@@ -1,0 +1,65 @@
+# LumatAgent local dev environment (T1.3; design deployment step 1).
+#
+# Topology: api (uvicorn, repo bind-mounted) + db (pgvector, named volume).
+# Named volumes: db (postgres data), media/ (WhatsApp media), backups/ (dumps).
+# Secrets come from infra/.env (gitignored) — never from the repo (SH-2).
+#
+# Usage:
+#   cp infra/.env.example infra/.env   # fill real values
+#   docker compose -f infra/docker-compose.yml up --build
+#   curl http://localhost:8000/health
+#   docker compose -f infra/docker-compose.yml exec db psql -U lumat -d lumat
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lumat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/.env}
+      POSTGRES_DB: lumat
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumat -d lumat"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    image: ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ..:/app
+      # .venv shadowed by a named volume: the container's `uv sync` builds its
+      # own venv and NEVER clobbers the host's .venv (bind mount is read-write).
+      - venv:/app/.venv
+      - media:/app/media
+      - backups:/app/backups
+    environment:
+      APP_SECRET: ${APP_SECRET:?set APP_SECRET in infra/.env}
+      VERIFY_TOKEN: ${VERIFY_TOKEN:?set VERIFY_TOKEN in infra/.env}
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in infra/.env}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/.env}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY in infra/.env}
+      META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:?set META_ACCESS_TOKEN in infra/.env}
+      META_PHONE_NUMBER_ID: ${META_PHONE_NUMBER_ID:?set META_PHONE_NUMBER_ID in infra/.env}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    # migrate (idempotent) then serve; DATABASE_URL admin points at `db`
+    command: >
+      sh -c "uv sync --frozen &&
+             DATABASE_URL=postgresql://lumat:$$POSTGRES_PASSWORD@db:5432/lumat
+             APP_DB_PASSWORD=$$APP_DB_PASSWORD db/migrate.sh &&
+             exec uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+volumes:
+  db:
+  venv:
+  media:
+  backups:
