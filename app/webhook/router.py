@@ -1,21 +1,25 @@
-"""WhatsApp webhook routes (specs WH-1..WH-3; persist stub until T1.1/T2.2).
+"""WhatsApp webhook routes (specs WH-1..WH-7).
 
 GET  /webhook/whatsapp — verify handshake: 200 with the raw `hub.challenge`
      value, or 403 when mode/token mismatch (WH-1). Failed attempts are logged
      (audit_log lands in T1.2, SH-5).
 
 POST /webhook/whatsapp — HMAC-SHA256 signature verified against the raw body:
-     200 on valid signature, 403 + dropped payload on failure (WH-2).
-     The 200 is returned before any processing (WH-3). Persistence of the
-     payload is a debug-log stub until the `messages` table lands (T1.1/T2.2),
-     per design — no storage is written in Batch 0.
+     403 + dropped payload on failure (WH-2). Accepted payloads go through the
+     ingest pipeline: filter unsupported events (WH-6) -> normalize -> persist
+     as `received` (WH-4, WH-5 dedup by wamid) -> 200 BEFORE any processing
+     (WH-3). Processing (media download / conversation graph) runs afterwards
+     via FastAPI BackgroundTask, and a startup sweep recovers anything left
+     `received` after a crash (design Webhook Pipeline).
 """
 
+import json
 import logging
 
-from fastapi import APIRouter, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Request, Response, status
 
 from app.config import get_settings
+from app.webhook.ingest import ingest_payload, sweep_received
 from app.webhook.verify import verify_handshake, verify_signature
 
 logger = logging.getLogger(__name__)
@@ -40,8 +44,8 @@ def verify_get(request: Request) -> Response:
 
 
 @router.post("")
-async def verify_post(request: Request) -> Response:
-    """WH-2/WH-3: signature check over the raw body, then immediate 200."""
+async def verify_post(request: Request, background_tasks: BackgroundTasks) -> Response:
+    """WH-2..WH-7: signature gate, persist-before-process, 200-first."""
     settings = get_settings()
     raw_body = await request.body()
     signature = request.headers.get("X-Hub-Signature-256")
@@ -50,11 +54,18 @@ async def verify_post(request: Request) -> Response:
         # TODO(T1.2): record rejected attempt in audit_log (SH-5) — logged stub.
         return Response(status_code=status.HTTP_403_FORBIDDEN)
 
-    # WH-3: acknowledge before any processing — the 200 never waits on work.
-    # WH-4 persist stub (full ingest in T2.2): payload only logged at debug
-    # level; nothing is written to storage in Batch 0.
-    logger.debug(
-        "webhook POST accepted (persist stub): %s",
-        raw_body.decode("utf-8", errors="replace"),
-    )
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        logger.warning("webhook POST accepted with non-JSON body; acknowledged and dropped")
+        return Response(status_code=status.HTTP_200_OK)
+
+    # WH-4: persist accepted messages before anything else runs. Unsupported
+    # events (WH-6) and duplicates (WH-5) are filtered inside ingest_payload.
+    inserted = ingest_payload(payload)
+
+    # WH-3: acknowledge before processing — the 200 never waits on the graph
+    # run / media download. Processing happens after the response.
+    background_tasks.add_task(sweep_received)
+    logger.debug("webhook POST accepted: inserted=%d", inserted)
     return Response(status_code=status.HTTP_200_OK)
