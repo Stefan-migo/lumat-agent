@@ -29,11 +29,11 @@ import httpx
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from app.chat.graph import run_conversation
+from app.chat.state import get_or_create_conversation
 from app.config import get_settings
 from app.db import session_scope
 from app.models import (
-    Conversation,
-    ConversationState,
     Message,
     MessageDirection,
     MessageStatus,
@@ -221,33 +221,16 @@ rate_limiter = RateLimiter()
 # ---------------------------------------------------------------------------
 
 
-def _get_or_create_customer_and_conversation(session, phone_e164: str) -> Conversation:
+def _get_or_create_customer_and_conversation(session, phone_e164: str):
     """Get-or-create customer + open conversation for the messages FK.
 
-    Customer creation is delegated to the formal T3.1 customers service
-    (auto-ficha + E.164 dedup, CR-1/CR-2). Conversation handling here is a
-    lightweight bridge until T3.2's chat state owns conversations: one open
-    conversation per customer (closed conversations are not reopened — a new
-    inbound after close opens a new conversation, CR-5).
+    Customer creation delegates to the T3.1 customers service (auto-ficha +
+    E.164 dedup, CR-1/CR-2); conversation get-or-create lives in the chat
+    state (CR-5: closed conversations are never reopened — a new inbound after
+    close opens a new conversation).
     """
     customer = get_or_create_customer(session, phone_e164)
-
-    conversation = session.scalar(
-        select(Conversation)
-        .where(
-            Conversation.customer_id == customer.id,
-            Conversation.state != ConversationState.CLOSED,
-        )
-        .order_by(Conversation.created_at.desc())
-        .limit(1)
-    )
-    if conversation is None:
-        conversation = Conversation(
-            customer_id=customer.id, wa_phone=phone_e164, state=ConversationState.BOT
-        )
-        session.add(conversation)
-        session.flush()
-    return conversation
+    return get_or_create_conversation(session, customer, phone_e164)
 
 
 def persist_message(session, normalized: NormalizedMessage) -> bool:
@@ -338,18 +321,20 @@ def download_media(media_url: str, wamid: str, token: str, media_dir: str) -> Pa
 
 
 def process_message(session, message: Message) -> None:
-    """Process one inbound message: media download, then status processed.
+    """Process one inbound message: media download, then conversation run.
 
-    The LangGraph conversation run lands in T3.2+; this is the Batch 2
-    placeholder that owns the status transition (received -> processed) and
-    the media download. Download failure keeps the message `received` so the
-    sweep retries it — the raw payload is never lost (WH-4).
+    The LangGraph conversation run (T3.2+) answers the customer and persists
+    the outbound replies; the send itself is wired in T3.6. The status
+    transition received -> processed happens after a successful run; a failed
+    download keeps the message `received` so the sweep retries it (WH-4).
     """
     if message.media_url:
         settings = get_settings()
         download_media(
             message.media_url, message.wamid, settings.meta_access_token, settings.media_dir
         )
+    if message.direction == MessageDirection.INBOUND and message.text:
+        run_conversation(session, message)
     message.status = MessageStatus.PROCESSED
 
 
