@@ -10,7 +10,9 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 from sqlalchemy.orm import Session
 
+from app.chat.nodes.classify_intent import classify_intent
 from app.chat.nodes.receive import receive
+from app.chat.nodes.route import route
 from app.chat.state import ConversationState
 from app.models import Message, MessageDirection, MessageStatus, MessageType
 
@@ -20,15 +22,18 @@ __all__ = ["build_graph", "run_conversation"]
 def build_graph():
     """Build the compiled conversation graph.
 
-    Batch 3 wiring: receive -> classify_intent -> route -> (capture |
-    kb_retrieve -> respond) -> summary (T3.4/T3.5 add those nodes). Emergency
-    and handoff gates land in Batch 4 (T4.2/T4.4). `receive` handles the
-    first-contact greeting + resume for now.
+    Batch 3 wiring: receive -> classify_intent -> route. The capture /
+    kb_retrieve / respond / summary nodes land in T3.5 (conditional edges are
+    added there). Emergency and handoff gates land in Batch 4 (T4.2/T4.4).
     """
     builder = StateGraph(ConversationState)
     builder.add_node("receive", receive)
+    builder.add_node("classify_intent", classify_intent)
+    builder.add_node("route", route)
     builder.add_edge(START, "receive")
-    builder.add_edge("receive", END)
+    builder.add_edge("receive", "classify_intent")
+    builder.add_edge("classify_intent", "route")
+    builder.add_edge("route", END)
     return builder.compile()
 
 

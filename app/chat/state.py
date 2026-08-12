@@ -17,7 +17,13 @@ from dataclasses import dataclass, field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Conversation, ConversationState as ConvState, Customer, Message
+from app.models import (
+    Conversation,
+    ConversationEvent,
+    ConversationState as ConvState,
+    Customer,
+    Message,
+)
 from app.services.customers import get_or_create_customer
 
 # CM-1: the 8-category menu shown on first contact (LumatRequest §1.x).
@@ -93,6 +99,7 @@ class ConversationState:
     escalate: bool = False
     escalate_reason: str | None = None
     unknown_count: int = 0
+    next_step: str = "receive"
     window: list[dict] = field(default_factory=list)
     replies: list[str] = field(default_factory=list)
 
@@ -125,10 +132,19 @@ class ConversationState:
                 Message.direction == "inbound",
             )
         ) or 0
+        # HH-3: unknown-intent attempts persist as conversation_events so the
+        # counter survives the per-message state rebuild (D2).
+        unknown_count = session.scalar(
+            select(func.count(ConversationEvent.id)).where(
+                ConversationEvent.conversation_id == conversation_id,
+                ConversationEvent.event == "unknown_intent",
+            )
+        ) or 0
         return cls(
             customer_id=conversation.customer_id,
             conversation_id=conversation_id,
             phone=conversation.wa_phone,
             turn=int(turn),
+            unknown_count=int(unknown_count),
             window=window,
         )
