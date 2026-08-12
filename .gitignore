@@ -3,10 +3,23 @@
 
 # Dependencies — never commit
 node_modules/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
 
 # Secrets — never commit
 .env
 .env.*
+
+# Exception: committed template documenting the required env names (design SH-2, T1.3)
+!infra/.env.example
+
+# Graphify runtime cache (outputs graph.json/GRAPH_REPORT.md stay tracked)
+graphify-out/cache/
 
 # Runtime data (design: media/ and backups/ are compose volumes)
 media/
