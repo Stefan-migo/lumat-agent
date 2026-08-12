@@ -160,6 +160,7 @@ class Conversation(Base):
         server_default="bot",
     )
     summary: Mapped[str | None] = mapped_column(Text)
+    captured_data: Mapped[dict | None] = mapped_column(JSONB)  # 003: CM-2 capture state
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _ts()
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -86,7 +86,11 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
     rows = admin_conn.execute(
         "SELECT version FROM schema_migrations ORDER BY version"
     ).fetchall()
-    assert rows == [("001_init",), ("002_customer_notes",)]
+    assert rows == [
+        ("001_init",),
+        ("002_customer_notes",),
+        ("003_conversation_captured_data",),
+    ]
 
 
 # --- tables ----------------------------------------------------------------

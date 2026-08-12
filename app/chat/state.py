@@ -13,6 +13,8 @@ scratch.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from operator import add
+from typing import Annotated
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -46,7 +48,6 @@ GREETING_HEADER = (
     "Hola, soy el asistente virtual de Lumat, la empresa de gasfitería que te "
     "atiende. ¿En qué puedo ayudarte? Elige una opción:\n"
 )
-RESUME_REPLY = "Entendido, continuemos con tu consulta."
 
 
 def greeting_with_menu() -> str:
@@ -101,7 +102,8 @@ class ConversationState:
     unknown_count: int = 0
     next_step: str = "receive"
     window: list[dict] = field(default_factory=list)
-    replies: list[str] = field(default_factory=list)
+    # accumulator: nodes append their replies (reducer merges, last-write-wins off)
+    replies: Annotated[list, add] = field(default_factory=list)
 
     @classmethod
     def from_db(cls, session: Session, conversation_id: int) -> "ConversationState":
@@ -146,5 +148,6 @@ class ConversationState:
             phone=conversation.wa_phone,
             turn=int(turn),
             unknown_count=int(unknown_count),
+            captured=dict(conversation.captured_data or {}),
             window=window,
         )

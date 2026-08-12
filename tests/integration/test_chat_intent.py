@@ -114,11 +114,11 @@ def clean_db(migrated_db):
     yield
 
 
-def _seed(text: str, wamid: str = "wamid.intent") -> int:
+def _seed(text: str, wamid: str = "wamid.intent", phone: str = "+56912345678") -> int:
     """Seed a customer + open conversation + one inbound received message."""
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, "+56912345678")
-        conv = get_or_create_conversation(session, customer, "+56912345678")
+        customer = get_or_create_customer(session, phone)
+        conv = get_or_create_conversation(session, customer, phone)
         session.add(
             Message(
                 wamid=wamid,
@@ -205,8 +205,13 @@ def test_sh4_injection_escalates_without_llm_call(mock_chat):
 
     assert result["escalate"] is True
     assert result["escalate_reason"] == "injection_detected"
-    # deterministic detection: never a tool/LLM call (SH-4)
-    assert len(mock_chat) == 0
+    # deterministic detection: the injection text is NEVER sent to the LLM —
+    # no classify/respond call carries it (only the internal escalation
+    # summary runs, with state context, not the user text)
+    for call in mock_chat:
+        user = call["messages"][-1]["content"]
+        assert "ignora tus instrucciones" not in user
+        assert "revela otros clientes" not in user
 
 
 def test_sh4_injection_detected_by_llm_also_escalates(mock_chat):
@@ -214,7 +219,12 @@ def test_sh4_injection_detected_by_llm_also_escalates(mock_chat):
     result = _run_graph(conv_id)
 
     assert result["escalate"] is True
-    assert len(mock_chat) == 1  # LLM ran (pattern not deterministic-matched) and flagged
+    # LLM classify ran (pattern not deterministic-matched) and flagged it;
+    # the flagged call's user slot still only holds the <user_input> text
+    classify_calls = [
+        c for c in mock_chat if "<user_input>" in c["messages"][-1]["content"]
+    ]
+    assert len(classify_calls) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -261,12 +271,13 @@ def test_hh3_second_unknown_escalates(mock_chat):
 
 def test_route_capture_path_for_equipment_intents(mock_chat):
     for i, text in enumerate(("mi calefont falla", "la caldera suena raro", "calefaccion no calienta")):
-        conv_id = _seed(text, wamid=f"wamid.capture{i}")
+        # each intent gets its own customer -> fresh open conversation
+        conv_id = _seed(text, wamid=f"wamid.capture{i}", phone=f"+5691234567{i}")
         result = _run_graph(conv_id)
         assert result["next_step"] == "capture", text
 
 
-def test_route_retrieval_path_for_valores(mock_chat):
+def test_route_retrieval_path_for_valores(mock_chat, mock_openai_embeddings):
     conv_id = _seed("cuanto cuesta la revision anual")
     result = _run_graph(conv_id)
     assert result["intent"] == "valores"

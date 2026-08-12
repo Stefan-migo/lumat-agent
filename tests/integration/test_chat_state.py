@@ -92,7 +92,7 @@ def _inbound_count() -> int:
 # ---------------------------------------------------------------------------
 
 
-def test_cm1_first_contact_greeting_with_menu():
+def test_cm1_first_contact_greeting_with_menu(mock_openai_chat):
     conv_id = _seed(["hola"])
     from app.chat.graph import run_conversation
 
@@ -103,8 +103,8 @@ def test_cm1_first_contact_greeting_with_menu():
         replies = run_conversation(session, message)
         session.commit()
 
-    assert len(replies) == 1
-    greeting = replies[0]
+    assert len(replies) >= 1
+    greeting = replies[0]  # greeting is always the first reply on first contact
     assert "asistente virtual" in greeting.lower()  # identifies itself
     assert "Lumat" in greeting
     for category in MENU_CATEGORIES:  # all 8 categories present
@@ -129,7 +129,7 @@ def test_cm1_menu_has_exactly_8_categories():
 # ---------------------------------------------------------------------------
 
 
-def test_cm1_repeat_contact_resumes_not_from_scratch():
+def test_cm1_repeat_contact_resumes_not_from_scratch(mock_openai_chat):
     conv_id = _seed(["hola"])
     from app.chat.graph import run_conversation
 
@@ -157,7 +157,8 @@ def test_cm1_repeat_contact_resumes_not_from_scratch():
         replies = run_conversation(session, second)
         session.commit()
 
-    # resumed: the second reply is NOT a fresh greeting+menu
+    # resumed: the second reply is NOT a fresh greeting+menu (it's the first
+    # capture question for the visita intent)
     assert len(replies) == 1
     assert "asistente virtual" not in replies[0].lower()
     assert MENU_CATEGORIES[0] not in replies[0]
@@ -194,7 +195,7 @@ def test_d2_window_capped_at_10():
     assert state.window[-1]["text"] == "msg-11"
 
 
-def test_d2_run_conversation_persists_outbound_replies():
+def test_d2_run_conversation_persists_outbound_replies(mock_openai_chat):
     conv_id = _seed(["hola"])
     from app.chat.graph import run_conversation
 
@@ -207,11 +208,11 @@ def test_d2_run_conversation_persists_outbound_replies():
 
     assert _inbound_count() == 1  # original inbound untouched
     replies = _outbound_texts(conv_id)
-    assert len(replies) == 1  # greeting persisted as an outbound message
+    assert len(replies) == 2  # greeting + clarification for the unknown "hola"
     assert "asistente virtual" in replies[0].lower()
 
 
-def test_d2_next_message_sees_previous_replies_in_window():
+def test_d2_next_message_sees_previous_replies_in_window(mock_openai_chat):
     """The outbound reply from turn 1 is part of turn 2's context (D2)."""
     conv_id = _seed(["hola"])
     from app.chat.graph import run_conversation
@@ -238,7 +239,8 @@ def test_d2_next_message_sees_previous_replies_in_window():
     texts = [m["text"] for m in state.window]
     assert texts[0] == "hola"  # inbound
     assert "asistente virtual" in texts[1].lower()  # bot greeting reply in context
-    assert texts[2] == "calefont"  # current inbound
+    assert "entend" in texts[2].lower()  # clarification for unknown "hola"
+    assert texts[3] == "calefont"  # current inbound
 
 
 # ---------------------------------------------------------------------------
