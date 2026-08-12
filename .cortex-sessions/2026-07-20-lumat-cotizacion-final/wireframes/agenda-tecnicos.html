@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumat Admin — Agenda de Técnicos</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: #f0f4f8; color: #1a1a2e; }
+  .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 240px; background: #1e3a5f; color: #fff; padding: 24px 0; }
+  .sidebar .logo { font-size: 22px; font-weight: 700; padding: 0 20px 32px; }
+  .sidebar .logo span { color: #60a5fa; }
+  .sidebar nav a { display: block; padding: 10px 20px; color: #93c5fd; text-decoration: none; font-size: 14px; }
+  .sidebar nav a:hover, .sidebar nav a.active { background: #2563eb; color: #fff; }
+  .main { margin-left: 240px; padding: 32px; }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .header h1 { font-size: 24px; font-weight: 700; color: #1e3a5f; }
+  .tech-selector { display: flex; gap: 8px; margin-bottom: 24px; }
+  .tech-btn { padding: 8px 20px; border-radius: 20px; font-size: 13px; font-weight: 500; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; color: #64748b; }
+  .tech-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .week-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .week-nav .week-label { font-size: 16px; font-weight: 600; color: #1e3a5f; }
+  .week-nav .nav-btn { background: #fff; border: 1px solid #e2e8f0; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; color: #2563eb; }
+  .time-column { width: 70px; flex-shrink: 0; }
+  .time-slot { height: 56px; display: flex; align-items: center; font-size: 11px; color: #94a3b8; padding-right: 8px; justify-content: flex-end; border-bottom: 1px solid #f1f5f9; }
+  .calendar { display: flex; background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+  .day-column { flex: 1; border-left: 1px solid #f1f5f9; }
+  .day-column:first-child { border-left: none; }
+  .day-header { padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: #64748b; border-bottom: 2px solid #e2e8f0; }
+  .day-header .day-name { font-size: 11px; color: #94a3b8; }
+  .day-header.today { background: #eff6ff; color: #2563eb; }
+  .day-header.today .day-name { color: #2563eb; }
+  .slot { height: 56px; border-bottom: 1px solid #f1f5f9; padding: 3px 6px; font-size: 10px; position: relative; }
+  .event { padding: 4px 6px; border-radius: 4px; font-size: 10px; line-height: 1.3; margin-bottom: 2px; }
+  .event.visit { background: #dbeafe; color: #1e40af; border-left: 3px solid #2563eb; }
+  .event.emergency { background: #fef2f2; color: #dc2626; border-left: 3px solid #ef4444; }
+  .event.maintenance { background: #d1fae5; color: #059669; border-left: 3px solid #10b981; }
+  .blocked { background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 4px, #e2e8f0 4px, #e2e8f0 8px); color: #94a3b8; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="logo">Lumat <span>Admin</span></div>
+  <nav>
+    <a href="#">📊 Dashboard</a>
+    <a href="#">👥 Clientes</a>
+    <a href="#">💬 Conversaciones</a>
+    <a href="#">📋 Casos</a>
+    <a href="#" class="active">📅 Agenda</a>
+    <a href="#">📚 Base de Conocimiento</a>
+    <a href="#">⚙️ Configuración</a>
+  </nav>
+</div>
+<div class="main">
+  <div class="header">
+    <h1>Agenda de Técnicos</h1>
+    <div style="display:flex;gap:8px;">
+      <button class="nav-btn" style="background:#2563eb;color:#fff;">+ Nueva Visita</button>
+      <button class="nav-btn">🗓️ Google Calendar</button>
+    </div>
+  </div>
+  <div class="tech-selector">
+    <span style="font-size:13px;color:#64748b;margin-right:8px;padding-top:8px;">Técnico:</span>
+    <button class="tech-btn active">👤 Pedro Rodríguez</button>
+    <button class="tech-btn">👤 Luis Vásquez</button>
+    <button class="tech-btn">👤 Carlos Muñoz</button>
+    <button class="tech-btn" style="border-style:dashed;color:#94a3b8;">+ Agregar técnico</button>
+  </div>
+  <div class="week-nav">
+    <button class="nav-btn">← Semana anterior</button>
+    <div class="week-label">Semana del 20 al 26 de Julio, 2026</div>
+    <button class="nav-btn">Semana siguiente →</button>
+  </div>
+  <div class="calendar">
+    <div class="time-column">
+      <div class="day-header" style="border-bottom:2px solid #e2e8f0;">&nbsp;</div>
+      <div class="time-slot">08:00</div><div class="time-slot">09:00</div><div class="time-slot">10:00</div>
+      <div class="time-slot">11:00</div><div class="time-slot">12:00</div><div class="time-slot">13:00</div>
+      <div class="time-slot">14:00</div><div class="time-slot">15:00</div><div class="time-slot">16:00</div>
+      <div class="time-slot">17:00</div><div class="time-slot">18:00</div>
+    </div>
+    <div class="day-column">
+      <div class="day-header today"><div class="day-name">LUN</div>20 Jul</div>
+      <div class="slot"></div>
+      <div class="slot"><div class="event visit"><strong>Juan Pérez</strong><br>Calefont Bosch E1</div></div>
+      <div class="slot"><div class="event visit"><strong>María Soto</strong><br>Fuga gas — Emergencia</div></div>
+      <div class="slot"></div>
+      <div class="slot"><div class="blocked">ALMUERZO</div></div>
+      <div class="slot"><div class="event visit"><strong>Empresa ABC</strong><br>Mantención caldera</div></div>
+      <div class="slot"></div>
+      <div class="slot"><div class="event visit"><strong>Roberto Díaz</strong><br>Instalación termostato</div></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+    </div>
+    <div class="day-column">
+      <div class="day-header"><div class="day-name">MAR</div>21 Jul</div>
+      <div class="slot"><div class="event visit"><strong>Carolina Ríos</strong><br>Garantía caldera</div></div>
+      <div class="slot"></div>
+      <div class="slot"><div class="event maintenance"><strong>Diego Morales</strong><br>Lavado de red</div></div>
+      <div class="slot"></div>
+      <div class="slot"><div class="blocked">ALMUERZO</div></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"><div class="event visit"><strong>Alejandra Vega</strong><br>Revisión calefont</div></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+    </div>
+    <div class="day-column">
+      <div class="day-header"><div class="day-name">MIÉ</div>22 Jul</div>
+      <div class="slot"></div>
+      <div class="slot"><div class="event visit"><strong>Patricio Lara</strong><br>Puesta en marcha</div></div>
+      <div class="slot"></div>
+      <div class="slot"><div class="event maintenance"><strong>Edificio Vista</strong><br>Mantención 3 calderas</div></div>
+      <div class="slot"><div class="blocked">ALMUERZO</div></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+    </div>
+    <div class="day-column">
+      <div class="day-header"><div class="day-name">JUE</div>23 Jul</div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"><div class="event visit"><strong>Francisco Soto</strong><br>Cambio radiador</div></div>
+      <div class="slot"></div>
+      <div class="slot"><div class="blocked">ALMUERZO</div></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"><div class="blocked">Bloqueado</div></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+    </div>
+    <div class="day-column">
+      <div class="day-header"><div class="day-name">VIE</div>24 Jul</div>
+      <div class="slot"></div>
+      <div class="slot"><div class="event visit"><strong>Gabriela Muñoz</strong><br>Diagnóstico caldera</div></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"><div class="blocked">ALMUERZO</div></div>
+      <div class="slot"><div class="event maintenance"><strong>Liceo Central</strong><br>Lavado radiadores</div></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+      <div class="slot"></div>
+    </div>
+  </div>
+  <div style="display:flex;gap:20px;margin-top:24px;font-size:12px;color:#64748b;">
+    <span><span style="display:inline-block;width:12px;height:12px;background:#dbeafe;border-left:3px solid #2563eb;margin-right:4px;vertical-align:middle;"></span> Visita</span>
+    <span><span style="display:inline-block;width:12px;height:12px;background:#d1fae5;border-left:3px solid #10b981;margin-right:4px;vertical-align:middle;"></span> Mantención</span>
+    <span><span style="display:inline-block;width:12px;height:12px;background:repeating-linear-gradient(45deg,#f1f5f9,#f1f5f9 2px,#e2e8f0 2px,#e2e8f0 4px);margin-right:4px;vertical-align:middle;"></span> Bloqueado</span>
+  </div>
+</div>
+</body>
+</html>

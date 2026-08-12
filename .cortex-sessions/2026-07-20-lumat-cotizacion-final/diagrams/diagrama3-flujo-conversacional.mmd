@@ -1,0 +1,42 @@
+graph TD
+    START([Cliente escribe por WhatsApp]) --> ID{Identificación<br/>por teléfono}
+    ID -->|Existe| LOAD[Recuperar historial<br/>+ equipos + servicios]
+    ID -->|No existe| CREATE[Crear ficha nueva<br/>Nombre · Dirección · Comuna]
+    LOAD --> CTX[Construcción de contexto]
+    CREATE --> CTX
+    CTX --> RAG[Consulta RAG<br/>Base de Conocimiento]
+    RAG --> IA[Motor IA<br/>GPT-4o-mini]
+    IA --> CONF{¿Respuesta<br/>confiable?}
+    
+    CONF -->|Sí| EMER{¿Palabras de<br/>emergencia?}
+    CONF -->|No| RETRY{¿Segundo<br/>intento?}
+    
+    RETRY -->|Sí| ASK[Solicitar más<br/>antecedentes]
+    RETRY -->|No| DERIVE[Derivar a<br/>operador humano]
+    
+    ASK --> IA
+    
+    EMER -->|Sí| PROTO[Activar protocolo<br/>de emergencia]
+    EMER -->|No| RESPOND[Responder al cliente]
+    
+    PROTO --> SAFETY[Instrucciones de seguridad]
+    PROTO --> NOTIFY[Notificar a Lumat]
+    PROTO --> CRITICAL[Marcar prioridad crítica]
+    PROTO --> REG_EM[Registrar evento]
+    
+    RESPOND --> NEEDVISIT{¿Necesita<br/>visita?}
+    NEEDVISIT -->|Sí| SCHEDULE[Registrar solicitud<br/>Derivar a agenda]
+    NEEDVISIT -->|No| CLOSE[Cierre con datos<br/>de contacto]
+    
+    SCHEDULE --> SAVE
+    CLOSE --> SAVE
+    DERIVE --> SUMMARY[Generar resumen<br/>para operador]
+    SUMMARY --> SAVE
+
+    SAVE[Guardar conversación<br/>Actualizar ficha]
+    SAVE --> END([Fin del flujo])
+
+    style PROTO fill:#ef4444,color:#fff
+    style CRITICAL fill:#ef4444,color:#fff
+    style DERIVE fill:#f59e0b,color:#fff
+    style SAVE fill:#10b981,color:#fff

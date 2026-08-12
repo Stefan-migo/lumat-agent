@@ -1,0 +1,48 @@
+schema: spec-driven
+
+context: |
+  Project: LumatAgent — AI WhatsApp assistant for Lumat (gasfitería, Chile)
+  Phase: Software delivery — Hito 1 (Setup + WhatsApp operativo) active; contract signed 2026-08-07, Pago 1 received 2026-08-11, kickoff 2026-08-17
+  Stack: Hostinger KVM 2 (São Paulo) + Ubuntu LTS + Docker Compose + PostgreSQL/pgvector + Python FastAPI/LangGraph
+  Structure: Single milestone active (M1/Hito 1: Setup + WhatsApp operativo). M2 (web) on standby. M3 (payments) out of scope. One SDD change per hito (4 changes total); 12 weeks construction + 5 weeks testing, acceptance ~16-dic-2026.
+  Existing: documentation-only (LumatRequest.md, signed proposal, session docs); no source code — Hito 1 is greenfield
+
+rules:
+  proposal:
+    - Keep scope tight to H1: no H2-H4 features (multi-agent orchestration, reply-from-panel inbox, calendar/ICS, notifications, automations/event bus, PWA, advanced dashboards), no M2 web, no M3 payments
+    - Technical artifacts in English; client-facing docs in Spanish (separate deliverable)
+    - Include rollback plan for risky changes
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for complex flows (webhook ingest, handoff, emergency)
+    - Document architecture decisions with rationale
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    - Follow existing code patterns
+    tdd: false
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
+
+testing:
+  strict_tdd: false
+  detected: "2026-08-11"
+  runner: pytest (planned, H1)
+  layers:
+    unit: false
+    integration: false
+    e2e: false
+  coverage: false
+  quality:
+    linter: false
+    type_checker: false
+    formatter: false
+  notes: "Greenfield — no test infrastructure yet. H1 establishes pytest; integration, functional and prompt-injection suites are H1 acceptance deliverables (signed proposal)."

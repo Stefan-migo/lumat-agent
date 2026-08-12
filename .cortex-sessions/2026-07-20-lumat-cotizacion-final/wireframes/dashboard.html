@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumat Admin — Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: #f0f4f8; color: #1a1a2e; }
+  .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 240px; background: #1e3a5f; color: #fff; padding: 24px 0; }
+  .sidebar .logo { font-size: 22px; font-weight: 700; padding: 0 20px 32px; letter-spacing: 0.5px; }
+  .sidebar .logo span { color: #60a5fa; }
+  .sidebar nav a { display: block; padding: 10px 20px; color: #93c5fd; text-decoration: none; font-size: 14px; }
+  .sidebar nav a:hover, .sidebar nav a.active { background: #2563eb; color: #fff; }
+  .main { margin-left: 240px; padding: 32px; }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+  .header h1 { font-size: 24px; font-weight: 700; color: #1e3a5f; }
+  .header .user { display: flex; align-items: center; gap: 12px; font-size: 14px; color: #64748b; }
+  .header .user .avatar { width: 36px; height: 36px; background: #2563eb; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+  .kpi-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .kpi-card .label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .kpi-card .value { font-size: 28px; font-weight: 700; color: #1e3a5f; }
+  .kpi-card .trend { font-size: 12px; margin-top: 4px; }
+  .kpi-card .trend.up { color: #10b981; }
+  .section { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .section h2 { font-size: 16px; font-weight: 600; color: #1e3a5f; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { text-align: left; padding: 8px 12px; border-bottom: 2px solid #e2e8f0; color: #64748b; font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+  .badge.critico { background: #fef2f2; color: #dc2626; }
+  .badge.pendiente { background: #fef3c7; color: #d97706; }
+  .badge.agendado { background: #dbeafe; color: #2563eb; }
+  .badge.finalizado { background: #d1fae5; color: #059669; }
+  .activity { display: flex; flex-direction: column; gap: 10px; }
+  .activity-item { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+  .activity-item .time { color: #94a3b8; font-size: 11px; min-width: 48px; }
+  .activity-item .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot.emergency { background: #ef4444; }
+  .dot.visit { background: #2563eb; }
+  .dot.warranty { background: #f59e0b; }
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="logo">Lumat <span>Admin</span></div>
+  <nav>
+    <a href="#" class="active">📊 Dashboard</a>
+    <a href="#">👥 Clientes</a>
+    <a href="#">💬 Conversaciones</a>
+    <a href="#">📋 Casos</a>
+    <a href="#">📅 Agenda</a>
+    <a href="#">📚 Base de Conocimiento</a>
+    <a href="#">⚙️ Configuración</a>
+    <a href="#">📈 Reportes</a>
+  </nav>
+</div>
+<div class="main">
+  <div class="header">
+    <h1>Dashboard</h1>
+    <div class="user">
+      <span>Carlos Muñoz — Administrador</span>
+      <div class="avatar">CM</div>
+    </div>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="label">Clientes Nuevos</div>
+      <div class="value">18</div>
+      <div class="trend up">↑ 12% vs mes anterior</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">Solicitudes de Visita</div>
+      <div class="value">24</div>
+      <div class="trend up">↑ 8% vs mes anterior</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">Emergencias</div>
+      <div class="value">1</div>
+      <div class="trend" style="color:#64748b">Sin cambios</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">Pendientes</div>
+      <div class="value">6</div>
+      <div class="trend" style="color:#ef4444">↓ 15% vs mes anterior</div>
+    </div>
+  </div>
+  <div class="section">
+    <h2>Últimos Casos</h2>
+    <table>
+      <thead><tr><th>Cliente</th><th>Motivo</th><th>Estado</th><th>Fecha</th><th>Técnico</th></tr></thead>
+      <tbody>
+        <tr><td>Juan Pérez</td><td>Calefont sin encendido</td><td><span class="badge pendiente">Pendiente</span></td><td>20/07/2026</td><td>—</td></tr>
+        <tr><td>María Soto</td><td>Fuga de gas — Emergencia</td><td><span class="badge critico">Crítico</span></td><td>19/07/2026</td><td>Pedro R.</td></tr>
+        <tr><td>Empresa ABC</td><td>Mantención caldera Baxi</td><td><span class="badge agendado">Agendado</span></td><td>19/07/2026</td><td>Luis V.</td></tr>
+        <tr><td>Carolina Ríos</td><td>Garantía — no calienta</td><td><span class="badge pendiente">Pendiente</span></td><td>18/07/2026</td><td>—</td></tr>
+        <tr><td>Roberto Díaz</td><td>Instalación termostato</td><td><span class="badge finalizado">Finalizado</span></td><td>18/07/2026</td><td>Carlos M.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="section">
+    <h2>Actividad Reciente</h2>
+    <div class="activity">
+      <div class="activity-item"><span class="time">09:10</span><span class="dot emergency"></span>Emergencia — Fuga de gas reportada por María Soto (Providencia)</div>
+      <div class="activity-item"><span class="time">09:18</span><span class="dot visit"></span>Solicitud de visita — Calefont Bosch, Juan Pérez (Las Condes)</div>
+      <div class="activity-item"><span class="time">09:22</span><span class="dot warranty"></span>Postventa — Garantía caldera, Carolina Ríos (Ñuñoa)</div>
+      <div class="activity-item"><span class="time">09:45</span><span class="dot visit"></span>Agendamiento confirmado — Mantención Empresa ABC, 21/07 10:00</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

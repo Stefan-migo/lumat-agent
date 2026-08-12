@@ -1,0 +1,45 @@
+graph TD
+    subgraph "Canales de Entrada"
+        WA[WhatsApp Business]
+        WEB[Sitio Web Lumat]
+    end
+
+    subgraph "Capa de Orquestación"
+        LA[LumatAgent<br/>Orquestador Central]
+    end
+
+    subgraph "Servicios Core"
+        BC[Base de Conocimiento<br/>RAG]
+        IA[Motor IA<br/>GPT + LangGraph]
+        PA[Panel Administrativo<br/>Next.js]
+    end
+
+    subgraph "Almacenamiento"
+        DB[(PostgreSQL<br/>+ pgvector)]
+        FS[File Storage<br/>Fotos / Audio]
+    end
+
+    subgraph "M3 — Plataforma Operacional"
+        AG[Agenda Técnica]
+        CRM[CRM / Clientes]
+        PG[Pagos]
+        PV[Postventa]
+        RP[Reportes]
+    end
+
+    WA --> LA
+    WEB --> LA
+    LA --> BC
+    LA --> IA
+    LA --> PA
+    BC --> DB
+    IA --> DB
+    PA --> DB
+    AG --> DB
+    CRM --> DB
+    PG --> DB
+    PV --> DB
+    RP --> DB
+    AG --> CRM
+    PG --> CRM
+    PV --> CRM

@@ -1,0 +1,47 @@
+graph TD
+    subgraph "Internet"
+        USER([Clientes])
+    end
+
+    subgraph "Capa de Entrada"
+        NX[Nginx Reverse Proxy<br/>HTTPS · SSL · Let's Encrypt]
+    end
+
+    subgraph "Docker Compose — VPS Lumat"
+        subgraph "Contenedores de Aplicación"
+            FE[Frontend<br/>Next.js · Puerto 3000]
+            BE[Backend<br/>Python · LangGraph · Puerto 8000]
+            ADMIN[Panel Admin<br/>Next.js · Puerto 3001]
+        end
+
+        subgraph "Contenedores de Datos"
+            DB[(PostgreSQL<br/>+ pgvector · Puerto 5432)]
+        end
+
+        subgraph "Servicios Auxiliares"
+            BACKUP[Backup Service<br/>Diario · Automático]
+            MONITOR[Health Check<br/>Monitoreo]
+        end
+    end
+
+    subgraph "Servicios Externos"
+        WA_API[WhatsApp Cloud API<br/>Meta]
+        OAI[OpenAI API<br/>GPT-4o-mini]
+        GCAL[Google Calendar<br/>Sincronización]
+        PAY[Transbank/Webpay<br/>Pasarela de Pagos]
+    end
+
+    USER -->|HTTPS| NX
+    NX --> FE
+    NX --> ADMIN
+    NX --> BE
+    FE --> BE
+    ADMIN --> BE
+    BE --> DB
+    BE --> WA_API
+    BE --> OAI
+    BE --> GCAL
+    BE --> PAY
+    BACKUP --> DB
+    MONITOR --> BE
+    MONITOR --> DB

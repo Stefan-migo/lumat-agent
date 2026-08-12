@@ -1,0 +1,148 @@
+# Tasks: H1 — Setup + WhatsApp operativo (LumatAgent)
+
+> Change: `hito-1-setup-whatsapp` · Project: LumatAgent · Phase: sdd-tasks · Date: 2026-08-11
+> Contract signed, Pago 1 received, kickoff 17-ago-2026. Greenfield, TDD not active.
+> Artifact language: English (technical). Solo dev ~20 h/wk. 34 tasks → 8 batches → 8 chained PRs.
+> Task numbering: `T<batch>.<index>` (e.g., T2.2 = batch 2, task 2). Tests ship with their code unit (work-unit-commits); Batch 6 holds the cross-cutting suites + docs + ops scripts.
+
+## Review Workload Forecast
+
+| Field | Value |
+|-------|-------|
+| Estimated changed lines (total) | ~6,500–7,500 (authored, additions+deletions) |
+| Estimated changed lines per batch | B0 ~450 · B1 ~800 · B2 ~650 · B3 ~1,600 · B4 ~1,150 · B5 ~1,300 · B6 ~1,300 · B7 ~350 |
+| 400-line budget risk | High (B1–B6 High; B0, B7 Medium) |
+| Chained PRs recommended | Yes |
+| Suggested split | 1 PR per batch → PR 1 (B0) → PR 2 (B1) → PR 3 (B2) → PR 4 (B3) → PR 5 (B4) → PR 6 (B5) → PR 7 (B6) → PR 8 (B7), each stacked to main |
+| Delivery strategy | auto-chain |
+| Chain strategy | stacked-to-main |
+
+Decision needed before apply: No
+Chained PRs recommended: Yes
+Chain strategy: stacked-to-main
+400-line budget risk: High
+
+Rationale: every batch is independently functional and can land to main in order (B0 = webhook alive — the 24-ago checkpoint; B1 = DB; B2 = ingest pipeline; etc.). No batch depends on an unreleased parent, so stacked-to-main is the cheapest chain for a solo dev; feature-branch-chain is the fallback if the client wants a single go-live merge.
+
+### Suggested Work Units
+
+| Unit | Goal | Likely PR | Focused test command | Runtime harness | Rollback boundary |
+|------|------|-----------|----------------------|-----------------|-------------------|
+| B0 | Repo + webhook verify/signature alive (checkpoint 24-ago) | PR 1 | `pytest tests/integration/test_webhook_verify.py` | `uvicorn app.main:app` + curl GET verify / POST signature | Remove `app/`, `pyproject.toml`; nothing else depends |
+| B1 | DB schema + ORM + dev compose | PR 2 | `pytest tests/integration/test_db.py` | `docker compose up -d db` + `db/migrate.sh` + psql `\dt` | Drop compose volumes; revert `db/`, `app/models.py` |
+| B2 | Webhook ingest (persist→200→graph→sweep) + Meta test number | PR 3 | `pytest tests/integration/test_webhook_ingest.py` | Meta test number → webhook URL (tunnel or early VPS) | Revert `app/webhook/`; unsubscribe test number |
+| B3 | Chat graph + customers + KB + send/costs | PR 4 | `pytest tests/integration/test_kb.py tests/integration/test_customers.py tests/integration/test_send_costs.py` | Seeded DB + mocked LLM (respx) via TestClient | Revert `app/chat/`, `app/services/{customers,kb,send,costs}.py` |
+| B4 | Settings + emergency + notification + handoff + cost guardrails | PR 5 | `pytest tests/integration/test_settings.py tests/integration/test_emergency.py tests/integration/test_emergency_notify.py tests/integration/test_handoff.py tests/integration/test_cost_guardrails.py` | Simulated emergency msg → assert notification (Meta mocked) | Revert services/nodes; clear emergency keywords in settings |
+| B5 | Admin panel (auth, clients, conversations, cases, KB, settings, dashboard, CSV) | PR 6 | `pytest tests/functional/test_auth.py` | Browser on `:8000/panel` with seeded admin | Revert `app/panel/` |
+| B6 | Harness + functional + injection suites + docs + ops scripts | PR 7 | `pytest tests/functional tests/injection` (full) | Suites run in compose `test` profile | Revert `tests/`, `docs/`, `infra/{backup,restore-test,monitor}.sh` |
+| B7 | Prod provision + TLS + deploy + go-live prepago | PR 8 | Post-deploy smoke: `curl https://agente.lumat.cl/health`, webhook GET verify, monitor checks | Prod VPS (Hostinger KVM 2); prepago number | `git revert` + compose restart; prepago stays unlinked until validation |
+
+## Batch 0 — Repo scaffold + git init + config (SPEED CHECKPOINT: server + webhook alive by 24-ago)
+
+- [ ] **T0.1** Repo scaffold: `git init` (main), `.gitignore` (secrets/.env/media/backups), `pyproject.toml` (fastapi, uvicorn, sqlalchemy, psycopg, pydantic-settings, langgraph, langchain-text-splitters, openai, pypdf, httpx, pytest, respx), dir skeleton `app/ app/panel/ db/migrations/ infra/ tests/{integration,functional,injection}/ docs/`; refresh `openspec/config.yaml` (verify Hostinger/M1/software-delivery values). Acceptance: clean tree matches design layout; `uv sync`/pip install resolves. [Reqs: config.yaml · Files: `pyproject.toml`, `.gitignore`, `openspec/config.yaml` · 3h · Deps: —]
+- [ ] **T0.2** App factory + env config: `app/main.py` `create_app()` + `GET /health` (ok + version); `app/config.py` pydantic-settings reading env only (app_secret, verify_token, DB URL, OpenAI, Meta creds). Acceptance: uvicorn boots; `/health` → 200; missing env → clear boot error. [Reqs: — · Files: `app/main.py`, `app/config.py` · 4h · Deps: T0.1]
+- [ ] **T0.3** Webhook verify + signature + 200-first (pre-DB stub): `app/webhook/{router,verify}.py` — GET handshake (`hub.mode`+token → 200 challenge, else 403 + audit attempt); POST HMAC-SHA256(raw body, app_secret) constant-time compare → 403/drop on fail, 200 on valid (persist stub: debug log until T1.1/T2.2); README quickstart with curl proof commands (no Makefile — commands documented). Acceptance: correct token → challenge; wrong → 403; valid sig → 200; bad sig → 403 dropped; integration tests green. [Reqs: WH-1, WH-2, WH-3 (full persist in T2.2) · Files: `app/webhook/router.py`, `app/webhook/verify.py`, `tests/integration/test_webhook_verify.py`, `README.md` · 6h · Deps: T0.2]
+
+## Batch 1 — Infra + DB schema + migrations + local Docker dev env
+
+- [ ] **T1.1** Schema + migrations: `db/migrations/001_init.sql` — 10 tables (customers, users, conversations, messages, cases, conversation_events, kb_documents, kb_chunks, settings, audit_log) per design Data Model; `customers.phone_e164 UNIQUE`, partial unique index on `messages.wamid` (inbound), HNSW index on `kb_chunks.embedding` (vector_cosine_ops, m=16, ef_construction=64); app DB role INSERT+SELECT only (append-only audit); `db/migrate.sh` runner + `schema_migrations`. Acceptance: applies cleanly twice (idempotent); `\dt` shows all tables; grants verified. [Reqs: WH-5, SH-5, data-model foundation · Files: `db/migrations/001_init.sql`, `db/migrate.sh` · 5h · Deps: T0.1]
+- [ ] **T1.2** ORM + session + audit service: `app/db.py` (engine/session/Base), `app/models.py` (10 tables, enums, jsonb/vector types), `app/services/audit.py` (append-only `record(actor, action, entity, before/after)` + admin read). Acceptance: CRUD round-trip test against compose pgvector; audit row written with before/after. [Reqs: SH-5 · Files: `app/db.py`, `app/models.py`, `app/services/audit.py`, `tests/integration/test_db.py` · 6h · Deps: T1.1]
+- [ ] **T1.3** Local dev env: `infra/docker-compose.yml` (api + postgres pgvector, volumes: db, `media/`, `backups/`), `infra/.env.example` (all secrets as placeholders, committed — secrets never in repo). Acceptance: `docker compose up` → api `/health` OK, pgvector ready; migrate.sh runs in container. [Reqs: SH-2 (secrets not in repo) · Files: `infra/docker-compose.yml`, `infra/.env.example` · 4h · Deps: T0.2, T1.1]
+
+## Batch 2 — Webhook pipeline + Meta onboarding (test number)
+
+- [ ] **T2.1** Meta Cloud API onboarding (ops): developer app, WABA link, Phone Number ID, permanent token + 2-step PIN, submit utility template `emergency_alert`, subscribe webhook to `messages` on test number (public HTTPS endpoint required — dev tunnel or early VPS; coordinate DNS with client week 1–2); creds → server env only. Acceptance: test number receives webhook POSTs; GET verify challenge passes; template approval status logged. [Reqs: WH-1 (live), EM-4 (template prerequisite) · Files: `infra/.env` (server-side), notes in `docs/ops.md` · 3h · Deps: T0.3]
+- [ ] **T2.2** Webhook ingest + tests: `app/webhook/ingest.py` — normalize (E.164 phone, wamid, type, text/media) → INSERT `messages(status=received)` `ON CONFLICT (wamid) DO NOTHING` → 200 first → BackgroundTask graph run (→ processed/failed) → startup sweep (`status='received' FOR UPDATE SKIP LOCKED`); filter non-`messages` + error 131051 (debug log only); in-memory per-phone rate limit 15 msg/min (`ponytail:` resets on restart — acceptable, single worker); media → `media_url` + async download to `media/` volume (retry via sweep). Integration tests: valid/invalid sig, 200-before-process, wamid dedup, retry storm, 131051, sweep recovery (WH scenarios). [Reqs: WH-3, WH-4, WH-5, WH-6, WH-7 · Files: `app/webhook/ingest.py`, `app/webhook/router.py` (wire), `tests/integration/test_webhook_ingest.py` · 10h · Deps: T1.1, T1.2]
+
+## Batch 3 — Conversation graph + customer records + KB pipeline
+
+- [ ] **T3.1** Customers service + tests: `app/services/customers.py` — E.164 normalization, get-or-create by phone (auto-ficha, no duplicates), state enum + transition validation, notes add/list, history query (conversations/cases/messages), captured data + consent store. Acceptance: auto-ficha on unknown phone; `+56 9…` vs `9…` dedup; invalid transition (nuevo→postventa) rejected. [Reqs: CR-1..6 · Files: `app/services/customers.py`, `tests/integration/test_customers.py` · 6h · Deps: T1.2]
+- [ ] **T3.2** Chat state + graph scaffold + receive node: `app/chat/state.py` ConversationState (customer_id, conversation_id, phone, turn, intent, case, captured{}, summary, emergency, escalate, window[10]); `app/chat/graph.py` builder; receive node: first-contact greeting + 8-category menu, resume from stored state (rebuild from DB per message — D2, no checkpointer). Acceptance: first contact → greeting+menu; repeat → resumes state, not from scratch. [Reqs: CM-1 · Files: `app/chat/state.py`, `app/chat/graph.py`, `app/chat/nodes/receive.py` · 6h · Deps: T3.1]
+- [ ] **T3.3** KB pipeline + tests: `app/services/kb.py` — ingest PDF (pypdf)/MD/CSV → `RecursiveCharacterTextSplitter` (500/50; CSV row-grouped) → embeddings `text-embedding-3-small` (1536d) → `kb_chunks` (version-tagged, source_meta); retrieval top_k=5, min_sim=0.65 (configurable); versioning: edit → new version + re-embed, restore = `active_version` flip (no re-embed), disable → excluded; provider/model/cost recorded on `kb_documents`. Tests: 3 formats, chunk counts, threshold behavior, version restore (OpenAI mocked via respx). [Reqs: KB-1, KB-2, KB-4 · Files: `app/services/kb.py`, `tests/integration/test_kb.py` · 9h · Deps: T1.2]
+- [ ] **T3.4** Intent + routing + case classification nodes: classify_intent (LLM `gpt-4o-mini`; user text only in `<user_input>` slot — input-as-data; system = static template + scope rules), route node (capture vs retrieval paths); case classification (service/priority/status) stored on case; `unknown_count` +1 on unknown intent, at 2 → handoff flag (HH-3); injection pattern detection → escalate flag, never a tool call (SH-4). Tests with mocked LLM. [Reqs: CM-3, HH-3 (partial), SH-4 (partial) · Files: `app/chat/nodes/classify_intent.py`, `app/chat/nodes/route.py` · 7h · Deps: T3.2]
+- [ ] **T3.5** Capture + respond + summary + unresolved nodes: capture — progressive fields (identification, location, equipment, failure, evidence, availability, consent; skip → unknown, non-blocking; consent → customer record); respond — KB-grounded only (`<kb>` tags; never invent prices/guarantees/diagnoses — CM-4), KB miss → "cannot answer reliably" + unresolved log (status flag; no dedicated SQL view — filter by flag in queries) (CM-6); summary — at completion/escalation on conversation+case (CM-5); LLM calls record `cost_llm` via T3.6. Acceptance: complete capture persists; skip continues; unresolved logged with question+context+timestamp. [Reqs: CM-2, CM-4, CM-5, CM-6, CR-6 · Files: `app/chat/nodes/capture.py`, `app/chat/nodes/respond.py`, `app/chat/nodes/summary.py` · 9h · Deps: T3.3, T3.4, T3.6]
+- [ ] **T3.6** Send + cost services + tests: `app/services/send.py` (Meta outbound text send, returns wamid, records `cost_meta` per pricing settings); `app/services/costs.py` (`cost_llm` = tokens × rate, SQL SUM per conversation/day — D6). Tests with mocked Meta/OpenAI. [Reqs: SS-4 (tracking basis) · Files: `app/services/send.py`, `app/services/costs.py`, `tests/integration/test_send_costs.py` · 5h · Deps: T1.2]
+
+## Batch 4 — Settings/scope + emergency + notification + handoff + cost guardrails
+
+- [ ] **T4.1** Settings service + scope rules + tone: `app/services/settings.py` — KV read/write (`settings` table, `updated_by` + audit row on change); scope_rules per category (bot_resolve / always_escalate — SS-1); emergency_keywords (SS-2, triggers regex recompile); tone/standard messages (SS-5). Service-level tests; panel UI lands in T5.4. [Reqs: SS-1, SS-2, SS-5, SH-5 · Files: `app/services/settings.py`, `tests/integration/test_settings.py` · 6h · Deps: T1.2]
+- [ ] **T4.2** Emergency engine + node + tests: `app/services/emergency.py` — compiled regex from settings.emergency_keywords (defaults: olor a gas, fuga, humo, incendio, chispa, explosión, monóxido, intoxicación, riesgo eléctrico, filtración severa + variants), compiled at load + on settings change; emergency_gate node runs before any LLM; hit → emergency node: abandon capture (EM-2), deliver `settings.safety_instructions` + contacts + "technician notified" (EM-3), case flagged + state→human; weak hit → escalate to human, never ignore (EM-5). Tests: keyword hit, weak hit, mid-capture interrupt. [Reqs: EM-1, EM-2, EM-3, EM-5 · Files: `app/services/emergency.py`, `app/chat/nodes/emergency_gate.py`, `app/chat/nodes/emergency.py`, `tests/integration/test_emergency.py` · 6h · Deps: T4.1, T3.2]
+- [ ] **T4.3** Emergency notification + ack: WhatsApp utility template `emergency_alert` (customer number, location when known, context) + email fallback via stdlib `smtplib` (no new dep); ack via reply keyword (regex, recorded on case) or panel button; unacked > 15 min → reminder email (max 2); every notification/ack → audit_log. Tests: notification sent, ack recorded, reminder capped (Meta mocked). [Reqs: EM-4, SH-5 · Files: `app/services/notify.py`, `tests/integration/test_emergency_notify.py` · 8h · Deps: T4.2, T3.6]
+- [ ] **T4.4** Handoff + deriva + gates + tests: state model bot/human/closed with every transition → `conversation_events` row (HH-1); handoff_gate deterministic triggers: menu "persona", 2× unknown (from T3.4), media evidence, complaint/warranty keywords, SS-1 always_escalate (HH-3); deriva bundle → `cases` (history + summary + customer + captured fields — HH-2); closed + new inbound → new conversation, same customer (CR-5); webhook keeps persisting during `human` state (HH-5, no panel reply in H1). Tests: transitions, bundle content, closed→new conv. [Reqs: HH-1, HH-2, HH-3, HH-5, CR-5 · Files: `app/chat/nodes/handoff_gate.py`, `app/chat/nodes/handoff.py`, `app/services/cases.py`, `tests/integration/test_handoff.py` · 8h · Deps: T3.5, T3.6, T4.1]
+- [ ] **T4.5** Cost guardrails: extend `costs.py` — per-conversation limit (default $1.50): 80% → alert owner + conservative mode (short replies); 100% → escalate conv, no more LLM for it; daily limit (default $5): 80% → alert; 100% → block paid LLM, deterministic fallback script + escalate (SS-3); spend + limits data for panel (SS-4); Meta service-message pricing unit in settings (effective 2026-10-01; default placeholder, verify at activation). Tests: threshold transitions with seeded costs. [Reqs: SS-3, SS-4 · Files: `app/services/costs.py` (extend), `app/chat/nodes/cost_gate.py`, `tests/integration/test_cost_guardrails.py` · 6h · Deps: T3.6, T4.1]
+
+## Batch 5 — Admin panel + CSV + KPIs
+
+- [ ] **T5.1** Panel auth + roles: login form → bcrypt verify → Starlette signed-cookie session (12 h); `failed_logins`/`locked_until` (5 fails → 15 min lock); admin/operador dependency on every route, server-side only; login/failure → audit; seed script for initial admin (bcrypt). Tests: authorized login, lockout, role matrix. [Reqs: AP-1, AP-2, SH-5 · Files: `app/panel/routes/auth.py`, `app/panel/deps.py`, `tests/functional/test_auth.py` · 8h · Deps: T1.2]
+- [ ] **T5.2** Clients + conversations views: clients list/search (name, phone) + ficha (history CR-5, internal notes CR-4, state change CR-3 — audited); conversations read-only thread + media links (AP-4). Jinja2 templates + vanilla JS. [Reqs: AP-3, AP-4, CR-3, CR-4, CR-5 · Files: `app/panel/routes/{clients,conversations}.py`, `app/panel/templates/{clients,conversations}/` · 7h · Deps: T5.1, T3.1]
+- [ ] **T5.3** Cases view: pending/escalated list (HH-4), case state change + responsible assign (AP-5, audited), emergency flag + ack button (EM-4 ack UI). [Reqs: AP-5, HH-4, EM-4 (ack) · Files: `app/panel/routes/cases.py`, `app/panel/templates/cases/` · 5h · Deps: T5.1, T4.4]
+- [ ] **T5.4** KB manager + settings views: KB add/edit/disable/restore (AP-6, KB-3/4, audited; cost + provider/model shown); settings: scope rules, emergency keywords (save → recompile), tone, spend limits, Meta pricing (SS-1..5, audited). [Reqs: AP-6, KB-3, KB-4, SS-1..5, SH-5 · Files: `app/panel/routes/{kb,settings}.py`, `app/panel/templates/{kb,settings}/` · 9h · Deps: T5.1, T3.3, T4.1, T4.5]
+- [ ] **T5.5** Dashboard KPIs + CSV export: dashboard — contacts, motivos, derivados, solicitudes de visita as SQL counts over settings time window (AP-8, no chart lib); export — streaming CSV via stdlib `csv` for clients + cases with panel-visible fields (AP-7). [Reqs: AP-7, AP-8 · Files: `app/panel/routes/{dashboard,export}.py`, `app/panel/templates/dashboard.html` · 5h · Deps: T5.1]
+
+## Batch 6 — Test suites + hardening docs + ops runbook
+
+- [ ] **T6.1** Test harness: pytest config, `@pytest.mark.spec("WH-5")` markers, conftest fixtures (compose `test` profile pgvector, seeded data, respx OpenAI/Meta mocks), `tests/README.md` spec→test traceability table. Acceptance: `pytest -m "spec"` runs collected scenarios. [Reqs: Traceability (design Testing Strategy) · Files: `pyproject.toml` (pytest cfg), `tests/conftest.py`, `tests/README.md`, `infra/docker-compose.yml` (test profile) · 4h · Deps: all code batches]
+- [ ] **T6.2** Functional suite: CM (first contact menu, repeat resume, capture skip, 2-failure escalation, KB miss → unresolved log), CR (auto-ficha, E.164 dedup, invalid transition rejection), AP (login/lockout, role matrix, CSV export, KPIs) via TestClient + seeded DB. [Reqs: CM-1..6, CR-1..6, AP-1..8 (functional) · Files: `tests/functional/*` · 11h · Deps: T6.1]
+- [ ] **T6.3** Injection suite (SH-4): fixtures — "ignore your instructions…", admin-tool attempt, sensitive-data probe, delimiter breakouts, Spanish variants; golden assertions: no tool call executed, conversation escalated, attempt logged (audit). [Reqs: SH-4 · Files: `tests/injection/*` · 8h · Deps: T6.1, T3.4, T3.5]
+- [ ] **T6.4** `docs/hardening.md`: executable SH-1..3 checklist — ufw 80/443/SSH only, SSH key-only + fail2ban, non-root user, TLS + auto-renew, api read-only fs + writable volumes, secrets env-only, backup schedule/retention, monitor checks, audit grants verification. [Reqs: SH-1, SH-2, SH-3 (doc) · Files: `docs/hardening.md` · 3h · Deps: —]
+- [ ] **T6.5** `docs/ops.md`: runbook — deploy/rollback (git tag + compose restart), backup restore drill, emergency ack flow, KB add/edit, settings change, monitoring alert triage, daily summary cron, go-live record. [Reqs: Ops (design Deployment step 6) · Files: `docs/ops.md` · 4h · Deps: —]
+- [ ] **T6.6** Ops scripts: `infra/backup.sh` (daily pg_dump 03:00 → `backups/` volume, retention 14 d), `infra/restore-test.sh` (weekly restore to scratch DB), `infra/monitor.sh` (single script: `/health` uptime + webhook POST probe + backup-age, 5-min cron → SMTP alert) — fixed commands, no user-controlled args (threat matrix N/A). [Reqs: SH-3 · Files: `infra/backup.sh`, `infra/restore-test.sh`, `infra/monitor.sh` · 4h · Deps: —]
+
+## Batch 7 — Deployment (Hostinger) + TLS + monitoring + go-live on prepago
+
+- [ ] **T7.1** Prod provision + hardening + TLS: Hostinger KVM 2 (São Paulo) — Ubuntu LTS, Docker + Compose, ufw, SSH key-only + fail2ban, non-root deploy user, secrets in server env; `infra/docker-compose.prod.yml` (api `read_only: true` + tmpfs + `media/` volume, no `--privileged`, internal network); `infra/nginx/` reverse proxy for `agente.` + `panel.lumat.cl`; `infra/certbot/` + systemd renew timer; execute hardening.md checklist and record results. [Reqs: SH-1, SH-2 · Files: `infra/docker-compose.prod.yml`, `infra/nginx/*`, `infra/certbot/*` · 6h · Deps: T6.4, T6.6]
+- [ ] **T7.2** Deploy + migrate + seed + smoke: clone repo → compose prod up → `db/migrate.sh` → seed settings defaults + admin user (bcrypt) → smoke: `/health`, webhook GET verify, backup cron + monitor cron verified active. [Reqs: Deploy (design step 4) · Files: `infra/seed.sql` (or seed script), `infra/.env` · 5h · Deps: T7.1, T5.1, T6.6]
+- [ ] **T7.3** Go-live on prepago: point prepago dedicated number webhook at `https://agente.lumat.cl/webhook/whatsapp`; validate with Lumat (real test cases per proposal success criteria); Meta checklist; real number only after approval; confirm `emergency_alert` template + Meta service-message pricing with Meta; record outcome in ops.md. [Reqs: Go-live (proposal success criteria) · Files: `docs/ops.md` (go-live record) · 4h · Deps: T7.2, T2.1]
+
+## Traceability: Spec Requirements → Tasks
+
+| Spec | Req → Tasks |
+|------|-------------|
+| whatsapp-webhook | WH-1 → T0.3 · WH-2 → T0.3 · WH-3 → T0.3, T2.2 · WH-4 → T2.2 · WH-5 → T1.1, T2.2 · WH-6 → T2.2 · WH-7 → T2.2 |
+| conversation-manager | CM-1 → T3.2 · CM-2 → T3.5 · CM-3 → T3.4 · CM-4 → T3.5 · CM-5 → T3.5 · CM-6 → T3.5 |
+| customer-records | CR-1 → T3.1 · CR-2 → T3.1 · CR-3 → T3.1, T5.2 · CR-4 → T3.1, T5.2 · CR-5 → T3.1, T3.2, T4.4, T5.2 · CR-6 → T3.1, T3.5 |
+| knowledge-base | KB-1 → T3.3 · KB-2 → T3.3 · KB-3 → T5.4 · KB-4 → T3.3, T5.4 |
+| emergency-detection | EM-1 → T4.1, T4.2 · EM-2 → T4.2 · EM-3 → T4.2 · EM-4 → T4.3 · EM-5 → T4.2, T4.4 |
+| human-handoff | HH-1 → T4.4 · HH-2 → T4.4 · HH-3 → T3.4, T4.4 · HH-4 → T5.3 · HH-5 → T4.4 |
+| admin-panel | AP-1 → T5.1 · AP-2 → T5.1 · AP-3 → T5.2 · AP-4 → T5.2 · AP-5 → T5.3 · AP-6 → T5.4 · AP-7 → T5.5 · AP-8 → T5.5 |
+| settings-scope-limits | SS-1 → T4.1, T4.4 · SS-2 → T4.1, T4.2 · SS-3 → T4.5 · SS-4 → T3.6, T4.5, T5.4 · SS-5 → T4.1, T5.4 |
+| security-hardening | SH-1 → T6.4, T7.1 · SH-2 → T1.3, T6.4, T7.1 · SH-3 → T6.4, T6.6 · SH-4 → T3.4, T3.5, T6.3 · SH-5 → T1.2, T4.1, T4.3, T4.4, T5.1, T5.3, T5.4 |
+
+Every requirement ID (WH-1..7, CM-1..6, CR-1..6, KB-1..4, EM-1..5, HH-1..5, AP-1..8, SS-1..5, SH-1..5) maps to ≥1 task. Threat matrix: N/A — no RED-test tasks (per design).
+
+## File Changes Coverage
+
+| Design entry | Tasks |
+|--------------|-------|
+| `app/main.py`, `app/config.py` | T0.2 |
+| `app/db.py`, `app/models.py` | T1.2 |
+| `app/webhook/{router,verify,ingest}.py` | T0.3, T2.2 |
+| `app/chat/{state,graph}.py`, `app/chat/nodes/*` | T3.2, T3.4, T3.5, T4.2, T4.4, T4.5 |
+| `app/services/{emergency,kb,customers,send,costs,audit}.py` | T1.2 (audit), T3.1 (customers), T3.3 (kb), T3.6 (send/costs), T4.1 (settings), T4.2 (emergency), T4.3 (notify) |
+| `app/panel/` (routes, templates, static) | T5.1–T5.5 |
+| `db/migrations/*.sql`, `db/migrate.sh` | T1.1 |
+| `infra/*` (compose, nginx, certbot, backup, restore-test, monitor, .env.example) | T1.3, T6.6, T7.1 |
+| `tests/{integration,functional,injection}/` | with each code unit; T6.1–T6.3 |
+| `docs/{hardening,ops}.md` | T6.4, T6.5 |
+| `openspec/config.yaml` | T0.1 |
+
+## Ponytail Task Review (applied after writing — cuts)
+
+1. `Batch 0`: yagni: separate "dev boot + checkpoint proof" task (Makefile + README). A Makefile for 3 commands is boilerplate — README quickstart with the commands folds into T0.3; T0.4 deleted (was 2 h).
+2. `Batch 4`: stdlib: email fallback dependency. `smtplib` covers it — no new package; T4.3 already uses stdlib (no change, flagged as guard).
+3. `Batch 5`: stdlib: CSV export. Python stdlib `csv` streaming (design D7) — T5.5 already specified; no new dep (guard flagged).
+4. `Batch 5`: shrink: "dashboard KPIs" + "CSV export" were two candidate tasks — merged into T5.5 (both small panel additions, same session).
+5. `Batch 6`: shrink: 3 monitor scripts (`health`, `webhook-probe`, `backup-age`) → one `infra/monitor.sh` with 3 checks + SMTP alert. -2 files, one cron entry.
+6. `Batch 3`: yagni: dedicated `unresolved_questions` SQL view. Drop it — a status flag + filter query in the panel/export path covers CM-6; noted in T3.5.
+7. `Batch 3`: native: send/costs as one task (T3.6) — both thin services, one reviewable unit (kept merged from draft).
+8. `Batch 0`: yagni: seed-admin service task — folded into T7.2 (SQL seed at deploy; no service). No separate task.
+
+net: -1 task, -2 script files, -1 SQL view, 0 new dependencies beyond design stack.
+
+## Risks / Notes
+
+- **Capacity (material)**: estimated total ~200 h vs ~80 h available in the H1 window (4 weeks × 20 h/wk). Matches the proposal's own "Capacity < 20 h/wk" risk. Recommend the orchestrator/client decide BEFORE apply: (a) extend H1 timeline, or (b) scope cuts via separate quote (candidates, in Ponytail order: defer media download + evidence review, defer email-fallback reminders, trim panel views). Speed checkpoint (T0.3, 24-ago) is protected under any option.
+- **Meta external dependencies**: template approval + business verification timing (T2.1) can block go-live, not development (dev on test number). DNS (client) needed week 1–2 for HTTPS endpoint reachability.
+- **Dev webhook endpoint**: Meta test number needs a public HTTPS URL — tunnel or early VPS provision (documented in T2.1); confirm approach at apply time.
+- **Chain strategy**: stacked-to-main chosen (each batch lands independently); switch to feature-branch-chain only if client demands a single go-live merge — would need a decision before apply (currently auto-chain → No).
+- **Injection suite (SH-4)** is the acceptance gate — do not ship go-live (T7.3) before T6.3 passes.
