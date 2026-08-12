@@ -1,2 +1,13 @@
 # Local AI runtime state
 .atl/
+
+# Dependencies — never commit
+node_modules/
+
+# Secrets — never commit
+.env
+.env.*
+
+# Runtime data (design: media/ and backups/ are compose volumes)
+media/
+backups/
