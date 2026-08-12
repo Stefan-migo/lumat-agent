@@ -8,6 +8,7 @@ a clear error instead of starting a half-configured server.
 from fastapi import FastAPI
 
 from app.config import get_settings
+from app.webhook.router import router as webhook_router
 
 
 def create_app() -> FastAPI:
@@ -19,6 +20,7 @@ def create_app() -> FastAPI:
     def health() -> dict:
         return {"status": "ok", "version": settings.app_version}
 
+    app.include_router(webhook_router)
     return app
 
 
