@@ -34,13 +34,12 @@ from app.db import session_scope
 from app.models import (
     Conversation,
     ConversationState,
-    Customer,
-    CustomerState,
     Message,
     MessageDirection,
     MessageStatus,
     MessageType,
 )
+from app.services.customers import get_or_create_customer, normalize_phone_e164
 
 logger = logging.getLogger(__name__)
 
@@ -87,24 +86,6 @@ class MediaDownloadError(RuntimeError):
 # ---------------------------------------------------------------------------
 # Normalization (pure functions)
 # ---------------------------------------------------------------------------
-
-
-def normalize_phone_e164(wa_id: str) -> str:
-    """Normalize a WhatsApp wa_id to E.164 (design CR-2 dedup basis).
-
-    Handles: full international "+56912345678", digits-only "56912345678",
-    Chilean local mobile "912345678" (9XXXXXXXX -> +56 9...), and stray
-    spaces/dashes. Unknown shapes fall back to a best-effort "+<digits>".
-    """
-    digits = re.sub(r"\D", "", wa_id or "")
-    if not digits:
-        return ""
-    if digits.startswith("9") and len(digits) == 9:
-        return "+56" + digits
-    if digits.startswith("56") and len(digits) == 11:
-        return "+" + digits
-    return "+" + digits
-
 
 _META_TYPE_TO_ENUM = {
     "text": MessageType.TEXT,
@@ -241,18 +222,15 @@ rate_limiter = RateLimiter()
 
 
 def _get_or_create_customer_and_conversation(session, phone_e164: str) -> Conversation:
-    """Minimal get-or-create for the messages FK (customers/conversations).
+    """Get-or-create customer + open conversation for the messages FK.
 
-    Full customer service (auto-ficha, consent, states) lands in T3.1; chat
-    state handling in T3.2. Here we only satisfy the schema: one customer per
-    E.164 phone, one open conversation per customer (closed conversations are
-    not reopened — a new inbound after close opens a new conversation, CR-5).
+    Customer creation is delegated to the formal T3.1 customers service
+    (auto-ficha + E.164 dedup, CR-1/CR-2). Conversation handling here is a
+    lightweight bridge until T3.2's chat state owns conversations: one open
+    conversation per customer (closed conversations are not reopened — a new
+    inbound after close opens a new conversation, CR-5).
     """
-    customer = session.scalar(select(Customer).where(Customer.phone_e164 == phone_e164))
-    if customer is None:
-        customer = Customer(phone_e164=phone_e164, state=CustomerState.NUEVO)
-        session.add(customer)
-        session.flush()
+    customer = get_or_create_customer(session, phone_e164)
 
     conversation = session.scalar(
         select(Conversation)

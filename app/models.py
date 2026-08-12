@@ -228,6 +228,28 @@ class Case(Base):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class CustomerNote(Base):
+    """Internal staff note on a customer ficha (CR-4; 002_customer_notes.sql).
+
+    Staff-only (admin/operador) — never exposed to the customer. The schema
+    keeps notes out of the `customers` row on purpose (CR-4: visible to staff
+    only); the panel renders them from this table.
+    """
+
+    __tablename__ = "customer_notes"
+    __table_args__ = (
+        Index("idx_customer_notes_customer_id", "customer_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    customer_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("customers.id"), nullable=False
+    )
+    note: Mapped[str] = mapped_column(Text, nullable=False)
+    author: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = _ts()
+
+
 class ConversationEvent(Base):
     __tablename__ = "conversation_events"
     __table_args__ = (
