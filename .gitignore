@@ -24,3 +24,6 @@ graphify-out/cache/
 # Runtime data (design: media/ and backups/ are compose volumes)
 media/
 backups/
+
+# Archivo Personal para prompts
+txt.txt
