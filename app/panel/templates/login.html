@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Login — Lumat Panel{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 24rem; margin: 3rem auto;">
+  <h1>Lumat Panel</h1>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post" action="/panel/login">
+    <p><label>Username<br><input type="text" name="username" autofocus required style="width: 100%;"></label></p>
+    <p><label>Password<br><input type="password" name="password" required style="width: 100%;"></label></p>
+    <p><button type="submit" class="btn">Login</button></p>
+  </form>
+</div>
+{% endblock %}

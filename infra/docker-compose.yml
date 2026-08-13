@@ -46,6 +46,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY in infra/.env}
       META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:?set META_ACCESS_TOKEN in infra/.env}
       META_PHONE_NUMBER_ID: ${META_PHONE_NUMBER_ID:?set META_PHONE_NUMBER_ID in infra/.env}
+      PANEL_SESSION_SECRET: ${PANEL_SESSION_SECRET:?set PANEL_SESSION_SECRET in infra/.env}
     depends_on:
       db:
         condition: service_healthy
