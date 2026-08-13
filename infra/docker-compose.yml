@@ -9,6 +9,10 @@
 #   docker compose -f infra/docker-compose.yml up --build
 #   curl http://localhost:8000/health
 #   docker compose -f infra/docker-compose.yml exec db psql -U lumat -d lumat
+#
+# Test profile (T6.1): the pgvector container the pytest suites run against
+# (tests conftest DATABASE_URL). Bring it up with:
+#   docker compose -f infra/docker-compose.yml --profile test up -d db-test
 
 services:
   db:
@@ -20,6 +24,26 @@ services:
       POSTGRES_DB: lumat
     volumes:
       - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumat -d lumat"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # Test DB for the pytest suites (T6.1): pgvector on localhost:5432, same
+  # credentials the tests conftests use (lumat/lumat admin, app/app role
+  # created by db/migrate.sh). Started only with --profile test.
+  db-test:
+    image: pgvector/pgvector:pg16
+    profiles: ["test"]
+    environment:
+      POSTGRES_USER: lumat
+      POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:-lumat}
+      POSTGRES_DB: lumat
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-test:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U lumat -d lumat"]
       interval: 5s
@@ -61,6 +85,7 @@ services:
 
 volumes:
   db:
+  db-test:
   venv:
   media:
   backups:

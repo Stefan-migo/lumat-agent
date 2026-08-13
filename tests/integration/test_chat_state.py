@@ -208,7 +208,7 @@ def test_d2_run_conversation_persists_outbound_replies(mock_openai_chat):
 
     assert _inbound_count() == 1  # original inbound untouched
     replies = _outbound_texts(conv_id)
-    assert len(replies) == 2  # greeting + clarification for the unknown "hola"
+    assert len(replies) == 1  # CM-1: greeting + menu only, no turn-1 clarification
     assert "asistente virtual" in replies[0].lower()
 
 
@@ -239,8 +239,9 @@ def test_d2_next_message_sees_previous_replies_in_window(mock_openai_chat):
     texts = [m["text"] for m in state.window]
     assert texts[0] == "hola"  # inbound
     assert "asistente virtual" in texts[1].lower()  # bot greeting reply in context
-    assert "entend" in texts[2].lower()  # clarification for unknown "hola"
-    assert texts[3] == "calefont"  # current inbound
+    # CM-1: turn 1 produces ONLY the greeting — no clarification after the menu
+    assert "entend" not in texts[1].lower()
+    assert texts[2] == "calefont"  # current inbound
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,250 @@
+"""T6.2 functional tests — conversation-manager flows over the webhook (CM-1..6).
+
+End-to-end through the REAL pipeline (signature gate -> persist -> background
+sweep -> LangGraph run -> outbound persist + Meta send mocked): first contact
+menu, repeat-contact resume, capture skip, 2-failure escalation, KB miss ->
+unresolved log. The B3/B4 graph behavior was unit-tested at node level in
+tests/integration/; these prove the same scenarios through the customer-facing
+entry point (TestClient + seeded DB).
+
+Scenarios mapped 1:1 from openspec/specs/conversation-manager/spec.md:
+
+- CM-1 "First contact": greeting + 8-category menu
+- CM-1 "Repeat contact on same conversation": resumes, never restarts
+- CM-2 "Customer skips a field": field marked unknown, flow continues
+- CM-2 "Complete capture" + CR-6: captured fields + consent land on the ficha
+- HH-3 "Two failed comprehension attempts": 2x unknown -> human
+- CM-4/CM-6 "No reliable answer": KB miss -> cannot-answer + unresolved log
+"""
+
+from __future__ import annotations
+
+import pytest
+from sqlalchemy import func, select
+
+from app.chat.nodes.respond import CANNOT_ANSWER_REPLY  # noqa: E402
+from app.chat.state import MENU_CATEGORIES  # noqa: E402
+from app.db import SessionLocal  # noqa: E402
+from app.models import (  # noqa: E402
+    Case,
+    Conversation,
+    ConversationState,
+    Customer,
+    Message,
+    MessageDirection,
+)
+from tests.webhook_helpers import post_message
+
+
+def _last_outbound(session) -> Message:
+    return session.scalars(
+        select(Message)
+        .where(Message.direction == MessageDirection.OUTBOUND)
+        .order_by(Message.id.desc())
+        .limit(1)
+    ).one()
+
+
+def _outbound_texts(session) -> list[str]:
+    return [
+        m.text or ""
+        for m in session.scalars(
+            select(Message)
+            .where(Message.direction == MessageDirection.OUTBOUND)
+            .order_by(Message.id)
+        )
+    ]
+
+
+def _conversation(session, customer: Customer) -> Conversation:
+    return session.scalars(
+        select(Conversation)
+        .where(Conversation.customer_id == customer.id)
+        .order_by(Conversation.id.desc())
+        .limit(1)
+    ).one()
+
+
+# ---------------------------------------------------------------------------
+# CM-1 — first contact menu + repeat resume
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.spec("CM-1")
+def test_cm1_first_contact_presents_8_category_menu(
+    client, mock_openai_chat, mock_meta_send
+):
+    post_message(client, "wamid.cm1.1", "hola")
+
+    with SessionLocal() as session:
+        replies = _outbound_texts(session)
+        customer = session.scalars(select(Customer)).one()
+        assert customer.state.value == "nuevo"  # auto-ficha (CR-1)
+        conversation = _conversation(session, customer)
+        assert conversation.state == ConversationState.BOT
+
+    assert len(replies) == 1
+    assert "asistente virtual de Lumat" in replies[0]
+    for category in MENU_CATEGORIES:
+        assert category in replies[0], f"menu missing category: {category}"
+
+
+@pytest.mark.spec("CM-1")
+def test_cm1_repeat_contact_resumes_not_restarts(
+    client, mock_openai_chat, mock_meta_send
+):
+    """Turn 2 must continue the flow (capture question), not greet again."""
+    post_message(client, "wamid.cm1.2a", "hola")
+    post_message(client, "wamid.cm1.2b", "quiero ver mi calefont")
+
+    with SessionLocal() as session:
+        replies = _outbound_texts(session)
+        customer = session.scalars(select(Customer)).one()
+        conversation = _conversation(session, customer)
+        captured = conversation.captured_data or {}
+
+    assert len(replies) == 2
+    assert "asistente virtual" in replies[0]  # greeting only on turn 1
+    assert "¿Cuál es tu nombre?" in replies[1]  # capture resumed (CM-2 field 1)
+    assert "asistente virtual" not in replies[1]  # NOT restarted from scratch
+    assert captured["_pending"] == "name"  # state persisted (D2 rebuild)
+
+
+# ---------------------------------------------------------------------------
+# CM-2 — progressive capture: skip + complete-with-consent
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.spec("CM-2")
+def test_cm2_skip_marks_unknown_and_continues(client, mock_openai_chat, mock_meta_send):
+    post_message(client, "wamid.cm2.1", "hola")
+    post_message(client, "wamid.cm2.2", "calefont")
+    post_message(client, "wamid.cm2.3", "no sé")
+
+    with SessionLocal() as session:
+        customer = session.scalars(select(Customer)).one()
+        conversation = _conversation(session, customer)
+        captured = conversation.captured_data or {}
+        last_reply = _last_outbound(session).text
+
+    # the skipped field is stored as unknown, NOT blocking the flow (CM-2)
+    assert captured.get("name") == "unknown"
+    assert captured["_pending"] == "comuna"  # flow advanced to the next field
+    assert "comuna" in (last_reply or "").lower()
+
+
+@pytest.mark.spec("CM-2")
+@pytest.mark.spec("CR-6")
+def test_cm2_complete_capture_persists_consent_and_ficha(
+    client, mock_openai_chat, mock_meta_send
+):
+    """Full capture: each answer stored, skip on evidence, consent -> ficha."""
+    turns = [
+        ("wamid.cm2c.1", "hola"),                      # greeting
+        ("wamid.cm2c.2", "calefont"),                  # menu choice -> capture
+        ("wamid.cm2c.3", "Juan Perez"),                # name
+        ("wamid.cm2c.4", "Providencia"),               # comuna
+        ("wamid.cm2c.5", "Av. Siempre Viva 123"),      # address
+        ("wamid.cm2c.6", "Marca X modelo Y, 5 años"),  # equipment
+        ("wamid.cm2c.7", "no enciende desde ayer"),    # failure
+        ("wamid.cm2c.8", "no tengo"),                  # evidence -> skip
+        ("wamid.cm2c.9", "lunes o martes en la tarde"),  # availability
+        ("wamid.cm2c.10", "sí"),                       # consent -> completion
+    ]
+    for wamid, text in turns:
+        post_message(client, wamid, text)
+
+    with SessionLocal() as session:
+        customer = session.scalars(select(Customer)).one()
+        conversation = _conversation(session, customer)
+        captured = conversation.captured_data or {}
+        replies = _outbound_texts(session)
+
+    # CR-6: captured identification/location + consent on the ficha
+    assert customer.name == "Juan Perez"
+    assert customer.comuna == "Providencia"
+    assert customer.address == "Av. Siempre Viva 123"
+    assert customer.consent_status is True
+    assert customer.consent_at is not None
+
+    # CM-2: every answer stored; the skipped evidence field is "unknown"
+    assert captured["name"] == "Juan Perez"
+    assert captured["comuna"] == "Providencia"
+    assert captured["equipment"] == "Marca X modelo Y, 5 años"
+    assert captured["failure"] == "no enciende desde ayer"
+    assert captured["evidence"] == "unknown"
+    assert "_pending" not in captured  # flow completed
+
+    # CM-5: completion + summary attached
+    assert any("quedó registrada" in r for r in replies)
+    assert conversation.summary is not None
+
+
+# ---------------------------------------------------------------------------
+# HH-3 — two failed comprehension attempts escalate to a human
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.spec("HH-3")
+def test_hh3_two_failures_escalate(client, mock_openai_chat, mock_meta_send):
+    """Greeting + one post-greeting failure -> human (2 unknown classifications).
+
+    The first-contact "hola" is itself classified `unknown` and consumes the
+    first HH-3 counter slot (B4 behavior — classify_intent counts every unknown
+    message; the greeting is the bot's successful answer to it, CM-1). The NEXT
+    unknown reaches the 2-failure threshold: the handoff reply is sent (no LLM)
+    and the deriva bundle is created. The non-escalating clarification path for
+    a turn-2 unknown is covered by tests/integration/test_webhook_ingest.py
+    (retry-storm) and test_handoff.py.
+    """
+    post_message(client, "wamid.hh3.1", "hola")  # greeting + menu (CM-1)
+    post_message(client, "wamid.hh3.2", "asdfghjkl")  # 2nd unknown -> escalate
+
+    with SessionLocal() as session:
+        customer = session.scalars(select(Customer)).one()
+        conversation = _conversation(session, customer)
+        replies = _outbound_texts(session)
+        cases = session.scalars(select(Case)).all()
+
+    assert len(replies) == 2
+    assert "asistente virtual" in replies[0]  # CM-1: NO clarification on turn 1
+    assert "asesor revisará tu caso" in replies[1]  # handoff reply
+    assert conversation.state == ConversationState.HUMAN  # HH-1 bot->human
+    assert len(cases) == 1  # deriva bundle created (HH-2)
+    assert cases[0].conversation_id == conversation.id
+    assert cases[0].bundle["escalate_reason"] == "unknown_intent_twice"
+
+
+# ---------------------------------------------------------------------------
+# CM-4 / CM-6 — KB miss: cannot-answer + unresolved log + escalation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.spec("CM-4")
+@pytest.mark.spec("CM-6")
+def test_cm6_kb_miss_logs_unresolved_and_escalates(
+    client, mock_openai_chat, mock_openai_embeddings, mock_meta_send
+):
+    """Empty KB -> retrieval returns nothing -> cannot-answer (deterministic,
+    no respond LLM call), the question is logged unresolved (CM-6), and the
+    conversation escalates by default."""
+    post_message(client, "wamid.cm6.1", "hola")
+    post_message(client, "wamid.cm6.2", "cuanto cuesta la revision anual")
+
+    with SessionLocal() as session:
+        customer = session.scalars(select(Customer)).one()
+        conversation = _conversation(session, customer)
+        replies = _outbound_texts(session)
+        inbound = session.scalars(
+            select(Message)
+            .where(
+                Message.direction == MessageDirection.INBOUND,
+                Message.text == "cuanto cuesta la revision anual",
+            )
+        ).one()
+
+    assert replies[1] == CANNOT_ANSWER_REPLY  # CM-4 deterministic cannot-answer
+    assert conversation.state == ConversationState.HUMAN  # default escalation
+    # CM-6: question + context logged on the inbound message payload
+    assert (inbound.payload or {}).get("unresolved") is True
+    assert (inbound.payload or {}).get("unresolved_context") == "intent=valores"
