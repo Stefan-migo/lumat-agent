@@ -20,7 +20,8 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import session_scope
-from app.models import Conversation, Message, MessageDirection, MessageStatus, Settings
+from app.models import Conversation, Message, MessageDirection, MessageStatus
+from app.services.settings import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +58,20 @@ def send_text(phone_e164: str, text: str) -> str:
 
 
 def meta_message_cost(session) -> float:
-    """Service-message unit cost from settings (SS-4), default reference."""
-    row = session.get(Settings, "meta_pricing")
-    if row is not None and isinstance(row.value, dict):
-        unit = row.value.get("service_message_cost")
+    """Service-message unit cost from settings (SS-4), default reference.
+
+    T4.5 consolidation (T4.1.1 ponytail debt): reads through the settings
+    service (`get_setting`) instead of touching the `settings` row directly
+    — one settings read path for the whole codebase. A stored pricing dict
+    without `service_message_cost` (or any non-dict value) falls back to the
+    reference default; the effective-2026-10-01 price is verified at
+    activation.
+    """
+    pricing = get_setting(
+        session, "meta_pricing", default={"service_message_cost": DEFAULT_META_COST}
+    )
+    if isinstance(pricing, dict):
+        unit = pricing.get("service_message_cost")
         if unit is not None:
             return float(unit)
     return DEFAULT_META_COST
