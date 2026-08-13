@@ -1,15 +1,15 @@
 ```yaml
 schema: gentle-ai.verify-result/v1
-evidence_revision: sha256:6c6a34e6f8a139ed7922365678db3bb1f5f571a6308d846306cb0aee2363596c
+evidence_revision: sha256:c4d5a2b23909c3be1749e8854b0ddf74b320ff70b7fd61b2bfdca8777b3a7129
 verdict: pass
 blockers: 0
 critical_findings: 0
-requirements: 18/18
-scenarios: 25/25
+requirements: 16/16
+scenarios: 21/21
 test_command: pytest tests/
 test_exit_code: 0
-test_output_hash: sha256:6c6a34e6f8a139ed7922365678db3bb1f5f571a6308d846306cb0aee2363596c
-build_command: .venv/bin/python -c "import app.main; from app.services.customers import get_or_create_customer, set_customer_state; from app.services.kb import ingest_document, retrieve; from app.services.send import send_text, deliver_outbound; from app.services.costs import record_llm_cost, conversation_spend, daily_spend; from app.chat.state import ConversationState; from app.chat.graph import build_graph, run_conversation; from app.chat.nodes.classify_intent import classify_intent, is_injection; from app.chat.nodes.respond import respond, log_unresolved; from app.chat.nodes.capture import capture; from app.chat.nodes.summary import summary; print('import OK')" (with test env set)
+test_output_hash: sha256:c4d5a2b23909c3be1749e8854b0ddf74b320ff70b7fd61b2bfdca8777b3a7129
+build_command: .venv/bin/python -c "import app.main; from app.services.settings import get_setting, set_setting, get_scope_mode, get_emergency_keywords, get_tone, get_message; from app.services.emergency import classify_emergency, compile_keywords, fold_accents; from app.services.notify import send_emergency_notification, send_email, is_ack_message, acknowledge_emergency_if_ack, send_pending_emergency_reminders; from app.services.cases import get_or_create_case, build_deriva_bundle, create_handoff_case; from app.services.costs import conversation_cost_state, daily_cost_state, maybe_alert_owner, spend_snapshot, combined_cost_mode; from app.chat.nodes.emergency_gate import emergency_gate; from app.chat.nodes.emergency import emergency; from app.chat.nodes.cost_gate import cost_gate; from app.chat.nodes.handoff_gate import handoff_gate, evaluate_handoff; from app.chat.nodes.handoff import handoff, HANDOFF_REPLY; from app.chat.graph import build_graph, run_conversation; from app.chat.state import ConversationState, set_conversation_state; print('import OK')" (with test env set)
 build_exit_code: 0
 build_output_hash: sha256:73e65cba19528ade3fd463248a9ba2c44e92c41810caef6a0bba624cefc54219
 ```
@@ -17,18 +17,232 @@ build_output_hash: sha256:73e65cba19528ade3fd463248a9ba2c44e92c41810caef6a0bba62
 # Verification Report — hito-1-setup-whatsapp
 
 **Change**: hito-1-setup-whatsapp · **Project**: LumatAgent (lumat) · **Phase**: sdd-verify
-**Latest verified slice**: **Batch 3 (PR 4)** — commits `c3226c49..ef8aba74` (T3.1 customers · T3.2 chat state/graph · T3.3 KB · T3.4 intent · T3.5 nodes · T3.6 send/costs; T2.1 remains blocked on client credentials)
+**Latest verified slice**: **Batch 4 (PR 5)** — commits `e43c6b46..c0823e6e` (18 commits: T4.1 settings/scope/tone · T4.2 emergency engine+gates · T4.3 notification+ack+reminders · T4.4 handoff+deriva · T4.5 cost guardrails; T2.1 remains blocked on client credentials)
 **Mode**: **STRICT TDD** (config.yaml `apply.tdd: true`, runner `pytest tests/`)
 **Artifact store**: hybrid (this file + Engram `sdd/hito-1-setup-whatsapp/verify-report`)
-**Ledger token (verify run)**: `sha256:5782326ac5cd2959814531e5d584d769070b5c193f58a8ff04b48b7fed97a037` (orchestrator settles)
-**Cumulative verified**: 27 requirements / 37 scenarios across B0+B1+B2+B3 slices. Slice-scoped envelope for B3 = 18/18 reqs, 25/25 scenarios.
+**Ledger token (verify run)**: `sha256:5782326ac5cd2959814531e5d584d769070b5c193f58a8ff04b48b7fed97a037` (B3 run token, orchestrator settles; B4 run token assigned by orchestrator)
+**Cumulative verified**: 39 requirements / 55 scenarios across B0+B1+B2+B3+B4 slices. Slice-scoped envelope for B4 = 16/16 reqs, 21/21 scenarios.
 
 ---
+# Batch 4 (PR 5) — THIS VERIFY RUN
+
+**Verified slice**: commits `e43c6b46..c0823e6e` (18 commits: e43c6b46 feat(settings) KV+audit · 269323a2 feat(settings) scope/keywords/tone · ec582bf4 feat(emergency) regex engine · 0885e62e feat(chat) emergency gate+nodes · e2919bfa feat(notify) notification service · 76f21dec feat(chat) ack+reminders · 82d241f3 feat(chat) state model+handoff gate · e82c52cf feat(services) cases+deriva node · 3ea3d90e feat(costs) guardrails · 807cc7b6 feat(chat) cost gate · 08c90d32 refactor(send) settings-consolidation · c0823e6e refactor(costs) _limit dedupe + chore commits)
+**Runtime harness**: `lumat-pg-test` container UP (localhost:5432, pgvector) — all suites executed against the real DB; OpenAI/Meta/SMTP calls respx-mocked or patched.
+
+### Completeness (B4 slice)
+
+| Metric | Value |
+|--------|-------|
+| Tasks total (change) | 33 (header says 34 — pre-existing discrepancy, SUGGESTION-1 carried) |
+| Tasks complete | 18/33 (B0: 3 + B1: 3 + B2: 2 + B3: 6 + B4: 5, of which T2.1 stays `[ ]` **blocked**) |
+| B4 tasks complete | 5/5 — T4.1 [x], T4.2 [x], T4.3 [x], T4.4 [x], T4.5 [x] (tasks.md, flipped by this verify) |
+| B4 requirements verified | 16/16 slice-scope: SS-1..5 (5) · EM-1..5 (5) · HH-1, HH-2, HH-3, HH-5 (4) · CR-5 (1) · SH-5 (1) |
+| B4 scenarios verified | 21/21 slice-scope: SS 6 (SS-4 0 — basis/snapshot, panel → T5.4) · EM 7 · HH 6 · CR-5 1 · SH-5 1 |
+| T2.1 blocked verdict | ✅ PASS for this slice — ops dependency on client credentials, unchanged from B2/B3 |
+
+Full-spec totals for context: settings-scope-limits = 5 reqs / 7 scenarios (SS-4 visibility → T5.4) · emergency-detection = 5 reqs / 7 scenarios · human-handoff = 5 reqs / 7 scenarios (HH-4 panel → T5.3) · customer-records = 6 reqs / 8 scenarios (B4 re-verifies CR-5 closed→new at ingest) · security-hardening = 5 reqs / 8 scenarios (SH-5 login → T5.1). **Cumulative B0+B1+B2+B3+B4: 39 reqs / 55 scenarios verified** (27+12 new reqs, 37+18 new scenarios; CR-5/SH-5/HH-3 counted once — B4 adds ingest-level and service-level evidence).
+
+### Build & Tests Execution (B4)
+
+**Build-equivalent**: ✅ Passed (exit 0)
+```text
+.venv/bin/python -c "import app.main; from app.services.settings import ...; from app.services.emergency import ...; from app.services.notify import ...; from app.services.cases import ...; from app.services.costs import ...; from app.chat.nodes.{emergency_gate,emergency,cost_gate,handoff_gate,handoff} import ...; from app.chat.graph import ...; from app.chat.state import ...; print('import OK')" (with test env set)
+-> import OK   (hash sha256:73e65cba…4cefc54219)
+```
+
+**Focused suites** (live pgvector, exit 0):
+```text
+$ pytest tests/integration/test_settings.py -v          -> 17 passed
+$ pytest tests/integration/test_emergency.py -v         -> 32 passed
+$ pytest tests/integration/test_emergency_notify.py -v  -> 29 passed
+$ pytest tests/integration/test_handoff.py -v           -> 18 passed
+$ pytest tests/integration/test_cost_guardrails.py -v   -> 22 passed
+Total: 118 passed in 15.81s   (hash sha256:38a7fbdc…89f43dd6)
+```
+
+**Full suite**: ✅ **246 passed / 0 failed / 0 skipped** in 41.64s, exit 0 — matches expected 246 (128 B0-B3 + 118 B4), no regressions.
+Output hash: `sha256:c4d5a2b23909c3be1749e8854b0ddf74b320ff70b7fd61b2bfdca8777b3a7129`.
+
+**Migration check** (live): `schema_migrations` = [001_init, 002_customer_notes, 003_conversation_captured_data, 004_case_emergency, 005_case_emergency_ack, 006_handoff_deriva]; `cases.emergency/notified_at/acknowledged_at/ack_by/reminder_count/bundle/escalated_at` + `conversation_events.actor` present in live `\d`; `test_migrations.py` 10/10 green (004/005/006 expected).
+
+**Secrets check** (all passed):
+```text
+git grep -iE "sk-[A-Za-z0-9]{10,}" app/ db/ infra/ (excl. sk-test)  -> no matches
+git grep -iE "EAAG[A-Za-z0-9]{10,}" / "AKIA" / "ghp_"               -> no matches
+git ls-files | grep -i env                                          -> only infra/.env.example (SH-2 intact)
+```
+No test makes a real call to api.openai.com / graph.facebook.com / SMTP: conftest FORCES `OPENAI_API_KEY=sk-test` (fail-fast 401), Meta is respx-mocked, SMTP patched (`no_real_smtp` fixture in test_cost_guardrails, `_capturing_smtp`/`_failing_smtp` in test_emergency_notify) — full suite green confirms zero real external calls.
+
+**Coverage**: ➖ Not available (config.yaml `verify.coverage_threshold: 0`; no coverage tooling — consistent with B0-B3).
+
+### Spec Compliance Matrix (B4 slice)
+
+| Requirement | Scenario | Covering test (runtime, all passing) | Result |
+|-------------|----------|--------------------------------------|--------|
+| SS-1 Bot-Resolves vs Always-Escalate | Owner changes a rule | `test_scope_mode_per_category_override` (valores→always_escalate stored; calefont keeps bot_resolve) + `test_scope_mode_invalid_stored_mode_falls_back_to_default` | ✅ COMPLIANT |
+| SS-1 Bot-Resolves vs Always-Escalate | Rule change takes effect | `test_scope_always_escalate_category_escalates` (graph run: always_escalate category → handoff; no LLM answer) + `test_scope_bot_resolve_category_does_not_escalate` (companion) | ✅ COMPLIANT |
+| SS-2 Configurable Emergency Keywords | Keyword added | `test_emergency_keywords_override_round_trip` (list round-trips through KV) + `test_custom_keyword_from_settings_detected` (settings change → next message detects; 0 LLM calls) | ✅ COMPLIANT |
+| SS-3 Cost Guardrails | Conversation limit reached | `test_conversation_cost_state_conservative_at_80` (exact 80.0%) + `test_conversation_cost_state_blocked_at_100` (exact 100%) + `test_conversation_blocked_escalates_no_llm` (blocked→handoff, HANDOFF_REPLY, 0 LLM calls, `cost.alert.conversation.100` audit) | ✅ COMPLIANT |
+| SS-3 Cost Guardrails | Daily limit reached | `test_daily_cost_state_blocked_at_100` + `test_daily_blocked_escalates_no_llm` (daily 100% → escalate cost_daily_limit, no paid LLM, deterministic fallback) + `test_maybe_alert_owner_daily_scoped_by_date` (per-UTC-day dedupe) | ✅ COMPLIANT |
+| SS-4 Cost Tracking and Meta Pricing Awareness | (tracking + snapshot basis) | `test_spend_snapshot_exposes_spend_limits_and_mode` + `test_spend_snapshot_without_conversation_scope` (date/spend/limits/percent/mode read model) + `test_meta_message_cost_uses_stored_settings_value` (meta_pricing via settings) + `test_daily_spend_scoped_to_day` (B3) | ✅ COMPLIANT (basis; "spend visible in panel" scenario → T5.4) |
+| SS-5 Adjustable Tone and Messages | Message edited | `test_tone_override` + `test_message_override_wins_over_caller_default` (edited greeting/cannot_answer win; unset falls back to caller default) | ✅ COMPLIANT (service surface; panel UI → T5.4) |
+| EM-1 Deterministic Keyword Detection | Emergency keyword detected | `test_strong_hit_each_default_keyword` (13/13 SS-2 default keywords) + `test_accent_folded_variants_are_strong` (explosión==explosion, monóxido==monoxido, eléctrico==electrico) + `test_benign_text_no_hit` (fuga de agua ≠ hit) | ✅ COMPLIANT |
+| EM-1 Deterministic Keyword Detection | Keyword configured | `test_custom_keyword_from_settings_detected` (SS-2 list change → strong hit next message, before any LLM) | ✅ COMPLIANT |
+| EM-2 Flow Interrupt | Interrupt mid-capture | `test_strong_hit_mid_capture_interrupts` (capture in progress; emergency message → protocol replies, `_pending` NOT advanced, 0 additional LLM calls) | ✅ COMPLIANT |
+| EM-3 Safety Instructions | Safety guidance delivered | `test_strong_hit_mid_capture_interrupts` (INSTRUCCIONES DE SEGURIDAD + CONTACTOS DE EMERGENCIA incl. Bomberos 132 + "notificado"; case.emergency=True, status=escalado, state→human) | ✅ COMPLIANT |
+| EM-4 Immediate Owner/Technician Notification | Notification sent | `test_emergency_node_fires_notification_on_strong_hit` (template to `notify.owner_whatsapp`, notified_at set, `notification.sent` audit) + `test_template_goes_to_owner_with_phone_and_context` (customer phone + location + context params) + `test_email_fallback_on_whatsapp_failure` | ✅ COMPLIANT |
+| EM-4 Immediate Owner/Technician Notification | Notification acknowledged | `test_acknowledge_records_ack_on_case` (acknowledged_at + ack_by=customer_reply + `case.acknowledged` audit) + `test_ack_hooked_in_ingest_process_message` (webhook path) + `test_ack_ignored_when_already_acknowledged` | ✅ COMPLIANT |
+| EM-5 Conservative Default | Ambiguous risk | `test_weak_hit_escalates_not_ignored` (huele raro / no me llega gas / olor a quemado → weak) + `test_weak_hit_escalates_to_human` (weak → handoff deriva case, HH-2 bundle, state→human, never ignored; no emergency protocol flags) | ✅ COMPLIANT |
+| HH-1 Per-Conversation State Model | Bot to human | `test_state_transition_bot_to_human_records_event` (state_change event with cause+actor) + `test_persona_escalates_to_human_with_deriva_case` (state→human via handoff) | ✅ COMPLIANT |
+| HH-1 Per-Conversation State Model | Close conversation | `test_state_transition_close_records_closure` (→closed + closed_at stamped + event recorded) + `test_state_transition_same_state_is_noop` | ✅ COMPLIANT |
+| HH-2 Deriva with History and Summary | Handoff bundle complete | `test_handoff_bundle_contains_history_summary_customer_captured` (bundle: history ≥4 msgs, summary on case+conv, customer phone, captured fields, escalate_reason=complaint) | ✅ COMPLIANT |
+| HH-3 Escalation Triggers | Customer requests a person | `test_gate_persona_trigger` (deterministic pre-LLM) + `test_persona_escalates_to_human_with_deriva_case` (escalated with history+summary) | ✅ COMPLIANT (this B4 scenario; "two failed comprehension" verified in B3, re-confirmed here by `test_two_unknown_intents_escalate_to_human`) |
+| HH-5 Human Response Channel | Webhook keeps recording during human phase | `test_hh5_human_state_persists_without_bot_reply` (inbound during human → persisted, status processed, NO bot reply, no LLM) + `test_hh5_human_state_graph_direct_still_persists_events` (no re-escalation) | ✅ COMPLIANT |
+| CR-5 History Linkage | History complete | `test_cr5_closed_opens_new_conversation_through_ingest` (closed conversation never reopens; next inbound → NEW conversation, same customer, history linked) + B3 history test | ✅ COMPLIANT (re-verified at ingest path; counted in B3, B4 adds ingest evidence) |
+| SH-5 Audit Log | Settings change audited | `test_set_creates_row_and_audits_change` (actor/action/entity_id/before/after) + `test_set_update_upserts_in_place` (2 writes → 2 audit entries, before/after on each) + `test_semantic_writes_are_audited` (scope_rules + keywords audited) + notification/handoff audits (`notification.sent`, `case.acknowledged`, `conversation.handoff`) | ✅ COMPLIANT |
+
+**Compliance summary (B4 slice)**: 21/21 scenarios compliant for the verified scope; 16/16 requirements mapped to passing tests. Deferred per tasks.md traceability: SS-4 "spend visible" panel → T5.4 · SS-5 panel UI → T5.4 · HH-4 case visibility → T5.3 · SH-5 login audit → T5.1.
+
+### Correctness (Static Evidence — B4)
+
+| Design item | Status | Notes |
+|-------------|--------|-------|
+| `app/services/settings.py` — KV + scope/keywords/tone (D5, SS-1/2/5, SH-5) | ✅ Implemented | `get_setting`/`set_setting` (UPSERT + one audit entry per write, actor+updated_by); `get_scope_mode` (SS-1, invalid mode → default), `get_emergency_keywords` (SS-2, EM-1 defaults), `get_tone`/`get_message` (SS-5); SETTINGS_DEFAULTS incl. meta_pricing (SS-4) + cost limits (SS-3) + notify/safety defaults |
+| `app/services/emergency.py` — regex engine (EM-1, EM-5, SS-2) | ✅ Implemented | accent-folded (NFD) + IGNORECASE compile, longest-first; strong/weak/None (EM-5 weak markers); benign-qualifier exclusion ("fuga de agua" ≠ hit); read-only default list |
+| `emergency_gate` node — before any LLM (EM-1/2/5) | ✅ Implemented | runs on every inbound incl. mid-capture; per-run settings read (SS-2 immediate); weak → escalate_reason=emergency_weak_hit |
+| `emergency` node — safety protocol (EM-2/3/4) | ✅ Implemented | safety instructions + contacts + notify_message from settings; case flagged (migration 004); state→human (HH-1 actor=system); notification via notify service (dedup on notified_at); never blocks on notification failure |
+| `app/services/notify.py` — EM-4 + D9 | ✅ Implemented | `emergency_alert` template to `notify.owner_whatsapp` (customer phone + location + context), email fallback (stdlib smtplib), every attempt audited (SH-5), never raises; `is_ack_message`/`acknowledge_emergency_if_ack` (reply-keyword ack, audited); `send_pending_emergency_reminders` (>15 min, max 2, audited) |
+| Ack + reminders wiring | ✅ Implemented | `acknowledge_emergency_if_ack` before the graph in ingest `process_message`; `send_pending_emergency_reminders` inside `sweep_received` (no new scheduler); migration 005 columns |
+| `handoff_gate` — deterministic triggers (HH-3) | ✅ Implemented | persona/media/complaint pre-LLM; 2× unknown + SS-1 always_escalate post-classification; all converge on handoff node |
+| `handoff` node — deriva (HH-1/2) | ✅ Implemented | CM-5 summary (failure degrades, never blocks), `create_handoff_case` bundle (history+summary+customer+captured+reason), state→human with cause+actor, audit + ConversationEvent; under cost block skips the summary LLM |
+| `app/services/cases.py` — HH-2 bundle | ✅ Implemented | `get_or_create_case` + `build_deriva_bundle` + `create_handoff_case`; replaces T3.4 `_get_or_create_case` ponytail debt |
+| State model (HH-1) | ✅ Implemented | `set_conversation_state` writes state_change event (cause+actor, migration 006); closed stamps closed_at; `get_or_create_conversation` never reopens closed (CR-5) |
+| HH-5 ingest guard | ✅ Implemented | `process_message`: human-state conversation → persist + PROCESSED, no graph run, no outbound; media-only inbound now runs the graph (evidence → handoff) |
+| `cost_gate` node (SS-3) | ✅ Implemented | after emergency_gate, before handoff_gate; combined mode worst-wins; blocked → escalate + reason cost_daily_limit/cost_conversation_limit; 80%/100% alerts fire here |
+| `costs.py` guardrails (SS-3/4) | ✅ Implemented | `conversation_cost_state`/`daily_cost_state` (Decimal exact 80/100 boundaries), `_limit` deduped read path, `maybe_alert_owner` (audit-deduped: audit row + email, never raises), `spend_snapshot` (SS-4 panel read model) |
+| Graph ordering | ✅ Implemented | START→emergency_gate→(strong→emergency | weak→handoff | miss→cost_gate)→(blocked→handoff | else→handoff_gate)→(trigger→handoff | else→receive); safety > budget > handoff > LLM; documented in graph.py |
+| `respond` conservative mode (SS-3) | ✅ Implemented | BRIEF_MODE_SUFFIX appended to system prompt when cost_mode=="conservative" (one-line replies; deterministic) |
+| send.py consolidation (T4.1.1 debt) | ✅ Implemented | `meta_message_cost` reads via `get_setting` (stored/malformed/missing → DEFAULT_META_COST); send/notify share one settings read path |
+| Migrations 004/005/006 | ✅ Implemented | apply cleanly, idempotent, live-verified (columns present); migration tests updated (10/10) |
+
+### Coherence (Design — B4)
+
+| Design decision | Followed? | Notes |
+|-----------------|-----------|-------|
+| D4 no LLM on safety path | ✅ Yes | emergency path proven zero-LLM (call-count assertions in tests + runtime harness); weak → deterministic escalate |
+| D5 single settings KV table | ✅ Yes | scope_rules/keywords/tone/limits/safety/notify all in `settings` JSONB; one UPSERT + one audit entry |
+| D9 notification = WhatsApp template + email fallback; ack keyword | ✅ Yes | `emergency_alert` template to owner + smtplib fallback; ack via reply keyword (panel button → T5.3) |
+| Gate ordering (emergency → cost → handoff → LLM) | ✅ Yes | design drew gates abstractly; concrete order documented in graph.py and proven by `test_emergency_wins_over_daily_block` (safety beats budget) |
+| HH-1 every transition recorded with timestamp+cause | ✅ Yes | state_change events with actor (migration 006); no-op transitions write nothing |
+| HH-2 deriva bundle self-contained | ✅ Yes | JSONB bundle snapshot on case (history/summary/customer/captured/reason); panel renders without re-join |
+| HH-5 persist during human, no panel reply in H1 | ✅ Yes | ingest boundary guard; no bot loop |
+| CR-5 closed→new, history linked | ✅ Yes | get_or_create_conversation never reopens closed; ingest-level test |
+| Deviation 1 (EM-4/D9): notification recipient = OWNER (`notify.owner_whatsapp`), not the customer | ✅ Acceptable | Spec text "notify the configured owner/technician contact"; template carries customer phone as a parameter. Matches EM-4 and D9 — the customer's own emergency reply is the customer-facing channel |
+| Deviation 2: gate ordering gate-first (emergency_gate before receive) | ✅ Acceptable | Keeps the greeting/menu out of the safety protocol (EM-2 full interrupt); recorded in graph.py |
+| Deviation 3: HH-5 persist-only (no reply from bot during human) | ✅ Acceptable | Spec: "In H1 the human responds through the same WhatsApp number"; ingest marks PROCESSED, no graph run |
+| Deviation 4: conservative mode only in respond | ✅ Acceptable | Summary node is internal and already "breve y conciso"; documented in apply-progress |
+| Deviation 5: blocked path reuses existing handoff node | ✅ Acceptable | Single escalation flow (T4.4 principle); handoff skips summary LLM under block — no fake-answer generator |
+| Deviation 6: owner cost alert = audit + email only (no WhatsApp template) | ✅ Acceptable | Cost-alert utility template needs Meta approval (T2.1); email is the T4.3 fallback channel already in place; documented in maybe_alert_owner docstring |
+| Deviation 7: cost block reply = existing HANDOFF_REPLY | ✅ Acceptable | Same no-LLM reply family as CANNOT_ANSWER_REPLY/CLARIFICATION_REPLY; deterministic, SS-3 "escalate to human" |
+| Rollback boundary | ✅ Yes | B4 = 18 commits e43c6b46..c0823e6e; reset to ef8aba74 removes slice cleanly; B0-B3 suites still green (128/128 in full run) |
+
+### Strict TDD Compliance (Step 5a + expanded)
+
+| Check | Result | Details |
+|-------|--------|---------|
+| TDD Evidence reported | ✅ | apply-progress obs #1372/#1424 (topic sdd/hito-1-setup-whatsapp/apply-progress) "TDD Cycle Evidence" tables present (T4.1..T4.5 rows, RED→GREEN→TRIANGULATE→SAFETY NET→REFACTOR) |
+| All tasks have tests | ✅ | 5/5 B4 code tasks have test files (settings/emergency/emergency_notify/handoff/cost_guardrails); T2.1 ops-blocked (no tests expected) |
+| RED confirmed (tests exist) | ✅ | 5/5 test files verified on disk (RED = failing/import errors per apply-progress) |
+| GREEN confirmed (tests pass) | ✅ | 118/118 B4 tests pass on execution now — cross-referenced against live runs, not trusted blindly |
+| Triangulation adequate | ✅ | 118 distinct cases: settings ×17 (KV read/write/audit, scope ×3, keywords ×2, tone/messages ×4) · emergency ×32 (13 keywords + 5 accent + 3 weak + 3 benign + 2 pair + 4 graph) · notify ×29 (template ×4, fallback ×2, ack ×8+3, reminders ×3, graph ×2) · handoff ×18 (transitions ×3, gate ×5, scope ×2, graph ×7) · cost ×22 (thresholds ×8, snapshot ×2, alerts ×4, gate ×6) — multiple distinct expectations per behavior; no single-case task with multi-scenario spec |
+| Safety Net for modified files | ✅ | test_webhook_ingest.py modified (ack hook + media evidence + HH-5 guard): B0-B3 suites still green in full run (128 baseline); new files "N/A (new)" correct; ingest/state/graph/send modified — full 246 green |
+| Assertion quality audit (5f) | ✅ | No tautologies, no ghost loops, no smoke-only, no type-only-alone. Strongest: cost-block tests assert zero LLM calls under block; `test_emergency_wins_over_daily_block` asserts the cost gate NEVER ran (no alert audit rows); Decimal-exact 80.0/100.0 boundary asserts; `test_weak_hit_escalates_to_human` asserts customer text NEVER in an LLM user slot; SMTP patched via fixtures (never real) |
+
+**TDD Compliance**: 7/7 checks passed.
+
+### Test Layer Distribution (B4)
+
+| Layer | Tests | Files | Tools |
+|-------|-------|-------|-------|
+| Unit | 0 | 0 | — |
+| Integration | 118 | 5 (+ shared conftest) | real pgvector container + respx (OpenAI chat, Meta template/send) + SMTP patched (smtplib fixture) |
+| E2E | 0 | 0 | — |
+| **Total** | **118 (B4)** | **5** | suite total 246 (128 B0-B3 + 118 B4) |
+
+### Changed File Coverage
+
+Coverage analysis skipped — no coverage tool detected (config.yaml `verify.coverage_threshold: 0`, no pytest-cov in pyproject). Informational only (strict-TDD module).
+
+### Quality Metrics
+
+**Linter**: ➖ Not available · **Type Checker**: ➖ Not available. Informational only — never blocking.
+
+### Issues Found (B4 slice)
+
+**CRITICAL**: None
+
+**WARNING**:
+1. **(Carried from B1/B2/B3 — MECHANISM RESOLVED, hygiene remains)** Real `OPENAI_API_KEY` still exported in the dev shell (`~/.bashrc`). conftest FORCES `os.environ["OPENAI_API_KEY"] = "sk-test"` (no setdefault), so tests can never pick up the real key — verified: zero real network calls (full suite green). Remaining risk is dev-shell hygiene only (an unmocked manual script could spend tokens). Downgraded, unchanged.
+2. (NEW, informational) B4 diff (authored, excl. graphify artifacts + verify report) = 3,620 insertions / 79 deletions across 32 files vs B4 forecast ~1,150 lines (tests excluded from forecast per tasks.md). Within the chained-PR contract; flagging for PR-time reviewer awareness only — the large deltas are the graphify `graph.json`/`graph.html` artifacts and the migration/test bodies, not unexpected architecture.
+
+**SUGGESTION**:
+1. (Carried) `tasks.md` header claims "34 tasks" vs 33 rows (line 4). Fix on next tasks.md edit.
+2. (Carried) WH-1 "Token mismatch" scenario log clause — no `caplog` assertion yet. Close in a later batch or T6.1.
+3. (Carried) README curl proof manual — spec-marker count check in T6.1.
+4. (Carried) `test_infra.py::test_db_service_uses_pgvector_image` double-condition assert — cosmetic simplification.
+5. (Carried) Rate limiter counts duplicate deliveries against the per-phone budget BEFORE dedup — consider counting newly-inserted rows when ingest is next touched.
+6. (Carried) Non-JSON body → 200+drop has no covering test — add in T6.2 functional suite.
+7. (Carried from B3) Media-only inbound now runs the graph (B4 fixed the silent no-reply gap) — a photo-only first contact escalates as evidence via the handoff gate; covered by `test_media_evidence_escalates_through_process_message`. RESOLVED in B4.
+8. (NEW) `test_handoff.py::test_cr5_closed_opens_new_conversation_through_ingest` comments note a latent psycopg rowcount quirk (`persist_message` boolean returns False even for new rows) — the acceptance asserts the row landed in a NEW conversation, so the quirk is documented not blocking; worth a look in T6.x.
+
+### Graphify Context (B4)
+
+- Graph check: `graphify-out/graph.json` present (876 nodes / 1623 edges / 66 communities; report header "built from commit c3226c49", `.graphify_analysis.json` regenerated 2026-08-13 08:19 post-B4 — B4 nodes ARE present in queries; semantic extraction blocked without a real OpenAI key per apply-progress; AST pass current; orchestrator owns the final refresh).
+- Query `graphify query "emergency detection regex gate"` (BFS depth=2, 82 nodes): start nodes `Emergency Detection`, `Emergency Detection Specification`, `app/chat/nodes/emergency_gate.py`, `services/emergency.py`, `Task T4.2 — emergency detection + gate`, `EM-1..EM-5` — all [EXTRACTED]; communities: Conversation Manager, 34 (emergency nodes).
+- Query `graphify query "handoff deriva cases escalation"` (BFS depth=2, 131 nodes): `HH-1..HH-5`, `Task T4.4 — Handoff + deriva + gates + tests`, `cases`, `Case Record`, `Human Handoff` — [EXTRACTED].
+- Query `graphify query "cost guardrails spend limit gate"` (BFS depth=2, 204 nodes): `Cost guardrails (spend limits + alerts)` (design), `costs.py` + `daily_spend()`/`conversation_spend()`/`_sum_columns()`, `tests/integration/test_cost_guardrails.py`, `Task T4.5 — Cost guardrails`, `SS-1..SS-4` — [EXTRACTED].
+- Path `graphify path "costs.py" "send.py" --undirected` → 2 hops: `costs.py --imports_from--> models.py <--imports_from-- send.py` ✓ (settings-service consolidation keeps the same 2-hop shape).
+- Path `graphify path "emergency_gate.py" "handoff" --undirected` → 7 hops via `Task T4.2 → Task T4.1 → Task T1.2 → T2.2 → WH-3 → WhatsApp Webhook → Human Handoff` (task→spec edges present).
+- Communities consulted: Conversation Manager (EM/SS/HH cluster), 34 (emergency nodes), 33 (cost guardrails), T3.6 Send + cost services, T4.4 Handoff.
+- Cosmetic: graphify skill 0.6.1 vs package version-mismatch warning — ignore (carried).
+
+### Runtime Harness Spot-Check (live)
+
+```text
+docker ps                                       -> lumat-pg-test UP (23 h), 0.0.0.0:5432->5432
+psql schema_migrations                          -> [001_init .. 006_handoff_deriva] (6)
+psql \d cases / \d conversation_events          -> emergency/notified_at/acknowledged_at/ack_by/reminder_count/bundle + actor present
+pytest tests/integration/{settings,emergency,emergency_notify,handoff,cost_guardrails}.py -> 118 passed (real DB, TRUNCATE-reset)
+pytest tests/                                   -> 246 passed in 41.64s (128 B0-B3 + 118 B4), exit 0
+build import (test env)                         -> import OK, exit 0
+secrets grep (sk-/EAAG/AKIA/ghp_)               -> no credential values in app/ db/ infra/
+```
+
+**B4 runtime harness** (signed webhook, Meta/OpenAI respx-mocked, /tmp/opencode/b4_harness.py):
+```text
+[1] emergency "huele a gas en el calefont" via signed POST ->
+    state=human, case.emergency=True, notified_at set,
+    audit=[customer.auto_created, conversation.emergency_detected, notification.sent],
+    outbound safety replies x3 (INSTRUCCIONES DE SEGURIDAD / CONTACTOS / notificado),
+    LLM calls=0, Meta template to owner=+56912345678 (name=emergency_alert) OK
+[2] customer reply "ok gracias" -> acknowledged_at set, ack_by=customer_reply,
+    case.acknowledged audit row (SH-5) OK
+[3] seeded daily spend >= $5.00 -> benign message from a FRESH phone ->
+    LLM calls before=0 after=0 (no LLM under block), reply='Un asesor revisará tu caso...',
+    state=human, bundle escalate_reason=cost_daily_limit OK
+HARNESS PASS: emergency->notify->ack->cost-block all verified live
+```
+(Note: the harness intentionally has no SMTP server, so the SS-3 100% alert email to localhost is refused — `maybe_alert_owner` catches it and never raises, proving the never-raises contract; the alert audit row is still written.)
+
+### Verdict (B4 slice)
+
+**PASS** — Batch 4 (T4.1 settings/scope/tone, T4.2 emergency engine+gates, T4.3 notification+ack+reminders, T4.4 handoff+deriva, T4.5 cost guardrails) is complete (5/5 tasks [x]), fully tested (118/118 focused, 246/246 full suite, live against the pgvector container with OpenAI/Meta/SMTP mocked/patched), and matches specs SS-1..5, EM-1..5, HH-1/2/3/5, CR-5, SH-5, the design D4/D5/D9 decisions, the gate-ordering (safety > budget > handoff > LLM), and task acceptance criteria. Strict TDD evidence validated 7/7. Runtime harness proved the EM-4 notification (Meta template to owner, mocked), the reply-keyword ack, and the SS-3 daily cost block end-to-end through the signed webhook. No CRITICAL findings; 1 carried WARNING (dev-shell key hygiene — test-override mechanism fixed). T2.1 remains `[ ]` **blocked on client credentials** — blocked is a PASS for this slice. **Cumulative: 39 reqs / 55 scenarios across B0+B1+B2+B3+B4.** Recommended next: create PR 5 (B4 slice, stacked to main), archive B4 slice (orchestrator), then Batch 5 apply (T5.1 panel auth … T5.5 dashboard; T5.4 settings view consumes spend_snapshot), and unblock T2.1 when Meta credentials arrive.
+
 ## Previous Slices — B0 (PR 1) PASS, B1 (PR 2) PASS, B2 (PR 3) PASS — preserved verbatim
 
 B0 (f8357e5f..0894f5c7): PASS, 3/3 reqs, 5/5 scenarios (WH-1..WH-3), 12/12 tests. B1 (d405dcab..45565e3f): PASS, 3/3 reqs, 3/3 scenarios (WH-5 schema, SH-5, SH-2), 38/38 tests. B2 (54c61829..a2ee2a62): PASS, 5/5 reqs, 6/6 scenarios (WH-3..WH-7 delivery path), 62/62 tests. Full B0+B1+B2 bodies preserved in this file below the B3 section and in the prior Engram revision (obs #1375). Key carried findings: 1 WARNING (real OPENAI_API_KEY in dev shell) — **mechanism now fixed in B3** (see WARNING-1); deferred items SH-5 login → T5.1, SH-2 read-only fs → T7.1, KB-3 manager view → T5.4, HH-3 persona-menu trigger → T4.4, SH-4 tool-whitelist suite → T6.3.
 
-# Batch 3 (PR 4) — THIS VERIFY RUN
+## Previous Slice — Batch 3 (PR 4) PASS — preserved verbatim
 
 **Verified slice**: commits `c3226c49..ef8aba74` (8 commits: 7dd1d796 feat(customers) · c309238b feat(chat state+receive) · ceffdef6 feat(kb) · addceb7c feat(chat intent+route) · f5a83d4b feat(chat capture+respond+summary) · 8693b6a3 fix(route injection) · 9b7aa710 feat(send+costs) · ef8aba74 fix(webhook claim-pattern sweep))
 **Runtime harness**: `lumat-pg-test` container UP (localhost:5432, pgvector) — all suites executed against the real DB; OpenAI/Meta calls respx-mocked.

@@ -302,7 +302,13 @@ def test_retry_storm_single_processing_pass(client, mock_openai_chat, mock_meta_
     assert _count_inbound() == 3  # dedup: 3 unique wamids, never 30
     assert all(r.status == MessageStatus.PROCESSED for r in rows)
     outbound = [r for r in rows if r.direction == MessageDirection.OUTBOUND]
-    assert len(outbound) >= 3  # bot replies for the processed inbound messages
+    # The first inbound answers (clarification); the SECOND unknown escalates
+    # (HH-3) and hands off to a human; the third inbound lands in `human`
+    # state and is persisted WITHOUT a bot reply (HH-5) — the human owns the
+    # channel from there. 2 outbound rows = clarification + handoff reply.
+    assert len(outbound) == 2
+    assert any("entend" in (m.text or "") for m in outbound)  # clarification
+    assert any("asesor" in (m.text or "") for m in outbound)  # handoff reply
 
 
 # ---------------------------------------------------------------------------
@@ -427,7 +433,9 @@ def test_processing_failure_marks_failed(monkeypatch, migrated_db):
 # ---------------------------------------------------------------------------
 
 
-def test_media_download_failure_retries_via_sweep(monkeypatch, tmp_path, migrated_db):
+def test_media_download_failure_retries_via_sweep(
+    monkeypatch, tmp_path, migrated_db, mock_openai_chat, mock_meta_send
+):
     media_url = "https://lookaside.example/img123.jpg"
     with SessionLocal() as session:
         customer = Customer(phone_e164="+56911112222")
@@ -475,7 +483,9 @@ def test_media_download_failure_retries_via_sweep(monkeypatch, tmp_path, migrate
     assert files[0].suffix == ".jpg"
 
 
-def test_media_download_uses_bearer_token(monkeypatch, tmp_path, migrated_db):
+def test_media_download_uses_bearer_token(
+    monkeypatch, tmp_path, migrated_db, mock_openai_chat, mock_meta_send
+):
     media_url = "https://lookaside.example/tok.jpeg"
     with SessionLocal() as session:
         customer = Customer(phone_e164="+56933334444")

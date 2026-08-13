@@ -13,6 +13,7 @@ scratch.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from operator import add
 from typing import Annotated
 
@@ -78,6 +79,39 @@ def get_or_create_conversation(session: Session, customer: Customer, phone_e164:
     return conversation
 
 
+def set_conversation_state(
+    session: Session,
+    conversation: Conversation,
+    new_state: ConvState,
+    *,
+    cause: str,
+    actor: str = "rule",
+) -> Conversation:
+    """Transition a conversation's bot/human/closed state (HH-1).
+
+    Every transition writes one `state_change` row on `conversation_events`
+    with timestamp + cause + actor (system | bot | rule) — the operador-
+    visible transition log (audit_log stays admin-only, SH-5). A close also
+    stamps `closed_at`. A no-op transition writes nothing.
+    """
+    if conversation.state == new_state:
+        return conversation
+    before = conversation.state.value
+    conversation.state = new_state
+    if new_state == ConvState.CLOSED:
+        conversation.closed_at = datetime.now(timezone.utc)
+    session.add(
+        ConversationEvent(
+            conversation_id=conversation.id,
+            event="state_change",
+            cause=f"{before}->{new_state.value}: {cause}",
+            actor=actor,
+        )
+    )
+    session.flush()
+    return conversation
+
+
 @dataclass
 class ConversationState:
     """Per-conversation state (design Data Model: state.py).
@@ -97,6 +131,13 @@ class ConversationState:
     captured: dict = field(default_factory=dict)
     summary: str | None = None
     emergency: bool = False
+    # set by the emergency_gate: "strong" | "weak" | None (EM-1/EM-5, T4.2)
+    emergency_hit: str | None = None
+    # set by the handoff_gate: deterministic pre-LLM trigger (HH-3, T4.4)
+    handoff_reason: str | None = None
+    # set by the cost_gate (SS-3, T4.5): "normal" | "conservative" | "blocked".
+    # Computed fresh from the DB sums every run — never persisted (D2).
+    cost_mode: str = "normal"
     escalate: bool = False
     escalate_reason: str | None = None
     unknown_count: int = 0

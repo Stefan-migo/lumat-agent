@@ -108,7 +108,7 @@ def mock_chat():
 def clean_db(migrated_db):
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
-            "TRUNCATE audit_log, conversation_events, cases, messages, "
+            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
             "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
         )
     yield

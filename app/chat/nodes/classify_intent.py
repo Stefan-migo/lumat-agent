@@ -9,9 +9,11 @@ LLM classification with SH-4 input-as-data:
 - LLM may also flag injection -> same escalation, no further action
 - unknown intent increments `unknown_count`; at 2 the conversation escalates
   (HH-3 "Two failed comprehension attempts")
+- an SS-1 `always_escalate` scope rule for the classified category escalates
+  (HH-3 trigger 5, T4.4 — evaluated here, where the category is known; the
+  handoff gate owns the pre-LLM triggers)
 - case classification (service/priority/status) is stored on the case row
-  (CM-3); the full cases service lands in T4.4 — this node keeps a minimal
-  get-or-create (ponytail: single conversation->case bridge until then)
+  (CM-3) through the formal cases service (T4.4)
 """
 
 from __future__ import annotations
@@ -24,10 +26,12 @@ from sqlalchemy import func, select
 
 from app.chat.state import ConversationState
 from app.db import session_scope
-from app.models import Case, ConversationEvent
+from app.models import ConversationEvent
 from app.services.audit import record_audit
+from app.services.cases import get_or_create_case
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
+from app.services.settings import get_scope_mode
 
 logger = logging.getLogger(__name__)
 
@@ -109,25 +113,8 @@ def _llm_classify(text: str, message_id: int) -> dict:
     }
 
 
-def _get_or_create_case(session, state: ConversationState) -> Case:
-    case = session.scalar(
-        select(Case)
-        .where(Case.conversation_id == state.conversation_id)
-        .order_by(Case.id.desc())
-        .limit(1)
-    )
-    if case is None:
-        case = Case(
-            conversation_id=state.conversation_id,
-            customer_id=state.customer_id,
-        )
-        session.add(case)
-        session.flush()
-    return case
-
-
 def _store_classification(session, state: ConversationState, result: dict) -> dict:
-    case = _get_or_create_case(session, state)
+    case = get_or_create_case(session, state.conversation_id, state.customer_id)
     case.service = result.get("service")
     case.priority = result.get("priority")
     case.status = result.get("status")
@@ -145,7 +132,10 @@ def _record_unknown_intent(session, state: ConversationState, cause: str) -> int
     """Persist one unknown-intent attempt; returns the NEW total (HH-3)."""
     session.add(
         ConversationEvent(
-            conversation_id=state.conversation_id, event="unknown_intent", cause=cause
+            conversation_id=state.conversation_id,
+            event="unknown_intent",
+            cause=cause,
+            actor="rule",
         )
     )
     session.flush()
@@ -217,4 +207,14 @@ def classify_intent(state: ConversationState) -> dict:
 
     with session_scope() as session:
         case_update = _store_classification(session, state, result)
+        # HH-3 trigger 5 (T4.4): an SS-1 `always_escalate` category escalates
+        # regardless of the answer path. Evaluated here, where the category is
+        # known — the handoff gate owns the pre-LLM triggers.
+        if get_scope_mode(session, result["intent"]) == "always_escalate":
+            return {
+                "intent": result["intent"],
+                "escalate": True,
+                "escalate_reason": "scope_always_escalate",
+                **case_update,
+            }
     return {"intent": result["intent"], **case_update}
