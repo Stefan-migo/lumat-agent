@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Ficha — {{ customer.name or customer.phone_e164 }} — Lumat Panel{% endblock %}
+{% block content %}
+<h1>Ficha: {{ customer.name or customer.phone_e164 }}</h1>
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+<div class="card">
+  <h2>Customer</h2>
+  <p>Phone: {{ customer.phone_e164 }} · State: <strong>{{ customer.state.value }}</strong>
+     · Consent: {{ 'yes' if customer.consent_status else 'no' }}</p>
+  <p class="muted">
+    {% if customer.email %}Email: {{ customer.email }} · {% endif %}
+    {% if customer.comuna %}Comuna: {{ customer.comuna }} · {% endif %}
+    {% if customer.address %}Address: {{ customer.address }}{% endif %}
+    Created {{ customer.created_at.strftime('%Y-%m-%d %H:%M') if customer.created_at else '—' }}
+  </p>
+
+  <form method="post" action="/panel/clients/{{ customer.id }}/state" class="inline">
+    <label>State
+      <select name="state">
+        {% for s in states %}
+        <option value="{{ s }}" {% if s == customer.state.value %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn">Change state</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Internal notes</h2>
+  <ul>
+    {% for note in notes %}
+    <li><strong>{{ note.author }}</strong> · {{ note.created_at.strftime('%Y-%m-%d %H:%M') if note.created_at else '—' }}: {{ note.note }}</li>
+    {% else %}
+    <li class="muted">No notes yet.</li>
+    {% endfor %}
+  </ul>
+  <form method="post" action="/panel/clients/{{ customer.id }}/notes">
+    <textarea name="note" rows="2" style="width: 100%;" placeholder="Internal note (staff only)…"></textarea>
+    <p><button type="submit" class="btn">Add note</button></p>
+  </form>
+</div>
+
+<div class="card">
+  <h2>History</h2>
+  <h3>Conversations</h3>
+  <table>
+    <tr><th>#</th><th>State</th><th>Summary</th><th>Created</th></tr>
+    {% for conv in history.conversations %}
+    <tr>
+      <td><a href="/panel/conversations/{{ conv.id }}">#{{ conv.id }}</a></td>
+      <td>{{ conv.state }}</td>
+      <td>{{ conv.summary or '—' }}</td>
+      <td>{{ conv.created_at.strftime('%Y-%m-%d %H:%M') if conv.created_at else '—' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">No conversations.</td></tr>
+    {% endfor %}
+  </table>
+
+  <h3>Cases</h3>
+  <table>
+    <tr><th>#</th><th>Service</th><th>Priority</th><th>Status</th><th>Summary</th></tr>
+    {% for case in history.cases %}
+    <tr>
+      <td><a href="/panel/cases">#{{ case.id }}</a></td>
+      <td>{{ case.service or '—' }}</td>
+      <td>{{ case.priority or '—' }}</td>
+      <td>{{ case.status or '—' }}</td>
+      <td>{{ case.summary or '—' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">No cases.</td></tr>
+    {% endfor %}
+  </table>
+
+  <h3>Messages</h3>
+  <table>
+    <tr><th>Direction</th><th>Type</th><th>Text</th><th>Media</th><th>When</th></tr>
+    {% for msg in history.messages %}
+    <tr>
+      <td>{{ msg.direction }}</td>
+      <td>{{ msg.msg_type }}</td>
+      <td>{{ msg.text or '' }}</td>
+      <td>{% if msg.media_url %}<a href="{{ msg.media_url }}">link</a>{% else %}—{% endif %}</td>
+      <td>{{ msg.created_at.strftime('%Y-%m-%d %H:%M') if msg.created_at else '—' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">No messages.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

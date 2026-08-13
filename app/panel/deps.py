@@ -32,6 +32,16 @@ templates = Jinja2Templates(
 LOGIN_PATH = "/panel/login"
 
 
+def flash(request: Request, message: str) -> None:
+    """Store a one-shot notice in the session (shown on the next page)."""
+    request.session["flash"] = message
+
+
+def pop_flash(request: Request) -> str | None:
+    """Read and clear the one-shot notice for this request."""
+    return request.session.pop("flash", None)
+
+
 def get_db() -> Generator[Session, None, None]:
     """Request-scoped session: commit on success, rollback on error."""
     session = SessionLocal()

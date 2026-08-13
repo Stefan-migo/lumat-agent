@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Conversation #{{ conversation.id }} — Lumat Panel{% endblock %}
+{% block content %}
+<h1>Conversation #{{ conversation.id }}</h1>
+<p class="muted">
+  State: {{ conversation.state.value }} ·
+  Created {{ conversation.created_at.strftime('%Y-%m-%d %H:%M') if conversation.created_at else '—' }}
+  {% if conversation.summary %} · Summary: {{ conversation.summary }}{% endif %}
+</p>
+<div class="card">
+  <h2>Thread (read-only)</h2>
+  <table>
+    <tr><th>When</th><th>Direction</th><th>Type</th><th>Content</th></tr>
+    {% for msg in messages %}
+    <tr>
+      <td>{{ msg.created_at.strftime('%Y-%m-%d %H:%M') if msg.created_at else '—' }}</td>
+      <td>{{ msg.direction.value }}</td>
+      <td>{{ msg.msg_type.value }}</td>
+      <td>
+        {{ msg.text or '' }}
+        {% if msg.media_url %}<br><a href="{{ msg.media_url }}" target="_blank" rel="noopener">📎 linked file</a>{% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">No messages.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+<p class="muted">Replying from the panel is not available in H1 — answer via the WhatsApp app on the same number (HH-5).</p>
+{% endblock %}
