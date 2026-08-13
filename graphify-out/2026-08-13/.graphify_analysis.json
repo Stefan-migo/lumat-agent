@@ -244,8 +244,6 @@
     ],
     "5": [
       "app_models_auditlog",
-      "app_models_kbchunk",
-      "app_models_kbdocument",
       "app_models_settings",
       "app_services_audit",
       "app_services_audit_list_audit_entries",
@@ -255,17 +253,20 @@
       "app_services_audit_rationale_42",
       "app_services_audit_record_audit",
       "tests_integration_test_db",
+      "tests_integration_test_db_clean_db",
+      "tests_integration_test_db_py_fixture",
       "tests_integration_test_db_rationale_1",
       "tests_integration_test_db_rationale_121",
-      "tests_integration_test_db_rationale_133",
       "tests_integration_test_db_rationale_159",
       "tests_integration_test_db_rationale_184",
       "tests_integration_test_db_rationale_197",
       "tests_integration_test_db_rationale_212",
+      "tests_integration_test_db_rationale_42",
+      "tests_integration_test_db_rationale_53",
       "tests_integration_test_db_test_audit_admin_read_lists_entries",
       "tests_integration_test_db_test_audit_is_append_only_via_grants",
       "tests_integration_test_db_test_audit_record_writes_before_after",
-      "tests_integration_test_db_test_kb_chunk_vector_round_trip",
+      "tests_integration_test_db_test_crud_round_trip",
       "tests_integration_test_db_test_models_expose_ten_tables",
       "tests_integration_test_db_test_settings_jsonb_round_trip"
     ],
@@ -296,17 +297,66 @@
       "cortex_sessions_2026_07_20_lumat_cotizacion_final_diagrams_diagrama3_flujo_conversacional_summary"
     ],
     "7": [
+      "activity_event_dots",
+      "archivos_finales_propuesta_ia_doc",
+      "case_status_enum",
+      "cortex_sessions_2026_07_16_lumat_cotizacion_session_memory",
+      "cortex_sessions_2026_07_20_lumat_cotizacion_final_cotizacion_lumat_comparativa_m1",
+      "cortex_sessions_2026_07_20_lumat_cotizacion_final_cotizacion_lumat_doc",
+      "cortex_sessions_2026_07_20_lumat_cotizacion_final_cotizacion_lumat_opcion_a",
+      "cortex_sessions_2026_07_20_lumat_cotizacion_final_cotizacion_lumat_pdf_doc",
+      "cortex_sessions_2026_07_20_lumat_cotizacion_final_cotizacion_lumat_resumen_inversion",
+      "cortex_sessions_2026_07_20_lumat_cotizacion_final_gptversion_propuesta_doc",
+      "cortex_sessions_2026_07_20_lumat_cotizacion_final_wireframes_agenda_tecnicos_wireframe",
+      "cortex_sessions_2026_07_20_lumat_cotizacion_final_wireframes_cliente_ficha_wireframe",
+      "cortex_sessions_2026_07_20_lumat_cotizacion_final_wireframes_dashboard_sidebar",
+      "cortex_sessions_2026_07_20_lumat_cotizacion_final_wireframes_dashboard_wireframe",
+      "domain_captura_datos",
+      "domain_derivacion",
+      "domain_identificacion",
       "domain_lumat",
+      "domain_m1",
+      "domain_opcion_a",
+      "domain_opcion_b",
+      "domain_opcion_c",
+      "domain_rag",
       "entrega1_propuesta_pdf_doc",
+      "guia_lectura_doc",
+      "guia_lectura_final_pdf_doc",
+      "guia_lectura_pdf_doc",
+      "guia_recomendacion_opcion_b",
       "handcodestudio_provider",
+      "header_user_bar",
+      "kpi_clientes_nuevos",
+      "kpi_emergencias",
+      "kpi_grid",
+      "kpi_pendientes",
+      "kpi_solicitudes_visita",
+      "lumat_admin_panel",
+      "presentacion_cotizacion_pdf_doc",
+      "presentacion_ejecutiva_doc",
+      "propuesta_final_doc",
+      "propuesta_ia_agenda_tecnica",
+      "propuesta_ia_anexo_a_flujo",
+      "propuesta_ia_anexo_b_glosario",
+      "propuesta_ia_anexo_c_cronograma",
+      "propuesta_ia_arquitectura_multiagente",
       "propuesta_ia_base_conocimiento",
       "propuesta_ia_boton_emergencia",
       "propuesta_ia_catalogo_servicios",
       "propuesta_ia_cms",
+      "propuesta_ia_costos_operativos",
+      "propuesta_ia_crm",
       "propuesta_ia_deteccion_emergencias",
+      "propuesta_ia_doc",
+      "propuesta_ia_flujo_conversacional",
       "propuesta_ia_gestion_costos_ia",
+      "propuesta_ia_google_calendar",
       "propuesta_ia_infraestructura_docker",
+      "propuesta_ia_lumatagent",
+      "propuesta_ia_matriz_trazabilidad",
       "propuesta_ia_memoria_sistema",
+      "propuesta_ia_milestone_1",
       "propuesta_ia_milestone_2",
       "propuesta_ia_milestone_3",
       "propuesta_ia_pagos",
@@ -318,8 +368,16 @@
       "propuesta_ia_roadmap",
       "propuesta_ia_seo",
       "propuesta_ia_stack_tecnologico",
+      "propuesta_tecnica_economica_final_pdf_doc",
       "propuesta_tecnica_economica_pdf_doc",
-      "stefan_miranda_contact"
+      "recent_activity_feed",
+      "recent_cases_table",
+      "sidebar_logo",
+      "status_badges",
+      "stefan_miranda_contact",
+      "tech_openai",
+      "tech_postgres",
+      "tech_redis"
     ],
     "8": [
       "tests_integration_test_migrations",
@@ -350,22 +408,23 @@
     "9": [
       "app_db_base",
       "app_db_rationale_23",
-      "app_models",
-      "app_models_case",
-      "app_models_conversationevent",
       "app_models_conversationstate",
       "app_models_customerstate",
       "app_models_documentformat",
       "app_models_messagedirection",
       "app_models_messagestatus",
       "app_models_messagetype",
-      "app_models_rationale_1",
-      "app_models_user",
       "app_models_userrole",
       "app_webhook_ingest",
       "app_webhook_ingest_mediadownloaderror",
       "app_webhook_ingest_normalizedmessage",
+      "app_webhook_ingest_ratelimiter",
+      "app_webhook_ingest_ratelimiter_allow",
+      "app_webhook_ingest_ratelimiter_init",
+      "app_webhook_ingest_ratelimiter_reset",
       "app_webhook_ingest_rationale_1",
+      "app_webhook_ingest_rationale_205",
+      "app_webhook_ingest_rationale_220",
       "app_webhook_ingest_rationale_73",
       "app_webhook_ingest_rationale_84",
       "declarativebase",
@@ -405,10 +464,8 @@
       "app_webhook_ingest_rationale_379",
       "app_webhook_ingest_sweep_received",
       "runtimeerror",
-      "tests_integration_test_db_rationale_53",
       "tests_integration_test_db_rationale_87",
       "tests_integration_test_db_test_conversation_and_message_round_trip",
-      "tests_integration_test_db_test_crud_round_trip",
       "tests_integration_test_webhook_ingest_test_media_download_failure_retries_via_sweep",
       "tests_integration_test_webhook_ingest_test_media_download_uses_bearer_token",
       "tests_integration_test_webhook_ingest_test_processing_failure_marks_failed",
@@ -417,24 +474,30 @@
     ],
     "12": [
       "arquitectura_audit_log",
+      "arquitectura_automation_agent",
+      "arquitectura_automation_worker",
+      "arquitectura_calendar_agent",
+      "arquitectura_notification_agent",
+      "arquitectura_orchestrator",
+      "arquitectura_report_agent",
       "arquitectura_roles",
+      "arquitectura_router",
       "arquitectura_tools_layer",
+      "arquitectura_whatsapp_agent",
       "cortex_sessions_2026_07_16_lumat_cotizacion_session_agentic_arch",
-      "cortex_sessions_2026_07_16_lumat_cotizacion_session_memory",
       "cortex_sessions_2026_07_20_lumat_agent_arquitectura_arquitectura_lumatagent",
-      "domain_captura_datos",
-      "domain_derivacion",
-      "domain_identificacion",
-      "domain_m1",
+      "domain_calendario_propio",
+      "domain_estrategia_m3",
+      "domain_event_bus",
+      "domain_ics_export",
       "domain_m2",
-      "domain_opcion_a",
+      "domain_m3",
       "domain_panel",
+      "domain_prompt_injection",
       "domain_pwa",
-      "domain_rag",
+      "tech_caldav_google",
       "tech_nextjs",
-      "tech_openai",
-      "tech_postgres",
-      "tech_redis"
+      "tech_pagos"
     ],
     "13": [
       "docs_ops_dns_agente_lumat",
@@ -456,23 +519,6 @@
       "infra_docker_compose_volume_venv",
       "infra_env_file",
       "tasks_file"
-    ],
-    "14": [
-      "activity_event_dots",
-      "case_status_enum",
-      "cortex_sessions_2026_07_20_lumat_cotizacion_final_wireframes_dashboard_sidebar",
-      "cortex_sessions_2026_07_20_lumat_cotizacion_final_wireframes_dashboard_wireframe",
-      "header_user_bar",
-      "kpi_clientes_nuevos",
-      "kpi_emergencias",
-      "kpi_grid",
-      "kpi_pendientes",
-      "kpi_solicitudes_visita",
-      "lumat_admin_panel",
-      "recent_activity_feed",
-      "recent_cases_table",
-      "sidebar_logo",
-      "status_badges"
     ],
     "15": [
       "cortex_sessions_2026_07_20_lumat_cotizacion_final_package",
@@ -586,21 +632,6 @@
       "tests_integration_test_migrations_rationale_75",
       "tests_integration_test_migrations_test_migrate_applies_cleanly_twice"
     ],
-    "22": [
-      "cortex_sessions_2026_07_20_lumat_cotizacion_final_cotizacion_lumat_opcion_a",
-      "cortex_sessions_2026_07_20_lumat_cotizacion_final_cotizacion_lumat_pdf_doc",
-      "domain_opcion_b",
-      "domain_opcion_c",
-      "guia_lectura_final_pdf_doc",
-      "guia_lectura_pdf_doc",
-      "guia_recomendacion_opcion_b",
-      "presentacion_cotizacion_pdf_doc",
-      "propuesta_ia_arquitectura_multiagente",
-      "propuesta_ia_costos_operativos",
-      "propuesta_ia_lumatagent",
-      "propuesta_ia_milestone_1",
-      "propuesta_tecnica_economica_final_pdf_doc"
-    ],
     "23": [
       "cortex_sessions_2026_07_20_lumat_cotizacion_final_diagrams_diagrama2_multiagente_ag_aut",
       "cortex_sessions_2026_07_20_lumat_cotizacion_final_diagrams_diagrama2_multiagente_ag_cal",
@@ -644,20 +675,6 @@
       "openspec_changes_hito_1_setup_whatsapp_tasks_t5_3",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t5_5",
       "tests_functional_test_auth"
-    ],
-    "26": [
-      "archivos_finales_propuesta_ia_doc",
-      "cortex_sessions_2026_07_20_lumat_cotizacion_final_cotizacion_lumat_comparativa_m1",
-      "cortex_sessions_2026_07_20_lumat_cotizacion_final_cotizacion_lumat_doc",
-      "cortex_sessions_2026_07_20_lumat_cotizacion_final_cotizacion_lumat_resumen_inversion",
-      "cortex_sessions_2026_07_20_lumat_cotizacion_final_gptversion_propuesta_doc",
-      "guia_lectura_doc",
-      "presentacion_ejecutiva_doc",
-      "propuesta_final_doc",
-      "propuesta_ia_anexo_b_glosario",
-      "propuesta_ia_anexo_c_cronograma",
-      "propuesta_ia_doc",
-      "propuesta_ia_matriz_trazabilidad"
     ],
     "27": [
       "cortex_sessions_2026_07_20_lumat_cotizacion_final_diagrams_diagrama4_infraestructura_admin",
@@ -748,6 +765,7 @@
       "openspec_changes_hito_1_setup_whatsapp_tasks_kb_3",
       "openspec_changes_hito_1_setup_whatsapp_tasks_kb_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_ss_1",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_ss_3",
       "openspec_changes_hito_1_setup_whatsapp_tasks_ss_5",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t3_3",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t5_4",
@@ -789,17 +807,6 @@
       "app_webhook_ingest_persist_message",
       "app_webhook_ingest_rationale_276",
       "app_webhook_ingest_rationale_303"
-    ],
-    "37": [
-      "arquitectura_automation_agent",
-      "arquitectura_automation_worker",
-      "arquitectura_notification_agent",
-      "arquitectura_orchestrator",
-      "arquitectura_report_agent",
-      "arquitectura_router",
-      "arquitectura_whatsapp_agent",
-      "domain_event_bus",
-      "domain_prompt_injection"
     ],
     "38": [
       "customer-records_customer-records",
@@ -857,7 +864,6 @@
     "43": [
       "app_services_costs",
       "app_services_send",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_ss_3",
       "openspec_changes_hito_1_setup_whatsapp_tasks_ss_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t3_6",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t4_5",
@@ -904,24 +910,6 @@
       "req_kb_3",
       "req_kb_4"
     ],
-    "48": [
-      "arquitectura_calendar_agent",
-      "domain_calendario_propio",
-      "domain_estrategia_m3",
-      "domain_ics_export",
-      "domain_m3",
-      "tech_caldav_google",
-      "tech_pagos"
-    ],
-    "49": [
-      "cortex_sessions_2026_07_20_lumat_cotizacion_final_wireframes_agenda_tecnicos_wireframe",
-      "cortex_sessions_2026_07_20_lumat_cotizacion_final_wireframes_cliente_ficha_wireframe",
-      "propuesta_ia_agenda_tecnica",
-      "propuesta_ia_anexo_a_flujo",
-      "propuesta_ia_crm",
-      "propuesta_ia_flujo_conversacional",
-      "propuesta_ia_google_calendar"
-    ],
     "50": [
       "openspec_changes_hito_1_setup_whatsapp_specs_security_hardening_spec_security_hardening",
       "req_sh_1",
@@ -930,14 +918,6 @@
       "req_sh_4",
       "req_sh_5",
       "security-hardening_security-hardening"
-    ],
-    "51": [
-      "app_webhook_ingest_ratelimiter",
-      "app_webhook_ingest_ratelimiter_allow",
-      "app_webhook_ingest_ratelimiter_init",
-      "app_webhook_ingest_ratelimiter_reset",
-      "app_webhook_ingest_rationale_205",
-      "app_webhook_ingest_rationale_220"
     ],
     "52": [
       "app_webhook_ingest_download_media",
@@ -959,19 +939,21 @@
       "db_migrate_sh__entry"
     ],
     "55": [
+      "app_models",
+      "app_models_case",
+      "app_models_conversationevent",
+      "app_models_kbchunk",
+      "app_models_kbdocument",
       "app_models_pg_enum",
+      "app_models_rationale_1",
       "app_models_rationale_37",
-      "enum"
-    ],
-    "56": [
       "app_models_ts",
+      "app_models_user",
       "datetime",
-      "mapped"
-    ],
-    "57": [
-      "tests_integration_test_db_clean_db",
-      "tests_integration_test_db_py_fixture",
-      "tests_integration_test_db_rationale_42"
+      "enum",
+      "mapped",
+      "tests_integration_test_db_rationale_133",
+      "tests_integration_test_db_test_kb_chunk_vector_round_trip"
     ],
     "58": [
       "app_init",
@@ -1033,16 +1015,15 @@
     "2": 0.08970099667774087,
     "3": 0.10084033613445378,
     "4": 0.08866995073891626,
-    "5": 0.12333333333333334,
+    "5": 0.11076923076923077,
     "6": 0.09782608695652174,
-    "7": 0.15579710144927536,
+    "7": 0.05123456790123457,
     "8": 0.09057971014492754,
-    "9": 0.22510822510822512,
+    "9": 0.1857707509881423,
     "10": 0.2,
-    "11": 0.19298245614035087,
-    "12": 0.12280701754385964,
+    "11": 0.22794117647058823,
+    "12": 0.09333333333333334,
     "13": 0.1286549707602339,
-    "14": 0.18095238095238095,
     "15": 0.13333333333333333,
     "16": 0.23076923076923078,
     "17": 0.18681318681318682,
@@ -1050,42 +1031,34 @@
     "19": 0.1978021978021978,
     "20": 0.14285714285714285,
     "21": 0.1794871794871795,
-    "22": 0.3717948717948718,
     "23": 0.20512820512820512,
     "24": 0.15384615384615385,
     "25": 0.22727272727272727,
-    "26": 0.22727272727272727,
     "27": 0.21212121212121213,
     "28": 0.24242424242424243,
     "29": 0.22727272727272727,
     "30": 0.32727272727272727,
     "31": 0.23636363636363636,
     "32": 0.21818181818181817,
-    "33": 0.2,
+    "33": 0.18181818181818182,
     "34": 0.3090909090909091,
     "35": 0.2,
     "36": 0.2222222222222222,
-    "37": 0.25,
     "38": 0.4166666666666667,
     "39": 0.25,
     "40": 0.3611111111111111,
     "41": 0.39285714285714285,
     "42": 0.25,
-    "43": 0.32142857142857145,
+    "43": 0.38095238095238093,
     "44": 0.25,
     "45": 0.2857142857142857,
     "46": 0.7142857142857143,
     "47": 0.39285714285714285,
-    "48": 0.3333333333333333,
-    "49": 0.3333333333333333,
     "50": 0.47619047619047616,
-    "51": 0.3333333333333333,
     "52": 0.4,
     "53": 0.5,
     "54": 0.5,
-    "55": 0.6666666666666666,
-    "56": 0.6666666666666666,
-    "57": 0.6666666666666666,
+    "55": 0.1619047619047619,
     "58": 1.0,
     "59": 1.0,
     "60": 1.0,
@@ -1107,7 +1080,7 @@
   "gods": [
     {
       "id": "propuesta_tecnica_economica_pdf_doc",
-      "label": "Propuesta T\u00e9cnica y Econ\u00f3mica Lumat \u2014 PDF (45 p\u00e1gs.)",
+      "label": "Propuesta Técnica y Económica Lumat — PDF (45 págs.)",
       "degree": 36
     },
     {
@@ -1121,13 +1094,13 @@
       "degree": 19
     },
     {
-      "id": "doc_report_gestion_2026_08_11",
-      "label": "Reporte de sesion - Plan de gestion LumatAgent",
+      "id": "app_models_customer",
+      "label": "Customer",
       "degree": 16
     },
     {
-      "id": "admin-panel_admin-panel",
-      "label": "Admin Panel",
+      "id": "doc_report_gestion_2026_08_11",
+      "label": "Reporte de sesion - Plan de gestion LumatAgent",
       "degree": 16
     },
     {
@@ -1137,17 +1110,17 @@
     },
     {
       "id": "lumat-propuesta-final_lumat-propuesta-final",
-      "label": "Propuesta T\u00e9cnica y Econ\u00f3mica Lumat",
+      "label": "Propuesta Técnica y Económica Lumat",
       "degree": 16
     },
     {
-      "id": "app_models_customer",
-      "label": "Customer",
+      "id": "admin-panel_admin-panel",
+      "label": "Admin Panel",
       "degree": 16
     },
     {
       "id": "openspec_changes_hito_1_setup_whatsapp_verify_report",
-      "label": "Verify Report \u2014 Hito 1 Setup WhatsApp (B0+B1 PASS)",
+      "label": "Verify Report — Hito 1 Setup WhatsApp (B0+B1 PASS)",
       "degree": 16
     },
     {
@@ -1191,30 +1164,63 @@
       "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; semantically similar concepts with no structural link"
     },
     {
-      "source": "Detecci\u00f3n de Emergencias y protocolo de seguridad",
-      "target": "Bot\u00f3n y Protocolo de Emergencia (web)",
+      "source": "Detección de Emergencias y protocolo de seguridad",
+      "target": "Botón y Protocolo de Emergencia (web)",
       "source_files": [
         ".cortex-sessions/2026-07-20-lumat-cotizacion-final/propuesta tecnica-economica para IA.md",
         ".cortex-sessions/2026-07-20-lumat-cotizacion-final/propuesta-tecnica-economica-lumat.pdf"
       ],
       "confidence": "INFERRED",
       "relation": "semantically_similar_to",
-      "why": "inferred connection - not explicitly stated in source; crosses file types (paper \u2194 doc); semantically similar concepts with no structural link"
+      "why": "inferred connection - not explicitly stated in source; crosses file types (paper ↔ doc); semantically similar concepts with no structural link"
     },
     {
-      "source": "Propuesta Lumat \u2014 Entrega 1 (Resumen Ejecutivo)",
-      "target": "LumatAgent \u2014 n\u00facleo del ecosistema",
+      "source": "T3.2 Chat state + graph scaffold + receive node",
+      "target": "app/chat/graph.py — graph builder",
       "source_files": [
-        "Propuesta_Lumat_Entrega_1.pdf",
-        ".cortex-sessions/2026-07-20-lumat-cotizacion-final/propuesta tecnica-economica para IA.md"
+        "openspec/changes/hito-1-setup-whatsapp/tasks.md",
+        "app/chat/graph.py"
       ],
       "confidence": "EXTRACTED",
       "relation": "references",
-      "why": "crosses file types (doc \u2194 paper); connects across different repos/directories; bridges separate communities"
+      "why": "crosses file types (code ↔ doc); connects across different repos/directories; peripheral node `app/chat/graph.py — graph builder` unexpectedly reaches hub `T3.2 Chat state + graph scaffold + receive node`"
     }
   ],
-  "tokens": {
-    "input": 17825,
-    "output": 83577
-  }
+  "questions": [
+    {
+      "type": "ambiguous_edge",
+      "question": "What is the exact relationship between `Schedule Event Block` and `Emergency Event Type`?",
+      "why": "Edge tagged AMBIGUOUS (relation: implements) - confidence is low."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `SH-5 Audit Log` connect `SH-5 Audit Log` to `T5.4 KB manager + settings views`, `Verify Report — Hito 1 Setup WhatsApp (B0+B1 PASS)`, `T4.4 Handoff + deriva + gates + tests`, `T4.1 Settings service + scope rules + tone`, `T5.1 Panel auth + roles`, `Admin Panel`?",
+      "why": "High betweenness centrality (0.029) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `LumatAgent Project` connect `LumatAgent README` to `Hito 1 change — Setup + WhatsApp operativo`?",
+      "why": "High betweenness centrality (0.027) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `LumatAgent README` connect `LumatAgent README` to `WhatsApp Webhook`, `SH-5 Audit Log`?",
+      "why": "High betweenness centrality (0.025) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 2 inferred relationships involving `Propuesta Técnica y Económica Lumat — PDF (45 págs.)` (e.g. with `Propuesta Lumat — Entrega 1 (Resumen Ejecutivo)` and `Propuesta Técnica y Económica Lumat — PDF (versión final, 59 págs.)`) actually correct?",
+      "why": "`Propuesta Técnica y Económica Lumat — PDF (45 págs.)` has 2 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 17 inferred relationships involving `Base` (e.g. with `AuditLog` and `Case`) actually correct?",
+      "why": "`Base` has 17 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 4 inferred relationships involving `Customer` (e.g. with `Base` and `MediaDownloadError`) actually correct?",
+      "why": "`Customer` has 4 INFERRED edges - model-reasoned connections that need verification."
+    }
+  ]
 }
