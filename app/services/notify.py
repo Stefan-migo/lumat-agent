@@ -246,7 +246,119 @@ def _send_email_fallback(
 
 
 # ---------------------------------------------------------------------------
-# T4.3.2 — ack (reply keyword) + reminder escalation. Filled by the next
-# TDD work unit; kept together here because they share the same case columns
-# and the SMTP layer above.
+# T4.3.2 — ack (reply keyword) + reminder escalation.
 # ---------------------------------------------------------------------------
+
+
+def is_ack_message(text: str) -> bool:
+    """True when the customer's reply is a pure ack-keyword message.
+
+    "ok" / "listo" / "recibido" / "gracias" — case- and punctuation-
+    insensitive, combinations count ("ok gracias"). A reply carrying any other
+    word ("ok pero no funciona") is NOT an ack: the emergency conversation
+    continues. Only combined with an unacked emergency case does it record an
+    ack (see acknowledge_emergency_if_ack).
+    """
+    words = [w.strip(_ACK_PUNCTUATION) for w in text.lower().split()]
+    return bool(words) and all(w in ACK_WORDS for w in words)
+
+
+def acknowledge_emergency_if_ack(session: Session, conversation_id: int, text: str) -> bool:
+    """Record the customer reply-keyword ack on the emergency case (T4.3.2).
+
+    Deterministic hook called from the webhook ingest flow BEFORE the graph
+    runs (minimal hook; the panel ack button lands in T5.3 on the same case
+    columns). No-op unless the message is a pure ack keyword AND the
+    conversation has an unacknowledged emergency case. Audited (SH-5).
+    Returns True when an ack was recorded.
+    """
+    if not is_ack_message(text):
+        return False
+    case = session.scalar(
+        select(Case)
+        .where(
+            Case.conversation_id == conversation_id,
+            Case.emergency.is_(True),
+            Case.acknowledged_at.is_(None),
+        )
+        .order_by(Case.id.desc())
+        .limit(1)
+    )
+    if case is None:
+        return False
+    case.acknowledged_at = datetime.now(timezone.utc)
+    case.ack_by = "customer_reply"
+    record_audit(
+        session,
+        actor="system",
+        action="case.acknowledged",
+        entity="case",
+        entity_id=str(case.id),
+        before={"acknowledged_at": None},
+        after={
+            "acknowledged_at": case.acknowledged_at.isoformat(),
+            "ack_by": case.ack_by,
+            "keyword": text,
+        },
+    )
+    session.flush()
+    return True
+
+
+def send_pending_emergency_reminders(session: Session) -> int:
+    """Reminder emails for unacked emergencies: notified >15 min, max 2 (T4.3.2).
+
+    Finds cases with a delivered notification (notified_at set), not
+    acknowledged, older than REMINDER_DELAY_MINUTES, with fewer than
+    MAX_REMINDERS reminders already sent; sends one reminder email each and
+    increments reminder_count. Every reminder is audited (SH-5). Returns the
+    number of reminders sent. Deterministic with seeded timestamps (UTC).
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=REMINDER_DELAY_MINUTES)
+    cases = session.scalars(
+        select(Case).where(
+            Case.emergency.is_(True),
+            Case.notified_at.is_not(None),
+            Case.acknowledged_at.is_(None),
+            Case.notified_at <= cutoff,
+            Case.reminder_count < MAX_REMINDERS,
+        )
+    ).all()
+    owner_email = get_setting(session, "notify.owner_email", default=DEFAULT_OWNER_EMAIL)
+    sent = 0
+    for case in cases:
+        customer = session.get(Customer, case.customer_id)
+        conversation = session.get(Conversation, case.conversation_id)
+        location = _customer_location(conversation) if conversation is not None else None
+        subject = f"Recordatorio: emergencia sin confirmar - caso #{case.id}"
+        body = (
+            f"El caso #{case.id} (emergencia) aún no ha sido confirmado.\n\n"
+            f"Cliente: {customer.phone_e164 if customer is not None else 'desconocido'}\n"
+            f"Ubicación: {location or 'sin ubicación'}\n"
+            f"Caso: #{case.id}\n"
+            "Confirma el caso para detener estos recordatorios."
+        )
+        try:
+            send_email(session, owner_email, subject, body)
+        except Exception as exc:
+            logger.exception("emergency reminder email failed for case %s: %s", case.id, exc)
+            _audit_notification(
+                session,
+                case,
+                action="notification.reminder_failed",
+                channel="email",
+                recipient=owner_email,
+                result={"error": str(exc)},
+            )
+            continue
+        case.reminder_count += 1
+        _audit_notification(
+            session,
+            case,
+            action="notification.reminder_sent",
+            channel="email",
+            recipient=owner_email,
+            result={"reminder": case.reminder_count, "subject": subject},
+        )
+        sent += 1
+    return sent

@@ -50,6 +50,7 @@ from app.services.settings import (  # noqa: E402
     DEFAULT_SMTP_HOST,
     SETTINGS_DEFAULTS,
 )
+from app.webhook import ingest  # noqa: E402
 
 ADMIN_DB_URL = "postgresql://lumat:lumat@localhost:5432/lumat"
 
@@ -108,8 +109,6 @@ def _seed_case(**overrides) -> tuple[int, int, int]:
             customer_id=customer.id,
             status="escalado",
             emergency=True,
-            notified_at=None,
-            reminder_count=0,
             **overrides,
         )
         session.add(case)
@@ -327,3 +326,167 @@ def test_notification_failure_never_blocks_safety_reply(mock_openai_chat, mock_m
         assert case.notified_at is None  # nothing delivered -> retry allowed
     failed = [a for a in _audit_rows() if a.action == "notification.failed"]
     assert len(failed) == 2
+
+
+# ---------------------------------------------------------------------------
+# Part 3 — ack via reply keyword (T4.3.2; EM-4 "Notification acknowledged")
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["ok", "listo", "recibido", "gracias", "OK", "Ok, gracias", "gracias!", "recibido, ok"],
+)
+def test_is_ack_message_true(text):
+    assert notify.is_ack_message(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ok pero no funciona",
+        "no gracias",
+        "gracias por tu ayuda",
+        "hola",
+        "sí",
+        "",
+        "revisa mi calefont",
+    ],
+)
+def test_is_ack_message_false(text):
+    assert notify.is_ack_message(text) is False
+
+
+def test_acknowledge_records_ack_on_case():
+    case_id, _, conv_id = _seed_case()
+    with SessionLocal() as session:
+        acked = notify.acknowledge_emergency_if_ack(session, conv_id, "ok gracias")
+        session.commit()
+        assert acked is True
+        case = session.get(Case, case_id)
+        assert case.acknowledged_at is not None
+        assert case.ack_by == "customer_reply"
+
+    ack_audit = [a for a in _audit_rows() if a.action == "case.acknowledged"]
+    assert len(ack_audit) == 1
+    assert ack_audit[0].entity == "case"
+    assert ack_audit[0].after["ack_by"] == "customer_reply"
+    assert ack_audit[0].after["keyword"] == "ok gracias"
+
+
+def test_ack_ignored_when_already_acknowledged():
+    case_id, _, conv_id = _seed_case(
+        acknowledged_at=datetime.now(timezone.utc), ack_by="panel"
+    )
+    with SessionLocal() as session:
+        assert notify.acknowledge_emergency_if_ack(session, conv_id, "ok") is False
+        session.commit()
+    assert len([a for a in _audit_rows() if a.action == "case.acknowledged"]) == 0
+
+
+def test_ack_ignored_without_emergency_case():
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, "+56912345678")
+        conv = get_or_create_conversation(session, customer, "+56912345678")
+        session.commit()
+        conv_id = conv.id
+    with SessionLocal() as session:
+        assert notify.acknowledge_emergency_if_ack(session, conv_id, "ok") is False
+        session.commit()
+    assert len([a for a in _audit_rows() if a.action == "case.acknowledged"]) == 0
+
+
+def test_ack_hooked_in_ingest_process_message(mock_meta_send):
+    """The ack check lives in the webhook ingest flow (process_message)."""
+    case_id, _, conv_id = _seed_case()
+    with SessionLocal() as session:
+        session.get(Conversation, conv_id).captured_data = {"_pending": "name"}
+        session.commit()
+    with SessionLocal() as session:
+        session.add(
+            Message(
+                conversation_id=conv_id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="ok",
+                status=MessageStatus.RECEIVED,
+            )
+        )
+        session.commit()
+        message = session.scalars(
+            select(Message)
+            .where(Message.conversation_id == conv_id, Message.direction == MessageDirection.INBOUND)
+        ).one()
+        ingest.process_message(session, message)
+        session.commit()
+        case = session.get(Case, case_id)
+        assert case.acknowledged_at is not None
+        assert case.ack_by == "customer_reply"
+    assert len([a for a in _audit_rows() if a.action == "case.acknowledged"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Part 4 — reminder escalation: unacked > 15 min, reminder email max 2 (T4.3.2)
+# ---------------------------------------------------------------------------
+
+
+def test_reminder_sent_after_15min_and_capped(monkeypatch):
+    sent_emails: list = []
+    monkeypatch.setattr("app.services.notify.smtplib.SMTP", _capturing_smtp(sent_emails))
+
+    old = datetime.now(timezone.utc) - timedelta(minutes=20)
+    case_id, _, _ = _seed_case(notified_at=old)
+
+    with SessionLocal() as session:
+        assert notify.send_pending_emergency_reminders(session) == 1
+        session.commit()
+        assert session.get(Case, case_id).reminder_count == 1
+    assert len(sent_emails) == 1
+    assert sent_emails[0][1] == [DEFAULT_OWNER_EMAIL]
+
+    with SessionLocal() as session:
+        assert notify.send_pending_emergency_reminders(session) == 1
+        session.commit()
+    with SessionLocal() as session:
+        # capped at MAX_REMINDERS — the third pass sends nothing
+        assert notify.send_pending_emergency_reminders(session) == 0
+        session.commit()
+        assert session.get(Case, case_id).reminder_count == 2
+
+    reminders = [a for a in _audit_rows() if a.action == "notification.reminder_sent"]
+    assert len(reminders) == 2
+    assert {r.after["recipient"] for r in reminders} == {DEFAULT_OWNER_EMAIL}
+
+
+def test_reminder_skips_fresh_acked_and_capped_cases(monkeypatch):
+    sent_emails: list = []
+    monkeypatch.setattr("app.services.notify.smtplib.SMTP", _capturing_smtp(sent_emails))
+
+    now = datetime.now(timezone.utc)
+    _seed_case(notified_at=now - timedelta(minutes=5))  # too fresh
+    _seed_case(
+        notified_at=now - timedelta(minutes=20),
+        acknowledged_at=now,
+        ack_by="customer_reply",
+    )  # already acked
+    _seed_case(notified_at=now - timedelta(minutes=20), reminder_count=2)  # capped
+
+    with SessionLocal() as session:
+        assert notify.send_pending_emergency_reminders(session) == 0
+        session.commit()
+    assert sent_emails == []
+
+
+def test_sweep_received_triggers_reminders(monkeypatch):
+    """Reminder sweep runs inside the existing webhook sweep (no scheduler)."""
+    sent_emails: list = []
+    monkeypatch.setattr("app.services.notify.smtplib.SMTP", _capturing_smtp(sent_emails))
+
+    case_id, _, _ = _seed_case(
+        notified_at=datetime.now(timezone.utc) - timedelta(minutes=20)
+    )
+    ingest.sweep_received()  # no received messages; the reminder pass still runs
+
+    with SessionLocal() as session:
+        assert session.get(Case, case_id).reminder_count == 1
+    assert len(sent_emails) == 1

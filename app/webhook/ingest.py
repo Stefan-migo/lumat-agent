@@ -40,6 +40,7 @@ from app.models import (
     MessageType,
 )
 from app.services.customers import get_or_create_customer, normalize_phone_e164
+from app.services.notify import acknowledge_emergency_if_ack, send_pending_emergency_reminders
 from app.services.send import deliver_outbound
 
 logger = logging.getLogger(__name__)
@@ -335,6 +336,9 @@ def process_message(session, message: Message) -> None:
             message.media_url, message.wamid, settings.meta_access_token, settings.media_dir
         )
     if message.direction == MessageDirection.INBOUND and message.text:
+        # EM-4 ack (T4.3.2): a reply-keyword ack is recorded on the emergency
+        # case BEFORE the graph runs — deterministic, audited, no-op otherwise.
+        acknowledge_emergency_if_ack(session, message.conversation_id, message.text)
         run_conversation(session, message)
         deliver_outbound(session, message.conversation_id)
     message.status = MessageStatus.PROCESSED
@@ -405,4 +409,11 @@ def sweep_received(limit: int = 50) -> int:
             with session_scope() as session:
                 message = session.get(Message, message_id)
                 message.status = MessageStatus.FAILED
+
+    # EM-4 escalation (T4.3.2): reminder emails for unacked emergencies — a
+    # lightweight call in the same sweep (startup + webhook BackgroundTask),
+    # no separate scheduler (ponytail: tens of cases/day; a cron/dedicated
+    # worker is the upgrade path when volume grows).
+    with session_scope() as session:
+        send_pending_emergency_reminders(session)
     return processed
