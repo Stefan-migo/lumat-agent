@@ -42,3 +42,32 @@ def record_llm_cost(
         previous = Decimal(message.cost_llm or 0)
         message.cost_llm = float(previous + cost)
     return cost
+
+
+def _sum_columns(session: Session, *filters) -> float:
+    """SUM(cost_llm) + SUM(cost_meta) over the filtered messages (D6)."""
+    statement = select(
+        func.sum(Message.cost_llm),
+        func.sum(Message.cost_meta),
+    )
+    for condition in filters:
+        statement = statement.where(condition)
+    row = session.execute(statement).one()
+    return float((row[0] or 0) + (row[1] or 0))
+
+
+def conversation_spend(session: Session, conversation_id: int) -> float:
+    """Total spend (LLM + Meta) of one conversation (D6, SS-3 basis)."""
+    return _sum_columns(session, Message.conversation_id == conversation_id)
+
+
+def daily_spend(session: Session, day: date | None = None) -> float:
+    """Total spend (LLM + Meta) of a calendar day, UTC (D6, SS-3 basis).
+
+    Timestamps are UTC (DB now()); the default day is the UTC date so the
+    window always matches the stored rows.
+    """
+    day = day or datetime.now(timezone.utc).date()
+    start = datetime.combine(day, time.min, tzinfo=timezone.utc)
+    end = datetime.combine(day, time.max, tzinfo=timezone.utc)
+    return _sum_columns(session, Message.created_at >= start, Message.created_at <= end)

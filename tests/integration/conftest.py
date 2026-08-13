@@ -219,3 +219,16 @@ def mock_openai_embeddings():
 
         router.post("/embeddings").mock(side_effect=handler)
         yield router
+
+
+@pytest.fixture
+def mock_meta_send():
+    """Intercept the Meta Cloud API outbound text send."""
+    with respx.mock(base_url="https://graph.facebook.com") as router:
+        router.post("/v20.0/123456789/messages").mock(
+            return_value=httpx.Response(
+                200,
+                json={"messaging_product": "whatsapp", "messages": [{"id": "wamid.out123"}]},
+            )
+        )
+        yield router

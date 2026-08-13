@@ -258,7 +258,7 @@ def test_200_returned_before_processing_runs(client, monkeypatch):
     assert rows[0].status == MessageStatus.RECEIVED
 
 
-def test_background_task_processes_message_after_200(client, mock_openai_chat):
+def test_background_task_processes_message_after_200(client, mock_openai_chat, mock_meta_send):
     """Real wiring: after the 200, the BackgroundTask sweep marks it processed
     and the conversation graph (T3.2) answers with an outbound reply."""
     resp = _post(client, _payload([_message("wamid.bg", text="hola")]))
@@ -286,7 +286,7 @@ def test_wamid_dedup_keeps_single_row(client, monkeypatch):
     assert _count_messages() == 1
 
 
-def test_retry_storm_single_processing_pass(client, mock_openai_chat):
+def test_retry_storm_single_processing_pass(client, mock_openai_chat, mock_meta_send):
     """WH-7: a batch re-delivered 10x yields exactly one processing pass each.
     Each processed inbound also produces one bot reply (B3 behavior)."""
     batch = [
@@ -355,7 +355,7 @@ def test_rate_limit_drops_overflow_after_15_per_minute(client, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_sweep_recovers_stuck_received_messages(migrated_db, mock_openai_chat):
+def test_sweep_recovers_stuck_received_messages(migrated_db, mock_openai_chat, mock_meta_send):
     with SessionLocal() as session:
         customer = Customer(phone_e164="+56912345678", name="Ana")
         session.add(customer)
@@ -513,7 +513,7 @@ def test_media_download_uses_bearer_token(monkeypatch, tmp_path, migrated_db):
 # ---------------------------------------------------------------------------
 
 
-def test_startup_sweep_reprocesses_received(migrated_db, mock_openai_chat):
+def test_startup_sweep_reprocesses_received(migrated_db, mock_openai_chat, mock_meta_send):
     with SessionLocal() as session:
         customer = Customer(phone_e164="+56944445555")
         session.add(customer)

@@ -40,6 +40,7 @@ from app.models import (
     MessageType,
 )
 from app.services.customers import get_or_create_customer, normalize_phone_e164
+from app.services.send import deliver_outbound
 
 logger = logging.getLogger(__name__)
 
@@ -321,10 +322,10 @@ def download_media(media_url: str, wamid: str, token: str, media_dir: str) -> Pa
 
 
 def process_message(session, message: Message) -> None:
-    """Process one inbound message: media download, then conversation run.
+    """Process one inbound message: media download, conversation run, delivery.
 
-    The LangGraph conversation run (T3.2+) answers the customer and persists
-    the outbound replies; the send itself is wired in T3.6. The status
+    The LangGraph conversation run (T3.2+) answers the customer, persists the
+    outbound replies (T3.5) and delivers them via Meta (T3.6). The status
     transition received -> processed happens after a successful run; a failed
     download keeps the message `received` so the sweep retries it (WH-4).
     """
@@ -335,6 +336,7 @@ def process_message(session, message: Message) -> None:
         )
     if message.direction == MessageDirection.INBOUND and message.text:
         run_conversation(session, message)
+        deliver_outbound(session, message.conversation_id)
     message.status = MessageStatus.PROCESSED
 
 
