@@ -1,0 +1,462 @@
+{
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/build.sh": {
+    "mtime": 1784581145.507031,
+    "ast_hash": "e47bfbdacb4c074fe834e79e6893c50d",
+    "semantic_hash": "e47bfbdacb4c074fe834e79e6893c50d"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/md-to-pdf.config.js": {
+    "mtime": 1784581154.954041,
+    "ast_hash": "15339208634f855348004b1387fd9007",
+    "semantic_hash": "15339208634f855348004b1387fd9007"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/package.json": {
+    "mtime": 1784581087.7134826,
+    "ast_hash": "dda937d675e001a27334a3fa0320154e",
+    "semantic_hash": "dda937d675e001a27334a3fa0320154e"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/screenshot.js": {
+    "mtime": 1784581120.6717134,
+    "ast_hash": "c35b70542ed3b3788353b0cc02c3bf0a",
+    "semantic_hash": "c35b70542ed3b3788353b0cc02c3bf0a"
+  },
+  ".opencode/opencode.json": {
+    "mtime": 1784231604.7503808,
+    "ast_hash": "0338e8056a2b4affaea1a5c1c4442e4e",
+    "semantic_hash": "0338e8056a2b4affaea1a5c1c4442e4e"
+  },
+  ".cortex-sessions/2026-07-16-lumat-cotizacion/cotizacion-borrador.md": {
+    "mtime": 1784567141.011928,
+    "ast_hash": "3a022b62ce891faf195c7574ee6d82f9",
+    "semantic_hash": "3a022b62ce891faf195c7574ee6d82f9"
+  },
+  ".cortex-sessions/2026-07-16-lumat-cotizacion/estimacion-costos.md": {
+    "mtime": 1784567122.2244225,
+    "ast_hash": "f96e9771cbdef32d66bf0c26974c1c83",
+    "semantic_hash": "f96e9771cbdef32d66bf0c26974c1c83"
+  },
+  ".cortex-sessions/2026-07-16-lumat-cotizacion/flujo-bot.md": {
+    "mtime": 1784239878.068693,
+    "ast_hash": "c2b343eae4b947524559f1ee278d24a8",
+    "semantic_hash": "c2b343eae4b947524559f1ee278d24a8"
+  },
+  ".cortex-sessions/2026-07-16-lumat-cotizacion/preguntas-cliente.md": {
+    "mtime": 1784654014.2613828,
+    "ast_hash": "00de7ce2cd75bbacc7aaca8367a416ae",
+    "semantic_hash": "00de7ce2cd75bbacc7aaca8367a416ae"
+  },
+  ".cortex-sessions/2026-07-16-lumat-cotizacion/preguntas-filtradas.md": {
+    "mtime": 1784654014.2613401,
+    "ast_hash": "47ef04556a70c2061b6eb1551f2c710d",
+    "semantic_hash": "47ef04556a70c2061b6eb1551f2c710d"
+  },
+  ".cortex-sessions/2026-07-16-lumat-cotizacion/report.md": {
+    "mtime": 1784240733.9844959,
+    "ast_hash": "bbc347bf6df61c1ac448963426d1e066",
+    "semantic_hash": "bbc347bf6df61c1ac448963426d1e066"
+  },
+  ".cortex-sessions/2026-07-16-lumat-cotizacion/session.md": {
+    "mtime": 1784251647.857234,
+    "ast_hash": "458fdd3f41aa85542ade0e19b5739acb",
+    "semantic_hash": "458fdd3f41aa85542ade0e19b5739acb"
+  },
+  ".cortex-sessions/2026-07-20-lumat-agent-arquitectura/arquitectura-lumatagent.md": {
+    "mtime": 1784564942.847111,
+    "ast_hash": "8454fd1d86c646ecc90240f6ba536f49",
+    "semantic_hash": "8454fd1d86c646ecc90240f6ba536f49"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/GPTversion.md": {
+    "mtime": 1784579743.5364754,
+    "ast_hash": "b16fe57dda527b981a8b9e02c41be813",
+    "semantic_hash": "b16fe57dda527b981a8b9e02c41be813"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/archivos finales/propuesta tecnica-economica para IA.md": {
+    "mtime": 1784650516.2042325,
+    "ast_hash": "01bea0c23d6186029d0f0017479b87f2",
+    "semantic_hash": "01bea0c23d6186029d0f0017479b87f2"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/cotizacion-lumat.md": {
+    "mtime": 1784576489.64554,
+    "ast_hash": "52994a5d52ed85aa50517e6e30c769f7",
+    "semantic_hash": "52994a5d52ed85aa50517e6e30c769f7"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/guia-lectura-propuesta.md": {
+    "mtime": 1784643978.3368905,
+    "ast_hash": "9213ca859e83efd3e885e8888defee1f",
+    "semantic_hash": "9213ca859e83efd3e885e8888defee1f"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/presentacion-ejecutiva-lumat.md": {
+    "mtime": 1784643930.4992244,
+    "ast_hash": "fcb759d0342219fabf12fbc8b838c8b3",
+    "semantic_hash": "fcb759d0342219fabf12fbc8b838c8b3"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/propuesta tecnica-economica para IA.md": {
+    "mtime": 1784654014.2956822,
+    "ast_hash": "01bea0c23d6186029d0f0017479b87f2",
+    "semantic_hash": "01bea0c23d6186029d0f0017479b87f2"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/propuesta-tecnica-economica-lumat.md": {
+    "mtime": 1784654014.2483568,
+    "ast_hash": "e1408b3fa28187a13bcce43c844982e6",
+    "semantic_hash": "e1408b3fa28187a13bcce43c844982e6"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/wireframes/agenda-tecnicos.html": {
+    "mtime": 1784581016.2644856,
+    "ast_hash": "2c2f5790cc50bf9b2013e4af4f7b393b",
+    "semantic_hash": "2c2f5790cc50bf9b2013e4af4f7b393b"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/wireframes/cliente-ficha.html": {
+    "mtime": 1784580987.7195897,
+    "ast_hash": "9b68dd527d8c774f3e20b2c8ea4cf7d8",
+    "semantic_hash": "9b68dd527d8c774f3e20b2c8ea4cf7d8"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/wireframes/dashboard.html": {
+    "mtime": 1784580964.211096,
+    "ast_hash": "e993ef6950d3c65d29ac14f37c5ceed4",
+    "semantic_hash": "e993ef6950d3c65d29ac14f37c5ceed4"
+  },
+  ".cortex-sessions/2026-07-29-lumat-roadmap-m1/roadmap-m1-lumatagent.md": {
+    "mtime": 1786117549.8290112,
+    "ast_hash": "17be1503de0f34b012a3e5e1a055effb",
+    "semantic_hash": "17be1503de0f34b012a3e5e1a055effb"
+  },
+  ".cortex-sessions/2026-08-07-reunion-cierre/01-plan-hitos-detallado.md": {
+    "mtime": 1786117559.3446054,
+    "ast_hash": "1784fa181bf70c449f38b0e7ef10efe9",
+    "semantic_hash": "1784fa181bf70c449f38b0e7ef10efe9"
+  },
+  ".cortex-sessions/2026-08-07-reunion-cierre/02-requerimientos-servidor.md": {
+    "mtime": 1786129213.5014713,
+    "ast_hash": "e618cc8757ed318aec0038e0f6f30e29",
+    "semantic_hash": "e618cc8757ed318aec0038e0f6f30e29"
+  },
+  ".cortex-sessions/2026-08-07-reunion-cierre/03-checklist-meta-api.md": {
+    "mtime": 1786114999.7989278,
+    "ast_hash": "2e31d630da6e10765c001f8d3aac55c2",
+    "semantic_hash": "2e31d630da6e10765c001f8d3aac55c2"
+  },
+  ".cortex-sessions/2026-08-07-reunion-cierre/04-plan-pagos-cronograma.md": {
+    "mtime": 1786129227.9973629,
+    "ast_hash": "99d44de6eae201331bb468a7e12d21c9",
+    "semantic_hash": "99d44de6eae201331bb468a7e12d21c9"
+  },
+  ".cortex-sessions/2026-08-07-reunion-cierre/investigacion-puntos-abiertos.md": {
+    "mtime": 1786114888.4115846,
+    "ast_hash": "eb49d3f1c05539ae03c38071ca6d4474",
+    "semantic_hash": "eb49d3f1c05539ae03c38071ca6d4474"
+  },
+  ".cortex-sessions/2026-08-07-reunion-cierre/propuesta-final-lumatagent.md": {
+    "mtime": 1786130896.0927446,
+    "ast_hash": "ba6bf4756fcee87526430fe37f7d45bb",
+    "semantic_hash": "ba6bf4756fcee87526430fe37f7d45bb"
+  },
+  ".cortex-sessions/2026-08-11-gestion-proyecto/report.md": {
+    "mtime": 1786488292.1503637,
+    "ast_hash": "89172a23986b0d93c41301a47e84aa7d",
+    "semantic_hash": "89172a23986b0d93c41301a47e84aa7d"
+  },
+  ".cortex-sessions/2026-08-11-gestion-proyecto/session.md": {
+    "mtime": 1786494256.5003228,
+    "ast_hash": "1b2625718c8e67e59ee9ea565c0835df",
+    "semantic_hash": "1b2625718c8e67e59ee9ea565c0835df"
+  },
+  ".opencode/commands/cortex-init.md": {
+    "mtime": 1784231574.2408433,
+    "ast_hash": "24308b2eb0d7aaf2bc0d6905b4e213f1",
+    "semantic_hash": "24308b2eb0d7aaf2bc0d6905b4e213f1"
+  },
+  ".opencode/skills/cortex-session/SKILL.md": {
+    "mtime": 1784233493.9626918,
+    "ast_hash": "dd86237e22881719a8215d469ff19d21",
+    "semantic_hash": "dd86237e22881719a8215d469ff19d21"
+  },
+  "AGENTS.md": {
+    "mtime": 1786533331.206629,
+    "ast_hash": "21f2839ad70189f2cb2f3c09db3067d8",
+    "semantic_hash": "21f2839ad70189f2cb2f3c09db3067d8"
+  },
+  "LumatRequest.md": {
+    "mtime": 1784230225.2243135,
+    "ast_hash": "8453f9211a22b967b7e969eb3efe6bfa",
+    "semantic_hash": "8453f9211a22b967b7e969eb3efe6bfa"
+  },
+  "docs/solicitud-al-cliente-lumat.md": {
+    "mtime": 1786532801.9045897,
+    "ast_hash": "f7c585d6897f0d8e67a881cbfa16bb8b",
+    "semantic_hash": "f7c585d6897f0d8e67a881cbfa16bb8b"
+  },
+  "openspec/changes/archive/2026-07-20-lumat-propuesta-final/design.md": {
+    "mtime": 1784580438.8435473,
+    "ast_hash": "af91dc9c8407d64fe3bf0324f0924369",
+    "semantic_hash": "af91dc9c8407d64fe3bf0324f0924369"
+  },
+  "openspec/changes/archive/2026-07-20-lumat-propuesta-final/proposal.md": {
+    "mtime": 1784580226.5597422,
+    "ast_hash": "b0a96936e94db0babdbbe8f5b478f7b6",
+    "semantic_hash": "b0a96936e94db0babdbbe8f5b478f7b6"
+  },
+  "openspec/changes/archive/2026-07-20-lumat-propuesta-final/specs/lumat-propuesta-final.md": {
+    "mtime": 1784581516.739576,
+    "ast_hash": "5b52fd819abceddc8dabcbbbb1808257",
+    "semantic_hash": "5b52fd819abceddc8dabcbbbb1808257"
+  },
+  "openspec/changes/archive/2026-07-20-lumat-propuesta-final/tasks.md": {
+    "mtime": 1784581527.1534166,
+    "ast_hash": "18dba18169cca5d45aaa63690dab3b3e",
+    "semantic_hash": "18dba18169cca5d45aaa63690dab3b3e"
+  },
+  "openspec/changes/archive/2026-07-20-lumat-propuesta-final/verify-report.md": {
+    "mtime": 1784581439.8440313,
+    "ast_hash": "e8206434bd59c2edc99ff3d884c6a297",
+    "semantic_hash": "e8206434bd59c2edc99ff3d884c6a297"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/design.md": {
+    "mtime": 1786489254.1675272,
+    "ast_hash": "bd35a87a1b2d6a1392ab4d44cde9fcd6",
+    "semantic_hash": "bd35a87a1b2d6a1392ab4d44cde9fcd6"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/exploration.md": {
+    "mtime": 1786488693.6763184,
+    "ast_hash": "d6204e137747fd54331a25adfa5e673a",
+    "semantic_hash": "d6204e137747fd54331a25adfa5e673a"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/proposal.md": {
+    "mtime": 1786488822.2116287,
+    "ast_hash": "19ff2f77a10fc47241ce5cb70c969a11",
+    "semantic_hash": "19ff2f77a10fc47241ce5cb70c969a11"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/tasks.md": {
+    "mtime": 1786535771.901533,
+    "ast_hash": "7727bb6c478baeefc2678383f3404040",
+    "semantic_hash": "7727bb6c478baeefc2678383f3404040"
+  },
+  "openspec/config.yaml": {
+    "mtime": 1786538347.5728326,
+    "ast_hash": "c3e40ca41a75eb7af32a86014e68e309",
+    "semantic_hash": "c3e40ca41a75eb7af32a86014e68e309"
+  },
+  "openspec/specs/admin-panel/spec.md": {
+    "mtime": 1786489008.0156724,
+    "ast_hash": "425444c26f6ff744cf3cbdfa9ad20ac2",
+    "semantic_hash": "425444c26f6ff744cf3cbdfa9ad20ac2"
+  },
+  "openspec/specs/conversation-manager/spec.md": {
+    "mtime": 1786488968.424104,
+    "ast_hash": "9d47a3053ca38c676001f25974a3adcf",
+    "semantic_hash": "9d47a3053ca38c676001f25974a3adcf"
+  },
+  "openspec/specs/customer-records/spec.md": {
+    "mtime": 1786488976.2002149,
+    "ast_hash": "63bd2152117b2129d0397b19c65d6d1f",
+    "semantic_hash": "63bd2152117b2129d0397b19c65d6d1f"
+  },
+  "openspec/specs/emergency-detection/spec.md": {
+    "mtime": 1786488991.1890242,
+    "ast_hash": "4297d63c626004022340e4cbd73fce9c",
+    "semantic_hash": "4297d63c626004022340e4cbd73fce9c"
+  },
+  "openspec/specs/human-handoff/spec.md": {
+    "mtime": 1786488999.0836558,
+    "ast_hash": "f29b508ded92a70c14cdbec29f4462f8",
+    "semantic_hash": "f29b508ded92a70c14cdbec29f4462f8"
+  },
+  "openspec/specs/knowledge-base/spec.md": {
+    "mtime": 1786488983.8155086,
+    "ast_hash": "a294251bf8e0758bf7f135375fd95d8b",
+    "semantic_hash": "a294251bf8e0758bf7f135375fd95d8b"
+  },
+  "openspec/specs/lumat-propuesta-final/spec.md": {
+    "mtime": 1784581532.2062047,
+    "ast_hash": "5b52fd819abceddc8dabcbbbb1808257",
+    "semantic_hash": "5b52fd819abceddc8dabcbbbb1808257"
+  },
+  "openspec/specs/security-hardening/spec.md": {
+    "mtime": 1786489025.013655,
+    "ast_hash": "f0f38e59aaf934091bfea525bd809304",
+    "semantic_hash": "f0f38e59aaf934091bfea525bd809304"
+  },
+  "openspec/specs/settings-scope-limits/spec.md": {
+    "mtime": 1786489015.9433446,
+    "ast_hash": "fd68a6c217ac498d3f316c0c46420f4f",
+    "semantic_hash": "fd68a6c217ac498d3f316c0c46420f4f"
+  },
+  "openspec/specs/whatsapp-webhook/spec.md": {
+    "mtime": 1786488959.0856485,
+    "ast_hash": "9864c6fe5fb53d69a132fa6f76198837",
+    "semantic_hash": "9864c6fe5fb53d69a132fa6f76198837"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/Gu\u00eda de Lectura_.pdf": {
+    "mtime": 1784647202.19486,
+    "ast_hash": "7db7fccf7f09c69bde66b6527f9b8223",
+    "semantic_hash": "7db7fccf7f09c69bde66b6527f9b8223"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/archivos finales/Gu\u00eda de Lectura Propuesta Lumat.pdf": {
+    "mtime": 1784651832.9415317,
+    "ast_hash": "50a3d55ae08102965c01ce755fcb7ee7",
+    "semantic_hash": "50a3d55ae08102965c01ce755fcb7ee7"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/archivos finales/PresentacionCotizacionLumat.pdf": {
+    "mtime": 1784643461.259629,
+    "ast_hash": "9f39ccc4b8de6c5c6c77b5635f271a89",
+    "semantic_hash": "9f39ccc4b8de6c5c6c77b5635f271a89"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/archivos finales/Propuesta T\u00e9cnica y Econ\u00f3mica Lumat.pdf": {
+    "mtime": 1784651768.3744333,
+    "ast_hash": "686bab06b27455c43b4b115a64744264",
+    "semantic_hash": "686bab06b27455c43b4b115a64744264"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/cotizacion-lumat.pdf": {
+    "mtime": 1784576501.145514,
+    "ast_hash": "da196e46fb5dac64ac148b0cf791661e",
+    "semantic_hash": "da196e46fb5dac64ac148b0cf791661e"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/propuesta-tecnica-economica-lumat.pdf": {
+    "mtime": 1784643990.0586877,
+    "ast_hash": "4513b1ef0606682b003adaf458f3d721",
+    "semantic_hash": "4513b1ef0606682b003adaf458f3d721"
+  },
+  "Propuesta_Lumat_Entrega_1.pdf": {
+    "mtime": 1784578171.1959658,
+    "ast_hash": "e4ef48d7935497f77120361d1f07b973",
+    "semantic_hash": "e4ef48d7935497f77120361d1f07b973"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/diagrams/diagrama1-arquitectura-general.png": {
+    "mtime": 1784581094.5569916,
+    "ast_hash": "8306969fb58af98b7a9b60610eddf6c8",
+    "semantic_hash": "8306969fb58af98b7a9b60610eddf6c8"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/diagrams/diagrama2-multiagente.png": {
+    "mtime": 1784581113.1735644,
+    "ast_hash": "ea1ab3d314408606bb8b75cf437c8da4",
+    "semantic_hash": "ea1ab3d314408606bb8b75cf437c8da4"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/diagrams/diagrama3-flujo-conversacional.png": {
+    "mtime": 1784581101.7151687,
+    "ast_hash": "dbcae182157c87de01828b5c436aab62",
+    "semantic_hash": "dbcae182157c87de01828b5c436aab62"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/diagrams/diagrama4-infraestructura.png": {
+    "mtime": 1784581102.570233,
+    "ast_hash": "3763e9b8a52293814091de9d4a307f65",
+    "semantic_hash": "3763e9b8a52293814091de9d4a307f65"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/wireframes/agenda-tecnicos.png": {
+    "mtime": 1784581128.7250676,
+    "ast_hash": "d58168c7651173871d76391df0ab3ac7",
+    "semantic_hash": "d58168c7651173871d76391df0ab3ac7"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/wireframes/cliente-ficha.png": {
+    "mtime": 1784581127.5316896,
+    "ast_hash": "42393dfc74d3d0cfb84ce249cb189a9e",
+    "semantic_hash": "42393dfc74d3d0cfb84ce249cb189a9e"
+  },
+  ".cortex-sessions/2026-07-20-lumat-cotizacion-final/wireframes/dashboard.png": {
+    "mtime": 1784581126.2553434,
+    "ast_hash": "54d132c392725d73a2f87956cdeb3e18",
+    "semantic_hash": "54d132c392725d73a2f87956cdeb3e18"
+  },
+  "app/__init__.py": {
+    "mtime": 1786535616.0406551,
+    "ast_hash": "c0315157345e2c97ddcd9573c4c7b03c",
+    "semantic_hash": "c0315157345e2c97ddcd9573c4c7b03c"
+  },
+  "app/config.py": {
+    "mtime": 1786535618.4894936,
+    "ast_hash": "15f7fc281b5e3ff8b6bdb7529da22ffc",
+    "semantic_hash": "15f7fc281b5e3ff8b6bdb7529da22ffc"
+  },
+  "app/main.py": {
+    "mtime": 1786535729.370423,
+    "ast_hash": "e9b3849aecf09ab6269e7ba9d5305381",
+    "semantic_hash": "e9b3849aecf09ab6269e7ba9d5305381"
+  },
+  "app/webhook/__init__.py": {
+    "mtime": 1786535719.5048485,
+    "ast_hash": "177d9677ac35f5b0db02568bdfac8101",
+    "semantic_hash": "177d9677ac35f5b0db02568bdfac8101"
+  },
+  "app/webhook/router.py": {
+    "mtime": 1786535725.9985666,
+    "ast_hash": "d974a3471e9c130930d891f4ecc4405c",
+    "semantic_hash": "d974a3471e9c130930d891f4ecc4405c"
+  },
+  "app/webhook/verify.py": {
+    "mtime": 1786535722.2730474,
+    "ast_hash": "44c2d69a8f0fea02d241c0e40c208551",
+    "semantic_hash": "44c2d69a8f0fea02d241c0e40c208551"
+  },
+  "pyproject.toml": {
+    "mtime": 1786535547.8430843,
+    "ast_hash": "6708cff89eecd048e6ca5ccc121c43f6",
+    "semantic_hash": "6708cff89eecd048e6ca5ccc121c43f6"
+  },
+  "tests/integration/conftest.py": {
+    "mtime": 1786535694.8326013,
+    "ast_hash": "aeb462ee62f9634a9e7a62268d5756c0",
+    "semantic_hash": "aeb462ee62f9634a9e7a62268d5756c0"
+  },
+  "tests/integration/test_health.py": {
+    "mtime": 1786535695.3413844,
+    "ast_hash": "61ea43b494488c80def12993ed314b2b",
+    "semantic_hash": "61ea43b494488c80def12993ed314b2b"
+  },
+  "tests/integration/test_webhook_verify.py": {
+    "mtime": 1786535736.6411316,
+    "ast_hash": "327bbe744b3091722444ffbda9d61bbc",
+    "semantic_hash": "327bbe744b3091722444ffbda9d61bbc"
+  },
+  "README.md": {
+    "mtime": 1786535749.6557343,
+    "ast_hash": "4db257dfcbb770ac91fbc8dfd9aadff4",
+    "semantic_hash": "4db257dfcbb770ac91fbc8dfd9aadff4"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/specs/admin-panel/spec.md": {
+    "mtime": 1786534730.0886316,
+    "ast_hash": "425444c26f6ff744cf3cbdfa9ad20ac2",
+    "semantic_hash": "425444c26f6ff744cf3cbdfa9ad20ac2"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/specs/conversation-manager/spec.md": {
+    "mtime": 1786534730.072127,
+    "ast_hash": "9d47a3053ca38c676001f25974a3adcf",
+    "semantic_hash": "9d47a3053ca38c676001f25974a3adcf"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/specs/customer-records/spec.md": {
+    "mtime": 1786534730.0756514,
+    "ast_hash": "63bd2152117b2129d0397b19c65d6d1f",
+    "semantic_hash": "63bd2152117b2129d0397b19c65d6d1f"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/specs/emergency-detection/spec.md": {
+    "mtime": 1786534730.082535,
+    "ast_hash": "4297d63c626004022340e4cbd73fce9c",
+    "semantic_hash": "4297d63c626004022340e4cbd73fce9c"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/specs/human-handoff/spec.md": {
+    "mtime": 1786534730.0852928,
+    "ast_hash": "f29b508ded92a70c14cdbec29f4462f8",
+    "semantic_hash": "f29b508ded92a70c14cdbec29f4462f8"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/specs/knowledge-base/spec.md": {
+    "mtime": 1786534730.078941,
+    "ast_hash": "a294251bf8e0758bf7f135375fd95d8b",
+    "semantic_hash": "a294251bf8e0758bf7f135375fd95d8b"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/specs/security-hardening/spec.md": {
+    "mtime": 1786534730.0969958,
+    "ast_hash": "f0f38e59aaf934091bfea525bd809304",
+    "semantic_hash": "f0f38e59aaf934091bfea525bd809304"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/specs/settings-scope-limits/spec.md": {
+    "mtime": 1786534730.0932512,
+    "ast_hash": "fd68a6c217ac498d3f316c0c46420f4f",
+    "semantic_hash": "fd68a6c217ac498d3f316c0c46420f4f"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/specs/whatsapp-webhook/spec.md": {
+    "mtime": 1786534730.0687382,
+    "ast_hash": "9864c6fe5fb53d69a132fa6f76198837",
+    "semantic_hash": "9864c6fe5fb53d69a132fa6f76198837"
+  },
+  "openspec/changes/hito-1-setup-whatsapp/verify-report.md": {
+    "mtime": 1786536559.4431303,
+    "ast_hash": "8bb0cb98a79ad3dd28ee919cb56e8d87",
+    "semantic_hash": "8bb0cb98a79ad3dd28ee919cb56e8d87"
+  }
+}
