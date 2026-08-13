@@ -1,15 +1,15 @@
 ```yaml
 schema: gentle-ai.verify-result/v1
-evidence_revision: sha256:2d26aa4fc2e51bbf7edd77874535344ddf8d1054f4d771d74c7f4c1534de9513
+evidence_revision: sha256:6c6a34e6f8a139ed7922365678db3bb1f5f571a6308d846306cb0aee2363596c
 verdict: pass
 blockers: 0
 critical_findings: 0
-requirements: 5/5
-scenarios: 6/6
-test_command: pytest tests/integration/test_webhook_ingest.py -v ; pytest tests/
+requirements: 18/18
+scenarios: 25/25
+test_command: pytest tests/
 test_exit_code: 0
-test_output_hash: sha256:2d26aa4fc2e51bbf7edd77874535344ddf8d1054f4d771d74c7f4c1534de9513
-build_command: .venv/bin/python -c "import app.main; from app.webhook.ingest import ingest_payload, sweep_received, RateLimiter, normalize_phone_e164; print('import OK')" (with test env set)
+test_output_hash: sha256:6c6a34e6f8a139ed7922365678db3bb1f5f571a6308d846306cb0aee2363596c
+build_command: .venv/bin/python -c "import app.main; from app.services.customers import get_or_create_customer, set_customer_state; from app.services.kb import ingest_document, retrieve; from app.services.send import send_text, deliver_outbound; from app.services.costs import record_llm_cost, conversation_spend, daily_spend; from app.chat.state import ConversationState; from app.chat.graph import build_graph, run_conversation; from app.chat.nodes.classify_intent import classify_intent, is_injection; from app.chat.nodes.respond import respond, log_unresolved; from app.chat.nodes.capture import capture; from app.chat.nodes.summary import summary; print('import OK')" (with test env set)
 build_exit_code: 0
 build_output_hash: sha256:73e65cba19528ade3fd463248a9ba2c44e92c41810caef6a0bba624cefc54219
 ```
@@ -17,13 +17,218 @@ build_output_hash: sha256:73e65cba19528ade3fd463248a9ba2c44e92c41810caef6a0bba62
 # Verification Report — hito-1-setup-whatsapp
 
 **Change**: hito-1-setup-whatsapp · **Project**: LumatAgent (lumat) · **Phase**: sdd-verify
-**Latest verified slice**: **Batch 2 (PR 3)** — commits `54c61829..a2ee2a62` (T2.2 webhook ingest; T2.1 ops blocked on client credentials)
+**Latest verified slice**: **Batch 3 (PR 4)** — commits `c3226c49..ef8aba74` (T3.1 customers · T3.2 chat state/graph · T3.3 KB · T3.4 intent · T3.5 nodes · T3.6 send/costs; T2.1 remains blocked on client credentials)
 **Mode**: **STRICT TDD** (config.yaml `apply.tdd: true`, runner `pytest tests/`)
 **Artifact store**: hybrid (this file + Engram `sdd/hito-1-setup-whatsapp/verify-report`)
-**Ledger token (verify run)**: `sha256:369429df480cb9fa4f1f643833b610aa4ab26e8ccfe959ac7369de0541f63b9c` (orchestrator settles)
-**Cumulative verified**: 9 requirements / 12 scenarios across B0+B1+B2 slices. The **whatsapp-webhook spec is now fully verified (7/7 reqs, 10/10 scenarios)**; slice-scoped envelope for B2 = 5/5 reqs, 6/6 scenarios.
+**Ledger token (verify run)**: `sha256:5782326ac5cd2959814531e5d584d769070b5c193f58a8ff04b48b7fed97a037` (orchestrator settles)
+**Cumulative verified**: 27 requirements / 37 scenarios across B0+B1+B2+B3 slices. Slice-scoped envelope for B3 = 18/18 reqs, 25/25 scenarios.
 
 ---
+## Previous Slices — B0 (PR 1) PASS, B1 (PR 2) PASS, B2 (PR 3) PASS — preserved verbatim
+
+B0 (f8357e5f..0894f5c7): PASS, 3/3 reqs, 5/5 scenarios (WH-1..WH-3), 12/12 tests. B1 (d405dcab..45565e3f): PASS, 3/3 reqs, 3/3 scenarios (WH-5 schema, SH-5, SH-2), 38/38 tests. B2 (54c61829..a2ee2a62): PASS, 5/5 reqs, 6/6 scenarios (WH-3..WH-7 delivery path), 62/62 tests. Full B0+B1+B2 bodies preserved in this file below the B3 section and in the prior Engram revision (obs #1375). Key carried findings: 1 WARNING (real OPENAI_API_KEY in dev shell) — **mechanism now fixed in B3** (see WARNING-1); deferred items SH-5 login → T5.1, SH-2 read-only fs → T7.1, KB-3 manager view → T5.4, HH-3 persona-menu trigger → T4.4, SH-4 tool-whitelist suite → T6.3.
+
+# Batch 3 (PR 4) — THIS VERIFY RUN
+
+**Verified slice**: commits `c3226c49..ef8aba74` (8 commits: 7dd1d796 feat(customers) · c309238b feat(chat state+receive) · ceffdef6 feat(kb) · addceb7c feat(chat intent+route) · f5a83d4b feat(chat capture+respond+summary) · 8693b6a3 fix(route injection) · 9b7aa710 feat(send+costs) · ef8aba74 fix(webhook claim-pattern sweep))
+**Runtime harness**: `lumat-pg-test` container UP (localhost:5432, pgvector) — all suites executed against the real DB; OpenAI/Meta calls respx-mocked.
+
+### Completeness (B3 slice)
+
+| Metric | Value |
+|--------|-------|
+| Tasks total (change) | 33 (header says 34 — pre-existing discrepancy, SUGGESTION-1 carried) |
+| Tasks complete | 13/33 (B0: 3 + B1: 3 + B2: 2 + B3: 6, of which T2.1 stays `[ ]` **blocked**) |
+| B3 tasks complete | 6/6 — T3.1 [x], T3.2 [x], T3.3 [x], T3.4 [x], T3.5 [x], T3.6 [x] (tasks.md) |
+| B3 requirements verified | 18/18 slice-scope: CR-1..6 (6) · CM-1..6 (6) · KB-1, KB-2, KB-4 (3) · HH-3 (1, partial) · SH-4 (1, partial) · SS-4 (1, tracking basis) |
+| B3 scenarios verified | 25/25 slice-scope: CR 8 · CM 9 · KB 6 · HH-3 1 · SH-4 1 · SS-4 0 (basis only, panel visibility deferred) |
+| T2.1 blocked verdict | ✅ PASS for this slice — ops dependency on client credentials, unchanged from B2 |
+
+Full-spec totals for context: customer-records = 6 reqs / 8 scenarios · conversation-manager = 6 reqs / 9 scenarios · knowledge-base = 4 reqs / 7 scenarios (KB-3 manager view → T5.4) · human-handoff = 5 reqs / 7 scenarios (B3 covers HH-3 scenario "two failed comprehension") · security-hardening = 5 reqs / 8 scenarios (B3 covers SH-4 scenario "injection treated as data") · settings-scope-limits = 5 reqs / 5 scenarios (B3 covers SS-4 tracking basis; visibility → T4.5/T5.4). **Cumulative B0+B1+B2+B3: 27 reqs / 37 scenarios verified.**
+
+### Build & Tests Execution (B3)
+
+**Build-equivalent**: ✅ Passed (exit 0)
+```text
+.venv/bin/python -c "import app.main; from app.services.customers import ...; from app.services.kb import ...; from app.services.send import ...; from app.services.costs import ...; from app.chat.state import ConversationState; from app.chat.graph import build_graph, run_conversation; from app.chat.nodes.classify_intent import classify_intent, is_injection; from app.chat.nodes.respond import respond, log_unresolved; from app.chat.nodes.capture import capture; from app.chat.nodes.summary import summary; print('import OK')"
+-> import OK   (hash sha256:73e65cba…4cefc54219)
+```
+
+**Focused suites** (live pgvector, exit 0):
+```text
+$ pytest tests/integration/test_customers.py -v      -> 17 passed
+$ pytest tests/integration/test_chat_state.py -v     -> 8 passed
+$ pytest tests/integration/test_kb.py -v             -> 11 passed
+$ pytest tests/integration/test_chat_intent.py -v    -> 12 passed
+$ pytest tests/integration/test_chat_capture.py -v   -> 7 passed
+$ pytest tests/integration/test_send_costs.py -v     -> 11 passed
+Total: 66 passed in 12.74s   (hash sha256:784d49d9…0ed1b1eb15)
+```
+
+**Full suite**: ✅ **128 passed / 0 failed / 0 skipped** in 19.76s, exit 0 — matches expected 128 (12 B0 + 26 B1 + 24 B2 + 66 B3), no regressions.
+Output hash: `sha256:6c6a34e6f8a139ed7922365678db3bb1f5f571a6308d846306cb0aee2363596c`.
+
+**Migration check** (live): `schema_migrations` = [001_init, 002_customer_notes, 003_conversation_captured_data]; `\dt` shows 12 tables (11 business incl. `customer_notes` + schema_migrations); `conversations.captured_data` JSONB present; `test_migrations.py` 10/10 green (002/003 expectations updated).
+
+**Secrets check** (all passed):
+```text
+git grep -iE "sk-|EAAG|ghp_|AKIA" app/ db/ infra/ (excl. sk-test)  -> no credential values
+git grep -E "sk-[A-Za-z0-9]{10,}" / "EAAG[A-Za-z0-9]{10,}"         -> no matches
+git ls-files | grep -i env                                          -> only infra/.env.example (SH-2 intact)
+```
+No test makes a real call to api.openai.com: every LLM-touching test takes a respx mock fixture; conftest FORCES `OPENAI_API_KEY=sk-test` so an unmocked call fails fast (401) instead of hitting the network — full suite green confirms zero real calls (dev shell has a real key, apply-progress issue 2).
+
+**Coverage**: ➖ Not available (config.yaml `verify.coverage_threshold: 0`; no coverage tooling — consistent with B0/B1/B2).
+
+### Spec Compliance Matrix (B3 slice)
+
+| Requirement | Scenario | Covering test (runtime, all passing) | Result |
+|-------------|----------|--------------------------------------|--------|
+| CR-1 Auto-Ficha | First contact creates ficha | `test_cr1_first_contact_creates_ficha` + `test_cr1_unknown_phone_creates_exactly_one_row` (auto row + audit on create) | ✅ COMPLIANT |
+| CR-2 Phone-Based Dedup | Known customer returns | `test_cr2_same_number_reuses_record` (id equality + count 1) | ✅ COMPLIANT |
+| CR-2 Phone-Based Dedup | Different formatting | `test_cr2_different_formatting_dedups` (`+56 9 1234 5678` vs local `912345678` → same ficha) + `test_cr2_full_international_format_dedups` (`+569...` vs `569...`) | ✅ COMPLIANT |
+| CR-3 Lifecycle States | State progression | `test_cr3_valid_transition_updates_state` (nuevo→pendiente) + `test_cr3_postventa_reachable_only_after_finalizado` + `test_cr3_state_change_audited` (actor/action/before/after in audit_log) | ✅ COMPLIANT |
+| CR-3 Lifecycle States | Invalid transition rejected | `test_cr3_invalid_transition_rejected` (nuevo→postventa raises InvalidStateTransition, state unchanged) | ✅ COMPLIANT |
+| CR-4 Internal Notes | Staff adds note | `test_cr4_add_note_stores_author_and_timestamp` + `test_cr4_list_notes_chronological` + `test_cr4_notes_are_staff_only_no_customer_exposure` (separate customer_notes table) | ✅ COMPLIANT |
+| CR-5 History Linkage | History complete | `test_cr5_history_lists_conversations_cases_messages` (chronological dicts) + chat-state `test_cr5_closed_conversation_opens_new` (closed → new conv, history linked) | ✅ COMPLIANT |
+| CR-6 Data and Consent Recording | Captured data persisted | `test_cr6_captured_data_persisted_on_ficha` + `test_cr6_consent_recorded_with_timestamp` + `test_cr6_consent_withdrawn` + capture `test_cm2_complete_capture_persists_and_confirms` (end-to-end consent → ficha) | ✅ COMPLIANT |
+| CM-1 Single-Agent Flow with Menu | First contact | `test_cm1_first_contact_greeting_with_menu` (greeting + 8-category menu) + `test_cm1_menu_has_exactly_8_categories` (exact CM-1 category list) | ✅ COMPLIANT |
+| CM-1 Single-Agent Flow with Menu | Repeat contact resumes | `test_cm1_repeat_contact_resumes_not_from_scratch` (2nd reply is NOT a fresh greeting — resumes state) | ✅ COMPLIANT |
+| CM-2 Progressive Capture | Complete capture | `test_cm2_progressive_capture_asks_fields_in_order` (8 fields, one per turn) + `test_cm2_complete_capture_persists_and_confirms` (all fields stored, completion reply) | ✅ COMPLIANT |
+| CM-2 Progressive Capture | Customer skips a field | `test_cm2_skip_is_unknown_and_non_blocking` (skip → "unknown", flow continues) + evidence skip inside complete-capture test | ✅ COMPLIANT |
+| CM-3 Intent and Case Classification | Inbound message classified | `test_cm3_intent_classified` + `test_cm3_case_classification_stored` (service/priority/status on case row) + `test_cm3_state_case_holds_classification` | ✅ COMPLIANT |
+| CM-4 Authorized Technical Guidance | In-scope guidance | `test_cm4_kb_grounded_answer_with_kb_tags` (answer from `<kb>` chunks only; KB content never in system prompt; `<user_input>` slot) | ✅ COMPLIANT |
+| CM-4 Authorized Technical Guidance | No reliable answer | `test_cm4_kb_miss_cannot_answer_and_logs_unresolved` (CANNOT_ANSWER_REPLY + unresolved flag + escalation) | ✅ COMPLIANT |
+| CM-5 Conversation Summary | Summary after flow | `test_cm5_summary_stored_on_conversation_and_case` (conversation.summary + case.summary) | ✅ COMPLIANT |
+| CM-6 Unresolved Response Logging | Unresolved question logged | `test_cm4_kb_miss_cannot_answer_and_logs_unresolved` (payload unresolved + context + ts) + `test_cm6_no_unresolved_when_kb_hits` (companion: no flag on hit) | ✅ COMPLIANT |
+| KB-1 Ingestion Pipeline | Document ingested | `test_kb1_ingest_markdown_chunks_stored` + `test_kb1_ingest_pdf_extracts_text` + `test_kb1_ingest_csv_row_grouped` + `test_kb1_chunk_count_for_long_document` (3 formats, chunking, pgvector storage) | ✅ COMPLIANT |
+| KB-1 Ingestion Pipeline | Provider and model named | `test_kb1_ingest_markdown_chunks_stored` asserts provider="openai", model=EMBED_MODEL, cost_meta > 0 on kb_documents | ✅ COMPLIANT |
+| KB-2 Semantic Retrieval | Relevant retrieval | `test_kb2_retrieval_relevant_hit` (top chunks returned above threshold) + `test_kb2_retrieval_top_k_limits_results` (top_k=5) | ✅ COMPLIANT |
+| KB-2 Semantic Retrieval | No relevant content | `test_kb2_retrieval_threshold_miss` (below 0.65 → []) + `test_kb2_min_sim_configurable` + respond test (KB miss → cannot-answer + unresolved) | ✅ COMPLIANT |
+| KB-4 Versioning and Re-Ingestion | Re-ingestion on update | `test_kb4_update_creates_new_version_and_reembeds` (v2 created + re-embedded, v1 preserved, retrieval uses active v2) | ✅ COMPLIANT |
+| KB-4 Versioning and Re-Ingestion | Restore previous version | `test_kb4_restore_previous_version_flip_no_reembed` (pointer flip, ZERO embedding calls — D8 verified by call count) | ✅ COMPLIANT |
+| HH-3 Escalation Triggers | Two failed comprehension attempts | `test_hh3_unknown_intent_increments_counter` + `test_hh3_second_unknown_escalates` (unknown_count persisted as conversation_events, escalate at 2 with reason unknown_intent_twice) | ✅ COMPLIANT (partial req — persona-menu trigger deferred to T4.4) |
+| SH-4 Prompt-Injection Mitigations | Injection attempt treated as data | `test_sh4_injection_escalates_without_llm_call` (deterministic pattern → escalate, injection text NEVER sent to LLM, audit row) + `test_sh4_injection_detected_by_llm_also_escalates` + `test_sh4_user_text_only_in_user_input_slot` (input-as-data proven) | ✅ COMPLIANT (partial req — tool-whitelist suite deferred to T6.3) |
+| SS-4 Cost Tracking and Meta Pricing Awareness | (tracking basis) | `test_send_text_posts_to_meta_and_returns_wamid` + `test_deliver_outbound_sends_and_records_cost_meta` (wamid + cost_meta per row) + `test_record_llm_cost_computes_token_rate` + `test_conversation_spend_sums_cost_columns` + `test_daily_spend_sums_all_conversations` (SQL SUM, D6) | ✅ COMPLIANT (basis; "spend visible in panel" scenario → T5.4) |
+
+**Compliance summary (B3 slice)**: 25/25 scenarios compliant for the verified scope; 18/18 requirements mapped to passing tests. Deferred per tasks.md traceability: KB-3 (manager view) → T5.4 · HH-3 "customer requests a person" → T4.4 · SH-4 "tool whitelist enforced" → T6.3 · SS-4 panel visibility → T5.4/T4.5.
+
+### Correctness (Static Evidence — B3)
+
+| Design item | Status | Notes |
+|-------------|--------|-------|
+| `app/services/customers.py` — E.164 normalize + get-or-create (CR-1/2) | ✅ Implemented | Canonical `normalize_phone_e164` (moved from ingest, re-exported); auto-ficha + audit on create; UNIQUE(phone_e164) |
+| CR-3 state enum + transition map + validation + audit | ✅ Implemented | `CUSTOMER_STATE_TRANSITIONS` (nuevo→postventa absent → InvalidStateTransition); every change → audit_log before/after |
+| CR-4 notes (author+timestamp) | ✅ Implemented | Migration 002 `customer_notes` + CustomerNote model + grants; staff-only table |
+| CR-5 history query | ✅ Implemented | conversations/cases/messages chronological dicts; closed→new conversation (chat state) |
+| CR-6 captured data + consent | ✅ Implemented | update_captured_data + record_consent on ficha; wired from capture node |
+| `ConversationState` 10 design fields + D2 rebuild | ✅ Implemented | customer_id/conversation_id/phone/turn/intent/case/captured/summary/emergency/escalate/escalate_reason/window[10]; `from_db` rebuilds from DB (no checkpointer) |
+| receive: first-contact greeting + 8-category menu (CM-1) | ✅ Implemented | turn<=1 → greeting_with_menu (exact 8 categories); repeat → no reply here (downstream owns) |
+| KB pipeline (KB-1/2/4) | ✅ Implemented | pypdf/MD/CSV-row-grouped → RecursiveCharacterTextSplitter 500/50 → embeddings 1536d → kb_chunks version-tagged; retrieval top_k=5 min_sim=0.65 over ACTIVE versions; provider/model/cost on kb_documents |
+| Versioning D8: edit re-embeds, restore = flip, disable excludes | ✅ Implemented | update_document (v+1 re-embed, prior kept), restore_version (active_version flip, no re-embed), disable_document (active=false); all audited |
+| classify_intent (CM-3, HH-3 partial, SH-4 partial) | ✅ Implemented | static system prompt + `<user_input>` slot; deterministic injection pre-check → escalate WITHOUT LLM (audit); LLM injection flag → escalate; unknown → conversation_events counter, escalate at 2; case service/priority/status stored |
+| route (capture vs retrieval vs escalate) | ✅ Implemented | CAPTURE_INTENTS/RETRIEVAL_INTENTS; persona/emergencia/injection → escalate; unknown non-escalated → respond (clarification) |
+| capture: progressive fields + skip + consent (CM-2, CR-6) | ✅ Implemented | 8 fields one-per-turn; `_pending` persisted via migration 003 (survives D2 rebuild); skip → unknown non-blocking; consent → ficha |
+| respond: KB-grounded + cannot-answer + unresolved (CM-4/6) | ✅ Implemented | `<kb>` + `<user_input>` slots; system prompt forbids invented prices/guarantees/diagnoses; KB miss → CANNOT_ANSWER_REPLY + payload unresolved flag (no SQL view, per ponytail cut 6) + escalate; list_unresolved_questions filter query |
+| summary: completion/escalation (CM-5) | ✅ Implemented | LLM summary → conversation.summary + case.summary; cost_llm recorded |
+| send: Meta outbound + wamid + cost_meta (SS-4 basis) | ✅ Implemented | send_text (v20.0 POST, Bearer) → wamid; deliver_outbound (wamid-NULL rows only — no double-send) + deliver_all_pending |
+| costs: cost_llm tokens×rate + SQL SUM (D6) | ✅ Implemented | record_llm_cost accumulates per message; conversation_spend/daily_spend SUM(cost_llm)+SUM(cost_meta); daily = UTC day |
+| Webhook wiring: graph run + delivery + claim-pattern sweep | ✅ Implemented | process_message → run_conversation + deliver_outbound; claim (received→processing, release locks) + per-message own session (deadlock fix); reset_stale_processing at boot |
+| Migrations 002/003 | ✅ Implemented | apply cleanly, idempotent, grants correct (verified live + 10/10 migration tests) |
+
+### Coherence (Design — B3)
+
+| Design decision | Followed? | Notes |
+|-----------------|-----------|-------|
+| D2 no checkpointer — rebuild state from DB per message | ✅ Yes | `ConversationState.from_db` per run; tested (test_d2_state_rebuilt_from_db, window cap 10) |
+| D6 cost on messages columns + SQL SUM (no spend_ledger) | ✅ Yes | cost_llm/cost_meta on messages; conversation_spend/daily_spend SUM — exactly D6 |
+| D8 versioning: restore = active_version flip, no re-embed | ✅ Yes | verified by embedding call-count in test (0 calls on restore) |
+| D3 OpenAI gpt-4o-mini + text-embedding-3-small | ✅ Yes | CHAT_MODEL/EMBED_MODEL; reference rates in costs.py; per-call httpx client (respx-interceptable) |
+| Design Data Flow: receive → classify_intent → route → capture/kb_retrieve/respond → summary | ✅ Yes | graph.py wiring matches; `_flow_start`/`_after_capture`/`_after_respond` conditionals |
+| Design conversation state field list | ✅ Yes | 10 design fields + escalate_reason; `unknown_count` (HH-3), `next_step`, `replies` added (documented deviations 3/4) |
+| CM-1 menu exactly 8 categories | ✅ Yes | MENU_CATEGORIES verbatim from spec |
+| KB chunking 500/50 RecursiveCharacterTextSplitter | ✅ Yes | `ponytail:` chars-not-tokens ceiling documented (deviation 8) |
+| Deviation 1: migration 002 customer_notes (CR-4) | ✅ Acceptable | Design 10-table model lacked notes storage; documented in apply-progress |
+| Deviation 2: migration 003 conversations.captured_data (CM-2) | ✅ Acceptable | D2 rebuild needs capture persistence; documented |
+| Deviation 3/4: next_step field + replies Annotated[list, add] reducer | ✅ Acceptable | Standard LangGraph accumulator; without it last-write-wins drops replies |
+| Deviation 5: receive returns no reply on repeat | ✅ Acceptable | Downstream nodes own replies (CM-1 resume honored — no restart) |
+| Deviation 6: mid-capture skips re-classification | ✅ Acceptable | Saves an LLM call per capture turn; T4.2 emergency_gate runs before receive and can interrupt |
+| Deviation 7: injection detection in classify_intent | ✅ Acceptable | The LLM boundary; mid-capture text stored as data, never executed (SH-4) |
+| Deviation 9/10: cost_llm on classify too; costs.py born in T3.5 | ✅ Acceptable | All LLM calls tracked (D6); T3.6 completed the SUMs |
+| Deviation 11: claim-pattern sweep (processing status) | ✅ Acceptable | B2 note reserved `processing` for graph runs; required to fix FOR UPDATE deadlock |
+| Rollback boundary | ✅ Yes | B3 = 8 commits 7dd1d796..ef8aba74; reset to c3226c49 removes slice cleanly; B0-B2 suites still green (128/128) |
+
+### Strict TDD Compliance (Step 5a + expanded)
+
+| Check | Result | Details |
+|-------|--------|---------|
+| TDD Evidence reported | ✅ | apply-progress #1372 "TDD Cycle Evidence" table present (6 rows: T3.1..T3.6) |
+| All tasks have tests | ✅ | 6/6 B3 code tasks have test files (customers/chat_state/kb/chat_intent/chat_capture/send_costs); T2.1 ops-blocked (no tests expected) |
+| RED confirmed (tests exist) | ✅ | 6/6 test files verified on disk (RED = import errors per apply-progress) |
+| GREEN confirmed (tests pass) | ✅ | 66/66 B3 tests pass on execution now — cross-referenced against live runs, not trusted blindly |
+| Triangulation adequate | ✅ | 66 distinct cases: CR ×17 (dedup ×4, transitions ×4, notes ×3, history, consent ×3), CM ×8+7+12, KB ×11 (3 formats, counts, threshold, top_k, min_sim, restore, disable), send/costs ×11 — multiple distinct expectations per behavior; no single-case task with multi-scenario spec |
+| Safety Net for modified files | ✅ | conftest.py, test_migrations.py, test_webhook_ingest.py, app/webhook/ingest.py, app/main.py modified: B0-B2 suites 62/62 still green in full run (128 total); new files "N/A (new)" correct |
+| Assertion quality audit (5f) | ✅ | No tautologies, no ghost loops, no smoke-only, no type-only-alone. Strongest: SH-4 injection test asserts the injection text NEVER reaches the LLM user slot; input-as-data asserted (user text == `<user_input>...` exactly); KB-restore D8 verified by embedding call count (legitimate design-decision assertion); respx stubs external OpenAI/Meta URLs only |
+
+**TDD Compliance**: 7/7 checks passed.
+
+### Test Layer Distribution (B3)
+
+| Layer | Tests | Files | Tools |
+|-------|-------|-------|-------|
+| Unit | 0 | 0 | — |
+| Integration | 66 | 6 (+ shared conftest) | real pgvector container + respx (OpenAI chat/embeddings, Meta send) |
+| E2E | 0 | 0 | — |
+| **Total** | **66 (B3)** | **6** | suite total 128 (12 B0 + 26 B1 + 24 B2 + 66 B3) |
+
+### Changed File Coverage
+
+Coverage analysis skipped — no coverage tool detected (config.yaml `verify.coverage_threshold: 0`, no pytest-cov in pyproject). Informational only (strict-TDD module).
+
+### Quality Metrics
+
+**Linter**: ➖ Not available · **Type Checker**: ➖ Not available. Informational only — never blocking.
+
+### Issues Found (B3 slice)
+
+**CRITICAL**: None
+
+**WARNING**:
+1. **(Carried from B1/B2 — MECHANISM RESOLVED, hygiene remains)** Real `OPENAI_API_KEY` still exported in the dev shell (`~/.bashrc`). The B3 conftest change FORCES `os.environ["OPENAI_API_KEY"] = "sk-test"` (no more `setdefault` override), so tests can no longer pick up the real key — the silent-override risk is gone (verified: no real network call, full suite green). Remaining risk is dev-shell hygiene only (an unmocked manual script could spend tokens); stop exporting the real key or scope it per-process. Downgraded from the B1/B2 form.
+2. (NEW, informational) B3 diff = 3,890 insertions / 93 deletions (~3.8k authored lines, 66 tests + 6 nodes + 5 services + 2 migrations + graph/state) vs B3 forecast ~1,600 authored lines (tests excluded from forecast per tasks.md). Within the chained-PR contract (auto-chain, stacked-to-main), flagging for PR-time reviewer awareness only — not a defect.
+
+**SUGGESTION**:
+1. (Carried) `tasks.md` header claims "34 tasks" vs 33 rows (line 4). Fix on next tasks.md edit.
+2. (Carried) WH-1 "Token mismatch" scenario log clause — no `caplog` assertion yet. Close in a later batch or T6.1.
+3. (Carried) README curl proof manual — spec-marker count check in T6.1.
+4. (Carried) `test_infra.py::test_db_service_uses_pgvector_image` double-condition assert — cosmetic simplification.
+5. (Carried) Rate limiter counts duplicate deliveries against the per-phone budget BEFORE dedup (B2 SUGGESTION-5) — untouched in B3; consider counting newly-inserted rows when ingest is next touched, or document in docs/ops.md.
+6. (Carried) Non-JSON body → 200+drop has no covering test (B2 deviation 5) — add in T6.2 functional suite.
+7. (NEW) Media-only inbound messages (`direction==inbound` with no text) skip the graph run entirely — no greeting on a media-only first contact, and no media-evidence handoff until T4.4 (HH-3 "evidence requiring technical review"). Matches design (media → handoff review in T4.4); suggest a deterministic reply or gate coverage in T4.4/T6.2 so a photo-only customer is not left unanswered.
+
+### Graphify Context (B3)
+
+- Graph check: `graphify-out/graph.json` present (636 nodes / 1211 edges / 39 communities; built at d405dcab — B3 file nodes may lag; background refresh in progress, orchestrator owns final refresh; used current graph as-is per instructions).
+- Query `graphify query "customers E164 dedup ficha state notes history consent"` (BFS): start nodes `customers.phone_e164 UNIQUE (design Data Model, CR-2 dedup).`, `test_customers_phone_e164_unique()`, `CustomerState` — subgraph includes `app/models.py`, `ConversationState`, `normalize_phone_e164()`, `app/webhook/ingest.py` — all [EXTRACTED].
+- Paths (directed where possible): T3.2 → CM-1 (5 hops via Batch 3 → T3.5 → CM-5 → CM-1) · T3.3 → KB-2 (5 hops via Conversation Manager) · T3.4 → SH-4 (5 hops via HH-3 → T4.4 → SH-5 → SH-4) · T3.6 → SS-4 (5 hops via T1.2 → SH-5 → Security Hardening) — task→spec edges present via intermediate nodes.
+- Communities consulted: Customer Records (CR cluster), Chat Graph Routing, Knowledge Base Pipeline, Cost Tracking and Sending, WhatsApp API Onboarding.
+- Cosmetic: graphify skill 0.6.1 vs package version-mismatch warning — ignore (carried).
+
+### Runtime Harness Spot-Check (live)
+
+```text
+docker ps                                     -> lumat-pg-test UP (13 h), 0.0.0.0:5432->5432
+psql schema_migrations                        -> [001_init, 002_customer_notes, 003_conversation_captured_data]
+psql \dt                                      -> 12 tables (11 business incl. customer_notes + schema_migrations)
+pytest tests/integration/{customers,chat_state,kb,chat_intent,chat_capture,send_costs}.py -> 66 passed (real DB, TRUNCATE-reset)
+pytest tests/                                 -> 128 passed in 19.76s (12 B0 + 26 B1 + 24 B2 + 66 B3), exit 0
+build import (test env)                       -> import OK, exit 0
+secrets grep (sk-/EAAG/AKIA/ghp_)             -> no credential values in app/ db/ infra/
+```
+
+### Verdict (B3 slice)
+
+**PASS** — Batch 3 (T3.1 customers, T3.2 chat state/graph/receive, T3.3 KB pipeline, T3.4 intent+routing, T3.5 capture+respond+summary, T3.6 send/costs) is complete (6/6 tasks [x]), fully tested (66/66 focused, 128/128 full suite, live against the pgvector container with OpenAI/Meta respx-mocked), and matches specs CR-1..6, CM-1..6, KB-1/2/4, HH-3 (partial), SH-4 (partial), SS-4 (tracking basis), the design D2/D6/D8 decisions and conversation graph wiring, and task acceptance criteria. Strict TDD evidence validated 7/7. No CRITICAL findings; 1 carried WARNING (dev-shell key hygiene — test-override mechanism now fixed). B2's FOR UPDATE deadlock was fixed with the claim-pattern sweep (ef8aba74) and is covered by the full suite. T2.1 remains `[ ]` **blocked on client credentials** — blocked is a PASS for this slice. **Cumulative: 27 reqs / 37 scenarios across B0+B1+B2+B3.** Recommended next: archive B3 slice (orchestrator), then proceed to Batch 4 apply (T4.1 settings · T4.2 emergency · T4.3 notify · T4.4 handoff · T4.5 cost guardrails), and unblock T2.1 when Meta credentials arrive.
 
 ## Previous Slice — Batch 0 (PR 1) PASS — preserved verbatim
 
