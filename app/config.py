@@ -32,6 +32,9 @@ class Settings(BaseSettings):
 
     app_version: str = "0.1.0"
 
+    # Media downloads (design Webhook Pipeline: media -> media/ volume)
+    media_dir: str = "media"
+
 
 @lru_cache
 def get_settings() -> Settings:

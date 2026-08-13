@@ -1,27 +1,27 @@
 ```yaml
 schema: gentle-ai.verify-result/v1
-evidence_revision: sha256:79e45e36542eaac05418dc9f1efe11d8843f8e115aaa1bcb40059d59e5e6b7b5
+evidence_revision: sha256:2d26aa4fc2e51bbf7edd77874535344ddf8d1054f4d771d74c7f4c1534de9513
 verdict: pass
 blockers: 0
 critical_findings: 0
-requirements: 3/3
-scenarios: 3/3
-test_command: pytest tests/ ; pytest tests/integration/test_migrations.py -v ; pytest tests/integration/test_db.py -v ; pytest tests/integration/test_infra.py -v
+requirements: 5/5
+scenarios: 6/6
+test_command: pytest tests/integration/test_webhook_ingest.py -v ; pytest tests/
 test_exit_code: 0
-test_output_hash: sha256:79e45e36542eaac05418dc9f1efe11d8843f8e115aaa1bcb40059d59e5e6b7b5
-build_command: .venv/bin/python -c "import app.main" (with test env set)
+test_output_hash: sha256:2d26aa4fc2e51bbf7edd77874535344ddf8d1054f4d771d74c7f4c1534de9513
+build_command: .venv/bin/python -c "import app.main; from app.webhook.ingest import ingest_payload, sweep_received, RateLimiter, normalize_phone_e164; print('import OK')" (with test env set)
 build_exit_code: 0
-build_output_hash: sha256:196c321bf8e43723e10f86032bd62cbafc1155df016ca950341fa8113e633550
+build_output_hash: sha256:73e65cba19528ade3fd463248a9ba2c44e92c41810caef6a0bba624cefc54219
 ```
 
 # Verification Report — hito-1-setup-whatsapp
 
 **Change**: hito-1-setup-whatsapp · **Project**: LumatAgent (lumat) · **Phase**: sdd-verify
-**Latest verified slice**: **Batch 1 (PR 2)** — commits `d405dcab..45565e3f` (T1.1, T1.2, T1.3)
+**Latest verified slice**: **Batch 2 (PR 3)** — commits `54c61829..a2ee2a62` (T2.2 webhook ingest; T2.1 ops blocked on client credentials)
 **Mode**: **STRICT TDD** (config.yaml `apply.tdd: true`, runner `pytest tests/`)
 **Artifact store**: hybrid (this file + Engram `sdd/hito-1-setup-whatsapp/verify-report`)
-**Ledger token (verify run)**: `sha256:a989ce4f3c0ad2811e298d6f4b525322bc19b7d0fa2c338d3c2a55f7ad9171f0` (orchestrator settles)
-**Cumulative verified**: 6 requirements / 8 scenarios across B0+B1 slices (slice-scoped envelope: B1 = 3/3 reqs, 3/3 scenarios)
+**Ledger token (verify run)**: `sha256:369429df480cb9fa4f1f643833b610aa4ab26e8ccfe959ac7369de0541f63b9c` (orchestrator settles)
+**Cumulative verified**: 9 requirements / 12 scenarios across B0+B1+B2 slices. The **whatsapp-webhook spec is now fully verified (7/7 reqs, 10/10 scenarios)**; slice-scoped envelope for B2 = 5/5 reqs, 6/6 scenarios.
 
 ---
 
@@ -49,10 +49,26 @@ build_output_hash: sha256:29ac96f0f0140d10a79b55231d14e65a2759e0c42f091f7c9d961f
 
 ---
 
-# Batch 1 (PR 2) — THIS VERIFY RUN
+## Previous Slice — Batch 1 (PR 2) PASS — preserved verbatim
 
 **Verified slice**: commits `d405dcab..45565e3f` (4 commits: dc9c9078 migration · af741c8a ORM/audit · bde1d4b8 compose/env · 45565e3f tasks [x])
 **Runtime harness**: `lumat-pg-test` container UP (localhost:5432, pgvector ext 0.8.6) — integration suites executed against real DB.
+
+```yaml
+schema: gentle-ai.verify-result/v1
+evidence_revision: sha256:79e45e36542eaac05418dc9f1efe11d8843f8e115aaa1bcb40059d59e5e6b7b5
+verdict: pass
+blockers: 0
+critical_findings: 0
+requirements: 3/3
+scenarios: 3/3
+test_command: pytest tests/ ; pytest tests/integration/test_migrations.py -v ; pytest tests/integration/test_db.py -v ; pytest tests/integration/test_infra.py -v
+test_exit_code: 0
+test_output_hash: sha256:79e45e36542eaac05418dc9f1efe11d8843f8e115aaa1bcb40059d59e5e6b7b5
+build_command: .venv/bin/python -c "import app.main" (with test env set)
+build_exit_code: 0
+build_output_hash: sha256:196c321bf8e43723e10f86032bd62cbafc1155df016ca950341fa8113e633550
+```
 
 ### Completeness (B1 slice)
 
@@ -218,3 +234,169 @@ docker compose -f infra/docker-compose.yml config (vars injected)     -> valid
 ### Verdict (B1 slice)
 
 **PASS** — Batch 1 (T1.1 schema+migrations, T1.2 ORM+audit, T1.3 compose+env) is complete (3/3 tasks [x]), fully tested (26/26 focused, 38/38 full suite, all live against the pgvector container), and matches the design Data Model, WH-5 (schema mechanism), SH-5 (audit foundation), SH-2 (secrets), and task acceptance criteria. Strict TDD evidence validated 6/6. No CRITICAL findings; 1 WARNING (dev-shell secret hygiene, no repo impact). Deferred items (SH-5 login → T5.1, SH-2 read-only fs → T7.1, WH-5 full path → T2.2) remain deferred per tasks.md — not failures of this slice. Recommended next: archive B1 slice (orchestrator) then proceed to Batch 2 apply (T2.2 webhook ingest).
+
+---
+
+# Batch 2 (PR 3) — THIS VERIFY RUN
+
+**Verified slice**: commits `54c61829..a2ee2a62` (3 commits: 27377a72 feat(webhook) ingest pipeline · c029059f docs(ops) T2.1 checklist · a2ee2a62 tasks [x])
+**Runtime harness**: `lumat-pg-test` container UP (localhost:5432) — focused suite executed against real pgvector DB.
+
+### Completeness (B2 slice)
+
+| Metric | Value |
+|--------|-------|
+| Tasks total (change) | 33 (header says 34 — pre-existing discrepancy, SUGGESTION-1 carried) |
+| Tasks complete | 8/33 (B0: 3 + B1: 3 + B2: 2, of which T2.1 stays `[ ]` **blocked**) |
+| B2 tasks complete | T2.2 [x] · T2.1 [ ] (blocked: client credentials — documented in tasks.md + docs/ops.md) |
+| B2 requirements verified | 5/5 slice-scope: WH-3, WH-4, WH-5 (full path), WH-6, WH-7 (+ WH-2 HMAC gate re-confirmed intact) |
+| B2 scenarios verified | 6/6 slice-scope: WH-3 slow-downstream · WH-4 crash-after-200 · WH-5 meta-retries · WH-6 unsupported-event · WH-6 error-131051 · WH-7 burst-of-retries |
+| T2.1 blocked verdict | ✅ PASS for this slice — ops dependency on client, checklist delivered, no credentials fabricated, task remains [ ] |
+
+Full-spec totals for context: whatsapp-webhook spec = 7 reqs / 10 scenarios. **Cumulative B0+B1+B2: whatsapp-webhook 7/7 reqs, 10/10 scenarios fully verified** (B0: WH-1, WH-2; B1: WH-5 schema; B2: WH-3..7 delivery path) + SH-2/SH-5 foundations from B1 = 9 reqs / 12 scenarios cumulative.
+
+### Build & Tests Execution (B2)
+
+**Build-equivalent**: ✅ Passed (exit 0)
+```text
+.venv/bin/python -c "import app.main; from app.webhook.ingest import ingest_payload, sweep_received, RateLimiter, normalize_phone_e164; print('import OK')"
+-> import OK   (hash sha256:73e65cba…4cefc54219)
+```
+
+**Focused suite** (live against pgvector container, exit 0):
+```text
+$ pytest tests/integration/test_webhook_ingest.py -v   -> 24 passed in 2.65s
+   (normalize ×7, sig gate ×3, phone dedup ×1, 200-before-process ×2, wamid dedup ×1,
+    retry storm ×1, 131051 value+message ×2, unsupported event ×1, rate limit ×1,
+    sweep recovery ×2, media retry + bearer ×2, startup sweep ×1)
+   Output hash: sha256:46c702e7fd0a39bd3500dca25b391d1d36e374ec98c29af2565b7e5a26b8d9d2
+```
+
+**Full suite**: ✅ **62 passed / 0 failed / 0 skipped** in 4.72s, exit 0 — matches expected 62 (12 B0 + 26 B1 + 24 B2), no regressions.
+Output hash: `sha256:2d26aa4fc2e51bbf7edd77874535344ddf8d1054f4d771d74c7f4c1534de9513`.
+
+**Static checks** (all passed):
+```text
+git grep -i "EAAG|token|secret" app/ infra/ db/ docs/ (filtered)  -> only comments, identifiers, env-var names; zero credential VALUES
+git grep -iE "EAAG[A-Za-z0-9]{10,}"                               -> no matches (Meta tokens)
+git grep -E "sk-[A-Za-z0-9]{10,}" (excl. sk-test)                 -> no matches (OpenAI keys)
+git grep -iE "AKIA|ghp_|xox[bap]-|sha256=[0-9a-f]{32,}"            -> no matches
+git ls-files | grep -i env                                         -> only infra/.env.example (change-me placeholders, SH-2 intact)
+```
+
+**Coverage**: ➖ Not available (config.yaml `verify.coverage_threshold: 0`; no coverage tooling — consistent with B0/B1).
+
+### Spec Compliance Matrix (B2 slice)
+
+| Requirement | Scenario | Covering test (runtime, all passing) | Result |
+|-------------|----------|--------------------------------------|--------|
+| WH-3 Immediate 200 | Slow downstream processing | `test_200_returned_before_processing_runs` (200 returned, row still `received`, sweep stub no-op) + `test_post_valid_message_persists_normalized_row` + `test_background_task_processes_message_after_200` (real BackgroundTask runs post-response) | ✅ COMPLIANT — 200 before any processing; decoupled via FastAPI BackgroundTask |
+| WH-4 Persist Before Process | Crash after 200 but before processing | `test_post_valid_message_persists_normalized_row` (payload JSONB persisted, status `received` at 200) + `test_sweep_recovers_stuck_received_messages` (sweep reprocesses 2 stuck rows) + `test_startup_sweep_reprocesses_received` (lifespan sweep via TestClient) + `test_processing_failure_marks_failed` | ✅ COMPLIANT — persist→200→sweep; crash recovery via startup sweep `FOR UPDATE SKIP LOCKED` |
+| WH-5 Deduplicate by WAMID | Meta retries a delivery | `test_wamid_dedup_keeps_single_row` (same payload twice → 1 row) + `test_retry_storm_single_processing_pass` (10× batch → 3 rows, all processed once) + B1 schema test `test_messages_wamid_partial_unique_inbound_only` | ✅ COMPLIANT — full delivery-path dedup now proven at runtime (schema mechanism from B1 + `ON CONFLICT (wamid) DO NOTHING` with partial index predicate match) |
+| WH-6 Filter Unsupported Events | Unsupported event type | `test_unsupported_event_type_acknowledged_not_persisted` (field="statuses" → 200, 0 rows) | ✅ COMPLIANT — filtered before persist, debug log only, no 500 |
+| WH-6 Filter Unsupported Events | Error 131051 message | `test_error_131051_value_skipped` (value-level) + `test_error_131051_on_message_object_skipped` (message-level errors array) | ✅ COMPLIANT — both filter levels, debug log only, no 500 |
+| WH-7 Retry-Storm Tolerance | Burst of retries | `test_retry_storm_single_processing_pass` (10× re-delivery → exactly one processing pass per wamid) + `test_rate_limit_drops_overflow_after_15_per_minute` (per-phone 15/min guard) | ✅ COMPLIANT — no duplicates, no loss on dedup path, bounded queue (status column), service responsive |
+| WH-2 Signature Verification (regression) | Invalid signature | `test_post_invalid_signature_rejected_and_dropped` + `test_post_missing_signature_rejected` (403, 0 rows persisted) + B0 `test_webhook_verify.py` 10/10 still green | ✅ INTACT — HMAC gate unchanged in router diff, 403 + drop before any ingest |
+
+**Compliance summary (B2 slice)**: 6/6 scenarios compliant; HMAC gate (WH-2) re-confirmed intact. **whatsapp-webhook spec now 7/7 reqs, 10/10 scenarios cumulative.**
+
+### Correctness (Static Evidence — B2)
+
+| Design item | Status | Notes |
+|-------------|--------|-------|
+| Data flow: verify → filter → normalize → INSERT received → 200 → BackgroundTask | ✅ Implemented | `router.py` POST: HMAC gate → json.loads → `ingest_payload` → `background_tasks.add_task(sweep_received)` → 200. Matches design Data Flow line-for-line |
+| `ON CONFLICT (wamid) DO NOTHING` + partial unique index predicate | ✅ Implemented | `index_elements=[Message.wamid], index_where=text("direction = 'inbound' AND wamid IS NOT NULL")` — exactly matches B1 schema predicate; verified by dedup + retry-storm tests (no inference error) |
+| E.164 phone normalization (CR-2 dedup basis) | ✅ Implemented | `normalize_phone_e164`: full international, digits-only, Chilean local mobile 9XXXXXXXX→+56, stray chars; tested ×3 + via normalize_message |
+| WH-6 filter before persist (value-level + message-level 131051 + non-messages field) | ✅ Implemented | `_change_is_message_event`, `_value_error_131051`, `_message_error_131051`, `iter_inbound_messages`; debug-log only; no 500 path |
+| In-memory per-phone rate limit 15 msg/min (design Webhook Pipeline row) | ✅ Implemented | `RateLimiter` sliding window (deque), module-level `rate_limiter`, reset per test; `ponytail:` ceiling documented (resets on restart, single worker D1) |
+| Media → media_url + download to `media/` volume (Bearer token, retry via sweep) | ✅ Implemented | `download_media` (httpx, Bearer header, MIME→ext map), failure raises `MediaDownloadError` → row stays `received` → next sweep retries; `media_dir` config added (default "media", matches compose volume) |
+| Startup sweep crash recovery (`status='received' FOR UPDATE SKIP LOCKED`) | ✅ Implemented | `app/main.py` lifespan runs `sweep_received()`; `sweep_received` uses `.with_for_update(skip_locked=True)`; tested (startup sweep + recovery) |
+| Processing failure → `failed` (raw payload retained) | ✅ Implemented | `except Exception` → `MessageStatus.FAILED`; tested |
+| Minimal get-or-create customer+conversation (messages FK) | ✅ Implemented | Inline in ingest.py; one customer per E.164, one open conversation (closed → new conversation, CR-5); `ponytail:` replaced by formal service in T3.1 — documented deviation 1 |
+| Non-JSON body with valid HMAC → 200 + drop | ✅ Implemented | `json.loads` except → 200 acknowledged, dropped (WH-6 spirit; documented deviation 5) — no test yet (noted SUGGESTION-6) |
+
+### Coherence (Design — B2)
+
+| Design decision | Followed? | Notes |
+|-----------------|-----------|-------|
+| In-process BackgroundTask + startup sweep (D1, no broker) | ✅ Yes | Exactly as designed: persist → 200 → BackgroundTask sweep; startup recovery |
+| Dedup via partial unique wamid + ON CONFLICT DO NOTHING | ✅ Yes | Design Webhook Pipeline Dedup row; predicate matches B1 schema exactly |
+| 131051/unsupported filtered before persist, debug log only | ✅ Yes | WH-6 row; value-level AND message-level both handled (stronger than design sketch) |
+| Rate limit 15 msg/min per phone, in-memory, single worker | ✅ Yes | Design row verbatim; `ponytail:` ceiling noted |
+| Media retry via sweep on download failure | ✅ Yes | `MediaDownloadError` path keeps `received`; second sweep succeeds (tested) |
+| Deviation 1: get-or-create customer/conversation inline | ✅ Acceptable | Design assumes conversation exists; customers service is T3.1. FK satisfied, CR-5 respected, `ponytail:` documented |
+| Deviation 2: media download sync httpx in BackgroundTask (threadpool) | ✅ Acceptable | "async" = not in request path; 200 never waits (WH-3 satisfied); respx-mocked in tests |
+| Deviation 3: no `processing` status written in B2 sweep | ✅ Acceptable | received → processed directly; `processing` enum reserved for T3.2+ graph runs |
+| Deviation 4: `media_dir` config added | ✅ Acceptable | Matches compose `media:/app/media` volume mount; relative default resolves in container |
+| Deviation 5: non-JSON body → 200 + drop | ✅ Acceptable | WH-6 spirit (ack, no retry-storm); Meta never sends malformed bodies |
+| Rollback boundary | ✅ Yes | B2 = 3 commits 27377a72..a2ee2a62; reset/revert to 54c61829 removes slice cleanly; B0/B1 webhook tests unaffected (62/62 green) |
+
+### Strict TDD Compliance (Step 5a + expanded)
+
+| Check | Result | Details |
+|-------|--------|---------|
+| TDD Evidence reported | ✅ | apply-progress #1372 "TDD Cycle Evidence" table present (1 row: T2.2) |
+| All tasks have tests | ✅ | 1/1 B2 code task (T2.2) has test file; T2.1 is ops (blocked, no code tests expected) |
+| RED confirmed (tests exist) | ✅ | `tests/integration/test_webhook_ingest.py` exists (new in 27377a72); RED documented (ingest import → ModuleNotFoundError) |
+| GREEN confirmed (tests pass) | ✅ | 24/24 B2 tests pass on execution now — cross-referenced against live run, not trusted blindly |
+| Triangulation adequate | ✅ | 24 cases: normalize ×7, sig ×3, dedup ×3 (phone/wamid/storm), 131051 ×2 (value+message), unsupported ×1, rate ×1, sweep ×2, media ×2, startup ×1 — multiple distinct expectations per behavior |
+| Safety Net for modified files | ✅ | router.py/config.py/main.py (B0/B1 files) modified: B0+B1 suites 38/38 still green in full run; new files "N/A (new)" correct |
+| Assertion quality audit (5f) | ✅ | No tautologies, no ghost loops, no smoke-only, no type-only-alone. All assertions verify real behavior (status codes, persisted rows, dedup counts, Bearer header on real httpx request). respx mocks only stub the external Meta URL (2 tests) |
+
+**TDD Compliance**: 7/7 checks passed.
+
+### Test Layer Distribution (B2)
+
+| Layer | Tests | Files | Tools |
+|-------|-------|-------|-------|
+| Unit | 0 | 0 | — |
+| Integration | 24 | 1 (+ shared conftest) | real pgvector container + respx (media stub only) |
+| E2E | 0 | 0 | — |
+| **Total** | **24 (B2)** | **1** | suite total 62 (12 B0 + 26 B1 + 24 B2) |
+
+### Changed File Coverage
+
+Coverage analysis skipped — no coverage tool detected (config.yaml `verify.coverage_threshold: 0`, no pytest-cov in pyproject). Not a failure (strict-TDD module: informational only).
+
+### Quality Metrics
+
+**Linter**: ➖ Not available (no lint config/runner in repo) · **Type Checker**: ➖ Not available. Informational only — never blocking.
+
+### Issues Found (B2 slice)
+
+**CRITICAL**: None
+
+**WARNING**:
+1. (Carried from B1) Real `OPENAI_API_KEY` still exported in the dev shell (`~/.bashrc`) + `tests/integration/conftest.py` still uses `os.environ.setdefault(...)` — the real key silently overrides `sk-test` in test env (re-confirmed: env shows OPENAI_API_KEY set). **No B2 test calls OpenAI** (media is respx-stubbed, no LLM), so zero result impact, and the key is NOT in the repo (`git grep` clean — SH-2 intact). Fix deferred to T6.1 (force values, stop exporting real key).
+
+**SUGGESTION**:
+1. (Carried) `tasks.md` header claims "34 tasks" vs 33 rows (line 4). Fix on next tasks.md edit.
+2. (Carried) WH-1 "Token mismatch" scenario log clause — no `caplog` assertion yet (B2 untouched the GET path). Close in a later batch or T6.1.
+3. (Carried) README curl proof manual — spec-marker count check in T6.1.
+4. (Carried) `test_infra.py::test_db_service_uses_pgvector_image` double-condition assert — cosmetic simplification.
+5. (NEW) Rate limiter counts duplicate deliveries against the per-phone budget BEFORE dedup: a retry storm of the SAME wamid consumes the 15 msg/min slots, so a genuinely new message from that phone in the same window can be dropped. Design-level tradeoff (15/min is generous; duplicates→dedup keeps rows correct — proven by tests), but WH-7's "no message loss" is technically softened. Consider counting only newly-inserted rows when the ingest path is next touched (T3.x), or document the tradeoff in docs/ops.md.
+6. (NEW) Non-JSON body with valid HMAC → 200 + drop (deviation 5) has no covering test. Add one in T6.2 functional suite (spec-marker tests) to lock the behavior.
+
+### Graphify Context (B2)
+
+- Graph check: `graphify-out/graph.json` present, 636 nodes / 1211 edges / 39 communities (background refresh PID running — orchestrator owns final refresh; using current graph as-is per instructions).
+- Query `graphify query "webhook ingest pipeline wamid dedup rate limit media"` (BFS depth=2): 102 nodes; start nodes `WH-5 Deduplicate by WAMID`, `app/webhook/ingest.py`, `tests/integration/test_webhook_ingest.py`, `T2.2 Webhook ingest + tests`, `WH-3 Immediate 200` — all [EXTRACTED] from code/specs.
+- Path `graphify path "T2.2 Webhook ingest + tests" "WH-4 Persist Before Process"` → 1 hop: `T2.2 --implements[EXTRACTED]--> WH-4 Persist Before Process` ✓
+- Path `graphify path "app/webhook/ingest.py" "WH-7 Retry-Storm Tolerance" --undirected` → 2 hops: `app/webhook/ingest.py <--references[EXTRACTED]-- T2.2 --implements[EXTRACTED]--> WH-7` ✓
+- Path `graphify path "app/webhook/ingest.py" "WH-5 Deduplicate by WAMID" --undirected` → 2 hops: `app/webhook/ingest.py <--references-- T2.2 --implements--> WH-5` ✓
+- Communities consulted: webhook/ingest (WH-3..7 cluster), Backend Routes and Services (ingest.py, models.py, db.py), Infrastructure and Deployment (T2.2, tests).
+- Cosmetic: graphify skill 0.6.1 vs package version-mismatch warning — ignore.
+
+### Runtime Harness Spot-Check (live)
+
+```text
+docker ps                                    -> lumat-pg-test UP (43 min), 0.0.0.0:5432->5432
+pytest tests/integration/test_webhook_ingest.py -v  -> 24 passed in 2.65s (real DB, TRUNCATE-reset per test)
+pytest tests/                                 -> 62 passed in 4.72s (12 B0 + 26 B1 + 24 B2), exit 0
+build import (test env)                       -> import OK, exit 0
+secrets grep                                  -> no EAAG / sk- / AKIA / ghp_ values anywhere in app/ infra/ db/ docs/
+```
+
+### Verdict (B2 slice)
+
+**PASS** — Batch 2 (T2.2 webhook ingest) is complete ([x]), fully tested (24/24 focused, 62/62 full suite, live against the pgvector container), and matches specs WH-3..WH-7, the design Webhook Pipeline data flow, and task acceptance criteria. T2.1 (Meta onboarding) remains `[ ]` **blocked on client credentials** with `docs/ops.md` checklist delivered — **blocked is a PASS for this slice** (ops dependency, documented, zero credentials fabricated, SH-2 intact). Strict TDD evidence validated 7/7. No CRITICAL findings; 1 carried WARNING (dev-shell secret hygiene, no repo or test impact). **Cumulative: whatsapp-webhook spec 7/7 reqs / 10/10 scenarios verified across B0+B1+B2.** Recommended next: archive B2 slice (orchestrator), then proceed to Batch 3 apply (T3.1 customers · T3.2 chat state/graph · T3.3 KB · T3.4 intent · T3.5 nodes · T3.6 send/costs), and unblock T2.1 as soon as Meta credentials arrive.
