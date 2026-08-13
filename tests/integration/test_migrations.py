@@ -39,6 +39,7 @@ EXPECTED_TABLES = {
     "kb_chunks",
     "settings",
     "audit_log",
+    "customer_notes",  # 002_customer_notes.sql (CR-4 internal staff notes)
     "schema_migrations",
 }
 
@@ -63,8 +64,8 @@ def clean_db(migrated_db):
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
             "TRUNCATE settings, audit_log, kb_chunks, kb_documents, "
-            "conversation_events, cases, messages, conversations, users, customers "
-            "RESTART IDENTITY CASCADE"
+            "conversation_events, cases, messages, conversations, users, customers, "
+            "customer_notes RESTART IDENTITY CASCADE"
         )
     yield
 
@@ -85,7 +86,11 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
     rows = admin_conn.execute(
         "SELECT version FROM schema_migrations ORDER BY version"
     ).fetchall()
-    assert rows == [("001_init",)]
+    assert rows == [
+        ("001_init",),
+        ("002_customer_notes",),
+        ("003_conversation_captured_data",),
+    ]
 
 
 # --- tables ----------------------------------------------------------------

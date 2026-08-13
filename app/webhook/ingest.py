@@ -26,21 +26,21 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 import httpx
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from app.chat.graph import run_conversation
+from app.chat.state import get_or_create_conversation
 from app.config import get_settings
 from app.db import session_scope
 from app.models import (
-    Conversation,
-    ConversationState,
-    Customer,
-    CustomerState,
     Message,
     MessageDirection,
     MessageStatus,
     MessageType,
 )
+from app.services.customers import get_or_create_customer, normalize_phone_e164
+from app.services.send import deliver_outbound
 
 logger = logging.getLogger(__name__)
 
@@ -87,24 +87,6 @@ class MediaDownloadError(RuntimeError):
 # ---------------------------------------------------------------------------
 # Normalization (pure functions)
 # ---------------------------------------------------------------------------
-
-
-def normalize_phone_e164(wa_id: str) -> str:
-    """Normalize a WhatsApp wa_id to E.164 (design CR-2 dedup basis).
-
-    Handles: full international "+56912345678", digits-only "56912345678",
-    Chilean local mobile "912345678" (9XXXXXXXX -> +56 9...), and stray
-    spaces/dashes. Unknown shapes fall back to a best-effort "+<digits>".
-    """
-    digits = re.sub(r"\D", "", wa_id or "")
-    if not digits:
-        return ""
-    if digits.startswith("9") and len(digits) == 9:
-        return "+56" + digits
-    if digits.startswith("56") and len(digits) == 11:
-        return "+" + digits
-    return "+" + digits
-
 
 _META_TYPE_TO_ENUM = {
     "text": MessageType.TEXT,
@@ -240,36 +222,16 @@ rate_limiter = RateLimiter()
 # ---------------------------------------------------------------------------
 
 
-def _get_or_create_customer_and_conversation(session, phone_e164: str) -> Conversation:
-    """Minimal get-or-create for the messages FK (customers/conversations).
+def _get_or_create_customer_and_conversation(session, phone_e164: str):
+    """Get-or-create customer + open conversation for the messages FK.
 
-    Full customer service (auto-ficha, consent, states) lands in T3.1; chat
-    state handling in T3.2. Here we only satisfy the schema: one customer per
-    E.164 phone, one open conversation per customer (closed conversations are
-    not reopened — a new inbound after close opens a new conversation, CR-5).
+    Customer creation delegates to the T3.1 customers service (auto-ficha +
+    E.164 dedup, CR-1/CR-2); conversation get-or-create lives in the chat
+    state (CR-5: closed conversations are never reopened — a new inbound after
+    close opens a new conversation).
     """
-    customer = session.scalar(select(Customer).where(Customer.phone_e164 == phone_e164))
-    if customer is None:
-        customer = Customer(phone_e164=phone_e164, state=CustomerState.NUEVO)
-        session.add(customer)
-        session.flush()
-
-    conversation = session.scalar(
-        select(Conversation)
-        .where(
-            Conversation.customer_id == customer.id,
-            Conversation.state != ConversationState.CLOSED,
-        )
-        .order_by(Conversation.created_at.desc())
-        .limit(1)
-    )
-    if conversation is None:
-        conversation = Conversation(
-            customer_id=customer.id, wa_phone=phone_e164, state=ConversationState.BOT
-        )
-        session.add(conversation)
-        session.flush()
-    return conversation
+    customer = get_or_create_customer(session, phone_e164)
+    return get_or_create_conversation(session, customer, phone_e164)
 
 
 def persist_message(session, normalized: NormalizedMessage) -> bool:
@@ -360,47 +322,87 @@ def download_media(media_url: str, wamid: str, token: str, media_dir: str) -> Pa
 
 
 def process_message(session, message: Message) -> None:
-    """Process one inbound message: media download, then status processed.
+    """Process one inbound message: media download, conversation run, delivery.
 
-    The LangGraph conversation run lands in T3.2+; this is the Batch 2
-    placeholder that owns the status transition (received -> processed) and
-    the media download. Download failure keeps the message `received` so the
-    sweep retries it — the raw payload is never lost (WH-4).
+    The LangGraph conversation run (T3.2+) answers the customer, persists the
+    outbound replies (T3.5) and delivers them via Meta (T3.6). The status
+    transition received -> processed happens after a successful run; a failed
+    download keeps the message `received` so the sweep retries it (WH-4).
     """
     if message.media_url:
         settings = get_settings()
         download_media(
             message.media_url, message.wamid, settings.meta_access_token, settings.media_dir
         )
+    if message.direction == MessageDirection.INBOUND and message.text:
+        run_conversation(session, message)
+        deliver_outbound(session, message.conversation_id)
     message.status = MessageStatus.PROCESSED
+
+
+def reset_stale_processing() -> int:
+    """Crash recovery: reset `processing` rows back to `received` at startup.
+
+    The claim pattern below sets `processing` in a short transaction; a hard
+    crash mid-processing would leave a row stuck there. Single worker + boot
+    sweep means no processing is active at startup, so a blanket reset is safe.
+    """
+    with session_scope() as session:
+        result = session.execute(
+            update(Message)
+            .where(Message.status == MessageStatus.PROCESSING)
+            .values(status=MessageStatus.RECEIVED)
+        )
+        return result.rowcount
 
 
 def sweep_received(limit: int = 50) -> int:
     """Process messages stuck in `received` (BackgroundTask + startup sweep).
 
-    FOR UPDATE SKIP LOCKED so concurrent sweeps (background + startup) never
-    process the same row twice (WH-7: no duplicate side effects). Unexpected
-    failures mark the row `failed` (retried never; raw payload still stored).
+    Claim pattern (WH-7: no duplicate side effects): a short transaction
+    SELECTs received ids FOR UPDATE SKIP LOCKED and flips them to `processing`
+    (releasing the locks), then each message is processed in its OWN session.
+    Holding the FOR UPDATE lock across the graph run would deadlock — the
+    graph nodes persist in separate sessions (case, captured, cost_llm on the
+    very row the sweep would be locking).
+
+    Failures: media download -> back to `received` (retry); anything else ->
+    `failed` (raw payload still stored). Hard-crash rows stay `processing`
+    until the next boot's `reset_stale_processing`.
     """
-    processed = 0
     with session_scope() as session:
-        rows = session.scalars(
-            select(Message)
+        claimed_ids = session.scalars(
+            select(Message.id)
             .where(Message.status == MessageStatus.RECEIVED)
             .order_by(Message.id)
             .limit(limit)
             .with_for_update(skip_locked=True)
         ).all()
-        for message in rows:
-            try:
+        if claimed_ids:
+            session.execute(
+                update(Message)
+                .where(Message.id.in_(claimed_ids))
+                .values(status=MessageStatus.PROCESSING)
+            )
+
+    processed = 0
+    for message_id in claimed_ids:
+        try:
+            with session_scope() as session:
+                message = session.get(Message, message_id)
                 process_message(session, message)
-                processed += 1
-            except MediaDownloadError:
-                # keep status='received' -> next sweep retries the download
-                logger.warning(
-                    "media download failed for %s; will retry on next sweep", message.wamid
-                )
-            except Exception:
-                logger.exception("processing failed for wamid=%s; marking failed", message.wamid)
+            processed += 1
+        except MediaDownloadError:
+            # keep status='received' -> next sweep retries the download
+            with session_scope() as session:
+                message = session.get(Message, message_id)
+                message.status = MessageStatus.RECEIVED
+            logger.warning(
+                "media download failed for message %s; will retry on next sweep", message_id
+            )
+        except Exception:
+            logger.exception("processing failed for message %s; marking failed", message_id)
+            with session_scope() as session:
+                message = session.get(Message, message_id)
                 message.status = MessageStatus.FAILED
     return processed

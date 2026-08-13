@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.config import get_settings
-from app.webhook.ingest import sweep_received
+from app.webhook.ingest import reset_stale_processing, sweep_received
 from app.webhook.router import router as webhook_router
 
 logger = logging.getLogger(__name__)
@@ -23,8 +23,13 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup sweep: reprocess messages stuck in `received` (crash recovery)."""
+    """Startup sweep: reprocess messages stuck in `received` (crash recovery).
+
+    Rows left `processing` by a hard crash are reset to `received` first
+    (single worker: nothing can be actively processing at boot).
+    """
     try:
+        reset_stale_processing()
         sweep_received()
     except Exception:
         logger.exception("startup webhook sweep failed")
