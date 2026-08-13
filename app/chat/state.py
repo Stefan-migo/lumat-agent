@@ -13,6 +13,7 @@ scratch.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from operator import add
 from typing import Annotated
 
@@ -75,6 +76,39 @@ def get_or_create_conversation(session: Session, customer: Customer, phone_e164:
         conversation = Conversation(customer_id=customer.id, wa_phone=phone_e164)
         session.add(conversation)
         session.flush()
+    return conversation
+
+
+def set_conversation_state(
+    session: Session,
+    conversation: Conversation,
+    new_state: ConvState,
+    *,
+    cause: str,
+    actor: str = "rule",
+) -> Conversation:
+    """Transition a conversation's bot/human/closed state (HH-1).
+
+    Every transition writes one `state_change` row on `conversation_events`
+    with timestamp + cause + actor (system | bot | rule) — the operador-
+    visible transition log (audit_log stays admin-only, SH-5). A close also
+    stamps `closed_at`. A no-op transition writes nothing.
+    """
+    if conversation.state == new_state:
+        return conversation
+    before = conversation.state.value
+    conversation.state = new_state
+    if new_state == ConvState.CLOSED:
+        conversation.closed_at = datetime.now(timezone.utc)
+    session.add(
+        ConversationEvent(
+            conversation_id=conversation.id,
+            event="state_change",
+            cause=f"{before}->{new_state.value}: {cause}",
+            actor=actor,
+        )
+    )
+    session.flush()
     return conversation
 
 

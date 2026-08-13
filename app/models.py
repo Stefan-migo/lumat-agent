@@ -235,6 +235,9 @@ class Case(Base):
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ack_by: Mapped[str | None] = mapped_column(String(100))
     reminder_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # 006: HH-2 deriva bundle snapshot (history + summary + customer +
+    # captured fields), built by the handoff node at escalation time.
+    bundle: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class CustomerNote(Base):
@@ -271,6 +274,8 @@ class ConversationEvent(Base):
     )
     event: Mapped[str] = mapped_column(String(100), nullable=False)
     cause: Mapped[str | None] = mapped_column(Text)
+    # 006: HH-1 transition actor (system | bot | rule); NULL for pre-006 rows.
+    actor: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = _ts()
 
 

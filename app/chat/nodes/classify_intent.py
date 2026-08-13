@@ -28,6 +28,7 @@ from app.models import Case, ConversationEvent
 from app.services.audit import record_audit
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
+from app.services.settings import get_scope_mode
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +146,10 @@ def _record_unknown_intent(session, state: ConversationState, cause: str) -> int
     """Persist one unknown-intent attempt; returns the NEW total (HH-3)."""
     session.add(
         ConversationEvent(
-            conversation_id=state.conversation_id, event="unknown_intent", cause=cause
+            conversation_id=state.conversation_id,
+            event="unknown_intent",
+            cause=cause,
+            actor="rule",
         )
     )
     session.flush()
@@ -217,4 +221,14 @@ def classify_intent(state: ConversationState) -> dict:
 
     with session_scope() as session:
         case_update = _store_classification(session, state, result)
+        # HH-3 trigger 5 (T4.4): an SS-1 `always_escalate` category escalates
+        # regardless of the answer path. Evaluated here, where the category is
+        # known — the handoff gate owns the pre-LLM triggers.
+        if get_scope_mode(session, result["intent"]) == "always_escalate":
+            return {
+                "intent": result["intent"],
+                "escalate": True,
+                "escalate_reason": "scope_always_escalate",
+                **case_update,
+            }
     return {"intent": result["intent"], **case_update}

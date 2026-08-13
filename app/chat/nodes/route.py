@@ -20,6 +20,15 @@ RETRIEVAL_INTENTS = {"valores", "postventa"}
 
 def route(state: ConversationState) -> dict:
     """Decide the next step and set escalation/emergency flags."""
+    # T4.4: any post-classification escalation (2x unknown, injection, SS-1
+    # always_escalate) converges on the escalate path -> handoff node.
+    if state.escalate:
+        return {
+            "next_step": "escalate",
+            "escalate": True,
+            "escalate_reason": state.escalate_reason,
+        }
+
     intent = state.intent or ""
 
     if intent == "persona":
