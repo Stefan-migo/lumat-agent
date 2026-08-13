@@ -1,6 +1,6 @@
-"""T4.1.1 integration tests — settings KV service (D5 storage; SS-1..5; SH-5).
+"""T4.1 integration tests — settings KV service + semantic accessors.
 
-Scenarios mapped from tasks.md T4.1.1 + specs settings-scope-limits:
+Scenarios mapped from tasks.md T4.1.1/T4.1.2 + specs settings-scope-limits:
 
 - read: stored value wins; known-but-unset key -> built-in default
   (`meta_pricing`, SS-4 reference cost); unknown key -> None (or caller default)
@@ -9,6 +9,13 @@ Scenarios mapped from tasks.md T4.1.1 + specs settings-scope-limits:
 - update: a second write updates in place (still one row) and appends a new
   audit entry with before/after
 - `updated_by` persists the acting panel user id (FK -> users)
+- scope rules (SS-1): `get_scope_mode` -> bot_resolve by default, per-category
+  `always_escalate` override, invalid stored mode falls back to default
+- emergency keywords (SS-2): `get_emergency_keywords` -> EM-1 defaults until
+  overridden; list round-trips through the KV store
+- tone/messages (SS-5): `get_tone` default warm-professional; `get_message`
+  resolves override-or-caller-default for `messages.<key>`
+- defaults never materialize rows; every write is audited
 
 Runs against the migrated pgvector test DB (conftest DATABASE_URL).
 """
@@ -142,3 +149,137 @@ def test_set_records_updated_by_user():
     with SessionLocal() as session:
         row = session.get(Settings, "tone")
         assert row.updated_by == user_id
+
+
+# ---------------------------------------------------------------------------
+# T4.1.2 — Scope rules per category (SS-1)
+# ---------------------------------------------------------------------------
+
+
+def test_scope_mode_default_is_bot_resolve():
+    """Unset categories resolve as bot_resolve; reading never creates a row."""
+    with SessionLocal() as session:
+        assert settings.get_scope_mode(session, "valores") == "bot_resolve"
+        assert settings.get_scope_mode(session, "calefont") == "bot_resolve"
+    assert _count_settings() == 0
+
+
+def test_scope_mode_per_category_override():
+    """One category set to always_escalate; other categories keep the default."""
+    with SessionLocal() as session:
+        settings.set_setting(
+            session, "scope_rules", {"valores": "always_escalate"}, actor="admin1"
+        )
+        session.commit()
+    with SessionLocal() as session:
+        assert settings.get_scope_mode(session, "valores") == "always_escalate"
+        assert settings.get_scope_mode(session, "calefont") == "bot_resolve"
+
+
+def test_scope_mode_invalid_stored_mode_falls_back_to_default():
+    """A stored value outside the two literals behaves as unset (SS-1)."""
+    with SessionLocal() as session:
+        settings.set_setting(session, "scope_rules", {"valores": "maybe"}, actor="admin1")
+        session.commit()
+    with SessionLocal() as session:
+        assert settings.get_scope_mode(session, "valores") == "bot_resolve"
+
+
+# ---------------------------------------------------------------------------
+# T4.1.2 — Emergency keywords (SS-2)
+# ---------------------------------------------------------------------------
+
+
+def test_emergency_keywords_default_contains_em1_core():
+    """EM-1 expressions present by default; no row materialized until set."""
+    with SessionLocal() as session:
+        keywords = settings.get_emergency_keywords(session)
+    for core in (
+        "olor a gas", "fuga", "humo", "incendio", "chispa", "explosión",
+        "monóxido", "intoxicación", "riesgo eléctrico", "filtración severa",
+    ):
+        assert core in keywords
+    assert _count_settings() == 0
+
+
+def test_emergency_keywords_override_round_trip():
+    """Owner list replaces defaults and reads back unchanged (list round-trip)."""
+    with SessionLocal() as session:
+        settings.set_setting(
+            session, "emergency.keywords", ["fuga de gas", "chispa"], actor="admin1"
+        )
+        session.commit()
+    with SessionLocal() as session:
+        assert settings.get_emergency_keywords(session) == ["fuga de gas", "chispa"]
+
+
+# ---------------------------------------------------------------------------
+# T4.1.2 — Tone and standard messages (SS-5)
+# ---------------------------------------------------------------------------
+
+
+def test_tone_default_when_unset():
+    with SessionLocal() as session:
+        assert settings.get_tone(session) == "warm-professional"
+    assert _count_settings() == 0
+
+
+def test_tone_override():
+    with SessionLocal() as session:
+        settings.set_setting(session, "tone.style", "formal", actor="admin1")
+        session.commit()
+    with SessionLocal() as session:
+        assert settings.get_tone(session) == "formal"
+
+
+def test_message_uses_caller_default_when_unset():
+    """Content defaults live in the chat nodes; accessor only overrides."""
+    with SessionLocal() as session:
+        assert settings.get_message(session, "greeting", "Hola") == "Hola"
+        assert settings.get_message(session, "cannot_answer", "No puedo") == "No puedo"
+    assert _count_settings() == 0
+
+
+def test_message_override_wins_over_caller_default():
+    with SessionLocal() as session:
+        settings.set_setting(
+            session, "messages.greeting", "¡Hola!", actor="admin1"
+        )
+        settings.set_setting(
+            session, "messages.cannot_answer", "Un asesor te contactará.", actor="admin1"
+        )
+        session.commit()
+    with SessionLocal() as session:
+        assert settings.get_message(session, "greeting", "Hola") == "¡Hola!"
+        assert (
+            settings.get_message(session, "cannot_answer", "No puedo")
+            == "Un asesor te contactará."
+        )
+        # unset message key still falls back to the caller default
+        assert settings.get_message(session, "farewell", "Chao") == "Chao"
+
+
+# ---------------------------------------------------------------------------
+# T4.1.2 — Audit on semantic writes (SH-5)
+# ---------------------------------------------------------------------------
+
+
+def test_semantic_writes_are_audited():
+    """scope_rules and emergency.keywords writes each record an audit entry."""
+    with SessionLocal() as session:
+        settings.set_setting(
+            session, "scope_rules", {"valores": "always_escalate"}, actor="admin1"
+        )
+        settings.set_setting(
+            session, "emergency.keywords", ["chispa"], actor="admin1"
+        )
+        session.commit()
+    assert _count_audit() == 2
+    with SessionLocal() as session:
+        entries = {
+            e.entity_id: e for e in session.scalars(select(AuditLog))
+        }
+        assert entries["scope_rules"].actor == "admin1"
+        assert entries["scope_rules"].action == "settings.change"
+        assert entries["scope_rules"].after == {"value": {"valores": "always_escalate"}}
+        assert entries["emergency.keywords"].after == {"value": ["chispa"]}
