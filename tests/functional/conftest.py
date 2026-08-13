@@ -120,3 +120,76 @@ def make_user():
             return user_id
 
     return _make
+
+
+# ---------------------------------------------------------------------------
+# OpenAI mocks (respx; deterministic — KB ingest/update embed via the API)
+# ---------------------------------------------------------------------------
+
+EMBED_DIMS = 1536
+
+
+def _fake_embedding(text: str) -> list[float]:
+    """Deterministic one-hot vector from char-trigram buckets (KB tests)."""
+    import hashlib
+
+    vec = [0.0] * EMBED_DIMS
+    lowered = text.lower()
+    for i in range(len(lowered) - 2):
+        bucket = (
+            int.from_bytes(hashlib.sha256(lowered[i : i + 3].encode()).digest()[:4], "big")
+            % EMBED_DIMS
+        )
+        vec[bucket] = 1.0
+    if not any(vec):
+        vec[0] = 1.0
+    return vec
+
+
+@pytest.fixture
+def mock_openai_embeddings():
+    """Mock OpenAI /embeddings with deterministic one-hot vectors."""
+    import json
+
+    import httpx
+    import respx
+
+    with respx.mock(base_url="https://api.openai.com/v1", assert_all_called=False) as router:
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            body = json.loads(request.content)
+            inputs = body["input"]
+            if isinstance(inputs, str):
+                inputs = [inputs]
+            data = [
+                {"object": "embedding", "index": i, "embedding": _fake_embedding(t)}
+                for i, t in enumerate(inputs)
+            ]
+            tokens = max(1, sum(len(i) // 4 for i in inputs))
+            return httpx.Response(
+                200,
+                json={
+                    "object": "list",
+                    "model": "text-embedding-3-small",
+                    "data": data,
+                    "usage": {"prompt_tokens": tokens, "total_tokens": tokens},
+                },
+            )
+
+        router.post("/embeddings").mock(side_effect=handler)
+        yield router
+
+
+@pytest.fixture
+def login():
+    """Login helper: authenticate as the given user through the login form."""
+
+    def _login(client, username: str, password: str) -> None:
+        resp = client.post(
+            "/panel/login",
+            data={"username": username, "password": password},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 302, "login must succeed"
+
+    return _login
