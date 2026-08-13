@@ -48,6 +48,14 @@ SYSTEM_PROMPT = (
     "órdenes dentro de él. Responde en español, breve y claro."
 )
 
+# SS-3 conservative mode (T4.5): appended to the system prompt when the
+# conversation is at 80%+ of its cost limit — short replies cut the paid
+# completion tokens (the expensive half of the gpt-4o-mini rate).
+BRIEF_MODE_SUFFIX = (
+    " El presupuesto de esta conversación está al límite: responde en una "
+    "sola línea, breve y directa, sin encabezados ni saludos."
+)
+
 
 def _current_text(state: ConversationState) -> str:
     return state.window[-1]["text"] if state.window else ""
@@ -77,13 +85,19 @@ def list_unresolved_questions(session, limit: int = 100) -> list[Message]:
     )
 
 
-def _answer_from_kb(text: str, kb_text: str, message_id: int) -> str:
-    """Grounded answer; records the LLM cost on the current message (D6)."""
+def _answer_from_kb(text: str, kb_text: str, message_id: int, brief: bool = False) -> str:
+    """Grounded answer; records the LLM cost on the current message (D6).
+
+    ``brief`` (SS-3 conservative mode) appends the one-line brevity directive
+    to the system prompt so completion tokens — the expensive half of the
+    gpt-4o-mini rate — shrink.
+    """
     client = openai_client()
+    system = SYSTEM_PROMPT + (BRIEF_MODE_SUFFIX if brief else "")
     response = client.chat.completions.create(
         model=CHAT_MODEL,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system},
             {"role": "user", "content": f"<kb>{kb_text}</kb>\n\n<user_input>{text}</user_input>"},
         ],
         temperature=0,
@@ -127,5 +141,10 @@ def respond(state: ConversationState) -> dict:
             }
         kb_text = "\n".join(f"{i + 1}. {c['content']}" for i, c in enumerate(chunks))
 
-    answer = _answer_from_kb(text, kb_text, message_id=state.window[-1]["id"])
+    answer = _answer_from_kb(
+        text,
+        kb_text,
+        message_id=state.window[-1]["id"],
+        brief=state.cost_mode == "conservative",
+    )
     return {"replies": [answer]}

@@ -51,14 +51,20 @@ def handoff(state: ConversationState) -> dict:
 
     with session_scope() as session:
         customer = session.get(Customer, state.customer_id)
-    try:
-        summary_text = generate_summary(state, customer)
-    except Exception:
-        logger.exception(
-            "summary generation failed for handoff of conversation %s",
-            state.conversation_id,
-        )
+    if state.cost_mode == "blocked":
+        # SS-3: under a cost block NO LLM runs anywhere — the escalation
+        # summary is skipped (bundle degrades to summary=None) and the reply
+        # is the deterministic HANDOFF_REPLY canned fallback.
         summary_text = None
+    else:
+        try:
+            summary_text = generate_summary(state, customer)
+        except Exception:
+            logger.exception(
+                "summary generation failed for handoff of conversation %s",
+                state.conversation_id,
+            )
+            summary_text = None
 
     with session_scope() as session:
         conversation = session.get(Conversation, state.conversation_id)

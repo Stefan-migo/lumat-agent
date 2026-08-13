@@ -135,6 +135,9 @@ class ConversationState:
     emergency_hit: str | None = None
     # set by the handoff_gate: deterministic pre-LLM trigger (HH-3, T4.4)
     handoff_reason: str | None = None
+    # set by the cost_gate (SS-3, T4.5): "normal" | "conservative" | "blocked".
+    # Computed fresh from the DB sums every run — never persisted (D2).
+    cost_mode: str = "normal"
     escalate: bool = False
     escalate_reason: str | None = None
     unknown_count: int = 0
