@@ -93,6 +93,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("004_case_emergency",),
         ("005_case_emergency_ack",),
         ("006_handoff_deriva",),
+        ("007_case_created_at",),
     ]
 
 

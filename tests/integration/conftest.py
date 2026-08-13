@@ -34,6 +34,8 @@ TEST_ENV = {
     "OPENAI_API_KEY": "sk-test",
     "META_ACCESS_TOKEN": "meta-test-token",
     "META_PHONE_NUMBER_ID": "123456789",
+    # T5.1: panel session cookie signing secret (AP-1) — required at boot.
+    "PANEL_SESSION_SECRET": "test-panel-session-secret",
     # LangGraph auto-tracing (langsmith) must never hit the network in tests.
     "LANGCHAIN_TRACING_V2": "false",
     "LANGCHAIN_TRACING": "false",

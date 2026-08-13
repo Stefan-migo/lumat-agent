@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Lumat Panel{% endblock %}</title>
+  <style>
+    :root { color-scheme: light; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f4f5f7; color: #1a202c; }
+    header { background: #143c2c; color: #fff; padding: .75rem 1.25rem; display: flex; gap: 1.25rem; align-items: center; }
+    header a { color: #fff; text-decoration: none; font-weight: 600; }
+    header a:hover { text-decoration: underline; }
+    header .spacer { flex: 1; }
+    main { max-width: 72rem; margin: 1.5rem auto; padding: 0 1.25rem; }
+    table { border-collapse: collapse; width: 100%; background: #fff; }
+    th, td { border: 1px solid #d8dde3; padding: .5rem .75rem; text-align: left; }
+    th { background: #eef1f4; }
+    .card { background: #fff; border: 1px solid #d8dde3; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 1rem; }
+    .kpi { background: #fff; border: 1px solid #d8dde3; border-radius: 8px; padding: 1rem; text-align: center; }
+    .kpi .value { font-size: 2rem; font-weight: 700; }
+    .kpi .label { color: #4a5568; }
+    .btn { display: inline-block; border: 1px solid #143c2c; background: #143c2c; color: #fff; padding: .4rem .9rem; border-radius: 6px; cursor: pointer; font-size: .9rem; text-decoration: none; }
+    .btn.secondary { background: #fff; color: #143c2c; }
+    .error { background: #fdecea; border: 1px solid #e57373; color: #b71c1c; padding: .75rem; border-radius: 6px; margin-bottom: 1rem; }
+    .flash { background: #e8f5e9; border: 1px solid #81c784; color: #1b5e20; padding: .75rem; border-radius: 6px; margin-bottom: 1rem; }
+    input[type=text], input[type=password], input[type=search], select, textarea { padding: .45rem; border: 1px solid #c3cbd4; border-radius: 6px; font-size: .95rem; }
+    form.inline { display: inline; }
+    .muted { color: #4a5568; font-size: .85rem; }
+  </style>
+</head>
+<body>
+{% if current_user %}
+<header>
+  <a href="/panel/">Dashboard</a>
+  <a href="/panel/clients">Clients</a>
+  <a href="/panel/cases">Cases</a>
+  {% if current_user.role.value == 'admin' %}
+  <a href="/panel/kb">Knowledge Base</a>
+  <a href="/panel/settings">Settings</a>
+  {% endif %}
+  <span class="spacer"></span>
+  <span class="muted">{{ current_user.username }} ({{ current_user.role.value }})</span>
+  <form method="post" action="/panel/logout" class="inline">
+    <button type="submit" class="btn secondary">Logout</button>
+  </form>
+</header>
+{% endif %}
+<main>
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

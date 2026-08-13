@@ -190,6 +190,32 @@ def list_notes(session: Session, customer_id: int) -> list[CustomerNote]:
 
 
 # ---------------------------------------------------------------------------
+# AP-3 — clients list / search (panel)
+# ---------------------------------------------------------------------------
+
+
+def search_customers(session: Session, query: str | None = None, limit: int = 100) -> list[Customer]:
+    """List customers, optionally filtered by name or phone (AP-3).
+
+    `query` matches case-insensitively against the name, or as a digit
+    substring against the E.164 phone ("3333" finds +56933334444). No query
+    -> newest-first list. Used by the panel clients view.
+    """
+    statement = select(Customer).order_by(Customer.created_at.desc(), Customer.id.desc())
+    q = (query or "").strip()
+    if q:
+        digits = "".join(ch for ch in q if ch.isdigit())
+        name_clause = Customer.name.ilike(f"%{q}%")
+        if digits:
+            statement = statement.where(
+                name_clause | Customer.phone_e164.contains(digits)
+            )
+        else:
+            statement = statement.where(name_clause)
+    return list(session.scalars(statement.limit(limit)))
+
+
+# ---------------------------------------------------------------------------
 # CR-5 — full history (ficha view)
 # ---------------------------------------------------------------------------
 

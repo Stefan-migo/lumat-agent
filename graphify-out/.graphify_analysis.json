@@ -285,19 +285,14 @@
       "tests_integration_test_webhook_verify_test_post_with_valid_signature_returns_200"
     ],
     "4": [
-      "app_chat_nodes",
-      "app_chat_nodes_handoff_gate_module",
-      "app_chat_nodes_handoff_module",
       "app_panel_routes_clients_module",
       "app_panel_routes_conversations_module",
       "app_panel_templates_clients_dir",
       "app_panel_templates_conversations_dir",
-      "app_services_cases_module",
       "openspec_changes_hito_1_setup_whatsapp_tasks_ap_3",
       "openspec_changes_hito_1_setup_whatsapp_tasks_ap_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_cm_1",
       "openspec_changes_hito_1_setup_whatsapp_tasks_cm_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_cm_3",
       "openspec_changes_hito_1_setup_whatsapp_tasks_cm_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_cm_5",
       "openspec_changes_hito_1_setup_whatsapp_tasks_cm_6",
@@ -307,32 +302,17 @@
       "openspec_changes_hito_1_setup_whatsapp_tasks_cr_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_cr_5",
       "openspec_changes_hito_1_setup_whatsapp_tasks_cr_6",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_hh_1",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_hh_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_hh_3",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_hh_5",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_ap_3",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_ap_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_cr_1",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_cr_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_req_cr_3",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_cr_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_cr_5",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_cr_6",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_req_hh_1",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_req_hh_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_req_hh_3",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_req_sh_4",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_sh_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t3_1",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t3_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t3_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t3_5",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t4_4",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t5_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t6_3",
-      "tests_injection",
-      "tests_integration_test_handoff_module"
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t5_2"
     ],
     "5": [
       "admin_panel_cap",
@@ -382,8 +362,6 @@
       "whatsapp_webhook_cap"
     ],
     "6": [
-      "app_models_customernote",
-      "app_models_rationale_233",
       "app_services_customers",
       "app_services_customers_add_note",
       "app_services_customers_customer_history",
@@ -466,7 +444,8 @@
       "app_webhook_ingest_rationale_73",
       "app_webhook_ingest_rationale_84",
       "app_webhook_ingest_safe_filename",
-      "app_webhook_ingest_value_error_131051"
+      "app_webhook_ingest_value_error_131051",
+      "path"
     ],
     "8": [
       "app_chat_graph_after_capture",
@@ -595,6 +574,7 @@
       "tests_integration_test_db_test_settings_jsonb_round_trip"
     ],
     "12": [
+      "app_chat_nodes_cost_gate_module",
       "app_panel_routes_kb_module",
       "app_panel_routes_settings_module",
       "app_panel_templates_kb_dir",
@@ -612,13 +592,20 @@
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_kb_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_ss_1",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_ss_2",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_req_ss_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_req_ss_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_ss_5",
       "openspec_changes_hito_1_setup_whatsapp_tasks_ss_1",
       "openspec_changes_hito_1_setup_whatsapp_tasks_ss_2",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_ss_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_ss_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_ss_5",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t3_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t3_6",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t4_1",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t5_4"
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t4_5",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t5_4",
+      "tests_integration_test_cost_guardrails_module"
     ],
     "13": [
       "app_services_chat_capture",
@@ -750,26 +737,20 @@
     "18": [
       "app_panel_deps_module",
       "app_panel_routes_auth_module",
-      "app_panel_routes_cases_module",
       "app_panel_routes_dashboard",
-      "app_panel_templates_cases_dir",
       "app_panel_templates_dashboard",
-      "app_services_notify_module",
+      "db_migrations",
       "openspec_changes_hito_1_setup_whatsapp_tasks_ap_1",
       "openspec_changes_hito_1_setup_whatsapp_tasks_ap_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_ap_5",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_hh_4",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_b1",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_ap_1",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_ap_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_req_ap_5",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_req_em_4",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_req_sh_5",
       "openspec_changes_hito_1_setup_whatsapp_tasks_sh_5",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t4_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t1_2",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t1_3",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t5_1",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t5_3",
-      "tests_functional_test_auth_module",
-      "tests_integration_test_emergency_notify_module"
+      "tasks_t1_1",
+      "tests_functional_test_auth_module"
     ],
     "19": [
       "conversation-manager_conversation-manager",
@@ -797,7 +778,6 @@
     ],
     "20": [
       "openspec_changes_hito_1_setup_whatsapp_specs_whatsapp_webhook_spec_whatsapp_webhook",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_wh_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_wh_5",
       "openspec_changes_hito_1_setup_whatsapp_tasks_wh_6",
       "openspec_changes_hito_1_setup_whatsapp_tasks_wh_7",
@@ -821,13 +801,14 @@
       "app_models_case",
       "app_models_conversation",
       "app_models_customer",
+      "app_models_customernote",
       "app_models_message",
+      "app_models_rationale_233",
       "app_services_customers_invalidstatetransition",
       "app_services_customers_rationale_76",
       "app_webhook_ingest_rationale_360",
       "app_webhook_ingest_sweep_received",
       "base",
-      "path",
       "runtimeerror",
       "tests_integration_test_customers_seed_history",
       "tests_integration_test_db_rationale_87",
@@ -898,29 +879,33 @@
       "status_badges"
     ],
     "25": [
-      "db_migrations",
-      "docs_ops_hito_1_setup_whatsapp",
-      "openspec_changes_hito_1_setup_whatsapp_tasks",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_b0",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_b1",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_b2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_b3",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_config_yaml_req",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_1",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_3",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_4",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t0_1",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t0_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t1_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t1_3",
-      "tasks_t1_1"
+      "app_chat_nodes",
+      "app_chat_nodes_handoff_gate_module",
+      "app_chat_nodes_handoff_module",
+      "app_services_cases_module",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_cm_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_hh_1",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_hh_2",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_hh_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_hh_5",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_req_cr_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_req_hh_1",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_req_hh_2",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_req_hh_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_req_sh_4",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_sh_4",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t3_4",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t4_4",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t6_3",
+      "tests_injection",
+      "tests_integration_test_handoff_module"
     ],
     "26": [
       "tests_integration_conftest",
       "tests_integration_conftest_classify_result_for",
       "tests_integration_conftest_client",
       "tests_integration_conftest_fake_embedding",
+      "tests_integration_conftest_migrated_db",
       "tests_integration_conftest_mock_meta_send",
       "tests_integration_conftest_mock_openai_chat",
       "tests_integration_conftest_mock_openai_embeddings",
@@ -931,6 +916,7 @@
       "tests_integration_conftest_rationale_144",
       "tests_integration_conftest_rationale_197",
       "tests_integration_conftest_rationale_226",
+      "tests_integration_conftest_rationale_74",
       "tests_integration_conftest_rationale_83",
       "tests_integration_conftest_rationale_96"
     ],
@@ -1031,21 +1017,6 @@
       "app_chat_nodes_capture_rationale_66",
       "app_chat_nodes_capture_rationale_88"
     ],
-    "33": [
-      "app_chat_nodes_cost_gate_module",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_req_ss_3",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_req_ss_4",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_ss_3",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_ss_4",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t3_6",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t4_5",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t6_1",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t6_2",
-      "tests_conftest",
-      "tests_functional",
-      "tests_integration_test_cost_guardrails_module",
-      "tests_readme"
-    ],
     "34": [
       "app_chat_nodes_emergency_gate_module",
       "app_chat_nodes_emergency_module",
@@ -1062,19 +1033,12 @@
       "tests_integration_test_emergency_module"
     ],
     "35": [
-      "arquitectura_calendar_agent",
       "cortex_sessions_2026_07_20_lumat_cotizacion_final_wireframes_agenda_tecnicos_wireframe",
       "cortex_sessions_2026_07_20_lumat_cotizacion_final_wireframes_cliente_ficha_wireframe",
-      "domain_calendario_propio",
-      "domain_estrategia_m3",
-      "domain_ics_export",
-      "domain_m3",
       "propuesta_ia_agenda_tecnica",
       "propuesta_ia_anexo_a_flujo",
       "propuesta_ia_flujo_conversacional",
-      "propuesta_ia_google_calendar",
-      "tech_caldav_google",
-      "tech_pagos"
+      "propuesta_ia_google_calendar"
     ],
     "36": [
       "cortex_sessions_2026_07_20_lumat_cotizacion_final_diagrams_diagrama2_multiagente_ag_aut",
@@ -1093,18 +1057,56 @@
     ],
     "37": [
       "docs_hardening",
+      "docs_ops_dns_agente_lumat",
+      "docs_ops_em_4",
+      "docs_ops_emergency_alert_template",
+      "docs_ops_file",
+      "docs_ops_hito_1_setup_whatsapp",
+      "docs_ops_sh_2",
+      "docs_ops_t2_1",
+      "docs_ops_t6_5",
+      "docs_ops_webhook_whatsapp",
+      "docs_ops_wh_1",
       "infra_backup",
       "infra_certbot",
       "infra_docker_compose_prod",
+      "infra_env",
       "infra_monitor",
       "infra_nginx",
       "infra_restore_test",
+      "infra_seed",
+      "openspec_changes_hito_1_setup_whatsapp_tasks",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_b0",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_b2",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_b3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_b4",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_b5",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_b6",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_b7",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_config_yaml_req",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_1",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_2",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_4",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_5",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_6",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_7",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_8",
       "openspec_changes_hito_1_setup_whatsapp_tasks_sh_1",
       "openspec_changes_hito_1_setup_whatsapp_tasks_sh_2",
       "openspec_changes_hito_1_setup_whatsapp_tasks_sh_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t0_1",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t0_2",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t0_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t2_1",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t6_4",
       "openspec_changes_hito_1_setup_whatsapp_tasks_t6_6",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t7_1"
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t7_1",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t7_2",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t7_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_wh_1",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_wh_2",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_wh_3"
     ],
     "38": [
       "lumat-propuesta-final_ComparisonTable",
@@ -1229,16 +1231,19 @@
       "fastapi"
     ],
     "47": [
-      "infra_env",
-      "infra_seed",
+      "app_panel_routes_cases_module",
+      "app_panel_templates_cases_dir",
+      "app_services_notify_module",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_ap_5",
       "openspec_changes_hito_1_setup_whatsapp_tasks_em_4",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t0_3",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t2_1",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t7_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t7_3",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_wh_1",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_wh_2",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_wh_3"
+      "openspec_changes_hito_1_setup_whatsapp_tasks_hh_4",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_req_ap_5",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_req_em_4",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_req_sh_5",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t4_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t5_3",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_wh_4",
+      "tests_integration_test_emergency_notify_module"
     ],
     "48": [
       "customer-records_customer-records",
@@ -1262,17 +1267,6 @@
       "shared_8category_menu",
       "shared_conversation_state"
     ],
-    "50": [
-      "docs_ops_dns_agente_lumat",
-      "docs_ops_em_4",
-      "docs_ops_emergency_alert_template",
-      "docs_ops_file",
-      "docs_ops_sh_2",
-      "docs_ops_t2_1",
-      "docs_ops_t6_5",
-      "docs_ops_webhook_whatsapp",
-      "docs_ops_wh_1"
-    ],
     "51": [
       "openspec_changes_hito_1_setup_whatsapp_specs_conversation_manager_spec_conversation_manager",
       "openspec_changes_hito_1_setup_whatsapp_specs_human_handoff_spec_human_handoff",
@@ -1285,12 +1279,19 @@
       "shared_roles_admin_operador"
     ],
     "52": [
+      "arquitectura_calendar_agent",
       "cortex_sessions_2026_07_16_lumat_cotizacion_session_memory",
+      "domain_calendario_propio",
       "domain_captura_datos",
       "domain_derivacion",
+      "domain_estrategia_m3",
+      "domain_ics_export",
       "domain_identificacion",
+      "domain_m3",
       "domain_rag",
+      "tech_caldav_google",
       "tech_openai",
+      "tech_pagos",
       "tech_postgres",
       "tech_redis"
     ],
@@ -1314,16 +1315,6 @@
       "req_kb_3",
       "req_kb_4"
     ],
-    "55": [
-      "openspec_changes_hito_1_setup_whatsapp_tasks_b4",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_b5",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_b6",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_b7",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_5",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_6",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_7",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_pr_8"
-    ],
     "56": [
       "openspec_changes_hito_1_setup_whatsapp_verify_report",
       "tasks",
@@ -1336,9 +1327,7 @@
     ],
     "57": [
       "completedprocess",
-      "tests_integration_conftest_migrated_db",
       "tests_integration_conftest_rationale_59",
-      "tests_integration_conftest_rationale_74",
       "tests_integration_conftest_run_migrate",
       "tests_integration_test_migrations_rationale_76",
       "tests_integration_test_migrations_test_migrate_applies_cleanly_twice"
@@ -1358,12 +1347,20 @@
       "openspec_changes_hito_1_setup_whatsapp_tasks_ap_8",
       "openspec_changes_hito_1_setup_whatsapp_tasks_d7",
       "openspec_changes_hito_1_setup_whatsapp_tasks_req_ap_8",
-      "openspec_changes_hito_1_setup_whatsapp_tasks_t5_5"
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t5_5",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t6_1",
+      "openspec_changes_hito_1_setup_whatsapp_tasks_t6_2",
+      "tests_conftest",
+      "tests_functional",
+      "tests_readme"
     ],
     "60": [
       "tests_integration_test_chat_state_clean_db",
       "tests_integration_test_chat_state_py_fixture",
       "tests_integration_test_chat_state_rationale_39",
+      "tests_integration_test_customers_clean_db",
+      "tests_integration_test_customers_py_fixture",
+      "tests_integration_test_customers_rationale_41",
       "tests_integration_test_db_clean_db",
       "tests_integration_test_db_py_fixture",
       "tests_integration_test_db_rationale_42"
@@ -1385,11 +1382,6 @@
       "tasks_batch_4",
       "tasks_t4_1",
       "tasks_t4_4"
-    ],
-    "64": [
-      "tests_integration_test_customers_clean_db",
-      "tests_integration_test_customers_py_fixture",
-      "tests_integration_test_customers_rationale_41"
     ],
     "65": [
       "app_init",
@@ -1501,40 +1493,39 @@
     "1": 0.054773082942097026,
     "2": 0.05311871227364185,
     "3": 0.08979591836734693,
-    "4": 0.06382978723404255,
+    "4": 0.10052910052910052,
     "5": 0.07272727272727272,
-    "6": 0.08787878787878788,
-    "7": 0.07965860597439545,
+    "6": 0.09080841638981174,
+    "7": 0.07692307692307693,
     "8": 0.11229946524064172,
     "9": 0.10591133004926108,
     "10": 0.08866995073891626,
     "11": 0.1076923076923077,
-    "12": 0.10507246376811594,
+    "12": 0.08669354838709678,
     "13": 0.12318840579710146,
     "14": 0.09782608695652174,
     "15": 0.09057971014492754,
     "16": 0.16600790513833993,
     "17": 0.16017316017316016,
-    "18": 0.10822510822510822,
+    "18": 0.15833333333333333,
     "19": 0.19047619047619047,
-    "20": 0.1736842105263158,
-    "21": 0.22807017543859648,
+    "20": 0.1871345029239766,
+    "21": 0.21578947368421053,
     "22": 0.1830065359477124,
     "23": 0.13071895424836602,
     "24": 0.15441176470588236,
-    "25": 0.17647058823529413,
-    "26": 0.15,
+    "25": 0.12631578947368421,
+    "26": 0.13725490196078433,
     "27": 0.3142857142857143,
     "28": 0.13333333333333333,
     "29": 0.16483516483516483,
     "30": 0.2087912087912088,
     "31": 0.14285714285714285,
     "32": 0.2692307692307692,
-    "33": 0.19230769230769232,
     "34": 0.16666666666666666,
-    "35": 0.1794871794871795,
+    "35": 0.4,
     "36": 0.20512820512820512,
-    "37": 0.19230769230769232,
+    "37": 0.05019607843137255,
     "38": 0.15384615384615385,
     "39": 0.22727272727272727,
     "40": 0.21212121212121213,
@@ -1544,24 +1535,21 @@
     "44": 0.23636363636363636,
     "45": 0.3090909090909091,
     "46": 0.3111111111111111,
-    "47": 0.24444444444444444,
+    "47": 0.16666666666666666,
     "48": 0.4166666666666667,
     "49": 0.2222222222222222,
-    "50": 0.3055555555555556,
     "51": 0.3333333333333333,
-    "52": 0.25,
+    "52": 0.14285714285714285,
     "53": 0.7142857142857143,
     "54": 0.39285714285714285,
-    "55": 0.25,
     "56": 0.25,
-    "57": 0.2857142857142857,
+    "57": 0.4,
     "58": 0.3333333333333333,
-    "59": 0.3333333333333333,
-    "60": 0.26666666666666666,
+    "59": 0.18181818181818182,
+    "60": 0.16666666666666666,
     "61": 0.5,
     "62": 0.5,
     "63": 0.5,
-    "64": 0.6666666666666666,
     "65": 1.0,
     "66": 1.0,
     "67": 1.0,
@@ -1610,7 +1598,7 @@
     },
     {
       "id": "propuesta_tecnica_economica_pdf_doc",
-      "label": "Propuesta T\u00e9cnica y Econ\u00f3mica Lumat \u2014 PDF (45 p\u00e1gs.)",
+      "label": "Propuesta Técnica y Económica Lumat — PDF (45 págs.)",
       "degree": 36
     },
     {
@@ -1619,13 +1607,13 @@
       "degree": 27
     },
     {
-      "id": "openspec_changes_hito_1_setup_whatsapp_tasks_t4_4",
-      "label": "Task T4.4 \u2014 Handoff + deriva + gates + tests",
+      "id": "openspec_changes_hito_1_setup_whatsapp_tasks_t5_4",
+      "label": "Task T5.4 — KB manager + settings views",
       "degree": 23
     },
     {
-      "id": "openspec_changes_hito_1_setup_whatsapp_tasks_t5_4",
-      "label": "Task T5.4 \u2014 KB manager + settings views",
+      "id": "openspec_changes_hito_1_setup_whatsapp_tasks_t4_4",
+      "label": "Task T4.4 — Handoff + deriva + gates + tests",
       "degree": 23
     },
     {
@@ -1684,30 +1672,63 @@
       "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; semantically similar concepts with no structural link"
     },
     {
-      "source": "Detecci\u00f3n de Emergencias y protocolo de seguridad",
-      "target": "Bot\u00f3n y Protocolo de Emergencia (web)",
+      "source": "Detección de Emergencias y protocolo de seguridad",
+      "target": "Botón y Protocolo de Emergencia (web)",
       "source_files": [
         ".cortex-sessions/2026-07-20-lumat-cotizacion-final/propuesta tecnica-economica para IA.md",
         ".cortex-sessions/2026-07-20-lumat-cotizacion-final/propuesta-tecnica-economica-lumat.pdf"
       ],
       "confidence": "INFERRED",
       "relation": "semantically_similar_to",
-      "why": "inferred connection - not explicitly stated in source; crosses file types (paper \u2194 doc); semantically similar concepts with no structural link"
+      "why": "inferred connection - not explicitly stated in source; crosses file types (paper ↔ doc); semantically similar concepts with no structural link"
     },
     {
-      "source": "Propuesta Lumat \u2014 Entrega 1 (Resumen Ejecutivo)",
-      "target": "LumatAgent \u2014 n\u00facleo del ecosistema",
+      "source": "Propuesta Lumat — Entrega 1 (Resumen Ejecutivo)",
+      "target": "LumatAgent — núcleo del ecosistema",
       "source_files": [
         "Propuesta_Lumat_Entrega_1.pdf",
         ".cortex-sessions/2026-07-20-lumat-cotizacion-final/propuesta tecnica-economica para IA.md"
       ],
       "confidence": "EXTRACTED",
       "relation": "references",
-      "why": "crosses file types (doc \u2194 paper); connects across different repos/directories; bridges separate communities"
+      "why": "crosses file types (paper ↔ doc); connects across different repos/directories; bridges separate communities"
     }
   ],
-  "tokens": {
-    "input": 30481,
-    "output": 204361
-  }
+  "questions": [
+    {
+      "type": "ambiguous_edge",
+      "question": "What is the exact relationship between `Schedule Event Block` and `Emergency Event Type`?",
+      "why": "Edge tagged AMBIGUOUS (relation: implements) - confidence is low."
+    },
+    {
+      "type": "ambiguous_edge",
+      "question": "What is the exact relationship between `Task T4.3 — Emergency notification + ack` and `Task T5.3 — Cases view`?",
+      "why": "Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low."
+    },
+    {
+      "type": "ambiguous_edge",
+      "question": "What is the exact relationship between `Requirement config.yaml (refresh/verify)` and `T0.1 — Repo scaffold + git init + config`?",
+      "why": "Edge tagged AMBIGUOUS (relation: implements) - confidence is low."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `LangGraph conversation graph` connect `Hito 1 change — Setup + WhatsApp operativo` to `graph.py`?",
+      "why": "High betweenness centrality (0.199) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `LumatAgent Project` connect `Hito 1 change — Setup + WhatsApp operativo` to `OpenSpec Project Config`, `docs/ops.md — Operations & Meta Onboarding Checklist`, `Security Hardening`?",
+      "why": "High betweenness centrality (0.198) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 5 inferred relationships involving `Message` (e.g. with `ConversationState` and `InvalidStateTransition`) actually correct?",
+      "why": "`Message` has 5 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 2 inferred relationships involving `Propuesta Técnica y Económica Lumat — PDF (45 págs.)` (e.g. with `Propuesta Lumat — Entrega 1 (Resumen Ejecutivo)` and `Propuesta Técnica y Económica Lumat — PDF (versión final, 59 págs.)`) actually correct?",
+      "why": "`Propuesta Técnica y Económica Lumat — PDF (45 págs.)` has 2 INFERRED edges - model-reasoned connections that need verification."
+    }
+  ]
 }

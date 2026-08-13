@@ -305,6 +305,35 @@ def acknowledge_emergency_if_ack(session: Session, conversation_id: int, text: s
     return True
 
 
+def acknowledge_case(session: Session, case: Case, actor: str) -> bool:
+    """EM-4: record the ack on an emergency case (panel button, T5.3).
+
+    Same mechanism as the reply-keyword ack (`acknowledge_emergency_if_ack`):
+    acknowledged_at + ack_by on the case, audited with action
+    `case.acknowledged`. No-op (False) when the case is not an unacknowledged
+    emergency. The caller commits.
+    """
+    if not case.emergency or case.acknowledged_at is not None:
+        return False
+    case.acknowledged_at = datetime.now(timezone.utc)
+    case.ack_by = actor
+    record_audit(
+        session,
+        actor=actor,
+        action="case.acknowledged",
+        entity="case",
+        entity_id=str(case.id),
+        before={"acknowledged_at": None},
+        after={
+            "acknowledged_at": case.acknowledged_at.isoformat(),
+            "ack_by": case.ack_by,
+            "channel": "panel",
+        },
+    )
+    session.flush()
+    return True
+
+
 def send_pending_emergency_reminders(session: Session) -> int:
     """Reminder emails for unacked emergencies: notified >15 min, max 2 (T4.3.2).
 

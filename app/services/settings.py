@@ -114,6 +114,9 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "notify.smtp_from": DEFAULT_SMTP_FROM,
     # SS-5: tone style used by the chat nodes (free string, panel-editable).
     "tone.style": DEFAULT_TONE_STYLE,
+    # AP-8 (T5.5): dashboard KPI time window in days (SQL counts over the
+    # last N days). Panel-editable via the generic settings KV surface.
+    "kpi.window_days": 7,
 }
 
 

@@ -220,6 +220,8 @@ class Case(Base):
     customer_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("customers.id"), nullable=False
     )
+    # 007: created_at (panel ordering + KPI windows, T5.3/T5.5).
+    created_at: Mapped[datetime] = _ts()
     service: Mapped[str | None] = mapped_column(String(100))
     priority: Mapped[str | None] = mapped_column(String(20))
     status: Mapped[str | None] = mapped_column(String(50))

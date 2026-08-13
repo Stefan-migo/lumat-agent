@@ -1,15 +1,15 @@
 ```yaml
 schema: gentle-ai.verify-result/v1
-evidence_revision: sha256:c4d5a2b23909c3be1749e8854b0ddf74b320ff70b7fd61b2bfdca8777b3a7129
+evidence_revision: sha256:27518b818a16dd25375bef79845b2a9f6db5abced46d366beb1f05416895e504
 verdict: pass
 blockers: 0
 critical_findings: 0
-requirements: 16/16
-scenarios: 21/21
-test_command: pytest tests/
+requirements: 20/20
+scenarios: 26/26
+test_command: .venv/bin/pytest tests/
 test_exit_code: 0
-test_output_hash: sha256:c4d5a2b23909c3be1749e8854b0ddf74b320ff70b7fd61b2bfdca8777b3a7129
-build_command: .venv/bin/python -c "import app.main; from app.services.settings import get_setting, set_setting, get_scope_mode, get_emergency_keywords, get_tone, get_message; from app.services.emergency import classify_emergency, compile_keywords, fold_accents; from app.services.notify import send_emergency_notification, send_email, is_ack_message, acknowledge_emergency_if_ack, send_pending_emergency_reminders; from app.services.cases import get_or_create_case, build_deriva_bundle, create_handoff_case; from app.services.costs import conversation_cost_state, daily_cost_state, maybe_alert_owner, spend_snapshot, combined_cost_mode; from app.chat.nodes.emergency_gate import emergency_gate; from app.chat.nodes.emergency import emergency; from app.chat.nodes.cost_gate import cost_gate; from app.chat.nodes.handoff_gate import handoff_gate, evaluate_handoff; from app.chat.nodes.handoff import handoff, HANDOFF_REPLY; from app.chat.graph import build_graph, run_conversation; from app.chat.state import ConversationState, set_conversation_state; print('import OK')" (with test env set)
+test_output_hash: sha256:27518b818a16dd25375bef79845b2a9f6db5abced46d366beb1f05416895e504
+build_command: .venv/bin/python -c "import app.main; from app.panel.deps import require_user, require_admin, get_current_user, templates; from app.panel.routes.auth import router; from app.panel.routes.clients import router; from app.panel.routes.conversations import router; from app.panel.routes.cases import router; from app.panel.routes.kb import router; from app.panel.routes.settings import router; from app.panel.routes.dashboard import compute_kpis; from app.panel.routes.export import _csv_stream; from app.panel.seed_admin import seed_admin; from app.services.users import hash_password, verify_password, is_locked, record_failed_login, reset_login_state; from app.services.cases import list_open_cases, update_case; from app.services.notify import acknowledge_case; from app.services.customers import search_customers; from app.services.costs import spend_snapshot; from app.services.settings import get_setting, set_setting; from app.services.kb import ingest_document, update_document, restore_version, disable_document; from app.models import User, UserRole, Case; print('import OK')" (with test env set)
 build_exit_code: 0
 build_output_hash: sha256:73e65cba19528ade3fd463248a9ba2c44e92c41810caef6a0bba624cefc54219
 ```
@@ -17,14 +17,233 @@ build_output_hash: sha256:73e65cba19528ade3fd463248a9ba2c44e92c41810caef6a0bba62
 # Verification Report — hito-1-setup-whatsapp
 
 **Change**: hito-1-setup-whatsapp · **Project**: LumatAgent (lumat) · **Phase**: sdd-verify
-**Latest verified slice**: **Batch 4 (PR 5)** — commits `e43c6b46..c0823e6e` (18 commits: T4.1 settings/scope/tone · T4.2 emergency engine+gates · T4.3 notification+ack+reminders · T4.4 handoff+deriva · T4.5 cost guardrails; T2.1 remains blocked on client credentials)
+**Latest verified slice**: **Batch 5 (PR 6)** — commits `fc8dc067..f300c4b0` (+ `b36adce4` chore marking T5.5): 5 feat(panel) + 5 chore(sdd) + migration 007 — T5.1 panel auth+roles · T5.2 clients/conversations views · T5.3 cases view + emergency ack · T5.4 KB manager + settings views · T5.5 dashboard KPIs + CSV export; T2.1 remains blocked on client credentials
 **Mode**: **STRICT TDD** (config.yaml `apply.tdd: true`, runner `pytest tests/`)
 **Artifact store**: hybrid (this file + Engram `sdd/hito-1-setup-whatsapp/verify-report`)
-**Ledger token (verify run)**: `sha256:5782326ac5cd2959814531e5d584d769070b5c193f58a8ff04b48b7fed97a037` (B3 run token, orchestrator settles; B4 run token assigned by orchestrator)
-**Cumulative verified**: 39 requirements / 55 scenarios across B0+B1+B2+B3+B4 slices. Slice-scoped envelope for B4 = 16/16 reqs, 21/21 scenarios.
+**Ledger token (verify run)**: B5 run token held by orchestrator (verify-B5, NOT re-acquired); prior B3 token `sha256:5782326ac5…7a037` settled by orchestrator
+**Cumulative verified**: 49 requirements / 68 scenarios across B0+B1+B2+B3+B4+B5 slices. Slice-scoped envelope for B5 = 20/20 reqs, 26/26 scenarios.
 
 ---
-# Batch 4 (PR 5) — THIS VERIFY RUN
+# Batch 5 (PR 6) — THIS VERIFY RUN
+
+**Verified slice**: commits `fc8dc067..f300c4b0` (8 commits) + `b36adce4` chore(T5.5 mark): `fc8dc067` feat(panel) signed-cookie auth + roles + lockout (AP-1, AP-2, SH-5) · `dbf5cb85` chore(sdd) T5.1 · `d024f83b` feat(panel) clients list/search + conversation threads (AP-3, AP-4, CR-3..5) · `c14066a6` chore(sdd) T5.2 · `a3c29aa3` feat(panel) cases view + state/assign + emergency ack (HH-4, AP-5, EM-4) + migration 007 · `2691aaaf` chore(sdd) T5.3 · `b402c92c` feat(panel) KB manager + settings views (AP-6, KB-3/4, SS-1..5) · `4fd06901` chore(sdd) T5.4 · `f300c4b0` feat(panel) dashboard KPIs + streaming CSV export (AP-7, AP-8) · `b36adce4` chore(sdd) T5.5
+**Runtime harness**: `lumat-pg-test` container UP (localhost:5432, pgvector) — all suites executed live against the real DB; OpenAI embeddings respx-mocked (`mock_openai_embeddings`); the panel flows touch no Meta/SMTP path (send/notify not exercised by panel routes).
+
+### Completeness (B5 slice)
+
+| Metric | Value |
+|--------|-------|
+| Tasks total (change) | 33 (header says 34 — pre-existing discrepancy, SUGGESTION-1 carried) |
+| Tasks complete | 23/33 (B0: 3 + B1: 3 + B2: 2 + B3: 6 + B4: 5 + B5: 5, of which T2.1 stays `[ ]` **blocked**) |
+| B5 tasks complete | 5/5 — T5.1 [x], T5.2 [x], T5.3 [x], T5.4 [x], T5.5 [x] (tasks.md, flipped by this verify) |
+| B5 requirements verified | 20/20 slice-scope: AP-1..8 (8) · SS-1..5 (5) · KB-3, KB-4 (2) · HH-4 (1) · EM-4 ack (1) · CR-3, CR-4, CR-5 (3) |
+| B5 scenarios verified | 26/26 slice-scope: AP 10 · SS 7 (incl. SS-4 "Spend visible" — first time counted) · KB-3 1 + KB-4 2 · HH-4 1 · EM-4 ack 1 · CR-3 2 + CR-4 1 + CR-5 1 |
+| T2.1 blocked verdict | ✅ PASS for this slice — ops dependency on client credentials, unchanged from B2/B3/B4 |
+
+Full-spec totals for context: admin-panel = 8 reqs / 10 scenarios (ALL first counted here) · settings-scope-limits = 5 reqs / 7 scenarios (SS-4 "spend visible" NEW; other 6 re-verified at panel surface) · knowledge-base = 4 reqs / 7 scenarios (KB-3 NEW; KB-4 re-verified at panel surface) · human-handoff = 5 reqs / 7 scenarios (HH-4 NEW) · emergency-detection = 5 reqs / 7 scenarios (EM-4 ack re-verified at panel button; mechanism proven B4) · customer-records = 6 reqs / 8 scenarios (CR-3/4/5 re-verified at ficha surface). **Cumulative B0+B1+B2+B3+B4+B5: 49 reqs / 68 scenarios verified** (+10 new reqs: AP×8, KB-3, HH-4; +13 new scenarios: AP 10, SS-4 1, KB-3 1, HH-4 1 — CR-3/4/5, SS-1/2/3/5, KB-4, EM-4 already counted in prior batches; this slice adds their panel-surface evidence without double-counting).
+
+### Build & Tests Execution (B5)
+
+**Build-equivalent**: ✅ Passed (exit 0)
+```text
+.venv/bin/python -c "import app.main; from app.panel.deps import require_user, require_admin, ...; from app.services.users import ...; from app.services.cases import ...; from app.services.notify import ...; from app.services.customers import ...; from app.services.costs import ...; from app.services.settings import ...; from app.services.kb import ...; print('import OK')" (with test env set)
+-> import OK   (hash sha256:73e65cba…4cefc54219 — same canonical 'import OK' digest as B4)
+```
+
+**Focused suites** (live pgvector, exit 0):
+```text
+$ .venv/bin/pytest tests/functional/test_auth.py -q           -> 14 passed
+$ .venv/bin/pytest tests/functional/test_clients.py -q        -> 11 passed
+$ .venv/bin/pytest tests/functional/test_cases.py -q          -> 8 passed
+$ .venv/bin/pytest tests/functional/test_kb_settings.py -q    -> 14 passed
+$ .venv/bin/pytest tests/functional/test_dashboard_export.py -q -> 7 passed
+$ .venv/bin/pytest tests/functional/ -q                       -> 54 passed in 39.56s
+$ .venv/bin/pytest tests/integration/test_migrations.py -q    -> 10 passed in 1.19s (007 approved)
+```
+
+**Full suite**: ✅ **300 passed / 0 failed / 0 skipped** in 76.72s, exit 0 — matches expected 300 (246 B0-B4 baseline + 54 B5), no regressions.
+Output hash (canonical capture): `sha256:27518b818a16dd25375bef79845b2a9f6db5abced46d366beb1f05416895e504` (last-line `======================== 300 passed in 76.72s (0:01:16) ========================`).
+
+**Migration check** (live): `schema_migrations` = [001_init .. 007_case_created_at] (7); `\d cases` shows `created_at timestamptz NOT NULL DEFAULT now()` + `acknowledged_at`/`ack_by`/`escalated_at`/`responsible_id FK->users`; `db/migrate.sh` re-run is idempotent ("skip 007_case_created_at (already applied)" → "migrations up to date"); `test_migrations.py` 10/10 green.
+
+**Secrets check** (all passed):
+```text
+git grep -iE "sk-[A-Za-z0-9]{10,}|EAAG[A-Za-z0-9]{10,}|AKIA|ghp_" app/ db/ infra/ (excl. sk-test)  -> no matches
+git ls-files | grep -i env                                          -> only infra/.env.example (SH-2 intact)
+```
+Both conftests FORCE `OPENAI_API_KEY=sk-test` (`os.environ[...] = "sk-test"`, no setdefault) and set `PANEL_SESSION_SECRET`; respx mocks only `https://api.openai.com/v1/embeddings` for KB tests — full suite green confirms zero real external calls.
+
+**Coverage**: ➖ Not available (config.yaml `verify.coverage_threshold: 0`; no coverage tooling — consistent with B0-B4).
+
+### Spec Compliance Matrix (B5 slice)
+
+| Requirement | Scenario | Covering test (runtime, all passing) | Result |
+|-------------|----------|--------------------------------------|--------|
+| AP-1 Authentication | Authorized login | `test_authorized_login_sets_session_and_audits` (302 → /panel/, signed `session` cookie set, `auth.login` audit row) + `test_authorized_login_resets_failed_counter` | ✅ COMPLIANT |
+| AP-1 Authentication | Failed login | `test_failed_login_audited_and_counted` (no cookie, counter 1, `auth.login_failed` audit) + `test_unknown_username_failed_login_audited` (no user oracle) + `test_lockout_after_five_failures` (5th → locked, `auth.login_locked` audit) + `test_lock_expiry_allows_login_again` (15-min window) + `test_inactive_user_cannot_login` | ✅ COMPLIANT |
+| AP-2 Roles and Permissions | Operador permissions | `test_operador_cannot_access_kb_manager` (403 GET+POST /panel/kb) + `test_operador_cannot_access_settings` (403 GET+POST /panel/settings) + `test_operador_can_access_panel_home` (shared routes 200) + `test_dashboard_and_export_require_login` | ✅ COMPLIANT |
+| AP-2 Roles and Permissions | Admin permissions | `test_admin_can_access_kb_manager_and_settings` (200 both) + `test_admin_can_access_panel_home` | ✅ COMPLIANT |
+| AP-3 Clients List and Search | Search customer | `test_clients_search_by_name` + `test_clients_search_by_phone_digits` ("1111" finds +56911112222) + `test_clients_search_no_matches` + `test_clients_list_lists_customers_with_state` | ✅ COMPLIANT |
+| AP-4 Conversation View | View conversation | `test_conversation_thread_shows_messages_in_order` (chronological) + `test_conversation_thread_renders_media_links` (media_url as link, read-only, HH-5 no-reply note) | ✅ COMPLIANT |
+| AP-5 Cases View | Assign and update case | `test_case_update_status_and_responsible_audited` (`case.updated` snapshot with actor) + `test_case_update_clears_responsible` (`_UNSET` sentinel keep-vs-clear) | ✅ COMPLIANT |
+| AP-6 KB Manager Access | Admin opens KB manager | `test_kb_add_document` (upload md/pdf/csv, ingest + audit) + `test_kb_edit_creates_new_version` + `test_kb_disable_document` + `test_kb_restore_previous_version` + `test_kb_list_shows_provider_model_cost` (KB-1 provider/model/cost visible) | ✅ COMPLIANT |
+| AP-7 CSV/Excel Export | Export clients | `test_export_clients_csv` (text/csv, Content-Disposition, header + panel-visible rows) + `test_export_cases_csv` (+ customer name/phone, responsible, emergency, summary) | ✅ COMPLIANT |
+| AP-8 Basic KPIs | KPIs rendered | `test_dashboard_shows_kpi_counts` (contacts/motivos/derived/visits counts) + `test_dashboard_motivos_table_breaks_down_by_service` (grouped) + `test_dashboard_respects_settings_time_window` (window from `kpi.window_days`; out-of-window excluded) + `test_dashboard_empty_state_shows_zero_kpis` | ✅ COMPLIANT |
+| SS-1 Bot-Resolves vs Always-Escalate | Owner changes a rule | `test_settings_save_scope_rules` (scope_rules JSONB saved via set_setting + `settings.change` audit; effect on conversation proven in B4) | ✅ COMPLIANT (panel save surface; behavior B4) |
+| SS-1 Bot-Resolves vs Always-Escalate | Rule change takes effect | B4 `test_scope_always_escalate_category_escalates` + panel save round-trip (`test_settings_save_scope_rules` asserts stored value read back on GET) | ✅ COMPLIANT (re-verified at panel) |
+| SS-2 Configurable Emergency Keywords | Keyword added | `test_settings_save_emergency_keywords` (list saved + audited; T4.2 gate recompiles per run → immediate effect, no cache to invalidate) | ✅ COMPLIANT (panel save; immediate detection B4) |
+| SS-3 Cost Guardrails | Conversation limit reached | `test_settings_save_spend_limits` (cost.*_limit saved + audited; threshold enforcement B4) | ✅ COMPLIANT (view; enforcement B4) |
+| SS-3 Cost Guardrails | Daily limit reached | `test_settings_save_spend_limits` (daily_limit save surface) + B4 `test_daily_cost_state_blocked_at_100`/`test_daily_blocked_escalates_no_llm` | ✅ COMPLIANT (re-verified at panel) |
+| SS-4 Cost Tracking and Meta Pricing Awareness | Spend visible | `test_settings_page_shows_spend_snapshot` (GET /panel/settings renders `spend_snapshot` — "daily" section + default meta cost 0.01 + limits) + `test_settings_save_meta_pricing` (`meta_pricing.service_message_cost` saved + audited) | ✅ COMPLIANT (**NEW** — panel visibility proven) |
+| SS-5 Adjustable Tone and Messages | Message edited | `test_settings_save_tone` (tone.style saved + audited; reply effect proven B4) | ✅ COMPLIANT (view; behavior B4) |
+| KB-3 KB Manager | Admin edits a document | `test_kb_add_document` (upload → ingest, no redeploy) + `test_kb_edit_creates_new_version` (edit → new version + re-embed) + `test_kb_disable_document` (excluded from retrieval) | ✅ COMPLIANT (**NEW**) |
+| KB-4 Versioning and Re-Ingestion | Re-ingestion on update | `test_kb_edit_creates_new_version` (panel edit → version+1 + re-embed via mocked embeddings; v1 preserved) | ✅ COMPLIANT (re-verified at panel; mechanics B3) |
+| KB-4 Versioning and Re-Ingestion | Restore previous version | `test_kb_restore_previous_version` (panel restore → active_version flip, D8) | ✅ COMPLIANT (re-verified at panel) |
+| HH-4 Case Visibility in Panel | Case appears in panel | `test_cases_list_shows_customer_summary_status` (customer/summary/status columns, escalated-first order) + `test_cases_list_excludes_closed_cases` | ✅ COMPLIANT (**NEW**) |
+| EM-4 Immediate Notification | Notification acknowledged | `test_emergency_case_shows_flag_and_ack_button` (⚠ flag + ack button only when unacked) + `test_ack_button_records_ack_and_audits` (acknowledged_at + ack_by="oper" + `case.acknowledged` audit with actor + channel=panel) + `test_ack_button_hidden_after_ack` | ✅ COMPLIANT (panel button on the T4.3 columns — same mechanism, no new columns) |
+| CR-3 Lifecycle States | State progression | `test_state_change_updates_and_audits` (ficha POST state → `customer.state_change` audit with actor, flash) | ✅ COMPLIANT (re-verified at panel; mechanics B3) |
+| CR-3 Lifecycle States | Invalid transition rejected | `test_invalid_state_transition_rejected` (nuevo→postventa → flash error, no audit, state unchanged) | ✅ COMPLIANT (re-verified at panel) |
+| CR-4 Internal Notes | Staff adds note | `test_add_internal_note` (POST note → CustomerNote author+timestamp, rendered on ficha, staff-only table) | ✅ COMPLIANT (re-verified at panel) |
+| CR-5 History Linkage | History complete | `test_ficha_lists_history` (conversations/cases/messages chronological on ficha) | ✅ COMPLIANT (re-verified at panel) |
+
+**Compliance summary (B5 slice)**: 26/26 scenarios compliant for the verified scope; 20/20 requirements mapped to passing tests (54/54 focused). SH-5 panel-side: every mutating action audited — login/failure/lock/logout (`auth.*`), customer state (`customer.state_change`), case update/ack (`case.updated`, `case.acknowledged`), settings (`settings.change`), KB (`kb.document_ingest/update/restore/disable` with actor), seed (`user.seed_admin`) — verified by code inspection + harness audit-row assertions. Deferred per tasks.md: none for this slice (T6.2 functional re-runs the AP suite at batch level).
+
+### Correctness (Static Evidence — B5)
+
+| Design item | Status | Notes |
+|-------------|--------|-------|
+| `app/services/users.py` — bcrypt + lockout (AP-1) | ✅ Implemented | `hash_password`/`verify_password` (bcrypt, constant-time, malformed-hash safe), `is_locked` (UTC window), `record_failed_login` 5→lock+reset, `reset_login_state` |
+| `app/panel/deps.py` — server-side auth deps (AP-2) | ✅ Implemented | `get_current_user` re-reads the user row per request (deactivated/locked loses access immediately), `require_user`/`require_admin` (403 server-side); tampered/absent cookie → 302 login; role NEVER client-trusted |
+| `app/panel/routes/auth.py` — login/logout (AP-1, SH-5) | ✅ Implemented | bcrypt verify → signed session (12 h); every outcome audited (auth.login / auth.login_failed / auth.login_locked / auth.logout); generic "invalid credentials" (no user oracle) |
+| `app/main.py` — SessionMiddleware (D7, AP-1) | ✅ Implemented | `max_age=12*60*60`, `same_site=lax`, `https_only=False` (nginx terminates TLS — reviewer note WARNING-3); secret from `panel_session_secret` (required config) |
+| `app/panel/seed_admin.py` (AP-1, T7.2) | ✅ Implemented | standalone idempotent script (first seed wins), bcrypt, env PANEL_ADMIN_USERNAME/PASSWORD, audited `user.seed_admin` |
+| `app/panel/routes/clients.py` + `customers.search_customers` (AP-3, CR-3/4/5) | ✅ Implemented | list/search name-ILIKE or phone-digit substring (limit 100); ficha renders history (conversations/cases/messages) + notes; POST state → `set_customer_state` audited with actor, invalid transition → flash + no audit; POST notes → `add_note` author+timestamp |
+| `app/panel/routes/conversations.py` (AP-4) | ✅ Implemented | read-only thread, messages in created_at/id order, media_url links, HH-5 no-reply note |
+| `app/panel/routes/cases.py` + `cases.list_open_cases`/`update_case` (HH-4, AP-5) | ✅ Implemented | open cases (closed excluded), escalated-first ordering, joined with customer; update_case status/responsible with `_UNSET` sentinel, audited `case.updated` snapshot |
+| `notify.acknowledge_case` (EM-4 panel ack) | ✅ Implemented | SAME columns/audit as T4.3 reply-keyword ack (acknowledged_at/ack_by + `case.acknowledged`, channel=panel); no new mechanism; no-op on non-emergency/already-acked |
+| `app/panel/routes/kb.py` (AP-6, KB-3/4) | ✅ Implemented | admin-only (require_admin); upload (pdf/md/txt/csv by extension) → `ingest_document`; edit → `update_document` (new version + re-embed KB-4); disable (KB-3); restore (active_version flip D8); provider/model/cost shown; all audited with acting admin |
+| `app/panel/routes/settings.py` (SS-1..5, SH-5) | ✅ Implemented | admin-only; every save via `set_setting` (UPSERT + `settings.change` audit); GET renders scope/keywords/tone/limits/meta + `costs.spend_snapshot` (SS-4); numeric validation 400 on invalid/negative; keywords save = the SS-2 trigger (gate recompiles per run) |
+| `app/panel/routes/dashboard.py` (AP-8) | ✅ Implemented | `compute_kpis` = pure SQL COUNTs over `kpi.window_days` (default 7, in SETTINGS_DEFAULTS): contacts (distinct conversations w/ inbound in window), motivos (cases by service), derivados (escalated_at in window), visit_requests (service='visita'); NO chart library |
+| `app/panel/routes/export.py` (AP-7) | ✅ Implemented | streaming CSV via stdlib `csv` generator (`_csv_stream` — StringIO per row, yield); clients.csv + cases.csv with panel-visible fields only; `StreamingResponse` text/csv + Content-Disposition |
+| Templates (D7) | ✅ Implemented | Jinja2 + inline vanilla JS only; NO static dir, NO CDN, NO chart/htmx/React; base.html layout + login/dashboard/clients(ficha)/conversations/cases/kb/settings views |
+| Migration 007 `cases.created_at` | ✅ Implemented | `ALTER TABLE cases ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT now()` — applied live, idempotent (migrate.sh "skip"), model column + `test_migrations.py` approval list updated |
+| Deps (D7) | ✅ Implemented | only bcrypt, jinja2, itsdangerous, python-multipart added (pyproject + uv.lock); no chart/export/framework dep |
+| Config/env wiring | ✅ Implemented | `PANEL_SESSION_SECRET` required in app/config.py + infra/.env.example + docker-compose + BOTH conftests |
+
+### Coherence (Design — B5)
+
+| Design decision | Followed? | Notes |
+|-----------------|-----------|-------|
+| D7 panel stack = FastAPI + Jinja2 + vanilla JS, signed-cookie sessions, bcrypt | ✅ Yes | SessionMiddleware (12 h, lax) + bcrypt + Jinja2Templates + inline JS; no client framework, no chart lib, no htmx |
+| D7 CSV export via stdlib `csv` (Excel cut by ponytail review) | ✅ Yes | `_csv_stream` generator over io.StringIO + StreamingResponse; AP-7 "CSV or Excel" satisfied with CSV |
+| AP-1 lockout (5 fails → 15 min) on `users` | ✅ Yes | users table columns from 001_init; `MAX_FAILED_LOGINS=5`, `LOCK_MINUTES=15`; lock is a clean window (counter resets at lock) |
+| AP-2 server-side-only role enforcement | ✅ Yes | require_admin 403 on /panel/settings + /panel/kb (GET+POST); role in session is informational — user re-read per request |
+| KPI = SQL COUNTs, time window from settings | ✅ Yes | `kpi.window_days` default 7 registered; window respected (out-of-window excluded — test) |
+| Design users table / cases.responsible_id FK | ✅ Yes | responsible dropdown of users, outerjoin in cases.csv, FK verified in `\d cases` |
+| EM-4 ack via panel button on same columns (D9) | ✅ Yes | acknowledge_case reuses acknowledged_at/ack_by/`case.acknowledged` — no new mechanism, no new migration |
+| D8 restore = pointer flip (no re-embed) | ✅ Yes | panel restore → restore_version; embedding call-count proven in B3 |
+| SS-2 immediate effect without cache invalidation | ✅ Yes | T4.2 emergency_gate recompiles per run; settings save is the trigger (documented in settings.py docstring) |
+| HH-5 no reply-from-panel in H1 | ✅ Yes | conversation thread is read-only; no compose UI |
+| Deviation 1: `https_only=False` on session cookie | ✅ Acceptable | nginx terminates TLS in the designed topology (design architecture diagram); MUST flip to True if the panel is ever served directly — WARNING-3 |
+| Deviation 2: `.txt` uploads mapped to MD format | ✅ Acceptable | pragmatic extension; FORMAT_BY_EXTENSION documented in kb.py |
+| Rollback boundary | ✅ Yes | B5 = 10 commits fc8dc067..b36adce4; reset to e4563d87 (pre-B5) removes the slice cleanly; B0-B4 suites still green (246 in full run) |
+
+### Strict TDD Compliance (Step 5a + expanded)
+
+| Check | Result | Details |
+|-------|--------|---------|
+| TDD Evidence reported | ✅ | tasks.md T5.1..T5.5 done-annotations (per-task files, focused counts 14/11/8/14/7, full-suite progression 260→271→279→293→300, commits) + Engram obs #1455 (B5 apply summary). NOTE: the B5 apply did NOT mirror the formatted TDD-table into the Engram apply-progress topic (B4's #1424 format); evidence is carried by tasks.md annotations — SUGGESTION-9 |
+| All tasks have tests | ✅ | 5/5 B5 code tasks have test files (functional: test_auth, test_clients, test_cases, test_kb_settings, test_dashboard_export) — verified on disk |
+| RED confirmed (tests exist) | ✅ | 5/5 test files present; RED phase documented in per-task annotations ("tests written first" per task notes) |
+| GREEN confirmed (tests pass) | ✅ | 54/54 B5 tests pass on execution NOW (cross-ran, not trusted blindly): 14+11+8+14+7 |
+| Triangulation adequate | ✅ | 54 distinct cases with multiple expectations each: auth ×14 (session/audit/lock/reset/inactive/logout/seed/role), clients ×11 (list/search-by-name/search-by-phone/no-match/ficha/notes/state/invalid-transition/thread/media/require-login), cases ×8 (list/excludes-closed/update-audit/clear-responsible/flag+ack-button/ack-audit/hidden-after/require-login), kb_settings ×14 (role matrix ×3, KB add/edit/disable/restore/list ×5, settings scope/keywords/tone/limits/meta/snapshot ×6), dashboard_export ×7 (KPIs ×4 incl. window-respect, CSV ×2, require-login) |
+| Safety Net for modified files | ✅ | app/services/{customers,cases,notify,kb,settings}.py + models.py + main.py modified: full suite stays green (300 = 246 baseline + 54 new); new test files "N/A (new)" correct; both conftests updated together (PANEL_SESSION_SECRET) or collection fails — noted in obs #1455 |
+| Assertion quality audit (5f) | ✅ | 212 asserts across 54 tests (~4/test); no tautologies, no ghost loops, no smoke-only, no type-only-alone. Strongest: lockout asserts exact locked_until window + `auth.login_locked` audit; ack test asserts acknowledged_at + ack_by + audit actor AND after["ack_by"]; CSV asserts content-type + exact header prefix + row content; window test asserts out-of-window case NOT rendered |
+
+**TDD Compliance**: 7/7 checks passed.
+
+### Test Layer Distribution (B5)
+
+| Layer | Tests | Files | Tools |
+|-------|-------|-------|-------|
+| Unit | 0 | 0 | — |
+| Integration | 0 new | 0 new (test_migrations.py +1 line approval) | — |
+| Functional | 54 | 5 (+ shared conftest) | FastAPI TestClient over real app + live pgvector; respx OpenAI embeddings; bcrypt hashing |
+| **Total** | **54 (B5)** | **5** | suite total 300 (246 B0-B4 + 54 B5) |
+
+### Changed File Coverage
+
+Coverage analysis skipped — no coverage tool detected (config.yaml `verify.coverage_threshold: 0`, no pytest-cov in pyproject). Informational only (strict-TDD module).
+
+### Quality Metrics
+
+**Linter**: ➖ Not available · **Type Checker**: ➖ Not available. Informational only — never blocking.
+
+### Issues Found (B5 slice)
+
+**CRITICAL**: None
+
+**WARNING**:
+1. **(Carried from B1/B2/B3/B4 — mechanism resolved, hygiene remains)** Real `OPENAI_API_KEY` still exported in the dev shell (`~/.bashrc`); conftest FORCES `os.environ["OPENAI_API_KEY"] = "sk-test"` (no setdefault), so tests can never pick it up — verified: full suite green = zero real network calls. Dev-shell hygiene only.
+2. **(Carried, informational)** Authored diff size: B5 = 3,601 insertions / 12 deletions across 43 files (incl. uv.lock 182; ~3.4k authored) vs the pre-approved PR 6 slice note. Large deltas are test bodies (~1.4k), templates, and the panel routes — not unexpected architecture. Reviewer awareness only.
+3. **(NEW)** Session cookie `https_only=False`: correct for the designed topology (nginx terminates TLS in front of the API container — design architecture diagram), but MUST be flipped to True if the panel is ever exposed directly or TLS is offloaded differently. Reviewer note for PR 6.
+
+**SUGGESTION**:
+1. (Carried) `tasks.md` header claims "34 tasks" vs 33 rows (line 4). Fix on next tasks.md edit.
+2. (Carried) WH-1 "Token mismatch" scenario log clause — no `caplog` assertion yet. Close in T6.x.
+3. (Carried) README curl proof manual — spec-marker count check in T6.1.
+4. (Carried) `test_infra.py::test_db_service_uses_pgvector_image` double-condition assert — cosmetic.
+5. (Carried) Rate limiter counts duplicate deliveries before dedup — revisit at next ingest touch.
+6. (Carried) Non-JSON body → 200+drop has no covering test — add in T6.2.
+7. (Carried from B4) `test_handoff.py::test_cr5_closed_opens_new_conversation_through_ingest` psycopg rowcount quirk — documented, not blocking.
+8. (Carried) EM-4 "Notification sent" scenario fully verified in B4; B5 counts only the ack scenario (no double-count in cumulative).
+9. (NEW) B5 apply did not publish the formatted TDD Cycle Evidence table into the Engram apply-progress topic (B4 #1424 format). Evidence exists in tasks.md annotations + obs #1455 and verify re-ran everything; mirror the table format on the next apply for consistency.
+10. (NEW) `graphify` code-level edges for `app/panel/*` land at archive-time refresh (orchestrator-owned, per repo AGENTS.md); until then `graphify path` between panel code and services degenerates to task/spec paths — recorded below.
+
+### Graphify Context (B5)
+
+- Graph check: `graphify-out/graph.json` present (1297 nodes / 2520 edges), B4 code snapshot — `app/panel/*` route files appear as nodes from tasks.md/spec extraction but code-level import/call edges land at archive refresh (per orchestration: "panel nodes not yet added; that happens at archive"). NO rebuild performed (per instructions). GRAPH_REPORT.md read at session start (god nodes/communities).
+- Query `graphify query "app panel routes deps auth"` (BFS, 143 nodes) — start nodes: `app/panel/routes/auth.py`, `Task T5.1 — Panel auth + roles`, `Batch 5 — Admin panel`; consulted nodes: app/panel/routes/{auth,clients,settings,dashboard,conversations,cases,kb}.py, app/panel/deps.py, app/panel/templates/dashboard.html, tests/functional/test_auth.py, Requirements AP-1..AP-6, SS-1..SS-5, KB-4, EM-4, HH-4, SH-5, CR-3..CR-5, Tasks T5.1..T5.4, `PR 6 (delivers Batch 5)` — all [EXTRACTED]; key edges: `Task T5.1 --implements--> AP-1/AP-2/SH-5`, `T5.2 --implements--> AP-3/AP-4/CR-3/CR-4/CR-5`, `T5.3 --implements--> AP-5/EM-4` + `--references--> HH-4`, `Batch 5 --conceptually_related_to--> PR 6`.
+- Query `graphify query "services users settings kb cases customers costs"` (BFS, 115 nodes) — consulted: costs.py (`daily_spend()`), customers.py (`get_or_create_customer()`, `normalize_phone_e164()`), `Settings` (app/models.py L309), `Conversation` (L146), tests/integration/{test_migrations,test_customers,test_send_costs}.py, `T4.1 Settings` — [EXTRACTED].
+- Path queries: `path "app/panel/deps.py" "app/models.py"` and `path "app/panel/routes/cases.py" "app/services/notify.py"` — code-level edges absent in the B4 snapshot, so shortest-path degenerates to giant task/spec chains (902 hops); recorded as archive-refresh work (SUGGESTION-10). Structural understanding came from the BFS queries + direct source inspection.
+- Communities consulted: Conversation Manager (EM/SS/HH cluster), T4.1 Settings, T3.1 Customers, T3.3 KB pipeline, T3.6 Send + cost services, community 34 (emergency).
+
+### Runtime Harness Spot-Check (live)
+
+```text
+docker ps                                       -> lumat-pg-test UP (26 h), 0.0.0.0:5432->5432
+psql schema_migrations                          -> [001_init .. 007_case_created_at] (7)
+psql \d cases                                   -> created_at NOT NULL DEFAULT now() + ack columns present
+db/migrate.sh re-run                            -> "skip 007_case_created_at (already applied)" / "migrations up to date"
+pytest tests/functional/                        -> 54 passed in 39.56s (real DB, TRUNCATE-reset)
+pytest tests/integration/test_migrations.py     -> 10 passed in 1.19s
+pytest tests/                                   -> 300 passed in 76.72s (246 B0-B4 + 54 B5), exit 0
+build import (test env)                         -> import OK, exit 0 (hash sha256:73e65cba…)
+secrets grep (sk-/EAAG/AKIA/ghp_)               -> no credential values in app/ db/ infra/
+```
+
+**B5 runtime harness** (TestClient over the real app, live test DB, /tmp/opencode/b5_harness.py — 23/23 steps PASS):
+```text
+[1]  unauthenticated /panel/ -> 302 /panel/login
+[2]  admin login -> 302 + signed session cookie (bcrypt verified)
+[3]  dashboard 200 -> Contacts/Motivos/Derived cases/Visit requests rendered (AP-8)
+[4]  clients search "1111" and "Ana" -> ficha found (AP-3)
+[5]  add internal note -> rendered on ficha (CR-4); state change pendiente->agendado audited (CR-3)
+[6]  settings limits save -> Saved + audit (SS-3); settings page renders spend_snapshot (SS-4)
+[7]  cases list shows customer/summary/status + emergency flag + ack button (HH-4, EM-4)
+[8]  POST /panel/cases/{id}/ack -> acknowledged (EM-4 panel ack)
+[9]  clients.csv + cases.csv -> text/csv streaming with panel-visible rows (AP-7)
+[10] operador login -> /panel/settings 403, /panel/kb 403, /panel/clients 200 (AP-2)
+[11] audit_log rows present: auth.login, customer.state_change, settings.change,
+     case.acknowledged, auth.logout (SH-5)
+HARNESS PASS (23/23)
+```
+
+### Verdict (B5 slice)
+
+**PASS** — Batch 5 (T5.1 panel auth+roles, T5.2 clients/conversations, T5.3 cases+ack, T5.4 KB manager+settings, T5.5 dashboard+CSV) is complete (5/5 tasks [x]), fully tested (54/54 focused, 300/300 full suite, live against the pgvector container with OpenAI embeddings respx-mocked), and matches specs AP-1..8, SS-1..5 (views incl. NEW SS-4 spend visible), KB-3 (NEW) + KB-4, HH-4 (NEW), EM-4 ack, CR-3/4/5 (ficha), the design D7 decisions (Jinja2 + vanilla JS, signed-cookie sessions, stdlib CSV, SQL-count KPIs, no chart lib), server-side-only role enforcement (AP-2), and task acceptance criteria. Strict TDD evidence validated 7/7. Runtime harness proved login → KPIs → search → note/state → settings save → case ack → CSV export → role matrix end-to-end through the real app. Migration 007 applies cleanly and idempotently (approval test 10/10). No CRITICAL findings; 2 carried WARNINGs + 1 NEW WARNING (https_only=False — correct for the nginx-terminated topology, reviewer note). T2.1 remains `[ ]` **blocked on client credentials** — blocked is a PASS for this slice. **Cumulative: 49 reqs / 68 scenarios across B0+B1+B2+B3+B4+B5.** Recommended next: create PR 6 (B5 slice, stacked to main), archive B5 slice (orchestrator) + graphify refresh (adds app/panel code edges), then Batch 6 apply (T6.1 test harness, T6.2 functional suite, T6.4/6.5 docs, T6.6 ops scripts), and unblock T2.1 when Meta credentials arrive.
+
+## Previous Slice — Batch 4 (PR 5) PASS — preserved verbatim
 
 **Verified slice**: commits `e43c6b46..c0823e6e` (18 commits: e43c6b46 feat(settings) KV+audit · 269323a2 feat(settings) scope/keywords/tone · ec582bf4 feat(emergency) regex engine · 0885e62e feat(chat) emergency gate+nodes · e2919bfa feat(notify) notification service · 76f21dec feat(chat) ack+reminders · 82d241f3 feat(chat) state model+handoff gate · e82c52cf feat(services) cases+deriva node · 3ea3d90e feat(costs) guardrails · 807cc7b6 feat(chat) cost gate · 08c90d32 refactor(send) settings-consolidation · c0823e6e refactor(costs) _limit dedupe + chore commits)
 **Runtime harness**: `lumat-pg-test` container UP (localhost:5432, pgvector) — all suites executed against the real DB; OpenAI/Meta/SMTP calls respx-mocked or patched.

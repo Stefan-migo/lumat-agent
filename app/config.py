@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     # Media downloads (design Webhook Pipeline: media -> media/ volume)
     media_dir: str = "media"
 
+    # Panel (design D7; AP-1): secret used to SIGN the Starlette session
+    # cookie. Required at boot — an unsigned session cookie would be
+    # forgeable. SH-2: env-only, never in the repo.
+    panel_session_secret: str
+
 
 @lru_cache
 def get_settings() -> Settings:

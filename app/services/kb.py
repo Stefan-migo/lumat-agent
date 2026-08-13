@@ -159,6 +159,7 @@ def ingest_document(
     fmt: DocumentFormat,
     content: bytes,
     source_meta: dict | None = None,
+    actor: str = "system",
 ) -> KbDocument:
     """Create a document (version 1) and ingest its chunks (KB-1)."""
     doc = KbDocument(
@@ -176,7 +177,7 @@ def ingest_document(
     _store_chunks(session, doc, version=1, source_meta=source_meta)
     record_audit(
         session,
-        actor="system",
+        actor=actor,
         action="kb.document_ingest",
         entity="kb_document",
         entity_id=str(doc.id),
@@ -185,30 +186,40 @@ def ingest_document(
     return doc
 
 
-def update_document(session: Session, doc_id: int, new_content: str) -> KbDocument:
+def update_document(
+    session: Session,
+    doc_id: int,
+    new_content: str,
+    title: str | None = None,
+    actor: str = "system",
+) -> KbDocument:
     """Edit a document: new version + re-embed; prior version stays (KB-4)."""
     doc = session.get(KbDocument, doc_id)
     if doc is None:
         raise ValueError(f"kb document {doc_id} not found")
     new_version = doc.version + 1
     doc.content = new_content
+    if title is not None:
+        doc.title = title
     doc.version = new_version
     doc.active_version = new_version
     doc.active = True
     _store_chunks(session, doc, version=new_version, source_meta=None)
     record_audit(
         session,
-        actor="system",
+        actor=actor,
         action="kb.document_update",
         entity="kb_document",
         entity_id=str(doc.id),
         before={"version": new_version - 1},
-        after={"version": new_version},
+        after={"version": new_version, "title": doc.title},
     )
     return doc
 
 
-def restore_version(session: Session, doc_id: int, version: int) -> KbDocument:
+def restore_version(
+    session: Session, doc_id: int, version: int, actor: str = "system"
+) -> KbDocument:
     """Restore a prior version: active_version pointer flip (D8, no re-embed)."""
     doc = session.get(KbDocument, doc_id)
     if doc is None:
@@ -220,7 +231,7 @@ def restore_version(session: Session, doc_id: int, version: int) -> KbDocument:
     doc.active = True
     record_audit(
         session,
-        actor="system",
+        actor=actor,
         action="kb.document_restore",
         entity="kb_document",
         entity_id=str(doc.id),
@@ -230,7 +241,7 @@ def restore_version(session: Session, doc_id: int, version: int) -> KbDocument:
     return doc
 
 
-def disable_document(session: Session, doc_id: int) -> KbDocument:
+def disable_document(session: Session, doc_id: int, actor: str = "system") -> KbDocument:
     """Disable a document: excluded from retrieval, content kept (KB-3)."""
     doc = session.get(KbDocument, doc_id)
     if doc is None:
@@ -238,7 +249,7 @@ def disable_document(session: Session, doc_id: int) -> KbDocument:
     doc.active = False
     record_audit(
         session,
-        actor="system",
+        actor=actor,
         action="kb.document_disable",
         entity="kb_document",
         entity_id=str(doc_id),
