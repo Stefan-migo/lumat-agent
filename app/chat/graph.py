@@ -12,7 +12,16 @@ Batch 3 flow:
           kb_retrieve / respond -> respond (KB-grounded)
           escalate -> summary (escalation summary)
 
-Emergency and handoff gates land in Batch 4 (T4.2/T4.4).
+Batch 4 (T4.2) adds the deterministic emergency gate BEFORE any LLM:
+
+    emergency_gate -> emergency (strong/weak hit; no LLM)
+        emergency: strong -> safety protocol (EM-3), case flagged, state->human
+                   weak   -> escalate to a human (EM-5)
+        miss -> receive -> _flow_start (capture | classify_intent)
+
+The gate runs before `receive` too, so a first-contact emergency never mixes
+the greeting/menu into the safety protocol (EM-2 full flow interrupt). The
+handoff gate lands in T4.4.
 """
 
 from __future__ import annotations
@@ -22,6 +31,8 @@ from sqlalchemy.orm import Session
 
 from app.chat.nodes.capture import capture
 from app.chat.nodes.classify_intent import classify_intent
+from app.chat.nodes.emergency import emergency
+from app.chat.nodes.emergency_gate import emergency_gate
 from app.chat.nodes.receive import receive
 from app.chat.nodes.respond import respond
 from app.chat.nodes.route import route
@@ -40,6 +51,13 @@ def _flow_start(state: ConversationState) -> str:
     return "classify_intent"
 
 
+def _after_emergency_gate(state: ConversationState) -> str:
+    """Strong/weak hit -> emergency node (no LLM); miss -> normal flow."""
+    if state.emergency_hit in ("strong", "weak"):
+        return "emergency"
+    return "receive"
+
+
 def _route_path(state: ConversationState) -> str:
     return getattr(state, "next_step", None) or "respond"
 
@@ -55,16 +73,23 @@ def _after_respond(state: ConversationState) -> str:
 
 
 def build_graph():
-    """Build the compiled conversation graph (Batch 3 wiring)."""
+    """Build the compiled conversation graph (B3 flow + T4.2 emergency gate)."""
     builder = StateGraph(ConversationState)
+    builder.add_node("emergency_gate", emergency_gate)
     builder.add_node("receive", receive)
     builder.add_node("classify_intent", classify_intent)
     builder.add_node("route", route)
     builder.add_node("capture", capture)
     builder.add_node("respond", respond)
     builder.add_node("summary", summary)
+    builder.add_node("emergency", emergency)
 
-    builder.add_edge(START, "receive")
+    builder.add_edge(START, "emergency_gate")
+    builder.add_conditional_edges(
+        "emergency_gate",
+        _after_emergency_gate,
+        {"emergency": "emergency", "receive": "receive"},
+    )
     builder.add_conditional_edges(
         "receive",
         _flow_start,
@@ -83,6 +108,7 @@ def build_graph():
     )
     builder.add_conditional_edges("capture", _after_capture, {"summary": "summary", END: END})
     builder.add_conditional_edges("respond", _after_respond, {"summary": "summary", END: END})
+    builder.add_edge("emergency", END)
     builder.add_edge("summary", END)
     return builder.compile()
 

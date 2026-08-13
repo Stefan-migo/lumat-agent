@@ -58,6 +58,25 @@ DEFAULT_EMERGENCY_KEYWORDS: list[str] = [
     "filtración severa",
 ]
 
+# EM-3 (T4.2): safety protocol content delivered by the emergency node —
+# approved safety steps, emergency contacts and the technician-notified
+# confirmation. Panel-editable via the generic settings KV surface.
+DEFAULT_SAFETY_INSTRUCTIONS: list[str] = [
+    "Corta el suministro de gas solo si puedes hacerlo de forma segura.",
+    "Abre puertas y ventanas para ventilar el lugar.",
+    "No enciendas ni apagues luces, interruptores ni electrodomésticos.",
+    "Sal del lugar si el olor a gas es fuerte y avisa desde afuera.",
+    "No intentes reparar el equipo tú mismo.",
+]
+DEFAULT_EMERGENCY_CONTACTS: list[str] = [
+    "Emergencias: Bomberos 132 o Ambulancia 131.",
+    "Distribuidor de gas: el número de emergencia está en tu boleta o medidor.",
+    "Lumat: +56 9 1234 5678.",
+]
+DEFAULT_EMERGENCY_NOTIFY_MESSAGE: str = (
+    "Un técnico de Lumat ha sido notificado y te contactará a la brevedad."
+)
+
 # Built-in defaults for known keys. A missing row falls back to these instead
 # of None, so unconfigured keys still behave (SS-1..5 "works out of the box").
 # Message content defaults (`messages.greeting`, `messages.cannot_answer`, ...)
@@ -71,6 +90,10 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "scope_rules": {},
     # SS-2: emergency keyword list consumed by T4.2's regex compiler.
     "emergency.keywords": DEFAULT_EMERGENCY_KEYWORDS,
+    # EM-3: safety protocol content delivered by the emergency node (T4.2).
+    "emergency.safety_instructions": DEFAULT_SAFETY_INSTRUCTIONS,
+    "emergency.contacts": DEFAULT_EMERGENCY_CONTACTS,
+    "emergency.notify_message": DEFAULT_EMERGENCY_NOTIFY_MESSAGE,
     # SS-5: tone style used by the chat nodes (free string, panel-editable).
     "tone.style": DEFAULT_TONE_STYLE,
 }

@@ -223,6 +223,7 @@ class Case(Base):
     service: Mapped[str | None] = mapped_column(String(100))
     priority: Mapped[str | None] = mapped_column(String(20))
     status: Mapped[str | None] = mapped_column(String(50))
+    emergency: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     responsible_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     summary: Mapped[str | None] = mapped_column(Text)
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
