@@ -135,6 +135,16 @@ def combined_cost_mode(*modes: str) -> str:
     return "normal"
 
 
+def _limit(session: Session, scope: str) -> float:
+    """Configured spend limit for a scope ("conversation" | "daily")."""
+    default = (
+        float(DEFAULT_CONVERSATION_LIMIT)
+        if scope == "conversation"
+        else float(DEFAULT_DAILY_LIMIT)
+    )
+    return float(get_setting(session, f"cost.{scope}_limit", default=default))
+
+
 def conversation_cost_state(
     session: Session, conversation_id: int
 ) -> tuple[float, str]:
@@ -143,31 +153,16 @@ def conversation_cost_state(
     Total function used by the cost gate: reads the stored/ default
     ``cost.conversation_limit`` on every call (KV read, no cache).
     """
-    limit = float(
-        get_setting(
-            session, "cost.conversation_limit", default=float(DEFAULT_CONVERSATION_LIMIT)
-        )
+    percent = _percent(
+        conversation_spend(session, conversation_id), _limit(session, "conversation")
     )
-    percent = _percent(conversation_spend(session, conversation_id), limit)
     return percent, _mode_for(percent)
 
 
 def daily_cost_state(session: Session, day: date | None = None) -> tuple[float, str]:
     """SS-3: (percent, mode) of the UTC day against its limit."""
-    limit = float(
-        get_setting(session, "cost.daily_limit", default=float(DEFAULT_DAILY_LIMIT))
-    )
-    percent = _percent(daily_spend(session, day), limit)
+    percent = _percent(daily_spend(session, day), _limit(session, "daily"))
     return percent, _mode_for(percent)
-
-
-def _limit_for(session: Session, scope: str) -> float:
-    """The configured limit for a scope ("conversation" | "daily")."""
-    key = f"cost.{scope}_limit"
-    default = (
-        float(DEFAULT_CONVERSATION_LIMIT) if scope == "conversation" else float(DEFAULT_DAILY_LIMIT)
-    )
-    return float(get_setting(session, key, default=default))
 
 
 def maybe_alert_owner(
@@ -204,7 +199,7 @@ def maybe_alert_owner(
     )
     if existing is not None:
         return False
-    limit = _limit_for(session, scope)
+    limit = _limit(session, scope)
     record_audit(
         session,
         actor="system",
@@ -252,20 +247,14 @@ def spend_snapshot(session: Session, conversation_id: int | None = None) -> dict
     scope (T5.5 panel/settings view). No UI here — the panel consumes this.
     """
     today = datetime.now(timezone.utc).date()
-    conv_limit = float(
-        get_setting(session, "cost.conversation_limit", default=float(DEFAULT_CONVERSATION_LIMIT))
-    )
-    daily_limit = float(
-        get_setting(session, "cost.daily_limit", default=float(DEFAULT_DAILY_LIMIT))
-    )
     day_percent, day_mode = daily_cost_state(session)
     snapshot = {
         "date": today.isoformat(),
         "conversation_spend": None,
-        "conversation_limit": conv_limit,
+        "conversation_limit": _limit(session, "conversation"),
         "conversation_percent": None,
         "daily_spend": round(daily_spend(session), 4),
-        "daily_limit": daily_limit,
+        "daily_limit": _limit(session, "daily"),
         "daily_percent": round(day_percent, 2),
         "mode": day_mode,
     }
