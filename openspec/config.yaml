@@ -23,8 +23,8 @@ rules:
     - Keep tasks completable in one session
   apply:
     - Follow existing code patterns
-    tdd: false
-    test_command: ""
+    tdd: true
+    test_command: "pytest tests/"
   verify:
     test_command: ""
     build_command: ""
@@ -33,9 +33,9 @@ rules:
     - Warn before merging destructive deltas
 
 testing:
-  strict_tdd: false
-  detected: "2026-08-11"
-  runner: pytest (planned, H1)
+  strict_tdd: true
+  detected: "2026-08-12"
+  runner: pytest (active from B1, strict TDD)
   layers:
     unit: false
     integration: false
