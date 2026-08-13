@@ -26,6 +26,9 @@ def route(state: ConversationState) -> dict:
         return {"next_step": "escalate", "escalate": True, "escalate_reason": "persona"}
     if intent == "emergencia":
         return {"next_step": "escalate", "emergency": True, "escalate": True, "escalate_reason": "emergencia"}
+    if intent == "injection":
+        # SH-4: injection -> escalate (summary + human), never a tool/LLM answer
+        return {"next_step": "escalate", "escalate": True, "escalate_reason": "injection_detected"}
     if intent in CAPTURE_INTENTS:
         return {"next_step": "capture"}
     if intent in RETRIEVAL_INTENTS:
