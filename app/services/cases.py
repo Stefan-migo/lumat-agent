@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.chat.state import ConversationState
 from app.models import Case, Customer, Message
+from app.services.audit import record_audit
 
 
 def get_or_create_case(session: Session, conversation_id: int, customer_id: int) -> Case:
@@ -101,6 +102,67 @@ def create_handoff_case(
     case.escalated_at = datetime.now(timezone.utc)
     case.bundle = build_deriva_bundle(
         session, state, summary_text=summary_text, reason=reason
+    )
+    session.flush()
+    return case
+
+
+# ---------------------------------------------------------------------------
+# Panel operations (T5.3; HH-4, AP-5)
+# ---------------------------------------------------------------------------
+
+
+def list_open_cases(session: Session, limit: int = 100) -> list[Case]:
+    """HH-4: pending/escalated cases (open, not closed), escalated first.
+
+    The panel needs the customer next to each case, so rows are joined with
+    the customer record (the template renders name + phone).
+    """
+    return list(
+        session.execute(
+            select(Case, Customer)
+            .join(Customer, Case.customer_id == Customer.id)
+            .where(Case.closed_at.is_(None))
+            .order_by(
+                Case.escalated_at.desc().nulls_last(),
+                Case.created_at.desc(),
+                Case.id.desc(),
+            )
+            .limit(limit)
+        ).all()
+    )
+
+
+_UNSET = object()  # sentinel: distinguish "keep" from "explicitly clear"
+
+
+def update_case(
+    session: Session,
+    case: Case,
+    *,
+    status: str | None = None,
+    responsible_id: int | None | object = _UNSET,
+    actor: str = "system",
+) -> Case:
+    """AP-5: change case state and/or the responsible user; audited.
+
+    `status=None` keeps the current value; `responsible_id=None` (explicit)
+    CLEARS the assignment (the sentinel default means "keep"). Every change
+    writes an audit snapshot (SH-5). The caller commits.
+    """
+    before = {"status": case.status, "responsible_id": case.responsible_id}
+    if status is not None:
+        case.status = status
+    if responsible_id is not _UNSET:
+        case.responsible_id = responsible_id
+    record_audit(
+        session,
+        actor=actor,
+        action="case.updated",
+        entity="case",
+        entity_id=str(case.id),
+        before=before,
+        after={"status": case.status, "responsible_id": case.responsible_id},
     )
     session.flush()
     return case
