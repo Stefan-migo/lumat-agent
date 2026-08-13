@@ -32,6 +32,7 @@ from app.chat.state import (  # noqa: E402
 )
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
+    Case,
     Conversation,
     ConversationEvent,
     ConversationState as ConvState,
@@ -269,3 +270,240 @@ def test_scope_bot_resolve_category_does_not_escalate(mock_openai_chat):
     assert result["intent"] == "calefont"
     assert result["escalate"] is False
     assert result["next_step"] == "capture"
+
+
+# ---------------------------------------------------------------------------
+# HH-3 full flow — triggers converge on the handoff node (state -> human,
+# deriva case created, escalation + state_change events)
+# ---------------------------------------------------------------------------
+
+
+def _case(conv_id: int) -> Case:
+    with SessionLocal() as session:
+        return session.scalar(select(Case).where(Case.conversation_id == conv_id))
+
+
+def test_persona_escalates_to_human_with_deriva_case(mock_openai_chat):
+    """HH-3 "Customer requests a person": handoff with case + events."""
+    conv_id = _start_conversation()
+    replies = _turn(conv_id, "quiero hablar con una persona", "wamid.p1")
+
+    assert any("asesor" in r.lower() for r in replies)
+    assert _conversation_state(conv_id) == "human"  # HH-1: bot -> human
+
+    case = _case(conv_id)
+    assert case is not None
+    assert case.status == "escalado"
+    assert case.escalated_at is not None
+    assert case.bundle["escalate_reason"] == "persona"
+
+    events = _events(conv_id)
+    assert any(e.event == "escalation" and e.cause == "handoff:persona" for e in events)
+    assert any(
+        e.event == "state_change" and e.cause == "bot->human: handoff:persona"
+        for e in events
+    )
+
+
+def test_two_unknown_intents_escalate_to_human(mock_openai_chat):
+    """HH-3 "Two failed comprehension attempts": 2x unknown -> handoff."""
+    conv_id = _start_conversation()
+    _turn(conv_id, "zzzzzx", "wamid.u1")  # first unknown -> clarification
+    replies = _turn(conv_id, "qqqqqw", "wamid.u2")  # second -> handoff
+
+    assert any("asesor" in r.lower() for r in replies)
+    assert _conversation_state(conv_id) == "human"
+    case = _case(conv_id)
+    assert case.bundle["escalate_reason"] == "unknown_intent_twice"
+
+
+def test_complaint_escalates_to_human(mock_openai_chat):
+    """HH-3 complaint: deterministic keyword -> handoff before any LLM."""
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero hacer un reclamo", "wamid.c1")
+
+    assert _conversation_state(conv_id) == "human"
+    assert _case(conv_id).bundle["escalate_reason"] == "complaint"
+
+
+def test_media_evidence_escalates_through_process_message(mock_openai_chat, mock_meta_send):
+    """HH-3 evidence: an inbound image (no text) escalates for review."""
+    from app.webhook.ingest import process_message
+
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        session.add(
+            Message(
+                wamid="wamid.img1",
+                conversation_id=conv_id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.IMAGE,
+                status=MessageStatus.RECEIVED,
+            )
+        )
+        session.commit()
+        msg = session.scalars(
+            select(Message).where(Message.wamid == "wamid.img1")
+        ).one()
+        process_message(session, msg)
+        session.commit()
+
+    assert _conversation_state(conv_id) == "human"
+    case = _case(conv_id)
+    assert case.bundle["escalate_reason"] == "media_evidence"
+    assert any(m["msg_type"] == "image" for m in case.bundle["history"])
+
+
+# ---------------------------------------------------------------------------
+# HH-2 — deriva bundle content
+# ---------------------------------------------------------------------------
+
+
+def test_handoff_bundle_contains_history_summary_customer_captured(mock_openai_chat):
+    """HH-2 "Handoff bundle complete": history + summary + customer + captured."""
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.b1")
+    _turn(conv_id, "Juan", "wamid.b2")
+    _turn(conv_id, "Providencia", "wamid.b3")
+    _turn(conv_id, "estoy molesto, quiero reclamar", "wamid.b4")
+
+    with SessionLocal() as session:
+        conv = session.get(Conversation, conv_id)
+        assert conv.state.value == "human"
+        case = session.scalar(select(Case).where(Case.conversation_id == conv_id))
+        bundle = case.bundle
+
+        # summary generated at escalation (CM-5) and persisted on conv + case
+        assert bundle["summary"] is not None
+        assert "resumen" in bundle["summary"].lower()
+        assert case.summary == bundle["summary"]
+        assert conv.summary == bundle["summary"]
+
+        # customer ficha + captured fields
+        # (CR-6: ficha data lands at consent — the escalation happened before
+        # it, so the ficha name is None while the captured fields carry it)
+        assert bundle["customer"]["phone_e164"] == "+56912345678"
+        assert bundle["customer"]["name"] is None
+        assert bundle["captured"]["name"] == "Juan"
+        assert bundle["captured"]["comuna"] == "Providencia"
+        assert bundle["escalate_reason"] == "complaint"
+
+        # full history snapshot (inbound + bot replies)
+        history = bundle["history"]
+        assert len(history) >= 4
+        assert any("reclamar" in (m["text"] or "") for m in history)
+
+
+# ---------------------------------------------------------------------------
+# HH-5 — webhook keeps persisting during `human`, no bot loop
+# ---------------------------------------------------------------------------
+
+
+def test_hh5_human_state_persists_without_bot_reply(mock_openai_chat):
+    """HH-5: inbound during `human` is persisted; the bot never answers."""
+    from app.webhook.ingest import process_message
+
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero hablar con una persona", "wamid.h51")  # -> human
+
+    with SessionLocal() as session:
+        session.add(
+            Message(
+                wamid="wamid.h52",
+                conversation_id=conv_id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="sigo esperando respuesta",
+                status=MessageStatus.RECEIVED,
+            )
+        )
+        session.commit()
+        msg = session.scalars(
+            select(Message).where(Message.wamid == "wamid.h52")
+        ).one()
+        calls_before = len(mock_openai_chat)
+        process_message(session, msg)
+        session.commit()
+        assert msg.status == MessageStatus.PROCESSED  # persisted (HH-5)
+
+    # no new bot reply, no LLM call for the human-phase message
+    with SessionLocal() as session:
+        outbound = list(
+            session.scalars(
+                select(Message).where(
+                    Message.conversation_id == conv_id,
+                    Message.direction == MessageDirection.OUTBOUND,
+                )
+            )
+        )
+    assert all("asesor" in (m.text or "") for m in outbound)  # only the handoff reply
+    assert len(mock_openai_chat) == calls_before
+
+
+def test_hh5_human_state_graph_direct_still_persists_events(mock_openai_chat):
+    """HH-5: a direct graph run on a human conversation never re-escalates.
+
+    The no-bot-loop guard lives at the ingest boundary (process_message);
+    run_conversation itself is state-agnostic (D2) and classifies the turn,
+    but a human conversation never re-enters the escalation flow.
+    """
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero hablar con una persona", "wamid.h53")
+    escalations_before = [
+        e
+        for e in _events(conv_id)
+        if e.event in ("escalation", "state_change")
+    ]
+    _turn(conv_id, "algo mas", "wamid.h54")
+    escalations_after = [
+        e
+        for e in _events(conv_id)
+        if e.event in ("escalation", "state_change")
+    ]
+    assert len(escalations_after) == len(escalations_before)  # no re-escalation
+
+
+# ---------------------------------------------------------------------------
+# CR-5 — closed conversation -> new conversation on next inbound (ingest path)
+# ---------------------------------------------------------------------------
+
+
+def test_cr5_closed_opens_new_conversation_through_ingest():
+    """CR-5: a closed conversation never reopens; the next inbound lands in a
+    new conversation on the same customer (history stays linked)."""
+    from app.webhook.ingest import NormalizedMessage, persist_message
+
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, "+56912345678")
+        first = get_or_create_conversation(session, customer, "+56912345678")
+        set_conversation_state(session, first, ConvState.CLOSED, cause="resolved")
+        session.commit()
+        customer_id = customer.id
+        first_id = first.id
+
+    nm = NormalizedMessage(
+        wamid="wamid.cr51",
+        phone_e164="+56912345678",
+        msg_type=MessageType.TEXT,
+        text="nueva consulta",
+        media_url=None,
+        payload={},
+    )
+    with SessionLocal() as session:
+        # persist_message's boolean reflects ON CONFLICT dedup (latent psycopg
+        # rowcount quirk returns False even for new rows) — the acceptance is
+        # the persisted row landing in a NEW conversation, asserted below.
+        persist_message(session, nm)
+        session.commit()
+        conversations = list(
+            session.scalars(
+                select(Conversation)
+                .where(Conversation.customer_id == customer_id)
+                .order_by(Conversation.id)
+            )
+        )
+        assert [c.id for c in conversations] == [first_id, conversations[-1].id]
+        assert conversations[0].state.value == "closed"
+        assert conversations[1].state.value == "bot"
+        msg = session.scalars(select(Message).where(Message.wamid == "wamid.cr51")).one()
+        assert msg.conversation_id == conversations[1].id  # new conversation

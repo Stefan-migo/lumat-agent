@@ -30,10 +30,19 @@ def _current_text(state: ConversationState) -> str:
 
 
 def emergency_gate(state: ConversationState) -> dict:
-    """Classify the current message; store `emergency_hit` for the router."""
+    """Classify the current message; store `emergency_hit` for the router.
+
+    A weak hit also labels `escalate_reason` (EM-5): since T4.4 the graph
+    routes weak hits to the handoff node, and the label keeps the deriva
+    bundle/events distinguishable from the other handoff triggers.
+    """
     text = _current_text(state)
     if not text:
         return {"emergency_hit": None}
     with session_scope() as session:
         pattern = compile_keywords(get_emergency_keywords(session))
-    return {"emergency_hit": classify_emergency(text, pattern)}
+    hit = classify_emergency(text, pattern)
+    result = {"emergency_hit": hit}
+    if hit == "weak":
+        result["escalate_reason"] = "emergency_weak_hit"
+    return result

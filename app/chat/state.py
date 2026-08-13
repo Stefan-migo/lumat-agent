@@ -133,6 +133,8 @@ class ConversationState:
     emergency: bool = False
     # set by the emergency_gate: "strong" | "weak" | None (EM-1/EM-5, T4.2)
     emergency_hit: str | None = None
+    # set by the handoff_gate: deterministic pre-LLM trigger (HH-3, T4.4)
+    handoff_reason: str | None = None
     escalate: bool = False
     escalate_reason: str | None = None
     unknown_count: int = 0

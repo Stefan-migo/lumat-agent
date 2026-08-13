@@ -12,16 +12,26 @@ Batch 3 flow:
           kb_retrieve / respond -> respond (KB-grounded)
           escalate -> summary (escalation summary)
 
-Batch 4 (T4.2) adds the deterministic emergency gate BEFORE any LLM:
+Batch 4 adds the deterministic gates before any LLM:
 
-    emergency_gate -> emergency (strong/weak hit; no LLM)
+    emergency_gate -> emergency (strong hit; no LLM) | handoff (weak hit)
         emergency: strong -> safety protocol (EM-3), case flagged, state->human
-                   weak   -> escalate to a human (EM-5)
-        miss -> receive -> _flow_start (capture | classify_intent)
+        weak -> handoff node (EM-5: same human/escalate flow as T4.4)
+        miss -> handoff_gate
+    handoff_gate -> handoff (deterministic trigger; no LLM) | receive
 
+Batch 4 (T4.4) adds the handoff node, which owns every escalation:
+
+    handoff_gate (persona/media/complaint) -> handoff
+    emergency_gate weak hit -> handoff
+    classify_intent 2x unknown / SS-1 always_escalate -> route escalate -> handoff
+    injection (SH-4) -> route escalate -> handoff
+    respond KB miss -> handoff
+
+The handoff node builds the HH-2 deriva bundle (case row), transitions the
+conversation bot -> human (HH-1) and replies that a human will take over.
 The gate runs before `receive` too, so a first-contact emergency never mixes
-the greeting/menu into the safety protocol (EM-2 full flow interrupt). The
-handoff gate lands in T4.4.
+the greeting/menu into the safety protocol (EM-2 full flow interrupt).
 """
 
 from __future__ import annotations
@@ -33,6 +43,8 @@ from app.chat.nodes.capture import capture
 from app.chat.nodes.classify_intent import classify_intent
 from app.chat.nodes.emergency import emergency
 from app.chat.nodes.emergency_gate import emergency_gate
+from app.chat.nodes.handoff import handoff
+from app.chat.nodes.handoff_gate import handoff_gate
 from app.chat.nodes.receive import receive
 from app.chat.nodes.respond import respond
 from app.chat.nodes.route import route
@@ -52,10 +64,17 @@ def _flow_start(state: ConversationState) -> str:
 
 
 def _after_emergency_gate(state: ConversationState) -> str:
-    """Strong/weak hit -> emergency node (no LLM); miss -> normal flow."""
-    if state.emergency_hit in ("strong", "weak"):
+    """Strong -> emergency protocol; weak -> handoff (EM-5); miss -> handoff_gate."""
+    if state.emergency_hit == "strong":
         return "emergency"
-    return "receive"
+    if state.emergency_hit == "weak":
+        return "handoff"
+    return "handoff_gate"
+
+
+def _after_handoff_gate(state: ConversationState) -> str:
+    """Deterministic trigger -> handoff node; clear -> normal flow."""
+    return "handoff" if state.handoff_reason else "receive"
 
 
 def _route_path(state: ConversationState) -> str:
@@ -68,14 +87,15 @@ def _after_capture(state: ConversationState) -> str:
 
 
 def _after_respond(state: ConversationState) -> str:
-    # KB miss escalates -> summary at escalation (CM-5); answers end the turn
-    return "summary" if state.escalate else END
+    # KB miss escalates -> handoff (deriva bundle); answers end the turn
+    return "handoff" if state.escalate else END
 
 
 def build_graph():
-    """Build the compiled conversation graph (B3 flow + T4.2 emergency gate)."""
+    """Build the compiled conversation graph (B3 flow + T4.2/T4.4 gates)."""
     builder = StateGraph(ConversationState)
     builder.add_node("emergency_gate", emergency_gate)
+    builder.add_node("handoff_gate", handoff_gate)
     builder.add_node("receive", receive)
     builder.add_node("classify_intent", classify_intent)
     builder.add_node("route", route)
@@ -83,12 +103,18 @@ def build_graph():
     builder.add_node("respond", respond)
     builder.add_node("summary", summary)
     builder.add_node("emergency", emergency)
+    builder.add_node("handoff", handoff)
 
     builder.add_edge(START, "emergency_gate")
     builder.add_conditional_edges(
         "emergency_gate",
         _after_emergency_gate,
-        {"emergency": "emergency", "receive": "receive"},
+        {"emergency": "emergency", "handoff": "handoff", "handoff_gate": "handoff_gate"},
+    )
+    builder.add_conditional_edges(
+        "handoff_gate",
+        _after_handoff_gate,
+        {"handoff": "handoff", "receive": "receive"},
     )
     builder.add_conditional_edges(
         "receive",
@@ -103,11 +129,12 @@ def build_graph():
             "capture": "capture",
             "kb_retrieve": "respond",
             "respond": "respond",
-            "escalate": "summary",
+            "escalate": "handoff",
         },
     )
     builder.add_conditional_edges("capture", _after_capture, {"summary": "summary", END: END})
-    builder.add_conditional_edges("respond", _after_respond, {"summary": "summary", END: END})
+    builder.add_conditional_edges("respond", _after_respond, {"handoff": "handoff", END: END})
+    builder.add_edge("handoff", END)
     builder.add_edge("emergency", END)
     builder.add_edge("summary", END)
     return builder.compile()

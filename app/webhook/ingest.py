@@ -30,10 +30,13 @@ from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.chat.graph import run_conversation
+from app.chat.nodes.handoff_gate import MEDIA_EVIDENCE_TYPES
 from app.chat.state import get_or_create_conversation
 from app.config import get_settings
 from app.db import session_scope
 from app.models import (
+    Conversation,
+    ConversationState,
     Message,
     MessageDirection,
     MessageStatus,
@@ -329,18 +332,34 @@ def process_message(session, message: Message) -> None:
     outbound replies (T3.5) and delivers them via Meta (T3.6). The status
     transition received -> processed happens after a successful run; a failed
     download keeps the message `received` so the sweep retries it (WH-4).
+
+    HH-5 (T4.4): during `human` state the webhook keeps persisting every
+    message (complete history retained) but the bot never runs again — the
+    human owns the channel in H1 (replies from the WhatsApp app on the same
+    number, no panel reply). Ack handling still runs (a customer "ok" acks an
+    unacked emergency); no LLM call, no outbound delivery.
+
+    HH-3 (T4.4): media-only inbound (photo/video/audio/document) runs the
+    graph too, so the handoff gate can escalate evidence for technical review
+    (previously a media message was silently persisted without any answer).
     """
     if message.media_url:
         settings = get_settings()
         download_media(
             message.media_url, message.wamid, settings.meta_access_token, settings.media_dir
         )
-    if message.direction == MessageDirection.INBOUND and message.text:
-        # EM-4 ack (T4.3.2): a reply-keyword ack is recorded on the emergency
-        # case BEFORE the graph runs — deterministic, audited, no-op otherwise.
-        acknowledge_emergency_if_ack(session, message.conversation_id, message.text)
-        run_conversation(session, message)
-        deliver_outbound(session, message.conversation_id)
+    if message.direction == MessageDirection.INBOUND:
+        if message.text:
+            # EM-4 ack (T4.3.2): a reply-keyword ack is recorded on the emergency
+            # case BEFORE the graph runs — deterministic, audited, no-op otherwise.
+            acknowledge_emergency_if_ack(session, message.conversation_id, message.text)
+        conversation = session.get(Conversation, message.conversation_id)
+        if conversation is not None and conversation.state == ConversationState.HUMAN:
+            message.status = MessageStatus.PROCESSED  # HH-5: persisted, never retried
+            return
+        if message.text or message.msg_type in MEDIA_EVIDENCE_TYPES:
+            run_conversation(session, message)
+            deliver_outbound(session, message.conversation_id)
     message.status = MessageStatus.PROCESSED
 
 

@@ -227,19 +227,31 @@ def test_strong_hit_mid_capture_interrupts(mock_openai_chat, mock_meta_send):
 
 
 def test_weak_hit_escalates_to_human(mock_openai_chat):
-    """EM-5: ambiguous risk escalates to a human, never ignored."""
+    """EM-5: ambiguous risk escalates to a human, never ignored.
+
+    T4.4: the weak path converges on the handoff node — the deriva case is
+    created (HH-2) but WITHOUT the emergency protocol flags (EM-3 is strong
+    only). Deterministic gate: no classify/respond call ever carries the
+    customer text (D4); the only LLM call is the internal escalation summary.
+    """
     conv_id = _start_conversation()
     replies = _turn(conv_id, "huele raro el calefont", "wamid.emw1")
 
     assert any("asesor" in r.lower() for r in replies)
     assert not any("INSTRUCCIONES DE SEGURIDAD" in r for r in replies)
-    assert len(mock_openai_chat) == 0  # deterministic escalation, no LLM
+    # only the internal summary call runs — never a classification of the text
+    assert len(mock_openai_chat) == 1
+    assert not any(
+        "<user_input>" in c["messages"][-1]["content"] for c in mock_openai_chat
+    )
 
     with SessionLocal() as session:
         conv = session.get(Conversation, conv_id)
         assert conv.state.value == "human"  # escalated to a human
         case = session.scalar(select(Case).where(Case.conversation_id == conv_id))
-        assert case is None  # weak hit escalates without an emergency case
+        assert case is not None  # handoff deriva case (HH-2)
+        assert case.emergency is False  # weak hit is a handoff, not the protocol
+        assert case.bundle["escalate_reason"] == "emergency_weak_hit"
 
 
 def test_benign_text_passes_through_normal_flow(mock_openai_chat):
