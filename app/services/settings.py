@@ -94,6 +94,10 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     # SS-4: Meta service-message unit cost (USD), effective 2026-10-01.
     # Reference placeholder until verified with Meta at activation (T4.5).
     "meta_pricing": {"service_message_cost": 0.01},
+    # SS-3: cost guardrail limits (USD) — per conversation and per UTC day.
+    # T4.5 consumes them via costs.conversation_cost_state/daily_cost_state.
+    "cost.conversation_limit": 1.50,
+    "cost.daily_limit": 5.00,
     # SS-1: category -> "bot_resolve" | "always_escalate". Empty = all resolve.
     "scope_rules": {},
     # SS-2: emergency keyword list consumed by T4.2's regex compiler.
