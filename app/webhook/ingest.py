@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 import httpx
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.chat.graph import run_conversation
@@ -340,32 +340,69 @@ def process_message(session, message: Message) -> None:
     message.status = MessageStatus.PROCESSED
 
 
+def reset_stale_processing() -> int:
+    """Crash recovery: reset `processing` rows back to `received` at startup.
+
+    The claim pattern below sets `processing` in a short transaction; a hard
+    crash mid-processing would leave a row stuck there. Single worker + boot
+    sweep means no processing is active at startup, so a blanket reset is safe.
+    """
+    with session_scope() as session:
+        result = session.execute(
+            update(Message)
+            .where(Message.status == MessageStatus.PROCESSING)
+            .values(status=MessageStatus.RECEIVED)
+        )
+        return result.rowcount
+
+
 def sweep_received(limit: int = 50) -> int:
     """Process messages stuck in `received` (BackgroundTask + startup sweep).
 
-    FOR UPDATE SKIP LOCKED so concurrent sweeps (background + startup) never
-    process the same row twice (WH-7: no duplicate side effects). Unexpected
-    failures mark the row `failed` (retried never; raw payload still stored).
+    Claim pattern (WH-7: no duplicate side effects): a short transaction
+    SELECTs received ids FOR UPDATE SKIP LOCKED and flips them to `processing`
+    (releasing the locks), then each message is processed in its OWN session.
+    Holding the FOR UPDATE lock across the graph run would deadlock — the
+    graph nodes persist in separate sessions (case, captured, cost_llm on the
+    very row the sweep would be locking).
+
+    Failures: media download -> back to `received` (retry); anything else ->
+    `failed` (raw payload still stored). Hard-crash rows stay `processing`
+    until the next boot's `reset_stale_processing`.
     """
-    processed = 0
     with session_scope() as session:
-        rows = session.scalars(
-            select(Message)
+        claimed_ids = session.scalars(
+            select(Message.id)
             .where(Message.status == MessageStatus.RECEIVED)
             .order_by(Message.id)
             .limit(limit)
             .with_for_update(skip_locked=True)
         ).all()
-        for message in rows:
-            try:
+        if claimed_ids:
+            session.execute(
+                update(Message)
+                .where(Message.id.in_(claimed_ids))
+                .values(status=MessageStatus.PROCESSING)
+            )
+
+    processed = 0
+    for message_id in claimed_ids:
+        try:
+            with session_scope() as session:
+                message = session.get(Message, message_id)
                 process_message(session, message)
-                processed += 1
-            except MediaDownloadError:
-                # keep status='received' -> next sweep retries the download
-                logger.warning(
-                    "media download failed for %s; will retry on next sweep", message.wamid
-                )
-            except Exception:
-                logger.exception("processing failed for wamid=%s; marking failed", message.wamid)
+            processed += 1
+        except MediaDownloadError:
+            # keep status='received' -> next sweep retries the download
+            with session_scope() as session:
+                message = session.get(Message, message_id)
+                message.status = MessageStatus.RECEIVED
+            logger.warning(
+                "media download failed for message %s; will retry on next sweep", message_id
+            )
+        except Exception:
+            logger.exception("processing failed for message %s; marking failed", message_id)
+            with session_scope() as session:
+                message = session.get(Message, message_id)
                 message.status = MessageStatus.FAILED
     return processed

@@ -157,6 +157,12 @@ def test_cm3_intent_classified(mock_chat):
 
     assert result["intent"] == "calefont"
     assert result["escalate"] is False
+    # the classification LLM call recorded cost_llm (D6 tracking)
+    with SessionLocal() as session:
+        msg = session.scalars(
+            select(Message).where(Message.wamid == "wamid.intent")
+        ).one()
+        assert msg.cost_llm is not None and float(msg.cost_llm) > 0
 
 
 def test_cm3_case_classification_stored(mock_chat):

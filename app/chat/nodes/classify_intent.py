@@ -26,8 +26,8 @@ from app.chat.state import ConversationState
 from app.db import session_scope
 from app.models import Case, ConversationEvent
 from app.services.audit import record_audit
+from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
-from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -76,8 +76,11 @@ def _current_text(state: ConversationState) -> str:
     return state.window[-1]["text"] if state.window else ""
 
 
-def _llm_classify(text: str) -> dict:
-    """Call gpt-4o-mini with input-as-data (SH-4); returns the parsed JSON."""
+def _llm_classify(text: str, message_id: int) -> dict:
+    """Call gpt-4o-mini with input-as-data (SH-4); returns the parsed JSON.
+
+    Records the token cost on the current message (D6 via costs.py).
+    """
     client = openai_client()
     response = client.chat.completions.create(
         model=CHAT_MODEL,
@@ -87,6 +90,14 @@ def _llm_classify(text: str) -> dict:
         ],
         temperature=0,
     )
+    with session_scope() as session:
+        record_llm_cost(
+            session,
+            message_id=message_id,
+            model=CHAT_MODEL,
+            prompt_tokens=response.usage.prompt_tokens,
+            completion_tokens=response.usage.completion_tokens,
+        )
     content = response.choices[0].message.content or "{}"
     parsed = json.loads(content)
     return {
@@ -172,7 +183,7 @@ def classify_intent(state: ConversationState) -> dict:
         }
 
     try:
-        result = _llm_classify(text)
+        result = _llm_classify(text, message_id=state.window[-1]["id"] if state.window else 0)
     except Exception:
         logger.exception("LLM classify failed for conversation %s", state.conversation_id)
         result = {"intent": "unknown"}
