@@ -228,6 +228,13 @@ class Case(Base):
     summary: Mapped[str | None] = mapped_column(Text)
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 005: EM-4 notification state (T4.3) — notified_at set when the owner/
+    # technician notification was delivered on ANY channel (whatsapp/email);
+    # the reminder sweep keys off it. acknowledged_at/ack_by record the ack.
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ack_by: Mapped[str | None] = mapped_column(String(100))
+    reminder_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class CustomerNote(Base):

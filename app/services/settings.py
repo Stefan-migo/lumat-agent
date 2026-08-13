@@ -77,6 +77,14 @@ DEFAULT_EMERGENCY_NOTIFY_MESSAGE: str = (
     "Un técnico de Lumat ha sido notificado y te contactará a la brevedad."
 )
 
+# EM-4 (T4.3): owner/technician notification channel defaults. The WhatsApp
+# utility template goes to the owner number (business-initiated send outside
+# any 24h window — design D9); the email fallback / reminders use owner_email.
+DEFAULT_OWNER_EMAIL: str = "emergencias@lumat.cl"
+DEFAULT_OWNER_WHATSAPP: str = "+56912345678"
+DEFAULT_SMTP_HOST: str = "localhost"
+DEFAULT_SMTP_FROM: str = "notificaciones@lumat.cl"
+
 # Built-in defaults for known keys. A missing row falls back to these instead
 # of None, so unconfigured keys still behave (SS-1..5 "works out of the box").
 # Message content defaults (`messages.greeting`, `messages.cannot_answer`, ...)
@@ -94,6 +102,12 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "emergency.safety_instructions": DEFAULT_SAFETY_INSTRUCTIONS,
     "emergency.contacts": DEFAULT_EMERGENCY_CONTACTS,
     "emergency.notify_message": DEFAULT_EMERGENCY_NOTIFY_MESSAGE,
+    # EM-4: owner/technician notification channel (T4.3) — WhatsApp template
+    # recipient + email fallback SMTP config. Panel-editable via the KV surface.
+    "notify.owner_email": DEFAULT_OWNER_EMAIL,
+    "notify.owner_whatsapp": DEFAULT_OWNER_WHATSAPP,
+    "notify.smtp_host": DEFAULT_SMTP_HOST,
+    "notify.smtp_from": DEFAULT_SMTP_FROM,
     # SS-5: tone style used by the chat nodes (free string, panel-editable).
     "tone.style": DEFAULT_TONE_STYLE,
 }

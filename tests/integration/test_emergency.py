@@ -196,7 +196,7 @@ def _turn(conv_id: int, text: str, wamid: str) -> list[str]:
         return replies
 
 
-def test_strong_hit_mid_capture_interrupts(mock_openai_chat):
+def test_strong_hit_mid_capture_interrupts(mock_openai_chat, mock_meta_send):
     """EM-2: a strong hit abandons the capture flow and runs the protocol."""
     conv_id = _start_conversation()
     _turn(conv_id, "mi calefont falla", "wamid.ema1")  # capture starts
@@ -256,7 +256,7 @@ def test_benign_text_passes_through_normal_flow(mock_openai_chat):
         assert conv.state.value == "bot"  # untouched by the gate
 
 
-def test_custom_keyword_from_settings_detected(mock_openai_chat):
+def test_custom_keyword_from_settings_detected(mock_openai_chat, mock_meta_send):
     """EM-1 'Keyword configured': a settings change applies on the next message."""
     conv_id = _start_conversation()
     with SessionLocal() as session:

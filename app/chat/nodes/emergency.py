@@ -34,8 +34,10 @@ from app.models import (
     Conversation,
     ConversationEvent,
     ConversationState as ConversationStateEnum,
+    Customer,
 )
 from app.services.audit import record_audit
+from app.services.notify import send_emergency_notification
 from app.services.settings import (
     DEFAULT_EMERGENCY_CONTACTS,
     DEFAULT_EMERGENCY_NOTIFY_MESSAGE,
@@ -100,6 +102,24 @@ def emergency(state: ConversationState) -> dict:
                 entity_id=str(state.conversation_id),
                 after={"hit": "strong"},
             )
+            # EM-4: notify the owner/technician (WhatsApp template, email
+            # fallback). `send_emergency_notification` never raises and audits
+            # its own attempts; the outer guard keeps a notification bug from
+            # ever blocking the safety reply (EM-3). One notification per
+            # emergency — a delivered one (notified_at set) is not re-sent;
+            # a failed one (notified_at still None) retries on the next hit.
+            if case.notified_at is None:
+                try:
+                    customer = session.get(Customer, state.customer_id)
+                    context = state.window[-1]["text"] if state.window else ""
+                    send_emergency_notification(
+                        session, case, customer, conversation, context=context
+                    )
+                except Exception:
+                    logger.exception(
+                        "emergency notification failed for conversation %s",
+                        state.conversation_id,
+                    )
             replies = _protocol_replies(session)
         else:
             session.add(
