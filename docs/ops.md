@@ -66,7 +66,7 @@ credentials.**
 ## 2. Ops Runbook (T6.5)
 
 > Real paths below assume the deploy layout: repo cloned to `/opt/lumat` on
-> the VPS, deploy user `deploy`, containers `lumat-api` / `lumat-db`, volumes
+> the VPS, deploy user `deploy`, containers `lumat-api-1` / `lumat-db-1` (compose `--project-name lumat` names), volumes
 > `lumat_db` / `lumat_media` / `lumat_backups` (names from
 > `infra/docker-compose.yml`; prod override `infra/docker-compose.prod.yml`).
 > All commands run as `deploy` unless marked `sudo`.
@@ -128,11 +128,11 @@ scratch DB, verify row counts, drop the scratch DB:
 
 ```bash
 DUMP=$(ls -t /var/lib/docker/volumes/lumat_backups/_data/*.sql.gz | head -1)
-docker exec lumat-db sh -c 'gunzip -c < /backups/'"$(basename "$DUMP")" \
+docker exec lumat-db-1 sh -c 'gunzip -c < /backups/'"$(basename "$DUMP")" \
   '| psql -U lumat -d lumat_restore_test'
-docker exec lumat-db psql -U lumat -d lumat_restore_test -Atc \
+docker exec lumat-db-1 psql -U lumat -d lumat_restore_test -Atc \
   'SELECT count(*) FROM customers;'          # matches production count
-docker exec lumat-db psql -U lumat -c 'DROP DATABASE lumat_restore_test;'
+docker exec lumat-db-1 psql -U lumat -c 'DROP DATABASE lumat_restore_test;'
 ```
 
 ### 2.4 Emergency ack flow
@@ -151,7 +151,7 @@ Operator actions:
 
 ```bash
 # view pending emergency cases (panel UI, or psql for triage):
-docker exec lumat-db psql -U lumat -d lumat -c \
+docker exec lumat-db-1 psql -U lumat -d lumat -c \
   "SELECT id, customer_id, status, escalated_at FROM cases WHERE status='escalado' ORDER BY escalated_at;"
 ```
 
@@ -191,7 +191,7 @@ audited (`settings.change`, before/after values — SH-5).
 
 ```bash
 # via the panel (recommended), or psql for a fast change:
-docker exec lumat-db psql -U lumat -d lumat -c \
+docker exec lumat-db-1 psql -U lumat -d lumat -c \
   "UPDATE settings SET value='{\"calefont\": \"always_escalate\"}'::jsonb WHERE key='scope_rules';"
 ```
 

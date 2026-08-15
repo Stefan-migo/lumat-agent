@@ -1,24 +1,37 @@
 # LumatAgent — Server Hardening Checklist (SH-1..SH-3)
 
-> Change: `hito-1-setup-whatsapp` · Task: **T6.4** · Executed on the H1 VPS during **T7.1**
+> Change: `hito-1-setup-whatsapp` · Task: **T6.4** (doc) / **T7.1** (execution) · Date: 2026-08-15
 > Target: Hostinger KVM 2 — Ubuntu LTS (São Paulo), Docker + Compose
 > Hosts: `agente.lumat.cl` (bot API) · `panel.lumat.cl` (admin panel)
 > How to use: run every block as `root` (sections 1–4) or `deploy` (5–9) on the
 > production server; paste the real output under each block; tick the box with
 > date + initials when the expected output matches. The go-live record in
-> `docs/ops.md` §10 links to this executed checklist.
+> `docs/ops.md` §2.9 links to this executed checklist.
+>
+> **T7.1 execution note (2026-08-15)**: all 9 sections were executed and
+> recorded against a **local Ubuntu Server 24.04 rehearsal VM** (libvirt/KVM,
+> same Docker+Compose+ufw+fail2ban setup as the VPS) BEFORE provisioning any
+> Hostinger VPS. Deviations vs the VPS, all documented per-section:
+> - §4 TLS uses a **self-signed cert at the same live paths** (no public DNS
+>   locally) — the nginx server blocks are identical; Let's Encrypt real
+>   issuance + `certbot renew --dry-run` run on the VPS at T7.2.
+> - §7/§8 backup/monitor crons run under **root's crontab** (the docker volume
+>   host path `/var/lib/docker/volumes/…` is root-only; the api *container*
+>   still runs non-root — §5).
+> - SMTP alert delivery (§8) is VPS-only (no relay locally); the failure path
+>   and env guard were verified in T6.6.
 
 | # | Check | SH req | Status |
 |---|-------|--------|--------|
-| 1 | Firewall: 80/443/SSH only | SH-1 | ⬜ |
-| 2 | SSH key-only + fail2ban | SH-1 | ⬜ |
-| 3 | Non-root deploy user | SH-1 | ⬜ |
-| 4 | TLS + auto-renew | SH-1 | ⬜ |
-| 5 | Container hardening (read-only fs) | SH-2 | ⬜ |
-| 6 | Secrets env-only | SH-2 | ⬜ |
-| 7 | Backups: schedule + retention | SH-3 | ⬜ |
-| 8 | Monitoring: checks + alert | SH-3 | ⬜ |
-| 9 | Audit grants append-only | SH-5 | ⬜ |
+| 1 | Firewall: 80/443/SSH only | SH-1 | ✅ 2026-08-15 (VM) |
+| 2 | SSH key-only + fail2ban | SH-1 | ✅ 2026-08-15 (VM) |
+| 3 | Non-root deploy user | SH-1 | ✅ 2026-08-15 (VM) |
+| 4 | TLS + auto-renew | SH-1 | ✅ 2026-08-15 (VM, self-signed; LE on VPS) |
+| 5 | Container hardening (read-only fs) | SH-2 | ✅ 2026-08-15 (VM) |
+| 6 | Secrets env-only | SH-2 | ✅ 2026-08-15 (VM) |
+| 7 | Backups: schedule + retention | SH-3 | ✅ 2026-08-15 (VM) |
+| 8 | Monitoring: checks + alert | SH-3 | ✅ 2026-08-15 (VM) |
+| 9 | Audit grants append-only | SH-5 | ✅ 2026-08-15 (VM) |
 
 ---
 
@@ -51,10 +64,19 @@ Verify: a probe from outside to any other port (e.g. `nc -vz <server-ip> 5432`)
 times out / is filtered — connection is dropped (SH-1 "Firewall blocks
 unexpected port").
 
-- [ ] **SH-1 firewall verified — date/initials:**
+- [x] **SH-1 firewall verified — 2026-08-15 (VM):**
 
 ```bash
 # pasted real output here:
+$ ufw status verbose
+Status: active
+Logging: on (low)
+Default: deny (incoming), allow (outgoing), deny (routed)
+To                         Action      From
+--                         ------      ----
+80/tcp                     ALLOW IN    Anywhere
+443/tcp                    ALLOW IN    Anywhere
+22/tcp                     ALLOW IN    Anywhere
 ```
 
 ---
@@ -96,11 +118,26 @@ Expected output (last command): `Status for the jail: sshd` with
 Verify: log out and back in with your key only; a password login attempt is
 rejected before any prompt.
 
-- [ ] **SH-1 SSH verified — date/initials:**
+- [x] **SH-1 SSH verified — 2026-08-15 (VM):**
 
 ```bash
 # pasted real output here:
+$ sudo sshd -T | grep -Ei 'passwordauthentication|permitrootlogin'
+permitrootlogin without-password
+passwordauthentication no
+$ sudo fail2ban-client status sshd
+Status for the jail: sshd
+|- Filter
+|  |- Currently failed:  0
+|  |- Total failed:      0
+`- Actions
+   |- Currently banned:  0
+   |- Total banned:      0
+   `- Banned IP list:
 ```
+
+> Ubuntu 24.04 prints `permitrootlogin without-password` for the configured
+> `prohibit-password` (same semantics: key-only root login).
 
 ---
 
@@ -123,10 +160,14 @@ with the key and lands in `/home/deploy`. The API never runs as root:
 compose runs under the `deploy` user and the api container runs its own
 non-root user (see section 5).
 
-- [ ] **SH-1 non-root user verified — date/initials:**
+- [x] **SH-1 non-root user verified — 2026-08-15 (VM):**
 
 ```bash
 # pasted real output here:
+$ sudo -u deploy whoami
+deploy
+$ getent group docker
+docker:x:112:ubuntu,deploy
 ```
 
 ---
@@ -136,24 +177,59 @@ non-root user (see section 5).
 Prerequisite: DNS `A` records for `agente.lumat.cl` and `panel.lumat.cl`
 pointing at the VPS IP (client, week 1–2).
 
+TLS runs in containers (T7.1, `infra/docker-compose.prod.yml`): nginx
+terminates TLS, the `certbot` service issues/renews via the webroot challenge
+into the `certbot-certs` volume. First issuance on the VPS:
+
 ```bash
-apt install -y nginx certbot python3-certbot-nginx
-certbot --nginx -d agente.lumat.cl -d panel.lumat.cl
-systemctl list-timers | grep certbot
-certbot renew --dry-run
+cd /opt/lumat
+docker compose --profile certbot -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml run --rm certbot \
+  certonly --webroot -w /var/www/certbot \
+  -d agente.lumat.cl -d panel.lumat.cl \
+  --email ops@lumat.cl --agree-tos --no-eff-email
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml exec nginx nginx -s reload
+```
+
+Auto-renewal — systemd timer (files shipped in `infra/certbot/`):
+
+```bash
+sudo cp infra/certbot/lumat-certbot-renew.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now lumat-certbot-renew.timer
+systemctl list-timers | grep lumat-certbot
+docker compose --profile certbot -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml run --rm certbot renew --dry-run
 ```
 
 Expected: `Successfully received certificate` for both domains; the
-`certbot.timer` shows `next elapse` (twice-daily renewal check); the dry-run
-ends with `Congratulations, all simulated renewals succeeded`.
+`lumat-certbot-renew.timer` shows `next elapse` (twice-daily renewal check); the
+dry-run ends with `Congratulations, all simulated renewals succeeded`.
 
 Verify: `curl -sI https://agente.lumat.cl/health` returns `200`; plain HTTP
 redirects to HTTPS (`curl -sI http://agente.lumat.cl/health` → `301`).
 
-- [ ] **SH-1 TLS verified — date/initials:**
+**Local rehearsal (no public DNS → Let's Encrypt cannot issue)**: a
+self-signed certificate with both hostnames as SANs was placed at the SAME
+live paths the nginx confs read (`/etc/letsencrypt/live/agente.lumat.cl/…`,
+inside the `certbot-certs` volume) and the same cert was added to the system
+CA store so `curl`/`monitor.sh` validate the stack end-to-end. The nginx
+server blocks are byte-for-byte the VPS config (see `infra/certbot/README.md`
+§3). Real issuance + `renew --dry-run` run on the VPS at T7.2.
+
+- [x] **SH-1 TLS verified — 2026-08-15 (VM, self-signed; LE issuance pending VPS):**
 
 ```bash
-# pasted real output here:
+# rehearse on the VM: /etc/hosts (agente.lumat.cl, panel.lumat.cl -> 127.0.0.1),
+# self-signed SAN cert in lumat_certbot-certs volume + CA trust, stack up:
+$ curl -s https://agente.lumat.cl/health
+{"status":"ok","version":"0.1.0"}
+$ curl -sI http://agente.lumat.cl/health | head -1
+HTTP/1.1 301 Moved Permanently
+$ echo | openssl s_client -connect agente.lumat.cl:443 -servername agente.lumat.cl 2>/dev/null | grep Protocol
+    Protocol  : TLSv1.3
+$ sudo systemctl list-timers | grep lumat-certbot
+Sun 2026-08-16 03:21:19 UTC  4h 3min -  -  lumat-certbot-renew.timer  lumat-certbot-renew.service
 ```
 
 ---
@@ -177,28 +253,52 @@ api:
   # NO "privileged: true" anywhere in the file
 ```
 
-Verify against the running container (replace `api` with the actual name):
+Verify against the running container (compose names them `lumat-api-1`):
 
 ```bash
-docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' lumat-api        # true
-docker inspect --format '{{.HostConfig.Privileged}}' lumat-api            # false
-docker inspect --format '{{.HostConfig.SecurityOpt}}' lumat-api           # [no-new-privileges:true]
-docker inspect --format '{{.HostConfig.CapDrop}}' lumat-api               # [ALL]
+docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' lumat-api-1        # true
+docker inspect --format '{{.HostConfig.Privileged}}' lumat-api-1            # false
+docker inspect --format '{{.HostConfig.SecurityOpt}}' lumat-api-1           # [no-new-privileges:true]
+docker inspect --format '{{.HostConfig.CapDrop}}' lumat-api-1               # [ALL]
+docker exec lumat-api-1 whoami                                             # appuser (non-root)
 grep -n privileged infra/docker-compose.prod.yml || echo "no --privileged flag"
 ```
 
 Write probe (must FAIL — SH-2 "write outside the writable volume is denied"):
 
 ```bash
-docker exec lumat-api touch /root/probe.txt
+docker exec lumat-api-1 touch /root/probe.txt
 ```
 
-Expected: `touch: cannot touch '/root/probe.txt': Read-only file system`.
+Expected: `touch: cannot touch '/root/probe.txt': Permission denied` (the api
+runs as the non-root `appuser`, so even `/root` is unreachable; `/app` — the
+image fs — fails with `Read-only file system`). The only writable paths are
+`/tmp` (tmpfs) and `/app/media` (the `media` volume — verified by a
+write-and-clean probe; the Dockerfile pre-creates `/app/media` as `appuser`
+so a fresh volume inherits writable ownership).
 
-- [ ] **SH-2 read-only fs verified — date/initials:**
+- [x] **SH-2 read-only fs verified — 2026-08-15 (VM):**
 
 ```bash
 # pasted real output here:
+$ docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' lumat-api-1
+true
+$ docker inspect --format '{{.HostConfig.Privileged}}' lumat-api-1
+false
+$ docker inspect --format '{{.HostConfig.SecurityOpt}}' lumat-api-1
+[no-new-privileges:true]
+$ docker inspect --format '{{.HostConfig.CapDrop}}' lumat-api-1
+[ALL]
+$ docker exec lumat-api-1 whoami
+appuser
+$ grep -n privileged infra/docker-compose.prod.yml || echo "no --privileged flag"
+no --privileged flag in compose
+$ docker exec lumat-api-1 touch /root/probe.txt
+touch: cannot touch '/root/probe.txt': Permission denied
+$ docker exec lumat-api-1 touch /app/probe.txt
+touch: cannot touch '/app/probe.txt': Read-only file system
+$ docker exec lumat-api-1 touch /app/media/probe.txt && echo "media write OK"
+media write OK
 ```
 
 ---
@@ -216,19 +316,29 @@ git grep -nE 'sk-[A-Za-z0-9]{20}|EAAG[A-Za-z0-9]{20}' || echo "clean"
 # 2. infra/.env is gitignored:
 git check-ignore infra/.env          # -> infra/.env
 # 3. the running container has the secrets in ENV, not in code/image layers:
-docker exec lumat-api printenv | grep -E 'OPENAI_API_KEY|META_ACCESS_TOKEN|APP_SECRET'
+docker exec lumat-api-1 printenv | grep -E 'OPENAI_API_KEY|META_ACCESS_TOKEN|APP_SECRET'
 # 4. nothing secret baked into the image:
-docker history --no-trunc lumat-api | grep -iE 'secret|token|sk-' || echo "clean"
+docker history --no-trunc lumat-api:prod | grep -iE 'secret|token|sk-' || echo "clean"
 ```
 
 Expected: `git grep` prints nothing (or `clean`); `git check-ignore` prints
 `infra/.env`; `printenv` shows the variables; `docker history` shows no
 secret material.
 
-- [ ] **SH-2 secrets env-only verified — date/initials:**
+- [x] **SH-2 secrets env-only verified — 2026-08-15 (VM):**
 
 ```bash
-# pasted real output here:
+# pasted real output here (rehearsal snapshot repo, dummy env values):
+$ git grep -nE 'sk-[A-Za-z0-9]{20}|EAAG[A-Za-z0-9]{20}' || echo "clean"
+clean
+$ git check-ignore infra/.env
+infra/.env
+$ docker exec lumat-api-1 printenv | grep -E 'OPENAI_API_KEY|META_ACCESS_TOKEN|APP_SECRET' | sed 's/=.*/=<set>/'
+META_ACCESS_TOKEN=<set>
+OPENAI_API_KEY=<set>
+APP_SECRET=<set>
+$ docker history --no-trunc lumat-api:prod | grep -iE 'secret|token|sk-' || echo "clean"
+clean
 ```
 
 ---
@@ -237,34 +347,46 @@ secret material.
 
 `infra/backup.sh` (T6.6) dumps the `lumat` database to the `backups/` volume
 every day at 03:00 and deletes dumps older than 14 days. Install the cron
-entry on the server:
+entry on the server — **under ROOT's crontab** (T7.1 note: the docker volume
+host path `/var/lib/docker/volumes/…` is root-only; the api *container* still
+runs non-root, this is host-level ops):
 
 ```bash
-crontab -l 2>/dev/null; cat > /tmp/cron <<'EOF'
+sudo crontab -l 2>/dev/null; cat > /tmp/cron <<'EOF'
 0 3 * * * /opt/lumat/infra/backup.sh >> /var/log/lumat-backup.log 2>&1
+0 4 * * 1 /opt/lumat/infra/restore-test.sh >> /var/log/lumat-backup.log 2>&1
 EOF
-crontab /tmp/cron && rm /tmp/cron
-crontab -l | grep backup.sh
+sudo crontab /tmp/cron && rm /tmp/cron
+sudo crontab -l | grep -E 'backup|restore'
 ```
 
-Verify:
+Verify (as root — the volume path is root-only):
 
 ```bash
 # dumps exist and are non-empty:
-ls -lh /var/lib/docker/volumes/lumat_backups/_data/ | tail -5
+sudo ls -lh /var/lib/docker/volumes/lumat_backups/_data/ | tail -5
 # retention: nothing older than 14 days
-find /var/lib/docker/volumes/lumat_backups/_data/ -name '*.sql.gz' -mtime +14 | wc -l   # 0
-# restore drill (weekly, T6.6): see docs/ops.md §3 for the full drill
-sudo -u deploy /opt/lumat/infra/restore-test.sh
+sudo find /var/lib/docker/volumes/lumat_backups/_data/ -name '*.sql.gz' -mtime +14 | wc -l   # 0
+# restore drill (weekly, T6.6): see docs/ops.md §2.3 for the full drill
+sudo /opt/lumat/infra/restore-test.sh
 ```
 
 Expected: one dump per day, gzipped, > 0 bytes; the `-mtime +14` count is 0;
 `restore-test.sh` exits 0 and prints `restore OK`.
 
-- [ ] **SH-3 backups verified — date/initials:**
+- [x] **SH-3 backups verified — 2026-08-15 (VM):**
 
 ```bash
 # pasted real output here:
+$ sudo /opt/lumat/infra/backup.sh
+backup OK: /var/lib/docker/volumes/lumat_backups/_data/lumat-20260815T231553Z.sql.gz (4.0K)
+$ sudo find /var/lib/docker/volumes/lumat_backups/_data/ -name '*.sql.gz' -mtime +14 | wc -l
+0
+$ sudo /opt/lumat/infra/restore-test.sh
+restore OK (lumat_restore_test, dump lumat-20260815T231553Z.sql.gz, customers=0 messages=0)
+$ sudo crontab -l | grep -E 'backup|restore'
+0 3 * * * /opt/lumat/infra/backup.sh >> /var/log/lumat-backup.log 2>&1
+0 4 * * 1 /opt/lumat/infra/restore-test.sh >> /var/log/lumat-backup.log 2>&1
 ```
 
 ---
@@ -273,32 +395,45 @@ Expected: one dump per day, gzipped, > 0 bytes; the `-mtime +14` count is 0;
 
 `infra/monitor.sh` (T6.6) runs every 5 minutes: checks the `/health` endpoint
 (service uptime), POSTs a webhook probe (bot/external API path), and verifies
-the newest backup is fresh; on any failure it sends an SMTP alert. Install:
+the newest backup is fresh; on any failure it sends an SMTP alert. Install —
+also under **root's crontab** (reads the root-only volume path; see §7):
 
 ```bash
-crontab -l 2>/dev/null | grep -q monitor.sh || (crontab -l 2>/dev/null; cat > /tmp/cron <<'EOF'
-*/5 * * * * /opt/lumat/infra/monitor.sh >> /var/log/lumat-monitor.log 2>&1
-EOF
-crontab /tmp/cron && rm /tmp/cron)
-crontab -l | grep monitor.sh
+sudo crontab -l 2>/dev/null | grep -q monitor.sh || (sudo crontab -l 2>/dev/null; echo "*/5 * * * * /opt/lumat/infra/monitor.sh >> /var/log/lumat-monitor.log 2>&1" | sudo crontab -)
+sudo crontab -l | grep monitor.sh
 ```
+
+> On the VPS, export the SMTP credentials for the cron job: put `SMTP_HOST`,
+> `SMTP_PORT`, `SMTP_FROM`, `SMTP_TO`, `SMTP_USER`, `SMTP_PASS` in
+> `/etc/environment` (read by cron via pam_env) — values never in the repo
+> (SH-2; `infra/.env.example` documents the names).
 
 Verify — healthy run exits 0 and prints OK lines:
 
 ```bash
-sudo -u deploy /opt/lumat/infra/monitor.sh; echo "exit=$?"
+sudo /opt/lumat/infra/monitor.sh; echo "exit=$?"
 tail -5 /var/log/lumat-monitor.log
 ```
 
 Expected: `health=OK`, `webhook_probe=OK`, `backup_age=OK` (or the equivalent
 lines), `exit=0`. **Alert drill**: stop the api container for 60 s — the next
 5-min run must exit non-zero and the SMTP alert must arrive; restart the
-container (`docker compose up -d`).
+container (`docker start lumat-api-1`).
 
-- [ ] **SH-3 monitoring verified — date/initials:**
+- [x] **SH-3 monitoring verified — 2026-08-15 (VM):**
 
 ```bash
 # pasted real output here:
+$ sudo /opt/lumat/infra/monitor.sh; echo "exit=$?"
+[2026-08-15T23:16:07Z] health=OK
+[2026-08-15T23:16:07Z] webhook_probe=OK (unsigned POST rejected 403)
+[2026-08-15T23:16:07Z] backup_age=OK (lumat-20260815T231553Z.sql.gz, 14s old)
+exit=0
+# alert drill (api stopped):
+[2026-08-15T23:16:23Z] ALERT: health=FAIL webhook_probe=FAIL(HTTP 000000)
+/opt/lumat/infra/monitor.sh: line 34: SMTP_HOST: SMTP_HOST unset — cannot send monitoring alert
+# drill exit=1; api restarted -> healthy. SMTP delivery verified on the VPS at T7.2
+# (failure path + env guard verified in T6.6).
 ```
 
 ---
@@ -310,13 +445,13 @@ UPDATE/DELETE/TRUNCATE/REFERENCES) — enforced by `db/migrations/001_init.sql`
 and re-verified here:
 
 ```bash
-docker exec lumat-db psql -U lumat -d lumat -Atc \
+docker exec lumat-db-1 psql -U lumat -d lumat -Atc \
   "SELECT grantee || ':' || privilege_type FROM information_schema.role_table_grants
    WHERE table_name='audit_log' ORDER BY 1;"
 ```
 
-Expected output — the only rows are INSERT/SELECT for the `app` role (and
-superuser privileges for the admin role):
+Expected output — the only rows for the `app` role are INSERT/SELECT (plus
+the admin role's full privileges):
 
 ```
 app:INSERT
@@ -326,17 +461,33 @@ app:SELECT
 Verify a write other than INSERT is rejected:
 
 ```bash
-docker exec lumat-db psql -U lumat -d lumat -c \
+docker exec lumat-db-1 psql -U app -d lumat -c \
   "DELETE FROM audit_log;"    # ERROR: permission denied for table audit_log
 ```
 
 Expected: `ERROR: permission denied for table audit_log` (or
 `ERROR: must be owner of table audit_log` under the app role).
 
-- [ ] **SH-5 audit grants verified — date/initials:**
+- [x] **SH-5 audit grants verified — 2026-08-15 (VM):**
 
 ```bash
 # pasted real output here:
+$ docker exec lumat-db-1 psql -U lumat -d lumat -Atc "SELECT grantee || ':' || privilege_type FROM information_schema.role_table_grants WHERE table_name='audit_log' ORDER BY 1;"
+app:INSERT
+app:SELECT
+lumat:DELETE
+lumat:INSERT
+lumat:REFERENCES
+lumat:SELECT
+lumat:TRIGGER
+lumat:TRUNCATE
+lumat:UPDATE
+$ docker exec lumat-db-1 psql -U app -d lumat -c "DELETE FROM audit_log;"
+ERROR:  permission denied for table audit_log
+$ docker exec lumat-db-1 psql -U app -d lumat -c "UPDATE audit_log SET action='x';"
+ERROR:  permission denied for table audit_log
+$ docker exec lumat-db-1 psql -U app -d lumat -Atc "INSERT INTO audit_log (actor, action, entity) VALUES ('rehearsal','probe','audit_log') RETURNING id;"
+1
 ```
 
 ---
@@ -345,6 +496,7 @@ Expected: `ERROR: permission denied for table audit_log` (or
 
 | Date | Executor | Sections verified | Notes / deviations |
 |------|----------|------------------|--------------------|
+| 2026-08-15 | dev (T7.1) | 1–9 on local Ubuntu 24.04 rehearsal VM (libvirt/KVM, Docker 29 + Compose v2.40, ufw, fail2ban) | §4 self-signed cert at the LE live paths (no public DNS locally); §7/§8 crons under root (volume path root-only; api container stays non-root); §8 SMTP delivery VPS-only (env guard verified); VPS re-run of the full checklist + real LE issuance + `certbot renew --dry-run` at T7.2 go-live |
 |      |          |                  |                    |
 
 > If any check does NOT match its expected output, STOP and fix it before
