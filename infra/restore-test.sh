@@ -15,6 +15,9 @@ if [ -f "$INFRA_DIR/docker-compose.prod.yml" ]; then
     COMPOSE_FILES+=(-f "$INFRA_DIR/docker-compose.prod.yml")
 fi
 
+# T7.1: prod no longer mounts `backups` in any service — ensure the volume
+# exists (backup.sh creates it; this keeps the drill runnable on its own).
+docker volume create lumat_backups >/dev/null 2>&1 || true
 if docker volume inspect lumat_backups >/dev/null 2>&1; then
     BACKUPS_DIR="$(docker volume inspect -f '{{.Mountpoint}}' lumat_backups)"
 else
