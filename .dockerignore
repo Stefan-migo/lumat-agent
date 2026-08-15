@@ -1,0 +1,18 @@
+# T7.1 — keep the production build context lean. The image ships only
+# app/ + db/ (see Dockerfile); everything else is build noise or secret
+# material (SH-2: no secrets, no dev state in the image).
+.venv/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+graphify-out/
+backups/
+media/
+node_modules/
+tests/
+docs/
+openspec/
+infra/
+.env*
