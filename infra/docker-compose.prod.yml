@@ -1,0 +1,123 @@
+# LumatAgent production override (T7.1; design deployment step 2).
+#
+# Used together with the base dev compose:
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml up -d --build
+#
+# What this file changes vs dev (SH-1..SH-3 hardening + design topology):
+#   - api: built from the repo Dockerfile (no bind mount), published ports
+#     removed (!reset) — nothing exposes api/db to the host; only nginx
+#     publishes 80/443.
+#   - api: read-only filesystem (read_only: true), /tmp tmpfs, cap_drop ALL,
+#     no-new-privileges, writable `media/` volume only (SH-2).
+#   - api + db: on the `internal` network (internal: true — no gateway, no
+#     egress for db); api also stays on `default` so it can reach
+#     OpenAI/Meta outbound and nginx.
+#   - nginx: containerized reverse proxy (infra/nginx/*.conf, read-only
+#     mount) terminating TLS on 80/443, hardened the same way as api.
+#   - certbot: one-shot webroot issuance + renewal into the certbot-certs
+#     volume nginx reads (profile "certbot" — see infra/certbot/README.md).
+#   - restart: unless-stopped + healthchecks inherited/added on every service.
+#
+# Secrets stay in infra/.env (gitignored) — nothing literal here (SH-2).
+# Deploy/rollback flow: docs/ops.md §2.
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: lumat-api:prod
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # No host ports in prod — nginx proxies 80/443 (SH-2 internal networking).
+    ports: !reset []
+    # Replace the dev bind mounts/venv volume: code + venv are baked into the
+    # image; only WhatsApp media stays writable (SH-2).
+    volumes: !override
+      - media:/app/media
+    networks:
+      - internal
+      - default
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+    # Migrate (idempotent) then serve — same as dev, minus `uv sync` (baked).
+    command: >
+      sh -c "DATABASE_URL=postgresql://lumat:$$POSTGRES_PASSWORD@db:5432/lumat
+      APP_DB_PASSWORD=$$APP_DB_PASSWORD db/migrate.sh &&
+      exec uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  db:
+    networks:
+      - internal
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    # Master runs as root ONLY to read certbot's 0600 root-owned privkey and
+    # chown the cache dirs; workers drop to the nginx user (default config).
+    # Caps are minimized: NET_BIND_SERVICE (bind 80/443) + CHOWN (entrypoint
+    # cache dirs); everything else dropped, read-only fs, no-new-privileges.
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /var/log/nginx
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE # bind 80/443
+      - CHOWN # entrypoint cache-dir chown (once, at start)
+      - SETUID
+      - SETGID # master drops workers to the nginx user
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d:ro
+      - certbot-webroot:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null --no-check-certificate https://127.0.0.1/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # One-shot Let's Encrypt client (infra/certbot/README.md). Not started by
+  # `up -d`: run issuance/renewal explicitly with --profile certbot.
+  certbot:
+    image: certbot/certbot
+    profiles: ["certbot"]
+    restart: "no"
+    volumes:
+      - certbot-certs:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    command: renew --webroot -w /var/www/certbot
+
+networks:
+  # api<->db only: no gateway, so db has no egress and nothing but api can
+  # reach it (SH-2 internal service networking). api joins `default` too for
+  # outbound OpenAI/Meta + nginx.
+  internal:
+    internal: true
+
+volumes:
+  certbot-certs:
+  certbot-webroot:
