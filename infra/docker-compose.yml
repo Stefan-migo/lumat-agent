@@ -71,6 +71,12 @@ services:
       META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:?set META_ACCESS_TOKEN in infra/.env}
       META_PHONE_NUMBER_ID: ${META_PHONE_NUMBER_ID:?set META_PHONE_NUMBER_ID in infra/.env}
       PANEL_SESSION_SECRET: ${PANEL_SESSION_SECRET:?set PANEL_SESSION_SECRET in infra/.env}
+      # Admin bootstrap (T7.2): consumed by db/seed.sh at deploy time inside
+      # the container (`docker compose exec api db/seed.sh`) — never needed by
+      # the running app, defaults are fine for dev (seed fails loudly if the
+      # password is unset). Values live in infra/.env, never in the repo (SH-2).
+      PANEL_ADMIN_USERNAME: ${PANEL_ADMIN_USERNAME:-admin}
+      PANEL_ADMIN_PASSWORD: ${PANEL_ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy
