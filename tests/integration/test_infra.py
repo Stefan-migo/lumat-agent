@@ -13,6 +13,7 @@ migrate.sh in container) is verified live in the apply harness.
 """
 
 from pathlib import Path
+import subprocess
 
 import pytest
 import yaml
@@ -21,6 +22,16 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = REPO_ROOT / "infra" / "docker-compose.yml"
 ENV_EXAMPLE = REPO_ROOT / "infra" / ".env.example"
 GITIGNORE = REPO_ROOT / ".gitignore"
+
+# Scripts invoked directly by the deploy path (compose container command,
+# cron entries, ops.md) — the git index MUST carry the +x bit.
+EXECUTABLE_SCRIPTS = (
+    REPO_ROOT / "db" / "migrate.sh",
+    REPO_ROOT / "db" / "seed.sh",
+    REPO_ROOT / "infra" / "backup.sh",
+    REPO_ROOT / "infra" / "monitor.sh",
+    REPO_ROOT / "infra" / "restore-test.sh",
+)
 
 REQUIRED_ENV_NAMES = {
     "APP_SECRET",
@@ -115,3 +126,24 @@ def test_gitignore_covers_secrets_and_runtime_data():
     assert "media/" in content, ".gitignore must ignore media/"
     assert "backups/" in content, ".gitignore must ignore backups/"
     assert "!infra/.env.example" in content, ".gitignore must whitelist .env.example"
+
+
+def test_deploy_scripts_tracked_as_executable():
+    """Deploy scripts must be executable IN THE GIT INDEX (100755), not just in
+    the working tree: a fresh clone/bundle drops working-tree chmods, and a
+    100644 index breaks the api container (`db/migrate.sh: Permission denied`
+    in the compose command) and the cron jobs. Caught by the T7.2 clean-deploy
+    rehearsal on a fresh clone."""
+    for script in EXECUTABLE_SCRIPTS:
+        assert script.exists(), f"missing deploy script: {script}"
+        relative = script.relative_to(REPO_ROOT)
+        staged = subprocess.run(
+            ["git", "ls-files", "--stage", "--", str(relative)],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()[0]
+        assert staged == "100755", (
+            f"{relative} is mode {staged} in the git index; run "
+            f"`git update-index --chmod=+x {relative}`"
+        )
