@@ -75,14 +75,31 @@ credentials.**
 
 Every deploy is a tagged release; the tag is the rollback point (§2.2).
 
+> `--project-name lumat` is REQUIRED: with `-f infra/...` compose would derive
+> the project name from the `infra/` directory, producing `infra-api-1` /
+> `infra_db` instead of the documented `lumat-*` names every other command and
+> volume path assumes.
+
 ```bash
 cd /opt/lumat
 sudo -u deploy git fetch origin main
 sudo -u deploy git checkout <tag>            # e.g. v1.4.0
-sudo -u deploy docker compose -f infra/docker-compose.yml \
+sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
   -f infra/docker-compose.prod.yml up -d --build
-sudo -u deploy bash db/migrate.sh            # idempotent; run BEFORE the api picks up new code
+# Migrate runs automatically inside the api container before uvicorn (compose
+# command chain); re-run it explicitly to prove/refresh idempotence:
+sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml exec -T api sh -c \
+  'DATABASE_URL=postgresql://lumat:$POSTGRES_PASSWORD@db:5432/lumat db/migrate.sh'
+# Seed settings defaults + initial admin (T7.2; idempotent, first seed wins):
+sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml exec -T api db/seed.sh
 ```
+
+`db/migrate.sh` and `db/seed.sh` are containerized on purpose: the api image
+carries the venv, `DATABASE_URL`/`APP_DB_PASSWORD`/`PANEL_ADMIN_*` come from
+`infra/.env` through the compose environment (SH-2 — no secrets on the CLI),
+and the admin password is consumed at seed time only (bcrypt hash stored).
 
 Smoke (each deploy, before go-live):
 
@@ -94,6 +111,78 @@ sudo -u deploy /opt/lumat/infra/monitor.sh && echo monitor=OK
 
 Expected: `/health` returns 200; the verify handshake echoes the challenge;
 monitor exits 0. If any smoke fails → roll back (§2.2).
+
+### 2.1.1 T7.2 deploy rehearsal record — rehearsal complete, VPS pending
+
+Executed 2026-08-15/16 on the local Ubuntu 24.04 KVM rehearsal VM
+(`lumat-rehearsal`; Docker 29 + Compose v2.40, hardened stack §1–§9 already
+executed per `docs/hardening.md`). Simulated a clean deploy: fresh clone of
+`main` from a local git bundle into `/opt/lumat` (fresh db volume), exact
+commands below. **Rehearsal complete — the same steps run on the Hostinger VPS
+at go-live; nothing below touched a VPS.**
+
+```bash
+# 1. fresh clone (bundle -> /opt/lumat, branch main, HEAD 96d16817)
+sudo -u deploy git clone /tmp/lumat-main.bundle /opt/lumat
+sudo -u deploy git -C /opt/lumat checkout main
+# 2. full prod stack (api runs migrate before uvicorn):
+sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml up -d --build
+#    -> lumat-db-1 / lumat-api-1 / lumat-nginx-1 all healthy
+# 3. migrate twice (idempotence proof):
+#    run 1 (container start): created role app; applying 001_init..007_case_created_at; migrations up to date
+#    run 2 (explicit):        skip 001_init..007 (already applied); migrations up to date
+sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml exec -T api sh -c \
+  'DATABASE_URL=postgresql://lumat:$POSTGRES_PASSWORD@db:5432/lumat db/migrate.sh'
+# 4. seed twice (idempotence proof):
+#    run 1: settings: 14 inserted, 0 already present
+#           admin: created admin user 'admin'
+#    run 2: settings: 0 inserted, 14 already present
+#           admin: user 'admin' already exists — not overwritten
+sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml exec -T api db/seed.sh
+```
+
+Smoke outputs (recorded):
+
+```
+$ curl -fsS https://agente.lumat.cl/health
+{"status":"ok","version":"0.1.0"}
+$ curl -fsS "https://agente.lumat.cl/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=dummy-vm-verify-token&hub.challenge=9876543210"
+9876543210            # challenge echoed (WH-1); wrong token -> 403
+$ sudo /opt/lumat/infra/monitor.sh; echo "monitor exit=$?"
+[2026-08-16T00:15:46Z] health=OK
+[2026-08-16T00:15:46Z] webhook_probe=OK (unsigned POST rejected 403)
+[2026-08-16T00:15:46Z] backup_age=OK (lumat-20260816T001541Z.sql.gz, 6s old)
+monitor exit=0
+$ sudo crontab -l        # backup + restore + monitor armed under root
+*/5 * * * * /opt/lumat/infra/monitor.sh >> /var/log/lumat-monitor.log 2>&1
+0 3 * * * /opt/lumat/infra/backup.sh >> /var/log/lumat-backup.log 2>&1
+0 4 * * 1 /opt/lumat/infra/restore-test.sh >> /var/log/lumat-backup.log 2>&1
+$ systemctl list-timers | grep lumat-certbot      # renew timer armed (03:17/15:17)
+```
+
+Bonus (not in the canonical smoke): the seeded admin logged into the panel
+end-to-end — `POST /panel/login` (admin / env-supplied password) → 302 to
+`/panel/` → dashboard 200; wrong password rejected.
+
+Rehearsal-caught bugs fixed in this batch:
+- **Deploy scripts were mode 100644 in the git index** — a fresh clone drops
+  working-tree chmods, so the api container failed with `db/migrate.sh:
+  Permission denied`. Fixed with `git update-index --chmod=+x` on
+  `db/{migrate,seed}.sh` + `infra/{backup,monitor,restore-test}.sh`; regression
+  test added (`test_deploy_scripts_tracked_as_executable`).
+- **`docs/hardening.md` §8 cron command replaced (not appended) the crontab**
+  — `(crontab -l; echo X | crontab -)` wipes §7's backup/restore entries.
+  Fixed to `(crontab -l; echo X) | crontab -`; VM crontab rebuilt with all
+  three entries active.
+
+**Remains VPS-only (cannot run locally — no public DNS/LE):** real Let's
+Encrypt issuance for `agente.` + `panel.lumat.cl`, `certbot renew --dry-run`,
+SMTP alert delivery (monitor failure path), and all real credentials
+(`infra/.env` on the server). See `docs/hardening.md` §4/§8 + §2.9 go-live
+record.
 
 ### 2.2 Rollback — previous tag + compose restart
 
@@ -255,4 +344,4 @@ validation passes). It is the evidence the change is in production.
 
 | Date | Change | Operator |
 |------|--------|----------|
-| 2026-08-13 | T6.5 — full runbook written (sections 2.1–2.9); Meta onboarding checklist (section 1) unchanged | dev |
+| 2026-08-16 | T7.2 — §2.1 deploy flow updated (`--project-name lumat`, containerized migrate/seed via `docker compose exec api`); §2.1.1 rehearsal record (clean-deploy simulation on the local VM, smoke outputs, rehearsal-caught bugs, VPS-only remainder) | dev |

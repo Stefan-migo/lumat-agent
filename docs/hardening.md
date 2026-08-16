@@ -399,9 +399,14 @@ the newest backup is fresh; on any failure it sends an SMTP alert. Install —
 also under **root's crontab** (reads the root-only volume path; see §7):
 
 ```bash
-sudo crontab -l 2>/dev/null | grep -q monitor.sh || (sudo crontab -l 2>/dev/null; echo "*/5 * * * * /opt/lumat/infra/monitor.sh >> /var/log/lumat-monitor.log 2>&1" | sudo crontab -)
+sudo crontab -l 2>/dev/null | grep -q monitor.sh || { (sudo crontab -l 2>/dev/null; echo "*/5 * * * * /opt/lumat/infra/monitor.sh >> /var/log/lumat-monitor.log 2>&1") | sudo crontab -; }
 sudo crontab -l | grep monitor.sh
 ```
+
+> The `(crontab -l; echo X) | crontab -` form APPENDS to the existing crontab.
+> Do not write `(crontab -l; echo X | crontab -)` — the pipe binds only to the
+> echo and REPLACES the whole crontab, wiping §7's backup/restore entries
+> (rehearsal-caught, T7.2).
 
 > On the VPS, export the SMTP credentials for the cron job: put `SMTP_HOST`,
 > `SMTP_PORT`, `SMTP_FROM`, `SMTP_TO`, `SMTP_USER`, `SMTP_PASS` in
@@ -497,6 +502,7 @@ $ docker exec lumat-db-1 psql -U app -d lumat -Atc "INSERT INTO audit_log (actor
 | Date | Executor | Sections verified | Notes / deviations |
 |------|----------|------------------|--------------------|
 | 2026-08-15 | dev (T7.1) | 1–9 on local Ubuntu 24.04 rehearsal VM (libvirt/KVM, Docker 29 + Compose v2.40, ufw, fail2ban) | §4 self-signed cert at the LE live paths (no public DNS locally); §7/§8 crons under root (volume path root-only; api container stays non-root); §8 SMTP delivery VPS-only (env guard verified); VPS re-run of the full checklist + real LE issuance + `certbot renew --dry-run` at T7.2 go-live |
+| 2026-08-16 | dev (T7.2) | §7/§8 re-verified during the clean-deploy rehearsal (fresh clone into `/opt/lumat`, db volume wiped, full stack + migrate + seed + smoke; record in `docs/ops.md` §2.1.1) | §8 cron command fixed (append not replace — see note above); §1–§6/§9 unchanged, still valid on the same VM; real LE issuance + `certbot renew --dry-run` + SMTP delivery remain VPS-only |
 |      |          |                  |                    |
 
 > If any check does NOT match its expected output, STOP and fix it before
