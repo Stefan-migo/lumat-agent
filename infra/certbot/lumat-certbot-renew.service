@@ -1,0 +1,14 @@
+[Unit]
+# LumatAgent certificate renewal — runs the compose `certbot` service
+# (webroot renewal) and reloads nginx so it picks up fresh certs.
+Description=LumatAgent Let's Encrypt certificate renewal (compose certbot)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/lumat
+# The certbot service carries `command: renew --webroot -w /var/www/certbot`;
+# `docker compose run` executes it in a fresh container.
+ExecStart=/usr/bin/docker compose --profile certbot -f infra/docker-compose.yml -f infra/docker-compose.prod.yml run --rm certbot
+ExecStartPost=/usr/bin/docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml exec -T nginx nginx -s reload

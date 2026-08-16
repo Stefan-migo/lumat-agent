@@ -179,11 +179,6 @@
     "ast_hash": "8453f9211a22b967b7e969eb3efe6bfa",
     "semantic_hash": "8453f9211a22b967b7e969eb3efe6bfa"
   },
-  "docs/solicitud-al-cliente-lumat.md": {
-    "mtime": 1786532801.9045897,
-    "ast_hash": "f7c585d6897f0d8e67a881cbfa16bb8b",
-    "semantic_hash": "f7c585d6897f0d8e67a881cbfa16bb8b"
-  },
   "openspec/changes/archive/2026-07-20-lumat-propuesta-final/design.md": {
     "mtime": 1784580438.8435473,
     "ast_hash": "af91dc9c8407d64fe3bf0324f0924369",
@@ -225,9 +220,9 @@
     "semantic_hash": "19ff2f77a10fc47241ce5cb70c969a11"
   },
   "openspec/changes/hito-1-setup-whatsapp/tasks.md": {
-    "mtime": 1786637217.9577644,
-    "ast_hash": "3abe1d968dd4300b92698c2abcba62f2",
-    "semantic_hash": "3abe1d968dd4300b92698c2abcba62f2"
+    "mtime": 1786661592.475706,
+    "ast_hash": "2f6e70536eeecc22706fcbb94a8f2e39",
+    "semantic_hash": "2f6e70536eeecc22706fcbb94a8f2e39"
   },
   "openspec/config.yaml": {
     "mtime": 1786538347.5728326,
@@ -455,9 +450,9 @@
     "semantic_hash": "9864c6fe5fb53d69a132fa6f76198837"
   },
   "openspec/changes/hito-1-setup-whatsapp/verify-report.md": {
-    "mtime": 1786638952.3329675,
-    "ast_hash": "46949735d5b0b711f3712cce79417c3d",
-    "semantic_hash": "46949735d5b0b711f3712cce79417c3d"
+    "mtime": 1786663266.6942797,
+    "ast_hash": "7b2dea5a803e76a3633e4ca38ff57d34",
+    "semantic_hash": "7b2dea5a803e76a3633e4ca38ff57d34"
   },
   "app/db.py": {
     "mtime": 1786544598.9863367,
@@ -510,14 +505,14 @@
     "semantic_hash": "4d3c28fb0e816d97d38002ad6d8a4bcf"
   },
   "docs/ops.md": {
-    "mtime": 1786547434.8527155,
-    "ast_hash": "ff8f241110783c14a553d195c3e30332",
-    "semantic_hash": "ff8f241110783c14a553d195c3e30332"
+    "mtime": 1786661369.0515456,
+    "ast_hash": "7b86be3219cc1ce6ce9bf7623f7a8d04",
+    "semantic_hash": "7b86be3219cc1ce6ce9bf7623f7a8d04"
   },
   "infra/docker-compose.yml": {
-    "mtime": 1786635945.5042708,
-    "ast_hash": "637875b24141327eaf8c97c692e53dc2",
-    "semantic_hash": "637875b24141327eaf8c97c692e53dc2"
+    "mtime": 1786658202.4081874,
+    "ast_hash": "d62ea39a1cb86ca4b3815cf1d398745c",
+    "semantic_hash": "d62ea39a1cb86ca4b3815cf1d398745c"
   },
   "app/chat/__init__.py": {
     "mtime": 1786632461.0448194,
@@ -550,9 +545,9 @@
     "semantic_hash": "9808dbe71ef9d6ffc1678c80fd47860b"
   },
   "app/chat/nodes/respond.py": {
-    "mtime": 1786632461.2945135,
-    "ast_hash": "2f86358d795a27e8b253924e8fa39b66",
-    "semantic_hash": "2f86358d795a27e8b253924e8fa39b66"
+    "mtime": 1786658775.378362,
+    "ast_hash": "08b4f12cb64df5e0cb83a934555309d2",
+    "semantic_hash": "08b4f12cb64df5e0cb83a934555309d2"
   },
   "app/chat/nodes/route.py": {
     "mtime": 1786632461.2955558,
@@ -605,9 +600,9 @@
     "semantic_hash": "090af748a0a6188124cafe1aa9167b41"
   },
   "tests/integration/test_chat_state.py": {
-    "mtime": 1786632461.1302133,
-    "ast_hash": "e46c9c594c128951135f5682afb4fd73",
-    "semantic_hash": "e46c9c594c128951135f5682afb4fd73"
+    "mtime": 1786659883.798702,
+    "ast_hash": "ad740b4d2ee44be9046539bc0df3293f",
+    "semantic_hash": "ad740b4d2ee44be9046539bc0df3293f"
   },
   "tests/integration/test_customers.py": {
     "mtime": 1786632461.130757,
@@ -828,5 +823,85 @@
     "mtime": 1786636899.928398,
     "ast_hash": "0f3ffc7b90498bcb7fd85e793ff4de00",
     "semantic_hash": "0f3ffc7b90498bcb7fd85e793ff4de00"
+  },
+  "infra/backup.sh": {
+    "mtime": 1786661460.382323,
+    "ast_hash": "62347ac95dd427eb7ac327dbca53d0b1",
+    "semantic_hash": "62347ac95dd427eb7ac327dbca53d0b1"
+  },
+  "infra/monitor.sh": {
+    "mtime": 1786661473.8646708,
+    "ast_hash": "d1c095a1f08ca7425fa01604ae5d08f4",
+    "semantic_hash": "d1c095a1f08ca7425fa01604ae5d08f4"
+  },
+  "infra/restore-test.sh": {
+    "mtime": 1786661465.5970876,
+    "ast_hash": "007605767867065b1604ebfaf734041a",
+    "semantic_hash": "007605767867065b1604ebfaf734041a"
+  },
+  "tests/conftest.py": {
+    "mtime": 1786658168.249956,
+    "ast_hash": "513048cb82875e3eb464fa64c6f6a02c",
+    "semantic_hash": "513048cb82875e3eb464fa64c6f6a02c"
+  },
+  "tests/functional/test_conversation_flows.py": {
+    "mtime": 1786659875.3561487,
+    "ast_hash": "5dabe07cef8e820e46b76b50e4cefe12",
+    "semantic_hash": "5dabe07cef8e820e46b76b50e4cefe12"
+  },
+  "tests/functional/test_customer_flows.py": {
+    "mtime": 1786658458.0265994,
+    "ast_hash": "726d2fa3dbc8be2b47f2e81fa69d4dab",
+    "semantic_hash": "726d2fa3dbc8be2b47f2e81fa69d4dab"
+  },
+  "tests/injection/test_injection_suite.py": {
+    "mtime": 1786661119.6657152,
+    "ast_hash": "8f245f71bc7278e98d52e28fbc0d0ca2",
+    "semantic_hash": "8f245f71bc7278e98d52e28fbc0d0ca2"
+  },
+  "tests/webhook_helpers.py": {
+    "mtime": 1786658177.5969267,
+    "ast_hash": "ed4334482791c0633c89b5bf570543ae",
+    "semantic_hash": "ed4334482791c0633c89b5bf570543ae"
+  },
+  "docs/hardening.md": {
+    "mtime": 1786661332.5447738,
+    "ast_hash": "aa048dcf34789ac9c82a24a49f4ae785",
+    "semantic_hash": "aa048dcf34789ac9c82a24a49f4ae785"
+  },
+  "docs/local-meta-test-guide.md": {
+    "mtime": 1786717946.5471067,
+    "ast_hash": "41c9fbd2ac4ce05980801bab2b179ec3",
+    "semantic_hash": "41c9fbd2ac4ce05980801bab2b179ec3"
+  },
+  "graphify-out/converted/Entrega_1_Propuesta_Lumat_84d9275f.md": {
+    "mtime": 1786831394.1514456,
+    "ast_hash": "11ed8941114c97b81bfbd79953485cc8",
+    "semantic_hash": "11ed8941114c97b81bfbd79953485cc8"
+  },
+  "graphify-out/converted/Entrega_2_Propuesta_Lumat_a84ea1af.md": {
+    "mtime": 1786831394.202347,
+    "ast_hash": "ba26c3d743f604d2e4d65e9714c4911d",
+    "semantic_hash": "ba26c3d743f604d2e4d65e9714c4911d"
+  },
+  "graphify-out/converted/Entrega_3_Propuesta_Lumat_1fd76bfb.md": {
+    "mtime": 1786831394.2538836,
+    "ast_hash": "7d48a1b67cc479b731760ea9e92ad5c5",
+    "semantic_hash": "7d48a1b67cc479b731760ea9e92ad5c5"
+  },
+  "graphify-out/converted/Entrega_4_Propuesta_Lumat_c204fca6.md": {
+    "mtime": 1786831394.2978778,
+    "ast_hash": "246b0e46557f8f51e01138740ba39a34",
+    "semantic_hash": "246b0e46557f8f51e01138740ba39a34"
+  },
+  "graphify-out/converted/Entrega_5_Propuesta_Lumat_05f2d8c4.md": {
+    "mtime": 1786831394.3347702,
+    "ast_hash": "75d3bbffff0e0153824e8f44da73e83b",
+    "semantic_hash": "75d3bbffff0e0153824e8f44da73e83b"
+  },
+  "tests/README.md": {
+    "mtime": 1786658230.4873044,
+    "ast_hash": "5962e16f5155b1f668ae23ca8d44c5be",
+    "semantic_hash": "5962e16f5155b1f668ae23ca8d44c5be"
   }
 }

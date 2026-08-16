@@ -21,6 +21,9 @@ INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$INFRA_DIR")"
 LOG_TAG="[$(date -u +%FT%TZ)]"
 
+# T7.1: prod no longer mounts `backups` in any service — ensure the volume
+# exists (backup.sh creates it; keeps the freshness check meaningful).
+docker volume create lumat_backups >/dev/null 2>&1 || true
 if docker volume inspect lumat_backups >/dev/null 2>&1; then
     BACKUPS_DIR="$(docker volume inspect -f '{{.Mountpoint}}' lumat_backups)"
 else

@@ -1,14 +1,14 @@
 ```yaml
 schema: gentle-ai.verify-result/v1
-evidence_revision: sha256:e862b7c9490c99dae1cec14badd15a62b39b55c3f4c038d900a8419008fafdf8
+evidence_revision: sha256:acbbe4b4fbe246aaef113606c70a93087f02616478ae9eeab957167fc36429e8
 verdict: pass
 blockers: 0
 critical_findings: 0
-requirements: 25/25
-scenarios: 38/38
+requirements: 3/3
+scenarios: 7/7
 test_command: .venv/bin/pytest tests/
 test_exit_code: 0
-test_output_hash: sha256:e862b7c9490c99dae1cec14badd15a62b39b55c3f4c038d900a8419008fafdf8
+test_output_hash: sha256:acbbe4b4fbe246aaef113606c70a93087f02616478ae9eeab957167fc36429e8
 build_command: .venv/bin/python -c "import app.main; from app.panel.deps import require_user, require_admin, get_current_user, templates; from app.panel.routes.auth import router; from app.panel.routes.clients import router; from app.panel.routes.conversations import router; from app.panel.routes.cases import router; from app.panel.routes.kb import router; from app.panel.routes.settings import router; from app.panel.routes.dashboard import compute_kpis; from app.panel.routes.export import _csv_stream; from app.panel.seed_admin import seed_admin; from app.services.users import hash_password, verify_password, is_locked, record_failed_login, reset_login_state; from app.services.cases import list_open_cases, update_case; from app.services.notify import acknowledge_case; from app.services.customers import search_customers; from app.services.costs import spend_snapshot; from app.services.settings import get_setting, set_setting; from app.services.kb import ingest_document, update_document, restore_version, disable_document; from app.models import User, UserRole, Case; print('import OK')" (with test env set)
 build_exit_code: 0
 build_output_hash: sha256:73e65cba19528ade3fd463248a9ba2c44e92c41810caef6a0bba624cefc54219
@@ -17,14 +17,189 @@ build_output_hash: sha256:73e65cba19528ade3fd463248a9ba2c44e92c41810caef6a0bba62
 # Verification Report — hito-1-setup-whatsapp
 
 **Change**: hito-1-setup-whatsapp · **Project**: LumatAgent (lumat) · **Phase**: sdd-verify
-**Latest verified slice**: **Batch 6 (PR 7)** — commits `bbc6f15d..24a569ea` (9 commits: harness + respond.py CM-1 fix + functional flows + injection suite + hardening/ops docs + ops scripts) — T6.1 test harness · T6.2 functional suite (CM/CR/AP) · T6.3 injection suite (SH-4 go-live gate) · T6.4 hardening.md · T6.5 ops.md runbook · T6.6 ops scripts; T2.1 remains blocked on client credentials
+**Latest verified slice**: **Batch 7 slice (T7.1 prod infra + hardening + T7.2 deploy/migrate/seed/smoke)** — commits `310204bf..b46a9098` (T7.1: `310204bf` prod Dockerfile · `9bb9062b` hardened prod compose override · `8a533003` nginx reverse proxy · `83c38242` certbot + renew timer · `3aff2def` lumat_backups volume · `f41f1c9f` hardening VM execution record · `1c3e3382` T7.1 mark; T7.2: `6f0487a4` idempotent seed runner · `96d16817` deploy scripts executable in index · `b46a9098` clean-deploy rehearsal record) — rehearsed on the local VM (all 9 hardening sections PASS + deploy/migrate/seed/smoke), T7.3 go-live remains `[ ]` blocked on Meta credentials/DNS/VPS decision; T2.1 remains blocked on client credentials
 **Mode**: **STRICT TDD** (config.yaml `apply.tdd: true`, runner `pytest tests/`)
 **Artifact store**: hybrid (this file + Engram `sdd/hito-1-setup-whatsapp/verify-report`)
-**Ledger token (verify run)**: B6 run token held by orchestrator (verify-B6, NOT re-acquired); prior B5 token settled by orchestrator
-**Cumulative verified**: 51 requirements / 74 scenarios across B0+B1+B2+B3+B4+B5+B6 slices. Slice-scoped envelope for B6 = 25/25 reqs, 38/38 scenarios.
+**Ledger token (verify run)**: B7 run token held by orchestrator (verify-B7, NOT re-acquired); prior B6 token settled by orchestrator
+**Cumulative verified**: 51 requirements / 74 scenarios across B0+B1+B2+B3+B4+B5+B6 slices (B7 adds NO new req/scenario counts — SH-1..SH-3 are upgraded from doc/compose-level to executed-runtime compliance on the rehearsal VM). Slice-scoped envelope for B7 = 3/3 reqs, 7/7 scenarios.
 
 ---
-# Batch 6 (PR 7) — THIS VERIFY RUN
+# Batch 7 slice (T7.1 + T7.2) — THIS VERIFY RUN
+
+**Verified slice**: commits `310204bf..b46a9098` — T7.1 prod infra + hardening (PR 8 slice 1): `310204bf` feat(infra) production Dockerfile · `9bb9062b` feat(infra) hardened prod compose override (SH-1..SH-3) · `8a533003` feat(infra) nginx reverse proxy configs (agente/panel) · `83c38242` feat(infra) certbot + systemd renewal timer · `3aff2def` fix(infra) lumat_backups volume in prod scripts · `f41f1c9f` docs(hardening) T7.1 VM execution record · `1c3e3382` chore(sdd) T7.1 mark. T7.2 deploy/migrate/seed/smoke: `6f0487a4` feat(deploy) idempotent seed runner · `96d16817` fix(deploy) deploy scripts executable in the git index · `b46a9098` docs(deploy) clean-deploy rehearsal record. (`4238682c` chore(graphify) graph refresh sits in the range but is orchestrator-owned, not a T7.2 work unit.)
+**Runtime harness**: B7 is rehearse-first infra/deploy work — executed on a local Ubuntu 24.04 KVM rehearsal VM (Docker 29 + Compose v2.40, libvirt qemu:///session) with evidence recorded in `docs/hardening.md` (all 9 checklist blocks with real outputs) + `docs/ops.md` §2.1.1 (clean-deploy simulation). This verify re-validated on the dev machine, live: `docker compose ... config --quiet` (default + `--profile certbot` profiles), `config --format json` inspection (SH-2 runtime shape), full pytest suite against the pgvector test container (`infra-db-test-1` UP), secrets grep, git index modes (`100755`).
+
+### Completeness (B7 slice)
+
+| Metric | Value |
+|--------|-------|
+| Tasks total (change) | 33 (header says 34 — pre-existing discrepancy, SUGGESTION-1 carried) |
+| Tasks complete | 30/33 (B0..B7; T2.1 stays `[ ]` blocked, T7.3 stays `[ ]` pending) |
+| B7 tasks in this slice | 2/2 — T7.1 [x], T7.2 [x] (tasks.md, flipped by this verify; execution notes match committed files) |
+| T7.3 go-live | `[ ]` — blocked on external Meta credentials/DNS/VPS decision; NOT claimed complete → **blocked is a PASS for this slice** |
+| B7 requirements verified | 3/3 slice-scope at RUNTIME-EXECUTION level: SH-1, SH-2, SH-3 (previously doc/compose-level) |
+| B7 scenarios verified | 7/7: SH-1 ×2 (checklist verified, firewall blocks), SH-2 ×2 (secrets env-only, read-only fs), SH-3 ×3 (backup, backup-fail alert, restore) — all executed on the rehearsal VM |
+| T2.1 blocked verdict | ✅ PASS for this slice — unchanged, client credentials |
+
+Cumulative delta for context: B7 adds **no new req/scenario counts** — SH-1/SH-3 first counted B6 (doc-level), SH-2 first counted B1 (compose) + B6; this slice upgrades all three to executed-runtime compliance (real VM outputs) and verifies design **Deploy step 4** end-to-end. **Cumulative B0..B7: 51 reqs / 74 scenarios verified.**
+
+### Build & Tests Execution (B7)
+
+**Build-equivalent**: ✅ Passed (exit 0)
+```text
+.venv/bin/python -c "import app.main; from app.panel.deps import require_user, require_admin, ...; from app.services.users import ...; from app.services.cases import ...; from app.services.notify import ...; from app.services.customers import ...; from app.services.costs import ...; from app.services.settings import ...; from app.services.kb import ...; print('import OK')" (with test env set)
+-> import OK   (hash sha256:73e65cba…4cefc54219 — same canonical 'import OK' digest as B4/B5/B6)
+```
+
+**Compose validation** (live on this machine, exit 0 both):
+```text
+$ docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml config --quiet     -> VALID
+$ docker compose --profile certbot -f infra/docker-compose.yml -f infra/docker-compose.prod.yml config --quiet -> VALID
+```
+`config --format json` inspection (SH-2 runtime shape — matches hardening.md §5 claims):
+```text
+api:  read_only=True · tmpfs=['/tmp'] · security_opt=['no-new-privileges:true'] · cap_drop=['ALL']
+      · privileged=not set · ports=None (no host ports) · volumes=['/app/media'] · networks={default, internal}
+db:   networks={internal} only (no gateway/egress)
+nginx: read_only=True · cap_drop=['ALL'] · cap_add=[NET_BIND_SERVICE, CHOWN, SETUID, SETGID] · ports=80/443
+networks.internal: {'internal': True} · volumes.media: present · certbot: profile-gated ('certbot'), command renew --webroot
+```
+`nginx -t` passed on the VM against self-signed certs at the live paths (hardening.md §4, certbot README §3); `systemd-analyze verify` OK for the renew unit + timer armed (T7.1 note).
+
+**Full suite**: ✅ **321 passed / 0 failed / 0 skipped** in 93.67s, exit 0 — matches expected 321 (317 B6 baseline + 4 T7.2: `test_seed.py` ×3 + `test_deploy_scripts_tracked_as_executable` ×1), no regressions.
+Output hash (canonical capture): `sha256:acbbe4b4fbe246aaef113606c70a93087f02616478ae9eeab957167fc36429e8`.
+
+**Deploy-script index modes** (T7.2 regression, re-verified live):
+```text
+git ls-files -s -> db/migrate.sh 100755 · db/seed.sh 100755 · infra/backup.sh 100755 · infra/monitor.sh 100755 · infra/restore-test.sh 100755
+```
+
+**Secrets check** (all passed, SH-2):
+```text
+git grep -nE 'sk-[A-Za-z0-9]{20}|EAAG[A-Za-z0-9]{20}|AKIA|ghp_[A-Za-z0-9]{20}' -- app/ db/ infra/ docs/ tests/
+-> clean (only hit: tests/integration/test_infra.py:47 SECRET_PATTERNS tuple — the test's own pattern list, not a value)
+git ls-files | grep -i env          -> only infra/.env.example
+git check-ignore infra/.env         -> infra/.env (gitignored; NOT tracked)
+```
+
+**Coverage**: ➖ Not available (config.yaml `verify.coverage_threshold: 0`; no coverage tooling — consistent with B0-B6).
+
+### Spec Compliance Matrix (B7 slice)
+
+| Requirement | Scenario | Covering evidence (runtime, executed) | Result |
+|-------------|----------|--------------------------------------|--------|
+| SH-1 Network/Access Hardening | Production checklist verified | `docs/hardening.md` §1–§4 EXECUTED on the rehearsal VM (2026-08-15) with real outputs: ufw status verbose (80/443/22 ALLOW IN, default deny incoming); `sshd -T` → `passwordauthentication no` / `permitrootlogin without-password` (Ubuntu 24.04 rendering of prohibit-password); fail2ban jail active, 0 banned; `sudo -u deploy whoami` → deploy + docker group; TLS: `curl -s https://agente.lumat.cl/health` → `{"status":"ok","version":"0.1.0"}`, HTTP → 301, `openssl s_client` → TLSv1.3, certbot renew timer listed by systemd | ✅ COMPLIANT (executed on VM; real LE issuance VPS-only at T7.3) |
+| SH-1 Network/Access Hardening | Firewall blocks unexpected port | §1 verify step (`nc -vz <ip> 5432` filtered) + VM `ufw status verbose` proves deny-incoming with only 80/443/22 allowed (SH-2: api/db expose no host ports — compose JSON `api.ports=None`, only nginx 80/443) | ✅ COMPLIANT (config executed; external probe VPS-only) |
+| SH-2 Container/Secrets Hardening | Secrets not in repo | re-verified live (git grep clean, only `infra/.env.example` tracked, `infra/.env` gitignored+untracked) + §6 VM record: `docker exec printenv` shows OPENAI_API_KEY/META_ACCESS_TOKEN/APP_SECRET `<set>`; `docker history` clean | ✅ COMPLIANT (re-verified live + executed) |
+| SH-2 Container/Secrets Hardening | Read-only agent filesystem | live compose JSON (read_only=True, cap_drop ALL, no-new-privileges, media volume only, no privileged) + §5 VM record: `docker inspect` ReadonlyRootfs=true / Privileged=false / SecurityOpt=[no-new-privileges:true] / CapDrop=[ALL]; `docker exec whoami` → appuser; write probes: `/root` → Permission denied, `/app` → Read-only file system, `/app/media` → write OK | ✅ COMPLIANT (executed) |
+| SH-3 Backups and Monitoring | Daily backup succeeds | §7 VM record: `backup.sh` → `backup OK: …lumat-20260815T231553Z.sql.gz (4.0K)`; root crontab `0 3 * * *` armed; retention `-mtime +14` count = 0 | ✅ COMPLIANT (executed on VM) |
+| SH-3 Backups and Monitoring | Backup fails | §8 VM alert drill: api stopped → `ALERT: health=FAIL webhook_probe=FAIL(HTTP 000000)`, drill exit=1, SMTP env guard hit (`SMTP_HOST unset — cannot send monitoring alert`); SMTP delivery itself VPS-only (T6.6 failure path + env guard E2E-verified) | ✅ COMPLIANT (drill executed; SMTP relay VPS-only note) |
+| SH-3 Backups and Monitoring | Restore verified | §7 VM record: `restore-test.sh` → `restore OK (lumat_restore_test, dump …, customers=0 messages=0)`; weekly cron `0 4 * * 1` armed | ✅ COMPLIANT (executed on VM) |
+| Deploy (design step 4, not a spec req) | clone → up → migrate → seed → smoke | `docs/ops.md` §2.1.1 rehearsal record: fresh clone (bundle → `/opt/lumat`) → `compose --project-name lumat up -d --build` (lumat-db-1/api-1/nginx-1 healthy) → migrate ×2 (run 1 applied 001–007; run 2 skipped all — idempotent) → seed ×2 (run 1: 14 settings inserted + admin created; run 2: 0 inserted, "already exists — not overwritten", no new audit rows — `test_seed_applies_cleanly_twice`) → smoke: `/health` 200 `{"status":"ok","version":"0.1.0"}`, webhook GET challenge echoed (wrong token 403), `monitor.sh` exit 0 (health/webhook/backup OK), backup+restore+monitor crons armed under root, certbot renew timer armed, seeded admin login → `/panel/` end-to-end (bonus). nginx+certbot TLS portion rehearsed at T7.1 with a self-signed cert at the LE live paths | ✅ COMPLIANT (rehearsed on VM; matches design step 4 1:1) |
+
+**Compliance summary (B7 slice)**: 7/7 scenarios compliant at runtime-execution level + design Deploy step 4 fully rehearsed. Full suite 321/321 green. No new req/scenario counts — SH-1..SH-3 upgraded doc→executed.
+
+### Correctness (Static Evidence — B7)
+
+| Design item | Status | Notes |
+|-------------|--------|-------|
+| `Dockerfile` + `.dockerignore` (T7.1) | ✅ Implemented | multi-stage uv build (`--frozen --no-dev --no-install-project`), non-root `appuser` (uid 10001, nologin), `/app/media` pre-created appuser-owned (fresh volume inherits writable perms — fixes the media-volume root-ownership bug), `PYTHONDONTWRITEBYTECODE`; .dockerignore excludes `.env*`, `infra/`, `tests/`, `docs/`, `openspec/`, `graphify-out/`, `media/`, `backups/` |
+| `infra/docker-compose.prod.yml` (SH-2) | ✅ Implemented | api read_only + tmpfs /tmp + cap_drop ALL + no-new-privileges + `!reset` ports + `!override` volumes [media only] + `internal:true` network (db no egress; api also on default for OpenAI/Meta/nginx) + hardened nginx (minimal caps, read-only, tmpfs caches) + certbot profile service + healthchecks; `config --quiet` valid for both profiles; compose JSON confirms every claim |
+| `infra/nginx/*` (T7.1) | ✅ Implemented | agente/panel confs: 80→443 redirect with `/.well-known/acme-challenge/` served BEFORE the redirect; TLSv1.2/1.3, `HIGH:!aNULL:!MD5`, shared SSL session cache, HSTS + nosniff + X-Frame-Options DENY + Referrer-Policy; webhook/health/panel proxied via shared `snippets/proxy-pass.conf` (URI passed unchanged); both hosts read the same SAN cert live path; `nginx -t` passed on VM |
+| `infra/certbot/*` (T7.1) | ✅ Implemented | README (issuance/renewal/rehearsal-without-DNS/troubleshooting), systemd oneshot `lumat-certbot-renew.service` (compose run certbot + nginx reload) + twice-daily timer (03:17/15:17, 600s jitter, Persistent=true) — timer armed on VM, `systemd-analyze verify` OK |
+| `db/seed.sh` (T7.2) | ✅ Implemented | idempotent runner mirroring `migrate.sh`; settings seeded from `SETTINGS_DEFAULTS` (single source of truth, only-missing inserts, audit ONLY new inserts → re-run writes no audit rows, SH-5); admin via `seed_admin` (bcrypt from `PANEL_ADMIN_PASSWORD` env, first-seed-wins, loud failure without password); 3 integration tests green (`tests/integration/test_seed.py`) |
+| `PANEL_ADMIN_*` wiring (T7.2) | ✅ Implemented | compose api env (defaults `admin`/empty — seed fails loudly if unset) + `infra/.env.example` documented; no literals (SH-2) |
+| Deploy scripts executable in index (T7.2) | ✅ Implemented | `git update-index --chmod=+x` on `db/{migrate,seed}.sh` + `infra/{backup,monitor,restore-test}.sh`; regression test `test_deploy_scripts_tracked_as_executable` (fresh-clone `Permission denied` bug); index confirmed `100755` ×5 |
+| `docs/hardening.md` execution record (T7.1/T7.2) | ✅ Implemented | 9/9 sections ticked with real VM outputs + per-section deviations (self-signed TLS at LE paths, crons as root, SMTP VPS-only) + execution table (2026-08-15 T7.1, 2026-08-16 T7.2) |
+| `docs/ops.md` §2.1.1 rehearsal record (T7.2) | ✅ Implemented | full clean-deploy simulation with exact commands + recorded smoke outputs + rehearsal-caught bugs (100644 index → Permission denied; §8 cron replace-not-append) and their fixes |
+| `infra/.env.example` (T7.1/T7.2) | ✅ Implemented | `PANEL_ADMIN_*` + `SMTP_*` prod vars added with `change-me` placeholders only; `test_infra.py` SH-2 checks green |
+
+### Coherence (Design — B7)
+
+| Design decision | Followed? | Notes |
+|-----------------|-----------|-------|
+| Deployment step 2: prod provision + hardening checklist (SH-1) | ✅ Yes | checklist executed on rehearsal VM, 9/9 PASS; VPS provision deferred per user decision (rehearsal first, no VPS touched) |
+| Deployment step 4: clone → up → migrate → seed → smoke | ✅ Yes | rehearsed 1:1 (see matrix); migrate/seed idempotent ×2; smoke outputs recorded; nginx+certbot TLS leg rehearsed at T7.1 |
+| SH-1 checklist items (ufw 80/443/SSH, SSH key-only + fail2ban, non-root deploy user, TLS + auto-renew) | ✅ Yes | §1–§4 executed; TLS self-signed at LE paths on VM, real LE issuance VPS-only (T7.3) |
+| SH-2 (read-only fs, cap_drop, no privileged, internal network, secrets env-only) | ✅ Yes | §5–§6 executed + live compose JSON confirms the exact runtime shape |
+| SH-3 (backup 14-d retention, restore drill, monitor 5-min + SMTP alert) | ✅ Yes | §7–§8 executed on VM; SMTP relay VPS-only |
+| SH-5 audit append-only grants | ✅ Yes | §9 executed: app role INSERT/SELECT only; DELETE/UPDATE → `ERROR: permission denied`; INSERT RETURNING ok |
+| D7/AP-1 seed admin at deploy (T7.2) | ✅ Yes | `seed.sh` + `seed_admin` (bcrypt, first-seed-wins, audited `user.seed_admin`); panel login end-to-end bonus smoke |
+| T7.2 claim "deploy scripts executable in git index" | ✅ Yes | `git ls-files -s` 100755 ×5 + regression test `test_deploy_scripts_tracked_as_executable` |
+| Rehearsal-first (user decision: no VPS touched) | ✅ Yes | all B7 claims scoped to the VM; VPS-only remainder explicitly listed (LE issuance, `certbot renew --dry-run`, SMTP delivery, real creds, T7.3 go-live) |
+
+### Strict TDD Compliance (Step 5a + expanded)
+
+| Check | Result | Details |
+|-------|--------|---------|
+| TDD Evidence reported | ✅ (carried pattern) | no apply-progress artifact in the change dir (pre-existing, SUGGESTION-9 carried from B5/B6); evidence carried by tasks.md done-annotations — T7.1 (compose config / nginx -t / systemd-analyze / full suite 317) + T7.2 (test_seed ×3 + test_deploy_scripts_tracked_as_executable, full suite 321) |
+| All tasks have tests | ✅ | 4/4 new T7.2 tests on disk (`test_seed.py` ×3, `test_infra.py::test_deploy_scripts_tracked_as_executable` ×1); T7.1 infra artifacts verified via executable checks (compose config, nginx -t, systemd-analyze) — appropriate for infra, re-run live by this verify |
+| RED confirmed (tests exist) | ✅ | test_seed.py + the executable regression test exist in the T7.2 commit range (`6f0487a4`/`96d16817`) |
+| GREEN confirmed (tests pass) | ✅ | re-ran NOW: 321/321 pass (93.67s) — 3/3 seed + 1/1 executable green, not trusted blindly |
+| Triangulation adequate | ✅ | seed ×3 (applies-cleanly-twice incl. audit-row idempotence, inserts-defaults-and-admin with bcrypt verify, requires-password failure) + executable ×1 (per-script index mode) — distinct expectations per behavior |
+| Safety Net for modified files | ✅ | `test_infra.py` extended (modified) — full suite green (317 baseline intact in 321); new files "N/A (new)" correct |
+| Assertion quality audit (5f) | ✅ | seed tests assert real behavior (stored == SETTINGS_DEFAULTS, admin role + `verify_password`, audit count unchanged on re-run, non-zero exit + stderr message without password); executable test asserts git index mode per script — no tautologies, no ghost loops, no smoke-only |
+
+**TDD Compliance**: 7/7 checks passed (with carried SUGGESTION-9 on the apply-progress table).
+
+### Test Layer Distribution (B7)
+
+| Layer | Tests | Files | Tools |
+|-------|-------|-------|-------|
+| Unit | 0 | 0 | — |
+| Integration | 4 (T7.2) | 2 (`test_seed.py` new, `test_infra.py` extended) | pytest + live pgvector |
+| Functional | 0 new | 0 | — |
+| **Total** | **4 (T7.2)** | **2** | suite total 321 (317 B0-B6 + 4 B7) |
+
+### Changed File Coverage
+
+Coverage analysis skipped — no coverage tool detected (config.yaml `verify.coverage_threshold: 0`). Informational only.
+
+### Quality Metrics
+
+**Linter**: ➖ Not available · **Type Checker**: ➖ Not available · **shellcheck**: ➖ not installed on this machine (carried WARNING-3 from B6; scripts pass `bash -n`, are 100755 in the index, and were E2E-verified on the rehearsal VM). Informational only — never blocking.
+
+### Issues Found (B7 slice)
+
+**CRITICAL**: None
+
+**WARNING**:
+1. **(Carried from B1/B2/B3/B4/B5/B6 — hygiene)** Real `OPENAI_API_KEY` still exported in the dev shell (`~/.bashrc`); both conftests FORCE `os.environ["OPENAI_API_KEY"] = "sk-test"` (no setdefault) — tests can never pick it up (verified: full suite green = zero real network calls). Dev-shell hygiene only.
+2. **(Carried, informational)** Authored diff size B7 slice (T7.1+T7.2, excl. the orchestrator-owned graphify refresh `4238682c`): ~644 insertions / 65 deletions (T7.1 infra+docs) + seed script/tests/ops record (T7.2) vs the ~350-line forecast — infra/docs heavy, within chained-PR contract. Reviewer awareness only.
+3. **(Carried)** `shellcheck` not installed — recommend running on the deploy machine before go-live.
+4. **(Carried)** `monitor.sh` hardcodes PROD URLs (`agente.lumat.cl`) — correct for the H1 topology; local runs alert by design.
+
+**SUGGESTION**: (all carried — none candidate-caused) SUGGESTION-1 tasks.md header "34 tasks" vs 33 rows · SUGGESTION-2 WH-1 token-mismatch caplog · SUGGESTION-3 README curl proof manual · SUGGESTION-4 test_infra double-condition cosmetic · SUGGESTION-5 rate limiter counts dupes pre-dedup · SUGGESTION-6 non-JSON body 200+drop untested · SUGGESTION-7 psycopg rowcount quirk · SUGGESTION-8 EM-4 scenario counting · SUGGESTION-9 apply-progress TDD table not published (B5/B6 pattern) · SUGGESTION-10 graphify edges at archive refresh.
+
+**Notes (NOT findings — pre-existing user state, not candidate-caused)**: working tree carries uncommitted user state: `.gitignore` adds `temp/` (personal), `docs/solicitud-al-cliente-lumat.md` deleted outside git (user renamed to COPIA PROPIA / Oficial Lumat versions — those were never tracked), `docs/local-meta-test-guide.md` untracked (user file). `git log 310204bf^..b46a9098` on all four user-owned files: **no B7 commit touched any of them**. VPS-only remainder (real LE issuance, `certbot renew --dry-run`, SMTP delivery, real creds, T7.3) is by design per the rehearsal-first decision — not a defect, documented in hardening.md + ops.md.
+
+### Graphify Context (B7)
+
+- Graph check: `graphify-out/graph.json` present (2.4 MB, refreshed 2026-08-15 19:27 — includes B6 suites + B7 infra via commit `4238682c`); `graphify-out/GRAPH_REPORT.md` consulted at session start. NO rebuild performed (per instructions — refresh is orchestrator-owned at archive).
+- Query `graphify query "hardening security SH-1 SH-2 firewall TLS secrets deploy"` (BFS depth 2, **193 nodes**) — consulted: `Security Hardening Specification`, `Security Hardening`, `SH-2 Container and Secrets Hardening`, `SH-4 Prompt-Injection Mitigations`, `LumatAgent Server Hardening Checklist (SH-1..SH-3)` (docs/hardening.md), `Ops Runbook (T6.5) — deploy/rollback/backup/emergency/monitor` (docs/ops.md, community 44), `SH-3 Backups schedule + 14-day retention`, `Meta Cloud API Onboarding Checklist (T2.1, BLOCKED on client)` (community 70), `Verify report B6 (PR 7) — PASS` (community 68), `VPS Hostinger KVM 2 (Sao Paulo)`, `Batch 6 — Harness + functional/injection suites + docs + ops scripts` (community 68).
+- Path queries: `graphify path infra db` → no directed path (dir label without code edges); `graphify path deploy seed` → no directed path (graph degenerates to spec/task chains for infra topics). Structural understanding from BFS + direct source inspection of the verified artifacts.
+- Communities consulted: 44 (ops/hardening docs), 68 (tasks/verify), 70 (T2.1 onboarding), Security Hardening spec community.
+
+### Runtime Harness Spot-Check (live, this machine)
+
+```text
+docker ps                                       -> infra-db-test-1 UP (2 h, pgvector)
+docker compose ... config --quiet               -> VALID (exit 0)
+docker compose --profile certbot ... config --quiet -> VALID (exit 0)
+config --format json inspection                 -> read_only/cap_drop/no-new-privileges/internal/media all OK
+pytest tests/                                   -> 321 passed in 93.67s, exit 0
+git ls-files -s                                 -> db/{migrate,seed}.sh + infra/{backup,monitor,restore-test}.sh 100755
+git grep secrets (sk-/EAAG/AKIA/ghp_)           -> clean (only the test's own SECRET_PATTERNS tuple)
+git ls-files | grep -i env                      -> infra/.env.example only
+git check-ignore infra/.env                     -> infra/.env (gitignored, untracked)
+build import (test env)                         -> import OK, exit 0 (hash sha256:73e65cba…)
+```
+
+### Verdict (B7 slice)
+
+**PASS** — T7.1 + T7.2 (Batch 7 slice) is complete (2/2 tasks `[x]` with execution notes matching committed files), work-unit commits present (T7.1 `310204bf..1c3e3382`; T7.2 `6f0487a4`, `96d16817`, `b46a9098`) with no drift (deploy scripts `100755` in the git index + regression test), user-owned files untouched by the slice, full suite **321/321 green** (4 new T7.2 tests), prod compose valid with the SH-2 runtime shape confirmed live (read_only, cap_drop ALL, no-new-privileges, internal network, media volume writable, secrets env-only), the hardening checklist is genuinely executed on the rehearsal VM (9/9 PASS with real outputs — not just documented), and the deploy rehearsal (design step 4) matches 1:1: fresh clone → compose up → migrate ×2 idempotent → seed ×2 idempotent → smoke (`/health` 200, webhook challenge echo + 403 on wrong token, monitor exit 0, crons + renew timer armed, panel login end-to-end). Rehearsal-caught bugs (100644 script modes, cron replace-not-append) were fixed with regression coverage. **T7.3 remains `[ ]` blocked** on external Meta credentials/DNS/VPS decision — blocked is a PASS for this slice and no T7.3 requirement is claimed complete. The VPS-only remainder (real LE issuance, `certbot renew --dry-run`, SMTP delivery, real creds) is by design, explicitly documented, and NOT claimed done. No CRITICAL/WARNING/SUGGESTION findings are candidate-caused by B7. **Cumulative: 51 reqs / 74 scenarios** (unchanged — SH-1..SH-3 upgraded doc→executed). Recommended next: create PR 8 (B7 slice, stacked to main), then T7.3 go-live once Meta credentials + DNS + the VPS decision land, and archive B7 (orchestrator) with a graphify refresh.
+
+## Previous Slice — Batch 6 (PR 7) PASS — preserved verbatim
 
 **Verified slice**: commits `bbc6f15d..24a569ea` (9 commits): `63a21cd3` chore(sdd) T6.1 · `690eabad` fix(chat) suppress redundant clarification on first contact (CM-1) · `279d5747` test(functional) conversation + customer webhook flows (CM-1..6, CR-1..6) · `7ed823b7` chore(sdd) T6.2 · `01750813` test(injection) SH-4 prompt-injection suite (go-live gate) · `3d1f1b1c` chore(sdd) T6.3 · `b3b66fa8` docs(hardening) SH-1..3 executable checklist · `6b1cb473` docs(ops) deploy/rollback/backup/emergency/KB/monitor runbook · `287e4636` feat(ops) backup/restore-test/monitor scripts (SH-3) · `24a569ea` chore(sdd) T6.4..T6.6
 **Runtime harness**: `lumat-pg-test` container UP (localhost:5432, pgvector, 33 h) — all suites executed live against the real DB; OpenAI chat/embeddings + Meta sends respx-mocked; webhook flows driven through the REAL signed endpoint (TestClient + `tests/webhook_helpers.py` HMAC builders).

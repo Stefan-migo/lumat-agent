@@ -21,6 +21,9 @@ fi
 
 # Backups live in the compose `backups` volume; fall back to <repo>/backups
 # when the stack has never been brought up (dev machine, volume absent).
+# T7.1: prod no longer mounts `backups` in any service, so create the volume
+# explicitly — otherwise nothing ever materializes it.
+docker volume create lumat_backups >/dev/null 2>&1 || true
 if docker volume inspect lumat_backups >/dev/null 2>&1; then
     BACKUPS_DIR="$(docker volume inspect -f '{{.Mountpoint}}' lumat_backups)"
 else

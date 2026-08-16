@@ -1,0 +1,12 @@
+[Unit]
+# Twice-daily renewal check for the LumatAgent certificates
+# (certbot's own timer runs every 12 h; see infra/certbot/README.md).
+Description=Twice-daily LumatAgent certificate renewal check
+
+[Timer]
+OnCalendar=*-*-* 03:17,15:17
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
