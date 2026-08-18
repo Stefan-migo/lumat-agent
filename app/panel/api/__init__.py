@@ -9,13 +9,21 @@ prod (nginx), so the same-origin session cookie is all the transport needs.
 
 from fastapi import APIRouter
 
-from app.panel.api.routes import auth, clients, dashboard
+from app.panel.api.routes import (
+    auth,
+    cases,
+    clients,
+    conversations,
+    dashboard,
+)
 
-# Per-domain sub-routers (conversations, cases, kb, settings) are included
-# as they land, batch by batch.
+# Per-domain sub-routers (kb, settings) are included as they land, batch by
+# batch.
 
 api_router = APIRouter(prefix="/api")
 
 api_router.include_router(auth.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(clients.router)
+api_router.include_router(conversations.router)
+api_router.include_router(cases.router)
