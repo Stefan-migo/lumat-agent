@@ -1,9 +1,10 @@
-import { useId } from 'react';
-import type { TextareaHTMLAttributes } from 'react';
-import { FieldShell } from './FieldShell';
-import './primitives.css';
+import { useId } from "react";
+import type { TextareaHTMLAttributes } from "react";
+import { FieldShell } from "./FieldShell";
+import "./primitives.css";
 
-export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+export interface TextareaProps
+  extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label: string;
   /** Inline validation message, linked to the control via aria-describedby. */
   error?: string;
@@ -15,7 +16,7 @@ export function Textarea({
   error,
   id,
   disabled = false,
-  className = '',
+  className = "",
   ...rest
 }: TextareaProps) {
   const autoId = useId();
@@ -23,14 +24,22 @@ export function Textarea({
   const errorId = error ? `${textareaId}-error` : undefined;
 
   return (
-    <FieldShell label={label} id={textareaId} errorId={errorId} error={error} disabled={disabled}>
+    <FieldShell
+      label={label}
+      id={textareaId}
+      errorId={errorId}
+      error={error}
+      disabled={disabled}
+    >
       <textarea
         {...rest}
         id={textareaId}
-        className={['field__control', 'field__textarea', className].filter(Boolean).join(' ')}
+        className={["field__control", "field__textarea", className]
+          .filter(Boolean)
+          .join(" ")}
         disabled={disabled}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : rest['aria-describedby']}
+        aria-describedby={error ? errorId : rest["aria-describedby"]}
       />
     </FieldShell>
   );

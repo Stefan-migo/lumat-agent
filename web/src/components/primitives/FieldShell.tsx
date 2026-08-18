@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
 /**
  * Shared label + error wrapper for the form-control primitives (Input/Select/
@@ -20,8 +20,15 @@ export interface FieldShellProps {
   children: ReactNode;
 }
 
-export function FieldShell({ label, id, errorId, error, disabled, children }: FieldShellProps) {
-  const className = `field${disabled ? ' field--disabled' : ''}`;
+export function FieldShell({
+  label,
+  id,
+  errorId,
+  error,
+  disabled,
+  children,
+}: FieldShellProps) {
+  const className = `field${disabled ? " field--disabled" : ""}`;
   return (
     <div className={className}>
       <label className="field__label" htmlFor={id}>
@@ -29,7 +36,12 @@ export function FieldShell({ label, id, errorId, error, disabled, children }: Fi
       </label>
       {children}
       {error ? (
-        <span className="field__error" id={errorId} role="alert" data-testid="field-error">
+        <span
+          className="field__error"
+          id={errorId}
+          role="alert"
+          data-testid="field-error"
+        >
           {error}
         </span>
       ) : null}

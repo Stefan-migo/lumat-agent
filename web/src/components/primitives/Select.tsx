@@ -1,17 +1,18 @@
-import { useId } from 'react';
-import type { SelectHTMLAttributes } from 'react';
-import { FieldShell } from './FieldShell';
-import './primitives.css';
+import { useId } from "react";
+import type { SelectHTMLAttributes } from "react";
+import { FieldShell } from "./FieldShell";
+import "./primitives.css";
 
 export interface SelectOption {
   value: string;
   label: string;
 }
 
-export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
+export interface SelectProps
+  extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "size"> {
   label: string;
   options: SelectOption[];
-  size?: 'sm' | 'md';
+  size?: "sm" | "md";
   error?: string;
 }
 
@@ -19,11 +20,11 @@ export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement
 export function Select({
   label,
   options,
-  size = 'md',
+  size = "md",
   error,
   id,
   disabled = false,
-  className = '',
+  className = "",
   ...rest
 }: SelectProps) {
   const autoId = useId();
@@ -31,15 +32,21 @@ export function Select({
   const errorId = error ? `${selectId}-error` : undefined;
 
   const controlClass = [
-    'field__control',
-    size === 'sm' ? 'field__control--sm' : '',
+    "field__control",
+    size === "sm" ? "field__control--sm" : "",
     className,
   ]
     .filter(Boolean)
-    .join(' ');
+    .join(" ");
 
   return (
-    <FieldShell label={label} id={selectId} errorId={errorId} error={error} disabled={disabled}>
+    <FieldShell
+      label={label}
+      id={selectId}
+      errorId={errorId}
+      error={error}
+      disabled={disabled}
+    >
       <select
         {...rest}
         id={selectId}
@@ -47,7 +54,7 @@ export function Select({
         disabled={disabled}
         data-bx-size={size}
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : rest['aria-describedby']}
+        aria-describedby={error ? errorId : rest["aria-describedby"]}
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
