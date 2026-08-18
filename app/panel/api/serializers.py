@@ -12,7 +12,7 @@ the SPA must show the same fields the current panel shows.
 
 from __future__ import annotations
 
-from app.models import Customer, CustomerNote
+from app.models import Case, Conversation, Customer, CustomerNote, Message, User
 
 
 def _iso(value) -> str | None:
@@ -45,3 +45,55 @@ def to_note_dict(note: CustomerNote) -> dict:
         "author": note.author,
         "created_at": _iso(note.created_at),
     }
+
+
+def to_message_dict(message: Message) -> dict:
+    """Message row -> snake_case service dict (thread media link, PDW-TST-3)."""
+    return {
+        "id": message.id,
+        "conversation_id": message.conversation_id,
+        "direction": message.direction.value,
+        "msg_type": message.msg_type.value,
+        "text": message.text,
+        "media_url": message.media_url,
+        "created_at": _iso(message.created_at),
+    }
+
+
+def to_conversation_dict(conversation: Conversation) -> dict:
+    """Conversation row -> snake_case service dict (B3/T3.1)."""
+    return {
+        "id": conversation.id,
+        "customer_id": conversation.customer_id,
+        "wa_phone": conversation.wa_phone,
+        "state": conversation.state.value,
+        "summary": conversation.summary,
+        "last_message_at": _iso(conversation.last_message_at),
+        "created_at": _iso(conversation.created_at),
+        "closed_at": _iso(conversation.closed_at),
+    }
+
+
+def to_case_dict(case: Case) -> dict:
+    """Case row -> snake_case service dict (B3/T3.2)."""
+    return {
+        "id": case.id,
+        "conversation_id": case.conversation_id,
+        "customer_id": case.customer_id,
+        "created_at": _iso(case.created_at),
+        "service": case.service,
+        "priority": case.priority,
+        "status": case.status,
+        "emergency": case.emergency,
+        "responsible_id": case.responsible_id,
+        "summary": case.summary,
+        "escalated_at": _iso(case.escalated_at),
+        "closed_at": _iso(case.closed_at),
+        "acknowledged_at": _iso(case.acknowledged_at),
+        "ack_by": case.ack_by,
+    }
+
+
+def to_user_dict(user: User) -> dict:
+    """User row -> minimal {id, username} dict (D8 — embedded in cases, no /users)."""
+    return {"id": user.id, "username": user.username}
