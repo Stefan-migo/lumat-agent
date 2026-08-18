@@ -171,3 +171,25 @@ def login():
         assert resp.status_code == 302, "login must succeed"
 
     return _login
+
+
+@pytest.fixture
+def api_login():
+    """JSON login helper (PDW-AUTH-4): authenticate via POST /panel/api/login.
+
+    No redirects allowed — the JSON API must answer 200 JSON, never a 302 to
+    the HTML login page (PDW-AUTH-1), so follow_redirects=False proves it.
+    """
+
+    def _login(client, username: str, password: str) -> None:
+        resp = client.post(
+            "/panel/api/login",
+            json={"username": username, "password": password},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 200, f"api login must succeed: {resp.status_code} {resp.text}"
+        assert resp.headers["content-type"].startswith("application/json"), (
+            "api login must answer JSON, not HTML"
+        )
+
+    return _login

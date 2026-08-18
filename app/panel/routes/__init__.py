@@ -7,6 +7,7 @@ next to the webhook router.
 
 from fastapi import APIRouter
 
+from app.panel.api import api_router
 from app.panel.routes import (
     auth,
     cases,
@@ -20,6 +21,7 @@ from app.panel.routes import (
 
 panel_router = APIRouter(prefix="/panel", tags=["panel"])
 
+panel_router.include_router(api_router)
 panel_router.include_router(auth.router)
 panel_router.include_router(dashboard.router)
 panel_router.include_router(clients.router)
