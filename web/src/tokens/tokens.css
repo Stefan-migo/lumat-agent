@@ -1,0 +1,69 @@
+/* Lumat Panel design tokens (B6/T6.1) — SINGLE token source (PDW-TKN-1/2).
+ *
+ * Port of the panel's inline CSS palette (brand #143c2c seed), NOT a redesign.
+ * Component sources MUST reference these custom properties only — no hardcoded
+ * hex or magic spacing values (enforced by token guards, T6.2).
+ *
+ * Spot-checked equivalence (PDW-TKN-1): primary #143c2c, bg #f4f5f7,
+ * text #1a202c, danger #b71c1c, success #1b5e20, radii 6px/8px.
+ */
+
+:root {
+  /* Primary scale — seeded from brand #143c2c (HSL 156° 50% 16%) */
+  --primary-50: #f0faf6;
+  --primary-100: #e0f5ed;
+  --primary-200: #c2ebda;
+  --primary-300: #9cdec3;
+  --primary-400: #71d0aa;
+  --primary-500: #47c291;
+  --primary-600: #349d73;
+  --primary-700: #256f51;
+  --primary-800: #143c2c; /* brand */
+  --primary-900: #0d261c;
+
+  /* Neutrals (base.html port) */
+  --bg: #f4f5f7;
+  --surface: #fff;
+  --border: #d8dde3;
+  --border-strong: #c3cbd4;
+  --text: #1a202c;
+  --text-muted: #4a5568;
+  --table-head-bg: #eef1f4;
+
+  /* Semantic pairs (text / bg / border) */
+  --danger: #b71c1c;
+  --danger-bg: #fdecea;
+  --danger-border: #e57373;
+  --success: #1b5e20;
+  --success-bg: #e8f5e9;
+  --success-border: #81c784;
+  --warning: #a16207;
+  --warning-bg: #fef3c7;
+  --warning-border: #fcd34d; /* new: StatusBadge human/pending */
+
+  /* Spacing — 4px scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+
+  /* Type — system-ui */
+  --font-sans: system-ui, sans-serif;
+  --text-sm: 0.85rem;
+  --text-md: 0.95rem;
+  --text-lg: 1.25rem;
+  --text-2xl: 2rem;
+
+  /* Shadow */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.12);
+
+  --z-modal: 100;
+}
