@@ -28,6 +28,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 
+# Embedding dimensionality, local fastembed (db/migrations/008_local_embeddings.sql
+# resized the column from 1536 to 384; keep in sync with kb.EMBED_DIMS).
+EMBED_DIMS = 384
+
 
 def _ts() -> Mapped[datetime]:
     return mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -318,7 +322,7 @@ class KbChunk(Base):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     source_meta: Mapped[dict | None] = mapped_column(JSONB)
-    embedding: Mapped[list[float]] = mapped_column(Vector(1536), nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBED_DIMS), nullable=False)
 
 
 class Settings(Base):

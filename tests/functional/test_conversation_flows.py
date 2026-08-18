@@ -223,7 +223,7 @@ def test_hh3_two_failures_escalate(client, mock_openai_chat, mock_meta_send):
 @pytest.mark.spec("CM-4")
 @pytest.mark.spec("CM-6")
 def test_cm6_kb_miss_logs_unresolved_and_escalates(
-    client, mock_openai_chat, mock_openai_embeddings, mock_meta_send
+    client, mock_openai_chat, fake_embedder, mock_meta_send
 ):
     """Empty KB -> retrieval returns nothing -> cannot-answer (deterministic,
     no respond LLM call), the question is logged unresolved (CM-6), and the

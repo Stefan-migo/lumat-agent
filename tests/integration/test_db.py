@@ -4,7 +4,7 @@ Runs against the migrated pgvector test DB as the `app` role (the role the
 application uses). Verifies:
 
 - ORM CRUD round-trip (create/read/update/delete) on business tables
-- jsonb (settings) and vector(1536) (kb_chunks) types round-trip via ORM
+- jsonb (settings) and vector(384) (kb_chunks) types round-trip via ORM
 - audit service writes append-only rows with before/after (SH-5) and the
   admin read lists them
 """
@@ -130,13 +130,13 @@ def test_settings_jsonb_round_trip():
 
 
 def test_kb_chunk_vector_round_trip():
-    """kb_chunks.embedding vector(1536) round-trips via ORM (KB-1)."""
+    """kb_chunks.embedding vector(384) round-trips via ORM (KB-1)."""
     with SessionLocal() as session:
         doc = KbDocument(title="Manual", format="md", content="# Calefont")
         session.add(doc)
         session.flush()
 
-        embedding = [0.01 + i * 1e-6 for i in range(1536)]
+        embedding = [0.01 + i * 1e-6 for i in range(384)]
         chunk = KbChunk(
             document_id=doc.id,
             version=1,
@@ -150,7 +150,7 @@ def test_kb_chunk_vector_round_trip():
 
         fetched = session.get(KbChunk, chunk.id)
         assert fetched.embedding is not None
-        assert len(fetched.embedding) == 1536
+        assert len(fetched.embedding) == 384
         assert abs(fetched.embedding[0] - 0.01) < 1e-9
         assert fetched.source_meta == {"page": 1}
 

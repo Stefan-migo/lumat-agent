@@ -14,6 +14,7 @@ from sqlalchemy import select
 
 from app.db import SessionLocal  # noqa: E402
 from app.models import AuditLog, KbDocument, Settings, UserRole  # noqa: E402
+from app.services import kb
 from app.services.settings import SETTINGS_DEFAULTS  # noqa: E402
 
 
@@ -84,7 +85,7 @@ def test_admin_can_access_kb_manager_and_settings(admin_client):
 
 
 @pytest.mark.spec("KB-3")
-def test_kb_add_document(admin_client, mock_openai_embeddings):
+def test_kb_add_document(admin_client, fake_embedder):
     resp = admin_client.post(
         "/panel/kb",
         data={"title": "Tarifas 2026"},
@@ -100,14 +101,14 @@ def test_kb_add_document(admin_client, mock_openai_embeddings):
         assert doc.format.value == "md"
         assert doc.version == 1
         assert doc.active is True
-        assert doc.provider == "openai"
-        assert doc.model == "text-embedding-3-small"
+        assert doc.provider == "local"
+        assert doc.model == kb.EMBED_MODEL
     audit = _last_audit("kb.document_ingest")
     assert audit is not None and audit.actor == "adm"
 
 
 @pytest.mark.spec("KB-4")
-def test_kb_edit_creates_new_version(admin_client, mock_openai_embeddings):
+def test_kb_edit_creates_new_version(admin_client, fake_embedder):
     # Seed v1 via the panel, then edit it.
     admin_client.post(
         "/panel/kb",
@@ -136,7 +137,7 @@ def test_kb_edit_creates_new_version(admin_client, mock_openai_embeddings):
 
 
 @pytest.mark.spec("KB-3")
-def test_kb_disable_document(admin_client, mock_openai_embeddings):
+def test_kb_disable_document(admin_client, fake_embedder):
     admin_client.post(
         "/panel/kb",
         data={"title": "Manual"},
@@ -156,7 +157,7 @@ def test_kb_disable_document(admin_client, mock_openai_embeddings):
 
 
 @pytest.mark.spec("KB-4")
-def test_kb_restore_previous_version(admin_client, mock_openai_embeddings):
+def test_kb_restore_previous_version(admin_client, fake_embedder):
     admin_client.post(
         "/panel/kb",
         data={"title": "Manual"},
@@ -184,7 +185,7 @@ def test_kb_restore_previous_version(admin_client, mock_openai_embeddings):
 
 
 @pytest.mark.spec("KB-3")
-def test_kb_list_shows_provider_model_cost(admin_client, mock_openai_embeddings):
+def test_kb_list_shows_provider_model_cost(admin_client, fake_embedder):
     admin_client.post(
         "/panel/kb",
         data={"title": "Tarifas"},
@@ -195,8 +196,8 @@ def test_kb_list_shows_provider_model_cost(admin_client, mock_openai_embeddings)
     resp = admin_client.get("/panel/kb")
 
     assert resp.status_code == 200
-    assert "openai" in resp.text
-    assert "text-embedding-3-small" in resp.text
+    assert "local" in resp.text
+    assert kb.EMBED_MODEL in resp.text
     assert "Tarifas" in resp.text
 
 

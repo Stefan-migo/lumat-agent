@@ -33,7 +33,7 @@ from app.models import (  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
 
 ADMIN_DB_URL = "postgresql://lumat:lumat@localhost:5432/lumat"
-CHAT_URL = "https://api.openai.com/v1/chat/completions"
+CHAT_URL = "https://api.deepseek.com/chat/completions"
 
 
 def _llm_result_for(text: str) -> dict:
@@ -67,7 +67,7 @@ def mock_chat():
     """Intercept OpenAI /chat/completions; captures requests for SH-4 checks."""
     captured: list[dict] = []
 
-    with respx.mock(base_url="https://api.openai.com/v1", assert_all_called=False) as router:
+    with respx.mock(base_url="https://api.deepseek.com", assert_all_called=False) as router:
 
         def handler(request: httpx.Request) -> httpx.Response:
             body = json.loads(request.content)
@@ -85,7 +85,7 @@ def mock_chat():
                     "id": "cmpl-test",
                     "object": "chat.completion",
                     "created": 0,
-                    "model": "gpt-4o-mini",
+                    "model": "deepseek-chat",
                     "choices": [
                         {
                             "index": 0,
@@ -283,7 +283,7 @@ def test_route_capture_path_for_equipment_intents(mock_chat):
         assert result["next_step"] == "capture", text
 
 
-def test_route_retrieval_path_for_valores(mock_chat, mock_openai_embeddings):
+def test_route_retrieval_path_for_valores(mock_chat, fake_embedder):
     conv_id = _seed("cuanto cuesta la revision anual")
     result = _run_graph(conv_id)
     assert result["intent"] == "valores"

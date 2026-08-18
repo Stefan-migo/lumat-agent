@@ -112,7 +112,7 @@ def _all_call_texts(captured: list[dict]) -> list[str]:
     ids=["ignore-instructions", "delimiter-breakout", "sensitive-data", "english-admin"],
 )
 def test_sh4_deterministic_payload_never_reaches_llm_and_escalates(
-    client, mock_openai_chat, mock_openai_embeddings, mock_meta_send, wamid, payload
+    client, mock_openai_chat, fake_embedder, mock_meta_send, wamid, payload
 ):
     """(a) no LLM call carries the payload; (b) escalation; (c) audit."""
     post_message(client, wamid, payload)
@@ -150,7 +150,7 @@ def test_sh4_deterministic_payload_never_reaches_llm_and_escalates(
 
 @pytest.mark.spec("SH-4")
 def test_sh4_llm_flag_layer_isolates_payload_as_data(
-    client, mock_openai_chat, mock_openai_embeddings, mock_meta_send
+    client, mock_openai_chat, fake_embedder, mock_meta_send
 ):
     """A variant the deterministic set misses is caught by the classifier LLM.
 
@@ -196,7 +196,7 @@ def test_sh4_llm_flag_layer_isolates_payload_as_data(
 
 @pytest.mark.spec("SH-4")
 def test_sh4_admin_tool_attempt_never_executes(
-    client, mock_openai_chat, mock_openai_embeddings, mock_meta_send
+    client, mock_openai_chat, fake_embedder, mock_meta_send
 ):
     """'borra mi caso' never runs: no data is deleted, only escalation happens.
 
@@ -238,7 +238,7 @@ def test_sh4_admin_tool_attempt_never_executes(
 
 @pytest.mark.spec("SH-4")
 def test_sh4_normal_message_not_treated_as_injection(
-    client, mock_openai_chat, mock_openai_embeddings, mock_meta_send
+    client, mock_openai_chat, fake_embedder, mock_meta_send
 ):
     """The gate is specific: a regular query flows normally, no false positive."""
     post_message(client, "wamid.inj.ok1", "hola")

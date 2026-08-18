@@ -10,19 +10,17 @@ Scenarios mapped 1:1 from openspec/specs/knowledge-base/spec.md:
 - KB-4 "Re-ingestion on update": new version + re-embed, prior version kept;
   "Restore previous version": active_version flip, no re-embed (D8)
 
-OpenAI embeddings are mocked via respx (never a real API call — dev shell key
-is NOT used). The mock derives a deterministic 1536-d embedding per input
-text, so identical text -> cosine 1.0, unrelated text -> 0.0: retrieval
-threshold behavior is fully exercised.
+Embeddings are LOCAL (fastembed, 384d): the test injects a deterministic fake
+via the `fake_embedder` seam (kb.get_embedder monkeypatched), so the suite
+never downloads the ~130MB model. The fake derives a deterministic 384-d
+one-hot embedding per input text, so identical text -> cosine 1.0, unrelated
+text -> 0.0: retrieval threshold behavior is fully exercised.
 """
 
 import hashlib
-import json
 
-import httpx
 import psycopg
 import pytest
-import respx
 from sqlalchemy import func, select
 
 from app.db import SessionLocal  # noqa: E402
@@ -30,7 +28,6 @@ from app.models import DocumentFormat, KbChunk, KbDocument  # noqa: E402
 from app.services import kb  # noqa: E402
 
 ADMIN_DB_URL = "postgresql://lumat:lumat@localhost:5432/lumat"
-EMBED_URL = "https://api.openai.com/v1/embeddings"
 
 
 def _embed(text: str) -> list[float]:
@@ -42,37 +39,18 @@ def _embed(text: str) -> list[float]:
     return vec
 
 
-def _usage_tokens(inputs: list[str]) -> int:
-    return max(1, sum(len(i) // 4 for i in inputs))
-
-
 @pytest.fixture
-def mock_embeddings():
-    """Intercept OpenAI /embeddings for the whole test (respx)."""
-    with respx.mock(base_url="https://api.openai.com/v1") as router:
+def fake_embedder(monkeypatch):
+    """Inject a deterministic 384-d embedder; counts `.embed` calls."""
+    calls = {"count": 0}
 
-        def handler(request: httpx.Request) -> httpx.Response:
-            body = json.loads(request.content)
-            inputs = body["input"]
-            if isinstance(inputs, str):
-                inputs = [inputs]
-            data = [
-                {"object": "embedding", "index": i, "embedding": _embed(text)}
-                for i, text in enumerate(inputs)
-            ]
-            tokens = _usage_tokens(inputs)
-            return httpx.Response(
-                200,
-                json={
-                    "object": "list",
-                    "model": "text-embedding-3-small",
-                    "data": data,
-                    "usage": {"prompt_tokens": tokens, "total_tokens": tokens},
-                },
-            )
+    class _FakeEmbedder:
+        def embed(self, texts):
+            calls["count"] += 1
+            return (_embed(t) for t in texts)
 
-        router.post("/embeddings").mock(side_effect=handler)
-        yield router
+    monkeypatch.setattr(kb, "get_embedder", lambda: _FakeEmbedder())
+    return calls
 
 
 @pytest.fixture(autouse=True)
@@ -101,7 +79,7 @@ def _chunk_rows(doc_id: int) -> list[KbChunk]:
 # ---------------------------------------------------------------------------
 
 
-def test_kb1_ingest_markdown_chunks_stored(mock_embeddings):
+def test_kb1_ingest_markdown_chunks_stored(fake_embedder):
     content = "# Calefont\nInstrucciones de seguridad del calefont. " + "texto " * 400
     with SessionLocal() as session:
         doc = kb.ingest_document(
@@ -123,11 +101,11 @@ def test_kb1_ingest_markdown_chunks_stored(mock_embeddings):
     assert len(chunks) > 1  # long content -> multiple chunks
     assert all(c.version == 1 for c in chunks)
     assert all(c.embedding is not None for c in chunks)
-    assert all(len(c.embedding) == kb.EMBED_DIMS == 1536 for c in chunks)
+    assert all(len(c.embedding) == kb.EMBED_DIMS == 384 for c in chunks)
     # KB-1 "Provider and model named": recorded on the document
-    assert stored.provider == "openai"
+    assert stored.provider == "local"
     assert stored.model == kb.EMBED_MODEL
-    assert stored.cost_meta is not None and stored.cost_meta > 0
+    assert stored.cost_meta is not None and stored.cost_meta == 0  # local: free
 
 
 def _pdf_with_text(text: str) -> bytes:
@@ -157,7 +135,7 @@ def _pdf_with_text(text: str) -> bytes:
     return out
 
 
-def test_kb1_ingest_pdf_extracts_text(mock_embeddings):
+def test_kb1_ingest_pdf_extracts_text(fake_embedder):
     pdf_bytes = _pdf_with_text("como enciendo mi calefont correctamente")
 
     with SessionLocal() as session:
@@ -177,7 +155,7 @@ def test_kb1_ingest_pdf_extracts_text(mock_embeddings):
     assert stored.version == 1
 
 
-def test_kb1_ingest_csv_row_grouped(mock_embeddings):
+def test_kb1_ingest_csv_row_grouped(fake_embedder):
     csv_bytes = (
         "servicio,valor,detalle\n"
         "revision,15000,Revision anual calefont\n"
@@ -206,7 +184,7 @@ def test_kb1_ingest_csv_row_grouped(mock_embeddings):
     assert "valor: 35000" in joined
 
 
-def test_kb1_chunk_count_for_long_document(mock_embeddings):
+def test_kb1_chunk_count_for_long_document(fake_embedder):
     long_text = "parrafo " * 3000  # ~21k chars -> ~42 chunks at 500 chars
     with SessionLocal() as session:
         doc = kb.ingest_document(
@@ -230,7 +208,7 @@ def _ingest(session, title: str, text: str, fmt=DocumentFormat.MD) -> int:
     return doc.id
 
 
-def test_kb2_retrieval_relevant_hit(mock_embeddings):
+def test_kb2_retrieval_relevant_hit(fake_embedder):
     with SessionLocal() as session:
         _ingest(session, "Manual", "como enciendo mi calefont correctamente")
         session.commit()
@@ -244,7 +222,7 @@ def test_kb2_retrieval_relevant_hit(mock_embeddings):
     assert results[0]["similarity"] >= 0.99  # identical text -> cosine ~1
 
 
-def test_kb2_retrieval_threshold_miss(mock_embeddings):
+def test_kb2_retrieval_threshold_miss(fake_embedder):
     with SessionLocal() as session:
         _ingest(session, "Manual", "como enciendo mi calefont correctamente")
         session.commit()
@@ -255,7 +233,7 @@ def test_kb2_retrieval_threshold_miss(mock_embeddings):
     assert results == []  # unrelated -> below min_sim 0.65 (CM-4 unresolved path)
 
 
-def test_kb2_retrieval_top_k_limits_results(mock_embeddings):
+def test_kb2_retrieval_top_k_limits_results(fake_embedder):
     with SessionLocal() as session:
         for i in range(8):
             _ingest(session, f"Doc{i}", f"marca de calefont modelo {i}")
@@ -267,7 +245,7 @@ def test_kb2_retrieval_top_k_limits_results(mock_embeddings):
     assert len(results) <= 5  # top_k respected even with 8 near-matches
 
 
-def test_kb2_min_sim_configurable(mock_embeddings):
+def test_kb2_min_sim_configurable(fake_embedder):
     with SessionLocal() as session:
         _ingest(session, "Manual", "texto totalmente distinto sobre gasfiteria")
         session.commit()
@@ -288,7 +266,7 @@ def test_kb2_min_sim_configurable(mock_embeddings):
 # ---------------------------------------------------------------------------
 
 
-def test_kb4_update_creates_new_version_and_reembeds(mock_embeddings):
+def test_kb4_update_creates_new_version_and_reembeds(fake_embedder):
     with SessionLocal() as session:
         doc_id = _ingest(session, "Valores", "revision anual 15000")
         session.commit()
@@ -315,7 +293,7 @@ def test_kb4_update_creates_new_version_and_reembeds(mock_embeddings):
     assert results[0]["version"] == 2
 
 
-def test_kb4_restore_previous_version_flip_no_reembed(mock_embeddings):
+def test_kb4_restore_previous_version_flip_no_reembed(fake_embedder):
     with SessionLocal() as session:
         doc_id = _ingest(session, "Valores", "revision anual 15000")
         session.commit()
@@ -323,13 +301,13 @@ def test_kb4_restore_previous_version_flip_no_reembed(mock_embeddings):
         kb.update_document(session, doc_id, "revision anual 20000, nuevo valor")
         session.commit()
 
-    # restore v1: pointer flip, no embedding API call should happen
-    assert mock_embeddings.calls.call_count > 0
-    calls_before = len(mock_embeddings.calls)
+    # restore v1: pointer flip, no re-embed (D8 — embedder untouched)
+    assert fake_embedder["count"] > 0
+    calls_before = fake_embedder["count"]
     with SessionLocal() as session:
         kb.restore_version(session, doc_id, version=1)
         session.commit()
-    assert len(mock_embeddings.calls) == calls_before  # D8: no re-embed
+    assert fake_embedder["count"] == calls_before  # D8: no re-embed
 
     with SessionLocal() as session:
         stored = session.get(KbDocument, doc_id)
@@ -345,7 +323,7 @@ def test_kb4_restore_previous_version_flip_no_reembed(mock_embeddings):
 # ---------------------------------------------------------------------------
 
 
-def test_kb3_disable_document_excludes_from_retrieval(mock_embeddings):
+def test_kb3_disable_document_excludes_from_retrieval(fake_embedder):
     with SessionLocal() as session:
         doc_id = _ingest(session, "Manual", "como enciendo mi calefont")
         session.commit()

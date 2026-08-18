@@ -180,7 +180,7 @@ def _seed_kb_doc(text: str) -> None:
         session.commit()
 
 
-def test_cm4_kb_grounded_answer_with_kb_tags(mock_openai_chat, mock_openai_embeddings):
+def test_cm4_kb_grounded_answer_with_kb_tags(mock_openai_chat, fake_embedder):
     # the customer question is a prefix of the chunk -> semantic hit (mocked)
     _seed_kb_doc("cuanto cuesta la revision anual de calefont: 15000 pesos")
     conv_id = _start_conversation()
@@ -201,7 +201,7 @@ def test_cm4_kb_grounded_answer_with_kb_tags(mock_openai_chat, mock_openai_embed
     assert "15000" not in system  # KB content never in the system prompt
 
 
-def test_cm4_kb_miss_cannot_answer_and_logs_unresolved(mock_openai_chat, mock_openai_embeddings):
+def test_cm4_kb_miss_cannot_answer_and_logs_unresolved(mock_openai_chat, fake_embedder):
     _seed_kb_doc("revision anual 15000")
     conv_id = _start_conversation()
     replies = _turn(conv_id, "cuanto cuesta un grifo de cocina marca x", "wamid.miss0")
@@ -225,7 +225,7 @@ def test_cm4_kb_miss_cannot_answer_and_logs_unresolved(mock_openai_chat, mock_op
         assert "resumen" in conv.summary.lower()
 
 
-def test_cm6_no_unresolved_when_kb_hits(mock_openai_chat, mock_openai_embeddings):
+def test_cm6_no_unresolved_when_kb_hits(mock_openai_chat, fake_embedder):
     _seed_kb_doc("cuanto cuesta la revision anual de calefont: 15000 pesos")
     conv_id = _start_conversation()
     _turn(conv_id, "cuanto cuesta la revision anual", "wamid.hit0")
