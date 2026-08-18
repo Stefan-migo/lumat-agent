@@ -1,0 +1,99 @@
+/* Lumat Panel primitives shared styles (B7).
+ *
+ * Token-only: every value references a --var from `tokens.css` (PDW-TKN-2).
+ * No hex literals or magic spacing here — enforced by tokens.test.ts (T6.2).
+ *
+ * A shared file (not one per component) because inline styles cannot express
+ * :hover / :focus-visible / :disabled pseudo-states, which these interactive
+ * primitives need for real interaction + accessibility feedback.
+ */
+
+/* ---- Button (T7.1) ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1.2;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 120ms ease;
+}
+.btn--primary {
+  background: var(--primary-800);
+  color: var(--surface);
+}
+.btn--primary:hover {
+  background: var(--primary-700);
+}
+.btn--secondary {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.btn--secondary:hover {
+  background: var(--table-head-bg);
+}
+.btn:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 2px;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Form fields: label + control + error (Input/Select/Textarea) ---- */
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+.field__label {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+.field--disabled .field__label {
+  color: var(--text-muted);
+}
+.field__control {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  width: 100%;
+}
+.field__control--sm {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+.field__control:focus {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 1px;
+  border-color: var(--primary-500);
+}
+.field__control[aria-invalid='true'] {
+  border-color: var(--danger-border);
+}
+.field__control:disabled {
+  background: var(--table-head-bg);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+.field__error {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--danger);
+}
+.field__textarea {
+  min-height: var(--space-8);
+  resize: vertical;
+}
