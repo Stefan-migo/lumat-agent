@@ -15,10 +15,11 @@ from app.panel.api.routes import (
     clients,
     conversations,
     dashboard,
+    kb,
+    settings,
 )
 
-# Per-domain sub-routers (kb, settings) are included as they land, batch by
-# batch.
+# Per-domain sub-routers are included as they land, batch by batch.
 
 api_router = APIRouter(prefix="/api")
 
@@ -27,3 +28,5 @@ api_router.include_router(dashboard.router)
 api_router.include_router(clients.router)
 api_router.include_router(conversations.router)
 api_router.include_router(cases.router)
+api_router.include_router(kb.router)
+api_router.include_router(settings.router)
