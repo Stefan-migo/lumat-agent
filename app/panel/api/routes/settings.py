@@ -1,0 +1,199 @@
+"""Panel JSON API settings admin (B4/T4.2; PDW-API-2, PDW-API-3, PDW-API-4, D1, D4).
+
+Admin-only JSON wrappers over `app/services/settings.py` + `app/services/costs.py`
+(thin, no new business logic; every save flows through `set_setting` which
+upserts the KV row AND audits with the acting admin, SH-5):
+
+- GET /settings -> all sections + spend snapshot (design #18):
+  {"scope_rules", "keywords", "tone", "conversation_limit", "daily_limit",
+  "meta_cost", "snapshot"}
+- POST /settings/{section} -> per-section KV upsert + audit (design #19, #18):
+  scope  {"rules": {cat: mode}}           -> scope_rules
+  keywords {"keywords": [str]}            -> emergency.keywords
+  tone   {"tone": str}                    -> tone.style
+  limits {"conversation_limit": n, "daily_limit": n} (>= 0) -> cost.*
+  meta   {"service_message_cost": n}      -> meta_pricing
+
+Section names mirror the Jinja POST routes (/panel/settings/{scope,keywords,
+tone,limits,meta}); an unknown section is a 400 (PDW-API-3). Role enforcement
+server-side (PDW-API-4): `require_admin_json` -> operador 403; unauthenticated
+401 {"detail":"unauthorized"} no redirect (D4, PDW-AUTH-1). No CORS (D1).
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal, InvalidOperation
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.models import User
+from app.panel.api.deps import require_admin_json
+from app.panel.deps import get_db
+from app.services import costs, settings as settings_service
+
+router = APIRouter(tags=["panel-api-settings"])
+
+
+def _number(value: float, key: str, *, minimum: float = 0.0) -> float:
+    """Reject NaN/Inf/negative limit values loud and clear (SS-3 guard)."""
+    try:
+        parsed = Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        raise HTTPException(status_code=400, detail=f"{key} must be a number")
+    if not parsed.is_finite() or parsed < Decimal(str(minimum)):
+        raise HTTPException(status_code=400, detail=f"{key} must be >= {minimum}")
+    return float(parsed)
+
+
+class ScopeBody(BaseModel):
+    rules: dict[str, str]
+
+
+class KeywordsBody(BaseModel):
+    keywords: list[str]
+
+
+class ToneBody(BaseModel):
+    tone: str
+
+
+class LimitsBody(BaseModel):
+    conversation_limit: float
+    daily_limit: float
+
+
+class MetaBody(BaseModel):
+    service_message_cost: float
+
+
+def _save(session: Session, key: str, value, current: User) -> None:
+    settings_service.set_setting(
+        session,
+        key,
+        value,
+        updated_by=current.id,
+        actor=current.username,
+    )
+
+
+def _parse_scope(body: ScopeBody) -> dict[str, str]:
+    rules: dict[str, str] = {}
+    for category, mode in body.rules.items():
+        if mode not in settings_service.SCOPE_MODES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"mode must be one of {settings_service.SCOPE_MODES}",
+            )
+        rules[category.strip()] = mode.strip()
+    return rules
+
+
+@router.get("/settings")
+def settings_get(
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """All sections + spend snapshot (design #18; defaults out of the box)."""
+    scope_rules = settings_service.get_setting(session, "scope_rules", default={})
+    meta = settings_service.get_setting(session, "meta_pricing", default={})
+    return {
+        "scope_rules": scope_rules,
+        "keywords": settings_service.get_emergency_keywords(session),
+        "tone": settings_service.get_tone(session),
+        "conversation_limit": settings_service.get_setting(
+            session, "cost.conversation_limit", default=1.50
+        ),
+        "daily_limit": settings_service.get_setting(
+            session, "cost.daily_limit", default=5.00
+        ),
+        "meta_cost": (meta or {}).get("service_message_cost", 0.01),
+        "snapshot": costs.spend_snapshot(session),
+    }
+
+
+@router.post("/settings/scope")
+def settings_scope(
+    body: ScopeBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    _save(session, "scope_rules", _parse_scope(body), current)
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/keywords")
+def settings_keywords(
+    body: KeywordsBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    _save(session, "emergency.keywords", [k.strip() for k in body.keywords], current)
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/tone")
+def settings_tone(
+    body: ToneBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    _save(session, "tone.style", body.tone.strip(), current)
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/limits")
+def settings_limits(
+    body: LimitsBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    _save(
+        session,
+        "cost.conversation_limit",
+        _number(body.conversation_limit, "conversation_limit"),
+        current,
+    )
+    _save(
+        session,
+        "cost.daily_limit",
+        _number(body.daily_limit, "daily_limit"),
+        current,
+    )
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/meta")
+def settings_meta(
+    body: MetaBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    _save(
+        session,
+        "meta_pricing",
+        {"service_message_cost": _number(body.service_message_cost, "service_message_cost")},
+        current,
+    )
+    session.commit()
+    return {"ok": True}
+
+
+# Catch-all MUST stay registered AFTER the specific {scope,keywords,tone,limits,
+# meta} POST routes above: FastAPI matches routes in registration order, so the
+# literal sections win and anything else is an unknown section (PDW-API-3).
+_KNOWN_SECTIONS = {"scope", "keywords", "tone", "limits", "meta"}
+
+
+@router.post("/settings/{section}")
+def settings_section_unknown(
+    section: str,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    raise HTTPException(status_code=400, detail=f"unknown section {section!r} ({', '.join(sorted(_KNOWN_SECTIONS))})")

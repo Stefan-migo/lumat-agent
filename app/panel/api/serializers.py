@@ -12,7 +12,15 @@ the SPA must show the same fields the current panel shows.
 
 from __future__ import annotations
 
-from app.models import Case, Conversation, Customer, CustomerNote, Message, User
+from app.models import (
+    Case,
+    Conversation,
+    Customer,
+    CustomerNote,
+    KbDocument,
+    Message,
+    User,
+)
 
 
 def _iso(value) -> str | None:
@@ -97,3 +105,19 @@ def to_case_dict(case: Case) -> dict:
 def to_user_dict(user: User) -> dict:
     """User row -> minimal {id, username} dict (D8 — embedded in cases, no /users)."""
     return {"id": user.id, "username": user.username}
+
+
+def to_doc_dict(doc: KbDocument) -> dict:
+    """KB document row -> snake_case dict (B4/T4.1; provider/model/cost, KB-3)."""
+    return {
+        "id": doc.id,
+        "title": doc.title,
+        "format": doc.format.value,
+        "version": doc.version,
+        "active_version": doc.active_version,
+        "active": doc.active,
+        "provider": doc.provider,
+        "model": doc.model,
+        "cost_meta": float(doc.cost_meta) if doc.cost_meta is not None else None,
+        "created_at": _iso(doc.created_at),
+    }
