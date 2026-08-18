@@ -26,7 +26,7 @@ TEST_ENV = {
     "APP_SECRET": "test-app-secret",
     "VERIFY_TOKEN": "test-verify-token",
     "DATABASE_URL": "postgresql+psycopg://app:app@localhost:5432/lumat",
-    "OPENAI_API_KEY": "sk-test",
+    "DEEPSEEK_API_KEY": "sk-test",
     "META_ACCESS_TOKEN": "meta-test-token",
     "META_PHONE_NUMBER_ID": "123456789",
     # AP-1: panel session cookie signing secret (required at boot).
@@ -39,9 +39,9 @@ TEST_ENV = {
 for _key, _value in TEST_ENV.items():
     os.environ.setdefault(_key, _value)
 
-# The dev shell may carry a real OPENAI_API_KEY — the panel tests must never
-# use it (unmocked OpenAI calls would spend real tokens). Force the test key.
-os.environ["OPENAI_API_KEY"] = "sk-test"
+# The dev shell may carry a real DEEPSEEK_API_KEY — the panel tests must never
+# use it (unmocked chat calls would spend real tokens). Force the test key.
+os.environ["DEEPSEEK_API_KEY"] = "sk-test"
 
 from app.config import get_settings  # noqa: E402
 from app.main import create_app  # noqa: E402
@@ -123,10 +123,10 @@ def make_user():
 
 
 # ---------------------------------------------------------------------------
-# OpenAI mocks (respx; deterministic — KB ingest/update embed via the API)
+# Local embedder fake (deterministic — KB ingest/update embed via the seam)
 # ---------------------------------------------------------------------------
 
-EMBED_DIMS = 1536
+EMBED_DIMS = 384
 
 
 def _fake_embedding(text: str) -> list[float]:
@@ -147,37 +147,15 @@ def _fake_embedding(text: str) -> list[float]:
 
 
 @pytest.fixture
-def mock_openai_embeddings():
-    """Mock OpenAI /embeddings with deterministic one-hot vectors."""
-    import json
+def fake_embedder(monkeypatch):
+    """Swap kb.get_embedder() for a deterministic fake (no model download)."""
+    from app.services import kb as kb_service
 
-    import httpx
-    import respx
+    class _FakeEmbedder:
+        def embed(self, texts):
+            return (_fake_embedding(t) for t in texts)
 
-    with respx.mock(base_url="https://api.openai.com/v1", assert_all_called=False) as router:
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            body = json.loads(request.content)
-            inputs = body["input"]
-            if isinstance(inputs, str):
-                inputs = [inputs]
-            data = [
-                {"object": "embedding", "index": i, "embedding": _fake_embedding(t)}
-                for i, t in enumerate(inputs)
-            ]
-            tokens = max(1, sum(len(i) // 4 for i in inputs))
-            return httpx.Response(
-                200,
-                json={
-                    "object": "list",
-                    "model": "text-embedding-3-small",
-                    "data": data,
-                    "usage": {"prompt_tokens": tokens, "total_tokens": tokens},
-                },
-            )
-
-        router.post("/embeddings").mock(side_effect=handler)
-        yield router
+    monkeypatch.setattr(kb_service, "get_embedder", lambda: _FakeEmbedder())
 
 
 @pytest.fixture

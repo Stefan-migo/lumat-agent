@@ -37,7 +37,12 @@ REQUIRED_ENV_NAMES = {
     "APP_SECRET",
     "VERIFY_TOKEN",
     "DATABASE_URL",
-    "OPENAI_API_KEY",
+    "CHAT_PROVIDER",
+    "DEEPSEEK_API_KEY",
+    "OPENROUTER_API_KEY",
+    "CHAT_MODEL",
+    "EMBED_MODEL",
+    "EMBED_DIMS",
     "META_ACCESS_TOKEN",
     "META_PHONE_NUMBER_ID",
     "POSTGRES_PASSWORD",
@@ -46,7 +51,14 @@ REQUIRED_ENV_NAMES = {
 # values that look like real credentials — .env.example must not contain them
 SECRET_PATTERNS = ("sk-", "sha256:", "AKIA", "ghp_", "xoxb-")
 # documented non-secret dev defaults (not credentials)
-ALLOWED_PLAIN_VALUES = {"app", "lumat"}
+ALLOWED_PLAIN_VALUES = {
+    "app",
+    "lumat",
+    "deepseek",  # CHAT_PROVIDER default
+    "deepseek-chat",  # CHAT_MODEL default
+    "384",  # EMBED_DIMS default
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",  # EMBED_MODEL default
+}
 
 
 def _load_compose() -> dict:

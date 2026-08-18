@@ -11,7 +11,7 @@ compose `test` profile (T6.1):
 
 ```bash
 docker compose -f infra/docker-compose.yml --profile test up -d db-test
-export OPENAI_API_KEY=sk-test        # never let the dev-shell real key leak in
+export DEEPSEEK_API_KEY=sk-test       # never let the dev-shell real key leak in
 .venv/bin/pytest tests/              # full suite
 .venv/bin/pytest -m "spec"           # only OpenSpec requirement scenarios
 .venv/bin/pytest tests/functional    # functional flows (T6.2)

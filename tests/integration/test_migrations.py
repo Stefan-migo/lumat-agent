@@ -94,6 +94,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("005_case_emergency_ack",),
         ("006_handoff_deriva",),
         ("007_case_created_at",),
+        ("008_local_embeddings",),
     ]
 
 
@@ -191,8 +192,8 @@ def test_kb_chunks_embedding_hnsw_index(migrated_db, admin_conn):
     assert "ef_construction='64'" in indexdef or "ef_construction = 64" in indexdef
 
 
-def test_kb_chunks_accepts_1536d_vector(migrated_db, admin_conn):
-    """vector(1536) column accepts a real embedding (pgvector extension active)."""
+def test_kb_chunks_accepts_384d_vector(migrated_db, admin_conn):
+    """vector(384) column accepts a real embedding (pgvector extension active)."""
     admin_conn.execute(
         "INSERT INTO kb_documents (title, format, content) "
         "VALUES ('doc1', 'md', 'content')"
@@ -200,7 +201,7 @@ def test_kb_chunks_accepts_1536d_vector(migrated_db, admin_conn):
     doc_id = admin_conn.execute(
         "SELECT id FROM kb_documents WHERE title = 'doc1'"
     ).fetchone()[0]
-    embedding = "[" + ",".join("0.01" for _ in range(1536)) + "]"
+    embedding = "[" + ",".join("0.01" for _ in range(384)) + "]"
     admin_conn.execute(
         "INSERT INTO kb_chunks (document_id, version, chunk_index, content, embedding) "
         "VALUES (%s, 1, 0, 'chunk', %s::vector)",

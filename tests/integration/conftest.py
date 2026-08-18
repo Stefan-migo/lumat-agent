@@ -10,7 +10,8 @@ Batch 1 additions:
   (idempotent) so integration tests run against the migrated schema.
 
 Batch 3 additions:
-- `mock_openai_chat` / `mock_openai_embeddings`: deterministic respx mocks
+- `mock_openai_chat` / `fake_embedder`: respx + monkeypatch mocks — chat
+  completions (deepseek default provider) and the local embedder (no download)
   for the OpenAI API (never a real call — the dev shell key is NOT used).
 """
 
@@ -31,7 +32,7 @@ TEST_ENV = {
     "APP_SECRET": "test-app-secret",
     "VERIFY_TOKEN": "test-verify-token",
     "DATABASE_URL": "postgresql+psycopg://app:app@localhost:5432/lumat",
-    "OPENAI_API_KEY": "sk-test",
+    "DEEPSEEK_API_KEY": "sk-test",
     "META_ACCESS_TOKEN": "meta-test-token",
     "META_PHONE_NUMBER_ID": "123456789",
     # T5.1: panel session cookie signing secret (AP-1) — required at boot.
@@ -44,10 +45,10 @@ TEST_ENV = {
 for _key, _value in TEST_ENV.items():
     os.environ.setdefault(_key, _value)
 
-# The dev shell may carry a real OPENAI_API_KEY — tests MUST mock OpenAI via
+# The dev shell may carry a real DEEPSEEK_API_KEY — tests MUST mock chat via
 # respx and must NEVER use that key. Force the test key so an accidentally
 # unmocked call fails fast (401) instead of spending real tokens/hanging.
-os.environ["OPENAI_API_KEY"] = "sk-test"
+os.environ["DEEPSEEK_API_KEY"] = "sk-test"
 
 from app.config import get_settings  # noqa: E402
 from app.main import create_app  # noqa: E402
@@ -91,7 +92,7 @@ def client() -> TestClient:
 # Batch 3 — OpenAI mocks (respx; deterministic, never a real call)
 # ---------------------------------------------------------------------------
 
-EMBED_DIMS = 1536
+EMBED_DIMS = 384
 
 
 def fake_embedding(text: str) -> list[float]:
@@ -143,14 +144,14 @@ def classify_result_for(text: str) -> dict:
 
 @pytest.fixture
 def mock_openai_chat():
-    """Mock OpenAI /chat/completions; captures requests.
+    """Mock chat completions (deepseek default provider); captures requests.
 
     Dispatches by prompt role: summary prompt -> canned summary; respond
     prompt (has <kb>) -> grounded answer; otherwise -> intent classification.
     """
     captured: list[dict] = []
 
-    with respx.mock(base_url="https://api.openai.com/v1", assert_all_called=False) as router:
+    with respx.mock(base_url="https://api.deepseek.com", assert_all_called=False) as router:
 
         def handler(request: httpx.Request) -> httpx.Response:
             body = json.loads(request.content)
@@ -178,7 +179,7 @@ def mock_openai_chat():
                     "id": "cmpl-test",
                     "object": "chat.completion",
                     "created": 0,
-                    "model": "gpt-4o-mini",
+                    "model": "deepseek-chat",
                     "choices": [
                         {
                             "index": 0,
@@ -195,32 +196,15 @@ def mock_openai_chat():
 
 
 @pytest.fixture
-def mock_openai_embeddings():
-    """Mock OpenAI /embeddings with deterministic one-hot vectors."""
-    with respx.mock(base_url="https://api.openai.com/v1", assert_all_called=False) as router:
+def fake_embedder(monkeypatch):
+    """Swap kb.get_embedder() for a deterministic fake (no model download)."""
+    from app.services import kb as kb_service
 
-        def handler(request: httpx.Request) -> httpx.Response:
-            body = json.loads(request.content)
-            inputs = body["input"]
-            if isinstance(inputs, str):
-                inputs = [inputs]
-            data = [
-                {"object": "embedding", "index": i, "embedding": fake_embedding(t)}
-                for i, t in enumerate(inputs)
-            ]
-            tokens = max(1, sum(len(i) // 4 for i in inputs))
-            return httpx.Response(
-                200,
-                json={
-                    "object": "list",
-                    "model": "text-embedding-3-small",
-                    "data": data,
-                    "usage": {"prompt_tokens": tokens, "total_tokens": tokens},
-                },
-            )
+    class _FakeEmbedder:
+        def embed(self, texts):
+            return (fake_embedding(t) for t in texts)
 
-        router.post("/embeddings").mock(side_effect=handler)
-        yield router
+    monkeypatch.setattr(kb_service, "get_embedder", lambda: _FakeEmbedder())
 
 
 @pytest.fixture

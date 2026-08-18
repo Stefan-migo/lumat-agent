@@ -67,7 +67,6 @@ services:
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in infra/.env}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/.env}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY in infra/.env}
       META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:?set META_ACCESS_TOKEN in infra/.env}
       META_PHONE_NUMBER_ID: ${META_PHONE_NUMBER_ID:?set META_PHONE_NUMBER_ID in infra/.env}
       PANEL_SESSION_SECRET: ${PANEL_SESSION_SECRET:?set PANEL_SESSION_SECRET in infra/.env}
@@ -82,11 +81,14 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
-    # migrate (idempotent) then serve; DATABASE_URL admin points at `db`
+    # migrate (idempotent) then serve; the migrate needs the admin URL
+    # (psycopg direct, no SQLAlchemy) so it runs in a SUBSHELL — otherwise the
+    # bare `DATABASE_URL=...` assignment would leak into uvicorn's environment
+    # and make SQLAlchemy fall back to the psycopg2 dialect (crash: no module).
     command: >
       sh -c "uv sync --frozen &&
-             DATABASE_URL=postgresql://lumat:$$POSTGRES_PASSWORD@db:5432/lumat
-             APP_DB_PASSWORD=$$APP_DB_PASSWORD db/migrate.sh &&
+             (DATABASE_URL=postgresql://lumat:$$POSTGRES_PASSWORD@db:5432/lumat
+              APP_DB_PASSWORD=$$APP_DB_PASSWORD db/migrate.sh) &&
              exec uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
 volumes:

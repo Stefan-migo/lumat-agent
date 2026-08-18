@@ -8,14 +8,16 @@ The Batch 6 suites that have no local conftest of their own
 defined here:
 
 - full test environment set before ANY `app.*` import (same pattern as the
-  suite conftests; the dev-shell real OPENAI_API_KEY is forced to sk-test so
+  suite conftests; the dev-shell real DEEPSEEK_API_KEY is forced to sk-test so
   an accidentally unmocked call fails fast instead of spending tokens)
 - `migrated_db` / `clean_db`: migrations once per session, full table reset
   per test (shared test DB — compose `test` profile, see infra/docker-compose.yml)
 - `client`: TestClient over a freshly built app
 - `seed_customer`: get-or-create a ficha (CR-1/CR-2 fixtures)
-- `mock_openai_chat` / `mock_openai_embeddings` / `mock_meta_send`: respx
-  mocks — OpenAI is NEVER called for real; Meta sends are intercepted
+- `mock_openai_chat` / `fake_embedder` / `mock_meta_send`: respx + monkeypatch
+  mocks — chat completions (deepseek default provider) are NEVER called for
+  real; the local fastembed embedder is swapped for a deterministic fake
+  (no model download); Meta sends are intercepted
 - `_reset_rate_limiter` (autouse): the in-memory webhook rate limiter is
   module state; without a per-test reset, messages accumulate across tests
   from the same phone and get dropped after 15/min.
@@ -39,7 +41,7 @@ TEST_ENV = {
     "APP_SECRET": "test-app-secret",
     "VERIFY_TOKEN": "test-verify-token",
     "DATABASE_URL": "postgresql+psycopg://app:app@localhost:5432/lumat",
-    "OPENAI_API_KEY": "sk-test",
+    "DEEPSEEK_API_KEY": "sk-test",
     "META_ACCESS_TOKEN": "meta-test-token",
     "META_PHONE_NUMBER_ID": "123456789",
     "PANEL_SESSION_SECRET": "test-panel-session-secret",
@@ -51,8 +53,8 @@ TEST_ENV = {
 for _key, _value in TEST_ENV.items():
     os.environ.setdefault(_key, _value)
 
-# Force the test key — the dev shell may export a REAL OPENAI_API_KEY.
-os.environ["OPENAI_API_KEY"] = "sk-test"
+# Force the test key — the dev shell may export a REAL DEEPSEEK_API_KEY.
+os.environ["DEEPSEEK_API_KEY"] = "sk-test"
 
 from app.chat.nodes.classify_intent import is_injection  # noqa: E402
 from app.config import get_settings  # noqa: E402
@@ -136,7 +138,7 @@ def seed_customer():
 # OpenAI + Meta mocks (respx; deterministic, never a real call)
 # ---------------------------------------------------------------------------
 
-EMBED_DIMS = 1536
+EMBED_DIMS = 384
 
 # LLM-flag phrases for the injection suite: payloads the production
 # deterministic pattern set does NOT match but that are clearly manipulation
@@ -197,7 +199,7 @@ def classify_result_for(text: str) -> dict:
 
 @pytest.fixture
 def mock_openai_chat():
-    """Mock OpenAI /chat/completions; captures requests.
+    """Mock the chat-completions endpoint (deepseek default provider).
 
     Dispatches by prompt role: summary prompt -> canned summary; respond
     prompt (has <kb>) -> grounded answer; otherwise -> intent classification
@@ -205,7 +207,7 @@ def mock_openai_chat():
     """
     captured: list[dict] = []
 
-    with respx.mock(base_url="https://api.openai.com/v1", assert_all_called=False) as router:
+    with respx.mock(base_url="https://api.deepseek.com", assert_all_called=False) as router:
 
         def handler(request: httpx.Request) -> httpx.Response:
             body = json.loads(request.content)
@@ -233,7 +235,7 @@ def mock_openai_chat():
                     "id": "cmpl-test",
                     "object": "chat.completion",
                     "created": 0,
-                    "model": "gpt-4o-mini",
+                    "model": "deepseek-chat",
                     "choices": [
                         {
                             "index": 0,
@@ -250,32 +252,20 @@ def mock_openai_chat():
 
 
 @pytest.fixture
-def mock_openai_embeddings():
-    """Mock OpenAI /embeddings with deterministic one-hot vectors."""
-    with respx.mock(base_url="https://api.openai.com/v1", assert_all_called=False) as router:
+def fake_embedder(monkeypatch):
+    """Swap kb.get_embedder() for a deterministic fake (no model download).
 
-        def handler(request: httpx.Request) -> httpx.Response:
-            body = json.loads(request.content)
-            inputs = body["input"]
-            if isinstance(inputs, str):
-                inputs = [inputs]
-            data = [
-                {"object": "embedding", "index": i, "embedding": fake_embedding(t)}
-                for i, t in enumerate(inputs)
-            ]
-            tokens = max(1, sum(len(i) // 4 for i in inputs))
-            return httpx.Response(
-                200,
-                json={
-                    "object": "list",
-                    "model": "text-embedding-3-small",
-                    "data": data,
-                    "usage": {"prompt_tokens": tokens, "total_tokens": tokens},
-                },
-            )
+    The fake mirrors the fastembed seam (`.embed(texts)` -> iterable of
+    vectors), returning one-hot trigram-bucket vectors of kb.EMBED_DIMS, so
+    KB retrieval behaves deterministically in tests.
+    """
+    from app.services import kb as kb_service
 
-        router.post("/embeddings").mock(side_effect=handler)
-        yield router
+    class _FakeEmbedder:
+        def embed(self, texts):
+            return (fake_embedding(t) for t in texts)
+
+    monkeypatch.setattr(kb_service, "get_embedder", lambda: _FakeEmbedder())
 
 
 @pytest.fixture

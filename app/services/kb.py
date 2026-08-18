@@ -1,14 +1,16 @@
 """Knowledge base pipeline (KB-1..KB-4; design "KB Pipeline").
 
 Ingest (PDF/MD/CSV) -> RecursiveCharacterTextSplitter (500/50, CSV rows
-grouped) -> OpenAI text-embedding-3-small (1536d) -> kb_chunks (version-tagged
-with source_meta). Retrieval = pgvector cosine similarity, top_k=5,
-min_sim=0.65 (both configurable). Versioning per D8: update = new version +
-re-embed; restore = active_version pointer flip (chunks persist per version,
-no re-embed); disable = excluded from retrieval.
+grouped) -> local fastembed multilingual model (384d, ONNX Runtime, no API)
+-> kb_chunks (version-tagged with source_meta). Retrieval = pgvector cosine
+similarity, top_k=5, min_sim=0.65 (both configurable). Versioning per D8:
+update = new version + re-embed; restore = active_version pointer flip
+(chunks persist per version, no re-embed); disable = excluded from retrieval.
 
-All OpenAI calls go through `app/services/llm.openai_client()` so tests can
-intercept them with respx — production never hardcodes keys.
+Embeddings are LOCAL (no API key, no token billing): fastembed TextEmbedding,
+loaded once and cached. The `get_embedder()` seam is injectable — tests
+monkeypatch it with a deterministic fake so the suite never downloads the
+~130MB model.
 """
 
 from __future__ import annotations
@@ -23,13 +25,13 @@ from pypdf import PdfReader
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models import DocumentFormat, KbChunk, KbDocument
-from app.services.llm import openai_client
 from app.services.audit import record_audit
 
-EMBED_MODEL = "text-embedding-3-small"  # D3: OpenAI, 1536 dims
-EMBED_DIMS = 1536
-EMBED_COST_PER_1M = Decimal("0.02")  # LumatRequest §1.12 reference price
+EMBED_MODEL = get_settings().embed_model  # fastembed model id, multilingual, 384d
+EMBED_DIMS = get_settings().embed_dims
+EMBED_COST_PER_1M = Decimal("0")  # local embeddings: no token billing
 
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
@@ -37,7 +39,7 @@ CHUNK_OVERLAP = 50
 DEFAULT_TOP_K = 5
 DEFAULT_MIN_SIM = 0.65
 
-PROVIDER = "openai"
+PROVIDER = "local"
 
 
 @dataclass
@@ -104,23 +106,42 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
 
 
 # ---------------------------------------------------------------------------
-# Embedding (OpenAI, mocked in tests via respx)
+# Embedding (local fastembed; injectable seam for tests)
 # ---------------------------------------------------------------------------
+
+_embedder = None
+
+
+def get_embedder():
+    """Return the shared fastembed TextEmbedding, loading it once (lazy).
+
+    Injectable seam: tests monkeypatch this function with a deterministic fake
+    embedder so the ~130MB model is never downloaded by the suite.
+    """
+    global _embedder
+    if _embedder is None:
+        from fastembed import TextEmbedding
+
+        _embedder = TextEmbedding(model_name=EMBED_MODEL)
+    return _embedder
 
 
 def embed_texts(texts: list[str]) -> tuple[list[list[float]], int]:
-    """Embed a batch of texts; returns (embeddings, prompt_tokens)."""
+    """Embed a batch locally; returns (embeddings, prompt_tokens=0).
+
+    Local inference has no token billing, so the second element is always 0
+    (keeps the caller contract — `_embed_cost` and any cost bookkeeping —
+    intact while recording 0 cost).
+    """
     if not texts:
         return [], 0
-    client = openai_client()
-    response = client.embeddings.create(model=EMBED_MODEL, input=texts)
-    embeddings = [item.embedding for item in response.data]
-    tokens = int(response.usage.prompt_tokens)
-    return embeddings, tokens
+    # fastembed yields numpy arrays; the test fake yields plain lists — accept both.
+    embeddings = [v.tolist() if hasattr(v, "tolist") else list(v) for v in get_embedder().embed(texts)]
+    return embeddings, 0
 
 
 def _embed_cost(prompt_tokens: int) -> Decimal:
-    return Decimal(prompt_tokens) / Decimal(1_000_000) * EMBED_COST_PER_1M
+    return Decimal("0")  # local embeddings: no per-token cost
 
 
 # ---------------------------------------------------------------------------

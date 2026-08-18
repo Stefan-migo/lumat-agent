@@ -26,7 +26,21 @@ class Settings(BaseSettings):
     database_url: str  # SQLAlchemy URL for PostgreSQL + pgvector
 
     # External providers (design D3)
-    openai_api_key: str  # chat gpt-4o-mini + embeddings text-embedding-3-small
+    # Chat is multi-provider (D3 change): DeepSeek (default) or OpenRouter,
+    # both OpenAI chat-completions-compatible — only base_url + model + key
+    # change. Both keys are optional at the Settings level; the ACTIVE
+    # provider's key is required and enforced in llm.openai_client()
+    # (fail-fast at use time). CHAT_MODEL is provider-appropriate by default.
+    chat_provider: str = "deepseek"  # "deepseek" | "openrouter"
+    deepseek_api_key: str | None = None
+    openrouter_api_key: str | None = None
+    chat_model: str = "deepseek-chat"
+
+    # Local embeddings (fastembed, ONNX Runtime — no API key, no token
+    # billing). Multilingual model, 384 dims (db/migrations/008_local_embeddings.sql).
+    embed_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    embed_dims: int = 384
+
     meta_access_token: str  # Meta Cloud API permanent token
     meta_phone_number_id: str  # WhatsApp Business Phone Number ID
 

@@ -459,7 +459,7 @@ def test_daily_blocked_escalates_no_llm(mock_openai_chat, no_real_smtp):
         assert case.bundle["escalate_reason"] == "cost_daily_limit"
 
 
-def test_conservative_mode_brief_respond(mock_openai_chat, mock_openai_embeddings, no_real_smtp):
+def test_conservative_mode_brief_respond(mock_openai_chat, fake_embedder, no_real_smtp):
     """SS-3 at 80%: LLM still allowed, respond answers briefly, owner alerted."""
     from app.services import kb as kb_service
     from app.models import DocumentFormat

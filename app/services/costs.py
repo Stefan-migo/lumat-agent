@@ -1,10 +1,12 @@
 """Cost tracking service (design D6; SS-3/SS-4 basis).
 
 `record_llm_cost` writes the token-based cost of an LLM call onto the message
-row (`messages.cost_llm`, USD). Rates are the reference prices from the design
-(LumatRequest §1.12): gpt-4o-mini ~$0.15/1M in + $0.60/1M out,
-text-embedding-3-small $0.02/1M. `conversation_spend`/`daily_spend` (T3.6)
-sum the columns per D6 (no separate ledger table).
+row (`messages.cost_llm`, USD). Rates are reference prices: gpt-4o-mini
+~$0.15/1M in + $0.60/1M out (OpenRouter default model), deepseek-chat
+reference from DeepSeek API docs — verify at activation. Local fastembed
+embeddings cost $0 (no token billing) and are never recorded here.
+`conversation_spend`/`daily_spend` (T3.6) sum the columns per D6 (no separate
+ledger table).
 
 T4.5 adds the SS-3 guardrails on top of those sums:
 
@@ -42,7 +44,7 @@ logger = logging.getLogger(__name__)
 # (input_rate_per_1M, output_rate_per_1M) USD — reference, verify at activation.
 LLM_RATES: dict[str, tuple[Decimal, Decimal]] = {
     "gpt-4o-mini": (Decimal("0.15"), Decimal("0.60")),
-    "text-embedding-3-small": (Decimal("0.02"), Decimal("0.02")),
+    "deepseek-chat": (Decimal("0.27"), Decimal("1.10")),  # DeepSeek reference, verify
 }
 
 # SS-3 guardrail defaults (settings keys registered in SETTINGS_DEFAULTS).
