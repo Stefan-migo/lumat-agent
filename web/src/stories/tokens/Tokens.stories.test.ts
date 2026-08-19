@@ -13,6 +13,9 @@ describe("Tokens page grouping (D8 ordered first-match rules)", () => {
   it("routes every documented group by its rule", () => {
     expect(groupToken("--primary-500")).toBe("Color");
     expect(groupToken("--danger-border")).toBe("Color (semantic)");
+    expect(groupToken("--danger")).toBe("Color (semantic)");
+    expect(groupToken("--success")).toBe("Color (semantic)");
+    expect(groupToken("--warning")).toBe("Color (semantic)");
     expect(groupToken("--surface")).toBe("Color (neutrals)");
     expect(groupToken("--border-strong")).toBe("Color (neutrals)");
     expect(groupToken("--font-sans")).toBe("Typography (font/leading/weight)");
@@ -34,7 +37,5 @@ describe("Tokens page grouping (D8 ordered first-match rules)", () => {
 
   it("never silently drops unknown tokens (Other fallback)", () => {
     expect(groupToken("--some-future-token")).toBe("Other");
-    expect(groupToken("--danger")).toBe("Other");
-    expect(groupToken("--success")).toBe("Other");
   });
 });

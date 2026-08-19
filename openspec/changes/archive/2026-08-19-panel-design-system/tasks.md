@@ -216,3 +216,15 @@ Knowledge graph: `graphify-out/` (built from commit `52e5481a2`, older than B9's
 ### Attempt ledger
 
 - Attempt: **B10-tokens-page-stories**, ordinal 3 (objective generation 3), token `sha256:0a193f8a…` (parent-held, outcome running → settle by parent). Executor authenticated with `gentle-ai sdd-attempt acquire --cwd . --change panel-design-system --token … --request-id b10-apply-auth --work-unit "B10-tokens-page-stories" --evidence-goal "web tests green (npm test) + storybook build green (npm run build-storybook) with Tokens page + 10 doc-level stories"` → `proceed` (zero mutation, same ledger). Evidence goal met: `npm test` 48/48, `build-storybook` 33 story + 11 docs entries.
+
+---
+
+## Post-Verify Fix — semantic bare tokens grouping (2026-08-19)
+
+**What**: verify-report WARNING #1 detected that the B10 review-correction regex `^--(?:danger|success|warning)-` (trailing hyphen required) mis-routed the three **bare semantic tokens** `--danger`, `--success`, `--warning` to "Other" instead of "Color (semantic)", contradicting the ledger claim ("Color (semantic) 9 … Other empty"). Fixed by changing the rule to `^--(?:danger|success|warning)(?:$|-)` — anchored to either end-of-name or a hyphen — so the real bare tokens group correctly while lookalike tokens (`--dangerous`, `--successor`, `--border-radius`) still fall to "Other" (the R3-001 review correction intent is preserved).
+
+**Evidence**: `node` parse of `tokens.css` with the shipped rule list → **Color (semantic) 9, Other 0, total 67** (matches the ledger). Tests updated: `--danger`/`--success`/`--warning` assert "Color (semantic)"; lookalikes still assert "Other". `npm test` → 48/48; `npx tsc --noEmit` → clean.
+
+**Files**: `web/src/stories/tokens/Tokens.stories.tsx` (rule line), `web/src/stories/tokens/Tokens.stories.test.ts` (assertions), this `tasks.md` ledger note.
+
+**Status**: ledger is now factually accurate; no remaining WARNING-1-type drift.
