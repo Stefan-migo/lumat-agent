@@ -30,8 +30,11 @@ describe("Dashboard page story (R-PRD-PG-6)", () => {
     render(<DashboardOverview />);
     const table = screen.getByRole("table");
     for (const [service, count] of kpis.motivos) {
-      expect(within(table).getByText(service, { exact: false })).toBeInTheDocument();
-      expect(within(table).getByText(String(count))).toBeInTheDocument();
+      // Scope each service to its own row (exact cell match) so the count
+      // assertion cannot match a different cell (R3-001).
+      const row = within(table).getByText(service, { exact: true }).closest("tr")!;
+      expect(row).not.toBeNull();
+      expect(within(row).getByText(String(count), { exact: true })).toBeInTheDocument();
     }
   });
 });
