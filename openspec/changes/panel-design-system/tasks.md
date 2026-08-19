@@ -53,9 +53,9 @@ Depends on B9 (tokens present, autodocs on). Batch gate: `cd web && npm test` + 
 
 ## Lifecycle Gates (parent-owned — after implementation work)
 
-- [ ] Start or reuse bounded review on the B9 diff (PR 1) before chaining PR 2. <!-- sdd-owner: parent -->
-- [ ] Start or reuse bounded review on the B10 diff (PR 2) before archive. <!-- sdd-owner: parent -->
-- [ ] Archive gate (sdd-archive mandatory): run `graphify . --update` after apply and record the re-balanced web/ communities. <!-- sdd-owner: parent -->
+- [x] Start or reuse bounded review on the B9 diff (PR 1) before chaining PR 2. <!-- sdd-owner: parent -->
+- [x] Start or reuse bounded review on the B10 diff (PR 2) before archive. <!-- sdd-owner: parent -->
+- [x] Archive gate (sdd-archive mandatory): run `graphify . --update` after apply and record the re-balanced web/ communities. <!-- sdd-owner: parent -->
 
 ## Traceability: Spec Requirements → Tasks
 
