@@ -27,3 +27,12 @@ backups/
 
 # Archivo Personal para prompts
 txt.txt
+# Local agent working artifacts (RDD: keep the review workspace projection clean)
+.cortex-sessions/
+temp/
+web/graphify-out/
+.opencode/skills/web-design-engineer/
+graphify-out/.graphify_detect.json
+graphify-out/.graphify_incremental.json
+graphify-out/2026-08-*/
+graphify-out/converted/
