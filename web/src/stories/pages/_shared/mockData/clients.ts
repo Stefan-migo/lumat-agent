@@ -1,0 +1,81 @@
+import type { Customer } from "../../../../types";
+
+/** Customer mock matching `app/panel/api/serializers.py` to_customer_dict()
+ *  (snake_case keys, ISO datetime strings, nullable timestamps). Realistic
+ *  Chilean names + E.164 +56 phone numbers. Covers all 4 CustomerState values
+ *  (nuevo/activo/inactivo/bloqueado) for tone-map + ficha rendering
+ *  (R-PRD-PG-3, R-PRD-PG-7). */
+export const clients: Customer[] = [
+  {
+    id: 1,
+    phone_e164: "+56971234501",
+    name: "Marcela Fuentes",
+    email: "marcela.fuentes@example.cl",
+    comuna: "Providencia",
+    address: "Av. Providencia 1234, depto 45",
+    state: "activo",
+    consent_status: true,
+    consent_at: "2026-06-10T14:22:00-04:00",
+    created_at: "2026-01-05T09:14:00-03:00",
+  },
+  {
+    id: 2,
+    phone_e164: "+56987654302",
+    name: "Jorge Salinas",
+    email: "jorge.salinas@example.cl",
+    comuna: "Ñuñoa",
+    address: "Av. Irarrázaval 2210, depto 12",
+    state: "nuevo",
+    consent_status: false,
+    consent_at: null,
+    created_at: "2026-08-18T10:05:00-04:00",
+  },
+  {
+    id: 3,
+    phone_e164: "+56923456703",
+    name: "Valentina Rojas",
+    email: "valentina.rojas@example.cl",
+    comuna: "Maipú",
+    address: "Av. Américo Vespucio 507, casa 8",
+    state: "activo",
+    consent_status: true,
+    consent_at: "2026-05-20T17:40:00-04:00",
+    created_at: "2026-02-11T11:03:00-03:00",
+  },
+  {
+    id: 4,
+    phone_e164: "+56965748304",
+    name: "Rodrigo Paredes",
+    email: "rodrigo.paredes@example.cl",
+    comuna: "Las Condes",
+    address: "Av. Apoquindo 4500, oficina 703",
+    state: "inactivo",
+    consent_status: false,
+    consent_at: null,
+    created_at: "2025-11-02T15:30:00-03:00",
+  },
+  {
+    id: 5,
+    phone_e164: "+56954433205",
+    name: "Camila Soto",
+    email: "camila.soto@example.cl",
+    comuna: "Vitacura",
+    address: "Nueva Costanera 3911, depto 22",
+    state: "bloqueado",
+    consent_status: true,
+    consent_at: "2026-03-01T12:11:00-03:00",
+    created_at: "2026-01-22T08:55:00-03:00",
+  },
+  {
+    id: 6,
+    phone_e164: "+56977889906",
+    name: "Andrés Herrera",
+    email: "andres.herrera@example.cl",
+    comuna: "La Florida",
+    address: "Av. La Florida 9845, depto 301",
+    state: "activo",
+    consent_status: true,
+    consent_at: "2026-07-14T16:02:00-04:00",
+    created_at: "2026-04-02T13:47:00-04:00",
+  },
+];
