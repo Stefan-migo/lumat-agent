@@ -9,7 +9,7 @@ import tokensCss from "../../tokens/tokens.css?raw";
 // known scale token to "Other" would defeat the rule's purpose.
 const GROUP_RULES: Array<[RegExp, string]> = [
   [/^--primary-/, "Color"],
-  [/^--(?:danger|success|warning)-/, "Color (semantic)"],
+  [/^--(?:danger|success|warning)(?:$|-)/, "Color (semantic)"],
   [/^--(?:bg|surface)$|^--border(?:-strong)?$|^--table-head-bg$/, "Color (neutrals)"],
   [/^--text(-muted)?$/, "Color (text)"],
   [/^--text-(xs|base|sm|md|lg|xl|2xl|3xl)$/, "Typography (scale)"],
