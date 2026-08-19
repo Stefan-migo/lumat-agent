@@ -69,3 +69,51 @@ describe('design tokens (PDW-TKN-1 / PDW-TKN-2)', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('design tokens — B9 foundation additions (DS-TKN-3..7)', () => {
+  // Same line regex the Tokens page uses — one pattern, two consumers (D7/D11).
+  const cssVars = new Map<string, string>();
+  for (const line of tokensRaw.split('\n')) {
+    const m = line.match(/^\s*(--[\w-]+)\s*:\s*([^;]+);/);
+    if (m) cssVars.set(m[1], m[2].trim());
+  }
+
+  it('type scale, leading, and weight tokens match the design table (DS-TKN-3)', () => {
+    expect(cssVars.get('--text-xs')).toBe('0.75rem');
+    expect(cssVars.get('--text-base')).toBe('1rem');
+    expect(cssVars.get('--text-xl')).toBe('1.5rem');
+    expect(cssVars.get('--text-3xl')).toBe('2.25rem');
+    expect(cssVars.get('--leading-tight')).toBe('1.2');
+    expect(cssVars.get('--leading-snug')).toBe('1.375');
+    expect(cssVars.get('--leading-normal')).toBe('1.5');
+    expect(cssVars.get('--leading-relaxed')).toBe('1.625');
+    expect(cssVars.get('--weight-regular')).toBe('400');
+    expect(cssVars.get('--weight-medium')).toBe('500');
+    expect(cssVars.get('--weight-semibold')).toBe('600');
+    expect(cssVars.get('--weight-bold')).toBe('700');
+  });
+
+  it('focus-ring set matches the design table (DS-TKN-4)', () => {
+    expect(cssVars.get('--focus-ring')).toBe('#256f51');
+    expect(cssVars.get('--focus-ring-width')).toBe('2px');
+    expect(cssVars.get('--focus-ring-offset')).toBe('2px');
+  });
+
+  it('motion scale matches the design table (DS-TKN-5)', () => {
+    expect(cssVars.get('--duration-fast')).toBe('100ms');
+    expect(cssVars.get('--duration-base')).toBe('150ms');
+    expect(cssVars.get('--duration-slow')).toBe('250ms');
+    expect(cssVars.get('--ease-out')).toBe('cubic-bezier(0.33, 1, 0.68, 1)');
+    expect(cssVars.get('--ease-in-out')).toBe('cubic-bezier(0.65, 0, 0.35, 1)');
+  });
+
+  it('breakpoint reference tokens match the design table (DS-TKN-6)', () => {
+    expect(cssVars.get('--bp-sm')).toBe('640px');
+    expect(cssVars.get('--bp-md')).toBe('1024px');
+    expect(cssVars.get('--bp-lg')).toBe('1280px');
+  });
+
+  it('shadow-3 extends the elevation scale (DS-TKN-7)', () => {
+    expect(cssVars.get('--shadow-3')).toBe('0 8px 24px rgba(0, 0, 0, 0.16)');
+  });
+});

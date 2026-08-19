@@ -61,9 +61,45 @@
   --text-lg: 1.25rem;
   --text-2xl: 2rem;
 
+  /* Type — DS-TKN-3 (static rem, appended to the scale) */
+  --text-xs: 0.75rem;
+  --text-base: 1rem;
+  --text-xl: 1.5rem;
+  --text-3xl: 2.25rem;
+
+  /* Leading — DS-TKN-3 (unitless line-heights) */
+  --leading-tight: 1.2;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+
+  /* Weight — DS-TKN-3 */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Focus ring — DS-TKN-4 (primary-700; 6.0:1 vs --surface, 5.5:1 vs --bg) */
+  --focus-ring: #256f51;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  /* Motion — DS-TKN-5 */
+  --duration-fast: 100ms;
+  --duration-base: 150ms;
+  --duration-slow: 250ms;
+  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Breakpoints — DS-TKN-6 (reference only; no layout consumption this slice) */
+  --bp-sm: 640px;
+  --bp-md: 1024px;
+  --bp-lg: 1280px;
+
   /* Shadow */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);
   --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.16); /* DS-TKN-7 */
 
   --z-modal: 100;
 }
