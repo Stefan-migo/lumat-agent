@@ -30,16 +30,19 @@ from app.models import (  # noqa: E402
     MessageType,
 )
 from app.services.customers import get_or_create_customer  # noqa: E402
+from app.services import memory as memory_service  # noqa: E402
+from app.models import MemoryType  # noqa: E402
 
 ADMIN_DB_URL = "postgresql://lumat:lumat@localhost:5432/lumat"
 
 
 @pytest.fixture(autouse=True)
 def clean_db(migrated_db):
-    """Reset chat-related tables before every test (shared test DB)."""
+    """Reset chat + memory tables before every test (shared test DB)."""
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
-            "TRUNCATE audit_log, conversation_events, cases, messages, "
+            "TRUNCATE memories, memory_relations, memory_observations, "
+            "audit_log, conversation_events, cases, messages, "
             "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
         )
     yield
@@ -182,6 +185,8 @@ def test_d2_state_rebuilt_from_db():
     assert state.intent is None
     assert state.emergency is False
     assert state.escalate is False
+    # S2 (CM-7): no stored memory on first contact -> empty context, flow unblocked
+    assert state.memory_context == ""
 
 
 def test_d2_window_capped_at_10():
@@ -259,3 +264,32 @@ def test_cr5_closed_conversation_opens_new():
         session.commit()
         assert second.id != first.id
         assert second.state == ConvState.BOT
+
+
+# ---------------------------------------------------------------------------
+# S2 (CM-7) — memory context loaded into the rebuilt state
+# ---------------------------------------------------------------------------
+
+
+def test_s2_from_db_carries_memory_context(fake_embedder):
+    """Returning customer: customer memories are loaded into memory_context.
+
+    Scenario: Context injected (CM-7).
+    """
+    conv_id = _seed(["hola"])
+    with SessionLocal() as session:
+        conv = session.get(Conversation, conv_id)
+        memory_service.upsert(
+            session,
+            scope="customer",
+            entity_id=str(conv.customer_id),
+            topic_key="customer_memo",
+            tipo=MemoryType.CUSTOMER_MEMO,
+            titulo="customer_memo",
+            contenido="Cliente prefiere atencion en la tarde.",
+        )
+        session.commit()
+        state = ConversationState.from_db(session, conv_id)
+
+    assert state.memory_context
+    assert "tarde" in state.memory_context

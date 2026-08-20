@@ -85,20 +85,36 @@ def list_unresolved_questions(session, limit: int = 100) -> list[Message]:
     )
 
 
-def _answer_from_kb(text: str, kb_text: str, message_id: int, brief: bool = False) -> str:
+def _answer_from_kb(
+    text: str,
+    kb_text: str,
+    message_id: int,
+    brief: bool = False,
+    memory_context: str = "",
+) -> str:
     """Grounded answer; records the LLM cost on the current message (D6).
 
     ``brief`` (SS-3 conservative mode) appends the one-line brevity directive
     to the system prompt so completion tokens — the expensive half of the
-    gpt-4o-mini rate — shrink.
+    gpt-4o-mini rate — shrink. ``memory_context`` (CM-7) is injected as a
+    read-only <memory> block beside <kb> when the customer has stored memories.
     """
     client = openai_client()
     system = SYSTEM_PROMPT + (BRIEF_MODE_SUFFIX if brief else "")
+    memory_block = (
+        f"\n<memory>{memory_context}</memory>" if memory_context else ""
+    )
     response = client.chat.completions.create(
         model=CHAT_MODEL,
         messages=[
             {"role": "system", "content": system},
-            {"role": "user", "content": f"<kb>{kb_text}</kb>\n\n<user_input>{text}</user_input>"},
+            {
+                "role": "user",
+                "content": (
+                    f"<kb>{kb_text}</kb>"
+                    f"{memory_block}\n\n<user_input>{text}</user_input>"
+                ),
+            },
         ],
         temperature=0,
     )
@@ -151,5 +167,6 @@ def respond(state: ConversationState) -> dict:
         kb_text,
         message_id=state.window[-1]["id"],
         brief=state.cost_mode == "conservative",
+        memory_context=state.memory_context,
     )
     return {"replies": [answer]}

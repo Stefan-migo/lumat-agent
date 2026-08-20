@@ -272,3 +272,40 @@ def hybrid_search(
         }
         for m, score, _, _ in ranked[:top_k]
     ]
+
+
+def load_customer_context(session: Session, customer_id: int) -> str:
+    """Return the customer's memory context as text for prompt injection (CM-7).
+
+    Reads all `scope='customer'` memories for the entity and renders them as
+    `titulo: contenido` lines. Empty when the customer has no memories yet — the
+    caller proceeds with an empty context and never blocks the reply.
+    """
+    rows = list_for_entity(session, scope="customer", entity_id=str(customer_id))
+    return "\n".join(f"{m.titulo}: {m.contenido}" for m in rows)
+
+
+def persist_memory_session(session: Session, state: Any) -> None:
+    """Flush the current turn as a session memory before END (CM-8).
+
+    Upserts a single `topic_key='session'` memory under the customer so a
+    subsequent turn's `load_customer_context` sees the previous exchange — the
+    "persisted next turn" guarantee. KB-style contract: the caller commits.
+    """
+    text = _current_turn_text(state)
+    if not text:
+        return
+    upsert(
+        session,
+        scope="customer",
+        entity_id=str(state.customer_id),
+        topic_key="session",
+        tipo=MemoryType.SESSION,
+        titulo="session",
+        contenido=text,
+    )
+
+
+def _current_turn_text(state: Any) -> str:
+    """The latest inbound user text from a rebuilt ConversationState (CM-8)."""
+    return state.window[-1]["text"] if state.window else ""
