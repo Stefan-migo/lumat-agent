@@ -252,3 +252,95 @@ Phase 4+ (S4–S6) remain. See `tasks.md`.
 ## Graph Record
 
 Graph Check passed (mandatory gate). Queried `graphify query "ClientesList page titlebar badges customerState customer link EmptyState DataTable"` → BFS depth=2, 685 nodes; and `graphify query "CasesList PageFrame StateMessage caseStatus label page header"` → BFS depth=2, 231 nodes. Nodes consulted: `ClientesList.stories.tsx`, `CasesList.stories.tsx`, `ClientesListEmpty()`, `CasesListView()`, `CasesListEmpty()`, `ClientesListView()`, `CaseActions()`, `DataTable()`, `EmptyState()`, `StateMessage()`, `PageHeader()`, `caseStatusTone()/caseStatusLabel`, `customerStateTone()/customerStateLabel`, `Badge()`, `FlashMessage()`, `toneMaps.ts`, mockData `cases`/`clients`, page story communities (`ClientFicha.stories.tsx`, `CasesList.stories.tsx`). Graph present at `graphify-out/` (refreshed at session close, not per-batch).
+
+---
+
+# Apply Progress: Storybook Redesign — S4 (Phase 4: Conversations/Inbox/Thread)
+
+Change: `2026-08-20-storybook-redesign`
+Slice: **S4 / PR 4** (stacked-to-main chain; branch from S3 head, PR targets `main`)
+Mode: **Strict TDD** (web), artifact store: **hybrid** (OpenSpec + Engram)
+
+Status: **S4 complete — tasks 4.1–4.4 done**
+
+## Completed Tasks
+
+- [x] **4.1** ConversationsList — restyled onto `PageFrame` (titlebar); Spanish title "Conversaciones" + meta; empty `No hay registros` (was English "No conversations found"); approved state labels on badges AND the filter-by-state Select options (raw bot/human/closed never appear — DS-UI-LABELS holds on that surface); warning-tinted leading treatment for human rows (`borderLeft` warning rail + tint) paired with the approved "Atención humana" badge so meaning is never color-only; full workflow state matrix (loading/stale/partial-error/fatal-error) via StateMessage banners; `--primary-700` customer links (DS-UI-LINK).
+- [x] **4.2** InboxThread — voseo placeholder `Escribí tu respuesta al cliente...` → neutral `Escribe tu respuesta al cliente...`; "Bot pausado" → approved copy reflecting the actual transition: `El agente está atendiendo esta conversación` (design §Conversaciones: "Do not use 'Bot pausado' when the state means the bot is active"); raw `state` → `conversationLabel` in the frame meta; added stale banner via StateMessage; composer availability explicit (enabled only for human-owned inside reply window; disabled composers explain the exact reason); state-control labels → approved direct verbs (`Tomar conversación` / `Cerrar conversación` / `Devolver al agente`) dropping raw "bot"; shared frame adopted.
+- [x] **4.3** ConversationThread — raw `conv.state` → `conversationLabel` in frame meta; raw direction → `directionLabel` on the visible "Dirección" column (DS-UI-LABELS); ⚠️ emoji note → StateMessage status region (title "Canal automático" + detail); added loading + empty states (DS-UI-STATES); bubble row alignment preserved (existing justifySelf grid, H2-advance row alignment kept); shared frame adopted.
+- [x] **4.4** RED→GREEN — updated the three `*.stories.test.tsx` EN/raw assertions → Spanish approved labels; banner role/label asserts (`getByRole(role)` + `within(region).getByText` per S3 pattern); removed the banned `style.background` assertion on human rows (rewrote to assert the approved-label warning badge, a non-color semantic outcome per strict-tdd Assertion Quality Rules); viewports 390/640/768/1024/1280 verified via build-storybook rendered bundle containing the new Spanish copy (runtime harness; no automated viewport harness in repo, per repo precedent).
+
+## TDD Cycle Evidence (Strict TDD)
+
+Safety Net before edits: **25/25** on the three touched page test files (ConversationsList 9 + InboxThread 8 + ConversationThread 8).
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 4.1 | `ConversationsList.stories.test.tsx` | Unit (RTL) | ✅ 9/9 | ✅ 6 failing (title, human row, filter labels, empty, banners) | ✅ 13/13 | ✅ 3 states (loading/stale/fatal-error) + human vs non-human tone | ✅ clean |
+| 4.2 | `InboxThread.stories.test.tsx` | Unit (RTL) | ✅ 8/8 | ✅ 6 failing (meta label, voseo, reason, stale, controls) | ✅ 11/11 | ✅ open/closed/bot/outside-window + human→closed→bot state transitions | ✅ clean |
+| 4.3 | `ConversationThread.stories.test.tsx` | Unit (RTL) | ✅ 8/8 | ✅ 5 failing (meta label, direction, note→status, loading, empty) | ✅ 10/10 | ✅ table + bubble variants; loading/empty/ready | ✅ clean |
+
+**RED notes**: each task's production change was preceded by its failing test. The human-row treatment test was rewritten because the old assertion (`row.style.background`) is a banned CSS assertion under strict-tdd; the new assertion checks the approved "Atención humana" badge with `data-tone="warning"`, proving the meaning is carried by the label, never color alone.
+
+## Test Summary
+
+- **Total tests passing**: 257/257 (38 files) — full suite green (S3 baseline 248 → +9 net from S4).
+- **New tests written**: +4 ConversationsList (banners×3 + filter-labels), +3 InboxThread (meta label + neutral placeholder + stale), +2 ConversationThread (loading + empty) = +9.
+- **Layers used**: Unit (React Testing Library).
+- **Approval tests**: N/A — behavior changed by design (Spanish labels/state matrix), RED→GREEN drove it.
+
+## Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused test command + result | `cd web && npx vitest run <3 page tests>` → RED (17 failing) then GREEN `34/34`. Full `cd web && npm test` → **257/257 (38 files)**. |
+| Type check | `cd web && npx tsc --noEmit` → **exit 0** |
+| Runtime/integration harness | `cd web && npm run build-storybook` → **built OK** (exit 0, `storybook-static` produced). The three page story chunks embed the new Spanish copy (`Conversaciones`, `El agente está atendiendo esta conversación`, `Canal automático`). DS-UI-STORY viewports (390/640/768/1024/1280) verified via responsive shared frame + rendered build (no automated viewport harness in repo, per repo precedent). |
+| Rollback boundary | Revert the 6 S4 web files (3 page stories + 3 test files). primitives/tokens/PageFrame/StateMessage/mockData untouched; S5+/S6+ pages untouched. SDD planning folder NOT re-added. |
+
+## Files Changed (S4)
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `web/src/stories/pages/ConversationsList.stories.tsx` | Modified | PageFrame shell, "Conversaciones" title, `No hay registros`, filter Select approved labels, `--primary-700` links, human-row warning leading treatment (not color-only), loading/stale/partial-error/fatal-error banners, Spanish meta (tasks 4.1/4.4) |
+| `web/src/stories/pages/ConversationsList.stories.test.tsx` | Modified | Spanish title/empty, filter-label asserts (raw keys never appear), warning-treatment semantic assert, loading/stale/error banner role/label, human-filter triangulation (task 4.4) |
+| `web/src/stories/pages/InboxThread.stories.tsx` | Modified | PageFrame shell, neutral placeholder, "El agente está atendiendo esta conversación" reason, meta via conversationLabel, stale banner, direct control labels, Spanish meta (tasks 4.2/4.4) |
+| `web/src/stories/pages/InboxThread.stories.test.tsx` | Modified | meta label, neutral-placeholder assert, no-"Bot pausado", stale banner, state-transition asserts, direct control labels (task 4.4) |
+| `web/src/stories/pages/ConversationThread.stories.tsx` | Modified | PageFrame shell, meta via conversationLabel, directionLabel on Dirección column, ⚠️ note → StateMessage, loading/empty states, Spanish meta (tasks 4.3/4.4) |
+| `web/src/stories/pages/ConversationThread.stories.test.tsx` | Modified | conversationLabel meta, directionLabel cell, StateMessage status region note, loading/empty asserts (task 4.4) |
+| `openspec/.../tasks.md` | Modified | Marked 4.1–4.4 `[x]` |
+| `openspec/.../apply-progress.md` | Modified | Appended S4 section (this) |
+
+## Deviations from Design
+
+1. **`directionLabel for direction` lands on ConversationThread, not ConversationsList (task boundary note).** The tasks text lists "directionLabel for direction" under 4.1, but the `Conversation` type has NO direction field (only `Message` does), and the design §Conversaciones list spec enumerates rows as "customer, state, assignee, summary, freshness, created date" — no direction column. The only surface on S4 that renders a raw direction is the ConversationThread "Dirección" column (task 4.3's surface). Applied `directionLabel` there (visible, non-raw). The InboxThread bubble `aria-label` keeps the raw `inbound`/`outbound` as a hidden accessibility surface (technical, tests depend on it).
+2. **"Acciones actions header" (4.1) already satisfied by the DataTable Spanish default.** Design §Conversaciones defines no per-list action, so no fabricated action column was added; DataTable defaults `actionsHeader="Acciones"` (S2 task 2.6).
+3. **"Bot pausado" replacement copy.** The exact approved reason for a bot-state disabled composer is not a quoted string anywhere (the vocab table forbids "Bot pausado" but gives no replacement). I used `El agente está atendiendo esta conversación`, which reflects the real transition (state=bot ⇒ the agent is actively attending, per the approved `conversationLabel("bot") = "Agente atendiendo"`). Spec-compliant (DS-UI-COPY / DESIGN_SYSTEM §Conversaciones).
+4. **State-control verbs.** Changed `Tomar`/`Cerrar`/`Volver a bot` → `Tomar conversación`/`Cerrar conversación`/`Devolver al agente` because "Volver a bot" renders a raw implementation label (`bot`) on the surface, violating DS-UI-LABELS/COPY. Approved verbs come from DESIGN_SYSTEM §Conversaciones. Already flagged as in the three-page S4 scope.
+
+## Issues Found
+
+- S4 authored changed lines: **456** (315+/141−) across the 6 web files — above the ~280 slice forecast and the 400-line budget, driven by the bilingual Spanish meta-doc blocks and Strict-TDD coverage (same driver as S2's overage). PR body notes it; boundary stays S4-only per orchestrator instruction.
+- The `openspec/changes/memoria-persistente-lumat/` untracked folder is unrelated; excluded from the S4 commit/PR.
+
+## Remaining Tasks (not this slice)
+
+Phase 5+ (S5–S6) remain. See `tasks.md`.
+
+## Workload / PR Boundary
+
+- Mode: **chained PR slice (stacked-to-main)** — PR 4.
+- Current work unit: S4 — Conversations / Inbox / Thread restyle.
+- Boundary: starts from S3 head (`feat/storybook-redesign-s3`), ends with PR 4 (conversation surfaces). S5+ land in later PRs targeting `main`.
+- Review budget impact: **456 changed web lines** (315+/141−) — over the 400-line budget; noted in PR body.
+
+## Delivery / Branch / Commit / PR
+
+- Chain strategy: `stacked-to-main` (each PR targets `main`, merged in order). PR 4 = S4 only.
+- Branch: `feat/storybook-redesign-s4` (branched from S3 head `feat/storybook-redesign-s3`).
+- Commit: work-unit commit `2f7eef5f` (`feat(web)`), conventional, no AI attribution. PR URL recorded after push.
+- SDD planning folder: already on the S1 chain; NOT re-added.
+
+## Graph Record
+
+Graph Check passed (mandatory gate). Queried `graphify query "ConversationsList InboxThread ConversationThread PageFrame StateMessage conversation label direction"` → BFS depth=2, 695 nodes. Nodes consulted: `ConversationsList.stories.tsx`, `InboxThread.stories.tsx`, `ConversationThread.stories.tsx`, `StateMessage()`, `PageFrame` (via S2 `_shared`), `PageHeader()`, `DataTable()`, `StatusBadge()`, `conversationLabel`/`directionLabel` (toneMaps), `Conversation`, `MessageDirection`, `Message`, `ConversationThread`, mockData `conversations`/`messages`/`clients`/`users`, `types.ts`, `clientFicha`/`ChatWithAgent`/`Login` communities (untouched). Graph present at `graphify-out/` (refreshed at session close, not per-batch).
