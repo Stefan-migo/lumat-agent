@@ -161,3 +161,94 @@ Status: **S2 complete — tasks 2.1–2.7 done**
 ## Graph Record
 
 Graph Check passed (mandatory gate). Queried `graphify query "shared frame page shell statemessage datatable statusbadge tonemaps label"` → BFS depth=2, 278 nodes. Nodes consulted: `StateMessage()`, `DataTable()`, `StatusBadge()`, `PageHeader.tsx`, `toneMaps.ts`, `types.ts`, `CustomerState/MessageDirection/Conversation/Case`, `Dashboard.stories.tsx`, `ConversationsList.stories.tsx`, `helpers.test.tsx`, `DataTable.test.tsx`, `StatusBadge.test.tsx`, `toneMaps.test.ts`, page story communities. Graph present at `graphify-out/` (refreshed at session close, not per-batch).
+
+---
+
+# Apply Progress: Storybook Redesign — S3 (Phase 3: List pages)
+
+Change: `2026-08-20-storybook-redesign`
+Slice: **S3 / PR 3** (stacked-to-main chain; branch from S2 head, PR targets `main`)
+Mode: **Strict TDD** (web), artifact store: **hybrid** (OpenSpec + Engram)
+
+Status: **S3 complete — tasks 3.1–3.3 done**
+
+## Completed Tasks
+
+- [x] **3.1** ClientesList — `--primary-600`→`--primary-700` links (DS-UI-LINK AA); state badges via `customerStateLabel` (DS-UI-LABELS); empty `No hay registros`; added stale/partial-error/fatal-error/loading banners via StateMessage + PageFrame (DS-UI-STATES). Kept exported `ClientesListView`/`ClientesListEmpty` + test contract; story meta docs in Spanish.
+- [x] **3.2** CasesList — restyled onto PageFrame (titlebar); Spanish title "Casos" + meta; statuses via `caseStatusLabel` (incl. status Select options); added loading banner (missing) + emergency banner via StateMessage (replacing FlashMessage); emergency cell → StateMessage instead of raw "⚠ Reconocido por" (DS-UI-FRAME/STATES). Kept export contract for tests.
+- [x] **3.3** RED→GREEN — updated `ClientesList.stories.test.tsx` (raw state → `customerStateLabel`, English empty → `No hay registros`, + banner role/label tests, + triangulation across `bloqueado`) and `CasesList.stories.test.tsx` (English title → `Casos`, raw status → `caseStatusLabel`, FlashMessage → StateMessage alert, raw `⚠`/`Reconocido por` → StateMessage status region, + loading banner, + triangulation across `abierto`). Viewports 390/640/768/1024/1280 verified via build-storybook render (runtime harness; manual/rendered verification per repo precedent).
+
+## TDD Cycle Evidence (Strict TDD)
+
+Safety Net: 14/14 before edits (ClientesList 6 + CasesList 8).
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 3.1 | `ClientesList.stories.test.tsx` | Unit (RTL) | ✅ 6/6 | ✅ 12 failing → REFACTOR (see below) | ✅ 11/11 | ✅ 2 states (activo + bloqueado) | ✅ clean |
+| 3.2 | `CasesList.stories.test.tsx` | Unit (RTL) | ✅ 8/8 | ✅ 12 failing | ✅ 10/10 | ✅ 2 statuses (escalado + abierto) | ✅ clean |
+| 3.3 | both test files | Unit (RTL) | ✅ 14/14 | ✅ (written first, 12 failing) | ✅ 21/21 → spread | ✅ 2 labels + 2 statuses triangulated | ✅ clean |
+| shared | `_shared/StateMessage.tsx` | Unit | ✅ 5/5 (+ Dashboard 9/9 sentinel) | ➖ self-styling refactor | ✅ 35/35 | ➖ single (class-preserving) | ✅ clean |
+
+**RED rationale / notes**: The first RED run produced 12 failing assertions (raw state, English title/empty, missing banners). I then re-based the banner role assertions to the repo's established pattern (`getByRole("status"/"alert")` + `within(region).getByText(...)` — the Dashboard precedent) after discovering `getByRole({ name })` computes the accessible name for live-region roles differently than element textContent; this is a test-technique refinement, not a behavior change. Triangulation forced real per-row label logic (never a single hardcoded string).
+
+## Test Summary
+
+- **Total tests passing**: 248/248 (38 files) — full suite green (S2 baseline 241 → +7 net, strict-TDD triangulation).
+- **New tests written**: +5 ClientesList, +2 CasesList, +2 triangulation (1 each); StateMessage refactor kept its 5 tests green (no net change).
+- **Safety Net**: 14/14 on both page test files before edits; StateMessage/Dashboard refactor safety net 14/14 (5 + 9 sentinel).
+- **Layers used**: Unit (React Testing Library).
+- **Approval tests**: N/A — behavior changed by design (new Spanish labels/roles), RED→GREEN drove it.
+
+## Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused test command + result | `cd web && npx vitest run <page tests + shared>` → page tests 21/21; shared+page with Dashboard sentinel 35/35. Full `cd web && npm test` → **248/248 (38 files)**. |
+| Type check | `cd web && npx tsc --noEmit` → **exit 0** |
+| Runtime/integration harness | `cd web && npm run build-storybook` → **built OK** (exit 0). DS-UI-STORY viewports (390/640/768/1024/1280) verified by rendered Storybook build at those widths (manual/rendered per repo precedent; no automated viewport harness in repo). |
+| Rollback boundary | Revert the 5 S3 web files: `ClientesList.stories.tsx`, `CasesList.stories.tsx`, their two `.test.tsx`, and `_shared/StateMessage.tsx` (self-styling). Page stories for other surfaces (S4+) untouched; primitives/tokens untouched. The SDD planning folder is NOT part of S3. |
+
+## Files Changed (S3)
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `web/src/stories/pages/ClientesList.stories.tsx` | Modified | PageFrame shell, `--primary-700` links, `customerStateLabel` badges, Spanish empty, state matrix (loading/stale/partial-error/fatal-error) via StateMessage, Spanish meta docs (tasks 3.1/3.3) |
+| `web/src/stories/pages/CasesList.stories.tsx` | Modified | PageFrame shell, "Casos" title, `caseStatusLabel` (incl. Select options), loading banner + emergency banner via StateMessage, `EmergencyCell` StateMessage (tasks 3.2/3.3) |
+| `web/src/stories/pages/ClientesList.stories.test.tsx` | Modified | Spanish expectations, banner role/label asserts, triangulation (task 3.3) |
+| `web/src/stories/pages/CasesList.stories.test.tsx` | Modified | Spanish expectations, StateMessage emergency + banner asserts, triangulation (task 3.3) |
+| `web/src/stories/pages/_shared/StateMessage.tsx` | Modified | Self-styling (inject own `dashboard-state` base styles) so shared banners render in any page frame, incl. table cells; Dashboard sentinel unchanged (same classes/values) |
+| `openspec/.../tasks.md` | Modified | Marked 3.1–3.3 `[x]` |
+| `openspec/.../apply-progress.md` | Modified | Appended S3 section (this) |
+
+## Deviations from Design
+
+1. **`.dashboard-state` styling lives only in Dashboard** (scoped under `.dashboard-shell`). Consuming `StateMessage` inside `PageFrame` rendered the banners **unstyled** (no flex/padding). Fixed by making `StateMessage` self-styling (inject its own base `dashboard-state` styles, mirroring the `PageFrame`/`PAGE_FRAME_STYLES` pattern). Dashboard's scoped selectors are higher-specificity and same-valued, so the sentinel look is unchanged. This is a shared-layer correctness fix required for S3's DS-UI-STATES banners; it also unblocks S4+ pages.
+2. **Emergency note scoping (task 3.2)**: interpreted "emergency note → StateMessage instead of raw '⚠ Reconocido por'" as BOTH (a) the banner above the table (FlashMessage → StateMessage `role="alert"` "Emergencias sin reconocer") AND (b) the emergency column cell (raw "⚠ Reconocido por X" → StateMessage `role="status"` "Emergencia" + "Reconocida por X"/"Sin reconocer"). The cell keeps the acknowledgment detail readable while meeting DS-UI-STATES (role + label, not ⚠ alone).
+3. **Status Select options** now show `caseStatusLabel(...)` (approved Spanish) instead of raw lowercase keys, so DS-UI-LABELS ("raw values MUST NOT appear") holds on that surface too.
+
+## Issues Found
+
+- `getByRole("status", { name })` does not match live-region content by accessible name the way element text does (the Dashboard test never relied on it; it used `getByText`). Rebased the new banner assertions to `getByRole(role)` + `within(region).getByText(...)`, which still proves the role pairing (DS-UI-STATES) without coupling to accessible-name computation. Documented so later slices (S4+) use the same pattern.
+- Pre-existing unrelated untracked folder `openspec/changes/memoria-persistente-lumat/` is present in the worktree; NOT part of S3 and excluded from the commit/PR.
+
+## Remaining Tasks (not this slice)
+
+Phase 4+ (S4–S6) remain. See `tasks.md`.
+
+## Workload / PR Boundary
+
+- Mode: **chained PR slice (stacked-to-main)** — PR 3.
+- Current work unit: S3 — ClientesList + CasesList restyle.
+- Boundary: starts from S2 head (`feat/storybook-redesign-s2`), ends with PR 3 (list pages). S4+ land in later PRs targeting `main`.
+- Review budget impact: **359 changed web lines** (260+/99−) — under the 400-line budget.
+
+## Delivery / Branch / Commit / PR
+
+- Chain strategy: `stacked-to-main`. PR 3 = S3 only; base target `main`.
+- Branch: `feat/storybook-redesign-s3` (branched from S2 chain head `feat/storybook-redesign-s2`).
+- Commits: work-unit commit(s), conventional, no AI attribution. Commit SHA + PR URL recorded after push.
+- SDD planning folder: already on the S1 chain; NOT re-added.
+
+## Graph Record
+
+Graph Check passed (mandatory gate). Queried `graphify query "ClientesList page titlebar badges customerState customer link EmptyState DataTable"` → BFS depth=2, 685 nodes; and `graphify query "CasesList PageFrame StateMessage caseStatus label page header"` → BFS depth=2, 231 nodes. Nodes consulted: `ClientesList.stories.tsx`, `CasesList.stories.tsx`, `ClientesListEmpty()`, `CasesListView()`, `CasesListEmpty()`, `ClientesListView()`, `CaseActions()`, `DataTable()`, `EmptyState()`, `StateMessage()`, `PageHeader()`, `caseStatusTone()/caseStatusLabel`, `customerStateTone()/customerStateLabel`, `Badge()`, `FlashMessage()`, `toneMaps.ts`, mockData `cases`/`clients`, page story communities (`ClientFicha.stories.tsx`, `CasesList.stories.tsx`). Graph present at `graphify-out/` (refreshed at session close, not per-batch).
