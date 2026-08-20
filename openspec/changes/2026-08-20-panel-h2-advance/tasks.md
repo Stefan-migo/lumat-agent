@@ -39,7 +39,7 @@ Gate: `cd web && npm test && npx tsc -b && npm run build-storybook` green; diff 
 
 Gate: same as PR1; index includes ChatWithAgent.
 
-- [ ] **T2.1** Test-first: `chat.test.ts` (shape `{id,role,text,created_at}`, `AgentStatus` idle/processing) + `chat.ts` (D2/R3 — dedicated, not `Conversation`). [R-PRD-PG-12]
+- [x] **T2.1** Test-first: `chat.test.ts` (shape `{id,role,text,created_at}`, `AgentStatus` idle/processing) + `chat.ts` (D2/R3 — dedicated, not `Conversation`). [R-PRD-PG-12]
 - [ ] **T2.2** RED: `ChatWithAgent.stories.test.tsx` — Default: header+bubbles+Avatar+idle+chips+enabled; AgentThinking: `.spinner`+disabled. [R-PRD-PG-11 · Deps: T2.1]
 - [ ] **T2.3** GREEN: `ChatWithAgent.stories.tsx` — PageHeader + bubbles + Avatar + `AgentStatusBar` (idle / `.spinner`+thinking, D7) + `SuggestionChips` + Textarea/Button composer; variants Default / AgentThinking (disabled). [R-PRD-PG-11 · Deps: T2.2]
 
