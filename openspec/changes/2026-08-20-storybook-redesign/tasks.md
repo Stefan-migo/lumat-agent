@@ -59,10 +59,10 @@ Chain strategy: pending
 
 ## Phase 5: Ficha/Chat/Login (DS-UI-TONEFIX/LOGIN/STATES)
 
-- [ ] 5.1 RED `ClientFicha.stories.test.tsx`: case status uses `caseStatusTone` not `customerStateTone`.
-- [ ] 5.2 GREEN: ClientFicha case rows → `caseStatusTone` + labels; saving/validation/disabled states (DS-UI-TONEFIX/STATES).
-- [ ] 5.3 ChatWithAgent: translate `agentStatus`/voseo/EN aria → Spanish; role labels (DS-UI-COPY).
-- [ ] 5.4 Login: Lumat lockup + `Usuario`/`Contraseña`/`Iniciar sesión`; RED→GREEN inline error preserves username, no existence leak; loading (DS-UI-LOGIN/STATES).
+- [x] 5.1 RED `ClientFicha.stories.test.tsx`: case status uses `caseStatusTone` not `customerStateTone`.
+- [x] 5.2 GREEN: ClientFicha case rows → `caseStatusTone` + labels; saving/validation/disabled states (DS-UI-TONEFIX/STATES).
+- [x] 5.3 ChatWithAgent: translate `agentStatus`/voseo/EN aria → Spanish; role labels (DS-UI-COPY).
+- [x] 5.4 Login: Lumat lockup + `Usuario`/`Contraseña`/`Iniciar sesión`; RED→GREEN inline error preserves username, no existence leak; loading (DS-UI-LOGIN/STATES).
 
 ## Phase 6: KB + Settings
 

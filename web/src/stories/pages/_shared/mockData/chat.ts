@@ -13,8 +13,8 @@ export interface AgentChatMessage {
 }
 
 export const agentStatus: Record<"idle" | "processing", string> = {
-  idle: "Agent idle",
-  processing: "Agent is thinking…",
+  idle: "Agente en espera",
+  processing: "El agente está pensando…",
 };
 
 export const agentChatMessages: AgentChatMessage[] = [

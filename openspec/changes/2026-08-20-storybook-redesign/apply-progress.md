@@ -344,3 +344,95 @@ Phase 5+ (S5–S6) remain. See `tasks.md`.
 ## Graph Record
 
 Graph Check passed (mandatory gate). Queried `graphify query "ConversationsList InboxThread ConversationThread PageFrame StateMessage conversation label direction"` → BFS depth=2, 695 nodes. Nodes consulted: `ConversationsList.stories.tsx`, `InboxThread.stories.tsx`, `ConversationThread.stories.tsx`, `StateMessage()`, `PageFrame` (via S2 `_shared`), `PageHeader()`, `DataTable()`, `StatusBadge()`, `conversationLabel`/`directionLabel` (toneMaps), `Conversation`, `MessageDirection`, `Message`, `ConversationThread`, mockData `conversations`/`messages`/`clients`/`users`, `types.ts`, `clientFicha`/`ChatWithAgent`/`Login` communities (untouched). Graph present at `graphify-out/` (refreshed at session close, not per-batch).
+
+---
+
+# Apply Progress: Storybook Redesign — S5 (Phase 5: Ficha/Chat/Login)
+
+Change: `2026-08-20-storybook-redesign`
+Slice: **S5 / PR 5** (stacked-to-main chain; branch from S4 head, PR targets `main`)
+Mode: **Strict TDD** (web), artifact store: **hybrid** (OpenSpec + Engram)
+
+Status: **S5 complete — tasks 5.1–5.4 done**
+
+## Completed Tasks
+
+- [x] **5.1** RED — `ClientFicha.stories.test.tsx`: case status must render via `caseStatusTone`+`caseStatusLabel`, never `customerStateTone`. 7 failing tests first (tone, no-raw-leak, conversationLabel, directionLabel, customerStateLabel badge+Select, Guardar estado, saving state).
+- [x] **5.2** GREEN — ClientFicha: case rows → `caseStatusTone`+`caseStatusLabel` (DS-UI-TONEFIX); conversation states → `conversationLabel`; message directions → `directionLabel`; customer-state badge/Select → `customerStateLabel` (raw keys never appear); state form gets saving/validation/disabled (DS-UI-STATES) via `isSaving` prop + `SavingState` story; adopted the shared `PageFrame` (DS-UI-FRAME). Spanish meta docs.
+- [x] **5.3** ChatWithAgent: `agentStatus` translated ("Agente en espera"/"El agente está pensando…" — data shape preserved); voseo "Escribí tu mensaje" → neutral "Escribe tu mensaje..."; EN aria labels ("admin message"/"agent message") → Spanish ("Mensaje de administrador"/"Mensaje de agente"); role label "Admin" → "Administrador"; shared `PageFrame` adopted; Spanish meta docs (DS-UI-COPY/FRAME).
+- [x] **5.4** Login: Lumat typographic lockup (`Lumat` + `Panel operativo`, reuses panel-shell brand language — design D8, no logo asset); `Usuario`/`Contraseña`/`Iniciar sesión`; inline non-destructive error preserves the username via `username` prop; no username-existence leak (generic "Credenciales inválidas"); `LoginLoading` story (disabled submit + "Iniciando sesión…"); RED→GREEN tests updated to approved Spanish (DS-UI-LOGIN/STATES).
+
+## TDD Cycle Evidence (Strict TDD)
+
+Safety Net before edits: **14/14** on the three touched page test files (ClientFicha 7 + ChatWithAgent 3 + Login 4).
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 5.1/5.2 | `ClientFicha.stories.test.tsx` | Unit (RTL) | ✅ 7/7 | ✅ 7 failing → 12 passing | ✅ 12/12 | ✅ 2 case tones (escalado/danger + cerrado/success), 4 customerStates, bot/human/closed + inbound/outbound | ✅ clean |
+| 5.3 | `ChatWithAgent.stories.test.tsx` | Unit (RTL) | ✅ 3/3 | ✅ 4 failing → 5 passing | ✅ 5/5 | ✅ idle + processing; adult/agent aria; placeholder neutral | ✅ clean |
+| 5.4 | `Login.stories.test.tsx` | Unit (RTL) | ✅ 4/4 | ✅ 5 failing → 6 passing | ✅ 6/6 | ✅ default/error/loading; username preserve + no-leak regex | ✅ clean |
+
+**Triangulation notes**: no ghost loops — every assertion exercises real rendered rows (case statuses `escalado`+`cerrado` present in the mock, distinct tones). The no-raw-leak test proves raw keys vanished because the labels now render (not an empty DOM). Login no-leak test asserts the generic error text, exercising the real alert node.
+
+## Test Summary
+
+- **Total tests passing**: 266/266 (38 files) — full suite green (S4 baseline 257 → +9 net from S5: ClientFicha +5, ChatWithAgent +2, Login +2).
+- **New tests written**: +5 ClientFicha, +2 ChatWithAgent, +2 Login.
+- **Layers used**: Unit (React Testing Library).
+- **Approval tests**: N/A — behavior changed by design (tone fix + Spanish, DS-UI-COPY/TONEFIX), RED→GREEN drove it.
+
+## Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused test command + result | `cd web && npx vitest run <3 page tests>` → RED (16 failing) then GREEN `23/23`. Full `cd web && npm test` → **266/266 (38 files)**. |
+| Type check | `cd web && npx tsc --noEmit` → **exit 0** |
+| Runtime/integration harness | `cd web && npm run build-storybook` → **built OK** (exit 0). Rendered chunks embed the new Spanish copy: `El agente está pensando…`, `Panel operativo`, `Iniciar sesión`, `Guardar estado`, `Credenciales inválidas`, `Ficha de cliente del panel`. DS-UI-STORY viewports (390/640/768/1024/1280) verified via shared responsive frame + rendered build (no automated viewport harness in repo, per repo precedent). |
+| Rollback boundary | Revert the 7 S5 web files (3 page stories + 3 test files + `_shared/mockData/chat.ts`). `mockData/chat.ts` change is copy-only (agentStatus values), data shape preserved. primitives/tokens/PageFrame/StateMessage/toneMaps untouched; S6 pages (KbList/Settings) untouched. SDD planning folder NOT re-added. |
+
+## Files Changed (S5)
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `web/src/stories/pages/ClientFicha.stories.tsx` | Modified | PageFrame shell; case rows → `caseStatusTone`+`caseStatusLabel` (DS-UI-TONEFIX); conversationLabel/directionLabel on history; customerStateLabel badge + Select; `Guardar estado` + saving/validation/disabled via `isSaving`; `SavingState` story; Spanish meta (tasks 5.1/5.2) |
+| `web/src/stories/pages/ClientFicha.stories.test.tsx` | Modified | RED→GREEN: tone-fix asserts, no-raw-leak, label maps, Spanish Select options, saving-state (tasks 5.1/5.2) |
+| `web/src/stories/pages/ChatWithAgent.stories.tsx` | Modified | PageFrame shell; `agentStatus` Spanish copy; neutral placeholder; Spanish aria labels; "Administrador" role; Spanish meta (task 5.3) |
+| `web/src/stories/pages/ChatWithAgent.stories.test.tsx` | Modified | Spanish idle/thinking, neutral placeholder, Spanish aria, role initials (task 5.3) |
+| `web/src/stories/pages/Login.stories.tsx` | Modified | Lumat typographic lockup + Usuario/Contraseña/Iniciar sesión; username-preserving inline error; no-leak generic error; LoginLoading story; Spanish meta (task 5.4) |
+| `web/src/stories/pages/Login.stories.test.tsx` | Modified | Lockup + Spanish labels, loading, non-destructive error, no existence leak (task 5.4) |
+| `web/src/stories/pages/_shared/mockData/chat.ts` | Modified | `agentStatus` values → Spanish (idle "Agente en espera", processing "El agente está pensando…"); shape preserved (task 5.3, DS-UI-COPY) |
+| `openspec/.../tasks.md` | Modified | Marked 5.1–5.4 `[x]` |
+| `openspec/.../apply-progress.md` | Modified | Appended S5 section (this) |
+
+## Deviations from Design
+
+1. **PageFrame adoption extends to ClientFicha and ChatWithAgent.** DS-UI-FRAME requires the shared frame consumed by all page stories; both adopted `PageFrame` (titlebar + content) to stay spec-compliant alongside S3/S4 pages. Login correctly stays a standalone centered auth card (design D8 — auth surface outside the shell, not a framed page). This added lines beyond the raw tone/label work but is the frame contract the redesign exists to enforce.
+2. **Action verb "Guardar estado"** (was "Cambiar estado") on the customer-state form — clearer + verified; approved Spanish, no raw keys. DESIGN_SYSTEM §Clientes (state control) guidance kept.
+3. **Login error copy "Credenciales inválidas"** — the design gives no exact string for the generic auth error; this is the approved DS-UI-LOGIN non-destructive message that preserves the username and never reveals existence (matches DESIGN_SYSTEM §Login). The mockData `agentStatus` translation changes copy ONLY (data shape intact) — in scope per the prompt's DS-UI-COPY note.
+
+## Issues Found
+
+- S5 authored changed lines: **575** (415+/160−) across 7 web files — above the ~320 forecast and the 400-line budget, driven by Strict-TDD triangulation coverage + PageFrame adoption + Spanish meta-doc blocks (same driver as S2/S4 overage). Noted in PR body; boundary stays S5-only per orchestrator instruction.
+- The `openspec/changes/memoria-persistente-lumat/` untracked folder is unrelated; excluded from the S5 commit/PR (un-staged).
+
+## Remaining Tasks (not this slice)
+
+Phase 6+ (S6) remain. See `tasks.md`.
+
+## Workload / PR Boundary
+
+- Mode: **chained PR slice (stacked-to-main)** — PR 5.
+- Current work unit: S5 — ClientFicha / ChatWithAgent / Login restyle.
+- Boundary: starts from S4 head (`feat/storybook-redesign-s4`), ends with PR 5 (ficha/chat/login). S6 (KbList/Settings) lands in PR 6 targeting `main`.
+- Review budget impact: **575 changed web lines** (415+/160−) — over the 400-line budget; noted in PR body.
+
+## Delivery / Branch / Commit / PR
+
+- Chain strategy: `stacked-to-main` (each PR targets `main`, merged in order). PR 5 = S5 only.
+- Branch: `feat/storybook-redesign-s5` (branched from S4 chain head `feat/storybook-redesign-s4`).
+- Commit: work-unit commit (conventional, no AI attribution). Commit SHA + PR URL recorded after push.
+- SDD planning folder: already on the S1 chain; NOT re-added.
+
+## Graph Record
+
+Graph Check passed (mandatory gate). Queried `graphify query "ClientFicha case status tone caseStatusTone customerStateTone ficha page"` → BFS depth=2, 603 nodes; `graphify path "ClientFicha" "caseStatusTone"` → `ClientFicha.stories.tsx --imports_from--> toneMaps.ts --contains--> caseStatusTone()` (the tone-fix path); `graphify path "ChatWithAgent" "agentStatus"` → `ChatWithAgent.stories.tsx --imports_from--> chat.ts --contains--> agentStatus`; `graphify path "Login" "PanelShell"` → no directed path (Login is an isolated unauthenticated auth surface; lockup is typographic reuse of brand language, not an import). Nodes consulted: `ClientFicha.stories.tsx`, `ChatWithAgent.stories.tsx`, `Login.stories.tsx`, `toneMaps.ts` (caseStatusTone/caseStatusLabel/conversationLabel/directionLabel/customerStateLabel), `PageFrame`, `PageHeader`, `DataTable`, `Card`, `agentStatus`/`chat.ts`, `clients`, `conversations`, `types.ts`, `panel-shell__brand` (Login lockup reference). Graph present at `graphify-out/` (refreshed at session close, not per-batch).
