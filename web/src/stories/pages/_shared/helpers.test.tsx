@@ -7,19 +7,19 @@ import { StatCard } from "./StatCard";
 
 describe("PageHeader", () => {
   it("renders the title and subtitle/meta", () => {
-    render(<PageHeader title="Dashboard" meta="last 30 days" />);
-    expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
-    expect(screen.getByText("last 30 days")).toBeInTheDocument();
+    render(<PageHeader title="Panel" meta="últimos 30 días" />);
+    expect(screen.getByRole("heading", { name: "Panel" })).toBeInTheDocument();
+    expect(screen.getByText("últimos 30 días")).toBeInTheDocument();
   });
 
   it("renders actions when provided", () => {
     render(
       <PageHeader
         title="Casos"
-        actions={<button type="button">Export CSV</button>}
+        actions={<button type="button">Exportar CSV</button>}
       />,
     );
-    expect(screen.getByRole("button", { name: "Export CSV" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Exportar CSV" })).toBeInTheDocument();
   });
 });
 
@@ -38,24 +38,24 @@ describe("StatCard", () => {
 
 describe("EmptyState", () => {
   it("renders title through the .empty-state wrapper", () => {
-    render(<EmptyState title="No customers found" />);
-    expect(screen.getByText("No customers found")).toBeInTheDocument();
+    render(<EmptyState title="No se encontraron clientes" />);
+    expect(screen.getByText("No se encontraron clientes")).toBeInTheDocument();
   });
 
   it("emits the .empty-state primitive class", () => {
-    const { container } = render(<EmptyState title="Empty" />);
+    const { container } = render(<EmptyState title="Vacío" />);
     expect(container.querySelector(".empty-state")).not.toBeNull();
   });
 });
 
 describe("FlashMessage", () => {
   it("renders the message text", () => {
-    render(<FlashMessage tone="success">Saved</FlashMessage>);
-    expect(screen.getByText("Saved")).toBeInTheDocument();
+    render(<FlashMessage tone="success">Guardado</FlashMessage>);
+    expect(screen.getByText("Guardado")).toBeInTheDocument();
   });
 
   it("emits the .flash-message--{tone} class for each tone", () => {
-    const { container } = render(<FlashMessage tone="danger">Blocked</FlashMessage>);
+    const { container } = render(<FlashMessage tone="danger">Bloqueado</FlashMessage>);
     expect(container.querySelector(".flash-message--danger")).not.toBeNull();
   });
 });
