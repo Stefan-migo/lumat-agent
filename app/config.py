@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     # forgeable. SH-2: env-only, never in the repo.
     panel_session_secret: str
 
+    # Memoria (design "fines de detalle fino"; S3 close observations).
+    # Product values pending sanity before merge (open design question), so
+    # they ship as env-configurable constants with the design defaults.
+    obs_recur_window_days: int = 30   # recurrencia window (OBS_RECUR_WINDOW)
+    obs_recur_count: int = 2          # closes per topic_key to raise recurrencia
+    obs_no_reply_hours: int = 24      # inbound w/o bot reply -> sin_respuesta
+
 
 @lru_cache
 def get_settings() -> Settings:

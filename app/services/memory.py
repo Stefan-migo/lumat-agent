@@ -21,12 +21,25 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Memory, MemoryStatus, MemoryType
+from app.config import get_settings
+from app.models import (
+    Case,
+    Conversation,
+    ConversationState as ConversationStateEnum,
+    Memory,
+    MemoryObservation,
+    MemoryStatus,
+    MemoryType,
+    Message,
+    MessageDirection,
+    ObservationType,
+)
 from app.services import kb
 
 logger = logging.getLogger(__name__)
@@ -328,3 +341,166 @@ def _current_turn_text(state: Any) -> str:
     if entry.get("direction") != "inbound":
         return ""
     return entry.get("text") or ""
+
+
+# ---------------------------------------------------------------------------
+# S3 — close event: customer_memo + typed observations (MEM-4, MEM-5, CM-9)
+# ---------------------------------------------------------------------------
+
+
+def close_conversation(session: Session, conversation: Conversation, *, acta_text: str) -> None:
+    """Close-time handler: upsert the customer_memo and persist observations.
+
+    MEM-4/CM-9: upserts the customer_memo (`scope=customer`,
+    `topic_key='customer_memo'`) under the conversation's customer, reusing the
+    CM-5 acta content (`conversation.summary`) VERBATIM — the acta is consumed,
+    never rewritten (CM-9 boundary). Then derives and persists the typed
+    observations for the close (MEM-5) against persisted data (case row,
+    message flow, prior closes) since a panel close has no in-run
+    `ConversationState`.
+
+    KB-style contract: the caller owns the session and commits.
+    """
+    customer_id = conversation.customer_id
+    upsert(
+        session,
+        scope="customer",
+        entity_id=str(customer_id),
+        topic_key="customer_memo",
+        tipo=MemoryType.CUSTOMER_MEMO,
+        titulo="customer_memo",
+        # Reuse the CM-5 acta verbatim. A conversation with no summary yet
+        # degrades to an empty memo rather than inventing content (CM-9).
+        contenido=acta_text or "",
+    )
+    _record_observations(session, conversation)
+
+
+def _record_observations(session: Session, conversation: Conversation) -> None:
+    """Persist any typed observations that fire for the close (MEM-5).
+
+    The patterns read persisted data so they work for a panel close (no in-run
+    state): recurrencia (prior closes in window), sin_respuesta (last message
+    inbound, no bot reply), riesgo (escalated emergency case row), oportunidad
+    (case left with no ticket). Each writes a `memory_observations` row scoped
+    to the customer.
+    """
+    settings = get_settings()
+
+    if _fires_recurrencia(session, conversation, settings):
+        _write_observation(
+            session,
+            conversation.customer_id,
+            ObservationType.RECURRENCIA,
+            {
+                "window_days": settings.obs_recur_window_days,
+                "count": settings.obs_recur_count,
+                "topic_key": "customer_memo",
+            },
+        )
+
+    if _fires_sin_respuesta(session, conversation, settings):
+        _write_observation(
+            session,
+            conversation.customer_id,
+            ObservationType.SIN_RESPUESTA,
+            {"hours": settings.obs_no_reply_hours},
+        )
+
+    if _fires_riesgo(session, conversation):
+        _write_observation(session, conversation.customer_id, ObservationType.RIESGO, {})
+
+    if _fires_oportunidad(session, conversation):
+        _write_observation(
+            session, conversation.customer_id, ObservationType.OPORTUNIDAD, {}
+        )
+
+
+def _write_observation(
+    session: Session, customer_id: int, tipo: ObservationType, detalle: dict
+) -> None:
+    """Insert a customer-scoped observation row (MEM-5). Caller commits."""
+    session.add(
+        MemoryObservation(
+            scope="customer",
+            entity_id=str(customer_id),
+            tipo=tipo,
+            detalle=detalle,
+        )
+    )
+    session.flush()
+
+
+def _fires_recurrencia(session: Session, conversation: Conversation, settings) -> bool:
+    """MEM-5 recurrence: this close makes N closes in window reach the count.
+
+    Counts prior CLOSED conversations for the same customer within
+    `obs_recur_window_days`; fires when the count plus this close reaches
+    `obs_recur_count` (the design threshold, configurable via Settings).
+    """
+    window_start = datetime.now(timezone.utc) - timedelta(days=settings.obs_recur_window_days)
+    prior_closes = session.scalar(
+        select(func.count(Conversation.id)).where(
+            Conversation.customer_id == conversation.customer_id,
+            Conversation.state == ConversationStateEnum.CLOSED,
+            Conversation.closed_at >= window_start,
+            Conversation.id != conversation.id,
+        )
+    ) or 0
+    return prior_closes + 1 >= settings.obs_recur_count
+
+
+def _fires_sin_respuesta(session: Session, conversation: Conversation, settings) -> bool:
+    """Inbound with no bot reply within the configured hours (MEM-5).
+
+    Fires when the conversation's newest message is an inbound the bot never
+    answered: no OUTBOUND reply newer than that inbound. The age is bounded by
+    `obs_no_reply_hours` (a reply older than the window is dismissed).
+    """
+    last = session.scalar(
+        select(Message)
+        .where(Message.conversation_id == conversation.id)
+        .order_by(Message.id.desc())
+        .limit(1)
+    )
+    if last is None or last.direction != MessageDirection.INBOUND or not last.created_at:
+        return False
+    # An inbound answered right away, or one so old the wait is no longer this
+    # close's concern, does not count as "no response" (bounded by the SLA).
+    if last.created_at < datetime.now(timezone.utc) - timedelta(hours=settings.obs_no_reply_hours):
+        return False
+    # No outbound reply after the last inbound.
+    reply = session.scalar(
+        select(Message.id)
+        .where(
+            Message.conversation_id == conversation.id,
+            Message.direction == MessageDirection.OUTBOUND,
+            Message.id > last.id,
+        )
+        .limit(1)
+    )
+    return reply is None
+
+
+def _fires_riesgo(session: Session, conversation: Conversation) -> bool:
+    """An escalated emergency case flags a risk on close (reuses EM-1 flag)."""
+    case = session.scalar(
+        select(Case)
+        .where(Case.conversation_id == conversation.id)
+        .order_by(Case.id.desc())
+        .limit(1)
+    )
+    return bool(case is not None and case.emergency)
+
+
+def _fires_oportunidad(session: Session, conversation: Conversation) -> bool:
+    """A case left with no ticket is a follow-up opportunity (MEM-5)."""
+    case = session.scalar(
+        select(Case)
+        .where(Case.conversation_id == conversation.id)
+        .order_by(Case.id.desc())
+        .limit(1)
+    )
+    # No ticket yet -> the case was closed without a resolution ticket, so it is
+    # a potential follow-up / sales opportunity.
+    return bool(case is None or case.status is None)

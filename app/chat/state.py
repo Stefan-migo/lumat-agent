@@ -28,7 +28,7 @@ from app.models import (
     Message,
 )
 from app.services.customers import get_or_create_customer
-from app.services.memory import load_customer_context
+from app.services.memory import load_customer_context, close_conversation
 
 # CM-1: the 8-category menu shown on first contact (LumatRequest §1.x).
 MENU_CATEGORIES: list[str] = [
@@ -101,6 +101,14 @@ def set_conversation_state(
     conversation.state = new_state
     if new_state == ConvState.CLOSED:
         conversation.closed_at = datetime.now(timezone.utc)
+        # MEM-4/CM-9: fire the close handler — upsert the customer_memo
+        # (reusing conversation.summary VERBATIM) + persist observations.
+        # The summary is consumed, never rewritten (CM-9 boundary).
+        close_conversation(
+            session,
+            conversation,
+            acta_text=conversation.summary or "",
+        )
     session.add(
         ConversationEvent(
             conversation_id=conversation.id,
