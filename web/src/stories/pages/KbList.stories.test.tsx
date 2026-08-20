@@ -120,7 +120,7 @@ describe("KbList page story (T5.2 / S6 DS-UI-COPY/STATES/LABELS)", () => {
     render(<KbListView state="disable-confirmation" />);
     const activeDoc = docs.find((d) => d.active)!;
     const alert = screen.getByRole("alert");
-    expect(within(alert).getByText("Confirmá la desactivación")).toBeInTheDocument();
+    expect(within(alert).getByText("Confirma la desactivación")).toBeInTheDocument();
     expect(within(alert).getByText(new RegExp(activeDoc.title))).toBeInTheDocument();
     expect(within(alert).getByText(/el agente dejará de responder/i)).toBeInTheDocument();
   });

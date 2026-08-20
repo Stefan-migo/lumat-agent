@@ -167,8 +167,8 @@ export function KbListView({ state = "ready" }: { state?: KbListState }) {
         <StateMessage
           tone="warning"
           role="alert"
-          title="Confirmá la desactivación"
-          detail={`Al deshabilitar «${docs.find((d) => d.active)?.title ?? "este documento"}», el agente dejará de responder con él. Podés volver a activarlo cuando quieras.`}
+          title="Confirma la desactivación"
+          detail={`Al deshabilitar «${docs.find((d) => d.active)?.title ?? "este documento"}», el agente dejará de responder con él. Puedes volver a activarlo cuando quieras.`}
         />
       ) : null}
     </PageFrame>
