@@ -58,10 +58,10 @@ export function SettingsView({ state = "ready" }: { state?: SettingsState }) {
         tone="danger"
         role="alert"
         title="Sintaxis no válida"
-        detail="Revisá las reglas avanzadas: cada línea debe tener categoría=mode con mode bot_resolve o always_escalate."
+        detail="Revisa las reglas avanzadas: cada línea debe tener categoría=mode con mode bot_resolve o always_escalate."
       />
     ) : state === "server-error" ? (
-      <StateMessage tone="danger" role="alert" title="No pudimos guardar los cambios" detail="Ocurrió un error del servidor. Reintentá en unos minutos." />
+      <StateMessage tone="danger" role="alert" title="No pudimos guardar los cambios" detail="Ocurrió un error del servidor. Reintenta en unos minutos." />
     ) : state === "stale" ? (
       <StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="La última consulta no pudo completarse. Mostramos la información disponible." />
     ) : null;

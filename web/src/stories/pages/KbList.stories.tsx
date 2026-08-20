@@ -150,14 +150,14 @@ export function KbListView({ state = "ready" }: { state?: KbListState }) {
             role="status"
             spinner
             title="Procesando documento"
-            detail="Revisando el formato, tamaño y contenido. Verificá el estado en unos momentos."
+            detail="Revisando el formato, tamaño y contenido. Verifica el estado en unos momentos."
           />
         ) : state === "error" ? (
           <StateMessage
             tone="danger"
             role="alert"
             title="No pudimos procesar el documento"
-            detail="El archivo no cumple con el formato, tamaño o estado permitido. Revisalo e intentá de nuevo."
+            detail="El archivo no cumple con el formato, tamaño o estado permitido. Revísalo e intenta de nuevo."
           />
         ) : null
       }
