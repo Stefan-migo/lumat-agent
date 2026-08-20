@@ -9,10 +9,10 @@ const meta = {
     docs: {
       description: {
         component:
-          "Domain status badge for conversation/case states, mapping status to a `Badge` tone (DS-STORY-2).\n\n" +
-          "**When to use** — the five panel statuses: bot, human, closed, pending, escalated.\n" +
-          "**When not to use** — ad-hoc labels (use `Badge` directly).\n\n" +
-          "**Accessibility** — the text label always renders (bot/human/closed/pending/escalated), so color is NEVER the only channel (DS-STORY-5). Contrast: tone backgrounds (`--success-bg`, `--warning-bg`, `--danger-bg`) with `--text` meet WCAG AA for normal text; `escalated` maps to danger and `human`/`pending` to warning per the component's tone map.",
+          "Insignia de estado de dominio para estados de conversación/caso, que mapea el estado a un tono de `Badge` (DS-STORY-2).\n\n" +
+          "**Cuándo usarlo** — los cinco estados del panel: bot, human, closed, pending, escalated.\n" +
+          "**Cuándo no usarlo** — etiquetas ad-hoc (para eso usa `Badge` directamente).\n\n" +
+          "**Accesibilidad** — la etiqueta de texto siempre se renderiza (Agente atendiendo / Atención humana / Cerrada / En espera / Escalado) desde el mapa de etiquetas en español, de modo que el color NUNCA es el único canal de información (DS-STORY-5, DS-UI-LABELS). Contraste: los fondos de tono (`--success-bg`, `--warning-bg`, `--danger-bg`) con `--text` cumplen WCAG AA para texto normal; `escalated` mapea a danger y `human`/`pending` a warning según el mapa de tonos del componente.",
       },
     },
   },
@@ -20,7 +20,11 @@ const meta = {
     status: {
       control: "select",
       options: ["bot", "human", "closed", "pending", "escalated"],
-      description: "Domain status — mapped to a badge tone + text label.",
+      description: "Estado de dominio — mapeado a un tono de insignia y una etiqueta de texto.",
+    },
+    label: {
+      control: "text",
+      description: "Etiqueta aprobada (en español) que se muestra en lugar del estado crudo.",
     },
   },
 } satisfies Meta<typeof StatusBadge>;

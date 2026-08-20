@@ -9,17 +9,17 @@ const meta = {
     docs: {
       description: {
         component:
-          "Debounced search field with a built-in magnifier glyph (DS-STORY-2).\n\n" +
-          "**When to use** — client/bill search where you want to debounce keystrokes and call `onSearch` after a pause.\n" +
-          "**When not to use** — an input whose value is read on submit (use `Input`).\n\n" +
-          "**Accessibility** — the control exposes an `aria-label` (default `Search`) since it has no visible label; pass a specific one, e.g. `Buscar clientes`. The focus indicator MUST use the design tokens: `--focus-ring`, `--focus-ring-width`, `--focus-ring-offset` (2px solid, 2px offset) so it meets WCAG 2.4.11 on `--bg` and `--surface`.",
+          "Campo de búsqueda con debounce y glifo de lupa integrado (DS-STORY-2).\n\n" +
+          "**Cuándo usarlo** — búsqueda de clientes/facturas donde conviene retrasar las pulsaciones y llamar a `onSearch` tras una pausa.\n" +
+          "**Cuándo no usarlo** — un campo cuyo valor se lee al enviar (para eso usa `Input`).\n\n" +
+          "**Accesibilidad** — el control expone un `aria-label` (por defecto `Buscar`) porque no tiene etiqueta visible; pasá uno más específico, p. ej. `Buscar clientes`. El foco DEBE usar los tokens de diseño: `--focus-ring`, `--focus-ring-width`, `--focus-ring-offset` (2px sólido, 2px de offset) para cumplir WCAG 2.4.11 sobre `--bg` y `--surface`.",
       },
     },
   },
   argTypes: {
-    placeholder: { control: "text", description: "Placeholder hint." },
-    "aria-label": { control: "text", description: "Accessible name for the search field." },
-    delay: { control: "number", description: "Debounce delay in ms before onSearch fires." },
+    placeholder: { control: "text", description: "Texto de sugerencia." },
+    "aria-label": { control: "text", description: "Nombre accesible del campo de búsqueda." },
+    delay: { control: "number", description: "Retraso de debounce en ms antes de disparar onSearch." },
   },
 } satisfies Meta<typeof SearchInput>;
 
@@ -27,7 +27,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-  args: { onSearch: () => {}, placeholder: "Search clients" },
+  args: { onSearch: () => {}, placeholder: "Buscar clientes" },
 };
 
 export const Matrix: StoryObj = {
@@ -35,8 +35,8 @@ export const Matrix: StoryObj = {
     <MatrixGrid
       cells={[
         [
-          "Default (debounced)",
-          <SearchInput key="d" onSearch={() => {}} placeholder="Search clients" />,
+          "Predeterminado (con debounce)",
+          <SearchInput key="d" onSearch={() => {}} placeholder="Buscar clientes" />,
         ],
       ]}
     />
