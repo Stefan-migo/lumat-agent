@@ -52,10 +52,10 @@ Chain strategy: pending
 
 ## Phase 4: Conversations/Inbox/Thread
 
-- [ ] 4.1 ConversationsList onto PageFrame; Spanish "Conversations"/empty; directionLabel; `Acciones` header (DS-UI-COPY/STATES).
-- [ ] 4.2 InboxThread: fix voseo placeholder "Escribí tu respuesta" → neutral; "Bot pausado" → approved label; raw state → map; stale banner (DS-UI-COPY/STATES).
-- [ ] 4.3 ConversationThread: raw `conv.state` → label; ⚠️ note → StateMessage; add loading/empty (DS-UI-STATES).
-- [ ] 4.4 RED→GREEN: update the three `*.stories.test.tsx` EN/raw assertions; viewports.
+- [x] 4.1 ConversationsList onto PageFrame; Spanish "Conversaciones"/empty `No hay registros`; directionLabel for direction (thread column); `Acciones` header (design default); approved state labels (filter select + badges); warning-tinted leading treatment for human rows (paired with `Atención humana` label, never color-only); loading/stale/partial-error/fatal-error banners (DS-UI-COPY/STATES).
+- [x] 4.2 InboxThread: neutral voseo-free placeholder "Escribe tu respuesta al cliente..."; "Bot pausado" → "El agente está atendiendo esta conversación"; raw state → conversationLabel; stale banner; controls → direct labels (Tomar conversación / Cerrar conversación / Devolver al agente); composer availability explicit (DS-UI-COPY/STATES).
+- [x] 4.3 ConversationThread: raw `conv.state` → conversationLabel; raw direction → directionLabel; ⚠️ note → StateMessage status region; add loading/empty states; preserve bubble row alignment (DS-UI-STATES/COPY).
+- [x] 4.4 RED→GREEN: updated the three `*.stories.test.tsx` EN/raw assertions → Spanish approved labels; viewports 390/640/768/1024/1280 via build-storybook render (DS-UI-STORY).
 
 ## Phase 5: Ficha/Chat/Login (DS-UI-TONEFIX/LOGIN/STATES)
 
