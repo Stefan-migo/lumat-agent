@@ -7,11 +7,11 @@ import type { Kpis } from "../../../../types";
 export const kpis: Kpis = {
   contacts: 128,
   motivos: [
-    ["Gestion comercial", 42],
-    ["Consulta tecnica", 31],
-    ["Cobros / facturacion", 18],
+    ["Gestión comercial", 42],
+    ["Consulta técnica", 31],
+    ["Cobros / facturación", 18],
     ["Soporte postventa", 15],
-    ["Visita tecnica", 22],
+    ["Visita técnica", 22],
   ],
   derived: 27,
   visit_requests: 14,
