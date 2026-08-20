@@ -40,7 +40,6 @@
   --warning: #a16207;
   --warning-bg: #fef3c7;
   --warning-border: #fcd34d; /* new: StatusBadge human/pending */
-
   /* Spacing — 4px scale */
   --space-1: 4px;
   --space-2: 8px;
@@ -102,4 +101,12 @@
   --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.16); /* DS-TKN-7 */
 
   --z-modal: 100;
+
+  /* Lumat brand primitives — additive roles from DESIGN_SYSTEM.md */
+  --brand-lime: #abc333;
+  --brand-cyan: #3d93af;
+  --brand-aqua: #8bccd5;
+  --brand-forest: #576f31;
+  --brand-graphite: #656665;
+  --info: #14788f;
 }
