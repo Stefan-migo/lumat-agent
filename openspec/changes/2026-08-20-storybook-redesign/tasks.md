@@ -66,9 +66,9 @@ Chain strategy: pending
 
 ## Phase 6: KB + Settings
 
-- [ ] 6.1 KbList full Spanish; `category=mode`/provider-model separated from ordinary controls; processing/error/disable-confirmation states (DS-UI-COPY/STATES/PRIMS-cat).
-- [ ] 6.2 Settings full Spanish; advanced `category=mode` separated/explained; `Spend` tabular-num via DataTable; saved/saving/validation/server-error/stale (DS-UI-STATES/TABLES).
-- [ ] 6.3 RED→GREEN: update `KbList`/`Settings` test EN assertions; viewports.
+- [x] 6.1 KbList full Spanish; `category=mode`/provider-model separated from ordinary controls; processing/error/disable-confirmation states (DS-UI-COPY/STATES/PRIMS-cat).
+- [x] 6.2 Settings full Spanish; advanced `category=mode` separated/explained; `Spend` tabular-num via DataTable; saved/saving/validation/server-error/stale (DS-UI-STATES/TABLES).
+- [x] 6.3 RED→GREEN: update `KbList`/`Settings` test EN assertions; viewports.
 
 ## Phase 7: Green gate + cleanup
 

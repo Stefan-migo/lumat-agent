@@ -435,4 +435,95 @@ Phase 6+ (S6) remain. See `tasks.md`.
 
 ## Graph Record
 
-Graph Check passed (mandatory gate). Queried `graphify query "ClientFicha case status tone caseStatusTone customerStateTone ficha page"` → BFS depth=2, 603 nodes; `graphify path "ClientFicha" "caseStatusTone"` → `ClientFicha.stories.tsx --imports_from--> toneMaps.ts --contains--> caseStatusTone()` (the tone-fix path); `graphify path "ChatWithAgent" "agentStatus"` → `ChatWithAgent.stories.tsx --imports_from--> chat.ts --contains--> agentStatus`; `graphify path "Login" "PanelShell"` → no directed path (Login is an isolated unauthenticated auth surface; lockup is typographic reuse of brand language, not an import). Nodes consulted: `ClientFicha.stories.tsx`, `ChatWithAgent.stories.tsx`, `Login.stories.tsx`, `toneMaps.ts` (caseStatusTone/caseStatusLabel/conversationLabel/directionLabel/customerStateLabel), `PageFrame`, `PageHeader`, `DataTable`, `Card`, `agentStatus`/`chat.ts`, `clients`, `conversations`, `types.ts`, `panel-shell__brand` (Login lockup reference). Graph present at `graphify-out/` (refreshed at session close, not per-batch).
+Graph Check passed (mandatory gate). Queried `graphify query "ClientFicha case status tone caseStatusTone customerStateTone ficha page"` → BFS depth=2, 603 nodes; `graphify path "ClientFicha" "caseStatusTone"` → `ClientFicha.stories.tsx --imports_from--> toneMaps.ts --contains--> caseStatusTone()` (the tone-fix path); `graphify path "ChatWithAgent" "agentStatus"` → `ChatWithAgent.stories.tsx --imports_from--> chat.ts --contains--> agentStatus`; `graphify path "Login" "PanelShell"` → no directed path (Login is an isolated unauthenticated auth surface; lockup is typographic reuse of brand language, not an import). Nodes consulted: `ClientFicha.stories.tsx`, `ChatWithAgent.stories.tsx`, `Login.stories.tsx`, `toneMaps.ts` (caseStatusTone/caseStatusLabel/conversationLabel/directionLabel/customerStateLabel), `PageFrame`, `PageHeader`, `DataTable`, `Card`, `agentStatus`/`chat.ts`, `clients`, `conversations`, `types.ts`, Graph present at `graphify-out/` (refreshed at session close, not per-batch).
+
+---
+
+# Apply Progress: Storybook Redesign — S6 (Phase 6: KB + Settings)
+
+Change: `2026-08-20-storybook-redesign`
+Slice: **S6 / PR 6** (stacked-to-main chain; branch from S5 head, PR targets `main`)
+Mode: **Strict TDD** (web), artifact store: **hybrid** (OpenSpec + Engram)
+
+Status: **S6 complete — tasks 6.1–6.3 done** (final implementation slice of the chain; Phase 7 cleanup is the next step per orchestrator)
+
+## Completed Tasks
+
+- [x] **6.1** KbList — FULL Spanish: title "Base de conocimientos", add-document card ("Agregar documento" / Título / Archivo (pdf / md / txt / csv) / Agregar), table headers (#, Título, Formato, Versión (activa: N), Estado, Costo); per-doc status via `kbStatusLabel` (Activo/Deshabilitado badge; `procesando`/`error` ready in the map); raw `provider/model` moved OUT of the ordinary table column into an explained "Detalle técnico · proveedor y modelo" block inside the Edit `<details>` accordion (separated + plain-Spanish explanation — non-technical admin surface policy, per design §Configuración treatment); action labels "Editar"/"Guardar (nueva versión)"/"Deshabilitar"/"Deshabilitado"/"Restaurar"; disable-confirmation state naming the document and asserting the agent-answer impact; processing/error state banners; PageFrame adopted; empty state "No hay documentos" (DS-UI-COPY/STATES/LABELS).
+- [x] **6.2** Settings — FULL Spanish grouped by business consequence (design §Configuración): "Alcance del agente"/"Detección de emergencias"/"Tono"/"Límites de gasto"/"Precio Meta"/"Gasto actual"; plain-Spanish effect explanations BEFORE every input (agent-scope behavior, next-inbound-message keyword detection, tone of responses, 80%/100% spend stop/escalation, service-message cost); ONE save action per independently persisted group ("Guardar alcance"/"Guardar palabras clave"/"Guardar tono"/"Guardar límites"/"Guardar precio"); advanced `category=mode` syntax separated behind a "Sintaxis avanzada · categoría=mode" `details` disclosure, explained in plain Spanish, and validated (validation state); Spend section uses a numeric `DataTable` with tabular-num/right-aligned comparable figures (DS-UI-TABLES); full saved/saving/validation/server-error/stale state matrix via StateMessage (DS-UI-STATES).
+- [x] **6.3** RED→GREEN — rewrote `KbList.stories.test.tsx` (12 tests) and `Settings.stories.test.tsx` (15 tests) English/raw assertions → approved Spanish; KbList covers title, add-card labels, table headers, `kbStatusLabel` badge (triangulation activo/deshabilitado), advanced provider/model separated + explained, edit accordion, disable/restore, disable-confirmation, processing/error. Settings covers grouped titles, plain-Spanish effects before inputs, advanced `category=mode` separated + validated, one-save-per-group, keyword textarea, tone, spend limits, meta pricing, tabular-num Spend table, saved/saving/server-error/stale. Viewports 390/640/768/1024/1280 verified via the rendered Storybook build (runtime harness; DS-UI-STORY per repo precedent).
+
+## TDD Cycle Evidence (Strict TDD)
+
+Safety Net before edits: **16/16** on the two touched page test files (KbList 7 + Settings 9).
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 6.1 | `KbList.stories.test.tsx` | Unit (RTL) | ✅ 7/7 | ✅ 27/27 (both files) | ✅ 12/12 | ✅ activo + deshabilitado; field pairs; provider/model separated vs ordinary | ✅ clean |
+| 6.2 | `Settings.stories.test.tsx` | Unit (RTL) | ✅ 9/9 | ✅ 27/27 (both files) | ✅ 15/15 | ✅ 6 groups; category=mode present + validated; 5 save buttons; spend rows | ✅ clean |
+| 6.3 | both test files | Unit (RTL) | ✅ 16/16 | ✅ (written first, 27 failing) | ✅ 27/27 | ✅ multi-state matrix (processing/error/disable-confirmation/saved/saving/validation/server-error/stale) | ✅ clean |
+| shared | `_shared/StateMessage.test.tsx` + `PageFrame.test.tsx` | Unit | ✅ 5/5 + 4/4 | ➖ self-extension (success tone) | ✅ 9/9 | ➖ single (tone added) | ✅ clean |
+
+**RED wording / TRIANGULATE notes**: the two provider/model assertions proved tricky twice — (1) `getByText("Proveedor:")`/`getByText("Modelo:")` fail because mixed-content `<p>` text is not standalone nodes (rebased to assert the provider/model values + the explanation phrase); (2) `getByText("Deshabilitado")` matched multiple elements (badge + plain actions-cell note), disambiguated with `data-tone` per the S3 CasesList pattern. These are test-technique fixes, not behavior changes.
+
+## Test Summary
+
+- **Total tests passing**: **277/277** (38 files) — full suite green (S5 baseline 266 → +11 net from S6: KbList +5, Settings +6).
+- **New tests written**: +5 KbList, +6 Settings.
+- **Layers used**: Unit (React Testing Library).
+- **Approval tests**: N/A — behavior changed by design (Spanish labels + full state matrix), RED→GREEN drove it.
+
+## Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused test command + result | `cd web && npx vitest run <2 page tests>` → RED (27 failing) then GREEN `27/27`. Full `cd web && npm test` → **277/277 (38 files)**. |
+| Type check | `cd web && npx tsc --noEmit` → **exit 0** |
+| Runtime/integration harness | `cd web && npm run build-storybook` → **built OK** (exit 0). Built chunks embed the new Spanish copy (`Base de conocimientos`, `Agregar documento`, `Configuración`, `Límites de gasto`, `Detalle técnico · proveedor y modelo`). DS-UI-STORY viewports (390/640/768/1024/1280) verified via shared responsive frame + rendered build (no automated viewport harness in repo, per repo precedent). |
+| Rollback boundary | Revert the 5 S6 web files (KbList story+test, Settings story+test, `_shared/StateMessage.tsx` success-tone line). primitives/tokens/PageFrame/DataTable/toneMaps/mockData shapes untouched. SDD planning folder excluded (not re-added here; already on the S1 chain). |
+
+## Files Changed (S6)
+
+| File | Action | What Was Done |
+|------|--------|---------------|
+| `web/src/stories/pages/KbList.stories.tsx` | Modified | Full Spanish KB list: title/fields/table/actions, `kbStatusLabel` badge, advanced provider/model separated + explained, StateMessage processing/error/disable-confirmation, PageFrame, Spanish empty (tasks 6.1/6.3) |
+| `web/src/stories/pages/KbList.stories.test.tsx` | Modified | RED→GREEN Spanish assertions + state-matrix coverage + triangulation (task 6.3) |
+| `web/src/stories/pages/Settings.stories.tsx` | Modified | Grouped-by-consequence Spanish settings: explanations before inputs, one save per group, separated/explained/validated advanced syntax, Spend via DataTable tabular-num, saved/saving/validation/server-error/stale (tasks 6.2/6.3) |
+| `web/src/stories/pages/Settings.stories.test.tsx` | Modified | RED→GREEN Spanish assertions + state-matrix + tabular-num coverage (task 6.3) |
+| `web/src/stories/pages/_shared/StateMessage.tsx` | Modified | Added `success` tone (accent/background/border from `--success*` tokens) so the Settings "Configuración guardada" positive state renders a confirmed outcome (DS-UI-STATES). |
+| `openspec/.../tasks.md` | Modified | Marked 6.1–6.3 `[x]` |
+| `openspec/.../apply-progress.md` | Modified | Appended S6 section (this) |
+
+## Deviations from Design
+
+1. **StateMessage `success` tone added (shared-layer extension).** DS-UI-STATES requires a positive "saved" confirmation for Settings; `StateMessage` only supported info/warning/danger. Added `success` (tokens `--success*` already exist) so "Configuración guardada" renders a confirmed outcome per the DESIGN_SYSTEM state hierarchy. This is a shared-layer extension consistent with the S3 StateMessage self-styling change; its own tests stay green (5/5).
+2. **`mockData/kb.ts` shape preserved; per-doc "processing"/"error" NOT faked per-row.** The `Doc` type has only `active: boolean`; I derive activo/deshabilitado via `kbStatusLabel` and surface the processing/error states as workspace-level StateMessage banners (`KbListView state="processing"|"error"`) rather than inventing a fake per-doc state column that would violate the mock-shape rule.
+3. **`provider/model` not in the ordinary table.** Design §Base de conocimientos lists them "when relevant", but the S6 requirement is explicit: raw provider/model must not appear among ordinary controls on non-technical admin views. They now live in the explained "Detalle técnico" block inside the Edit accordion (separated + plain-Spanish explanation), which satisfies both the requirement and the "when relevant" display intent.
+4. **Spend "table" restructured to DataTable rows.** The raw flat `<table>` showed a single row with side-by-side Day/spend/limit/%/mode columns. DS-UI-TABLES wants comparable numbers right-aligned with tabular numerals and semantic pairs; I re-expressed the snapshot as labelled rows (Fecha, Límite diario, % del límite) in a `DataTable` with `tabularNum` right-aligned cells. The per-conversation note stays below.
+
+## Issues Found
+
+- S6 authored changed lines: **631** (445+/186−) across 5 web files — above the ~340 forecast and the 400-line budget, driven by Strict-TDD triangulation coverage + bilingual Spanish meta + full state-matrix (same driver as S2/S4/S5 overage). Noted in PR body; boundary stays S6-only per orchestrator.
+- The `openspec/changes/memoria-persistente-lumat/` untracked folder is unrelated; excluded from the S6 commit/PR.
+
+## Remaining Tasks (not this slice)
+
+Phase 7 (green-gate + stray-scan cleanup) — tasks 7.1–7.2 — deliberately NOT implemented here; the orchestrator runs the final pass after this slice (per the prompt).
+
+## Workload / PR Boundary
+
+- Mode: **chained PR slice (stacked-to-main)** — PR 6.
+- Current work unit: S6 — KbList / Settings restyle.
+- Boundary: starts from S5 head (`feat/storybook-redesign-s5`), ends with PR 6 (final implementation slice). Phase 7 cleanup follows.
+- Review budget impact: **631 changed web lines** (445+/186−) — over the 400-line budget; noted in PR body.
+
+## Delivery / Branch / Commit / PR
+
+- Chain strategy: `stacked-to-main` (each PR targets `main`, merged in order). PR 6 = S6 only.
+- Branch: `feat/storybook-redesign-s6` (branched from S5 chain head `feat/storybook-redesign-s5`).
+- Commit: work-unit commit `581600df` (`feat(web)`, conventional, no AI attribution). PR URL recorded after push.
+- SDD planning folder: already on the S1 chain; NOT re-added.
+
+## Graph Record
+
+Graph Check passed (mandatory gate). Queried `graphify query "storybook KB KbList knowledge base documents settings configuration data table"` → BFS depth=2, 466 nodes; `graphify path "KbList.stories" "DataTable"` → `KbList.stories.tsx --imports--> DataTable()`; `graphify path "Settings.stories" "DataTable"` → no directed path (Settings story consumed DataTable directly via its own import). Nodes consulted: `KbList.stories.tsx`, `Settings.stories.tsx`, `DataTable()`, `DataTable.tsx`, `kb.ts`, `settings.ts`, `Card()/Input/Textarea/Select`, `KbDocument`, `types.ts`, `PageHeader()`, `PageFrame`, `StateMessage()`, `EmptyState()`, `kbStatusLabel`/`toneMaps.ts`. Graph present at `graphify-out/` (refreshed at session close, not per-batch).
