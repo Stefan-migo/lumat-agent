@@ -72,5 +72,5 @@ Chain strategy: pending
 
 ## Phase 7: Green gate + cleanup
 
-- [ ] 7.1 Run `cd web && npm test`, `npx tsc --noEmit`, `npm run build-storybook` — all green.
-- [ ] 7.2 Grep Storybook surfaces for `--primary-600`, raw EN/voseo status labels, hardcoded focus/motion; remove strays (DS-UI-COPY/PRIMS success criteria).
+- [x] 7.1 Run `cd web && npm test`, `npx tsc --noEmit`, `npm run build-storybook` — all green.
+- [x] 7.2 Grep Storybook surfaces for `--primary-600`, raw EN/voseo status labels, hardcoded focus/motion; remove strays (DS-UI-COPY/PRIMS success criteria).
