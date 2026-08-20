@@ -1,12 +1,11 @@
-import type { CasesResponse, UserRef } from "../../../../types";
+import type { CasesResponse } from "../../../../types";
 import { clients } from "./clients";
+import { users } from "./users";
 
-/** UserRef rows matching to_user_dict() (D8 — {id, username} only). */
-export const users: UserRef[] = [
-  { id: 7, username: "admin" },
-  { id: 8, username: "karla" },
-  { id: 9, username: "manuel" },
-];
+// Design D3: canonical assignee rows live in users.ts — cases.ts re-exports
+// them so existing importers (`casesData.users`, `cases.test.ts`) keep working
+// and responsible_id lookups share one source of truth.
+export { users };
 
 /** Case mock matching to_case_dict() + embedded customer (cases GET, R-PRD-PG-3).
  *  Covers all 4 Case.status values (abierto/en_evaluacion/escalado/cerrado) —
