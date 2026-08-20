@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 /** Column definition for DataTable (design D6). */
 export interface Column<T> {
@@ -14,6 +14,8 @@ export interface DataTableProps<T> {
   emptyMessage?: string;
   actions?: (row: T) => ReactNode;
   rowKey?: (row: T) => string;
+  /** Optional per-row inline style (e.g. inbox human-row highlight, S1). */
+  rowStyle?: (row: T) => CSSProperties | undefined;
 }
 
 /** Generic story-local table emitting the tokenized `.table` primitive.
@@ -25,6 +27,7 @@ export function DataTable<T>({
   emptyMessage,
   actions,
   rowKey,
+  rowStyle,
 }: DataTableProps<T>) {
   if (rows.length === 0) {
     return (
@@ -48,7 +51,7 @@ export function DataTable<T>({
       </thead>
       <tbody>
         {rows.map((row, i) => (
-          <tr key={rowKey ? rowKey(row) : i}>
+          <tr key={rowKey ? rowKey(row) : i} style={rowStyle ? rowStyle(row) : undefined}>
             {columns.map((c) => (
               <td key={c.key} style={{ textAlign: c.align ?? "left", gap: "var(--space-3)" }}>
                 {c.render(row)}

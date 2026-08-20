@@ -30,8 +30,8 @@ Gate: `cd web && npm test && npx tsc -b && npm run build-storybook` green; diff 
 - [x] **T1.2** GREEN: `conversations.ts` — conv 101 `"open"`→`bot` (R1/D6), add bot/stale convs, add outbound human-reply `Message` 9007. [R-PRD-PG-8,14 · Deps: T1.1]
 - [x] **T1.3** Test-first: `users.ts` (canonical `UserRef[]`, ≥3 rows) + `users.test.ts` (`{id,username}`, unique ids). [R-PRD-PG-12]
 - [x] **T1.4** `cases.ts` — re-export `users` from `users.ts` (D3), keep export green; adjust `cases.test.ts` import. [R-PRD-PG-12 · Deps: T1.3]
-- [ ] **T1.5** RED: `ConversationsList.stories.test.tsx` — `data-tone` status badge, assignee cell, human-row highlight, `FilterByState` narrows rows. [R-PRD-PG-8 · Deps: T1.2,T1.3]
-- [ ] **T1.6** GREEN: `ConversationsList.stories.tsx` — `StatusBadge` state column, assignee from `users`, human-row `--warning-bg` highlight, filter-by-state `Select` + `FilterByState` variant (D5). [R-PRD-PG-8 · Deps: T1.5]
+- [x] **T1.5** RED: `ConversationsList.stories.test.tsx` — `data-tone` status badge, assignee cell, human-row highlight, `FilterByState` narrows rows. [R-PRD-PG-8 · Deps: T1.2,T1.3]
+- [x] **T1.6** GREEN: `ConversationsList.stories.tsx` — `StatusBadge` state column, assignee from `users`, human-row `--warning-bg` highlight, filter-by-state `Select` + `FilterByState` variant (D5). [R-PRD-PG-8 · Deps: T1.5]
 - [ ] **T1.7** RED: `InboxThread.stories.test.tsx` — composer enabled vs disabled(closed/bot/outside-window), FlashMessage open/closed, state controls (Tomar→human, Cerrar→closed, Volver a bot). [R-PRD-PG-9,10 · Deps: T1.2]
 - [ ] **T1.8** GREEN: `InboxThread.stories.tsx` — bubbles grid + composer (Textarea/Button) + state controls + 24h FlashMessage (open success/warning, closed danger); variants ComposerEnabled/ComposerDisabled(closed|bot)/OutsideWindow (D1,D4). [R-PRD-PG-9,10 · Deps: T1.7]
 
