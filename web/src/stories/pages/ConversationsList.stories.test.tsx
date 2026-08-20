@@ -14,9 +14,10 @@ import {
 const customerName = (customer_id: number): string =>
   clients.find((c) => c.id === customer_id)?.name ?? "—";
 
-describe("ConversationsList page story (T4.3, R-PRD-PG-6)", () => {  it("renders the page title 'Conversations'", () => {
+describe("ConversationsList page story (T4.3, R-PRD-PG-6)", () => {
+  it("renders the Spanish page title 'Conversaciones'", () => {
     render(<ConversationsListView />);
-    expect(screen.getByRole("heading", { name: "Conversations" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Conversaciones" })).toBeInTheDocument();
   });
 
   it("renders the conversation table with every conversation row", () => {
@@ -91,18 +92,41 @@ describe("ConversationsList state/assignee/filter (R-PRD-PG-8, T1.5)", () => {
     }
   });
 
-  it("highlights human-state rows with the warning background (S1)", () => {
+  it("applies a warning leading treatment to human rows paired with the approved label, never color-only", () => {
     render(<ConversationsListView />);
     const table = screen.getByRole("table");
     for (const c of conversations) {
       const row = within(table).getByText(`#${c.id}`).closest("tr")!;
-      const humanRow = c.state === "human";
-      if (humanRow) {
-        expect(row.style.background).toBe("var(--warning-bg)");
-      } else {
-        expect(row.style.background).not.toBe("var(--warning-bg)");
+      const badge = within(row)
+        .getAllByText(conversationLabel(c.state))
+        .find((el) => el.getAttribute("data-tone") === statusTone[c.state as keyof typeof statusTone]);
+      expect(badge, `conversation ${c.id} should render its approved state badge`).toBeDefined();
+      if (c.state === "human") {
+        // Meaning is never conveyed by color alone: the warning treatment pairs
+        // with the approved "Atención humana" badge (data-tone warning).
+        expect(badge!.getAttribute("data-tone")).toBe("warning");
+      } else if (c.state in statusTone) {
+        expect(badge!.getAttribute("data-tone")).not.toBe("warning");
       }
     }
+  });
+
+  it("renders a loading banner pairing status role with a visible label (DS-UI-STATES)", () => {
+    render(<ConversationsListView state="loading" />);
+    const banner = screen.getByRole("status");
+    expect(within(banner).getByText(/cargando conversaciones/i)).toBeInTheDocument();
+  });
+
+  it("renders a stale banner pairing status role with a visible label (DS-UI-STATES)", () => {
+    render(<ConversationsListView state="stale" />);
+    const banner = screen.getByRole("status");
+    expect(within(banner).getByText(/posiblemente desactualizados/i)).toBeInTheDocument();
+  });
+
+  it("renders an error banner pairing alert role with a visible label (DS-UI-STATES)", () => {
+    render(<ConversationsListView state="fatal-error" />);
+    const alert = screen.getByRole("alert");
+    expect(within(alert).getByText(/no pudimos cargar/i)).toBeInTheDocument();
   });
 
   it("FilterByState=human narrows the table to human-state conversations only", () => {
@@ -122,11 +146,24 @@ describe("ConversationsList state/assignee/filter (R-PRD-PG-8, T1.5)", () => {
       }
     }
   });
+
+  it("renders the filter-by-state select with approved Spanish labels, never raw keys (DS-UI-LABELS)", () => {
+    render(<ConversationsListView />);
+    const select = screen.getByLabelText("Filtrar por estado");
+    expect(select.tagName).toBe("SELECT");
+    const optionLabels = Array.from(select.querySelectorAll("option")).map((o) => o.textContent);
+    for (const s of Object.keys(statusTone)) {
+      expect(optionLabels).toContain(conversationLabel(s));
+      expect(optionLabels).not.toContain(s); // raw bot/human/closed must NOT appear
+    }
+    expect(optionLabels).toContain("Todos");
+  });
 });
 
 describe("ConversationsList Empty story", () => {
-  it("renders the empty state with the expected message", () => {
+  it("renders the empty state with the approved Spanish message", () => {
     render(<ConversationsListEmpty />);
-    expect(screen.getByText("No conversations found")).toBeInTheDocument();
+    expect(screen.getByText("No hay registros")).toBeInTheDocument();
+    expect(screen.getByText(/No existen conversaciones para mostrar/i)).toBeInTheDocument();
   });
 });
