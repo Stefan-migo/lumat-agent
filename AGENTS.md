@@ -30,8 +30,9 @@ Graph Check before touching files (cortex-persona 5-Step Execution Gate, Step 1)
 2. Before each task, run `graphify query "<area>"` and `graphify path <A> <B>`
    on the modules you will touch, and read `graphify-out/GRAPH_REPORT.md` for
    god nodes and communities.
-3. After each apply batch / commit / archive, refresh the graph with
-   `graphify <project-root> --update`.
+3. Queries are mandatory on every task (step 2). The graph refresh with
+   `graphify <project-root> --update` runs ONCE per work session, when the
+   session closes — never after every batch or commit.
 4. Record the graph nodes/edges consulted in every apply-progress, design, and
    exploration output.
 

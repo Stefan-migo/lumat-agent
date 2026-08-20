@@ -75,10 +75,11 @@ blocking: there is NO skip, no "no graph" exception, no "I already know the
 codebase" waiver. Every agent that reads, designs, or writes code runs this gate.
 
 1. **Confirm the graph exists**: `graphify-out/graph.json` must be present and
-   current in the project root. If it is missing, empty, or stale → build it
-   NOW by running the `/graphify` skill (`graphify <path>` for a first build,
-   `graphify <path> --update` for an incremental refresh). Do NOT proceed to
-   Step 2 until a graph exists.
+   non-empty in the project root. If it is missing or empty → build it NOW by
+   running the `/graphify` skill (`graphify <path>` for a first build). Do NOT
+   proceed to Step 2 until a graph exists. Do NOT rebuild on "stale" mid-task:
+   an existing graph is usable for queries as-is; the incremental refresh
+   (`graphify <path> --update`) runs once per work session, at session close.
 2. **Query the affected area** — before touching each module/area, run:
    ```
    graphify query "describe the relevant area"
@@ -118,9 +119,10 @@ graphify path "<concept A>" "<concept B>"
 ```
 This is not optional context — it is the required first step of understanding.
 It saves 6-49x tokens vs reading raw files and prevents breaking hidden
-connections. The graph lives in `graphify-out/` and is updated after every
-commit. Trust the graph for understanding cross-module relationships, not for
-reading exact function content.
+connections. The graph lives in `graphify-out/` and is refreshed once per work
+session, when the session closes — never after every commit. Trust the graph
+for understanding cross-module relationships, not for reading exact function
+content.
 
 **At session start:** read `graphify-out/GRAPH_REPORT.md` for god nodes (most
 connected concepts) and communities. This gives you a structural map of the
@@ -197,4 +199,4 @@ Un grafo faltante se CONSTRUYE antes de continuar (`/graphify` o
 - Sin cambios específicos de Cortex. Continúa normal.
 
 ### Fase: sdd-archive
-- **MANDATORY — Graphify update**: después de archivar, corré `graphify . --update` para mantener el grafo sincronizado. El archivo de un cambio sin actualizar el grafo se considera incompleto
+- **MANDATORY — Graphify update**: el update corre UNA vez por sesión de trabajo, al cierre (nunca después de cada batch o commit). Si el archive cierra la sesión, corré `graphify . --update` en ese momento; si no, el update va al cierre de sesión. El archivo de un cambio sin actualizar el grafo al cierre se considera incompleto

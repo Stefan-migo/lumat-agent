@@ -30,7 +30,10 @@ txt.txt
 # Local agent working artifacts (RDD: keep the review workspace projection clean)
 .cortex-sessions/
 temp/
+.codex/
+.planning/
 web/graphify-out/
+web/src/graphify-out/
 .opencode/skills/web-design-engineer/
 graphify-out/.graphify_detect.json
 graphify-out/.graphify_incremental.json
