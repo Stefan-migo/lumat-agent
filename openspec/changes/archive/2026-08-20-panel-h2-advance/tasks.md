@@ -45,8 +45,8 @@ Gate: same as PR1; index includes ChatWithAgent.
 
 ## Lifecycle Gates
 
-- [ ] Bounded review on PR1 (B1) before chaining PR2. <!-- sdd-owner: parent -->
-- [ ] Archive gate: run `graphify . --update` after apply. <!-- sdd-owner: parent -->
+- [x] Bounded review on PR1 (B1) before chaining PR2 — RDD native approved: review-93bbd5951158648b (B1) + review-b900c31714b5ba60 (B2, after R3-001 fix). <!-- sdd-owner: parent -->
+- [x] Archive gate: run `graphify . --update` after apply — refreshed from HEAD be82f08b (2458 nodes / 5258 edges / 202 communities). <!-- sdd-owner: parent -->
 
 ## Notes
 
