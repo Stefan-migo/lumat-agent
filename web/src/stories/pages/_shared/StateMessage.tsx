@@ -9,13 +9,15 @@
  *  page frame consumes it identically. Dashboard additionally scopes these
  *  classes under `.dashboard-shell` with the same values, so the regression
  *  sentinel's look is unchanged. */
-export type StateTone = "info" | "warning" | "danger";
+export type StateTone = "info" | "warning" | "danger" | "success";
 export type StateRole = "status" | "alert";
 
 const STATE_TONES: Record<StateTone, { accent: string; background: string; border: string }> = {
   info: { accent: "var(--info)", background: "var(--surface)", border: "var(--border-strong)" },
   warning: { accent: "var(--warning)", background: "var(--warning-bg)", border: "var(--warning-border)" },
   danger: { accent: "var(--danger)", background: "var(--danger-bg)", border: "var(--danger-border)" },
+  // Positive/confirmed outcome (e.g. Settings saved) — DESIGN_SYSTEM state hierarchy.
+  success: { accent: "var(--success)", background: "var(--success-bg)", border: "var(--success-border)" },
 };
 
 const STATE_STYLES = `

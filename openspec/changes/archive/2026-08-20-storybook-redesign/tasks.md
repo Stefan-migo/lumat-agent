@@ -66,11 +66,11 @@ Chain strategy: pending
 
 ## Phase 6: KB + Settings
 
-- [ ] 6.1 KbList full Spanish; `category=mode`/provider-model separated from ordinary controls; processing/error/disable-confirmation states (DS-UI-COPY/STATES/PRIMS-cat).
-- [ ] 6.2 Settings full Spanish; advanced `category=mode` separated/explained; `Spend` tabular-num via DataTable; saved/saving/validation/server-error/stale (DS-UI-STATES/TABLES).
-- [ ] 6.3 RED→GREEN: update `KbList`/`Settings` test EN assertions; viewports.
+- [x] 6.1 KbList full Spanish; `category=mode`/provider-model separated from ordinary controls; processing/error/disable-confirmation states (DS-UI-COPY/STATES/PRIMS-cat).
+- [x] 6.2 Settings full Spanish; advanced `category=mode` separated/explained; `Spend` tabular-num via DataTable; saved/saving/validation/server-error/stale (DS-UI-STATES/TABLES).
+- [x] 6.3 RED→GREEN: update `KbList`/`Settings` test EN assertions; viewports.
 
 ## Phase 7: Green gate + cleanup
 
-- [ ] 7.1 Run `cd web && npm test`, `npx tsc --noEmit`, `npm run build-storybook` — all green.
-- [ ] 7.2 Grep Storybook surfaces for `--primary-600`, raw EN/voseo status labels, hardcoded focus/motion; remove strays (DS-UI-COPY/PRIMS success criteria).
+- [x] 7.1 Run `cd web && npm test`, `npx tsc --noEmit`, `npm run build-storybook` — all green.
+- [x] 7.2 Grep Storybook surfaces for `--primary-600`, raw EN/voseo status labels, hardcoded focus/motion; remove strays (DS-UI-COPY/PRIMS success criteria).
