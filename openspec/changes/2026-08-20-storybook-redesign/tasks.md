@@ -36,13 +36,13 @@ Chain strategy: pending
 
 ## Phase 2: Shared frame + label maps (DS-UI-LABELS/FRAME/TABLES/PRIMS-drift)
 
-- [ ] 2.1 RED `toneMaps.test.ts` + `StatusBadge.test.tsx`: every `types.ts` state resolves to non-empty Spanish label.
-- [ ] 2.2 GREEN: `_shared/toneMaps.ts` add `conversationLabel/customerStateLabel/caseStatusLabel/kbStatusLabel/directionLabel` maps (approved §labels).
-- [ ] 2.3 GREEN: `primitives/StatusBadge.tsx` add `label` prop + default Spanish map; render label not raw state.
-- [ ] 2.4 GREEN: `SearchInput.tsx` default `aria-label="Buscar"`; update `SearchInput.test.tsx` L10.
-- [ ] 2.5 Promote `_shared/StateMessage.tsx` (tone/role/title/detail/spinner) + `_shared/PageFrame.tsx` (titlebar+banner slot+content); test for role pairing (DS-UI-FRAME). Dashboard consumes StateMessage, sentinel green.
-- [ ] 2.6 GREEN: `DataTable.tsx` ES defaults (`No hay registros`/`Acciones`), `loading`/`stale`, `tabularNum`; `StatCard.tsx` tabular core. Update `helpers.test`/`DataTable.test` EN assertions.
-- [ ] 2.7 Primitives stories copy: StatusBadge/SearchInput/Badge/Card EN → Spanish (DS-UI-COPY).
+- [x] 2.1 RED `toneMaps.test.ts` + `StatusBadge.test.tsx`: every `types.ts` state resolves to non-empty Spanish label.
+- [x] 2.2 GREEN: `_shared/toneMaps.ts` add `conversationLabel/customerStateLabel/caseStatusLabel/kbStatusLabel/directionLabel` maps (approved §labels).
+- [x] 2.3 GREEN: `primitives/StatusBadge.tsx` add `label` prop + default Spanish map; render label not raw state.
+- [x] 2.4 GREEN: `SearchInput.tsx` default `aria-label="Buscar"`; update `SearchInput.test.tsx` L10.
+- [x] 2.5 Promote `_shared/StateMessage.tsx` (tone/role/title/detail/spinner) + `_shared/PageFrame.tsx` (titlebar+banner slot+content); test for role pairing (DS-UI-FRAME). Dashboard consumes StateMessage, sentinel green.
+- [x] 2.6 GREEN: `DataTable.tsx` ES defaults (`No hay registros`/`Acciones`), `loading`/`stale`, `tabularNum`; `StatCard.tsx` tabular core. Update `helpers.test`/`DataTable.test` EN assertions.
+- [x] 2.7 Primitives stories copy: StatusBadge/SearchInput/Badge/Card EN → Spanish (DS-UI-COPY).
 
 ## Phase 3: List pages (DS-UI-LINK/STATES/STORY)
 
