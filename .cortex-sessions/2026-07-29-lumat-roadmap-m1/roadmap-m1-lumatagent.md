@@ -163,6 +163,7 @@ Orquestador recibe → Clasifica intención
 | 2.10 | Scaffold Report Agent | 5h |
 | 2.11 | Worker de automatizaciones (scaffold) | 10h |
 | 2.12 | Tests multi-agente (routing, permisos, aislamiento, **prompt injection entre agentes**) | 17h |
+| 2.13 | **Bandeja humana (reply-from-panel)** — estado por conversación (bot/human/closed) + assignee + endpoints de envío por el MISMO número vía Cloud API + wiring del inbox del panel | 18h |
 
 ### Seguridad multi-agente
 
@@ -209,6 +210,7 @@ Sub-agentes:
 
 > **Arquitectura multi-agente operativa.**
 > El chatbot ahora es un sub-agente del orquestador.
+> La bandeja humana del panel opera (reply-from-panel): hilos derivados con estado/assignee y respuestas por el mismo número.
 > La plataforma está lista para agregar capacidades sin reescribir nada.
 
 ### 🟡 Hito 2 — Arquitectura lista
@@ -482,14 +484,14 @@ Fase       Duración   Horas    Hito                         Inversión
 ─────────────────────────────────────────────────────────────────────
 Fase 0     1 sem      20h     Setup seguro listo             ~$400
 Fase 1     4 sem     189h     🟢 Bot experto operativo       ~$3,780
-Fase 2     3 sem     130h     🟡 Arquitectura lista          ~$2,600
+Fase 2     3 sem     148h     🟡 Arquitectura lista          ~$2,960
 Fase 3     3 sem     106h     🔵 Agenda automática           ~$2,120
 Fase 4     3 sem     160h     🟣 LumatAgent 100%             ~$3,200
 ─────────────────────────────────────────────────────────────────────
-Total     14 sem     605h     Completo                      $2,300-3,000
+Total     14 sem     623h     Completo                      $2,300-3,000
 ```
 
-> **Nota**: las horas estimadas (~583h) superan la tarifa de referencia ($20/h). La inversión
+> **Nota**: las horas estimadas (~623h) superan la tarifa de referencia ($20/h). La inversión
 > al cliente se mantiene en el rango pactado **$2,300 – $3,000 USD** porque el desarrollo usa
 > coding agents (AI-assisted) que multiplican la productividad — el costo real al cliente
 > NO es horas × tarifa, es el valor del entregable. Las horas son referencia interna de esfuerzo.
@@ -609,7 +611,7 @@ Los service messages (respuestas no-plantilla dentro de la ventana) están **GRA
 
 ### Referencias cruzadas
 
-La bandeja humana complementa la **Fase 1 actividad 1.8** (derivación a humano con historial + resumen) y el **módulo de chat del panel (4.9)**.
+La bandeja humana es la **actividad 2.13 (Fase 2 / Hito 2)** con horas propias. Complementa la **Fase 1 actividad 1.8** (derivación a humano con historial + resumen) y el **módulo de chat del panel (4.9)**.
 
 ---
 
