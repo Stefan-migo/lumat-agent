@@ -116,4 +116,13 @@ describe('design tokens — B9 foundation additions (DS-TKN-3..7)', () => {
   it('shadow-3 extends the elevation scale (DS-TKN-7)', () => {
     expect(cssVars.get('--shadow-3')).toBe('0 8px 24px rgba(0, 0, 0, 0.16)');
   });
+
+  it('pins the approved Lumat brand roles from the definitive design system', () => {
+    expect(cssVars.get('--brand-lime')).toBe('#abc333');
+    expect(cssVars.get('--brand-cyan')).toBe('#3d93af');
+    expect(cssVars.get('--brand-aqua')).toBe('#8bccd5');
+    expect(cssVars.get('--brand-forest')).toBe('#576f31');
+    expect(cssVars.get('--brand-graphite')).toBe('#656665');
+    expect(cssVars.get('--info')).toBe('#14788f');
+  });
 });

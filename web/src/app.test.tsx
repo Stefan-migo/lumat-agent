@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './app';
 
@@ -35,6 +35,12 @@ function stubMePending() {
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
 }
 
+// PanelShell renders three "Lumat" brand nodes (desktop sidebar, mobile bar,
+// closed drawer), so app-name/username assertions are scoped to the sidebar.
+function sidebar(container: HTMLElement) {
+  return within(container.querySelector('.panel-shell__sidebar') as HTMLElement);
+}
+
 describe('App /me auth gate (T6.4)', () => {
   it('renders a loading state while /me is in flight', () => {
     stubMePending();
@@ -44,11 +50,11 @@ describe('App /me auth gate (T6.4)', () => {
 
   it('renders AppShell after a 200 /me (PDW-AUTH-2)', async () => {
     stubMeOk();
-    render(<App />);
+    const { container } = render(<App />);
     await waitFor(() =>
-      expect(screen.getByText('Lumat Panel')).toBeInTheDocument(),
+      expect(sidebar(container).getByText('Lumat')).toBeInTheDocument(),
     );
-    expect(screen.getByText('ana')).toBeInTheDocument();
+    expect(sidebar(container).getByText('ana')).toBeInTheDocument();
   });
 
   it('renders the sign-in placeholder after a 401 /me (PDW-AUTH-1)', async () => {
@@ -64,7 +70,7 @@ describe('App /me auth gate (T6.4)', () => {
 
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
-    render(<App />);
+    const { container } = render(<App />);
 
     await waitFor(() => expect(screen.getByText(/no se pudo conectar|error/i)).toBeInTheDocument());
 
@@ -77,7 +83,7 @@ describe('App /me auth gate (T6.4)', () => {
     );
     await user.click(screen.getByRole('button', { name: /reintentar|retry/i }));
 
-    await waitFor(() => expect(screen.getByText('Lumat Panel')).toBeInTheDocument());
-    expect(screen.getByText('vero')).toBeInTheDocument();
+    await waitFor(() => expect(sidebar(container).getByText('Lumat')).toBeInTheDocument());
+    expect(sidebar(container).getByText('vero')).toBeInTheDocument();
   });
 });

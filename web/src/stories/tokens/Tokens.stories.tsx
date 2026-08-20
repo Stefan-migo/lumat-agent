@@ -9,7 +9,8 @@ import tokensCss from "../../tokens/tokens.css?raw";
 // known scale token to "Other" would defeat the rule's purpose.
 const GROUP_RULES: Array<[RegExp, string]> = [
   [/^--primary-/, "Color"],
-  [/^--(?:danger|success|warning)(?:$|-)/, "Color (semantic)"],
+  [/^--brand-/, "Color (brand)"],
+  [/^--(?:danger|success|warning)(?:$|-)|^--info$/, "Color (semantic)"],
   [/^--(?:bg|surface)$|^--border(?:-strong)?$|^--table-head-bg$/, "Color (neutrals)"],
   [/^--text(-muted)?$/, "Color (text)"],
   [/^--text-(xs|base|sm|md|lg|xl|2xl|3xl)$/, "Typography (scale)"],
@@ -21,6 +22,24 @@ const GROUP_RULES: Array<[RegExp, string]> = [
   [/^--focus-ring/, "Focus"],
   [/^--bp-/, "Breakpoints"],
   [/^--z-/, "z-index"],
+];
+
+const GROUP_ORDER = [
+  "Color",
+  "Color (brand)",
+  "Color (neutrals)",
+  "Color (text)",
+  "Color (semantic)",
+  "Typography (font/leading/weight)",
+  "Typography (scale)",
+  "Spacing",
+  "Radius",
+  "Shadow",
+  "Motion",
+  "Focus",
+  "Breakpoints",
+  "z-index",
+  "Other",
 ];
 
 /** D8 first-match group resolution; exported for the drift test (one consumer
@@ -47,6 +66,9 @@ for (const [name, value] of tokens) {
   list.push([name, value]);
   groups.set(group, list);
 }
+const orderedGroups = [...groups.entries()].sort(
+  ([left], [right]) => GROUP_ORDER.indexOf(left) - GROUP_ORDER.indexOf(right),
+);
 
 function sample(group: string, name: string, value: string): ReactNode {
   const box: CSSProperties = {
@@ -59,6 +81,7 @@ function sample(group: string, name: string, value: string): ReactNode {
   };
   switch (group) {
     case "Color":
+    case "Color (brand)":
     case "Color (semantic)":
     case "Color (neutrals)":
     case "Color (text)":
@@ -112,18 +135,58 @@ function sample(group: string, name: string, value: string): ReactNode {
 
 function TokensPage() {
   return (
-    <div style={{ display: "grid", gap: "var(--space-4)" }}>
-      {[...groups.entries()].map(([group, rows]) => (
+    <main
+      style={{
+        display: "grid",
+        gap: "var(--space-5)",
+        maxWidth: "calc(var(--space-8) * 38)",
+        margin: "0 auto",
+        fontFamily: "var(--font-sans)",
+      }}
+    >
+      <header
+        style={{
+          display: "grid",
+          gap: "var(--space-2)",
+          padding: "var(--space-5)",
+          borderLeft: "var(--space-1) solid var(--brand-lime)",
+          borderRadius: "var(--radius-md)",
+          background: "var(--primary-800)",
+          color: "var(--surface)",
+        }}
+      >
+        <p style={{ margin: 0, color: "var(--brand-aqua)", fontSize: "var(--text-sm)", fontWeight: "var(--weight-semibold)" }}>
+          Lumat · Sistema de diseño
+        </p>
+        <h1 style={{ margin: 0, fontSize: "var(--text-2xl)", lineHeight: "var(--leading-tight)" }}>Design tokens</h1>
+        <p style={{ margin: 0, maxWidth: "calc(var(--space-8) * 22)", lineHeight: "var(--leading-normal)" }}>
+          Una base operativa sobria: forest estructura, cyan informa y lime reconoce o selecciona.
+        </p>
+      </header>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, calc(var(--space-8) * 10)), 1fr))",
+          gap: "var(--space-4)",
+          alignItems: "start",
+        }}
+      >
+      {orderedGroups.map(([group, rows]) => (
         <section
           key={group}
           style={{
             border: "1px solid var(--border)",
-            borderRadius: "var(--radius-sm)",
-            padding: "var(--space-3)",
+            borderRadius: "var(--radius-md)",
+            padding: "var(--space-4)",
             background: "var(--surface)",
+            boxShadow: "var(--shadow-1)",
+            overflowX: "auto",
           }}
         >
-          <h2 style={{ margin: 0, fontSize: "var(--text-lg)", color: "var(--text)" }}>{group}</h2>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "var(--space-2)" }}>
+            <h2 style={{ margin: 0, fontSize: "var(--text-lg)", color: "var(--text)" }}>{group}</h2>
+            <span style={{ color: "var(--text-muted)", fontSize: "var(--text-xs)" }}>{rows.length} tokens</span>
+          </div>
           <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "var(--space-2)" }}>
             <tbody>
               {rows.map(([name, value]) => (
@@ -139,19 +202,20 @@ function TokensPage() {
           </table>
         </section>
       ))}
-    </div>
+      </div>
+    </main>
   );
 }
 
 const meta = {
-  title: "Design Tokens",
+  title: "Sistema/Design tokens",
   component: TokensPage,
   excludeStories: ["groupToken"],
   parameters: {
     docs: {
       description: {
         component:
-          "Single-source token reference: every value below is parsed from `web/src/tokens/tokens.css` at build time (`?raw` import, D7) — the page can never drift from the token source (DS-TOKENS-1). Grouping uses the ordered first-match rules (D8): the exact `--text`/`--text-muted` color match precedes the `--text-*` scale rule, and any unknown token surfaces in an **Other** group so nothing is silently dropped.",
+          "Referencia visual del sistema Lumat. Cada valor se lee directamente desde `web/src/tokens/tokens.css` (`?raw`), por lo que Storybook no mantiene una segunda paleta. Forest estructura, cyan informa y lime queda reservado para reconocimiento o selección.",
       },
     },
   },

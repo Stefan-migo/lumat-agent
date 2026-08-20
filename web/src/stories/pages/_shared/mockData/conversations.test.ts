@@ -24,6 +24,14 @@ const MESSAGE_KEYS = [
   "created_at",
 ].sort();
 
+// Conversation.state domain (R-PRD-PG-8/R-PRD-PG-14): bot | human | closed.
+const CONV_STATES: string[] = ["bot", "human", "closed"];
+
+// Deterministic "now" reference aligned to the mock timeline (2026-08-20).
+// The 24h reply window (R-PRD-PG-10) is open when now - last_message_at < 24h.
+const NOW_MS = Date.parse("2026-08-20T12:00:00-04:00");
+const HOURS_24 = 24 * 60 * 60 * 1000;
+
 describe("Conversation mock (conversations.ts)", () => {
   it("exports a non-empty Conversation[]", () => {
     const list: Conversation[] = conversations;
@@ -64,5 +72,53 @@ describe("Conversation mock (conversations.ts)", () => {
     for (const m of messages) {
       expect(ids.has(m.conversation_id), `message ${m.id} -> conv ${m.conversation_id}`).toBe(true);
     }
+  });
+});
+
+describe("Conversation state domain (R-PRD-PG-8 / R-PRD-PG-14)", () => {
+  it("keeps every conversation state within bot|human|closed and no 'open' remains", () => {
+    for (const c of conversations) {
+      expect(
+        CONV_STATES.includes(c.state),
+        `conversation ${c.id} has invalid state '${c.state}'`,
+      ).toBe(true);
+    }
+    expect(conversations.some((c) => c.state === "open"), "no conversation can stay 'open'").toBe(false);
+  });
+
+  it("covers every state bot, human and closed at least once (R-PRD-PG-8)", () => {
+    const present = new Set(conversations.map((c) => c.state));
+    for (const state of CONV_STATES) {
+      expect(present.has(state), `missing conversation state: ${state}`).toBe(true);
+    }
+  });
+
+  it("contains a stale conversation older than the 24h reply window (R-PRD-PG-10)", () => {
+    const stale = conversations.filter((c) => {
+      if (!c.last_message_at) return false;
+      return NOW_MS - Date.parse(c.last_message_at) >= HOURS_24;
+    });
+    // Triangulation: at least one stale row exists AND at least one is still
+    // within the window (open) so the closed-window path has real data to act on.
+    expect(stale.length, "at least one conversation must be outside the 24h window").toBeGreaterThan(0);
+    const open = conversations.filter((c) => {
+      if (!c.last_message_at) return false;
+      return NOW_MS - Date.parse(c.last_message_at) < HOURS_24;
+    });
+    expect(open.length, "at least one conversation must still fall inside the 24h window").toBeGreaterThan(0);
+  });
+
+  it("a human-state conversation carries an outbound human-reply message (D6)", () => {
+    const humanIds = new Set(
+      conversations.filter((c) => c.state === "human").map((c) => c.id),
+    );
+    expect(humanIds.size, "mock needs a human-state conversation").toBeGreaterThan(0);
+    const humanOutbound = messages.filter(
+      (m) => humanIds.has(m.conversation_id) && m.direction === "outbound",
+    );
+    expect(
+      humanOutbound.length,
+      "a human-state conversation must have an outbound human-reply message",
+    ).toBeGreaterThan(0);
   });
 });

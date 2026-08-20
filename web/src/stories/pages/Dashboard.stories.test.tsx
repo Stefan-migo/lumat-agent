@@ -6,14 +6,12 @@ import { DashboardOverview } from "./Dashboard.stories";
 describe("Dashboard page story (R-PRD-PG-6)", () => {
   it("renders the page title", () => {
     render(<DashboardOverview />);
-    expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Panel" })).toBeInTheDocument();
   });
 
-  it("renders the muted KPI window caption", () => {
+  it("renders the localized KPI window caption", () => {
     render(<DashboardOverview />);
-    expect(
-      screen.getByText(`KPI window: last ${kpis.window_days} days (${kpis.window_start})`),
-    ).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`Ventana de ${kpis.window_days} días · desde`))).toBeInTheDocument();
   });
 
   it("renders the 3 KPI StatCards", () => {
@@ -36,5 +34,16 @@ describe("Dashboard page story (R-PRD-PG-6)", () => {
       expect(row).not.toBeNull();
       expect(within(row).getByText(String(count), { exact: true })).toBeInTheDocument();
     }
+  });
+
+  it.each([
+    ["loading", "Cargando indicadores"],
+    ["empty", "Aún no hay actividad en esta ventana"],
+    ["stale", "Datos posiblemente desactualizados"],
+    ["partial-error", "Una parte del panel no está disponible"],
+    ["fatal-error", "No pudimos cargar el panel"],
+  ] as const)("renders the %s state", (state, message) => {
+    render(<DashboardOverview state={state} />);
+    expect(screen.getByText(message)).toBeInTheDocument();
   });
 });

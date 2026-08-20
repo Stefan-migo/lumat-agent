@@ -8,12 +8,12 @@
         "graphify",
         "mcp",
         "--project-dir",
-        "/run/media/stefan/Nuevo vol/Proyectos/Lumat"
+        "/home/stefan/repos/lumat-agent"
       ],
       "_description": "Graphify \u2014 knowledge graph queries via MCP"
     }
   },
   "plugin": [
-    "/home/stefan/Cortex/.opencode/plugins/graphify.js"
+    ".opencode/plugins/graphify.js"
   ]
 }

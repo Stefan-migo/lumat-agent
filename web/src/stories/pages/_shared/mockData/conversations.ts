@@ -4,16 +4,18 @@ import type { Conversation, Message } from "../../../../types";
  *  to_conversation_dict()/to_message_dict() (snake_case, ISO strings,
  *  nullable timestamps). Customer id 1 references `clients.ts`
  *  ("Marcela Fuentes", +56971234501) for ficha + thread rendering
- *  consistency (R-PRD-PG-3). Covers Conversation state values used by the
- *  thread page (open/closed/human/bot) and MessageDirection in/out. */
+ *  consistency (R-PRD-PG-3). State domain is bot|human|closed (R-PRD-PG-14);
+ *  last_message_at has a deterministic timeline where 2026-08-20T12:00 is the
+ *  reference "now" so 101/102/103/104 are within the 24h reply window and
+ *  105 is stale (>24h) to drive the closed-window path (R-PRD-PG-10). */
 export const conversations: Conversation[] = [
   {
     id: 101,
     customer_id: 1,
     wa_phone: "+56971234501",
-    state: "open",
+    state: "bot",
     summary: "Fuga de agua en cocina — derivada a tecnico",
-    last_message_at: "2026-08-18T18:42:00-04:00",
+    last_message_at: "2026-08-20T09:40:00-04:00",
     created_at: "2026-08-18T09:03:00-04:00",
     closed_at: null,
   },
@@ -33,8 +35,28 @@ export const conversations: Conversation[] = [
     wa_phone: "+56923456703",
     state: "human",
     summary: "Consulta por cobro duplicado de boleta",
-    last_message_at: "2026-08-18T16:05:00-04:00",
+    last_message_at: "2026-08-20T08:15:00-04:00",
     created_at: "2026-08-17T08:30:00-04:00",
+    closed_at: null,
+  },
+  {
+    id: 104,
+    customer_id: 2,
+    wa_phone: "+56987654302",
+    state: "bot",
+    summary: "Consulta por horarios de atencion",
+    last_message_at: "2026-08-20T10:02:00-04:00",
+    created_at: "2026-08-20T08:55:00-04:00",
+    closed_at: null,
+  },
+  {
+    id: 105,
+    customer_id: 4,
+    wa_phone: "+56965748304",
+    state: "bot",
+    summary: "Solicitud de visita técnica pendiente de respuesta",
+    last_message_at: "2026-08-10T14:30:00-04:00",
+    created_at: "2026-08-05T11:00:00-04:00",
     closed_at: null,
   },
 ];
@@ -94,5 +116,14 @@ export const messages: Message[] = [
     text: "Gracias, con la foto el tecnico sabra que repuestos llevar. Te confirmamos el avance.",
     media_url: null,
     created_at: "2026-08-18T09:35:00-04:00",
+  },
+  {
+    id: 9007,
+    conversation_id: 103,
+    direction: "outbound",
+    msg_type: "text",
+    text: "Hola Valentina, ya revisamos tu boleta y el cargo era de otra emision. Te enviamos la correccion por correo.",
+    media_url: null,
+    created_at: "2026-08-20T09:10:00-04:00",
   },
 ];
