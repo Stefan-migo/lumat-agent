@@ -1,18 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { casesData } from "./_shared/mockData/cases";
-import { caseStatusTone } from "./_shared/toneMaps";
+import { caseStatusLabel, caseStatusTone } from "./_shared/toneMaps";
 import { CasesListView, CasesListEmpty } from "./CasesList.stories";
 
 describe("CasesList page story (T4.2, R-PRD-PG-6)", () => {
-  it("renders the page title 'Cases (pending / escalated)'", () => {
+  it("renders the Spanish page title 'Casos'", () => {
     render(<CasesListView />);
-    expect(screen.getByRole("heading", { name: "Cases (pending / escalated)" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Casos" })).toBeInTheDocument();
   });
 
-  it("renders a FlashMessage", () => {
+  it("renders an emergency banner via StateMessage pairing alert role with a visible label", () => {
     render(<CasesListView />);
-    expect(document.querySelector(".flash-message")).toBeInTheDocument();
+    const alert = screen.getByRole("alert");
+    expect(within(alert).getByText("Emergencias sin reconocer")).toBeInTheDocument();
   });
 
   it("renders the case table with R-PRD-PG-6 fields (#, Customer, Service, Status, Summary, Emergency)", () => {
@@ -34,27 +35,49 @@ describe("CasesList page story (T4.2, R-PRD-PG-6)", () => {
     expect(within(row).getByText(first.service)).toBeInTheDocument();
     expect(within(row).getByText(first.summary!)).toBeInTheDocument();
 
-    // Status badge tone wired per caseStatusTone (disambiguate from the
-    // status select option in the Actions cell — the badge carries data-tone)
+    // Status badge: approved Spanish label wired per caseStatusTone
+    // (disambiguate from the status select option in the Actions cell — the
+    // badge carries data-tone)
+    const statusLabel = caseStatusLabel(first.status);
     const statusBadge = within(row)
-      .getAllByText(first.status)
+      .getAllByText(statusLabel)
       .find((el) => el.getAttribute("data-tone") === caseStatusTone(first.status));
     expect(statusBadge, "a status badge with the expected tone should render").toBeDefined();
   });
 
-  it("renders the Emergency ⚠ indicator / acknowledged-by for every case", () => {
+  it("renders each case's approved Spanish status label (triangulation)", () => {
+    render(<CasesListView />);
+    const table = screen.getByRole("table");
+    // Cover a different status than the first row (e.g. abierto → "Abierto")
+    const open = casesData.cases.find((c) => c.status === "abierto")!;
+    const row = within(table).getByText(`#${open.id}`).closest("tr")!;
+    const label = caseStatusLabel(open.status);
+    const badge = within(row)
+      .getAllByText(label)
+      .find((el) => el.getAttribute("data-tone") === caseStatusTone(open.status));
+    expect(badge, "the abierto badge should render the approved label").toBeDefined();
+  });
+
+  it("renders the Emergency status region for every case, never a raw ⚠ glyph alone", () => {
     render(<CasesListView />);
     const table = screen.getByRole("table");
     for (const c of casesData.cases) {
       const row = within(table).getByText(`#${c.id}`).closest("tr")!;
       if (c.emergency) {
-        const cell = within(row).getByText(/⚠/);
-        expect(cell).toBeInTheDocument();
+        // The emergency cell announces via role=status + a visible label; the
+        // raw "⚠ Reconocido por" text is replaced by the shared StateMessage.
+        const regions = within(row).queryAllByRole("status");
+        const emergencyRegion = regions.find((r) => /emergencia/i.test(r.textContent ?? ""));
+        expect(emergencyRegion, "an emergency status region should render").toBeDefined();
+        expect(within(emergencyRegion!).getByText("Emergencia")).toBeInTheDocument();
         if (c.ack_by) {
-          expect(within(row).getByText(new RegExp(`Reconocido por ${c.ack_by}`))).toBeInTheDocument();
+          expect(within(emergencyRegion!).getByText(new RegExp(`Reconocida por ${c.ack_by}`))).toBeInTheDocument();
+        } else {
+          expect(within(emergencyRegion!).getByText(/Sin reconocer/i)).toBeInTheDocument();
         }
       } else {
-        expect(within(row).queryByText(/⚠/)).not.toBeInTheDocument();
+        const regions = within(row).queryAllByRole("status");
+        expect(regions.some((r) => /emergencia/i.test(r.textContent ?? ""))).toBe(false);
       }
     }
   });
@@ -81,7 +104,7 @@ describe("CasesList page story (T4.2, R-PRD-PG-6)", () => {
 
     const statusSelect = within(row).getByLabelText(/estado/i);
     expect(statusSelect.tagName).toBe("SELECT");
-    expect(within(statusSelect).getByRole("option", { name: "abierto" })).toBeInTheDocument();
+    expect(within(statusSelect).getByRole("option", { name: "Abierto" })).toBeInTheDocument();
 
     const responsibleSelect = within(row).getByLabelText(/responsable/i);
     expect(responsibleSelect.tagName).toBe("SELECT");
@@ -103,11 +126,17 @@ describe("CasesList page story (T4.2, R-PRD-PG-6)", () => {
       }
     }
   });
+
+  it("renders a loading banner pairing status role with a visible label and spinner", () => {
+    render(<CasesListView state="loading" />);
+    const banner = screen.getByRole("status");
+    expect(within(banner).getByText("Cargando casos")).toBeInTheDocument();
+  });
 });
 
 describe("CasesList Empty story", () => {
-  it("renders the empty state with the expected message", () => {
+  it("renders the empty state with the approved Spanish message", () => {
     render(<CasesListEmpty />);
-    expect(screen.getByText("No cases found")).toBeInTheDocument();
+    expect(screen.getByText("No hay registros")).toBeInTheDocument();
   });
 });

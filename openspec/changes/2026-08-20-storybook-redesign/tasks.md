@@ -46,9 +46,9 @@ Chain strategy: pending
 
 ## Phase 3: List pages (DS-UI-LINK/STATES/STORY)
 
-- [ ] 3.1 ClientesList `--primary-600`→`--primary-700` links (DS-UI-LINK AA); Stattle Spanish badges; empty `No hay registros`; add stale/error banners (DS-UI-STATES).
-- [ ] 3.2 CasesList onto PageFrame; Spanish title "Cases…"; `caseStatusLabel`; loading banner; emergency note → StateMessage (DS-UI-FRAME/STATES).
-- [ ] 3.3 RED→GREEN: update `ClientesList.stories.test.tsx`/`CasesList.stories.test.tsx` to Spanish (DS-UI-COPY); viewports at 390/640/768/1024/1280 (DS-UI-STORY).
+- [x] 3.1 ClientesList `--primary-600`→`--primary-700` links (DS-UI-LINK AA); Stattle Spanish badges; empty `No hay registros`; add stale/error banners (DS-UI-STATES).
+- [x] 3.2 CasesList onto PageFrame; Spanish title "Cases…"; `caseStatusLabel`; loading banner; emergency note → StateMessage (DS-UI-FRAME/STATES).
+- [x] 3.3 RED→GREEN: update `ClientesList.stories.test.tsx`/`CasesList.stories.test.tsx` to Spanish (DS-UI-COPY); viewports at 390/640/768/1024/1280 (DS-UI-STORY).
 
 ## Phase 4: Conversations/Inbox/Thread
 

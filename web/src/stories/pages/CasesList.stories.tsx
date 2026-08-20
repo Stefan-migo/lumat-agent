@@ -4,11 +4,11 @@ import { Button } from "../../components/primitives/Button";
 import { Select } from "../../components/primitives/Select";
 import type { Column } from "./_shared/DataTable";
 import { DataTable } from "./_shared/DataTable";
-import { PageHeader } from "./_shared/PageHeader";
-import { FlashMessage } from "./_shared/FlashMessage";
+import { PageFrame } from "./_shared/PageFrame";
 import { EmptyState } from "./_shared/EmptyState";
+import { StateMessage } from "./_shared/StateMessage";
 import { casesData, users } from "./_shared/mockData/cases";
-import { caseStatusTone } from "./_shared/toneMaps";
+import { caseStatusLabel, caseStatusTone } from "./_shared/toneMaps";
 import type { Case, UserRef } from "../../types";
 
 const CASE_STATUSES = ["abierto", "en_evaluacion", "escalado", "cerrado"];
@@ -30,7 +30,7 @@ function CaseActions({ c }: { c: Case }) {
         label="Estado"
         aria-label={`Estado caso ${c.id}`}
         defaultValue={c.status}
-        options={CASE_STATUSES.map((s) => ({ value: s, label: s }))}
+        options={CASE_STATUSES.map((s) => ({ value: s, label: caseStatusLabel(s) }))}
         size="sm"
       />
       <Select
@@ -50,13 +50,27 @@ function CaseActions({ c }: { c: Case }) {
   );
 }
 
+/** Emergency cell: announces the state via StateMessage (tone + visible label +
+ *  role=status), never a raw ⚠ glyph alone (DS-UI-FRAME/STATES). */
+function EmergencyCell({ c }: { c: Case }) {
+  if (!c.emergency) return <span>—</span>;
+  return (
+    <StateMessage
+      tone={c.ack_by ? "warning" : "danger"}
+      role="status"
+      title="Emergencia"
+      detail={c.ack_by ? `Reconocida por ${c.ack_by}` : "Sin reconocer"}
+    />
+  );
+}
+
 const columns: Column<Case>[] = [
   { key: "id", header: "#", render: (c) => `#${c.id}` },
   {
     key: "customer",
     header: "Cliente",
     render: (c) => (
-      <a href={`#/clientes/${c.customer.id}`} style={{ color: "var(--primary-600)" }}>
+      <a href={`#/clientes/${c.customer.id}`} style={{ color: "var(--primary-700)" }}>
         {c.customer.name ?? "—"}
       </a>
     ),
@@ -65,20 +79,13 @@ const columns: Column<Case>[] = [
   {
     key: "status",
     header: "Estado",
-    render: (c) => <Badge tone={caseStatusTone(c.status)}>{c.status}</Badge>,
+    render: (c) => <Badge tone={caseStatusTone(c.status)}>{caseStatusLabel(c.status)}</Badge>,
   },
   { key: "summary", header: "Resumen", render: (c) => c.summary ?? "—" },
   {
     key: "emergency",
     header: "Emergencia",
-    render: (c) =>
-      c.emergency ? (
-        <span>
-          ⚠ {c.ack_by ? `Reconocido por ${c.ack_by}` : "Sin reconocer"}
-        </span>
-      ) : (
-        "—"
-      ),
+    render: (c) => <EmergencyCell c={c} />,
   },
   {
     key: "responsible",
@@ -87,37 +94,50 @@ const columns: Column<Case>[] = [
   },
 ];
 
-/** Cases list body (header + flash + table with inline update/ack).
- *  Exported for tests; hidden from the addons panel. */
-export function CasesListView() {
+export type CasesListState = "ready" | "loading" | "empty" | "stale" | "partial-error" | "fatal-error";
+
+/** Cases list body (shared frame + emergency banner via StateMessage + table
+ *  with inline update/ack). Exported for tests; hidden from the addons panel.
+ *  Statuses render approved Spanish labels (DS-UI-LABELS); the emergency note
+ *  and loading banner route through StateMessage (DS-UI-FRAME/STATES). */
+export function CasesListView({ state = "ready" }: { state?: CasesListState }) {
+  const unanswered = casesData.cases.filter((c) => c.emergency && c.ack_by === null).length;
   return (
-    <div>
-      <PageHeader
-        title="Cases (pending / escalated)"
-        meta={`${casesData.cases.length} casos abiertos`}
-      />
-      <div style={{ marginBottom: "var(--space-3)" }}>
-        <FlashMessage tone="warning">
-          Hay {casesData.cases.filter((c) => c.emergency && c.ack_by === null).length} emergencias sin reconocer.
-        </FlashMessage>
-      </div>
-      <DataTable
-        columns={columns}
-        rows={casesData.cases}
-        rowKey={(c) => String(c.id)}
-        actions={(c) => <CaseActions c={c} />}
-      />
-    </div>
+    <PageFrame
+      title="Casos"
+      meta={`${casesData.cases.length} casos abiertos · ${unanswered} emergencias sin reconocer`}
+      state={
+        state === "loading" ? (
+          <StateMessage tone="info" role="status" spinner title="Cargando casos" detail="Reuniendo los casos pendientes y escalados." />
+        ) : state === "fatal-error" ? (
+          <StateMessage tone="danger" role="alert" title="No pudimos cargar los casos" detail="Reintenta para recuperar el listado." />
+        ) : state === "stale" ? (
+          <StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="La última consulta no pudo completarse. Mostramos la información disponible." />
+        ) : state === "partial-error" ? (
+          <StateMessage tone="danger" role="status" title="No pudimos actualizar parte de los casos" detail="El listado está vigente, pero un origen no respondió. Reintenta en unos minutos." />
+        ) : unanswered > 0 ? (
+          <StateMessage tone="danger" role="alert" title="Emergencias sin reconocer" detail={`${unanswered} casos requieren atención inmediata.`} />
+        ) : null
+      }
+    >
+      {state === "loading" ? null : (
+        <DataTable
+          columns={columns}
+          rows={casesData.cases}
+          rowKey={(c) => String(c.id)}
+          actions={(c) => <CaseActions c={c} />}
+        />
+      )}
+    </PageFrame>
   );
 }
 
 /** Cases list empty state. Exported for tests. */
 export function CasesListEmpty() {
   return (
-    <div>
-      <PageHeader title="Cases (pending / escalated)" />
-      <EmptyState title="No cases found" description="No existen casos abiertos pendientes o escalados." />
-    </div>
+    <PageFrame title="Casos">
+      <EmptyState title="No hay registros" description="No existen casos abiertos pendientes o escalados." />
+    </PageFrame>
   );
 }
 
@@ -128,13 +148,14 @@ const meta = {
     docs: {
       description: {
         component:
-          'Panel cases list: header + flash + case table with inline update/ack actions (T4.2; R-PRD-PG-6).\n\n' +
-          "**When to use** — the authenticated cases list (pending/escalated).\n" +
-          "**Source** — page-first Storybook mock; production wiring untouched.",
+          'Listado de casos: título en español, banner de emergencias por StateMessage y tabla con estados en etiquetas aprobadas (DS-UI-LABELS/FRAME/STATES).\n\n' +
+          "**Uso** — los casos pendientes y escalados.\n" +
+          "**Estados** — listo (con banner de emergencias), carga, vacío, datos obsoletos, error parcial y error fatal.\n" +
+          "**Fuente** — mock page-first con la forma del serializer productivo; el wiring de producción no cambia.",
       },
     },
   },
-  excludeStories: ["CasesListView", "CasesListEmpty"],
+  excludeStories: ["CasesListView", "CasesListEmpty", "EmergencyCell"],
 } satisfies Meta;
 
 export default meta;
@@ -142,6 +163,14 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   render: () => <CasesListView />,
+};
+
+export const Stale: Story = { render: () => <CasesListView state="stale" /> };
+export const PartialError: Story = { render: () => <CasesListView state="partial-error" /> };
+export const FatalError: Story = { render: () => <CasesListView state="fatal-error" /> };
+
+export const Loading: Story = {
+  render: () => <CasesListView state="loading" />,
 };
 
 export const Empty: Story = {
