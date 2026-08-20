@@ -3,6 +3,7 @@ import type { Column } from "./_shared/DataTable";
 import { DataTable } from "./_shared/DataTable";
 import { StatCard } from "./_shared/StatCard";
 import { PageHeader } from "./_shared/PageHeader";
+import { StateMessage } from "./_shared/StateMessage";
 import { kpis } from "./_shared/mockData/dashboard";
 import "../../components/primitives/primitives.css";
 
@@ -158,42 +159,6 @@ const DASHBOARD_STYLES = `
     }
   }
 `;
-
-type StateTone = "info" | "warning" | "danger";
-type StateRole = "status" | "alert";
-
-/** Semantic pairs per banner tone (accent rail + tinted surface + border). */
-const STATE_TONES: Record<StateTone, { accent: string; background: string; border: string }> = {
-  info: { accent: "var(--info)", background: "var(--surface)", border: "var(--border-strong)" },
-  warning: { accent: "var(--warning)", background: "var(--warning-bg)", border: "var(--warning-border)" },
-  danger: { accent: "var(--danger)", background: "var(--danger-bg)", border: "var(--danger-border)" },
-};
-
-interface StateMessageProps {
-  tone: StateTone;
-  role: StateRole;
-  title: string;
-  detail?: string;
-  /** Show the shipped spinner indicator next to the title (loading only). */
-  spinner?: boolean;
-}
-
-function StateMessage({ tone, role, title, detail, spinner = false }: StateMessageProps) {
-  const tokens = STATE_TONES[tone];
-  return (
-    <section
-      role={role}
-      className="dashboard-state"
-      style={{ background: tokens.background, borderColor: tokens.border, borderLeftColor: tokens.accent }}
-    >
-      {spinner ? <span className="spinner__indicator dashboard-state__spinner" aria-hidden="true" /> : null}
-      <div className="dashboard-state__body">
-        <h2 className="dashboard-state__title" style={{ color: tokens.accent }}>{title}</h2>
-        {detail ? <p className="dashboard-state__detail">{detail}</p> : null}
-      </div>
-    </section>
-  );
-}
 
 function formatWindowStart(value: string) {
   return new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(

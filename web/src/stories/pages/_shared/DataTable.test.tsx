@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { DataTable } from "./DataTable";
+import { DataTable, tabularNum } from "./DataTable";
 
 interface Row {
   id: number;
@@ -8,7 +8,7 @@ interface Row {
 }
 
 const COLUMNS = [
-  { key: "name", header: "Name", render: (r: Row) => r.name },
+  { key: "name", header: "Nombre", render: (r: Row) => r.name },
 ];
 
 describe("DataTable", () => {
@@ -19,7 +19,7 @@ describe("DataTable", () => {
         rows={[{ id: 1, name: "Ada" }]}
       />,
     );
-    expect(screen.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Nombre" })).toBeInTheDocument();
   });
 
   it("renders a cell for each row", () => {
@@ -37,15 +37,20 @@ describe("DataTable", () => {
     expect(screen.getByRole("cell", { name: "Grace" })).toBeInTheDocument();
   });
 
+  it("defaults the empty message to 'No hay registros' (DS-UI-TABLES)", () => {
+    render(<DataTable<Row> columns={COLUMNS} rows={[]} />);
+    expect(screen.getByText("No hay registros")).toBeInTheDocument();
+  });
+
   it("renders the empty message via .empty-state when rows are empty", () => {
     render(
       <DataTable<Row>
         columns={COLUMNS}
         rows={[]}
-        emptyMessage="No customers found"
+        emptyMessage="No se encontraron clientes"
       />,
     );
-    expect(screen.getByText("No customers found")).toBeInTheDocument();
+    expect(screen.getByText("No se encontraron clientes")).toBeInTheDocument();
   });
 
   it("emits the table primitive class", () => {
@@ -58,15 +63,52 @@ describe("DataTable", () => {
     expect(container.querySelector("table")!.className).toContain("table");
   });
 
-  it("renders an actions cell when the actions renderer is provided", () => {
+  it("defaults the actions header to 'Acciones' and renders each action cell", () => {
     render(
       <DataTable<Row>
         columns={COLUMNS}
         rows={[{ id: 1, name: "Ada" }]}
-        actions={(r) => <button type="button">Edit {r.name}</button>}
+        actions={(r) => <button type="button">Editar {r.name}</button>}
       />,
     );
-    expect(screen.getByRole("button", { name: "Edit Ada" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Acciones" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Editar Ada" })).toBeInTheDocument();
+  });
+
+  it("honors a custom actionsHeader", () => {
+    render(
+      <DataTable<Row>
+        columns={COLUMNS}
+        rows={[{ id: 1, name: "Ada" }]}
+        actionsHeader="Opciones"
+        actions={() => <button type="button">Ver</button>}
+      />,
+    );
+    expect(screen.getByRole("columnheader", { name: "Opciones" })).toBeInTheDocument();
+  });
+
+  it("renders a loading state instead of rows when loading", () => {
+    render(
+      <DataTable<Row>
+        columns={COLUMNS}
+        rows={[{ id: 1, name: "Ada" }]}
+        loading
+      />,
+    );
+    expect(screen.getByText(/Cargando/i)).toBeInTheDocument();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("renders a stale note above the table when stale", () => {
+    const { container } = render(
+      <DataTable<Row>
+        columns={COLUMNS}
+        rows={[{ id: 1, name: "Ada" }]}
+        stale
+      />,
+    );
+    expect(screen.getByText(/desactualizad/i)).toBeInTheDocument();
+    expect(container.querySelector("table")).not.toBeNull();
   });
 
   it("renders the name as a header regardless of row data", () => {
@@ -76,7 +118,19 @@ describe("DataTable", () => {
         rows={[{ id: 7, name: "Linus" }]}
       />,
     );
-    expect(screen.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Nombre" })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "Linus" })).toBeInTheDocument();
   });
 });
+
+describe("tabularNum (DS-UI-TABLES)", () => {
+  it("wraps a numeric cell with tabular-nums alignment for comparable numbers", () => {
+    const { container } = render(<>{tabularNum(42)}{tabularNum(7)}</>);
+    const spans = container.querySelectorAll("span");
+    expect(spans).toHaveLength(2);
+    for (const span of spans) {
+      expect(span.style.fontVariantNumeric).toBe("tabular-nums");
+    }
+  });
+});
+

@@ -4,6 +4,7 @@ import { conversations } from "./_shared/mockData/conversations";
 import { clients } from "./_shared/mockData/clients";
 import { users } from "./_shared/mockData/users";
 import { statusTone } from "../../components/primitives/StatusBadge";
+import { conversationLabel } from "./_shared/toneMaps";
 import {
   ConversationsListView,
   ConversationsListEmpty,
@@ -35,9 +36,10 @@ describe("ConversationsList page story (T4.3, R-PRD-PG-6)", () => {  it("renders
     expect(within(row).getByText(first.wa_phone!)).toBeInTheDocument();
 
     // State badge with the design tone (disambiguate from the filter select
-    // — match the element that carries data-tone)
+    // — match the element that carries data-tone). The badge renders the
+    // approved Spanish label (DS-UI-LABELS), never the raw state.
     const stateBadge = within(row)
-      .getAllByText(first.state)
+      .getAllByText(conversationLabel(first.state))
       .find((el) => el.getAttribute("data-tone") === statusTone[first.state as keyof typeof statusTone]);
     expect(stateBadge, "state should render as StatusBadge with the expected tone").toBeDefined();
     expect(within(row).getByText(first.summary!)).toBeInTheDocument();
@@ -63,13 +65,13 @@ describe("ConversationsList page story (T4.3, R-PRD-PG-6)", () => {  it("renders
 });
 
 describe("ConversationsList state/assignee/filter (R-PRD-PG-8, T1.5)", () => {
-  it("renders every conversation state as a StatusBadge with its design tone", () => {
+  it("renders every conversation state as a StatusBadge with its approved label and tone", () => {
     render(<ConversationsListView />);
     const table = screen.getByRole("table");
     for (const c of conversations) {
       const row = within(table).getByText(`#${c.id}`).closest("tr")!;
       const badge = within(row)
-        .getAllByText(c.state)
+        .getAllByText(conversationLabel(c.state))
         .find((el) => el.getAttribute("data-tone") === statusTone[c.state as keyof typeof statusTone]);
       expect(badge, `conversation ${c.id} state badge should render with data-tone`).toBeDefined();
     }
