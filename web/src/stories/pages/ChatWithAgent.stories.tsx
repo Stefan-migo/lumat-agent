@@ -63,29 +63,34 @@ export function ChatWithAgentView({ status }: { status: "idle" | "processing" })
         {agentChatMessages.map((m) => (
           <div
             key={m.id}
-            data-bubble
-            aria-label={`${m.role} message`}
             style={{
               display: "flex",
-              alignSelf: m.role === "agent" ? "flex-start" : "flex-end",
-              justifySelf: m.role === "agent" ? "flex-start" : "flex-end",
-              alignItems: "flex-start",
-              maxWidth: "70%",
-              gap: "var(--space-2)",
+              justifyContent: m.role === "agent" ? "flex-start" : "flex-end",
             }}
           >
-            <Avatar name={roleLabel[m.role]} />
             <div
+              data-bubble
+              aria-label={`${m.role} message`}
               style={{
-                padding: "var(--space-2) var(--space-3)",
-                border: m.role === "agent" ? "1px solid var(--border)" : "1px solid var(--primary-800)",
-                borderRadius: "var(--radius-md)",
-                background: m.role === "agent" ? "var(--surface)" : "var(--primary-800)",
-                color: m.role === "agent" ? "var(--text)" : "var(--surface)",
-                fontSize: "var(--text-md)",
+                display: "flex",
+                alignItems: "flex-start",
+                maxWidth: "70%",
+                gap: "var(--space-2)",
               }}
             >
-              {m.text}
+              <Avatar name={roleLabel[m.role]} />
+              <div
+                style={{
+                  padding: "var(--space-2) var(--space-3)",
+                  border: m.role === "agent" ? "1px solid var(--border)" : "1px solid var(--primary-800)",
+                  borderRadius: "var(--radius-md)",
+                  background: m.role === "agent" ? "var(--surface)" : "var(--primary-800)",
+                  color: m.role === "agent" ? "var(--text)" : "var(--surface)",
+                  fontSize: "var(--text-md)",
+                }}
+              >
+                {m.text}
+              </div>
             </div>
           </div>
         ))}
