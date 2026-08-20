@@ -22,7 +22,7 @@
   line-height: 1.2;
   cursor: pointer;
   text-decoration: none;
-  transition: background-color 120ms ease;
+  transition: background-color var(--duration-base) var(--ease-out);
 }
 .btn--primary {
   background: var(--primary-800);
@@ -40,8 +40,8 @@
   background: var(--table-head-bg);
 }
 .btn:focus-visible {
-  outline: 2px solid var(--primary-500);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .btn:disabled {
   opacity: 0.5;
@@ -76,9 +76,9 @@
   font-size: var(--text-sm);
 }
 .field__control:focus {
-  outline: 2px solid var(--primary-500);
-  outline-offset: 1px;
-  border-color: var(--primary-500);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-color: var(--focus-ring);
 }
 .field__control[aria-invalid="true"] {
   border-color: var(--danger-border);
@@ -110,9 +110,9 @@
   color: var(--text-muted);
 }
 .search-input:focus-within {
-  border-color: var(--primary-500);
-  outline: 2px solid var(--primary-500);
-  outline-offset: 1px;
+  border-color: var(--focus-ring);
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .search-input__control {
   width: 100%;
@@ -213,13 +213,19 @@
   width: var(--space-4);
   height: var(--space-4);
   border: 2px solid var(--border);
-  border-top-color: var(--primary-800);
+  border-top-color: var(--info);
   border-radius: var(--radius-md);
-  animation: spin 1s linear infinite;
+  animation: spin var(--duration-slow) linear infinite;
 }
 @keyframes spin {
   to {
     transform: rotate(1turn);
+  }
+}
+/* Decorative infinite rotation is non-essential; pause it for reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner__indicator {
+    animation: none;
   }
 }
 .modal {
