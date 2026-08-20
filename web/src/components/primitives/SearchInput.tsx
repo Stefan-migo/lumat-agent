@@ -11,7 +11,7 @@ export interface SearchInputProps
 export function SearchInput({
   onSearch,
   delay = 300,
-  "aria-label": ariaLabel = "Search",
+  "aria-label": ariaLabel = "Buscar",
   className = "",
   ...rest
 }: SearchInputProps) {

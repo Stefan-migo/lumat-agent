@@ -7,7 +7,7 @@ describe("SearchInput (T8.1)", () => {
     vi.useFakeTimers();
     const onSearch = vi.fn();
     render(<SearchInput onSearch={onSearch} />);
-    const input = screen.getByRole("searchbox", { name: "Search" });
+    const input = screen.getByRole("searchbox", { name: "Buscar" });
     fireEvent.change(input, { target: { value: "fuga" } });
     expect(onSearch).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(300);
