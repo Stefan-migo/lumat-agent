@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { conversations, messages } from "./_shared/mockData/conversations";
-import { clients } from "./_shared/mockData/clients";
 import {
   InboxThreadView,
   isWithinReplyWindow,
@@ -32,12 +31,11 @@ describe("InboxThread composer + window (R-PRD-PG-9 / R-PRD-PG-10)", () => {
     const convMsgs = messages.filter((m) => m.conversation_id === conv.id);
     const bubbles = document.querySelectorAll("[data-bubble]");
     expect(bubbles.length).toBeGreaterThanOrEqual(convMsgs.length);
-    const firstIn = convMsgs.find((m) => m.direction === "inbound");
     const inBubble = Array.from(bubbles).find(
       (b) => b.getAttribute("aria-label") === "inbound",
     );
     expect(inBubble).toBeDefined();
-    expect(within(screen.getByRole("heading", { name: `# ${conv.id}` }))).toBeTruthy();
+    expect(screen.getByRole("heading", { name: `# ${conv.id}` })).toBeInTheDocument();
   });
 
   it("ComposerEnabled: open-window notice + enabled Textarea and send Button", () => {

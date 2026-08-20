@@ -58,11 +58,9 @@ export function InboxThreadStateControls({
 export function InboxComposer({
   disabled,
   reason,
-  onSend,
 }: {
   disabled: boolean;
   reason?: string;
-  onSend?: (text: string) => void;
 }) {
   return (
     <div style={{ display: "grid", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
