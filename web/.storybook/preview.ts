@@ -9,7 +9,14 @@ import '../src/tokens/tokens.css';
 const withPanelSurface: Decorator = (Story, ctx) =>
   createElement(
     'div',
-    { className: 'sb-story', style: { background: 'var(--bg)', padding: 'var(--space-4)' } },
+    {
+      className: 'sb-story',
+      style: {
+        minHeight: ctx.parameters.layout === 'fullscreen' ? '100vh' : undefined,
+        background: 'var(--bg)',
+        padding: ctx.parameters.layout === 'fullscreen' ? 0 : 'var(--space-4)',
+      },
+    },
     createElement(Story, ctx),
   );
 
@@ -24,7 +31,9 @@ const preview: Preview = {
     // Viewport presets aligned to the --bp-* reference tokens (DS-STORY-7).
     viewport: {
       viewports: {
+        'mobile-compact': { name: 'Mobile compact (390px)', styles: { width: '390px', height: '844px' }, type: 'mobile' },
         'bp-sm': { name: 'bp-sm (640px)', styles: { width: '640px', height: '900px' }, type: 'mobile' },
+        'tablet-compact': { name: 'Tablet compact (768px)', styles: { width: '768px', height: '1024px' }, type: 'tablet' },
         'bp-md': { name: 'bp-md (1024px)', styles: { width: '1024px', height: '900px' }, type: 'tablet' },
         'bp-lg': { name: 'bp-lg (1280px)', styles: { width: '1280px', height: '900px' }, type: 'desktop' },
       },

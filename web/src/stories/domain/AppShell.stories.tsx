@@ -13,7 +13,7 @@ const meta = {
           'Application shell: role-gated sidebar nav + view switch (DS-STORY-2).\n\n' +
           '**When to use** — the authenticated panel frame; every top-level view renders inside it.\n' +
           "**When not to use** — embedded widgets or drill-down details without nav (render the view content directly).\n\n" +
-          '**Accessibility** — the active nav item carries `aria-current="page"`; the `<nav>` has `aria-label="Vistas del panel"`. Admin-only views (Base de conocimientos, Configuración) are filtered out for `operador` so the nav never shows dead links. Nav buttons are real `<button>`s (focusable, keyboard-operable) and the focus indicator MUST use the design tokens: `--focus-ring`, `--focus-ring-width`, `--focus-ring-offset` (2px solid, 2px offset) on `--surface` (WCAG 2.4.11).',
+          '**Accessibility** — the active nav item carries `aria-current="page"`; the `<nav>` has `aria-label="Navegación principal"`. Admin-only views (Base de conocimientos, Configuración) are filtered out for `operador` so the nav never shows dead links. Nav buttons are real `<button>`s (focusable, keyboard-operable) and the focus indicator MUST use the design tokens: `--focus-ring`, `--focus-ring-width`, `--focus-ring-offset` (2px solid, 2px offset) on `--surface` (WCAG 2.4.11).',
       },
     },
   },
