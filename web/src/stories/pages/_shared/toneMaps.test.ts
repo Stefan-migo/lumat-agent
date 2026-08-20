@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { BadgeTone } from "../../../components/primitives/Badge";
-import { caseStatusTone, customerStateTone } from "./toneMaps";
+import {
+  caseStatusLabel,
+  caseStatusTone,
+  conversationLabel,
+  customerStateLabel,
+  customerStateTone,
+  directionLabel,
+  kbStatusLabel,
+} from "./toneMaps";
 
 const VALID_TONES: BadgeTone[] = ["neutral", "success", "warning", "danger"];
 
@@ -65,5 +73,76 @@ describe("customerStateTone", () => {
   it("maps each distinct state to a distinct tone (no collisions)", () => {
     const tones = ["nuevo", "activo", "inactivo", "bloqueado"].map(customerStateTone);
     expect(new Set(tones).size).toBe(4);
+  });
+});
+
+describe("approved Spanish labels (DS-UI-LABELS)", () => {
+  // Every typed state union in types.ts (plus documented conversation/case/KB
+  // string values) MUST resolve to a non-empty Spanish label, and raw state
+  // keys MUST NOT leak onto the surface.
+  const domains: Array<[string, (key: string) => string, string[]]> = [
+    // CustomerState union: 'nuevo'|'activo'|'inactivo'|'bloqueado'
+    [
+      "customerStateLabel",
+      customerStateLabel,
+      ["nuevo", "activo", "inactivo", "bloqueado"],
+    ],
+    // MessageDirection union: 'inbound'|'outbound'
+    ["directionLabel", directionLabel, ["inbound", "outbound"]],
+    // Documented Conversation.state values (bot/human/closed, plus pending/escalated)
+    ["conversationLabel", conversationLabel, ["bot", "human", "closed", "pending", "escalated"]],
+    // Documented Case.status values
+    ["caseStatusLabel", caseStatusLabel, ["abierto", "en_evaluacion", "escalado", "cerrado"]],
+    // Documented KB activity states (activo/deshabilitado/procesando/error)
+    ["kbStatusLabel", kbStatusLabel, ["activo", "deshabilitado", "procesando", "error"]],
+  ];
+
+  for (const [name, label, keys] of domains) {
+    it(`${name} resolves every documented state to a non-empty Spanish label`, () => {
+      expect(keys.length).toBeGreaterThan(0);
+      for (const key of keys) {
+        const value = label(key);
+        expect(value).toBeTruthy();
+        expect(value.trim().length).toBeGreaterThan(0);
+        expect(value).not.toBe(key);
+      }
+    });
+
+    it(`${name} has no duplicate labels across distinct states`, () => {
+      const labels = keys.map(label);
+      expect(new Set(labels).size).toBe(keys.length);
+    });
+  }
+
+  it("matches the approved LABELS table for conversation states", () => {
+    expect(conversationLabel("bot")).toBe("Agente atendiendo");
+    expect(conversationLabel("human")).toBe("Atención humana");
+    expect(conversationLabel("closed")).toBe("Cerrada");
+  });
+
+  it("matches the approved LABELS table for customer states", () => {
+    expect(customerStateLabel("nuevo")).toBe("Nuevo");
+    expect(customerStateLabel("activo")).toBe("Activo");
+    expect(customerStateLabel("inactivo")).toBe("Inactivo");
+    expect(customerStateLabel("bloqueado")).toBe("Bloqueado");
+  });
+
+  it("matches the approved LABELS table for case statuses", () => {
+    expect(caseStatusLabel("abierto")).toBe("Abierto");
+    expect(caseStatusLabel("en_evaluacion")).toBe("En evaluación");
+    expect(caseStatusLabel("escalado")).toBe("Escalado");
+    expect(caseStatusLabel("cerrado")).toBe("Cerrado");
+  });
+
+  it("matches the approved LABELS table for KB activity states", () => {
+    expect(kbStatusLabel("activo")).toBe("Activo");
+    expect(kbStatusLabel("deshabilitado")).toBe("Deshabilitado");
+    expect(kbStatusLabel("procesando")).toBe("Procesando");
+    expect(kbStatusLabel("error")).toBe("Error");
+  });
+
+  it("matches the approved LABELS table for message directions", () => {
+    expect(directionLabel("inbound")).toBe("Entrante");
+    expect(directionLabel("outbound")).toBe("Saliente");
   });
 });

@@ -1,5 +1,6 @@
 import { Badge } from "./Badge";
 import type { BadgeTone } from "./Badge";
+import { conversationLabel } from "../../stories/pages/_shared/toneMaps";
 
 export type Status = "bot" | "human" | "closed" | "pending" | "escalated";
 export const statusTone: Record<Status, BadgeTone> = {
@@ -10,6 +11,13 @@ export const statusTone: Record<Status, BadgeTone> = {
   escalated: "danger",
 };
 
-export function StatusBadge({ status }: { status: Status }) {
-  return <Badge tone={statusTone[status]}>{status}</Badge>;
+export interface StatusBadgeProps {
+  status: Status;
+  /** Approved label (Spanish) rendered over the raw state (DS-UI-LABELS).
+   *  Defaults to the per-domain map via `conversationLabel`. */
+  label?: string;
+}
+
+export function StatusBadge({ status, label }: StatusBadgeProps) {
+  return <Badge tone={statusTone[status]}>{label ?? conversationLabel(status)}</Badge>;
 }
