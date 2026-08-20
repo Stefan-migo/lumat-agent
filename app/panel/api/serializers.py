@@ -18,6 +18,7 @@ from app.models import (
     Customer,
     CustomerNote,
     KbDocument,
+    Memory,
     Message,
     User,
 )
@@ -120,4 +121,25 @@ def to_doc_dict(doc: KbDocument) -> dict:
         "model": doc.model,
         "cost_meta": float(doc.cost_meta) if doc.cost_meta is not None else None,
         "created_at": _iso(doc.created_at),
+    }
+
+
+def to_memory_dict(memory: Memory) -> dict:
+    """Memory row -> snake_case service dict (MEM-6 panel /clients/{id}/memories).
+
+    Shape mirrors the design "Panel API + UI" payload: id, scope, entity_id,
+    tipo, titulo, contenido, topic_key, pin, status, ISO datetimes.
+    """
+    return {
+        "id": memory.id,
+        "scope": memory.scope,
+        "entity_id": memory.entity_id,
+        "tipo": memory.tipo.value,
+        "titulo": memory.titulo,
+        "contenido": memory.contenido,
+        "topic_key": memory.topic_key,
+        "pin": memory.pin,
+        "status": memory.status.value,
+        "created_at": _iso(memory.created_at),
+        "updated_at": _iso(memory.updated_at),
     }
