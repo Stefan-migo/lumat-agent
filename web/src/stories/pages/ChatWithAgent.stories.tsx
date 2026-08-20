@@ -1,14 +1,15 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { PageHeader } from "./_shared/PageHeader";
+import { PageFrame } from "./_shared/PageFrame";
 import { Textarea } from "../../components/primitives/Textarea";
 import { Button } from "../../components/primitives/Button";
 import { Avatar } from "../../components/primitives/Avatar";
-import { agentChatMessages, type AgentChatRole } from "./_shared/mockData/chat";
+import { agentChatMessages, agentStatus, type AgentChatRole } from "./_shared/mockData/chat";
 
 /** Friendly label + avatar initials per chat role (R-PRD-PG-12/D2). Distinct
- *  names so the per-message Avatar initials differ between admin and agent. */
+ *  names so the per-message Avatar initials differ between admin and agent.
+ *  Spanish, approved (DS-UI-COPY); the admin initials stay "A". */
 const roleLabel: Record<AgentChatRole, string> = {
-  admin: "Admin",
+  admin: "Administrador",
   agent: "Agente Lumat",
 };
 
@@ -27,7 +28,8 @@ export function SuggestionChips({ chips }: { chips: string[] }) {
 }
 
 /** Agent status bar (design D7; R-PRD-PG-11): idle shows a plain caption,
- *  processing shows the reusable `.spinner` + thinking copy. */
+ *  processing shows the reusable `.spinner` + thinking copy. Copy is Spanish
+ *  from the `agentStatus` map (DS-UI-COPY); the data shape is preserved. */
 export function AgentStatusBar({ status }: { status: "idle" | "processing" }) {
   if (status === "processing") {
     return (
@@ -37,27 +39,28 @@ export function AgentStatusBar({ status }: { status: "idle" | "processing" }) {
         style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}
       >
         <span className="spinner__indicator" aria-hidden="true" />
-        <span>Agent is thinking…</span>
+        <span>{agentStatus.processing}</span>
       </div>
     );
   }
   return (
-    <div style={{ color: "var(--text-muted)", fontSize: "var(--text-sm)" }}>Agent idle</div>
+    <div style={{ color: "var(--text-muted)", fontSize: "var(--text-sm)" }}>
+      {agentStatus.idle}
+    </div>
   );
 }
 
-/** Chat-with-agent page (design D2/D7; R-PRD-PG-11): PageHeader, bubble list with
+/** Chat-with-agent page (design D2/D7; R-PRD-PG-11): shared frame, bubble list with
  *  per-message Avatars, AgentStatusBar, suggestion chips and a Textarea+Button
  *  composer. `status` drives the idle/processing indicator and the composer's
  *  disabled state the way the AgentThinking variant exercises it. */
 export function ChatWithAgentView({ status }: { status: "idle" | "processing" }) {
   const composerEnabled = status === "idle";
   return (
-    <div>
-      <PageHeader
-        title="Asistente Lumat"
-        meta="Chat con el agente virtual — responde en tiempo real."
-      />
+    <PageFrame
+      title="Asistente Lumat"
+      meta="Chat con el agente virtual — responde en tiempo real."
+    >
       <AgentStatusBar status={status} />
       <div style={{ display: "grid", gap: "var(--space-2)", marginTop: "var(--space-3)" }}>
         {agentChatMessages.map((m) => (
@@ -70,7 +73,9 @@ export function ChatWithAgentView({ status }: { status: "idle" | "processing" })
           >
             <div
               data-bubble
-              aria-label={`${m.role} message`}
+              aria-label={`Mensaje de ${
+                m.role === "admin" ? "administrador" : "agente"
+              }`}
               style={{
                 display: "flex",
                 alignItems: "flex-start",
@@ -107,7 +112,7 @@ export function ChatWithAgentView({ status }: { status: "idle" | "processing" })
           <Textarea
             label="Escribe un mensaje"
             disabled={!composerEnabled}
-            placeholder="Escribí tu mensaje al asistente..."
+            placeholder="Escribe tu mensaje al asistente..."
           />
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
             <Button disabled={!composerEnabled}>Enviar</Button>
@@ -119,7 +124,7 @@ export function ChatWithAgentView({ status }: { status: "idle" | "processing" })
           </div>
         </div>
       </div>
-    </div>
+    </PageFrame>
   );
 }
 
@@ -130,9 +135,9 @@ const meta = {
     docs: {
       description: {
         component:
-          'Chat with the virtual agent (design D2/D7; R-PRD-PG-11): PageHeader, message list with per-message Avatars, an AgentStatusBar (idle / processing), suggestion chips and a Textarea+Button composer.\n\n' +
-          "**When to use** — the authenticated H4 chat-with-agent panel view.\n" +
-          "**Source** — page-first Storybook mock; production wiring untouched.",
+          'Chat con el asistente virtual (design D2/D7; R-PRD-PG-11): encabezado, lista de mensajes con avatares por mensaje, una barra de estado del asistente (en espera / pensando), chips de sugerencia y un diseñador con Textarea + Button.\n\n' +
+          "**Cuándo usar** — la vista de panel H4 con el asistente virtual autenticado.\n" +
+          "**Fuente** — mock de Storybook basado en la página; el cableado de producción no se toca.",
       },
     },
   },
