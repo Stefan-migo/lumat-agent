@@ -39,9 +39,9 @@ node `SYSTEM_PROMPT`. `tests/unit/test_prompts.py` asserts `agent/*.md == FALLBA
 
 ## Phase 2: Loader (PR 2)
 
-- [ ] 2.1 Create `app/services/prompts.py`: `load(key)` with `@lru_cache(32)` + literal `FALLBACKS` + `warning` on fallback (AC-2)
-- [ ] 2.2 Add `render(key, **vars)`: strict `{{var}}` substitute, raise on missing/unknown var, personastatic guarantee (AC-5)
-- [ ] 2.3 Extend `tests/unit/test_prompts.py`: fallback returns constant+warning (AC-2); render raises on missing var (AC-5); `agent/*.md == FALLBACKS[key]` (AC-3); `load()` returns file verbatim (AC-2)
+- [x] 2.1 Create `app/services/prompts.py`: `load(key)` with `@lru_cache(32)` + literal `FALLBACKS` + `warning` on fallback (AC-2)
+- [x] 2.2 Add `render(key, **vars)`: strict `{{var}}` substitute, raise on missing/unknown var, personastatic guarantee (AC-5)
+- [x] 2.3 Extend `tests/unit/test_prompts.py`: fallback returns constant+warning (AC-2); render raises on missing var (AC-5); `agent/*.md == FALLBACKS[key]` (AC-3); `load()` returns file verbatim (AC-2)
 
 ## Phase 3: Wire nodes (PR 3)
 
