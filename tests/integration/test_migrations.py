@@ -40,6 +40,9 @@ EXPECTED_TABLES = {
     "settings",
     "audit_log",
     "customer_notes",  # 002_customer_notes.sql (CR-4 internal staff notes)
+    "memories",  # 009_memory.sql (MEM-1 persistent memory layer)
+    "memory_relations",
+    "memory_observations",
     "schema_migrations",
 }
 
@@ -65,7 +68,8 @@ def clean_db(migrated_db):
         conn.execute(
             "TRUNCATE settings, audit_log, kb_chunks, kb_documents, "
             "conversation_events, cases, messages, conversations, users, customers, "
-            "customer_notes RESTART IDENTITY CASCADE"
+            "customer_notes, memories, memory_relations, memory_observations "
+            "RESTART IDENTITY CASCADE"
         )
     yield
 
@@ -95,6 +99,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("006_handoff_deriva",),
         ("007_case_created_at",),
         ("008_local_embeddings",),
+        ("009_memory",),
     ]
 
 
