@@ -286,15 +286,25 @@ def load_customer_context(session: Session, customer_id: int) -> str:
 
 
 def persist_memory_session(session: Session, state: Any) -> None:
-    """Flush the current turn as a session memory before END (CM-8).
+    """Flush the current turn into the session memory before END (CM-8).
 
-    Upserts a single `topic_key='session'` memory under the customer so a
-    subsequent turn's `load_customer_context` sees the previous exchange — the
-    "persisted next turn" guarantee. KB-style contract: the caller commits.
+    Accumulates the exchange: reads the existing `topic_key='session'` memory
+    (if any) and appends the latest inbound user text, so a subsequent turn's
+    `load_customer_context` sees the full conversation recap rather than only
+    the most recent message (R3-001). KB-style contract: the caller commits.
     """
     text = _current_turn_text(state)
     if not text:
         return
+    previous = get_by_key(
+        session,
+        scope="customer",
+        entity_id=str(state.customer_id),
+        topic_key="session",
+    )
+    combined = (
+        f"{previous.contenido}\n{text}" if previous and previous.contenido else text
+    )
     upsert(
         session,
         scope="customer",
@@ -302,10 +312,19 @@ def persist_memory_session(session: Session, state: Any) -> None:
         topic_key="session",
         tipo=MemoryType.SESSION,
         titulo="session",
-        contenido=text,
+        contenido=combined,
     )
 
 
 def _current_turn_text(state: Any) -> str:
-    """The latest inbound user text from a rebuilt ConversationState (CM-8)."""
-    return state.window[-1]["text"] if state.window else ""
+    """The latest inbound user text from a rebuilt ConversationState (CM-8).
+
+    Only the final window entry when it is the user's inbound message; empty
+    otherwise so an outbound reply is never recorded as the turn's recap.
+    """
+    if not state.window:
+        return ""
+    entry = state.window[-1]
+    if entry.get("direction") != "inbound":
+        return ""
+    return entry.get("text") or ""
