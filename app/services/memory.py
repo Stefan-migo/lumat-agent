@@ -272,3 +272,59 @@ def hybrid_search(
         }
         for m, score, _, _ in ranked[:top_k]
     ]
+
+
+def load_customer_context(session: Session, customer_id: int) -> str:
+    """Return the customer's memory context as text for prompt injection (CM-7).
+
+    Reads all `scope='customer'` memories for the entity and renders them as
+    `titulo: contenido` lines. Empty when the customer has no memories yet — the
+    caller proceeds with an empty context and never blocks the reply.
+    """
+    rows = list_for_entity(session, scope="customer", entity_id=str(customer_id))
+    return "\n".join(f"{m.titulo}: {m.contenido}" for m in rows)
+
+
+def persist_memory_session(session: Session, state: Any) -> None:
+    """Flush the current turn into the session memory before END (CM-8).
+
+    Accumulates the exchange: reads the existing `topic_key='session'` memory
+    (if any) and appends the latest inbound user text, so a subsequent turn's
+    `load_customer_context` sees the full conversation recap rather than only
+    the most recent message (R3-001). KB-style contract: the caller commits.
+    """
+    text = _current_turn_text(state)
+    if not text:
+        return
+    previous = get_by_key(
+        session,
+        scope="customer",
+        entity_id=str(state.customer_id),
+        topic_key="session",
+    )
+    combined = (
+        f"{previous.contenido}\n{text}" if previous and previous.contenido else text
+    )
+    upsert(
+        session,
+        scope="customer",
+        entity_id=str(state.customer_id),
+        topic_key="session",
+        tipo=MemoryType.SESSION,
+        titulo="session",
+        contenido=combined,
+    )
+
+
+def _current_turn_text(state: Any) -> str:
+    """The latest inbound user text from a rebuilt ConversationState (CM-8).
+
+    Only the final window entry when it is the user's inbound message; empty
+    otherwise so an outbound reply is never recorded as the turn's recap.
+    """
+    if not state.window:
+        return ""
+    entry = state.window[-1]
+    if entry.get("direction") != "inbound":
+        return ""
+    return entry.get("text") or ""

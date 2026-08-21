@@ -148,6 +148,7 @@ def mock_openai_chat():
 
     Dispatches by prompt role: summary prompt -> canned summary; respond
     prompt (has <kb>) -> grounded answer; otherwise -> intent classification.
+    (The embedder is autouse-mounted via `fake_embedder`.)
     """
     captured: list[dict] = []
 
@@ -195,9 +196,16 @@ def mock_openai_chat():
         yield captured
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def fake_embedder(monkeypatch):
-    """Swap kb.get_embedder() for a deterministic fake (no model download)."""
+    """Swap kb.get_embedder() for a deterministic fake (no model download).
+
+    Autouse: S2 runs the graph through run_conversation/process_message on
+    every turn, which persists per-turn memory (an embedding). The project
+    contract is that the suite NEVER downloads the ~130MB model, so the seam is
+    mounted by default for every integration test. Tests asserting on the
+    embedder itself define their own fake (test_kb.py) that shadows this one.
+    """
     from app.services import kb as kb_service
 
     class _FakeEmbedder:

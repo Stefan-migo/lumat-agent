@@ -28,6 +28,7 @@ from app.models import (
     Message,
 )
 from app.services.customers import get_or_create_customer
+from app.services.memory import load_customer_context
 
 # CM-1: the 8-category menu shown on first contact (LumatRequest §1.x).
 MENU_CATEGORIES: list[str] = [
@@ -145,6 +146,9 @@ class ConversationState:
     window: list[dict] = field(default_factory=list)
     # accumulator: nodes append their replies (reducer merges, last-write-wins off)
     replies: Annotated[list, add] = field(default_factory=list)
+    # CM-7: the customer's persistent memory context, loaded from the DB for
+    # this message (empty string on first contact -> reply never blocked).
+    memory_context: str = ""
 
     @classmethod
     def from_db(cls, session: Session, conversation_id: int) -> "ConversationState":
@@ -191,4 +195,5 @@ class ConversationState:
             unknown_count=int(unknown_count),
             captured=dict(conversation.captured_data or {}),
             window=window,
+            memory_context=load_customer_context(session, conversation.customer_id),
         )

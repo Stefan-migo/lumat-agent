@@ -60,6 +60,7 @@ from app.chat.nodes.route import route
 from app.chat.nodes.summary import summary
 from app.chat.state import ConversationState
 from app.models import Message, MessageDirection, MessageStatus, MessageType
+from app.services.memory import persist_memory_session
 
 __all__ = ["build_graph", "run_conversation"]
 
@@ -190,4 +191,7 @@ def run_conversation(session: Session, message: Message) -> list[str]:
     result = build_graph().invoke(state)
     replies = result.get("replies") or []
     persist_replies(session, state, replies)
+    # CM-8: flush any memory written during the turn before END so the next
+    # turn's from_db sees it (per-turn session memory).
+    persist_memory_session(session, state)
     return replies
