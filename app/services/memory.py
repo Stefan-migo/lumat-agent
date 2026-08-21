@@ -19,6 +19,8 @@ agreed constant (design "fines de detalle fino").
 
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any
 
 from sqlalchemy import func, select
@@ -26,6 +28,8 @@ from sqlalchemy.orm import Session
 
 from app.models import Memory, MemoryStatus, MemoryType
 from app.services import kb
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Concrete thresholds (design "fines de detalle fino")
@@ -35,6 +39,11 @@ REL_MIN_SIM = 0.85          # cosine pair gate for suggest_relations (S3+)
 FTS_BOOST = 0.3             # fused = vector + 0.3 * fts (vector dominates)
 DEFAULT_TOP_K = 5
 WRITABLE_PROYECTO = "default"
+
+# Embedder resilience (R4-001): bounded retry with short backoff on transient
+# model-init or network failures, then a clear logged failure.
+EMBED_RETRIES = 2
+EMBED_BACKOFF_SECONDS = (0.1, 0.3)
 
 
 def _guard_writable_project(proyecto: str) -> None:
@@ -46,11 +55,24 @@ def _guard_writable_project(proyecto: str) -> None:
 
 
 def _embed(texts: list[str]) -> list[list[float]]:
-    """Embed a batch locally; empty text -> empty list (reuses kb seam)."""
+    """Embed a batch locally; empty text -> empty list (reuses kb seam).
+
+    Retries transient embedder failures with a short backoff (R4-001) and logs
+    the final failure before re-raising so the caller can degrade explicitly.
+    """
     if not texts:
         return []
-    embeddings, _ = kb.embed_texts(texts)
-    return embeddings
+    last_error: Exception | None = None
+    for attempt in range(EMBED_RETRIES + 1):
+        try:
+            embeddings, _ = kb.embed_texts(texts)
+            return embeddings
+        except Exception as exc:  # transient model init / network
+            last_error = exc
+            if attempt < EMBED_RETRIES:
+                time.sleep(EMBED_BACKOFF_SECONDS[attempt])
+    logger.error("memory embedding failed after %d attempts: %s", EMBED_RETRIES + 1, last_error)
+    raise last_error
 
 
 def upsert(
@@ -191,21 +213,28 @@ def hybrid_search(
 ) -> list[dict[str, Any]]:
     """Hybrid retrieval over one entity's memories (MEM-3).
 
-    Fuses pgvector cosine similarity with 0.3 * pg_trgm FTS on content:
-        fused = vector_sim + FTS_BOOST * fts_sim
-    Returns only rows whose fused score is >= `min_sim`, ordered best-first,
-    capped at `top_k`. No out-of-scope fallback (design + MEM-3 Empty result).
+    Two-phase recall that stays bounded on high-cardinality entities (R4-002):
+    1. candidate pre-filter by vector cosine distance using the HNSW index
+       (proyecto/scope/entity_id scoped, `candidate_factor * top_k` rows);
+    2. fused score = vector_sim + FTS_BOOST * fts_sim computed per candidate,
+       threshold-filtered and re-ranked in memory, capped at `top_k`.
+
+    No out-of-scope fallback (design + MEM-3 Empty result).
     """
     query_embedding = _embed([query])
     if not query_embedding:
         return []
     vec = query_embedding[0]
 
-    vector_sim = 1 - Memory.embedding.cosine_distance(vec)
+    candidate_factor = 4
+    candidate_limit = max(candidate_factor * top_k, 20)
+
+    distance = Memory.embedding.cosine_distance(vec)
+    vector_sim = 1 - distance
     fts_sim = func.similarity(Memory.contenido, query)
     fused = vector_sim + FTS_BOOST * fts_sim
 
-    rows = session.execute(
+    candidates = session.execute(
         select(
             Memory,
             fused.label("fused"),
@@ -216,11 +245,17 @@ def hybrid_search(
             Memory.proyecto == proyecto,
             Memory.scope == scope,
             Memory.entity_id == entity_id,
-            fused >= min_sim,
         )
-        .order_by(fused.desc())
-        .limit(top_k)
+        .order_by(distance)
+        .limit(candidate_limit)
     ).all()
+
+    ranked = [
+        (m, float(fused_score), float(vs), float(fts))
+        for m, fused_score, vs, fts in candidates
+        if float(fused_score) >= min_sim
+    ]
+    ranked.sort(key=lambda item: item[1], reverse=True)
 
     return [
         {
@@ -235,5 +270,5 @@ def hybrid_search(
             "status": m.status.value,
             "score": round(float(score), 4),
         }
-        for m, score, _, _ in rows
+        for m, score, _, _ in ranked[:top_k]
     ]
