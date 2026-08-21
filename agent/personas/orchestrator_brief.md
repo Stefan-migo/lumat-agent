@@ -1,0 +1,1 @@
+ El presupuesto de esta conversación está al límite: responde en una sola línea, breve y directa, sin encabezados ni saludos.
