@@ -45,12 +45,12 @@ node `SYSTEM_PROMPT`. `tests/unit/test_prompts.py` asserts `agent/*.md == FALLBA
 
 ## Phase 3: Wire nodes (PR 3)
 
-- [ ] 3.1 `respond.py`: `_answer_from_kb` = `load("personas/orchestrator.md") + (load("personas/orchestrator_brief.md") if brief)` + `render("prompts/respond.md", ...)`; delete `SYSTEM_PROMPT`/`BRIEF_MODE_SUFFIX`; keep `CANNOT_ANSWER_REPLY`/`CLARIFICATION_REPLY` export (AC-3, AC-8)
-- [ ] 3.2 `classify_intent.py`: `_llm_classify` = `load("personas/classify.md")` + `render("prompts/classify.md", user_input=text)`; delete `SYSTEM_PROMPT`; keep `_INJECTION_PATTERNS`/`is_injection` (AC-3)
-- [ ] 3.3 `summary.py`: `generate_summary` = `load("personas/summary.md")` + `render("prompts/summary.md", name=..., phone=..., ...)`; delete `SYSTEM_PROMPT`; `_summary_context` computes slot values (AC-3)
-- [ ] 3.4 Full `pytest tests/` green: CM-4/CM-5/SH-4/handoff/cost-guardrail suites unchanged; AC-3 equality proven end-to-end
+- [x] 3.1 `respond.py`: `_answer_from_kb` = `load("personas/orchestrator.md") + (load("personas/orchestrator_brief.md") if brief)` + `render("prompts/respond.md", ...)`; delete `SYSTEM_PROMPT`/`BRIEF_MODE_SUFFIX`; keep `CANNOT_ANSWER_REPLY`/`CLARIFICATION_REPLY` export (AC-3, AC-8)
+- [x] 3.2 `classify_intent.py`: `_llm_classify` = `load("personas/classify.md")` + `render("prompts/classify.md", user_input=text)`; delete `SYSTEM_PROMPT`; keep `_INJECTION_PATTERNS`/`is_injection` (AC-3)
+- [x] 3.3 `summary.py`: `generate_summary` = `load("personas/summary.md")` + `render("prompts/summary.md", name=..., phone=..., ...)`; delete `SYSTEM_PROMPT`; `_summary_context` computes slot values (AC-3)
+- [x] 3.4 Full `pytest tests/` green: CM-4/CM-5/SH-4/handoff/cost-guardrail suites unchanged; AC-3 equality proven end-to-end
 
 ## Phase 4: Docs / D6
 
-- [ ] 4.1 Confirm `agent/README.md` states 3 D6 triggers + hybrid pattern; no DB change (AC-7)
-- [ ] 4.2 Cleanup: no dead constants left; `CANNOT_ANSWER_REPLY`/`HANDOFF_REPLY` still importable (AC-8)
+- [x] 4.1 Confirm `agent/README.md` states 3 D6 triggers + hybrid pattern; no DB change (AC-7)
+- [x] 4.2 Cleanup: no dead constants left; `CANNOT_ANSWER_REPLY`/`HANDOFF_REPLY` still importable (AC-8)
