@@ -210,29 +210,33 @@ def client_memory_upsert(
     topic_key = body.topic_key or "general"
     titulo = body.titulo.strip() or topic_key
 
-    row = memory_service.upsert(
-        session,
-        scope="customer",
-        entity_id=str(customer_id),
-        topic_key=topic_key,
-        tipo=tipo,
-        titulo=titulo,
-        contenido=contenido,
-    )
-    record_audit(
-        session,
-        actor=current.username,
-        action="memory.upserted",
-        entity="memory",
-        entity_id=str(row.id),
-        after={
-            "customer_id": customer_id,
-            "tipo": tipo.value,
-            "topic_key": topic_key,
-            "titulo": titulo,
-        },
-    )
-    session.commit()
+    try:
+        row = memory_service.upsert(
+            session,
+            scope="customer",
+            entity_id=str(customer_id),
+            topic_key=topic_key,
+            tipo=tipo,
+            titulo=titulo,
+            contenido=contenido,
+        )
+        record_audit(
+            session,
+            actor=current.username,
+            action="memory.upserted",
+            entity="memory",
+            entity_id=str(row.id),
+            after={
+                "customer_id": customer_id,
+                "tipo": tipo.value,
+                "topic_key": topic_key,
+                "titulo": titulo,
+            },
+        )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise HTTPException(status_code=500, detail="failed to persist memory")
     return {"ok": True, "memory": to_memory_dict(row)}
 
 
@@ -246,16 +250,20 @@ def client_memory_delete(
     """Delete one customer-scoped memory from this ficha (MEM-6, audited)."""
     _customer_or_404(session, customer_id)
     row = _ficha_memory_or_404(session, customer_id, memory_id)
-    memory_service.delete(session, memory_id)
-    record_audit(
-        session,
-        actor=current.username,
-        action="memory.deleted",
-        entity="memory",
-        entity_id=str(memory_id),
-        before={"customer_id": customer_id, "topic_key": row.topic_key},
-    )
-    session.commit()
+    try:
+        memory_service.delete(session, memory_id)
+        record_audit(
+            session,
+            actor=current.username,
+            action="memory.deleted",
+            entity="memory",
+            entity_id=str(memory_id),
+            before={"customer_id": customer_id, "topic_key": row.topic_key},
+        )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise HTTPException(status_code=500, detail="failed to delete memory")
     return {"ok": True, "deleted": memory_id}
 
 
@@ -282,14 +290,22 @@ def client_memory_mark(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"unknown memory status: {body.status!r}")
 
-    row = memory_service.set_mark(session, memory_id, pin=body.pin, status=status)
-    record_audit(
-        session,
-        actor=current.username,
-        action="memory.marked",
-        entity="memory",
-        entity_id=str(memory_id),
-        before={"customer_id": customer_id, "pin": row.pin, "status": row.status.value},
-    )
-    session.commit()
+    try:
+        row = memory_service.set_mark(session, memory_id, pin=body.pin, status=status)
+        record_audit(
+            session,
+            actor=current.username,
+            action="memory.marked",
+            entity="memory",
+            entity_id=str(memory_id),
+            before={
+                "customer_id": customer_id,
+                "pin": bool(getattr(row, "pin", None)),
+                "status": getattr(row.status, "value", None),
+            },
+        )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise HTTPException(status_code=500, detail="failed to update memory")
     return {"ok": True, "memory": to_memory_dict(row)}
