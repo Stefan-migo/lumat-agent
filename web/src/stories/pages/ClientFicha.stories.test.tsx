@@ -68,6 +68,22 @@ describe("ClientFicha page story (R-PRD-PG-6)", () => {
     expect(screen.getByRole("button", { name: "Agregar" })).toBeInTheDocument();
   });
 
+  it("renders the customer_memo distinctly from staff notes (CR-7)", () => {
+    render(<ClientFichaView />);
+    expect(screen.getByRole("heading", { name: "Memo del cliente" })).toBeInTheDocument();
+    expect(
+      screen.getByText(/acta del cierre: cliente pidio recalcular el presupuesto/),
+    ).toBeInTheDocument();
+    // The memo card is separate from the notes card heading
+    expect(screen.getByRole("heading", { name: "Notas" })).toBeInTheDocument();
+  });
+
+  it("shows an empty memo surface without error when there is no memo yet (CR-7)", () => {
+    render(<ClientFichaView memo="" />);
+    expect(screen.getByRole("heading", { name: "Memo del cliente" })).toBeInTheDocument();
+    expect(screen.getByText("Todavía no hay memo para este cliente.")).toBeInTheDocument();
+  });
+
   it("renders the three history DataTables (conversations / cases / messages)", () => {
     render(<ClientFichaView />);
     const tables = screen.getAllByRole("table");

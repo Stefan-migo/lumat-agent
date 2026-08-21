@@ -24,6 +24,7 @@ from app.models import (  # noqa: E402
     Customer,
     CustomerNote,
     CustomerState,
+    MemoryType,
     Message,
     MessageDirection,
     MessageType,
@@ -202,7 +203,7 @@ def test_client_ficha_returns_full_payload(client, make_user):
 
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body.keys()) == {"customer", "history", "notes", "states"}
+    assert set(body.keys()) == {"customer", "history", "notes", "memo", "states"}
     # customer: snake_case service keys, ISO-8601 datetimes, no ORM leak
     customer = body["customer"]
     assert customer["id"] == customer_id
@@ -244,6 +245,83 @@ def test_client_ficha_includes_notes(client, make_user):
     assert notes[0]["author"] == "oper"
     assert notes[0]["customer_id"] == customer_id
     datetime.fromisoformat(notes[0]["created_at"])
+
+
+# ---------------------------------------------------------------------------
+# CR-7 — ficha surfaces the living customer_memo distinct from staff notes
+# ---------------------------------------------------------------------------
+
+
+def test_client_ficha_shows_customer_memo(client, make_user):
+    """CR-7: the latest customer_memo appears on the ficha, as a string."""
+    from app.services import memory
+
+    customer_id = _seed_customer()
+    with SessionLocal() as session:
+        memory.upsert(
+            session,
+            scope="customer",
+            entity_id=str(customer_id),
+            topic_key="customer_memo",
+            tipo=MemoryType.CUSTOMER_MEMO,
+            titulo="customer_memo",
+            contenido="acta del cierre: cliente pidio recalcular presupuesto",
+        )
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    resp = client.get(f"/panel/api/clients/{customer_id}", follow_redirects=False)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["memo"] == "acta del cierre: cliente pidio recalcular presupuesto"
+
+
+def test_client_ficha_memo_empty_when_no_close(client, make_user):
+    """CR-7: with no memo yet, the ficha surfaces an empty memo, no error."""
+    customer_id = _seed_customer()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    resp = client.get(f"/panel/api/clients/{customer_id}", follow_redirects=False)
+
+    assert resp.status_code == 200
+    assert resp.json()["memo"] == ""
+
+
+def test_client_ficha_memo_and_notes_coexist(client, make_user):
+    """CR-7: auto memo and staff notes are distinct and both retained."""
+    from app.services import memory
+
+    customer_id = _seed_customer()
+    with SessionLocal() as session:
+        memory.upsert(
+            session,
+            scope="customer",
+            entity_id=str(customer_id),
+            topic_key="customer_memo",
+            tipo=MemoryType.CUSTOMER_MEMO,
+            titulo="customer_memo",
+            contenido="memo automatico del cierre",
+        )
+        session.add(
+            CustomerNote(
+                customer_id=customer_id, note="nota interna del operador", author="oper"
+            )
+        )
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    resp = client.get(f"/panel/api/clients/{customer_id}", follow_redirects=False)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["memo"] == "memo automatico del cierre"
+    notes = body["notes"]
+    assert len(notes) == 1
+    assert notes[0]["note"] == "nota interna del operador"
 
 
 def test_client_ficha_missing_returns_404_json(client, make_user):

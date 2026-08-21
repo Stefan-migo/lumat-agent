@@ -18,10 +18,16 @@ import {
   customerStateTone,
   directionLabel,
 } from "./_shared/toneMaps";
+import { memories } from "./_shared/mockData/memories";
 import type { CustomerState } from "../../types";
 
 const customer = clients[0];
 const customerStates: CustomerState[] = ["nuevo", "activo", "inactivo", "bloqueado"];
+
+/** CR-7: the living customer_memo (`topic_key='customer_memo'`) surfaced on
+ *  the ficha, distinct from staff notes (the notes Card). Empty when none yet. */
+const customerMemo = memories.find((m) => m.topic_key === "customer_memo");
+const customerMemoText = customerMemo?.contenido ?? "";
 
 /** History tables from the ficha serializer shapes (ClientFichaResponse.history). */
 const historyConversations = conversations.map((c) => ({
@@ -102,11 +108,18 @@ const messageColumns: Column<(typeof historyMessages)[number]>[] = [
   { key: "created", header: "Fecha", render: (m) => m.created_at?.slice(0, 10) ?? "—" },
 ];
 
-/** Client ficha body (customer card + state form + notes + history).
- *  `isSaving` drives the customer-state form's saving state (DS-UI-STATES):
- *  the save button is disabled and a saving status is announced.
- *  Exported for tests; hidden from the addons panel. */
-export function ClientFichaView({ isSaving = false }: { isSaving?: boolean }) {
+/** Client ficha body (customer card + state form + memo + notes + history).
+ *  `isSaving` drives the customer-state form's saving state (DS-UI-STATES).
+ *  `memo` overrides the mock memo (used by the NoMemo story for CR-7's empty
+ *  state; defaults to the living customer_memo). Exported for tests; hidden
+ *  from the addons panel. */
+export function ClientFichaView({
+  isSaving = false,
+  memo = customerMemoText,
+}: {
+  isSaving?: boolean;
+  memo?: string;
+}) {
   const identity = (
     <Card>
       <div>
@@ -206,11 +219,30 @@ export function ClientFichaView({ isSaving = false }: { isSaving?: boolean }) {
     </Card>
   );
 
+  const memoCard = (
+    <Card title="Memo del cliente">
+      <div style={{ color: "var(--text-muted)", fontSize: "var(--text-sm)" }}>
+        Acta generada automáticamente al cierre de la conversación (CR-7)
+      </div>
+      {memo ? (
+        <p style={{ margin: "var(--space-2) 0 0" }}>{memo}</p>
+      ) : (
+        <p style={{ margin: "var(--space-2) 0 0", color: "var(--text-muted)" }}>
+          Todavía no hay memo para este cliente.
+        </p>
+      )}
+      <div style={{ marginTop: "var(--space-3)" }}>
+        <Badge tone="neutral">customer_memo</Badge>
+      </div>
+    </Card>
+  );
+
   return (
     <PageFrame title={`Ficha: ${customer.name ?? customer.phone_e164 ?? "—"}`}>
       <div style={{ display: "grid", gap: "var(--space-4)" }}>
         {identity}
         {stateControl}
+        {memoCard}
         {notes}
         {history}
       </div>
@@ -225,14 +257,14 @@ const meta = {
     docs: {
       description: {
         component:
-          'Ficha de cliente del panel: tarjeta de identidad + control de estado + notas + historiales (R-PRD-PG-6, R-PRD-PG-7).\n\n' +
+          'Ficha de cliente del panel: tarjeta de identidad + control de estado + memo + notas + historiales (R-PRD-PG-6, R-PRD-PG-7).\n\n' +
           "**Cuándo usar** — la vista de detalle por cliente a la que se llega desde la lista de clientes.\n" +
-          "**Estados** — identidad, consentimiento, control de estado (guardando/validación/deshabilitado), notas e historial.\n" +
+          "**Estados** — identidad, consentimiento, control de estado (guardando/validación/deshabilitado), memo del cliente (CR-7), notas e historial.\n" +
           "**Fuente** — mock de Storybook basado en la página; el cableado de producción no se toca.",
       },
     },
   },
-  excludeStories: ["ClientFichaView"],
+  excludeStories: ["ClientFichaView", "NoMemo"],
 } satisfies Meta;
 
 export default meta;
@@ -244,4 +276,10 @@ export const Default: Story = {
 
 export const SavingState: Story = {
   render: () => <ClientFichaView isSaving />,
+};
+
+/** CR-7 edge: a customer with no closed conversation producing a memo shows an
+ *  empty memo surface, no error. */
+export const NoMemo: Story = {
+  render: () => <ClientFichaView memo="" />,
 };

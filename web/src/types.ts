@@ -40,6 +40,37 @@ export interface CustomerNote {
   created_at: string | null;
 }
 
+export type MemoryType =
+  | 'decision'
+  | 'discovery'
+  | 'pattern'
+  | 'preference'
+  | 'customer_memo'
+  | 'summary'
+  | 'session'
+  | 'prompt';
+
+export type MemoryStatus = 'active' | 'needs_review' | 'archived';
+
+/** Memory row mirroring to_memory_dict() (MEM-6 panel /clients/{id}/memories). */
+export interface Memory {
+  id: number;
+  scope: string;
+  entity_id: string;
+  tipo: MemoryType;
+  titulo: string;
+  contenido: string;
+  topic_key: string;
+  pin: boolean;
+  status: MemoryStatus;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface MemoriesResponse {
+  memories: Memory[];
+}
+
 export interface Kpis {
   contacts: number;
   motivos: Array<[string, number]>;
@@ -174,5 +205,7 @@ export interface ClientFichaResponse {
     }>;
   };
   notes: CustomerNote[];
+  /** CR-7: latest customer_memo (empty string when none yet). */
+  memo: string;
   states: CustomerState[];
 }
