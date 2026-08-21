@@ -1,22 +1,23 @@
-"""PR 1 tests — `agent/` declarative tree (config-agente-lumat).
+"""`agent/` declarative tree + loader coverage (config-agente-lumat).
 
-Assertions, mapped to requirements:
+PR 1 asserted the `agent/*.md` personas matched the then-untouched node
+constants. PR 3 deletes those constants (nodes now read through
+`prompts.load`/`prompts.render`), so the surviving equality proofs are:
 
-- AC-3 / AC-6: every `agent/personas/*.md` file is byte-identical to the
-  untouched node constant it replaces (`respond.SYSTEM_PROMPT`,
-  `respond.BRIEF_MODE_SUFFIX`, `classify_intent.SYSTEM_PROMPT`,
-  `summary.SYSTEM_PROMPT`). No node file is edited in this PR, so the constants
-  are the frozen source of truth for our equality tests.
-- AC-1 / AC-5: `agent/prompts/*.md` templates exist with `{{}}` slots.
-- AC-6: `agent/skills/*.md` references exist for the four deterministic gate
-  skills and are declared reference-only (never rendered into a prompt slot).
-- AC-4: `agent/registry.yaml` parses with pyyaml to exactly one agent
-  `orchestrator` and carries the D-A7 schema fields; nothing instantiates a
-  tools/KB/memory rule from it (there is no runtime registry consumer).
+- AC-3: `prompts.FALLBACKS[key]` is byte-identical to each `agent/*.md` file
+  (`test_fallbacks_equal_agent_files`) AND the nodes assemble their LLM
+  messages from the loader (`test_*_persona_and_template` below).
+- AC-1 / AC-5: `agent/prompts/*.md` templates exist with `{{}}` slots, personas
+  are static.
+- AC-6: `agent/skills/*.md` references exist and are never rendered.
+- AC-4: `agent/registry.yaml` parses to exactly one `orchestrator`; no runtime
+  registry consumer.
+- Task 4.2 / AC-8: no node dead constants remain; the canned reply strings stay
+  re-exportable.
 
-All assertions read real files from the `agent/` tree relative to the repo
-root, so they fail (FileNotFoundError / mismatch) until the tree exists — this
-is the RED state for PR 1.
+Node-wiring tests mock the transient boundaries (openai_client, session_scope,
+record_llm_cost) so they run DB-free in the unit suite; the DB-backed integration
+and functional suites are the end-to-end behavior-preservation net (task 3.4).
 """
 
 import logging
@@ -42,26 +43,10 @@ AGENT_KEYS = (
 )
 
 
-# --- AC-3: personas byte-identical to untouched node constants ----------------
-
-def test_personas_static_matches_node_constants(repo_root):
-    from app.chat.nodes.respond import BRIEF_MODE_SUFFIX, SYSTEM_PROMPT
-
-    assert _read(repo_root, "personas/orchestrator.md") == SYSTEM_PROMPT
-    assert _read(repo_root, "personas/orchestrator_brief.md") == BRIEF_MODE_SUFFIX
-
-
-def test_personas_classify_matches_node_constant(repo_root):
-    from app.chat.nodes.classify_intent import SYSTEM_PROMPT
-
-    assert _read(repo_root, "personas/classify.md") == SYSTEM_PROMPT
-
-
-def test_personas_summary_matches_node_constant(repo_root):
-    from app.chat.nodes.summary import SYSTEM_PROMPT
-
-    assert _read(repo_root, "personas/summary.md") == SYSTEM_PROMPT
-
+# --- AC-3: personas byte-identical to the frozen FALLBACKS+files --------------
+# (Node-constant equality lived in PR 1; PR 3 deleted the constants, so the
+# surviving proof is FALLBACKS == agent/*.md == loader output, covered below by
+# test_fallbacks_equal_agent_files plus the node wiring tests at the bottom.)
 
 # --- AC-5: prompt templates are static files with {{}} slots -----------------
 
@@ -212,3 +197,218 @@ def test_render_no_slots_returns_verbatim():
     # A template with zero {{}} returns the file verbatim even with vars given.
     assert prompts.render("personas/classify.md") is not None
     assert prompts.render("personas/classify.md") == prompts.load("personas/classify.md")
+
+
+# --- PR 3: nodes wire their LLM messages through the loader (tasks 3.1-3.3) --
+# These prove AC-3 wiring at unit level without a DB: the node assembles the
+# exact system persona + rendered template that the loader supplies. The
+# transient boundaries (openai_client, session_scope, record_llm_cost) are
+# mocked; the DB-backed integration/functional suites are the end-to-end net.
+#
+# RED-first: `prompts.load`/`prompts.render` do not yet exist inside the node
+# modules until task 3.1-3.3 wires them, so these tests fail to run the node
+# path until the nodes reference the loader.
+
+import contextlib  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+from unittest import mock  # noqa: E402
+
+from app.chat.nodes import classify_intent as _ci  # noqa: E402
+from app.chat.nodes import respond as _rn  # noqa: E402
+from app.chat.nodes import summary as _sm  # noqa: E402
+
+
+class _FakeCompletion:
+    def __init__(self, content: str):
+        self.usage = mock.Mock(prompt_tokens=20, completion_tokens=10)
+        self.choices = [mock.Mock(message=mock.Mock(content=content))]
+
+
+class _FakeClient:
+    """Mimics openai_client().chat.completions.create capturing the payload.
+
+    The OpenAI client is a dotted attribute chain (`client.chat.completions
+    .create(...)`), so `chat`/`completions` are attributes resolving to self.
+    """
+
+    def __init__(self, reply_content: str = "ok"):
+        self.captured: list[dict] = []
+        self._reply_content = reply_content
+        self.chat = self
+        self.completions = self
+
+    def create(self, **kwargs):
+        self.captured.append(kwargs)
+        return _FakeCompletion(self._reply_content)
+
+
+def _noop_session_scope():
+    """Function-typed stand-in for `with session_scope() as session:`.
+
+    Yielded object is a Mock so summary reads (`session.get`/`session.scalar`)
+    and writes (`conv.summary = ...`) succeed without a real DB.
+    """
+    return contextlib.nullcontext(mock.Mock())
+
+
+@pytest.fixture
+def respond_client():
+    """Mock the respond node's boundaries; returns the capturing fake client."""
+    client = _FakeClient()
+    with (
+        mock.patch.object(_rn, "openai_client", return_value=client),
+        mock.patch.object(_rn, "session_scope", _noop_session_scope),
+        mock.patch.object(_rn, "record_llm_cost", return_value=0),
+    ):
+        yield client
+
+
+def test_respond_answer_from_kb_persona_and_template(respond_client):
+    # AC-3 static slot unchanged: system == orchestrator persona via loader.
+    # AC-3 typed template identical: user == render(prompts/respond.md).
+    _rn._answer_from_kb("hola", "chunk uno\nchunk dos", message_id=7)
+    call = respond_client.captured[-1]
+    assert call["messages"][0]["content"] == prompts.load("personas/orchestrator.md")
+    assert call["messages"][1]["content"] == prompts.render(
+        "prompts/respond.md", kb_text="chunk uno\nchunk dos", user_input="hola"
+    )
+
+
+def test_respond_answer_from_kb_brief_mode_appends_brief_persona(respond_client):
+    # D-A5: brief (80%+ cost limit) appends the brief persona after the base.
+    _rn._answer_from_kb("hola", "chunk", message_id=8, brief=True)
+    call = respond_client.captured[-1]
+    assert call["messages"][0]["content"] == (
+        prompts.load("personas/orchestrator.md")
+        + prompts.load("personas/orchestrator_brief.md")
+    )
+
+
+def test_respond_answer_from_kb_memory_block_injected(respond_client):
+    # CM-7: a stored customer memory is injected as a read-only block beside kb.
+    _rn._answer_from_kb(
+        "hola", "chunk", message_id=9, memory_context="cliente probó varias reparaciones"
+    )
+    call = respond_client.captured[-1]
+    assert "<memory>" in call["messages"][1]["content"]
+    assert "reparaciones" in call["messages"][1]["content"]
+
+
+@pytest.fixture
+def classify_client():
+    client = _FakeClient(reply_content='{"intent": "caldera", "service": "caldera", "priority": "media", "status": "abierto", "injection": false}')
+    with (
+        mock.patch.object(_ci, "openai_client", return_value=client),
+        mock.patch.object(_ci, "session_scope", _noop_session_scope),
+        mock.patch.object(_ci, "record_llm_cost", return_value=0),
+    ):
+        yield client
+
+
+def test_classify_llm_classify_persona_and_template(classify_client):
+    # AC-3 static slot unchanged + template identical: persona via loader,
+    # user text inside the <user_input> slot (SH-4 input-as-data).
+    result = _ci._llm_classify("necesito una caldera", message_id=5)
+    call = classify_client.captured[-1]
+    assert call["messages"][0]["content"] == prompts.load("personas/classify.md")
+    assert call["messages"][1]["content"] == prompts.render(
+        "prompts/classify.md", user_input="necesito una caldera"
+    )
+    assert result["intent"] == "caldera"
+    assert result["injection"] is False
+
+
+def _dummy_state(**overrides):
+    base = dict(
+        conversation_id=101,
+        turn=3,
+        intent="calefont",
+        case={"id": 9, "service": "calefont"},
+        captured={"marca": "Splendid"},
+        escalate=True,
+        escalate_reason="kb_miss",
+        phone="+56911112222",
+        window=[],  # unused by _summary_context
+    )
+    base.update(overrides)
+    return mock.Mock(**base)
+
+
+def test_summary_context_computes_slot_values():
+    # Task 3.3: _summary_context returns the exact slot-value dict that render
+    # feeds (name falls back to phone when customer has no name).
+    customer = SimpleNamespace(name="Juan Perez")
+    ctx = _sm._summary_context(_dummy_state(), customer)
+    assert ctx["name"] == "Juan Perez"
+    assert ctx["phone"] == "+56911112222"
+    assert ctx["conversation_id"] == 101
+    assert ctx["turn"] == 3
+    assert ctx["intent"] == "calefont"
+    assert ctx["case"] == {"id": 9, "service": "calefont"}
+    assert ctx["captured"] == {"marca": "Splendid"}
+    assert ctx["escalate"] is True
+    assert ctx["escalate_reason"] == "kb_miss"
+
+
+def test_summary_context_nameless_falls_back_to_phone():
+    # Triangle: customer present but nameless → name uses the phone.
+    ctx = _sm._summary_context(_dummy_state(), SimpleNamespace(name=None))
+    assert ctx["name"] == "+56911112222"
+
+
+def test_summary_context_roundtrips_through_template():
+    # AC-3 template identical: render(prompts/summary.md, **_summary_context)
+    # reproduces the pre-change f-string exactly.
+    ctx = _sm._summary_context(_dummy_state(), SimpleNamespace(name="Juan Perez"))
+    expected = (
+        "Cliente: Juan Perez (telefono +56911112222)\n"
+        "Conversacion 101, turno 3\n"
+        "Intencion: calefont\n"
+        "Clasificacion del caso: {'id': 9, 'service': 'calefont'}\n"
+        "Datos capturados: {'marca': 'Splendid'}\n"
+        "Escalada: True (kb_miss)"
+    )
+    assert prompts.render("prompts/summary.md", **ctx) == expected
+
+
+@pytest.fixture
+def summary_client():
+    client = _FakeClient(reply_content="resumen del caso")
+    with (
+        mock.patch.object(_sm, "openai_client", return_value=client),
+        mock.patch.object(_sm, "session_scope", _noop_session_scope),
+        mock.patch.object(_sm, "record_llm_cost", return_value=0),
+    ):
+        yield client
+
+
+def test_summary_generate_summary_persona_and_template(summary_client):
+    # AC-3 wire: system == summary persona via loader; user == rendered context.
+    state = _dummy_state()
+    text = _sm.generate_summary(state, SimpleNamespace(name="Juan Perez"))
+    call = summary_client.captured[-1]
+    assert call["messages"][0]["content"] == prompts.load("personas/summary.md")
+    assert call["messages"][1]["content"] == prompts.render(
+        "prompts/summary.md", **_sm._summary_context(state, SimpleNamespace(name="Juan Perez"))
+    )
+    assert text == "resumen del caso"
+
+
+# --- Task 4.2 / AC-8: no dead constants left; canned replies re-exported ------
+
+def test_node_dead_constants_removed():
+    # Task 4.2: the extracted prompt constants are gone from the nodes.
+    assert not hasattr(_rn, "SYSTEM_PROMPT")
+    assert not hasattr(_rn, "BRIEF_MODE_SUFFIX")
+    assert not hasattr(_ci, "SYSTEM_PROMPT")
+    assert not hasattr(_sm, "SYSTEM_PROMPT")
+
+
+def test_canned_replies_still_reexported():
+    # AC-8: canned customer-facing strings keep their unchanged values from the
+    # same modules tests import them from (import compatibility).
+    from app.chat.nodes.handoff import HANDOFF_REPLY
+
+    assert _rn.CANNOT_ANSWER_REPLY.startswith("Lo siento, no puedo responder")
+    assert _rn.CLARIFICATION_REPLY.startswith("No entendí tu mensaje")
+    assert HANDOFF_REPLY  # import resolves; value non-empty
