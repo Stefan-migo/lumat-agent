@@ -19,13 +19,27 @@ root, so they fail (FileNotFoundError / mismatch) until the tree exists — this
 is the RED state for PR 1.
 """
 
+import logging
 import pathlib
 
+import pytest
 import yaml
 
 
 def _read(repo_root: pathlib.Path, rel: str) -> str:
     return (repo_root / "agent" / rel).read_text(encoding="utf-8")
+
+
+# Loader itself: must resolve keys against the repo-root agent/ directory.
+AGENT_KEYS = (
+    "personas/orchestrator.md",
+    "personas/orchestrator_brief.md",
+    "personas/classify.md",
+    "personas/summary.md",
+    "prompts/respond.md",
+    "prompts/classify.md",
+    "prompts/summary.md",
+)
 
 
 # --- AC-3: personas byte-identical to untouched node constants ----------------
@@ -124,3 +138,77 @@ def test_registry_has_no_runtime_consumer(repo_root):
         if path.exists():
             text = path.read_text(encoding="utf-8")
             assert "registry.yaml" not in text, f"{prog} must not read registry"
+
+
+# --- PR 2: loader (app/services/prompts.py) --------------------------------
+
+from app.services import prompts  # noqa: E402  (loader not yet implemented → RED)
+
+
+def test_load_returns_file_verbatim(repo_root):
+    # AC-2 "File present": load() returns the agent/ file byte-for-byte.
+    for key in AGENT_KEYS:
+        assert prompts.load(key) == _read(repo_root, key), f"load({key}) != file"
+
+
+def test_load_missing_key_falls_back_to_literal(tmp_path, monkeypatch, caplog):
+    # AC-2 "File missing": when an agent/ file is absent the loader returns the
+    # frozen FALLBACKS literal and logs a warning (no partial-tree crash).
+    # Point the loader at an empty dir so every known key reports "missing".
+    key = "personas/orchestrator.md"
+    monkeypatch.setattr(prompts, "_AGENT_DIR", tmp_path)
+    prompts.load.cache_clear()
+
+    with caplog.at_level(logging.WARNING, logger="app.services.prompts"):
+        result = prompts.load(key)
+
+    assert result == prompts.FALLBACKS[key]
+    assert any(r.levelno == logging.WARNING for r in caplog.records)
+
+
+def test_fallbacks_equal_agent_files(repo_root):
+    # AC-3: the frozen FALLBACKS literals are byte-identical to agent/*.md.
+    for key in AGENT_KEYS:
+        assert prompts.FALLBACKS[key] == _read(repo_root, key), f"FALLBACKS {key} != file"
+
+
+def test_render_substitutes_all_slots():
+    # AC-5 "All variables provided": every {{name}} is replaced.
+    out = prompts.render(
+        "prompts/respond.md",
+        kb_text="<kb text>",
+        user_input="hola",
+    )
+    assert out == "<kb><kb text></kb>\n\n<user_input>hola</user_input>"
+
+
+def test_render_missing_var_raises():
+    # AC-5 "Missing variable": rendering without a required var raises.
+    with pytest.raises(KeyError):
+        prompts.render("prompts/respond.md", kb_text="x")
+
+
+def test_render_unknown_var_raises():
+    # AC-5: a typo'd extra var is rejected too.
+    with pytest.raises(KeyError):
+        prompts.render("prompts/classify.md", user_input="hola", bogus="x")
+
+
+def test_render_missing_key_raises():
+    # render() is for templates; a unknown key with no {{}} is valid only when
+    # the key resolves, so an unknown key must raise (fail fast).
+    with pytest.raises(KeyError):
+        prompts.render("prompts/does_not_exist.md")
+
+
+def test_render_persona_static_returns_verbatim():
+    # AC-5 persona-static guarantee: no {{}} → content returned unchanged.
+    persona = prompts.load("personas/summary.md")
+    assert "{{" not in persona
+    assert prompts.render("personas/summary.md") == persona
+
+
+def test_render_no_slots_returns_verbatim():
+    # A template with zero {{}} returns the file verbatim even with vars given.
+    assert prompts.render("personas/classify.md") is not None
+    assert prompts.render("personas/classify.md") == prompts.load("personas/classify.md")
