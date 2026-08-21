@@ -158,9 +158,6 @@ export function ClientFichaView({
       </div>
     </Card>
   );
-      </div>
-    </Card>
-  );
 
   const stateControl = (
     <Card title="Estado del cliente">
@@ -285,5 +282,4 @@ export const SavingState: Story = {
  *  empty memo surface, no error. */
 export const NoMemo: Story = {
   render: () => <ClientFichaView memo="" />,
-};
 };
