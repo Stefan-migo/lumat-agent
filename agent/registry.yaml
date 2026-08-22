@@ -1,0 +1,12 @@
+# registry.yaml — declarative agent registry (data-only, AC-4).
+# D-A7: this file is validated by a test; there is NO runtime reader until
+# the H2 multi-agent router (Fase-2). No tools/KB/memory rule is enforced
+# from here today. See agent/README.md for D6 migration triggers.
+agent:
+  name: orchestrator
+  persona: personas/orchestrator.md
+  skills: [sdb, emergency, handoff, capture]
+  tools_whitelist: []
+  kb_scope: null
+  memoria_scope: null
+  model: deepseek-chat
