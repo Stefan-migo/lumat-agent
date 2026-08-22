@@ -9,10 +9,10 @@ iteration.
 ```
 agent/
 ├── personas/            # system prompts (static, never {{}})
-│   ├── orchestrator.md          # respond.SYSTEM_PROMPT (AC-3)
-│   ├── orchestrator_brief.md    # respond.BRIEF_MODE_SUFFIX (SS-3 short mode)
-│   ├── classify.md              # classify_intent.SYSTEM_PROMPT
-│   └── summary.md               # summary.SYSTEM_PROMPT
+│   ├── orchestrator.md          # system persona (loaded via prompts.load)
+│   ├── orchestrator_brief.md    # short-mode persona (SS-3, appended when brief)
+│   ├── classify.md              # classification persona
+│   └── summary.md               # summary persona
 ├── prompts/             # user-slot templates ({{var}} placeholders)
 │   ├── respond.md               # <kb>{{kb_text}}</kb> / <user_input>{{user_input}}</user_input>
 │   ├── classify.md              # <user_input>{{user_input}}</user_input>
@@ -38,9 +38,9 @@ agent/
 
 All files under `agent/` are editable without a code deploy. After editing:
 
-- Run `pytest tests/unit/ -q` — asserts every persona byte-matches its node
-  constant (AC-3), templates carry the right slots, and the registry stays as
-  exactly one `orchestrator` (AC-4).
+- Run `pytest tests/unit/ -q` — asserts every persona byte-matches its frozen
+  `FALLBACKS` literal in `app/services/prompts.py` (AC-3), templates carry the
+  right slots, and the registry stays as exactly one `orchestrator` (AC-4).
 - Do not put customer-facing copy into `agent/`; canned replies stay in code
   (`CANNOT_ANSWER_REPLY`, `CLARIFICATION_REPLY`, `HANDOFF_REPLY`).
 

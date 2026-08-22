@@ -16,27 +16,30 @@ from sqlalchemy import select
 from app.chat.state import ConversationState
 from app.db import session_scope
 from app.models import Case, Conversation, Customer
+from app.services import prompts
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
 
-SYSTEM_PROMPT = (
-    "Eres el asistente de Lumat. Genera un resumen breve y conciso de la "
-    "conversación con el cliente, en español: cliente (nombre o teléfono), "
-    "motivo/equipo, datos capturados, clasificación del caso y siguiente paso. "
-    "Responde SOLO con el resumen, sin preámbulo."
-)
 
+def _summary_context(state: ConversationState, customer: Customer) -> dict:
+    """Return the prompt-template slot values for a summary render (task 3.3).
 
-def _summary_context(state: ConversationState, customer: Customer) -> str:
+    The customer name falls back to the phone when absent, matching the
+    pre-change f-string. ``generate_summary`` renders these into
+    ``prompts/summary.md``.
+    """
     name = customer.name if customer else None
-    return (
-        f"Cliente: {name or state.phone} (telefono {state.phone})\n"
-        f"Conversacion {state.conversation_id}, turno {state.turn}\n"
-        f"Intencion: {state.intent}\n"
-        f"Clasificacion del caso: {state.case or {}}\n"
-        f"Datos capturados: {state.captured or {}}\n"
-        f"Escalada: {state.escalate} ({state.escalate_reason or '-'})"
-    )
+    return {
+        "name": name or state.phone,
+        "phone": state.phone,
+        "conversation_id": state.conversation_id,
+        "turn": state.turn,
+        "intent": state.intent,
+        "case": state.case or {},
+        "captured": state.captured or {},
+        "escalate": state.escalate,
+        "escalate_reason": state.escalate_reason or "-",
+    }
 
 
 def generate_summary(state: ConversationState, customer: Customer | None) -> str:
@@ -51,8 +54,8 @@ def generate_summary(state: ConversationState, customer: Customer | None) -> str
     response = client.chat.completions.create(
         model=CHAT_MODEL,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": context},
+            {"role": "system", "content": prompts.load("personas/summary.md")},
+            {"role": "user", "content": prompts.render("prompts/summary.md", **context)},
         ],
         temperature=0,
     )
