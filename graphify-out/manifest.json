@@ -1545,9 +1545,9 @@
     "semantic_hash": "b14da1253ea5f2bef0ae693513bf856c"
   },
   "agent/registry.yaml": {
-    "mtime": 1787396282.600303,
-    "ast_hash": "fee28c51b6fe334fa22b31477030bc5a",
-    "semantic_hash": "fee28c51b6fe334fa22b31477030bc5a"
+    "mtime": 1787522123.5022147,
+    "ast_hash": "67c2a7a5f4e103e20ace3d7f7e677b19",
+    "semantic_hash": "67c2a7a5f4e103e20ace3d7f7e677b19"
   },
   "agent/skills/capture.md": {
     "mtime": 1787396282.600303,
@@ -1608,5 +1608,95 @@
     "mtime": 1787326913.9152184,
     "ast_hash": "1e319dc3986e5df99b9b04e783573a16",
     "semantic_hash": "1e319dc3986e5df99b9b04e783573a16"
+  },
+  "app/agent_registry.py": {
+    "mtime": 1787522179.6151361,
+    "ast_hash": "efde370a8af75ad712372a5fa7014423",
+    "semantic_hash": "efde370a8af75ad712372a5fa7014423"
+  },
+  "tests/unit/test_agent_registry.py": {
+    "mtime": 1787522160.386163,
+    "ast_hash": "ddf290fc6305f5da0d29ec2da7e17ebf",
+    "semantic_hash": "ddf290fc6305f5da0d29ec2da7e17ebf"
+  },
+  "agent/personas/research_triage.md": {
+    "mtime": 1787522128.9342072,
+    "ast_hash": "6e00df6a99302b473222d3d9f3379201",
+    "semantic_hash": "6e00df6a99302b473222d3d9f3379201"
+  },
+  "openspec/changes/archive/2026-08-20-memoria-persistente-lumat/proposal.md": {
+    "mtime": 1787326913.9135962,
+    "ast_hash": "0653eaba646b5e752a20943c55a8b2f7",
+    "semantic_hash": "0653eaba646b5e752a20943c55a8b2f7"
+  },
+  "openspec/changes/archive/2026-08-20-memoria-persistente-lumat/specs/memory/spec.md": {
+    "mtime": 1787326902.186734,
+    "ast_hash": "1e319dc3986e5df99b9b04e783573a16",
+    "semantic_hash": "1e319dc3986e5df99b9b04e783573a16"
+  },
+  "openspec/changes/archive/2026-08-20-memoria-persistente-lumat/tasks.md": {
+    "mtime": 1787326913.9144185,
+    "ast_hash": "2b798f390ff99358ca4209aa4b1ab4cc",
+    "semantic_hash": "2b798f390ff99358ca4209aa4b1ab4cc"
+  },
+  "openspec/changes/archive/2026-08-20-storybook-redesign/exploration.md": {
+    "mtime": 1787267256.222832,
+    "ast_hash": "d6fcefa81d0f64996b43d6f416691885",
+    "semantic_hash": "d6fcefa81d0f64996b43d6f416691885"
+  },
+  "openspec/changes/archive/2026-08-20-storybook-redesign/proposal.md": {
+    "mtime": 1787267256.2230058,
+    "ast_hash": "3ff9e17ce7ff0bf9ce595f844c4fe7b0",
+    "semantic_hash": "3ff9e17ce7ff0bf9ce595f844c4fe7b0"
+  },
+  "openspec/changes/archive/2026-08-20-storybook-redesign/specs/panel-design-system/spec.md": {
+    "mtime": 1787267256.2231333,
+    "ast_hash": "8936f8094d081eb72ab6b826d7160e08",
+    "semantic_hash": "8936f8094d081eb72ab6b826d7160e08"
+  },
+  "openspec/changes/archive/2026-08-20-storybook-redesign/tasks.md": {
+    "mtime": 1787267256.2234166,
+    "ast_hash": "734cb0f4bf187d5bb7185c30c885ec84",
+    "semantic_hash": "734cb0f4bf187d5bb7185c30c885ec84"
+  },
+  "openspec/changes/archive/2026-08-21-config-agente-lumat/archive-report.md": {
+    "mtime": 1787396282.6043608,
+    "ast_hash": "541055de183e9c057399843b426cf390",
+    "semantic_hash": "541055de183e9c057399843b426cf390"
+  },
+  "openspec/changes/archive/2026-08-21-config-agente-lumat/exploration.md": {
+    "mtime": 1787396282.6043608,
+    "ast_hash": "98bbe2a87eb1d0e0a9323b74a21a9d3e",
+    "semantic_hash": "98bbe2a87eb1d0e0a9323b74a21a9d3e"
+  },
+  "openspec/changes/archive/2026-08-21-config-agente-lumat/proposal.md": {
+    "mtime": 1787396282.6043608,
+    "ast_hash": "2b8a6a0d5240617e2fc0f4685df9cfb2",
+    "semantic_hash": "2b8a6a0d5240617e2fc0f4685df9cfb2"
+  },
+  "openspec/changes/h2-router-langgraph/design.md": {
+    "mtime": 1787517752.0631034,
+    "ast_hash": "2bcbfcbc0bf3bdff5feec16ec5794a39",
+    "semantic_hash": "2bcbfcbc0bf3bdff5feec16ec5794a39"
+  },
+  "openspec/changes/h2-router-langgraph/proposal.md": {
+    "mtime": 1787517777.7870777,
+    "ast_hash": "27128c4e6ec4d64a411df5cb95032b96",
+    "semantic_hash": "27128c4e6ec4d64a411df5cb95032b96"
+  },
+  "openspec/changes/h2-router-langgraph/specs/agent-config/spec.md": {
+    "mtime": 1787517805.0050502,
+    "ast_hash": "acd6454e37269a2a3fba4f797332b476",
+    "semantic_hash": "acd6454e37269a2a3fba4f797332b476"
+  },
+  "openspec/changes/h2-router-langgraph/specs/agent-orchestration/spec.md": {
+    "mtime": 1787517797.318058,
+    "ast_hash": "918d531b329e245c8022bfda5005f2b0",
+    "semantic_hash": "918d531b329e245c8022bfda5005f2b0"
+  },
+  "openspec/changes/h2-router-langgraph/tasks.md": {
+    "mtime": 1787522224.9250724,
+    "ast_hash": "96ccf302e8f1c8f117f6c0bb0f92feaf",
+    "semantic_hash": "96ccf302e8f1c8f117f6c0bb0f92feaf"
   }
 }
