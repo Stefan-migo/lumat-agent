@@ -236,3 +236,30 @@ def test_orchestrator_sub_agents_fields_frozen(repo_root):
     reg_b = _load(repo_root)
     assert reg_a is not reg_b
     assert reg_a.sub_agents is not reg_b.sub_agents
+
+
+# --- AO-2 / design line 43: registry loaded ONCE (cached at graph construction)
+
+def test_get_registry_caches_single_load(monkeypatch, repo_root):
+    # design.md line 43: ``load_registry()`` runs ONCE at graph construction
+    # (module scope, cached). ``get_registry`` is the cached getter the runtime
+    # dispatch uses; it must not re-read ``registry.yaml`` on every call. The
+    # pure ``load_registry`` still returns fresh objects (frozen test above).
+    import app.agent_registry as reg_module
+
+    calls = {"n": 0}
+    original = reg_module.load_registry
+
+    def counting(path=None):
+        calls["n"] += 1
+        return original(path)
+
+    monkeypatch.setattr(reg_module, "load_registry", counting)
+    monkeypatch.setattr(reg_module, "_registry_cache", None)
+
+    first = reg_module.get_registry(repo_root / "agent" / "registry.yaml")
+    second = reg_module.get_registry(repo_root / "agent" / "registry.yaml")
+
+    assert calls["n"] == 1, "the registry loader must run exactly once"
+    assert first is second, "the cached getter must return the SAME object"
+    assert first.sub_agents["research_triage"].name == "kb-research-triage"

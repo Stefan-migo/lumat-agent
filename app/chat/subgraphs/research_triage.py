@@ -30,7 +30,7 @@ import logging
 
 from langgraph.graph import END, START, StateGraph
 
-from app.agent_registry import RegistryError, load_registry
+from app.agent_registry import RegistryError, get_registry
 from app.chat.nodes import respond as respond_node
 from app.chat.nodes.handoff import handoff
 from app.chat.nodes.orchestrate import RESEARCH_TRIAGE, is_tool_whitelisted
@@ -52,9 +52,9 @@ def _current_text(state: ConversationState) -> str:
 
 
 def _registry_kb_scope() -> list[str] | None:
-    """kb_scope of the research_triage sub-agent from the registry (AO-7)."""
+    """kb_scope of the research_triage sub-agent from the cached registry (AO-7)."""
     try:
-        sub = load_registry().sub_agents.get(RESEARCH_TRIAGE)
+        sub = get_registry().sub_agents.get(RESEARCH_TRIAGE)
     except RegistryError:
         # A broken registry already fails boot (AO-2); fall back to no scope
         # rather than crashing the turn.
@@ -119,7 +119,7 @@ def _kb_check(state: ConversationState) -> dict:
 
 def _sub_whitelist() -> tuple[str, ...] | None:
     try:
-        sub = load_registry().sub_agents.get(RESEARCH_TRIAGE)
+        sub = get_registry().sub_agents.get(RESEARCH_TRIAGE)
     except RegistryError:
         return None
     return sub.tools_whitelist if sub is not None else None
