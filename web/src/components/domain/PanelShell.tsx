@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import type { User } from "../../types";
+import { Badge } from "../primitives/Badge";
+import { Avatar } from "../primitives/Avatar";
 
 export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "kb" | "settings";
 
@@ -107,8 +109,8 @@ const PANEL_SHELL_STYLES = `
 
   .panel-shell {
     min-height: 100vh;
-    background: var(--bg);
-    color: var(--text);
+    background: var(--corp-bg);
+    color: var(--corp-fg);
     font-family: var(--font-sans);
   }
 
@@ -118,8 +120,8 @@ const PANEL_SHELL_STYLES = `
     z-index: var(--z-modal);
     padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-sm);
-    background: var(--primary-800);
-    color: var(--surface);
+    background: var(--corp-primary);
+    color: var(--corp-primary-fg);
     transform: translateY(calc(-100% - var(--space-4)));
   }
 
@@ -139,8 +141,8 @@ const PANEL_SHELL_STYLES = `
     justify-content: space-between;
     gap: var(--space-3);
     padding: var(--space-2) var(--space-4);
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
+    border-bottom: 1px solid var(--corp-border);
+    background: var(--corp-surface);
   }
 
   .panel-shell__brand {
@@ -148,8 +150,8 @@ const PANEL_SHELL_STYLES = `
     gap: var(--space-1);
     padding: var(--space-5) var(--space-4);
     border-left: var(--space-1) solid var(--brand-lime);
-    background: var(--primary-800);
-    color: var(--surface);
+    background: var(--corp-primary);
+    color: var(--corp-primary-fg);
   }
 
   .panel-shell__mobile-brand {
@@ -172,19 +174,19 @@ const PANEL_SHELL_STYLES = `
   }
 
   .panel-shell__mobile-brand .panel-shell__brand-name {
-    color: var(--primary-800);
+    color: var(--corp-primary);
   }
 
   .panel-shell__mobile-brand .panel-shell__brand-context {
-    color: var(--info);
+    color: var(--corp-accent);
   }
 
   .panel-shell__sidebar {
     display: none;
     min-width: 0;
     overflow: hidden;
-    border-right: 1px solid color-mix(in srgb, var(--surface) 25%, transparent);
-    background: var(--primary-800);
+    border-right: 1px solid color-mix(in srgb, var(--corp-primary-fg) 25%, transparent);
+    background: var(--corp-primary);
   }
 
   /* Desktop sidebar renders as one continuous dark-green panel; the mobile
@@ -194,30 +196,34 @@ const PANEL_SHELL_STYLES = `
     min-width: 0;
     min-height: 100%;
     flex-direction: column;
-    background: var(--primary-800);
+    background: var(--corp-primary);
   }
 
   .panel-shell__drawer {
     display: flex;
     min-height: 100%;
     flex-direction: column;
-    background: var(--bg);
+    background: var(--corp-bg);
   }
 
   /* Sidebar controls on the dark green: white text, green hover, lime
    * focus ring (the shared --focus-ring would be invisible on green).
    * Scoped to the sidebar — the drawer keeps the cream/dark styling. */
   .panel-shell__sidebar .panel-shell__navigation-button {
-    color: var(--surface);
+    color: var(--corp-primary-fg);
   }
 
+  /* ponytail: --corp-surface-hover resolves light (--table-head-bg), so the
+   * dark-green sidebar needs a brand-scale hover that the contract slot cannot
+   * provide. Shell-scoped exception: --primary-700 stays on the brand scale
+   * (hex-free), the same lane the active --primary-900 and lime focus use. */
   .panel-shell__sidebar .panel-shell__navigation-button:hover {
     background: var(--primary-700);
   }
 
   .panel-shell__sidebar .panel-shell__navigation-button[aria-current="page"] {
     background: var(--primary-900);
-    color: var(--surface);
+    color: var(--corp-primary-fg);
   }
 
   .panel-shell__sidebar .panel-shell__collapse-button:focus-visible,
@@ -227,8 +233,8 @@ const PANEL_SHELL_STYLES = `
   }
 
   .panel-shell__sidebar .panel-shell__user {
-    border-top-color: color-mix(in srgb, var(--surface) 25%, transparent);
-    color: var(--surface);
+    border-top-color: color-mix(in srgb, var(--corp-primary-fg) 25%, transparent);
+    color: var(--corp-primary-fg);
   }
 
   .panel-shell__sidebar .panel-shell__role {
@@ -269,7 +275,7 @@ const PANEL_SHELL_STYLES = `
     padding: var(--space-2) var(--space-3);
     border-left: var(--space-1) solid transparent;
     background: transparent;
-    color: var(--text);
+    color: var(--corp-fg);
   }
 
   .panel-shell__navigation-button svg {
@@ -284,13 +290,13 @@ const PANEL_SHELL_STYLES = `
   }
 
   .panel-shell__navigation-button:hover {
-    background: var(--table-head-bg);
+    background: var(--corp-surface-hover);
   }
 
   .panel-shell__navigation-button[aria-current="page"] {
     border-left-color: var(--brand-lime);
     background: var(--primary-100);
-    color: var(--primary-800);
+    color: var(--corp-primary);
   }
 
   /* Desktop sidebar collapse toggle: small ghost square icon button
@@ -307,7 +313,7 @@ const PANEL_SHELL_STYLES = `
     margin: 0 var(--space-3) var(--space-3);
     padding: 0;
     background: transparent;
-    color: var(--surface);
+    color: var(--corp-primary-fg);
   }
 
   .panel-shell__collapse-button:hover {
@@ -326,8 +332,8 @@ const PANEL_SHELL_STYLES = `
   .panel-shell__drawer-close {
     padding: var(--space-2) var(--space-3);
     border-color: var(--border-strong);
-    background: var(--surface);
-    color: var(--primary-800);
+    background: var(--corp-surface);
+    color: var(--corp-primary);
   }
 
   .panel-shell__user {
@@ -337,20 +343,8 @@ const PANEL_SHELL_STYLES = `
     align-items: center;
     margin-top: auto;
     padding: var(--space-4);
-    border-top: 1px solid var(--border);
-    color: var(--text);
-  }
-
-  .panel-shell__avatar {
-    display: grid;
-    width: var(--space-8);
-    height: var(--space-8);
-    place-items: center;
-    border-radius: var(--radius-md);
-    background: var(--brand-aqua);
-    color: var(--primary-800);
-    font-size: var(--text-sm);
-    font-weight: var(--weight-bold);
+    border-top: 1px solid var(--corp-border);
+    color: var(--corp-fg);
   }
 
   .panel-shell__user-copy {
@@ -368,7 +362,7 @@ const PANEL_SHELL_STYLES = `
   }
 
   .panel-shell__role {
-    color: var(--text-muted);
+    color: var(--corp-fg-muted);
     font-size: var(--text-xs);
   }
 
@@ -385,8 +379,8 @@ const PANEL_SHELL_STYLES = `
     justify-content: space-between;
     gap: var(--space-3);
     padding-right: var(--space-4);
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
+    background: var(--corp-surface);
+    border-bottom: 1px solid var(--corp-border);
   }
 
   .panel-shell__header {
@@ -395,7 +389,7 @@ const PANEL_SHELL_STYLES = `
     min-width: 0;
     align-items: center;
     padding: var(--space-4) var(--space-6);
-    color: var(--text);
+    color: var(--corp-fg);
   }
 
   .panel-shell__header-badge {
@@ -410,7 +404,7 @@ const PANEL_SHELL_STYLES = `
     font-weight: var(--weight-semibold);
     line-height: var(--leading-tight);
     letter-spacing: -0.01em;
-    color: var(--text);
+    color: var(--corp-fg);
   }
 
   .panel-shell__content {
@@ -447,12 +441,12 @@ const PANEL_SHELL_STYLES = `
     justify-content: space-between;
     gap: var(--space-2);
     padding: var(--space-3) var(--space-4);
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--corp-border);
   }
 
   .panel-shell__drawer-title {
     margin: 0;
-    color: var(--text);
+    color: var(--corp-fg);
     font-size: var(--text-md);
   }
 
@@ -569,7 +563,7 @@ function UserContext({ user, compact = false }: { user: User; compact?: boolean 
       aria-label={compact ? `${user.username} — ${role}` : undefined}
       title={compact ? `${user.username} — ${role}` : undefined}
     >
-      <span className="panel-shell__avatar" aria-hidden="true">{user.username.slice(0, 1).toUpperCase()}</span>
+      <Avatar name={user.username} className="panel-shell__user-avatar" />
       {compact ? null : (
         <span className="panel-shell__user-copy">
           <span className="panel-shell__username">{user.username}</span>
@@ -743,7 +737,9 @@ export function PanelShell({
             <h2 className="panel-shell__header-title">{NAVIGATION[currentView].label}</h2>
           </header>
           {statusBadge ? (
-            <div className="panel-shell__header-badge">{statusBadge}</div>
+            <div className="panel-shell__header-badge">
+              <Badge>{statusBadge}</Badge>
+            </div>
           ) : null}
         </div>
         <div id="panel-main-content" className="panel-shell__content" tabIndex={-1}>
