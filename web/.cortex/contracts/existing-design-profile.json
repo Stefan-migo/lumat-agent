@@ -1,0 +1,15 @@
+{
+  "id": "cortex-design-profile",
+  "stack": "vite-react",
+  "presentColors": {
+    "primary": "#6b56f0",
+    "secondary": "#0f0f23",
+    "text": "#f5f0ff"
+  },
+  "presentTypography": ["Inter", "Space Grotesk", "monospace"],
+  "existingTokens": {
+    "--lenis-ease": "0.3s",
+    "--scroll-depth": "50vh"
+  },
+  "notes": ["Existing tokens captured before port"]
+}

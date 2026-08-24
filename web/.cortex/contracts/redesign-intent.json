@@ -1,0 +1,9 @@
+{
+  "id": "cortex-redesign-intent",
+  "brief": "Portable, stack-agnostic Cortex design core with canonical token namespace",
+  "derivedTokens": [],
+  "constraints": ["dark-only"],
+  "notes": [
+    "Scroll narrative is a DRL concept; reserved, not emitted as tokens (VA-005)"
+  ]
+}
