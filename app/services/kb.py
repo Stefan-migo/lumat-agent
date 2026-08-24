@@ -289,26 +289,37 @@ def retrieve(
     query: str,
     top_k: int = DEFAULT_TOP_K,
     min_sim: float = DEFAULT_MIN_SIM,
+    scope: list[str] | None = None,
 ) -> list[dict]:
     """Semantic retrieval over the ACTIVE versions of enabled documents.
 
     Filters: kb_documents.active AND kb_chunks.version == active_version.
     Cosine similarity >= min_sim (pgvector <=> distance); ordered best-first.
     Below-threshold queries return [] -> the CM-4 "cannot answer reliably" path.
+
+    ``scope`` (AO-7): when provided (e.g. a sub-agent's ``kb_scope``), only
+    chunks whose ``source_meta.category`` (JSONB) is in the scope list are
+    returned. ``scope=None`` returns the unfiltered active-version set —
+    backward compatible with today's behavior.
     """
     query_embedding, _ = embed_texts([query])
     if not query_embedding:
         return []
     vec = query_embedding[0]
     distance = KbChunk.embedding.cosine_distance(vec)
+    filters = [
+        KbDocument.active.is_(True),
+        KbChunk.version == KbDocument.active_version,
+        distance <= 1 - min_sim,
+    ]
+    if scope is not None:
+        if not scope:
+            return []  # empty scope matches nothing by definition
+        filters.append(KbChunk.source_meta["category"].astext.in_(scope))
     rows = session.execute(
         select(KbChunk, distance.label("distance"))
         .join(KbDocument, KbChunk.document_id == KbDocument.id)
-        .where(
-            KbDocument.active.is_(True),
-            KbChunk.version == KbDocument.active_version,
-            distance <= 1 - min_sim,
-        )
+        .where(*filters)
         .order_by(distance.asc())
         .limit(top_k)
     ).all()
