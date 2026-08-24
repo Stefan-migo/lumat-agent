@@ -35,11 +35,11 @@ Gate: `cd web && npm test` green; aliases resolve to `var(--*)`, zero hex.
 
 Gate: `cd web && npm test && npx tsc -b`; no new hex; all slice-1 colors via `--corp-*`.
 
-- [ ] **T2.1** `web/src/components/primitives/primitives.css`: re-target Button (`--primary-800`→`--corp-primary`, hover `--primary-700`; fg `--surface`→`--corp-primary-fg`), Card/SearchInput/field controls (border→`--corp-border`, surface→`--corp-surface`, text→`--corp-text`, muted→`--corp-fg-muted`, radius→`--corp-radius`, gap→`--corp-gap`), Badge tones, flash-message/pagination (D1,D4). [CST-PRIM-1 · DS-TKN-1]
-- [ ] **T2.2** D7 touch-target block in `primitives.css`: `@media (hover: none)` `min-height: 44px` on `.btn` and `.field__control` (40px desktop preserved) — one CSS block, no `::before`. [CST-PRIM-3 · D7]
-- [ ] **T2.3** D8 complete-states: document-first, CSS-only additions; disabled Button/field keep label+opacity (never `--text-muted` alone); verify Badge neutral/warning/success/danger + Card EmptyState/StateMessage map. Mark **Button loading/empty explicitly deferred** (needs new props+spinner, no consumer — budget). [CST-PRIM-4 · D8]
-- [ ] **T2.4** `web/src/stories/pages/_shared/StateMessage.tsx`: confirm `STATE_TONES` tokenized + `role="status"|"alert"` (D5); add minimal Alert-compat comment, **no full BEM refactor** this slice. [CST-PRIM-5 · D5]
-- [ ] **T2.5** StatusBadge: confirm maps to `<Badge tone>` with `conversationLabel`; **no `.tsx`/CSS change** — covered by existing test. [CST-PRIM-5]
+- [x] **T2.1** `web/src/components/primitives/primitives.css`: re-target Button (`--primary-800`→`--corp-primary`, hover `--primary-700`; fg `--surface`→`--corp-primary-fg`), Card/SearchInput/field controls (border→`--corp-border`, surface→`--corp-surface`, text→`--corp-text`, muted→`--corp-fg-muted`, radius→`--corp-radius`, gap→`--corp-gap`), Badge tones, flash-message/pagination (D1,D4). [CST-PRIM-1 · DS-TKN-1]
+- [x] **T2.2** D7 touch-target block in `primitives.css`: `@media (hover: none)` `min-height: 44px` on `.btn` and `.field__control` (40px desktop preserved) — one CSS block, no `::before`. [CST-PRIM-3 · D7]
+- [x] **T2.3** D8 complete-states: document-first, CSS-only additions; disabled Button/field keep label+opacity (never `--text-muted` alone); verify Badge neutral/warning/success/danger + Card EmptyState/StateMessage map. Mark **Button loading/empty explicitly deferred** (needs new props+spinner, no consumer — budget). [CST-PRIM-4 · D8]
+- [x] **T2.4** `web/src/stories/pages/_shared/StateMessage.tsx`: confirm `STATE_TONES` tokenized + `role="status"|"alert"` (D5); add minimal Alert-compat comment, **no full BEM refactor** this slice. [CST-PRIM-5 · D5]
+- [x] **T2.5** StatusBadge: confirm maps to `<Badge tone>` with `conversationLabel`; **no `.tsx`/CSS change** — covered by existing test. [CST-PRIM-5]
 
 ## Phase 3 — B3 Micro-changes (PR 3)
 
