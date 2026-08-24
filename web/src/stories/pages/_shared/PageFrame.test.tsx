@@ -41,7 +41,7 @@ describe("PageFrame (DS-UI-FRAME)", () => {
     expect(screen.getByText("contenido principal")).toBeInTheDocument();
   });
 
-  it("emits the titlebar lime rail and tint via tokenized classes", () => {
+  it("emits a tokenized titlebar with no lime rail and no forest tint", () => {
     const { container } = render(
       <PageFrame title="Panel">
         <p>contenido</p>

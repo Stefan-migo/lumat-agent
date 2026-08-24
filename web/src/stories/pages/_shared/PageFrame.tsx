@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import { PageHeader } from "./PageHeader";
 
-/** Shared page shell (design D2; DS-UI-FRAME). Owns the titlebar (lime leading
- *  rail over a soft forest `--primary-100` tint, echoing the `panel-shell` brand
- *  block and the active navigation item), an optional banner slot (`state`)
- *  for StateMessage banners, and the content region. One contract for every
- *  page story instead of nine copies of the shell (the drift this redesign
- *  exists to remove). */
+/** Shared page shell (design D2; DS-UI-FRAME). Owns a text-only titlebar
+ *  (dark title + muted meta on the cream page bg; no lime rail, no forest
+ *  tint — those read as banners next to the panel header), an optional
+ *  banner slot (`state`) for subtle StateMessage banners, and the content
+ *  region. One contract for every page story instead of nine copies of the
+ *  shell (the drift this redesign exists to remove). */
 const PAGE_FRAME_STYLES = `
   .page-frame {
     display: grid;
@@ -15,11 +15,7 @@ const PAGE_FRAME_STYLES = `
   }
 
   .page-frame__titlebar {
-    padding: var(--space-4) var(--space-4) 0;
-    border: 1px solid var(--border);
-    border-left: var(--space-1) solid var(--brand-lime);
-    border-radius: var(--radius-md);
-    background: var(--primary-100);
+    padding: var(--space-2) 0 var(--space-4);
   }
 
   .page-frame__banner {
