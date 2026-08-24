@@ -22,6 +22,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy import func, select
 
+from app.chat.nodes.handoff import HANDOFF_REPLY  # noqa: E402
 from app.chat.nodes.respond import CANNOT_ANSWER_REPLY  # noqa: E402
 from app.chat.state import MENU_CATEGORIES  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
@@ -225,9 +226,9 @@ def test_hh3_two_failures_escalate(client, mock_openai_chat, mock_meta_send):
 def test_cm6_kb_miss_logs_unresolved_and_escalates(
     client, mock_openai_chat, fake_embedder, mock_meta_send
 ):
-    """Empty KB -> retrieval returns nothing -> cannot-answer (deterministic,
-    no respond LLM call), the question is logged unresolved (CM-6), and the
-    conversation escalates by default."""
+    """Empty KB -> scoped research_triage miss -> handoff (H2/AO-8: a sub-agent
+    that cannot resolve hands off rather than loop), the question is logged
+    unresolved (CM-6), and the conversation escalates by default."""
     post_message(client, "wamid.cm6.1", "hola")
     post_message(client, "wamid.cm6.2", "cuanto cuesta la revision anual")
 
@@ -243,7 +244,9 @@ def test_cm6_kb_miss_logs_unresolved_and_escalates(
             )
         ).one()
 
-    assert replies[1] == CANNOT_ANSWER_REPLY  # CM-4 deterministic cannot-answer
+    # H2 (PR 2, AO-8): the scoped research miss hands off directly (the reply
+    # is the handoff message, not respond's canned cannot-answer).
+    assert replies[1] == HANDOFF_REPLY
     assert conversation.state == ConversationState.HUMAN  # default escalation
     # CM-6: question + context logged on the inbound message payload
     assert (inbound.payload or {}).get("unresolved") is True

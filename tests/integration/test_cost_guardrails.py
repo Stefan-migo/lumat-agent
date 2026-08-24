@@ -470,6 +470,9 @@ def test_conservative_mode_brief_respond(mock_openai_chat, fake_embedder, no_rea
             title="Manual",
             fmt=DocumentFormat.MD,
             content=b"cuanto cuesta la revision anual de calefont: 15000 pesos",
+            # H2 (PR 2, AO-7): the valores query is answered by the scoped
+            # research_triage sub-graph, so the doc needs a values category.
+            source_meta={"category": "valores"},
         )
         session.commit()
     conv_id = _seed("mi calefont no enciende", "wamid.cg5")

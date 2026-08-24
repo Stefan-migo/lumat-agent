@@ -173,9 +173,18 @@ def test_cm2_skip_is_unknown_and_non_blocking(mock_openai_chat):
 
 
 def _seed_kb_doc(text: str) -> None:
+    # H2 (PR 2, AO-7): KB retail (valores) queries are answered by the scoped
+    # research_triage sub-graph, which only retrieves chunks whose
+    # source_meta.category is in its kb_scope. Seed the manual with the
+    # matching category so the scoped retrieval can find it (same semantic
+    # hit the pre-H2 unscoped path produced).
     with SessionLocal() as session:
         kb_service.ingest_document(
-            session, title="Manual", fmt=DocumentFormat.MD, content=text.encode()
+            session,
+            title="Manual",
+            fmt=DocumentFormat.MD,
+            content=text.encode(),
+            source_meta={"category": "valores"},
         )
         session.commit()
 
@@ -206,10 +215,14 @@ def test_cm4_kb_miss_cannot_answer_and_logs_unresolved(mock_openai_chat, fake_em
     conv_id = _start_conversation()
     replies = _turn(conv_id, "cuanto cuesta un grifo de cocina marca x", "wamid.miss0")
 
-    assert CANNOT_ANSWER_REPLY in replies  # CM-4: cannot answer reliably
+    # H2 (PR 2, AO-8): the scoped research_triage miss hands off directly
+    # (it does NOT reach respond's canned CANNOT_ANSWER_REPLY); the last reply
+    # is the handoff message announcing human takeover.
+    assert CANNOT_ANSWER_REPLY not in replies
     assert replies[-1] == "Un asesor revisará tu caso y te contactará a la brevedad."
 
-    # CM-6: question + context + timestamp logged (payload flag, no view)
+    # CM-6: question + context + timestamp logged (payload flag, no view); the
+    # research sub-graph preserves the unresolved log before handing off.
     with session_scope() as session:
         unresolved = list_unresolved_questions(session)
     assert len(unresolved) == 1
