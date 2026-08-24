@@ -10,3 +10,49 @@ agent:
   kb_scope: null
   memoria_scope: null
   model: deepseek-chat
+# H2 multi-agent roster (AO-1). The `agent:` block above is IN TACT (AC-4);
+# `sub_agents:` is a NEW sibling key. Each sub-agent declares all seven fields:
+# name / persona / tools_whitelist / kb_scope / memoria_scope / model /
+# temperature. Only research_triage has runtime wiring in slice 1; the other
+# four are data-only (declared, no runtime behavior).
+sub_agents:
+  research_triage:
+    name: kb-research-triage
+    persona: personas/research_triage.md
+    tools_whitelist: ["kb.retrieve"]
+    kb_scope: ["valores", "postventa"]
+    memoria_scope: "customer"
+    model: deepseek-chat
+    temperature: 0
+  retrieval:
+    name: kb-retrieval
+    persona: personas/retrieval.md
+    tools_whitelist: ["kb.retrieve"]
+    kb_scope: null
+    memoria_scope: "customer"
+    model: deepseek-chat
+    temperature: 0
+  customer_records:
+    name: customer-records
+    persona: personas/customer_records.md
+    tools_whitelist: []
+    kb_scope: null
+    memoria_scope: "customer"
+    model: deepseek-chat
+    temperature: 0
+  human_handoff:
+    name: human-handoff
+    persona: personas/human_handoff.md
+    tools_whitelist: []
+    kb_scope: null
+    memoria_scope: "customer"
+    model: deepseek-chat
+    temperature: 0
+  escalation:
+    name: escalation
+    persona: personas/escalation.md
+    tools_whitelist: []
+    kb_scope: null
+    memoria_scope: "customer"
+    model: deepseek-chat
+    temperature: 0
