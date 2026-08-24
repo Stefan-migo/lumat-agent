@@ -44,4 +44,11 @@ describe("Input (T7.2)", () => {
     render(<Input label="Nombre" disabled />);
     expect(screen.getByLabelText("Nombre")).toBeDisabled();
   });
+
+  it("disabled pairing keeps the visible label with the muted control — never color alone (CST-PRIM-4)", () => {
+    render(<Input label="Nombre" disabled />);
+    expect(screen.getByLabelText("Nombre")).toBeDisabled();
+    // The label stays readable text (muted via .field--disabled), not dropped.
+    expect(screen.getByText("Nombre")).toBeInTheDocument();
+  });
 });

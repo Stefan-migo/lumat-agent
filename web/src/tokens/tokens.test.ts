@@ -214,3 +214,27 @@ describe('design tokens — corp-* alias layer (CST-ALIAS-1..5 · DS-TKN-10..12)
     expect(nonCorp.get('--space-3')).toBe('12px');
   });
 });
+
+describe('primitives.css — slice-1 catalog contract (CST-PRIM-1/3 · D7)', () => {
+  const primitivesRaw = readFileSync(
+    join(componentsRoot, 'components', 'primitives', 'primitives.css'),
+    'utf8',
+  );
+
+  it('is hex-free — every value resolves through tokens (CST-PRIM-1)', () => {
+    const hex = primitivesRaw.match(/#[0-9a-fA-F]{3,6}\b/);
+    expect(hex).toBeNull();
+  });
+
+  it('D7: .btn and .field__control get a 44px touch target under (hover: none) (CST-PRIM-3)', () => {
+    const mediaRe = /@media\s*\(hover\s*:\s*none\)\s*\{([\s\S]*?)\n\}/;
+    const match = primitivesRaw.match(mediaRe);
+    expect(match, 'primitives.css must define an @media (hover: none) block').not.toBeNull();
+    const mediaBody = match![1];
+    // The touch block groups both selectors into one rule (comma list) and sets
+    // a 44px min-height on touch devices; desktop keeps 40px (no media bump).
+    expect(mediaBody).toMatch(/\.btn\s*,/);
+    expect(mediaBody).toMatch(/\.field__control/);
+    expect(mediaBody).toMatch(/min-height\s*:\s*44px/);
+  });
+});

@@ -52,12 +52,12 @@ Gate: `cd web && npm test`; doc matches token source.
 
 Gate: `cd web && npm test && npm run build-storybook`; viewports 390/640/768/1024/1280px.
 
-- [ ] **T4.1** `primitives*.test.tsx` — extend per-component smoke: renders, hex-free source scan, disabled pairing dims+`aria-disabled`/label. [CST-PRIM-1,4]
-- [ ] **T4.2** `tokens.test.ts` — alias spot-check asserts slots resolve to existing tokens (fallback size/w/h documented, never hardcoded). [CST-ALIAS-4,1]
-- [ ] **T4.3** `.btn`/`.field__control` ≥44px under `(hover:none)` — CSS media-check test (D7). [CST-PRIM-3]
-- [ ] **T4.4** StateMessage RTL: `role=` + visible Spanish label + tone (danger→`role=alert`, loading→`role=status`). [CST-PRIM-5]
-- [ ] **T4.5** Storybook: `build-storybook` + viewport review slice-1 primitives (Button/Badge/Card/Input/Select/Textarea) at 390/640/768/1024/1280px; record results. [CST-PRIM-6; success-criteria]
-- [ ] **T4.6** Hex-free audit: no raw hex in newly changed files under `web/src`. [CST-PRIM-1 · DS-TKN-10]
+- [x] **T4.1** `primitives*.test.tsx` — extend per-component smoke: renders, hex-free source scan, disabled pairing dims+`aria-disabled`/label. [CST-PRIM-1,4]
+- [x] **T4.2** `tokens.test.ts` — alias spot-check asserts slots resolve to existing tokens (fallback size/w/h documented, never hardcoded). [CST-ALIAS-4,1]
+- [x] **T4.3** `.btn`/`.field__control` ≥44px under `(hover:none)` — CSS media-check test (D7). [CST-PRIM-3]
+- [x] **T4.4** StateMessage RTL: `role=` + visible Spanish label + tone (danger→`role=alert`, loading→`role=status`). [CST-PRIM-5]
+- [x] **T4.5** Storybook: `build-storybook` + viewport review slice-1 primitives (Button/Badge/Card/Input/Select/Textarea) at 390/640/768/1024/1280px; record results. [CST-PRIM-6; success-criteria]
+- [x] **T4.6** Hex-free audit: no raw hex in newly changed files under `web/src`. [CST-PRIM-1 · DS-TKN-10]
 
 ## Delivery Plan (work-unit commits, stacked-to-main)
 
