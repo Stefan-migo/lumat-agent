@@ -124,12 +124,13 @@ describe("DataTable", () => {
 });
 
 describe("tabularNum (DS-UI-TABLES)", () => {
-  it("wraps a numeric cell with tabular-nums alignment for comparable numbers", () => {
+  it("wraps a numeric cell with tabular-nums alignment via --corp-value for comparable numbers", () => {
     const { container } = render(<>{tabularNum(42)}{tabularNum(7)}</>);
     const spans = container.querySelectorAll("span");
     expect(spans).toHaveLength(2);
     for (const span of spans) {
-      expect(span.style.fontVariantNumeric).toBe("tabular-nums");
+      // D3 / CST-ALIAS-5: the numeric alignment resolves through --corp-value.
+      expect(span.style.fontVariantNumeric).toBe("var(--corp-value)");
     }
   });
 });

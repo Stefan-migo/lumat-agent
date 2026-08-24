@@ -113,13 +113,13 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(within(table).getByText(/gasto diario/i)).toBeInTheDocument();
     expect(within(table).getByText(/límite diario/i)).toBeInTheDocument();
     expect(within(table).getByText(/% del límite/i)).toBeInTheDocument();
-    // The numeric cells carry tabular numerals (font-style numeric) so they align.
+    // The numeric cells carry tabular numerals via --corp-value so they align.
     const spendCell = within(table).getByText(`$${snap.daily_spend.toFixed(4)}`);
-    expect(spendCell.style.fontVariantNumeric).toBe("tabular-nums");
+    expect(spendCell.style.fontVariantNumeric).toBe("var(--corp-value)");
     const limitCell = within(table).getByText(`$${snap.daily_limit.toFixed(2)}`);
-    expect(limitCell.style.fontVariantNumeric).toBe("tabular-nums");
+    expect(limitCell.style.fontVariantNumeric).toBe("var(--corp-value)");
     const pctCell = within(table).getByText(`${snap.daily_percent.toFixed(1)}%`);
-    expect(pctCell.style.fontVariantNumeric).toBe("tabular-nums");
+    expect(pctCell.style.fontVariantNumeric).toBe("var(--corp-value)");
   });
 
   it("renders saving state (DS-UI-STATES)", () => {

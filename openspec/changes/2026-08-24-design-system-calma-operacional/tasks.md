@@ -45,8 +45,8 @@ Gate: `cd web && npm test && npx tsc -b`; no new hex; all slice-1 colors via `--
 
 Gate: `cd web && npm test`; doc matches token source.
 
-- [ ] **T3.1** `web/src/stories/pages/_shared/StatCard.tsx` + `DataTable.tsx` + `web/src/components/primitives/primitives.css`: apply `font-variant-numeric: tabular-nums` via `--corp-value` on numeric data roles (KPI value, numeric/`tabularNum()` cells, timestamps, IDs); decorative labels unaffected (CST-ALIAS-5, DS-TKN-11). [CST-ALIAS-5 · DS-TKN-11]
-- [ ] **T3.2** `web/DESIGN_SYSTEM.md` line 120 Canvas row: `--bg` `#F4F5F7` → `#F1F1E8` (executable token wins; DS-TKN-12). [DS-TKN-12]
+- [x] **T3.1** `web/src/stories/pages/_shared/StatCard.tsx` + `DataTable.tsx` + `web/src/components/primitives/primitives.css`: apply `font-variant-numeric: tabular-nums` via `--corp-value` on numeric data roles (KPI value, numeric/`tabularNum()` cells, timestamps, IDs); decorative labels unaffected (CST-ALIAS-5, DS-TKN-11). [CST-ALIAS-5 · DS-TKN-11]
+- [x] **T3.2** `web/DESIGN_SYSTEM.md` line 120 Canvas row: `--bg` `#F4F5F7` → `#F1F1E8` (executable token wins; DS-TKN-12). [DS-TKN-12]
 
 ## Phase 4 — B4 Tests + Storybook verification (PR 4)
 
