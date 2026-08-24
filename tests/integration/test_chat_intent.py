@@ -55,6 +55,8 @@ def _llm_result_for(text: str) -> dict:
         return {"intent": "solicitar_visita", "service": "visita", "priority": "alta", "status": "abierto", "injection": injection}
     if "precio" in tl or "valor" in tl or "cuesta" in tl or "cuanto" in tl:
         return {"intent": "valores", "service": "valores", "priority": "baja", "status": None, "injection": injection}
+    if "garantia" in tl or "postventa" in tl or "devolucion" in tl or "cobertura" in tl:
+        return {"intent": "postventa", "service": "postventa", "priority": "baja", "status": None, "injection": injection}
     if "persona" in tl:
         return {"intent": "persona", "service": None, "priority": None, "status": None, "injection": injection}
     if "emergencia" in tl or "incendio" in tl:
@@ -287,18 +289,46 @@ def test_route_capture_path_for_equipment_intents(mock_chat):
         assert result["next_step"] == "capture", text
 
 
-def test_route_retrieval_path_for_valores(mock_chat, fake_embedder):
-    # H2 (PR 2): a KB retail intent dispatches to the research_triage sub-graph.
-    # With no KB content seeded, the scoped retrieve misses -> bounded retry -> 
-    # handoff escalates the resolvable-otherwise query to a human (AO-8).
-    conv_id = _seed("cuanto cuesta la revision anual")
+@pytest.mark.parametrize(
+    "text, intent",
+    [
+        ("cuanto cuesta la revision anual", "valores"),
+        ("la garantia cubre algo?", "postventa"),
+    ],
+)
+def test_route_retrieval_path_research_miss_handoff_ends(mock_chat, fake_embedder, text, intent):
+    # H2 (AO-3/AO-8): a KB retail intent (valores OR postventa, RETRIEVAL_INTENTS)
+    # dispatches to the research_triage sub-graph. With no KB content seeded the
+    # scoped retrieve misses -> bounded retry (≤1) -> handoff, and the turn
+    # TERMINATES (the graph reaches END): the handoff reply is emitted, no loop.
+    from app.chat.nodes.handoff import HANDOFF_REPLY
+
+    conv_id = _seed(text)
     result = _run_graph(conv_id)
-    assert result["intent"] == "valores"
+
+    # AO-3: dispatched to the research sub-graph, not the linear respond path.
+    assert result["intent"] == intent
     assert result["active_sub_agent"] == "research_triage"
+    # AO-8: miss -> exactly one retry consumed (bounded ≤1) -> handoff.
+    assert result["triage_retry"] == 1
     assert result["escalate"] is True
     assert result["escalate_reason"] == "kb_miss"
-    # AO-8: exactly one retry was consumed before handing off (bounded ≤1).
-    assert result["triage_retry"] == 1
+    # The kb_check terminal decision was "handoff" (not "retry"), so the
+    # sub-graph reached its terminal node and the graph hit END: no miss/retry
+    # loop kept the turn alive after the bounded retry.
+    assert result["next_step"] == "handoff"
+    # The turn terminated via the handoff reply (handoff -> END edge). On first
+    # contact the receive node also emits the greeting menu, so the terminal
+    # handoff reply is present among the accumulated replies.
+    assert HANDOFF_REPLY in result["replies"]
+
+    # CM-6: the unresolved retail question was logged on the inbound message
+    # before handing off (respond.log_unresolved path preserved).
+    with SessionLocal() as session:
+        msg = session.scalars(
+            select(Message).where(Message.wamid == "wamid.intent")
+        ).one()
+        assert msg.payload and msg.payload.get("unresolved") is True
 
 
 def test_route_persona_escalates(mock_chat):
@@ -313,3 +343,65 @@ def test_route_emergencia_sets_emergency_flag(mock_chat):
     result = _run_graph(conv_id)
     assert result["emergency"] is True
     assert result["escalate"] is True
+
+
+# ---------------------------------------------------------------------------
+# AO-9 — invisible orchestration: sub-agent KB reply == pre-H2 single-agent reply
+# ---------------------------------------------------------------------------
+
+
+def test_ao9_research_reply_matches_pre_h2_single_agent(mock_openai_chat, fake_embedder):
+    """A KB-intent message answered via the research_triage sub-agent must have
+    copy/tone/format EQUAL to the pre-H2 single-agent reply (AO-9).
+
+    The research sub-graph wraps the unchanged ``respond`` node (AO-5). With a
+    ``valores``-categorized KB doc, the scoped retrieve (scope=["valores",
+    "postventa"]) and the pre-H2 unscoped retrieve return the same chunk, so
+    the grounded reply is built from the identical ``<kb>`` text via the same
+    prompt at temperature=0. Orchestration therefore MUST NOT change what the
+    customer reads: both replies are byte-identical.
+    """
+    from app.chat.nodes import respond as respond_node
+    from app.chat.state import ConversationState
+    from app.models import DocumentFormat
+    from app.services import kb as kb_service
+
+    # A values doc that contains NO equipment keyword ("calefont"/"caldera"/
+    # "calefaccion") so the classify mock resolves it as a valores intent
+    # (contains "precio"), not a capture intent. The query is byte-identical to
+    # the chunk so the deterministic fake embedder (trigram-bucket) scores it
+    # as a high-sim KB hit.
+    valores_text = "el precio de la revision anual del equipo es 15000 pesos"
+    with SessionLocal() as session:
+        kb_service.ingest_document(
+            session,
+            title="Valores",
+            fmt=DocumentFormat.MD,
+            content=valores_text.encode(),
+            source_meta={"category": "valores"},
+        )
+        session.commit()
+
+    conv_id = _seed(valores_text)
+
+    # H2 path: values query routes through research_triage (AO-3) -> scoped
+    # hit -> respond -> grounded reply. On first contact receive emits the
+    # greeting too; the grounded reply is the one that names the manual.
+    h2_result = _run_graph(conv_id)
+    assert h2_result["active_sub_agent"] == "research_triage"
+    h2_replies = h2_result["replies"]
+    grounded = [r for r in h2_replies if "Segun el manual de Lumat" in r]
+    assert grounded, "expected a KB-grounded reply from the research sub-graph"
+
+    # Pre-H2 single-agent path: invoke respond directly with the same
+    # conversation state — the linear route(kb_retrieve -> respond) path that
+    # the orchestrator replaced. Same node, same unscoped retrieve on the
+    # categorised doc -> same <kb> context -> same reply.
+    with SessionLocal() as session:
+        state = ConversationState.from_db(session, conv_id)
+    pre_h2 = respond_node.respond(state)
+
+    pre_h2_grounded = [r for r in (pre_h2.get("replies") or []) if "Segun el manual de Lumat" in r]
+    assert pre_h2_grounded, "expected a KB-grounded reply from direct respond"
+    # AO-9: copy/tone/format equal — byte-identical grounded reply.
+    assert grounded == pre_h2_grounded

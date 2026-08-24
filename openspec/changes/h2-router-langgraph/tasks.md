@@ -44,10 +44,10 @@ Slice-1 only: router + KB research/triage runtime. Other four sub-agents **data-
 
 ## Phase 3: Integration + Regression (PR 3)
 
-- [ ] 3.1 Extend `test_chat_intent`: valores/postventa → research; miss → retry → handoff reaches END (AO-3/AO-8)
-- [ ] 3.2 Invisible-tone regression: KB reply copy/tone/format equals pre-H2 reply (AO-9)
-- [ ] 3.3 Full `.venv/bin/pytest tests/` green; `test_chat_intent`/`test_handoff`/`test_cost_guardrails`/`test_registry_*` unchanged (AO-10)
-- [ ] 3.4 `agent/README.md`: multi-agent roster + slice-1 runtime + four data-only; no new tables (AO-1; doc-only)
+- [x] 3.1 Extend `test_chat_intent`: valores/postventa → research; miss → retry → handoff reaches END (AO-3/AO-8)
+- [x] 3.2 Invisible-tone regression: KB reply copy/tone/format equals pre-H2 reply (AO-9)
+- [x] 3.3 Full `.venv/bin/pytest tests/` green; `test_chat_intent`/`test_handoff`/`test_cost_guardrails`/`test_registry_*` unchanged (AO-10)
+- [x] 3.4 `agent/README.md`: multi-agent roster + slice-1 runtime + four data-only; no new tables (AO-1; doc-only)
 
 ## Dependencies
 

@@ -177,3 +177,28 @@ def load_registry(path: str | Path | None = None) -> Registry:
         for key, decl in sub_agents_map.items()
     }
     return Registry(orchestrator=orchestrator, sub_agents=sub_agents)
+
+
+# Cached runtime getter (design line 43): ``load_registry`` reads + validates
+# ``registry.yaml`` ONCE at graph construction (module scope, cached) and the
+# dispatch path reuses that single load instead of re-reading the file every
+# turn. ``get_registry`` is the cached reader the runtime (graph/sub-graph)
+# calls; ``load_registry`` stays the pure, always-fresh reader used by the
+# fail-fast unit tests and any path-specific validation (e.g. registry tests).
+_registry_cache: Registry | None = None
+
+
+def get_registry(path: str | Path | None = None) -> Registry:
+    """Return the loaded registry, cached so it is read from disk at most once.
+
+    Designed for the runtime default path (design line 43): the first call at
+    graph construction loads and validates ``agent/registry.yaml``; every
+    subsequent call returns the cached ``Registry`` without re-reading the
+    file. Passing an explicit ``path`` is intended for tests/callers that only
+    need the default read cached once; path-qualified validation should use
+    ``load_registry(path)`` directly.
+    """
+    global _registry_cache
+    if _registry_cache is None:
+        _registry_cache = load_registry(path)
+    return _registry_cache
