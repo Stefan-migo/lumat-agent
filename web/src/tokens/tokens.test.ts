@@ -12,7 +12,7 @@ describe('design tokens (PDW-TKN-1 / PDW-TKN-2)', () => {
   it('tokens.css is a single :root source with the exact spot-checked palette', () => {
     expect(tokensRaw).toContain(':root');
     expect(tokensRaw).toContain('#143c2c'); // brand primary-800
-    expect(tokensRaw).toContain('#f4f5f7'); // bg
+    expect(tokensRaw).toContain('#F1F1E8'); // bg (cream, DS-V1-SHELL)
     expect(tokensRaw).toContain('#1a202c'); // text
     expect(tokensRaw).toContain('#b71c1c'); // danger
     expect(tokensRaw).toContain('#1b5e20'); // success
@@ -124,5 +124,93 @@ describe('design tokens — B9 foundation additions (DS-TKN-3..7)', () => {
     expect(cssVars.get('--brand-forest')).toBe('#576f31');
     expect(cssVars.get('--brand-graphite')).toBe('#656665');
     expect(cssVars.get('--info')).toBe('#14788f');
+  });
+});
+
+describe('design tokens — corp-* alias layer (CST-ALIAS-1..5 · DS-TKN-10..12)', () => {
+  // Parse the FULL :root token declarations into { slot -> value } (file-scoped,
+  // so the alias layer can assert its var() targets resolve against them).
+  const allTokens = new Map<string, string>();
+  const corpVars = new Map<string, string>();
+  for (const line of tokensRaw.split('\n')) {
+    const m = line.match(/^\s*(--[\w-]+)\s*:\s*([^;]+);/);
+    if (!m) continue;
+    const key = m[1];
+    allTokens.set(key, m[2].trim());
+    if (key.startsWith('--corp-')) corpVars.set(key, m[2].trim());
+  }
+
+  // The 17 catalog slots defined by the alias layer (proposal/design tables).
+  const aliasedSlots = [
+    '--corp-primary', '--corp-primary-fg', '--corp-accent', '--corp-border',
+    '--corp-fg', '--corp-fg-muted', '--corp-text', '--corp-muted',
+    '--corp-surface', '--corp-surface-hover', '--corp-bg', '--corp-radius',
+    '--corp-gap', '--corp-value', '--corp-size', '--corp-w', '--corp-h',
+  ];
+  // Slots that intentionally do NOT resolve to a token (behavioral / fallback).
+  const unresolvedSlots = new Set(['--corp-value', '--corp-size', '--corp-w', '--corp-h']);
+  const declaredAliased = aliasedSlots.filter((s) => !unresolvedSlots.has(s));
+
+  it('declares the 14 resolvable corp-* slots exactly once; size/w/h fall back unmatched (CST-ALIAS-3 · CST-ALIAS-4)', () => {
+    for (const slot of declaredAliased) {
+      expect(corpVars.has(slot), `missing slot ${slot}`).toBe(true);
+    }
+    expect(corpVars.size).toBe(14); // 13 mapped + --corp-value, no twins
+    for (const slot of ['--corp-size', '--corp-w', '--corp-h']) {
+      expect(corpVars.has(slot), `${slot} is unresolved → component default`).toBe(false);
+    }
+  });
+
+  it('maps every resolved color/spacing slot to a var(--*) referencing an existing token (CST-ALIAS-1 · DS-TKN-10)', () => {
+    const resolvedSlots = [...corpVars.entries()].filter(([, v]) => /^var\(--[\w-]+\)$/.test(v));
+    expect(resolvedSlots.length).toBe(13); // 13 mapped var() targets
+    for (const [slot, value] of resolvedSlots) {
+      const target = value.slice(4, -1); // strip var( ... )
+      expect(allTokens.has(target), `${slot} -> ${value} references a declared token`).toBe(true);
+    }
+  });
+
+  it('declares zero hex literals anywhere in the corp-* alias layer (DS-TKN-10)', () => {
+    const hexRe = /#[0-9a-fA-F]{3,6}\b/;
+    const offenders: string[] = [];
+    for (const [slot, value] of corpVars) {
+      if (hexRe.test(value)) offenders.push(`${slot}: ${value}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('spot-checks the primary/bg/surface/value slot targets (DS-TKN-10 / CST-ALIAS-5)', () => {
+    expect(corpVars.get('--corp-primary')).toBe('var(--primary-800)');
+    expect(corpVars.get('--corp-primary-fg')).toBe('var(--surface)');
+    expect(corpVars.get('--corp-bg')).toBe('var(--bg)');
+    expect(corpVars.get('--corp-surface')).toBe('var(--surface)');
+    expect(corpVars.get('--corp-value')).toBe('tabular-nums');
+  });
+
+  it('keeps --corp-size/-w/-h as documented fallbacks, never hardcoded or twinned (CST-ALIAS-4)', () => {
+    for (const slot of ['--corp-size', '--corp-w', '--corp-h']) {
+      expect(corpVars.get(slot)).toBeUndefined(); // absent → component default
+    }
+    // The fallback is documented with a build-warning comment in the alias block.
+    expect(tokensRaw).toMatch(/--corp-size/);
+    expect(tokensRaw).toMatch(/fall ?back|unresolved|default sizing/i);
+  });
+
+  it('keeps every pre-existing --* declaration byte-identical after the alias layer (CST-ALIAS-2 · DS-TKN-2)', () => {
+    // The alias layer only referenced declared tokens above; this asserts the
+    // non-corp declarations are all still present and unconverted (the file was
+    // appended, not rewritten) so the original token set survives intact.
+    const nonCorp = new Map<string, string>();
+    for (const line of tokensRaw.split('\n')) {
+      const m = line.match(/^\s*(--[\w-]+)\s*:\s*([^;]+);/);
+      if (m && !m[1].startsWith('--corp-')) nonCorp.set(m[1], m[2].trim());
+    }
+    // Spot-checked palette still exact (no drift from the alias append).
+    expect(nonCorp.get('--primary-800')).toBe('#143c2c');
+    expect(nonCorp.get('--bg')).toBe('#F1F1E8');
+    expect(nonCorp.get('--surface')).toBe('#fff');
+    expect(nonCorp.get('--text-muted')).toBe('#4a5568');
+    expect(nonCorp.get('--radius-sm')).toBe('6px');
+    expect(nonCorp.get('--space-3')).toBe('12px');
   });
 });

@@ -4,7 +4,7 @@
  * Component sources MUST reference these custom properties only — no hardcoded
  * hex or magic spacing values (enforced by token guards, T6.2).
  *
- * Spot-checked equivalence (PDW-TKN-1): primary #143c2c, bg #f4f5f7,
+ * Spot-checked equivalence (PDW-TKN-1): primary #143c2c, bg #F1F1E8,
  * text #1a202c, danger #b71c1c, success #1b5e20, radii 6px/8px.
  */
 
@@ -21,8 +21,13 @@
   --primary-800: #143c2c; /* brand */
   --primary-900: #0d261c;
 
-  /* Neutrals (base.html port) */
-  --bg: #f4f5f7;
+  /* Neutrals (base.html port) — v1 shell uses cream warm off-white bg (DS-V1-SHELL)
+   * with a pure-white `--surface` so cards read as crisp white tiles on a cream
+   * page (per the friendly-dashboard reference; the previous `#FAF8F0` was too
+   * close to the bg and dropped cards out of the palette).
+   * The V2 proposal had cream scoped under a separate `--v2-bg-cream`; the
+   * pivot kept the V1 `--bg` slot and lifted cream straight into it (PDW-TKN-1). */
+  --bg: #F1F1E8;
   --surface: #fff;
   --border: #d8dde3;
   --border-strong: #c3cbd4;
@@ -40,6 +45,15 @@
   --warning: #a16207;
   --warning-bg: #fef3c7;
   --warning-border: #fcd34d; /* new: StatusBadge human/pending */
+
+  /* Semantic tints — very light backgrounds for subtle inline banners
+   * (StateMessage); the colored tone comes from the left bar + icon, the
+   * surface stays near-white so the banner doesn't shout. */
+  --success-tint: #f0fdf4;
+  --danger-tint: #fef2f2;
+  --warning-tint: #fffbeb;
+  --info-tint: #f0f9ff;
+
   /* Spacing — 4px scale */
   --space-1: 4px;
   --space-2: 8px;
@@ -109,4 +123,33 @@
   --brand-forest: #576f31;
   --brand-graphite: #656665;
   --info: #14788f;
+
+  /* Corp catalog alias layer (DC-004 Corporate family) — slice-1.
+   * Maps CortexDesign slots onto the frozen Lumat tokens above. Every slot
+   * resolves to an existing var(--*) token — NEVER raw hex (hex guard,
+   * DS-TKN-10). Consumers reference these slots, never twin a value
+   * (CST-ALIAS-3). Color/font/icon values are intentionally unchanged. */
+  --corp-primary: var(--primary-800);
+  --corp-primary-fg: var(--surface);
+  --corp-accent: var(--info);
+  --corp-border: var(--border);
+  --corp-fg: var(--text);
+  --corp-fg-muted: var(--text-muted);
+  --corp-text: var(--text);
+  --corp-muted: var(--text-muted);
+  --corp-surface: var(--surface);
+  --corp-surface-hover: var(--table-head-bg);
+  --corp-bg: var(--bg);
+  --corp-radius: var(--radius-sm);
+  --corp-gap: var(--space-3);
+  /* --corp-value is behavioral (D3): tabular-nums on data roles (KPIs, ids,
+   * timestamps, percentages). Applied where numeric values render. */
+  --corp-value: tabular-nums;
+
+  /* FALLBACK (D2): --corp-size / --corp-w / --corp-h are dimensional catalog
+   * slots with no single frozen-token mapping. They intentionally fall back to
+   * component default sizing (40px controls; 44px touch targets via the
+   * `@media (hover: none)` block in primitives.css). NEVER hardcode a size here
+   * — the absent definition documents the fallback and keeps the alias layer
+   * token-only. */
 }
