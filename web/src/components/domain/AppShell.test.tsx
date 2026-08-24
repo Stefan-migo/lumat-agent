@@ -60,3 +60,63 @@ describe('AppShell (T6.4)', () => {
     expect(screen.getByRole('heading', { name: 'Clientes' })).toBeInTheDocument();
   });
 });
+
+describe('AppShell — desktop sidebar collapse (icon-only ⇄ full nav)', () => {
+  /** Nav button lookup by aria-label; the sidebar keeps its base
+   *  `display: none` in jsdom (no ≥64rem media query), so role queries
+   *  exclude it — attribute queries only, same as the `sidebar()` helper. */
+  const navButtonByLabel = (container: HTMLElement, label: string) =>
+    Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.panel-shell__sidebar .panel-shell__navigation-button'),
+    ).find((button) => button.getAttribute('aria-label') === label);
+
+  /** Collapse toggle: icon-only button (no visible label); find it by class
+   *  since role queries exclude the `display: none` sidebar in jsdom. */
+  const collapseButton = (container: HTMLElement) =>
+    container.querySelector<HTMLButtonElement>('.panel-shell__collapse-button')!;
+
+  it('toggles aria-expanded, hides labels and keeps icon-only buttons named via aria-label', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<AppShell user={admin} />);
+    const s = sidebar(container);
+
+    // Expanded by default: full labels; the toggle is icon-only, named via aria-label.
+    const toggle = collapseButton(container);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveAttribute('aria-label', 'Colapsar menú');
+    expect(s.getByText('Clientes')).toBeInTheDocument();
+    expect(s.getByText('Conversaciones')).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-label', 'Expandir menú');
+    // Labels are gone, but the icon-only buttons keep an accessible name.
+    expect(s.queryByText('Clientes')).not.toBeInTheDocument();
+    expect(s.queryByText('Conversaciones')).not.toBeInTheDocument();
+    expect(navButtonByLabel(container, 'Clientes')).toHaveAttribute('aria-label', 'Clientes');
+    expect(navButtonByLabel(container, 'Clientes')).toHaveAttribute('title', 'Clientes');
+    // The compact brand mark keeps its label; the user block its tooltip text.
+    expect(s.getByText('L')).toBeInTheDocument();
+    expect(s.getByLabelText('ana — Administrador')).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(s.getByText('Clientes')).toBeInTheDocument();
+  });
+
+  it('keeps nav reachable and the active state marked while collapsed', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<AppShell user={operador} />);
+    await user.click(collapseButton(container));
+
+    const panelBtn = navButtonByLabel(container, 'Panel');
+    expect(panelBtn).toHaveAttribute('aria-current', 'page');
+    const clientesBtn = navButtonByLabel(container, 'Clientes')!;
+    expect(clientesBtn).not.toHaveAttribute('aria-current', 'page');
+
+    await user.click(clientesBtn);
+    expect(screen.getByRole('heading', { name: 'Clientes' })).toBeInTheDocument();
+    expect(panelBtn).not.toHaveAttribute('aria-current', 'page');
+    expect(clientesBtn).toHaveAttribute('aria-current', 'page');
+  });
+});
