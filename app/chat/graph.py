@@ -54,11 +54,12 @@ from app.chat.nodes.emergency import emergency
 from app.chat.nodes.emergency_gate import emergency_gate
 from app.chat.nodes.handoff import handoff
 from app.chat.nodes.handoff_gate import handoff_gate
+from app.chat.nodes.orchestrate import orchestrate
 from app.chat.nodes.receive import receive
 from app.chat.nodes.respond import respond
-from app.chat.nodes.route import route
 from app.chat.nodes.summary import summary
 from app.chat.state import ConversationState
+from app.chat.subgraphs.research_triage import build_research_triage_subgraph
 from app.models import Message, MessageDirection, MessageStatus, MessageType
 from app.services.memory import persist_memory_session
 
@@ -108,19 +109,27 @@ def _after_respond(state: ConversationState) -> str:
 
 
 def build_graph():
-    """Build the compiled conversation graph (B3 flow + T4.2/T4.4 gates)."""
+    """Build the compiled conversation graph (B3 flow + T4.2/T4.4 gates).
+
+    H2 (PR 2): ``orchestrate`` replaces ``route`` after the deterministic gate
+    prefix (AO-4). The gates stay the outer envelope; the orchestrator runs on
+    the clear path (after ``handoff_gate``) and dispatches KB retrieval intents
+    to the research_triage sub-graph, preserving capture/respond/handoff.
+    """
+    research_triage = build_research_triage_subgraph()
     builder = StateGraph(ConversationState)
     builder.add_node("emergency_gate", emergency_gate)
     builder.add_node("cost_gate", cost_gate)
     builder.add_node("handoff_gate", handoff_gate)
     builder.add_node("receive", receive)
     builder.add_node("classify_intent", classify_intent)
-    builder.add_node("route", route)
+    builder.add_node("orchestrate", orchestrate)
     builder.add_node("capture", capture)
     builder.add_node("respond", respond)
     builder.add_node("summary", summary)
     builder.add_node("emergency", emergency)
     builder.add_node("handoff", handoff)
+    builder.add_node("research_triage", research_triage)
 
     builder.add_edge(START, "emergency_gate")
     builder.add_conditional_edges(
@@ -143,19 +152,20 @@ def build_graph():
         _flow_start,
         {"capture": "capture", "classify_intent": "classify_intent"},
     )
-    builder.add_edge("classify_intent", "route")
+    builder.add_edge("classify_intent", "orchestrate")
     builder.add_conditional_edges(
-        "route",
+        "orchestrate",
         _route_path,
         {
             "capture": "capture",
-            "kb_retrieve": "respond",
+            "research": "research_triage",
             "respond": "respond",
-            "escalate": "handoff",
+            "handoff": "handoff",
         },
     )
     builder.add_conditional_edges("capture", _after_capture, {"summary": "summary", END: END})
     builder.add_conditional_edges("respond", _after_respond, {"handoff": "handoff", END: END})
+    builder.add_edge("research_triage", END)
     builder.add_edge("handoff", END)
     builder.add_edge("emergency", END)
     builder.add_edge("summary", END)

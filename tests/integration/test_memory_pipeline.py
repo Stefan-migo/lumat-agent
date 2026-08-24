@@ -52,9 +52,17 @@ def clean_db(migrated_db):
 
 
 def _seed_kb_doc(text: str) -> None:
+    # H2 (PR 2, AO-7): the valores query is answered by the scoped
+    # research_triage sub-graph, which only retrieves chunks whose
+    # source_meta.category is in its kb_scope — seed the category so the
+    # scoped retrieve finds it and respond (which injects <memory>) runs.
     with SessionLocal() as session:
         kb_service.ingest_document(
-            session, title="Manual", fmt=DocumentFormat.MD, content=text.encode()
+            session,
+            title="Manual",
+            fmt=DocumentFormat.MD,
+            content=text.encode(),
+            source_meta={"category": "valores"},
         )
         session.commit()
 

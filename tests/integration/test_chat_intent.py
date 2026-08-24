@@ -106,10 +106,14 @@ def mock_chat():
 
 @pytest.fixture(autouse=True)
 def clean_db(migrated_db):
+    # kb_chunks/kb_documents included (top-level conftest does too) so a
+    # values-test's scoped KB-hit/miss decision is hermetic — a leftover doc
+    # from a prior integration file would otherwise flip the miss into a hit.
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
-            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
-            "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
+            "TRUNCATE settings, audit_log, kb_chunks, kb_documents, "
+            "conversation_events, cases, messages, conversations, "
+            "customer_notes, customers RESTART IDENTITY CASCADE"
         )
     yield
 
@@ -284,10 +288,17 @@ def test_route_capture_path_for_equipment_intents(mock_chat):
 
 
 def test_route_retrieval_path_for_valores(mock_chat, fake_embedder):
+    # H2 (PR 2): a KB retail intent dispatches to the research_triage sub-graph.
+    # With no KB content seeded, the scoped retrieve misses -> bounded retry -> 
+    # handoff escalates the resolvable-otherwise query to a human (AO-8).
     conv_id = _seed("cuanto cuesta la revision anual")
     result = _run_graph(conv_id)
     assert result["intent"] == "valores"
-    assert result["next_step"] == "kb_retrieve"
+    assert result["active_sub_agent"] == "research_triage"
+    assert result["escalate"] is True
+    assert result["escalate_reason"] == "kb_miss"
+    # AO-8: exactly one retry was consumed before handing off (bounded ≤1).
+    assert result["triage_retry"] == 1
 
 
 def test_route_persona_escalates(mock_chat):
