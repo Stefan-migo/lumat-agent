@@ -16,7 +16,7 @@ Status: **Slice-1 complete — all 16 tasks (T1.1–T4.6) done**
 - [x] **T2.1** `primitives.css` re-targeted slice-1 primitives to `--corp-*`: Button (`--corp-primary`, `--corp-primary-fg`, hover `--primary-700`), Card/SearchInput/field controls (`--corp-border`, `--corp-surface`, `--corp-text`, `--corp-fg-muted`, `--corp-radius`, `--corp-gap`), Badge tones (extra semantic pairs keep existing tokens), flash-message/pagination (D1/D4). Non-aliased tokens (`--border-strong`, `--danger-*`, `--success-*`, `--warning-*`, `--focus-ring*`) keep existing token references per CST-PRIM-1.
 - [x] **T2.2** D7 touch block: one `@media (hover: none)` block setting `min-height: 44px` on `.btn` and `.field__control` (comma-grouped selector, no `::before`). Desktop keeps 40px.
 - [x] **T2.3** D8 complete-states: documented shipped variants + CSS-only pairings in primitives.css header comment (Button disabled retains label+opacity; fields use `.field--disabled` muted bg+text; Badge/Card/StateMessage variants). **Button loading/empty explicitly deferred** (new props + spinner, no consumer — budget).
-- [x] **T2.4** `StateMessage.tsx`: confirmed `STATE_TONES` already tokenized (`var(--*)` accent + tint) and `role="status"|"alert"` prop; added minimal Alert-compat comment (D5), no full BEM refactor this slice.
+- [x] **T2.4** `StateMessage.tsx`: **material** minimal Alert mapping (D5) — `STATE_TONES` shape `{accent, background, border}` → `{accent, tint}` (now `var(--*-tint)` surfaces); `STATE_STYLES` reworked to a subtle left `border-left: 4px solid` accent bar (`align-items: center`, `padding: var(--space-3) var(--space-4)`, `border: 1px solid` → `border-left: 4px solid`, type `text-lg→text-md`, `bold→semibold`, `line-height tight→snug`); render now applies `background: tokens.tint` + `borderLeftColor: tokens.accent`. `role="status"|"alert"` prop preserved. **Not** a full BEM refactor; inline `<style>` retained (D5 deferral holds). Note: the tint/shape change entered B2's commit from the uncommitted v1-shell working-tree substrate (see Deviations #1).
 - [x] **T2.5** `StatusBadge`: confirmed already maps to `<Badge tone>` with `conversationLabel`; no `.tsx`/CSS change — covered by existing `StatusBadge.test.tsx` (tone map + approved Spanish labels + never raw status).
 
 ### Phase 3 — B3 Micro-changes
@@ -41,7 +41,7 @@ Status: **Slice-1 complete — all 16 tasks (T1.1–T4.6) done**
 | 2.1 | `tokens.test.ts` hex guard | N/A (CSS) | ✅ 287/287 | ➖ No runtime boundary (token-equivalent) | ✅ Passed | ➖ Single set | ➖ None |
 | 2.2 | `tokens.test.ts` D7 media-check | N/A (CSS) | ✅ 287/287 | ➖ CSS media; verified in B4 (T4.3) | ✅ Passed (T4.3) | ➖ Single | ➖ None |
 | 2.3 | D8 documentation + existing tests | N/A (docs/CSS) | ✅ 287/287 | ➖ No behavior change (deferred props) | ✅ Passed | ➖ Single | ➖ None |
-| 2.4 | `StateMessage.test.tsx` (existing) | Unit (RTL) | ✅ 287/287 | ➖ Already tokenized (comment-only) | ✅ Passed | ➖ Single | ➖ None |
+| 2.4 | `StateMessage.test.tsx` (pairing updated in v1-shell substrate) | Unit (RTL) | ✅ 287/287 | ✅ Material change; tint pairing test (`--danger-tint` accent) written first in the workspace substrate | ✅ Passed (asserts `var(--danger)` accent + `var(--danger-tint)` surface) | ✅ danger accent/tint paired | ➖ None needed (inline `<style>` retained per D5) |
 | 2.5 | `StatusBadge.test.tsx` (existing) | Unit (RTL) | ✅ 287/287 | ➖ No change (confirmed mapping) | ✅ Passed | ➖ Single | ➖ None |
 | 3.1 | `DataTable.test.tsx` + `Settings.stories.test.tsx` | Unit (RTL) | ✅ 293/293 | ✅ Written (expect `var(--corp-value)`, RED vs `tabular-nums`) | ✅ Passed | ✅ 2 files (helper + cell) | ➖ None |
 | 3.2 | DESIGN_SYSTEM.md (doc) | N/A (doc) | ✅ 293/293 | ➖ Doc-only | ✅ grep no stale | ➖ Single | ➖ None |
@@ -73,12 +73,12 @@ Status: **Slice-1 complete — all 16 tasks (T1.1–T4.6) done**
 
 | File | Action | What Was Done |
 |------|--------|---------------|
-| `web/src/tokens/tokens.css` | Modified | Appended 17-slot `--corp-*` alias layer (13 `var(--*)` maps + `--corp-value: tabular-nums` + documented size/w/h fallback block). Zero hex in aliases. |
+| `web/src/tokens/tokens.css` | Modified | (1) Appended 17-slot `--corp-*` alias layer (13 `var(--*)` maps + `--corp-value: tabular-nums` + documented size/w/h fallback block) — zero hex in aliases. (2) Also carried the `--bg` `#f4f5f7 → #F1F1E8` change and the 4 `--*-tint` tokens (`--success/danger/warning/info-tint`) into the slice commits from the uncommitted v1-shell working-tree substrate. These are **consumed by slice-1** (StateMessage D5 tint mapping; DS-TKN-12 executable-wins doc alignment). See Deviations #1 — v1-shell must not re-add them. |
 | `web/src/tokens/tokens.test.ts` | Modified | Added `corp-* alias layer` describe (4 tests) + `primitives.css slice-1 catalog contract` describe (2 tests: hex-free, D7 media-check). Total 17 tests. |
 | `web/src/components/primitives/primitives.css` | Modified | Re-targeted slice-1 primitives to `--corp-*`; added D7 `@media (hover:none)` 44px touch block; `.kpi__value` uses `--corp-value`; D8 complete-states doc comment. |
 | `web/src/components/primitives/Button.test.tsx` | Modified | +3 tests: hex-free source scan, disabled label+semantic pairing, anchor `aria-disabled` pairing. |
 | `web/src/components/primitives/Input.test.tsx` | Modified | +1 test: disabled pairing retains visible label with muted control. |
-| `web/src/stories/pages/_shared/StateMessage.tsx` | Modified | Minimal Alert-compat comment (STATE_TONES already tokenized; `role` prop confirmed). No BEM refactor. |
+| `web/src/stories/pages/_shared/StateMessage.tsx` | Modified | **Material** minimal Alert mapping (D5): `STATE_TONES` `{accent, background, border}` → `{accent, tint}`; `STATE_STYLES` reworked (border-left 4px accent bar, alignment, type scale `text-lg→text-md`/`bold→semibold`); render applies `background: tokens.tint`. Alert-compat comment added. Inline `<style>` retained, no BEM refactor. (Tint/shape change entered from v1-shell substrate — see Deviations #1.) |
 | `web/src/stories/pages/_shared/StateMessage.test.tsx` | Modified | +1 test: state-matrix pairing (danger→alert, loading→status with spinner). |
 | `web/src/stories/pages/_shared/StatCard.tsx` | Modified | KPI value resolved via `var(--corp-value)` (was inline `tabular-nums`). |
 | `web/src/stories/pages/_shared/DataTable.tsx` | Modified | `tabularNum()` resolves via `var(--corp-value)`. |
@@ -102,7 +102,10 @@ Status: **Slice-1 complete — all 16 tasks (T1.1–T4.6) done**
 ## Deviations from Design
 
 None that change contract — implementation matches design D1–D8. Noted transparent discrepancies:
-1. **v1-shell workspace substrate**: the working tree already carried uncommitted `2026-08-20-v1-shell-header-and-bg` changes (bg `#F1F1E8`, semantic `--*-tint` tokens, StateMessage tint-based minimal Alert mapping, AppShell/PageFrame). Slice-1 built on top. This also explains a **pre-existing `tsc -b` failure in `AppShell.test.tsx`** (2 errors) that is outside slice-1 scope and was not fixed (strict-TDD safety-net rule: report, don't fix unrelated pre-existing failures).
+1. **v1-shell workspace substrate**: the working tree already carried uncommitted `2026-08-20-v1-shell-header-and-bg` changes (bg `#F1F1E8`, semantic `--*-tint` tokens, StateMessage tint-based minimal Alert mapping, AppShell/PageFrame). Slice-1 built on top, which means:
+   - **`tokens.css` accounting**: the `--bg #F4F5F7 → #F1F1E8` change and the `--success/danger/warning/info-tint` tokens **entered slice commit `aab6840b`** from the substrate. They are **kept** because slice-1 depends on them (T2.4 StateMessage renders `var(--*-tint)`; DS-TKN-12 aligns the doc to the executable `#F1F1E8`). Keeping them is defensible, but v1-shell MUST NOT re-add them (they are now part of the slice commits).
+   - **`StateMessage.tsx` accounting**: the `STATE_TONES` shape + `STATE_STYLES` + tint render changes are a **material** minimal Alert mapping (D5), committed in B2 (`47691eff`) — NOT "comment-only" as a prior accounting claimed.
+   - This also explains a **pre-existing `tsc -b` failure in `AppShell.test.tsx`** (2 errors) that is outside slice-1 scope and was not fixed (strict-TDD safety-net rule: report, don't fix unrelated pre-existing failures).
 2. **`--corp-value` on timestamps/IDs**: handled via the `tabularNum()` helper contract (the design's stated extension point) rather than forcing every un-formatted cell; callers using `tabularNum()` for numeric/timestamp/ID cells get it uniformly.
 3. **`.btn--secondary` border**: `--border-strong` has no `--corp-*` alias; kept the existing token reference (allowed by CST-PRIM-1 "references a `--corp-*` slot **or existing token**"; mapping it to `--corp-border` would change the value).
 
