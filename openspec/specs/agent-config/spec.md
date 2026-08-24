@@ -45,12 +45,18 @@ Extraction MUST NOT change what the LLM sees: for the same inputs the assembled 
 
 ### Requirement: AC-4 — Data-Only Registry
 
-The system MUST declare agents in `registry.yaml` as data with a defined schema, registering exactly one agent (`orchestrator`). The registry MUST NOT enforce tools, KB scope, or memory scope at runtime.
+The system MUST declare agents in `registry.yaml` as data with a defined schema: the top-level `orchestrator` entry (per D-A7) plus a multi-agent sub-agent roster. The registry MUST NOT enforce tools, KB scope, or memory scope beyond the orchestrator dispatch boundary (AO-2/AO-6/AO-7).
+(Previously: the registry declared exactly one agent `orchestrator`; no runtime reader or consumer existed; enforcement deferred until H2, which now enforces tools/KB/memory scoping at the orchestrator dispatch boundary.)
 
-#### Scenario: Declarative, one agent
+#### Scenario: Declarative, one orchestrator
 - GIVEN `registry.yaml` parses at boot
-- THEN it contains exactly one agent `orchestrator` per schema
-- AND no tools, KB-scope, or memory-scope rule instantiates from it
+- THEN it resolves exactly one top-level `orchestrator` per schema
+- AND the multi-agent roster is present as data
+- AND no tools, KB-scope, or memory-scope rule enforces outside dispatch
+
+#### Scenario: Reader lives outside prompts/respond
+- GIVEN the startup registry reader is wired
+- THEN `app/services/prompts.py` and `app/chat/nodes/respond.py` do not read `registry.yaml`
 
 ### Requirement: AC-5 — Strict Typed Template Rendering
 
@@ -94,4 +100,4 @@ Extraction MUST keep `CANNOT_ANSWER_REPLY` importable from `app.chat.nodes.respo
 
 ## Boundary
 
-Deterministic gates and canned replies stay in code; Fase-2 consumers (router, tools whitelist, KB/memory scoping, sub-agents) are not implemented here. Web/ out of scope.
+Deterministic gates and canned replies stay in code; the registry remains data-only (enforcement at the orchestrator dispatch boundary per AO-2/AO-6/AO-7, defined in the `agent-orchestration` capability). Web/ out of scope.
