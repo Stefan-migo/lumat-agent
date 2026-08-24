@@ -151,6 +151,12 @@ class ConversationState:
     escalate_reason: str | None = None
     unknown_count: int = 0
     next_step: str = "receive"
+    # H2 orchestrator (design.md line 47): which sub-agent the orchestrator
+    # dispatched to for this turn (None when no sub-graph runs).
+    active_sub_agent: str | None = None
+    # AO-8: bounded KB retry counter consumed by the research_triage sub-graph
+    # (≤1 retry, then handoff) — never grows unbounded in a single turn.
+    triage_retry: int = 0
     window: list[dict] = field(default_factory=list)
     # accumulator: nodes append their replies (reducer merges, last-write-wins off)
     replies: Annotated[list, add] = field(default_factory=list)
