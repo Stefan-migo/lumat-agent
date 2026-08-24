@@ -107,7 +107,7 @@ def _kb_check(state: ConversationState) -> dict:
         if message_id is not None:
             with session_scope() as session:
                 respond_node.log_unresolved(
-                    session, message_id=message_id, context="intent=valores"
+                    session, message_id=message_id, context=f"intent={state.intent}"
                 )
         return {
             "next_step": "handoff",
