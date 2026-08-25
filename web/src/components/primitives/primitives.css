@@ -205,23 +205,60 @@
   object-fit: cover;
 }
 
-/* ---- Table, Spinner, Modal, FlashMessage (B9) ---- */
+/* ---- Table, Tabs, Spinner, Modal, FlashMessage (B9) ---- */
+/* .table consumes catalog `table` slots (CORP-TABLE-1): aliases resolve to the
+   same values, so this is contract alignment with zero visual change. */
 .table {
   width: 100%;
   border-collapse: collapse;
-  color: var(--text);
+  color: var(--corp-text);
   font-family: var(--font-sans);
   font-size: var(--text-md);
 }
 .table th,
 .table td {
   padding: var(--space-3);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--corp-border);
   text-align: left;
 }
 .table th {
   background: var(--table-head-bg);
   font-size: var(--text-sm);
+}
+/* Tabs (CORP-TABS-1): underline accent marks the active tab; inactive tabs use
+   --corp-muted; panel content inherits --corp-text. */
+.tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.tabs [role="tablist"] {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--corp-border);
+}
+.tabs__tab {
+  background: none;
+  border: 0;
+  padding: var(--space-2) var(--space-3);
+  color: var(--corp-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tabs__tab[aria-selected="true"] {
+  color: var(--corp-text);
+  border-bottom-color: var(--corp-accent);
+}
+.tabs__tab:focus-visible {
+  outline: 2px solid var(--corp-accent);
+  outline-offset: 2px;
+}
+.tabs__panel {
+  padding: var(--space-3) 0;
+  color: var(--corp-text);
 }
 .spinner {
   display: inline-flex;
