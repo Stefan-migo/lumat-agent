@@ -260,6 +260,55 @@
   padding: var(--space-3) 0;
   color: var(--corp-text);
 }
+/* Dialog (CORP-DIALOG-1): overlay scrim derives from --corp-bg via color-mix
+   (no new color value — palette frozen); panel uses --shadow-3 (DS-reserved
+   overlay shadow) and --corp-radius. */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--corp-bg) 55%, transparent);
+}
+.dialog {
+  background: var(--corp-surface);
+  border: 1px solid var(--corp-border);
+  border-radius: var(--corp-radius);
+  box-shadow: var(--shadow-3);
+  width: min(28rem, calc(100vw - var(--space-5)));
+  color: var(--corp-fg);
+}
+.dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--corp-border);
+}
+.dialog__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+.dialog__close {
+  background: none;
+  border: 0;
+  color: var(--corp-muted);
+  cursor: pointer;
+  font-size: var(--text-md);
+  line-height: 1;
+  padding: var(--space-1);
+}
+.dialog__close:focus-visible {
+  outline: 2px solid var(--corp-accent);
+  outline-offset: 2px;
+}
+.dialog__body {
+  padding: var(--space-4);
+}
 .spinner {
   display: inline-flex;
   align-items: center;
