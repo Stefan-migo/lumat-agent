@@ -125,6 +125,7 @@ describe('App /me auth gate (T6.4)', () => {
   it('returns to the login gate after logout', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ username: 'ana', role: 'admin' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
@@ -134,7 +135,7 @@ describe('App /me auth gate (T6.4)', () => {
     await user.click(screen.getByRole('button', { name: 'Menú' }));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: /cerrar sesión/i }));
 
-    expect(await screen.findByText('Lumat')).toBeInTheDocument();
+    expect(await screen.findByLabelText(/usuario/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/usuario/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/logout', expect.objectContaining({ method: 'POST' }));
   });

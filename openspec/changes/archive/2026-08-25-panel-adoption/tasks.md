@@ -47,24 +47,29 @@ Sub-units (S3a/b, S5a/b, S6a/b) build sequentially; promote the second sub-unit 
 
 - [x] 3.1 RED ClientesList tests: `?q=` search, empty "No hay registros"
 - [x] 3.2 GREEN create `pages/ClientesList.tsx` + wrapper (`ClientesListView/ClientesListEmpty`)
-- [ ] 3.3 RED ClientFicha tests: sections render, no-memo state
-- [ ] 3.4 GREEN create `pages/ClientFicha.tsx` (reuses `ClientMemories`) + wrapper (`ClientFichaView/NoMemo`)
+- [x] 3.3 RED ClientFicha tests: sections render, no-memo state
+- [x] 3.4 GREEN create `pages/ClientFicha.tsx` (reuses `ClientMemories`) + wrapper (`ClientFichaView/NoMemo`)
 
 ## Phase 4 — S4 Cases (commit: `feat(web): cases list with update/ack refetch`)
 
-- [ ] 4.1 RED CasesList tests: rows render; update/ack POST→refetch
-- [ ] 4.2 GREEN create `pages/CasesList.tsx` (CaseActions→update/ack+refetch) + wrapper (`CasesListView/CasesListEmpty`)
+- [x] 4.1 RED CasesList tests: rows render; update/ack POST→refetch
+- [x] 4.2 GREEN create `pages/CasesList.tsx` (CaseActions→update/ack+refetch) + wrapper (`CasesListView/CasesListEmpty`)
 
 ## Phase 5 — S5 Conversations, backend first (commits: `feat(panel): add GET /panel/api/conversations list endpoint`; `feat(web): conversations inbox + read-only thread`)
 
-- [ ] 5.1 RED extend `tests/functional/test_api_conversations.py`: 200 shape `{"conversations":[...]}`, no assignee key, `last_message_at DESC NULLS LAST, id DESC`, 401 JSON
-- [ ] 5.2 GREEN add `/conversations` list route (`app/panel/api/routes/conversations.py`, select+order_by, `to_conversation_dict`); add `ConversationsResponse` to `types.ts`
-- [ ] 5.3 RED ConversationsList/Thread tests: rows (no Asignado), thread drill-down
-- [ ] 5.4 GREEN create `pages/ConversationsList.tsx` (no Asignado)+`ConversationThread.tsx` (read-only)+wrappers (`ConversationsListView/...Empty`, `ConversationThreadView/...Bubbles/NoReplyNote`)
+- [x] 5.1 RED extend `tests/functional/test_api_conversations.py`: 200 shape `{"conversations":[...]}`, no assignee key, `last_message_at DESC NULLS LAST, id DESC`, 401 JSON
+- [x] 5.2 GREEN add `/conversations` list route (`app/panel/api/routes/conversations.py`, select+order_by, `to_conversation_dict`); add `ConversationsResponse` to `types.ts`
+- [x] 5.3 RED ConversationsList/Thread tests: rows (no Asignado), thread drill-down
+- [x] 5.4 GREEN create `pages/ConversationsList.tsx` (no Asignado)+`ConversationThread.tsx` (read-only)+wrappers (`ConversationsListView/...Empty`, `ConversationThreadView/...Bubbles/NoReplyNote`)
 
 ## Phase 6 — S6 KB+Settings (commits: `feat(web): kb admin list with 403 denied`; `feat(web): settings admin save with 403 denied`)
 
-- [ ] 6.1 RED KbList tests: admin list; operador 403→denied, no crash
-- [ ] 6.2 GREEN create `pages/KbList.tsx` + wrapper (`KbListView/KbListEmpty`)
-- [ ] 6.3 RED Settings tests: save flow; 403 denied
-- [ ] 6.4 GREEN create `pages/Settings.tsx` + wrapper (`SettingsView`)
+- [x] 6.1 RED KbList tests: admin list; operador 403→denied, no crash
+- [x] 6.2 GREEN create `pages/KbList.tsx` + wrapper (`KbListView/KbListEmpty`)
+- [x] 6.3 RED Settings tests: save flow; 403 denied
+- [x] 6.4 GREEN create `pages/Settings.tsx` + wrapper (`SettingsView`)
+
+## Corrective completion — AppShell live view wiring and regression proof
+
+- [x] 7.1 Wire `AppShell.tsx` D7 state routing to the live ClientesList, CasesList, ConversationsList, KbList, and Settings pages; preserve drill-down callbacks for ClientFicha and ConversationThread.
+- [x] 7.2 Add/update AppShell regression coverage and run the complete frontend suite; resolve existing Dashboard/auth/PanelEntry regressions without changing the approved scope.

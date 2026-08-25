@@ -17,14 +17,15 @@ export interface ClientesListProps {
   data?: Customer[] | null;
   state?: ClientesListState;
   onRetry?: () => void;
+  onOpenClient?: (id: number) => void;
 }
 
-const columns: Column<Customer>[] = [
+const columns = (onOpenClient?: (id: number) => void): Column<Customer>[] => [
   {
     key: "name",
     header: "Cliente",
     render: (customer) => (
-      <a href={`#/clientes/${customer.id}`} style={{ color: "var(--primary-700)" }}>
+      <a href={`#/clientes/${customer.id}`} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined} style={{ color: "var(--primary-700)" }}>
         {customer.name ?? "—"}
       </a>
     ),
@@ -56,7 +57,7 @@ function stateMessage(state: ClientesListState, retry: () => void) {
   return null;
 }
 
-export function ClientesList({ data: controlledData, state: controlledState, onRetry }: ClientesListProps) {
+export function ClientesList({ data: controlledData, state: controlledState, onRetry, onOpenClient }: ClientesListProps) {
   const [query, setQuery] = useState("");
   const fetchClients = useCallback(
     () => apiFetch<{ clients: Customer[] }>(`/panel/api/clients${query ? `?q=${encodeURIComponent(query)}` : ""}`).then((response) => response.clients),
@@ -83,7 +84,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       state={stateMessage(state, retry)}
     >
       {state === "loading" ? null : data && data.length > 0 ? (
-        <DataTable columns={columns} rows={data} rowKey={(customer) => String(customer.id)} />
+        <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} />
       ) : state === "empty" || (state === "ready" && data?.length === 0) ? (
         <EmptyState title="No hay registros" description="Ajusta tu búsqueda o agrega nuevos clientes." />
       ) : null}

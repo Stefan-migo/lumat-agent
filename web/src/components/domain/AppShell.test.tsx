@@ -72,6 +72,66 @@ describe('AppShell (T6.4)', () => {
 
     fetchMock.mockRestore();
   });
+
+  it('renders live data pages for every navigation view', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = String(input);
+      const bodies: Record<string, unknown> = {
+        '/panel/api/clients': { clients: [{ id: 7, name: 'Cliente vivo', phone_e164: '+56911111111', state: 'activo', consent_status: true, created_at: '2026-08-25' }] },
+        '/panel/api/cases': { cases: [], users: [] },
+        '/panel/api/conversations': { conversations: [{ id: 9, customer_id: 7, wa_phone: '+56911111111', state: 'active', summary: 'Conversación viva', last_message_at: '2026-08-25', created_at: '2026-08-25' }] },
+        '/panel/api/kb': { docs: [] },
+        '/panel/api/settings': { scope_rules: {}, keywords: [], tone: 'Claro', conversation_limit: 1, daily_limit: 2, meta_cost: 3, snapshot: null },
+      };
+      const body = bodies[new URL(path, 'http://localhost').pathname] ?? { contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    const user = userEvent.setup();
+    const { container } = render(<AppShell user={admin} />);
+    const drawer = async () => {
+      await user.click(screen.getByRole('button', { name: 'Menú' }));
+      return screen.getByRole('dialog', { name: 'Navegación' });
+    };
+
+    await user.click(within(await drawer()).getByRole('button', { name: 'Clientes' }));
+    expect(await screen.findByText('Cliente vivo')).toBeInTheDocument();
+    await user.click(within(await drawer()).getByRole('button', { name: 'Casos' }));
+    expect(await screen.findByText('No hay registros')).toBeInTheDocument();
+    await user.click(within(await drawer()).getByRole('button', { name: 'Conversaciones' }));
+    expect(await screen.findByText('Conversación viva')).toBeInTheDocument();
+    await user.click(within(await drawer()).getByRole('button', { name: 'Base de conocimientos' }));
+    expect(await screen.findByText('No hay documentos')).toBeInTheDocument();
+    await user.click(within(await drawer()).getByRole('button', { name: 'Configuración' }));
+    expect(await screen.findByDisplayValue('Claro')).toBeInTheDocument();
+    expect(container.querySelector('.panel-shell__content')).not.toHaveTextContent('Vista disponible en un batch posterior.');
+    fetchMock.mockRestore();
+  });
+
+  it('keeps client and conversation drill-downs inside D7 state navigation', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      const bodies: Record<string, unknown> = {
+        '/panel/api/clients': { clients: [{ id: 7, name: 'Cliente vivo', phone_e164: '+56911111111', state: 'activo', consent_status: true, created_at: '2026-08-25' }] },
+        '/panel/api/clients/7': { customer: { id: 7, name: 'Cliente vivo', phone_e164: '+56911111111', state: 'activo', consent_status: true, created_at: '2026-08-25' }, memo: '', notes: [], history: { conversations: [], cases: [], messages: [] } },
+        '/panel/api/clients/7/memories': { memories: [] },
+        '/panel/api/conversations': { conversations: [{ id: 9, customer_id: 7, wa_phone: '+56911111111', state: 'active', summary: 'Conversación viva', last_message_at: '2026-08-25', created_at: '2026-08-25' }] },
+        '/panel/api/conversations/9': { conversation: { id: 9, customer_id: 7, state: 'active', created_at: '2026-08-25', summary: 'Conversación viva' }, messages: [{ id: 1, direction: 'inbound', msg_type: 'text', text: 'Hola', created_at: '2026-08-25' }] },
+      };
+      return new Response(JSON.stringify(bodies[path] ?? { contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' }), { status: 200 });
+    });
+    const user = userEvent.setup();
+    render(<AppShell user={admin} />);
+    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Clientes' }));
+    await user.click(await screen.findByRole('link', { name: 'Cliente vivo' }));
+    expect(await screen.findByText('Ficha: Cliente vivo')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Conversaciones' }));
+    await user.click(await screen.findByRole('button', { name: 'Abrir conversación #9' }));
+    expect(await screen.findByText('# 9')).toBeInTheDocument();
+    fetchMock.mockRestore();
+  });
 });
 
 describe('AppShell — desktop sidebar collapse (icon-only ⇄ full nav)', () => {

@@ -17,7 +17,7 @@ describe("Panel entry layout", () => {
     expect(screen.getAllByRole("main")).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Saltar al contenido" })).toHaveAttribute("href", "#panel-main-content");
     const main = screen.getByRole("main");
-    expect(within(main).getByRole("heading", { name: /Buen d[ií]a, equipo Lumat/i })).toBeInTheDocument();
+    expect(within(main).getByRole("heading", { name: "Panel" })).toBeInTheDocument();
     const drawer = screen.getByRole("dialog", { name: "Navegación" });
     expect(within(drawer).getByRole("navigation", { name: "Navegación principal" })).toBeInTheDocument();
     for (const label of ["Panel", "Clientes", "Conversaciones", "Casos", "Base de conocimientos", "Configuración"]) {

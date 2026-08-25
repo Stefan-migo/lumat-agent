@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { casesData } from "./_shared/mockData/cases";
 import { caseStatusLabel, caseStatusTone } from "./_shared/toneMaps";
 import { CasesListView, CasesListEmpty } from "./CasesList.stories";
+import { CasesList } from "../../components/pages/CasesList";
 
 describe("CasesList page story (T4.2, R-PRD-PG-6)", () => {
   it("renders the Spanish page title 'Casos'", () => {
@@ -138,5 +139,61 @@ describe("CasesList Empty story", () => {
   it("renders the empty state with the approved Spanish message", () => {
     render(<CasesListEmpty />);
     expect(screen.getByText("No hay registros")).toBeInTheDocument();
+  });
+});
+
+describe("CasesList API behavior", () => {
+  it("renders rows from the cases API response", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(casesData), { status: 200 }),
+    );
+
+    render(<CasesList />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    expect(screen.getByText(`#${casesData.cases[0].id}`)).toBeInTheDocument();
+    expect(screen.getByText(casesData.cases[0].service)).toBeInTheDocument();
+  });
+
+  it("POSTs an update and refetches the cases list", async () => {
+    const updated = { ...casesData.cases[0], status: "abierto" };
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(casesData), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, case: updated }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...casesData, cases: [updated, ...casesData.cases.slice(1)] }), { status: 200 }));
+
+    render(<CasesList />);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    const row = screen.getByText(`#${updated.id}`).closest("tr")!;
+    fireEvent.change(within(row).getByLabelText(/estado/i), { target: { value: "abierto" } });
+    fireEvent.click(within(row).getByRole("button", { name: "Actualizar" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock.mock.calls[1][0]).toBe(`/panel/api/cases/${updated.id}/update`);
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({
+      status: "abierto",
+      responsible_id: updated.responsible_id,
+    });
+    expect(fetchMock.mock.calls[2][0]).toBe("/panel/api/cases");
+  });
+
+  it("POSTs an acknowledgement and refetches the cases list", async () => {
+    const acknowledged = { ...casesData.cases[0], ack_by: "operador" };
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify(casesData), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, case: acknowledged }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...casesData, cases: [acknowledged, ...casesData.cases.slice(1)] }), { status: 200 }));
+
+    render(<CasesList />);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    const row = screen.getByText(`#${acknowledged.id}`).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: "Reconocer" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock.mock.calls[1][0]).toBe(`/panel/api/cases/${acknowledged.id}/ack`);
+    expect(fetchMock.mock.calls[1][1]?.method).toBe("POST");
+    expect(fetchMock.mock.calls[2][0]).toBe("/panel/api/cases");
   });
 });

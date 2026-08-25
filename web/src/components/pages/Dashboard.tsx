@@ -37,6 +37,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
   const state = controlledState ?? fetched.state;
   const retry = onRetry ?? fetched.retry;
   const caption = data ? `Actividad de los últimos ${data.window_days} días · Desde ${data.window_start}` : undefined;
+  const motivos = data?.motivos ?? [];
 
   return (
     <PageFrame title="Panel" meta={caption} state={stateMessage(state, retry)}>
@@ -49,9 +50,9 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
           </section>
           <section aria-labelledby="motivos-title">
             <h2 id="motivos-title">Motivos</h2>
-            {data.motivos.length ? (
+            {motivos.length ? (
               <ul>
-                {data.motivos.map(([motivo, count]) => <li key={motivo}>{motivo}: {count}</li>)}
+                {motivos.map(([motivo, count]) => <li key={motivo}>{motivo}: {count}</li>)}
               </ul>
             ) : <p>No hay registros</p>}
           </section>

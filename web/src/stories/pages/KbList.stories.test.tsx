@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { docs } from "./_shared/mockData/kb";
 import { kbStatusLabel } from "./_shared/toneMaps";
+import { KbList } from "../../components/pages/KbList";
 import { KbListView, KbListEmpty } from "./KbList.stories";
 
 describe("KbList page story (T5.2 / S6 DS-UI-COPY/STATES/LABELS)", () => {
@@ -142,5 +143,31 @@ describe("KbList Empty story", () => {
   it("renders the empty state with the approved Spanish message", () => {
     render(<KbListEmpty />);
     expect(screen.getByText("No hay documentos")).toBeInTheDocument();
+  });
+});
+
+describe("KbList API page", () => {
+  it("renders the admin document list from GET /panel/api/kb", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ docs }), { status: 200 }));
+
+    render(<KbList />);
+
+    expect(await screen.findByText(docs[0].title)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/panel/api/kb", expect.objectContaining({ credentials: "include" }));
+    fetchMock.mockRestore();
+  });
+
+  it("renders permission denied when an operador receives 403 without crashing", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail: "Admin role required" }), { status: 403 }),
+    );
+
+    render(<KbList />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permiso para ver este panel");
+    expect(screen.queryByText("No pudimos cargar la base de conocimientos")).toBeNull();
+    fetchMock.mockRestore();
   });
 });

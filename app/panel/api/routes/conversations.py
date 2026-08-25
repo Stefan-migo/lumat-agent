@@ -31,6 +31,21 @@ def _conversation_or_404(session: Session, conversation_id: int) -> Conversation
     return conversation
 
 
+@router.get("/conversations")
+def conversations_list(
+    session: Session = Depends(get_db),
+    current: User = Depends(require_user_json),
+) -> dict:
+    """List conversation metadata, most recently active first."""
+    rows = session.scalars(
+        select(Conversation).order_by(
+            Conversation.last_message_at.desc().nulls_last(),
+            Conversation.id.desc(),
+        )
+    ).all()
+    return {"conversations": [to_conversation_dict(row) for row in rows]}
+
+
 @router.get("/conversations/{conversation_id}")
 def conversation_thread(
     conversation_id: int,
