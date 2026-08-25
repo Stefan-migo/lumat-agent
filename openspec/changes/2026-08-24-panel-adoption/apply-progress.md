@@ -1,13 +1,13 @@
-# Apply Progress: Panel Adoption — S2 Shell + Dashboard
+# Apply Progress: Panel Adoption — S3a ClientesList
 
 ## Status
 - Change: `2026-08-24-panel-adoption`
-- Work unit: Phase 2 / S2 Shell + Dashboard, tasks 2.1–2.4
+- Work unit: Phase 3 / S3a ClientesList, tasks 3.1–3.2
 - Mode: Strict TDD
-- Delivery: `auto-chain`, `stacked-to-main`, PR2 focused boundary
-- Commit: `feat(web): shell view map + real KPI dashboard`
-- Rollback: revert the S2 commit
-- Completed: 8/28 tasks (S1: 1.1–1.4; S2: 2.1–2.4)
+- Delivery: `auto-chain`, `stacked-to-main`, PR3 focused boundary
+- Commit: `feat(web): client list search and empty state`
+- Rollback: revert the S3a commit
+- Completed: 10/28 tasks (S1: 1.1–1.4; S2: 2.1–2.4; S3a: 3.1–3.2)
 
 ## Completed Tasks
 - [x] 1.1 RED coverage for successful login, invalid/locked login, logout-to-login, and `postJson` success/error.
@@ -56,6 +56,20 @@
 | Runtime harness command/scenario and exact result | N/A — S2 has no live server boundary; Dashboard and hook behavior use native fetch stubs/promises in Vitest. |
 | Rollback boundary | Revert the S2 commit; removes `Dashboard`, `useAsyncData`, S2 tests, AppShell map, and Dashboard wrapper without touching S1 or later slices. |
 
+## S3a TDD Cycle Evidence
+| Task | Test file | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 3.1 | `web/src/stories/pages/ClientesList.stories.test.tsx` | Component integration with fetch stub | ✅ 11/11 existing ClientesList tests | ✅ Written first; failed because `components/pages/ClientesList` did not exist | ✅ 14/14 focused tests passed | ✅ `Jorge` query plus encoded `Marcela Fuentes` query; empty result companion | ✅ Clean; reused existing API, hook, table, and state primitives |
+| 3.2 | `web/src/stories/pages/ClientesList.stories.test.tsx` | Component integration | ✅ 11/11 existing ClientesList tests | ✅ Wrapper/page import contract failed before page creation | ✅ 14/14 focused tests passed | ✅ Non-empty customer rows and controlled empty state | ✅ Thin story wrapper; no new dependency or abstraction |
+
+## S3a Work Unit Evidence
+| Evidence | Result |
+|----------|--------|
+| Focused test command and exact result | `cd web && npm test -- ClientesList` — PASS; 1 file, 14 tests passed. |
+| Type check | `cd web && npx tsc -b` — PASS; exit code 0. |
+| Runtime harness command/scenario and exact result | N/A — frontend-only slice; API interaction is exercised through native `fetch` stubs in Vitest, with no live server boundary assigned to S3a. |
+| Rollback boundary | Revert the S3a commit; removes `web/src/components/pages/ClientesList.tsx`, its focused tests, and the ClientesList story wrapper only, preserving S1/S2 and leaving ClientFicha untouched. |
+
 ## Graph Check
 Graph was present and non-empty at `graphify-out/graph.json`; `graphify-out/GRAPH_REPORT.md` was read before implementation. No graph refresh was run.
 
@@ -68,15 +82,30 @@ Consulted nodes:
 - `StatCard()` / `web/src/stories/pages/_shared/StatCard.tsx`
 - `kpis()` / `app/panel/api/routes/dashboard.py`
 - `Kpis` / `web/src/types.ts`
+- `ClientesList.stories.tsx` / `web/src/stories/pages/ClientesList.stories.tsx`
+- `ClientesListView()` / `ClientesListEmpty()` story exports
+- `ClientesList()` / `web/src/components/pages/ClientesList.tsx`
+- `DataTable()` / `web/src/stories/pages/_shared/DataTable.tsx`
+- `StateMessage()` / `web/src/stories/pages/_shared/StateMessage.tsx`
+- `PageFrame()` / `web/src/stories/pages/_shared/PageFrame.tsx`
+- `apiFetch()` / `web/src/api.ts`
+- `clients_list()` / `app/panel/api/routes/clients.py`
 
 Consulted edges:
 - `AppShell.tsx --imports_from--> PanelShell.tsx`
 - `Dashboard.stories.tsx --imports_from--> StatCard.tsx`
 - `AppShell()` → `PanelShell()` shell relationship from the graph query
 - `Dashboard` → `/panel/api/kpis` contract validated against `kpis()` and `compute_kpis()` source
+- `ClientesList.stories.tsx --imports_from--> DataTable.tsx`
+- `ClientesList` → `apiFetch()` → `/panel/api/clients?q=` contract validated against `clients_list()` / `search_customers()`
+- `ClientesList` → `PageFrame()` → `StateMessage()` / `DataTable()` shared rendering path
+
+## Pre-apply Ponytail Review
+- Clean slate: no router, dependency, pagination, client class, or speculative abstraction was added; the page reuses existing API, hook, table, state, and design-system primitives.
 
 ## Remaining Tasks
-- [ ] Phase 3 / S3 Clientes tasks 3.1–3.4
+- [x] Phase 3 / S3a ClientesList tasks 3.1–3.2
+- [ ] Phase 3 / S3b ClientFicha tasks 3.3–3.4
 - [ ] Phase 4 / S4 Cases tasks 4.1–4.2
 - [ ] Phase 5 / S5 Conversations tasks 5.1–5.4
 - [ ] Phase 6 / S6 KB + Settings tasks 6.1–6.4

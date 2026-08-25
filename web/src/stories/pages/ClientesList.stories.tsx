@@ -1,37 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { Button } from "../../components/primitives/Button";
-import { SearchInput } from "../../components/primitives/SearchInput";
-import type { Column } from "./_shared/DataTable";
-import { DataTable } from "./_shared/DataTable";
-import { PageFrame } from "./_shared/PageFrame";
-import { EmptyState } from "./_shared/EmptyState";
-import { StateMessage } from "./_shared/StateMessage";
-import { Badge } from "../../components/primitives/Badge";
+import { ClientesList, type ClientesListState } from "../../components/pages/ClientesList";
 import { clients } from "./_shared/mockData/clients";
-import { customerStateLabel, customerStateTone } from "./_shared/toneMaps";
-import type { Customer } from "../../types";
-
-export type ClientesListState = "ready" | "loading" | "empty" | "stale" | "partial-error" | "fatal-error";
-
-const columns: Column<Customer>[] = [
-  {
-    key: "name",
-    header: "Cliente",
-    render: (c) => (
-      <a href={`#/clientes/${c.id}`} style={{ color: "var(--primary-700)" }}>
-        {c.name ?? "—"}
-      </a>
-    ),
-  },
-  { key: "phone", header: "Teléfono", render: (c) => c.phone_e164 ?? "—" },
-  {
-    key: "state",
-    header: "Estado",
-    render: (c) => <Badge tone={customerStateTone(c.state)}>{customerStateLabel(c.state)}</Badge>,
-  },
-  { key: "consent", header: "Consentimiento", render: (c) => (c.consent_status ? "Sí" : "No") },
-  { key: "created", header: "Creado", render: (c) => c.created_at?.slice(0, 10) ?? "—" },
-];
 
 /** Clientes list body (search + export CSV + table) on the shared frame with
  *  a complete state matrix (loading/empty/stale/partial-error/fatal-error).
@@ -39,45 +8,12 @@ const columns: Column<Customer>[] = [
  *  state badges render approved Spanish labels (DS-UI-LABELS); banners pair
  *  a visible label and role, never color alone (DS-UI-STATES). */
 export function ClientesListView({ state = "ready" }: { state?: ClientesListState }) {
-  return (
-    <PageFrame
-      title="Clientes"
-      meta={`${clients.length} clientes`}
-      actions={
-        <>
-          <SearchInput aria-label="Buscar clientes" onSearch={() => {}} />
-          <Button variant="secondary" href="data:text/csv;base64,">Exportar CSV</Button>
-        </>
-      }
-      state={
-        state === "loading" ? (
-          <StateMessage tone="info" role="status" spinner title="Cargando clientes" detail="Reuniendo el padrón de clientes de la operación." />
-        ) : state === "fatal-error" ? (
-          <StateMessage tone="danger" role="alert" title="No pudimos cargar los clientes" detail="Reintenta para recuperar el listado." />
-        ) : state === "stale" ? (
-          <StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="La última consulta no pudo completarse. Mostramos la información disponible." />
-        ) : state === "partial-error" ? (
-          <StateMessage tone="danger" role="status" title="No pudimos actualizar parte del listado" detail="El padrón está vigente, pero un origen no respondió. Reintenta en unos minutos." />
-        ) : null
-      }
-    >
-      {state === "loading" ? null : (
-        <DataTable columns={columns} rows={clients} rowKey={(c) => String(c.id)} />
-      )}
-    </PageFrame>
-  );
+  return <ClientesList data={state === "empty" ? [] : clients} state={state} />;
 }
 
 /** Clientes list empty state. Exported for tests. */
 export function ClientesListEmpty() {
-  return (
-    <PageFrame
-      title="Clientes"
-      actions={<SearchInput aria-label="Buscar clientes" onSearch={() => {}} />}
-    >
-      <EmptyState title="No hay registros" description="Ajusta tu búsqueda o agrega nuevos clientes." />
-    </PageFrame>
-  );
+  return <ClientesList data={[]} state="empty" />;
 }
 
 /** Clientes list loading state. */

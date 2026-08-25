@@ -45,8 +45,8 @@ Sub-units (S3a/b, S5a/b, S6a/b) build sequentially; promote the second sub-unit 
 
 ## Phase 3 — S3 Clientes (commit: `feat(web): client list search + ficha drill-down`)
 
-- [ ] 3.1 RED ClientesList tests: `?q=` search, empty "No hay registros"
-- [ ] 3.2 GREEN create `pages/ClientesList.tsx` + wrapper (`ClientesListView/ClientesListEmpty`)
+- [x] 3.1 RED ClientesList tests: `?q=` search, empty "No hay registros"
+- [x] 3.2 GREEN create `pages/ClientesList.tsx` + wrapper (`ClientesListView/ClientesListEmpty`)
 - [ ] 3.3 RED ClientFicha tests: sections render, no-memo state
 - [ ] 3.4 GREEN create `pages/ClientFicha.tsx` (reuses `ClientMemories`) + wrapper (`ClientFichaView/NoMemo`)
 

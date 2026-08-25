@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import { fireEvent, waitFor } from "@testing-library/react";
 import { clients as customers } from "./_shared/mockData/clients";
 import { customerStateLabel, customerStateTone } from "./_shared/toneMaps";
 import { ClientesListView, ClientesListEmpty } from "./ClientesList.stories";
+import { ClientesList } from "../../components/pages/ClientesList";
 
 describe("ClientesList page story (R-PRD-PG-6)", () => {
   it("renders the page title", () => {
@@ -87,5 +89,50 @@ describe("ClientesList Empty story", () => {
   it("renders the empty state with the approved Spanish message", () => {
     render(<ClientesListEmpty />);
     expect(screen.getByText("No hay registros")).toBeInTheDocument();
+  });
+});
+
+describe("ClientesList API behavior", () => {
+  it("adds the search query to the clients API request", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ clients: customers.slice(0, 1), query: "Jorge" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ClientesList />);
+    const search = screen.getByRole("searchbox", { name: "Buscar clientes" });
+    fireEvent.change(search, { target: { value: "Jorge" } });
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Jorge")).toBe(true);
+    });
+  });
+
+  it("renders the shared empty message when the API has no matching clients", () => {
+    render(<ClientesList data={[]} state="empty" />);
+
+    expect(screen.getByText("No hay registros")).toBeInTheDocument();
+  });
+
+  it("encodes spaces in a search query before requesting the API", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ clients: [], query: "Marcela Fuentes" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ClientesList />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar clientes" }), {
+      target: { value: "Marcela Fuentes" },
+    });
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Marcela%20Fuentes")).toBe(true);
+    });
   });
 });
