@@ -38,10 +38,10 @@ Sub-units (S3a/b, S5a/b, S6a/b) build sequentially; promote the second sub-unit 
 
 ## Phase 2 — S2 Shell+Dashboard (commit: `feat(web): shell view map + real KPI dashboard`)
 
-- [ ] 2.1 RED `AppShell.test.tsx`+Dashboard tests: nav→pages; StatCards counts; no deltas/feed
-- [ ] 2.2 GREEN create `hooks/useAsyncData.ts` (loading/ready/empty/error/denied+retry; 403→denied)
-- [ ] 2.3 GREEN create `pages/Dashboard.tsx` — Kpis→StatCards (contacts/derived/visit_requests)+motivos+window caption
-- [ ] 2.4 GREEN `AppShell.tsx` view→page map (unwired placeholder); `Dashboard.stories.tsx` wrapper (`DashboardOverview`)
+- [x] 2.1 RED `AppShell.test.tsx`+Dashboard tests: nav→pages; StatCards counts; no deltas/feed
+- [x] 2.2 GREEN create `hooks/useAsyncData.ts` (loading/ready/empty/error/denied+retry; 403→denied)
+- [x] 2.3 GREEN create `pages/Dashboard.tsx` — Kpis→StatCards (contacts/derived/visit_requests)+motivos+window caption
+- [x] 2.4 GREEN `AppShell.tsx` view→page map (unwired placeholder); `Dashboard.stories.tsx` wrapper (`DashboardOverview`)
 
 ## Phase 3 — S3 Clientes (commit: `feat(web): client list search + ficha drill-down`)
 

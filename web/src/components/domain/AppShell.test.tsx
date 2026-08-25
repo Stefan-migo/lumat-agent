@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
@@ -43,7 +43,7 @@ describe('AppShell (T6.4)', () => {
   it('switches views on nav click and marks the active view', async () => {
     const user = userEvent.setup();
     const { container } = render(<AppShell user={operador} />);
-    expect(screen.getByRole('heading', { name: 'Panel' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Panel', level: 1 })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Menú' }));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
@@ -57,7 +57,20 @@ describe('AppShell (T6.4)', () => {
     // Drawer closes on navigate; the desktop sidebar nav marks the active view.
     expect(sidebar(container).getByText('Panel').closest('button')).not.toHaveAttribute('aria-current', 'page');
     expect(sidebar(container).getByText('Clientes').closest('button')).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'Clientes' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Clientes', level: 1 })).toBeInTheDocument();
+  });
+
+  it('renders the real dashboard page for the Panel view', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ contacts: 12, motivos: [['consulta', 3]], derived: 2, visit_requests: 1, window_days: 7, window_start: '2026-08-18' }), { status: 200 }),
+    );
+
+    render(<AppShell user={operador} />);
+    expect(await screen.findByText('Contactos')).toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.queryByText('disponible en un batch posterior')).not.toBeInTheDocument();
+
+    fetchMock.mockRestore();
   });
 });
 
@@ -115,7 +128,7 @@ describe('AppShell — desktop sidebar collapse (icon-only ⇄ full nav)', () =>
     expect(clientesBtn).not.toHaveAttribute('aria-current', 'page');
 
     await user.click(clientesBtn);
-    expect(screen.getByRole('heading', { name: 'Clientes' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Clientes', level: 1 })).toBeInTheDocument();
     expect(panelBtn).not.toHaveAttribute('aria-current', 'page');
     expect(clientesBtn).toHaveAttribute('aria-current', 'page');
   });

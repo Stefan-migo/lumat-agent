@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { User } from '../../types';
 import type { PanelView } from './PanelShell';
 import { PanelShell } from './PanelShell';
+import { Dashboard } from '../pages/Dashboard';
 
 /** Top-level SPA views, switched via AppShell state (D7 — no router; `ponytail:`
  *  no URL shareability, upgrade path = react-router hash router when desired).
@@ -34,11 +35,14 @@ export function AppShell({ user, onLogout }: AppShellProps) {
 
   return (
     <PanelShell user={user} currentView={view} onNavigate={setView} onLogout={onLogout}>
-      <main>
-        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-          Vista {VIEW_LABELS[view]} disponible en un batch posterior.
-        </p>
-      </main>
+      {view === 'dashboard' ? <Dashboard /> : (
+        <main>
+          <h1>{VIEW_LABELS[view]}</h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+            Vista disponible en un batch posterior.
+          </p>
+        </main>
+      )}
     </PanelShell>
   );
 }
