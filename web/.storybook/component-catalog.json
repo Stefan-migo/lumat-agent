@@ -1,0 +1,2268 @@
+{
+  "version": "1.2.0",
+  "components": [
+    {
+      "id": "glitch-text",
+      "storyFile": "../src/components/TextAnimations/GlitchText.stories.jsx",
+      "visualContext": [
+        "hero",
+        "callout",
+        "feedback"
+      ],
+      "moodTags": [
+        "edgy",
+        "tech",
+        "playful"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "HoverOnly": {},
+          "SlowMotion": {},
+          "NoShadows": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "text-pressure",
+      "storyFile": "../src/components/TextAnimations/TextPressure.stories.jsx",
+      "visualContext": [
+        "hero",
+        "headline",
+        "callout"
+      ],
+      "moodTags": [
+        "dynamic",
+        "experimental",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "AllAxes": {},
+          "NoFlex": {},
+          "Minimal": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "fuzzy-text",
+      "storyFile": "../src/components/TextAnimations/FuzzyText.stories.jsx",
+      "visualContext": [
+        "hero",
+        "hover",
+        "feedback"
+      ],
+      "moodTags": [
+        "playful",
+        "chaotic",
+        "edgy"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Vertical": {},
+          "HighFuzz": {},
+          "GlitchMode": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "curved-loop",
+      "storyFile": "../src/components/TextAnimations/CurvedLoop.stories.jsx",
+      "visualContext": [
+        "hero",
+        "showcase",
+        "marquee"
+      ],
+      "moodTags": [
+        "dynamic",
+        "playful",
+        "elegant"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "FastRight": {},
+          "ExtremeCurve": {},
+          "Stationary": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "shiny-text",
+      "storyFile": "../src/components/TextAnimations/ShinyText/ShinyText.stories.jsx",
+      "visualContext": [
+        "hero",
+        "callout",
+        "headline"
+      ],
+      "moodTags": [
+        "elegant",
+        "modern",
+        "premium"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Slow": {},
+          "RightToLeft": {},
+          "Yoyo": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "gradient-text",
+      "storyFile": "../src/components/TextAnimations/GradientText/GradientText.stories.jsx",
+      "visualContext": [
+        "hero",
+        "headline",
+        "callout",
+        "brand"
+      ],
+      "moodTags": [
+        "vibrant",
+        "dynamic",
+        "playful"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Vertical": {},
+          "Fast": {},
+          "Yoyo": {},
+          "PauseOnHover": {},
+          "WithBorder": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "circular-text",
+      "storyFile": "../src/components/TextAnimations/CircularText/CircularText.stories.jsx",
+      "visualContext": [
+        "hero",
+        "showcase",
+        "badge",
+        "marquee"
+      ],
+      "moodTags": [
+        "playful",
+        "dynamic",
+        "experimental"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "SlowSpin": {},
+          "SpeedUpOnHover": {},
+          "PauseOnHover": {},
+          "GoBonkers": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "blur-text",
+      "storyFile": "../src/components/TextAnimations/BlurText/BlurText.stories.jsx",
+      "visualContext": [
+        "hero",
+        "callout",
+        "scroll-reveal"
+      ],
+      "moodTags": [
+        "modern",
+        "smooth",
+        "elegant"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "ByCharacter": {},
+          "FromBottom": {},
+          "Fast": {},
+          "Slow": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "rotating-text",
+      "storyFile": "../src/components/TextAnimations/RotatingText/RotatingText.stories.jsx",
+      "visualContext": [
+        "hero",
+        "headline",
+        "showcase"
+      ],
+      "moodTags": [
+        "dynamic",
+        "playful",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Fast": {},
+          "Slow": {},
+          "StaggerWords": {},
+          "SingleChar": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "scrambled-text",
+      "storyFile": "../src/components/TextAnimations/ScrambledText/ScrambledText.stories.jsx",
+      "visualContext": [
+        "hero",
+        "hover",
+        "feedback"
+      ],
+      "moodTags": [
+        "playful",
+        "tech",
+        "experimental"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Wide": {},
+          "FastScramble": {},
+          "CustomChars": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "shuffle",
+      "storyFile": "../src/components/TextAnimations/Shuffle/Shuffle.stories.jsx",
+      "visualContext": [
+        "hero",
+        "headline",
+        "scroll-reveal"
+      ],
+      "moodTags": [
+        "dynamic",
+        "playful",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "FromLeft": {},
+          "StaggerHeavy": {},
+          "Fast": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "split-text",
+      "storyFile": "../src/components/TextAnimations/SplitText/SplitText.stories.jsx",
+      "visualContext": [
+        "hero",
+        "callout",
+        "scroll-reveal"
+      ],
+      "moodTags": [
+        "modern",
+        "smooth",
+        "elegant"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "ByWord": {},
+          "Fast": {},
+          "FromTop": {},
+          "H1Tag": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "scroll-reveal",
+      "storyFile": "../src/components/TextAnimations/ScrollReveal/ScrollReveal.stories.jsx",
+      "visualContext": [
+        "hero",
+        "callout",
+        "scroll-reveal"
+      ],
+      "moodTags": [
+        "dynamic",
+        "smooth",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "NoBlur": {},
+          "ByCharacter": {},
+          "Subtle": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "scroll-float",
+      "storyFile": "../src/components/TextAnimations/ScrollFloat/ScrollFloat.stories.jsx",
+      "visualContext": [
+        "hero",
+        "callout",
+        "scroll-reveal"
+      ],
+      "moodTags": [
+        "playful",
+        "dynamic",
+        "smooth"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "ByCharacter": {},
+          "Fast": {},
+          "Bouncy": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "scroll-velocity",
+      "storyFile": "../src/components/TextAnimations/ScrollVelocity/ScrollVelocity.stories.jsx",
+      "visualContext": [
+        "hero",
+        "marquee",
+        "showcase"
+      ],
+      "moodTags": [
+        "dynamic",
+        "modern",
+        "playful"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Fast": {},
+          "RightDirection": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "falling-text",
+      "storyFile": "../src/components/TextAnimations/FallingText/FallingText.stories.jsx",
+      "visualContext": [
+        "hero",
+        "feedback",
+        "playground"
+      ],
+      "moodTags": [
+        "playful",
+        "chaotic",
+        "dynamic"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "AutoTrigger": {},
+          "LightGravity": {},
+          "ScrollTrigger": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "decrypted-text",
+      "storyFile": "../src/components/TextAnimations/DecryptedText/DecryptedText.stories.jsx",
+      "visualContext": [
+        "hero",
+        "hover",
+        "feedback"
+      ],
+      "moodTags": [
+        "playful",
+        "tech",
+        "edgy"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "HoverTrigger": {},
+          "Instant": {},
+          "Loop": {},
+          "CustomChars": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "text-type",
+      "storyFile": "../src/components/TextAnimations/TextType/TextType.stories.jsx",
+      "visualContext": [
+        "hero",
+        "feedback",
+        "callout"
+      ],
+      "moodTags": [
+        "dynamic",
+        "playful",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "NoCursor": {},
+          "Slow": {},
+          "NoLoop": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "true-focus",
+      "storyFile": "../src/components/TextAnimations/TrueFocus/TrueFocus.stories.jsx",
+      "visualContext": [
+        "hero",
+        "callout",
+        "headline"
+      ],
+      "moodTags": [
+        "dynamic",
+        "modern",
+        "elegant"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Slow": {},
+          "ManualMode": {},
+          "LargeBlur": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "variable-proximity",
+      "storyFile": "../src/components/TextAnimations/VariableProximity/VariableProximity.stories.jsx",
+      "visualContext": [
+        "hero",
+        "headline",
+        "showcase"
+      ],
+      "moodTags": [
+        "dynamic",
+        "experimental",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Wide": {},
+          "NarrowRange": {},
+          "SlowResponsiveness": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "count-up",
+      "storyFile": "../src/components/TextAnimations/CountUp/CountUp.stories.jsx",
+      "visualContext": [
+        "hero",
+        "stats",
+        "feedback"
+      ],
+      "moodTags": [
+        "minimal",
+        "clean",
+        "functional"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "LargeNumber": {},
+          "Fast": {},
+          "WithDelay": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "text-cursor",
+      "storyFile": "../src/components/TextAnimations/TextCursor/TextCursor.stories.jsx",
+      "visualContext": [
+        "hero",
+        "playground",
+        "feedback"
+      ],
+      "moodTags": [
+        "playful",
+        "dynamic",
+        "experimental"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "CustomText": {},
+          "ManyPoints": {},
+          "NoFloat": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "ascii-text",
+      "storyFile": "../src/components/TextAnimations/ASCIIText/ASCIIText.stories.jsx",
+      "visualContext": [
+        "hero",
+        "headline",
+        "showcase"
+      ],
+      "moodTags": [
+        "tech",
+        "edgy",
+        "experimental"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "NoWaves": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "star-border",
+      "storyFile": "../src/components/Animations/StarBorder/StarBorder.stories.jsx",
+      "visualContext": [
+        "hero",
+        "callout",
+        "button"
+      ],
+      "moodTags": [
+        "premium",
+        "dynamic",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Blue": {},
+          "Fast": {},
+          "Thick": {},
+          "AsDiv": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "glare-hover",
+      "storyFile": "../src/components/Animations/GlareHover/GlareHover.stories.jsx",
+      "visualContext": [
+        "card",
+        "showcase",
+        "hover"
+      ],
+      "moodTags": [
+        "modern",
+        "sleek",
+        "premium"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "CustomGlare": {},
+          "LargeGlare": {},
+          "PlayOnce": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "noise",
+      "storyFile": "../src/components/Animations/Noise/Noise.stories.jsx",
+      "visualContext": [
+        "background",
+        "overlay",
+        "fullscreen"
+      ],
+      "moodTags": [
+        "grunge",
+        "film",
+        "texture"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Subtle": {},
+          "FineGrain": {},
+          "Static": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "magnet",
+      "storyFile": "../src/components/Animations/Magnet/Magnet.stories.jsx",
+      "visualContext": [
+        "card",
+        "button",
+        "hover"
+      ],
+      "moodTags": [
+        "playful",
+        "dynamic",
+        "interactive"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Strong": {},
+          "Weak": {},
+          "Disabled": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "magnet-lines",
+      "storyFile": "../src/components/Animations/MagnetLines/MagnetLines.stories.jsx",
+      "visualContext": [
+        "background",
+        "showcase",
+        "cursor"
+      ],
+      "moodTags": [
+        "dynamic",
+        "tech",
+        "interactive"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "ManyLines": {},
+          "ShortLines": {},
+          "SlowRotation": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "click-spark",
+      "storyFile": "../src/components/Animations/ClickSpark/ClickSpark.stories.jsx",
+      "visualContext": [
+        "button",
+        "feedback",
+        "interaction"
+      ],
+      "moodTags": [
+        "playful",
+        "dynamic",
+        "feedback"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "ManySparks": {},
+          "Large": {},
+          "DifferentColor": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "fade-content",
+      "storyFile": "../src/components/Animations/FadeContent/FadeContent.stories.jsx",
+      "visualContext": [
+        "scroll-reveal",
+        "content",
+        "transition"
+      ],
+      "moodTags": [
+        "smooth",
+        "clean",
+        "minimal"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Slow": {},
+          "Delayed": {},
+          "BottomFade": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "orbit-images",
+      "storyFile": "../src/components/Animations/OrbitImages/OrbitImages.stories.jsx",
+      "visualContext": [
+        "showcase",
+        "hero",
+        "gallery"
+      ],
+      "moodTags": [
+        "dynamic",
+        "playful",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "SpeedUp": {},
+          "LargerOrbit": {},
+          "SixImages": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "electric-border",
+      "storyFile": "../src/components/Animations/ElectricBorder/ElectricBorder.stories.jsx",
+      "visualContext": [
+        "border",
+        "container",
+        "card"
+      ],
+      "moodTags": [
+        "edgy",
+        "tech",
+        "dynamic"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Fast": {},
+          "HighChaos": {},
+          "Blue": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "gradual-blur",
+      "storyFile": "../src/components/Animations/GradualBlur/GradualBlur.stories.jsx",
+      "visualContext": [
+        "scroll-reveal",
+        "content",
+        "transition"
+      ],
+      "moodTags": [
+        "smooth",
+        "clean",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "HeavyBlur": {},
+          "QuickTransition": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "logo-loop",
+      "storyFile": "../src/components/Animations/LogoLoop/LogoLoop.stories.jsx",
+      "visualContext": [
+        "marquee",
+        "showcase",
+        "gallery"
+      ],
+      "moodTags": [
+        "dynamic",
+        "playful",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Fast": {},
+          "RightDirection": {},
+          "ManyItems": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "metallic-paint",
+      "storyFile": "../src/components/Animations/MetallicPaint/MetallicPaint.stories.jsx",
+      "visualContext": [
+        "background",
+        "card",
+        "showcase"
+      ],
+      "moodTags": [
+        "premium",
+        "sleek",
+        "dynamic"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Gold": {},
+          "Silver": {},
+          "FastShimmer": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "splash-cursor",
+      "storyFile": "../src/components/Animations/SplashCursor/SplashCursor.stories.jsx",
+      "visualContext": [
+        "background",
+        "cursor",
+        "fullscreen"
+      ],
+      "moodTags": [
+        "playful",
+        "dynamic",
+        "colorful"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Rainbow": {},
+          "LargeSplats": {},
+          "SingleColor": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "blob-cursor",
+      "storyFile": "../src/components/Animations/BlobCursor/BlobCursor.stories.jsx",
+      "visualContext": [
+        "cursor",
+        "background",
+        "fullscreen"
+      ],
+      "moodTags": [
+        "playful",
+        "dynamic",
+        "smooth"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "LargeBlob": {},
+          "FadeMode": {},
+          "DifferentColor": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "pixel-transition",
+      "storyFile": "../src/components/Animations/PixelTransition/PixelTransition.stories.jsx",
+      "visualContext": [
+        "transition",
+        "showcase",
+        "image"
+      ],
+      "moodTags": [
+        "modern",
+        "dynamic",
+        "playful"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "FineGrid": {},
+          "Slow": {},
+          "Fast": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "animated-content",
+      "storyFile": "../src/components/Animations/AnimatedContent/AnimatedContent.stories.jsx",
+      "visualContext": [
+        "hero",
+        "scroll-reveal",
+        "callout"
+      ],
+      "moodTags": [
+        "smooth",
+        "dynamic",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "ByWord": {},
+          "Fast": {},
+          "Slow": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "crosshair",
+      "storyFile": "../src/components/Animations/Crosshair/Crosshair.stories.jsx",
+      "visualContext": [
+        "cursor",
+        "fullscreen",
+        "interaction"
+      ],
+      "moodTags": [
+        "tech",
+        "clean",
+        "functional"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Large": {},
+          "Thin": {},
+          "DifferentColor": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "cubes",
+      "storyFile": "../src/components/Animations/Cubes/Cubes.stories.jsx",
+      "visualContext": [
+        "background",
+        "showcase",
+        "fullscreen"
+      ],
+      "moodTags": [
+        "modern",
+        "dynamic",
+        "playful"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "LargeGrid": {},
+          "BigCubes": {},
+          "Monochrome": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "image-trail",
+      "storyFile": "../src/components/Animations/ImageTrail/ImageTrail.stories.jsx",
+      "visualContext": [
+        "cursor",
+        "gallery",
+        "showcase"
+      ],
+      "moodTags": [
+        "playful",
+        "dynamic",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "LongTrail": {},
+          "SmallImages": {},
+          "Fast": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "sticker-peel",
+      "storyFile": "../src/components/Animations/StickerPeel/StickerPeel.stories.jsx",
+      "visualContext": [
+        "card",
+        "hover",
+        "interaction"
+      ],
+      "moodTags": [
+        "playful",
+        "clean",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "LargePeel": {},
+          "DarkPeel": {},
+          "NoHover": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "target-cursor",
+      "storyFile": "../src/components/Animations/TargetCursor/TargetCursor.stories.jsx",
+      "visualContext": [
+        "cursor",
+        "fullscreen",
+        "interaction"
+      ],
+      "moodTags": [
+        "tech",
+        "clean",
+        "precise"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Large": {},
+          "NoClickEffect": {},
+          "Red": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "aurora",
+      "storyFile": "../src/components/Backgrounds/Aurora/Aurora.stories.jsx",
+      "visualContext": [
+        "hero",
+        "background",
+        "fullscreen"
+      ],
+      "moodTags": [
+        "gradient",
+        "dynamic",
+        "ethereal"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "GreenAurora": {},
+          "WarmAurora": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "dot-grid",
+      "storyFile": "../src/components/Backgrounds/DotGrid/DotGrid.stories.jsx",
+      "visualContext": [
+        "background",
+        "overlay",
+        "fullscreen"
+      ],
+      "moodTags": [
+        "minimal",
+        "tech",
+        "clean"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "venetian-blinds",
+      "storyFile": "../src/components/Transitions/VenetianBlinds.stories.jsx",
+      "visualContext": [
+        "transition",
+        "scroll-reveal",
+        "section"
+      ],
+      "moodTags": [
+        "smooth",
+        "structured",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "light-rays",
+      "storyFile": "../src/components/Backgrounds/LightRays/LightRays.stories.jsx",
+      "visualContext": [
+        "background",
+        "overlay",
+        "fullscreen"
+      ],
+      "moodTags": [
+        "dynamic",
+        "ethereal",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "strands",
+      "storyFile": "../src/components/Animations/Strands/Strands.stories.jsx",
+      "visualContext": [
+        "background",
+        "cursor",
+        "fullscreen"
+      ],
+      "moodTags": [
+        "dynamic",
+        "interactive",
+        "smooth"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "ManyStrands": {},
+          "Short": {},
+          "NoMouse": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "ballpit",
+      "storyFile": "../src/components/Backgrounds/Ballpit/Ballpit.stories.jsx",
+      "visualContext": [
+        "background",
+        "playground",
+        "fullscreen"
+      ],
+      "moodTags": [
+        "playful",
+        "colorful",
+        "dynamic"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "FewBalls": {},
+          "NoFollow": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "prism",
+      "storyFile": "../src/components/Backgrounds/Prism/Prism.stories.jsx",
+      "visualContext": [
+        "background",
+        "hero",
+        "fullscreen"
+      ],
+      "moodTags": [
+        "colorful",
+        "dynamic",
+        "modern"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {}
+        },
+        "tokenSlots": [],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "button",
+      "storyFile": "../src/components/Corporate/Button/Button.stories.jsx",
+      "visualContext": [
+        "button",
+        "form"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Destructive": {},
+          "Outline": {},
+          "Ghost": {},
+          "Secondary": {},
+          "Link": {},
+          "Small": {},
+          "Large": {}
+        },
+        "tokenSlots": [
+          "--corp-primary",
+          "--corp-primary-fg",
+          "--corp-fg",
+          "--corp-surface",
+          "--corp-border",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "badge",
+      "storyFile": "../src/components/Corporate/Badge/Badge.stories.jsx",
+      "visualContext": [
+        "badge",
+        "callout"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Secondary": {},
+          "Outline": {},
+          "Destructive": {}
+        },
+        "tokenSlots": [
+          "--corp-primary",
+          "--corp-primary-fg",
+          "--corp-fg",
+          "--corp-border",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "card",
+      "storyFile": "../src/components/Corporate/Card/Card.stories.jsx",
+      "visualContext": [
+        "card",
+        "content"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Simple": {},
+          "ContentOnly": {}
+        },
+        "tokenSlots": [
+          "--corp-surface",
+          "--corp-border",
+          "--corp-fg",
+          "--corp-fg-muted",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "skeleton",
+      "storyFile": "../src/components/Corporate/Skeleton/Skeleton.stories.jsx",
+      "visualContext": [
+        "card",
+        "content",
+        "loading"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Circle": {},
+          "TextLines": {}
+        },
+        "tokenSlots": [
+          "--corp-surface",
+          "--corp-border",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "input",
+      "storyFile": "../src/components/Corporate/Input/Input.stories.jsx",
+      "visualContext": [
+        "form"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "WithValue": {},
+          "Password": {},
+          "Disabled": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-text",
+          "--corp-bg",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "textarea",
+      "storyFile": "../src/components/Corporate/Textarea/Textarea.stories.jsx",
+      "visualContext": [
+        "form"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "WithValue": {},
+          "Disabled": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-text",
+          "--corp-bg",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "label",
+      "storyFile": "../src/components/Corporate/Label/Label.stories.jsx",
+      "visualContext": [
+        "form"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "WithInput": {},
+          "Required": {}
+        },
+        "tokenSlots": [
+          "--corp-text"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "native-select",
+      "storyFile": "../src/components/Corporate/NativeSelect/NativeSelect.stories.jsx",
+      "visualContext": [
+        "form"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Disabled": {},
+          "WithDisclaimer": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-text",
+          "--corp-bg",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "checkbox",
+      "storyFile": "../src/components/Corporate/Checkbox/Checkbox.stories.jsx",
+      "visualContext": [
+        "form"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Checked": {},
+          "Disabled": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-accent",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "table",
+      "storyFile": "../src/components/Corporate/Table/Table.stories.jsx",
+      "visualContext": [
+        "table"
+      ],
+      "moodTags": [
+        "corporate",
+        "clean"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "HeadersOnly": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-text",
+          "--corp-bg"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "pagination",
+      "storyFile": "../src/components/Corporate/Pagination/Pagination.stories.jsx",
+      "visualContext": [
+        "pagination",
+        "navigation"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Current": {}
+        },
+        "tokenSlots": [
+          "--corp-text",
+          "--corp-border",
+          "--corp-primary",
+          "--corp-primary-fg"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "kbd",
+      "storyFile": "../src/components/Corporate/Kbd/Kbd.stories.jsx",
+      "visualContext": [
+        "content",
+        "button"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Modifiers": {},
+          "WithText": {}
+        },
+        "tokenSlots": [
+          "--corp-text",
+          "--corp-border",
+          "--corp-bg"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "separator",
+      "storyFile": "../src/components/Corporate/Separator/Separator.stories.jsx",
+      "visualContext": [
+        "content",
+        "section"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Vertical": {},
+          "WithLabel": {}
+        },
+        "tokenSlots": [
+          "--corp-border"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "avatar",
+      "storyFile": "../src/components/Corporate/Avatar/Avatar.stories.jsx",
+      "visualContext": [
+        "content",
+        "badge"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "WithImage": {},
+          "Sizes": {}
+        },
+        "tokenSlots": [
+          "--corp-bg",
+          "--corp-text",
+          "--corp-border",
+          "--corp-size"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "breadcrumb",
+      "storyFile": "../src/components/Corporate/Breadcrumb/Breadcrumb.stories.jsx",
+      "visualContext": [
+        "breadcrumb",
+        "navigation"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "WithEllipsis": {}
+        },
+        "tokenSlots": [
+          "--corp-text",
+          "--corp-muted",
+          "--corp-accent"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "tabs",
+      "storyFile": "../src/components/Corporate/Tabs/Tabs.stories.jsx",
+      "visualContext": [
+        "tabs",
+        "navigation"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Controlled": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-text",
+          "--corp-muted",
+          "--corp-accent",
+          "--corp-surface"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "tooltip",
+      "storyFile": "../src/components/Corporate/Tooltip/Tooltip.stories.jsx",
+      "visualContext": [
+        "tooltip"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Bordered": {}
+        },
+        "tokenSlots": [
+          "--corp-bg",
+          "--corp-text",
+          "--corp-border",
+          "--corp-accent"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "progress",
+      "storyFile": "../src/components/Corporate/Progress/Progress.stories.jsx",
+      "visualContext": [
+        "progress",
+        "feedback"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "AtMax": {},
+          "CustomRange": {}
+        },
+        "tokenSlots": [
+          "--corp-bg",
+          "--corp-accent"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "alert",
+      "storyFile": "../src/components/Corporate/Alert/Alert.stories.jsx",
+      "visualContext": [
+        "feedback",
+        "form",
+        "callout"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Destructive": {},
+          "TitleOnly": {}
+        },
+        "tokenSlots": [
+          "--corp-primary",
+          "--corp-primary-fg",
+          "--corp-fg",
+          "--corp-border",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "aspect-ratio",
+      "storyFile": "../src/components/Corporate/AspectRatio/AspectRatio.stories.jsx",
+      "visualContext": [
+        "content",
+        "media",
+        "card"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Square": {}
+        },
+        "tokenSlots": [
+          "--corp-w",
+          "--corp-h",
+          "--corp-border",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "button-group",
+      "storyFile": "../src/components/Corporate/ButtonGroup/ButtonGroup.stories.jsx",
+      "visualContext": [
+        "button",
+        "form",
+        "toolbar"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "ThreeButtons": {}
+        },
+        "tokenSlots": [
+          "--corp-gap",
+          "--corp-primary"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "collapsible",
+      "storyFile": "../src/components/Corporate/Collapsible/Collapsible.stories.jsx",
+      "visualContext": [
+        "content",
+        "navigation",
+        "section"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "OpenByDefault": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-radius",
+          "--corp-surface-hover"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "empty",
+      "storyFile": "../src/components/Corporate/Empty/Empty.stories.jsx",
+      "visualContext": [
+        "content",
+        "feedback",
+        "state"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "WithAction": {}
+        },
+        "tokenSlots": [
+          "--corp-surface",
+          "--corp-muted",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "field",
+      "storyFile": "../src/components/Corporate/Field/Field.stories.jsx",
+      "visualContext": [
+        "form"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "WithHint": {}
+        },
+        "tokenSlots": [
+          "--corp-surface",
+          "--corp-gap",
+          "--corp-muted"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "input-group",
+      "storyFile": "../src/components/Corporate/InputGroup/InputGroup.stories.jsx",
+      "visualContext": [
+        "form"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "RightAddon": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "item",
+      "storyFile": "../src/components/Corporate/Item/Item.stories.jsx",
+      "visualContext": [
+        "content",
+        "list"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "AsListItem": {},
+          "WithSlots": {}
+        },
+        "tokenSlots": [
+          "--corp-fg"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "spinner",
+      "storyFile": "../src/components/Corporate/Spinner/Spinner.stories.jsx",
+      "visualContext": [
+        "feedback",
+        "loading",
+        "button"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Small": {},
+          "Large": {}
+        },
+        "tokenSlots": [
+          "--corp-size",
+          "--corp-fg",
+          "--corp-w",
+          "--corp-h"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "radio-group",
+      "storyFile": "../src/components/Corporate/RadioGroup/RadioGroup.stories.jsx",
+      "visualContext": [
+        "form"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Controlled": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-surface",
+          "--corp-primary",
+          "--corp-radius",
+          "--corp-fg"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "scroll-area",
+      "storyFile": "../src/components/Corporate/ScrollArea/ScrollArea.stories.jsx",
+      "visualContext": [
+        "content",
+        "section"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {}
+        },
+        "tokenSlots": [
+          "--corp-surface",
+          "--corp-border",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "slider",
+      "storyFile": "../src/components/Corporate/Slider/Slider.stories.jsx",
+      "visualContext": [
+        "form",
+        "control"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "AtMin": {},
+          "AtMax": {},
+          "CustomRange": {},
+          "Disabled": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-primary",
+          "--corp-radius",
+          "--corp-value"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "switch",
+      "storyFile": "../src/components/Corporate/Switch/Switch.stories.jsx",
+      "visualContext": [
+        "form",
+        "toggle"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Off": {},
+          "On": {},
+          "Disabled": {}
+        },
+        "tokenSlots": [
+          "--corp-fg",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "toggle",
+      "storyFile": "../src/components/Corporate/Toggle/Toggle.stories.jsx",
+      "visualContext": [
+        "button",
+        "toolbar",
+        "form"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Pressed": {},
+          "Outline": {},
+          "Small": {},
+          "Disabled": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-surface",
+          "--corp-surface-hover",
+          "--corp-primary",
+          "--corp-primary-fg",
+          "--corp-fg",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "toggle-group",
+      "storyFile": "../src/components/Corporate/ToggleGroup/ToggleGroup.stories.jsx",
+      "visualContext": [
+        "button",
+        "toolbar",
+        "form"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Text": {},
+          "Single": {},
+          "Multiple": {},
+          "AsPlainToggles": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-surface-hover",
+          "--corp-primary",
+          "--corp-primary-fg",
+          "--corp-fg",
+          "--corp-gap",
+          "--corp-radius"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "accordion",
+      "storyFile": "../src/components/Corporate/Accordion/Accordion.stories.jsx",
+      "visualContext": [
+        "section",
+        "navigation",
+        "content"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "Exclusive": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-radius",
+          "--corp-surface-hover"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "input-otp",
+      "storyFile": "../src/components/Corporate/InputOtp/InputOtp.stories.jsx",
+      "visualContext": [
+        "form",
+        "input"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "WithSeparator": {},
+          "Disabled": {}
+        },
+        "tokenSlots": [
+          "--corp-bg",
+          "--corp-border",
+          "--corp-radius",
+          "--corp-fg"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "dialog",
+      "storyFile": "../src/components/Corporate/Dialog/Dialog.stories.jsx",
+      "visualContext": [
+        "overlay",
+        "modal",
+        "form"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-bg",
+          "--corp-radius",
+          "--corp-fg"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "dropdown-menu",
+      "storyFile": "../src/components/Corporate/DropdownMenu/DropdownMenu.stories.jsx",
+      "visualContext": [
+        "navigation",
+        "menu",
+        "overlay"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-bg",
+          "--corp-surface-hover",
+          "--corp-radius",
+          "--corp-fg"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "popover",
+      "storyFile": "../src/components/Corporate/Popover/Popover.stories.jsx",
+      "visualContext": [
+        "overlay",
+        "content",
+        "tooltip"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-bg",
+          "--corp-surface-hover",
+          "--corp-radius",
+          "--corp-fg"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    },
+    {
+      "id": "select",
+      "storyFile": "../src/components/Corporate/Select/Select.stories.jsx",
+      "visualContext": [
+        "form",
+        "input"
+      ],
+      "moodTags": [
+        "corporate"
+      ],
+      "adaptationRules": {
+        "variants": {
+          "Default": {},
+          "WithLabel": {}
+        },
+        "tokenSlots": [
+          "--corp-border",
+          "--corp-bg",
+          "--corp-radius",
+          "--corp-text"
+        ],
+        "defaultProps": {},
+        "defaults": {}
+      }
+    }
+  ]
+}

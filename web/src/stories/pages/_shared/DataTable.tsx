@@ -24,9 +24,10 @@ export interface DataTableProps<T> {
 }
 
 /** Numeric-column helper (design D6/DS-UI-TABLES): comparable numbers render
- *  with tabular numerals so digits align. Used inside a column's `render`. */
+ *  with tabular numerals so digits align — resolved through `--corp-value`
+ *  (CST-ALIAS-5 / DS-TKN-11). Used inside a column's `render`. */
 export function tabularNum(cell: ReactNode): ReactNode {
-  return <span style={{ fontVariantNumeric: "tabular-nums" }}>{cell}</span>;
+  return <span style={{ fontVariantNumeric: "var(--corp-value)" }}>{cell}</span>;
 }
 
 /** Generic shared table emitting the tokenized `.table` primitive.

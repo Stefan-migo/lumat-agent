@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Cortex canonical schema (DC-004)",
+  "description": "One canonical schema validating the DC-004 catalog and the four domain contracts (DC-001..DC-005). Object-form variants, not arrays.",
+  "oneOf": [
+    { "$ref": "#/definitions/catalog" },
+    { "$ref": "#/definitions/contract" }
+  ],
+  "definitions": {
+    "catalog": {
+      "type": "object",
+      "required": ["version", "components"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "string" },
+        "components": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/component" }
+        }
+      }
+    },
+    "component": {
+      "type": "object",
+      "required": ["id", "adaptationRules"],
+      "properties": {
+        "id": { "type": "string" },
+        "storyFile": { "type": ["string", "null"] },
+        "visualContext": { "type": "array", "items": { "type": "string" } },
+        "moodTags": { "type": "array", "items": { "type": "string" } },
+        "adaptationRules": { "$ref": "#/definitions/adaptationRules" }
+      }
+    },
+    "adaptationRules": {
+      "type": "object",
+      "required": ["variants"],
+      "properties": {
+        "tokenSlots": { "type": "array", "items": { "type": "string" } },
+        "defaultProps": { "type": "object" },
+        "variants": {
+          "type": "object",
+          "description": "OBJECT map of variant name to prop override. Array form is rejected (DC-004/DC-005).",
+          "additionalProperties": { "type": "object" }
+        },
+        "defaults": { "type": "object" }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "stack": { "type": "string", "description": "DC-002 target stack, e.g. plain-js" },
+        "presentColors": { "type": "object", "description": "DC-002 existing palette; empty object on greenfield" },
+        "presentTypography": { "type": "array", "items": { "type": "string" } },
+        "existingTokens": { "type": "object", "description": "DC-002 pre-existing CSS custom properties; empty on greenfield" },
+        "notes": { "type": "array", "items": { "type": "string" } },
+        "brief": { "type": "string", "description": "DC-003 aesthetic brief" },
+        "derivedTokens": { "type": "array", "description": "DC-003 empty until Visual Contract v1 generates" },
+        "constraints": { "type": "array", "items": { "type": "string" } },
+        "preservedTokens": { "type": "array", "items": { "type": "string" }, "description": "CP-005 migrated legacy tokens" },
+        "preservedColors": { "type": "array", "items": { "type": "string" } },
+        "preservedBehaviors": { "type": "array", "items": { "type": "string" } },
+        "dropped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["reason"],
+            "additionalProperties": false,
+            "properties": { "reason": { "type": "string" } }
+          },
+          "description": "CP-005/VA-004 dropped tokens; each unaliased with a reason"
+        }
+      }
+    }
+  }
+}

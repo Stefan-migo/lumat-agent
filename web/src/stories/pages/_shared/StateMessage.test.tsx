@@ -37,12 +37,31 @@ describe("StateMessage (DS-UI-FRAME)", () => {
     expect(container.querySelector(".spinner__indicator")).toBeNull();
   });
 
-  it("applies the tone accent to the title and the region rail", () => {
+  it("applies the tone accent to the title and the left bar, and the matching tint to the surface", () => {
     const { container } = render(
       <StateMessage tone="danger" role="alert" title="No pudimos cargar el panel" />,
     );
     const region = container.querySelector("section") as HTMLElement;
     expect(region.style.borderLeftColor).toBe("var(--danger)");
-    expect(region.style.background).toBe("var(--danger-bg)");
+    expect(region.style.background).toBe("var(--danger-tint)");
+  });
+
+  it("state-matrix pairing: danger→role=alert and loading→role=status, each with a visible Spanish label (CST-PRIM-4/5)", () => {
+    const { unmount } = render(
+      <StateMessage tone="danger" role="alert" title="Error al conectar el agente" />,
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Error al conectar el agente");
+    // alert is semantically color-coded (danger tint/accent) but the label + role carry it.
+    const asSection = alert as HTMLElement;
+    expect(asSection.style.borderLeftColor).toBe("var(--danger)");
+    unmount();
+
+    render(
+      <StateMessage tone="info" role="status" title="Cargando indicadores" spinner />,
+    );
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("Cargando indicadores");
+    expect(status.querySelector(".spinner__indicator")).not.toBeNull();
   });
 });

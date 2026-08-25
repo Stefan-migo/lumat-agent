@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Button } from "./Button";
 
 // T7.1 — Button (PDW-CMP-1). Behavioral tests: tag selection (button vs anchor),
@@ -53,5 +55,31 @@ describe("Button (T7.1)", () => {
     render(<Button variant="secondary">Cancelar</Button>);
     expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeEnabled();
+  });
+});
+
+describe("Button — slice-1 catalog audit (CST-PRIM-1/4)", () => {
+  it("keeps the primitive source hex-free — every value resolves through tokens (CST-PRIM-1)", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    const hex = css.match(/#[0-9a-fA-F]{3,6}\b/);
+    expect(hex).toBeNull();
+  });
+
+  it("disabled pairing retains the visible label alongside the disabled semantic — never color alone (CST-PRIM-4)", () => {
+    render(<Button disabled>Guardar</Button>);
+    const btn = screen.getByRole("button", { name: "Guardar" });
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveTextContent("Guardar");
+  });
+
+  it("anchor disabled pairing exposes aria-disabled alongside the visible label (CST-PRIM-4)", () => {
+    render(
+      <Button href="/panel/export/clients.csv" disabled>
+        Exportar
+      </Button>,
+    );
+    const link = screen.getByRole("link", { name: "Exportar" });
+    expect(link).toHaveAttribute("aria-disabled", "true");
+    expect(link).toHaveTextContent("Exportar");
   });
 });

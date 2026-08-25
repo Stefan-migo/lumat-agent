@@ -1,0 +1,9 @@
+{
+  "id": "cortex-preservation-matrix",
+  "preservedTokens": ["--palette-primary", "--palette-secondary", "--palette-background", "--palette-text"],
+  "preservedColors": ["primary", "secondary", "text"],
+  "preservedBehaviors": ["scroll-driven reveal"],
+  "dropped": [
+    { "reason": "Legacy --od-* namespace frozen as NON-canonical (VA-001); aliased, not hard-deleted" }
+  ]
+}

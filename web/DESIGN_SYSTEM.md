@@ -117,7 +117,7 @@ The current primary scale, neutrals, and semantic pairs in `tokens.css` remain t
 |---|---|---:|---|
 | Primary action / deep navigation | `--primary-800` | `#143C2C` | White text; measured 12.26:1 |
 | Primary hover / accessible link | `--primary-700` | `#256F51` | Use for normal-size links on light surfaces; measured 6.05:1 |
-| Canvas | `--bg` | `#F4F5F7` | Default page background |
+| Canvas | `--bg` | `#F1F1E8` | Default page background |
 | Surface | `--surface` | `#FFFFFF` | Cards, tables, controls, dialogs |
 | Text | `--text` | `#1A202C` | Default readable text |
 | Muted text | `--text-muted` | `#4A5568` | Metadata and supporting text, never disabled semantics alone |
