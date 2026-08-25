@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError } from './api';
+import { apiFetch, ApiError, postJson } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -56,6 +56,48 @@ describe('apiFetch', () => {
     await expect(apiFetch('/panel/api/kpis')).rejects.toMatchObject({
       status: 500,
       detail: 'Internal Server Error',
+    });
+  });
+});
+
+describe('postJson', () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('posts JSON with the session cookie and returns parsed data', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, role: 'admin' }), { status: 200 }),
+    );
+
+    await expect(postJson('/panel/api/login', { username: 'ana', password: 'secret' })).resolves.toEqual({
+      ok: true,
+      role: 'admin',
+    });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/panel/api/login',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ username: 'ana', password: 'secret' }),
+        credentials: 'include',
+      }),
+    );
+  });
+
+  it('preserves the API error contract for failed POST requests', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'Credenciales inválidas' }), { status: 401 }),
+    );
+
+    await expect(postJson('/panel/api/login', {})).rejects.toMatchObject({
+      status: 401,
+      detail: 'Credenciales inválidas',
     });
   });
 });

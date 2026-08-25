@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { Button } from "../../components/primitives/Button";
-import { Card } from "../../components/primitives/Card";
-import { Input } from "../../components/primitives/Input";
+import { LoginAuth } from "../../components/pages/LoginAuth";
+export { LoginAuth } from "../../components/pages/LoginAuth";
 
 /** Login auth card (centered, mirroring Jinja login.html). Optional `error`
  *  renders the inline error line — non-destructive: the username value is
@@ -14,93 +13,6 @@ import { Input } from "../../components/primitives/Input";
  *  it reuses the `panel-shell` brand-block language ("Lumat" + "Panel
  *  operativo") as styled text.
  *  Exported for tests. @param error error message string or null for default */
-export function LoginAuth({
-  error,
-  username = "",
-  isLoading = false,
-}: {
-  error?: string | null;
-  username?: string;
-  isLoading?: boolean;
-}) {
-  return (
-    <div style={{ display: "flex", justifyContent: "center", paddingTop: "3rem" }}>
-      <Card className="card--auth">
-        <style>{LOGIN_BRAND_STYLES}</style>
-        <div className="login-brand">
-          <span className="login-brand__name">Lumat</span>
-          <span className="login-brand__context">Panel operativo</span>
-        </div>
-        <div
-          style={{
-            maxWidth: "24rem",
-            display: "grid",
-            gap: "var(--space-3)",
-          }}
-        >
-          {error ? (
-            <p role="alert" style={{ color: "var(--danger, inherit)", margin: 0 }}>
-              {error}
-            </p>
-          ) : null}
-          <Input
-            label="Usuario"
-            type="text"
-            defaultValue={username}
-            autoComplete="username"
-          />
-          <Input label="Contraseña" type="password" autoComplete="current-password" />
-          <div style={{ display: "grid", gap: "var(--space-2)" }}>
-            <Button disabled={isLoading}>Iniciar sesión</Button>
-            {isLoading ? (
-              <p
-                role="status"
-                style={{
-                  margin: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "var(--space-2)",
-                  color: "var(--text-muted)",
-                  fontSize: "var(--text-sm)",
-                }}
-              >
-                <span className="spinner__indicator" aria-hidden="true" />
-                Iniciando sesión…
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-/** Typographic lockup styles echoing the `panel-shell` brand block: lime rail
- *  over a forest tint, bold "Lumat" + aqua "Panel operativo" context. No logo
- *  asset — type only (design D8). */
-const LOGIN_BRAND_STYLES = `
-  .login-brand {
-    display: grid;
-    gap: var(--space-1);
-    padding: var(--space-4);
-    border-left: var(--space-1) solid var(--brand-lime);
-    border-radius: var(--radius-md);
-    background: var(--primary-800);
-    color: var(--surface);
-  }
-  .login-brand__name {
-    font-size: var(--text-lg);
-    font-weight: var(--weight-bold);
-    line-height: var(--leading-tight);
-    letter-spacing: -0.02em;
-  }
-  .login-brand__context {
-    color: var(--brand-aqua);
-    font-size: var(--text-xs);
-    font-weight: var(--weight-medium);
-  }
-`;
-
 /** Default login state: centered auth card, no error. */
 export function LoginDefault() {
   return <LoginAuth error={null} />;

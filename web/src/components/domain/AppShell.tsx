@@ -22,17 +22,18 @@ const VIEW_LABELS: Record<PanelView, string> = {
 
 export interface AppShellProps {
   user: User;
+  onLogout?: () => void | Promise<void>;
 }
 
 /** Application shell: PanelShell frame (role-gated nav + view switch, B6/T6.4).
  *  PanelShell owns the shell chrome and nav; AppShell owns the active view
  *  state and the placeholder page. Domain views land in B11-B13; until then
  *  the active view renders a placeholder. */
-export function AppShell({ user }: AppShellProps) {
+export function AppShell({ user, onLogout }: AppShellProps) {
   const [view, setView] = useState<PanelView>('dashboard');
 
   return (
-    <PanelShell user={user} currentView={view} onNavigate={setView}>
+    <PanelShell user={user} currentView={view} onNavigate={setView} onLogout={onLogout}>
       <main>
         <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
           Vista {VIEW_LABELS[view]} disponible en un batch posterior.

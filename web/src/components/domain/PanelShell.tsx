@@ -539,6 +539,7 @@ export interface PanelShellProps {
   currentView?: PanelView;
   drawerInitiallyOpen?: boolean;
   onNavigate?: (view: PanelView) => void;
+  onLogout?: () => void | Promise<void>;
   user: User;
   /** Optional badge/chip rendered to the right of the panel header (e.g. a
    *  stale-data indicator). Kept narrow on purpose — full banner copy still
@@ -555,7 +556,7 @@ function Brand({ mobile = false, compact = false }: { mobile?: boolean; compact?
   );
 }
 
-function UserContext({ user, compact = false }: { user: User; compact?: boolean }) {
+function UserContext({ user, compact = false, onLogout }: { user: User; compact?: boolean; onLogout?: () => void | Promise<void> }) {
   const role = user.role === "admin" ? "Administrador" : "Operador";
   return (
     <div
@@ -568,6 +569,7 @@ function UserContext({ user, compact = false }: { user: User; compact?: boolean 
         <span className="panel-shell__user-copy">
           <span className="panel-shell__username">{user.username}</span>
           <span className="panel-shell__role">{role}</span>
+          {onLogout ? <button type="button" onClick={() => void onLogout()}>Cerrar sesión</button> : null}
         </span>
       )}
     </div>
@@ -617,6 +619,7 @@ export function PanelShell({
   onNavigate,
   user,
   statusBadge,
+  onLogout,
 }: PanelShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
@@ -684,7 +687,7 @@ export function PanelShell({
             <CollapseIcon />
           </button>
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} collapsed={collapsed} />
-          <UserContext user={user} compact={collapsed} />
+          <UserContext user={user} compact={collapsed} onLogout={onLogout} />
         </div>
       </aside>
 
@@ -727,7 +730,7 @@ export function PanelShell({
             </button>
           </div>
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} />
-          <UserContext user={user} />
+          <UserContext user={user} onLogout={onLogout} />
         </section>
       </div>
 
@@ -749,4 +752,3 @@ export function PanelShell({
     </div>
   );
 }
-
