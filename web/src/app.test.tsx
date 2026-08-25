@@ -86,4 +86,57 @@ describe('App /me auth gate (T6.4)', () => {
     await waitFor(() => expect(sidebar(container).getByText('Lumat')).toBeInTheDocument());
     expect(sidebar(container).getByText('vero')).toBeInTheDocument();
   });
+
+  it('logs in successfully and renders the returned role', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'unauthorized' }), { status: 401 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, role: 'admin' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ username: 'ana', role: 'admin' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+
+    await user.type(await screen.findByLabelText(/usuario/i), 'ana');
+    await user.type(screen.getByLabelText(/contraseña/i), 'secret');
+    await user.click(screen.getByRole('button', { name: /iniciar sesión/i }));
+
+    await waitFor(() => expect(sidebar(container).getByText('ana')).toBeInTheDocument());
+    expect(sidebar(container).getByText('Administrador')).toBeInTheDocument();
+  });
+
+  it('keeps the username and shows a generic error for invalid or locked login', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'unauthorized' }), { status: 401 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'account locked' }), { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<App />);
+
+    const username = await screen.findByLabelText(/usuario/i);
+    await user.type(username, 'ana');
+    await user.type(screen.getByLabelText(/contraseña/i), 'secret');
+    await user.click(screen.getByRole('button', { name: /iniciar sesión/i }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/cuenta bloqueada/i));
+    expect((screen.getByLabelText(/usuario/i) as HTMLInputElement).value).toBe('ana');
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/no existe|no encontrado/i);
+  });
+
+  it('returns to the login gate after logout', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ username: 'ana', role: 'admin' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+
+    await waitFor(() => expect(sidebar(container).getByText('ana')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: /cerrar sesión/i }));
+
+    expect(await screen.findByLabelText(/usuario/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/usuario/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/logout', expect.objectContaining({ method: 'POST' }));
+  });
 });

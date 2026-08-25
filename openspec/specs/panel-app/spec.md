@@ -1,0 +1,135 @@
+# Delta for panel-app
+
+## ADDED Requirements
+
+### Requirement: PNL-APP-1 — D7 State Routing Without a Router
+
+The SPA MUST switch top-level views through AppShell `useState<PanelView>` (D7; PanelShell owns the `NAVIGATION` map), MUST NOT add react-router or any routing dependency to `web/package.json`, and MUST open drill-downs (ClientFicha, ConversationThread) from list views via component state/`onClick`, never hash links.
+
+#### Scenario: Nav switches the active view
+
+- GIVEN an authenticated user in the shell
+- WHEN they click a NAVIGATION item
+- THEN AppShell renders the matching page without any URL change
+
+#### Scenario: No router dependency
+
+- GIVEN `web/package.json`
+- WHEN the change is reviewed
+- THEN no react-router or other routing package is added
+
+#### Scenario: Drill-down stays in place
+
+- GIVEN a row in ClientesList or ConversationsList
+- WHEN it is activated
+- THEN ClientFicha / ConversationThread renders in place via state, no hash navigation
+
+### Requirement: PNL-APP-2 — Auth Gate with Real Login
+
+The auth gate MUST replace the inline anon stub in `web/src/app.tsx` with a real LoginForm: on mount it probes `GET /panel/api/me`; `anon` renders the form, which MUST `POST /panel/api/login` via `api.ts`, render loading and error states, preserve the username on failure (DS-UI-LOGIN), and MUST NOT reveal whether a username exists. On success the gate MUST render `AppShell` with the returned role.
+
+#### Scenario: Successful login
+
+- GIVEN valid credentials on the LoginForm
+- WHEN the form is submitted
+- THEN `POST /panel/api/login` succeeds and the shell renders with the returned role
+
+#### Scenario: Failed login keeps the username
+
+- GIVEN a 401 `invalid credentials` response
+- WHEN the form is submitted
+- THEN an inline non-destructive error renders and the username persists
+
+#### Scenario: Account locked
+
+- GIVEN a 401 `account locked` response
+- WHEN the form is submitted
+- THEN the lock message renders without leaking whether the account exists
+
+### Requirement: PNL-APP-3 — Logout
+
+The shell MUST expose logout from the PanelShell user block: it MUST `POST /panel/api/logout`, and on success the gate MUST return to the LoginForm.
+
+#### Scenario: Logout returns to login
+
+- GIVEN an authenticated user in the shell
+- WHEN logout is triggered
+- THEN `POST /panel/api/logout` succeeds and the gate renders the LoginForm
+
+### Requirement: PNL-APP-4 — Page Extraction Preserves Story Exports (R7)
+
+The designed page components MUST be extracted from `web/src/stories/pages/*.stories.tsx` into `web/src/components/pages/` (DashboardOverview, LoginAuth, ClientesListView, ClientFichaView, ConversationsListView, ConversationThreadView, CasesListView, KbListView, SettingsView), and each story file MUST become a thin wrapper re-importing the extracted component, keeping the existing named exports and their props so story tests stay green.
+
+#### Scenario: Story tests still resolve exports
+
+- GIVEN a story test importing e.g. `DashboardOverview` from `Dashboard.stories`
+- WHEN the extraction is applied
+- THEN the same export name resolves with unchanged props
+
+#### Scenario: Wrappers render the extracted component
+
+- GIVEN a story state variant (loading/empty/error)
+- WHEN it renders through the wrapper
+- THEN it matches the pre-extraction rendering
+
+### Requirement: PNL-APP-5 — Pages Consume the Real API
+
+Extracted pages MUST consume the live JSON API through `api.ts` (`apiFetch`/`ApiError`) instead of `mockData`, and MUST render loading, empty, stale, and error states through the `StateMessage`/`DataTable` patterns from `stories/pages/_shared`; `mockData` remains story-only.
+
+#### Scenario: Loading and error states
+
+- GIVEN a list page with a pending or failed fetch
+- WHEN it renders
+- THEN the StateMessage loading / fatal-error states appear
+
+#### Scenario: Empty state
+
+- GIVEN a 200 response with an empty collection
+- WHEN the list renders
+- THEN the DataTable empty state shows "No hay registros"
+
+### Requirement: PNL-APP-6 — 403 Handling on Admin-Only Views
+
+The kb and settings views MUST handle an `ApiError` with status 403 by rendering a permission-denied state (StateMessage) for operadores; they MUST NOT crash or render a fatal error. Nav already hides them via PanelShell `adminOnly`, but the active view state MUST be safe.
+
+#### Scenario: Operador sees denied state
+
+- GIVEN an operador session with kb or settings as the active view
+- WHEN the page fetch returns 403
+- THEN a permission-denied state renders, not a fatal error
+
+### Requirement: PNL-APP-7 — Conversations List Consumption
+
+ConversationsListView MUST consume `GET /panel/api/conversations` (AP-9) and MUST NOT render the demo-only Asignado column; each row MUST open the read-only ConversationThread (`GET /panel/api/conversations/{id}`).
+
+#### Scenario: List renders from the API
+
+- GIVEN the conversations endpoint returns serialized conversations
+- WHEN the view loads
+- THEN rows render conversation/customer fields and no Asignado column
+
+#### Scenario: Thread drill-down
+
+- GIVEN a conversation row
+- WHEN it is activated
+- THEN the read-only thread renders from the thread endpoint
+
+### Requirement: PNL-APP-8 — Dashboard Renders Real KPIs
+
+DashboardOverview MUST render the real `compute_kpis` counts (contacts, motivos, derived, visit_requests, window caption) on the designed StatCards, and MUST NOT render fabricated deltas, autonomy %, response time, or the activity feed (R1 — designed metrics are a follow-up).
+
+#### Scenario: Real counts on designed cards
+
+- GIVEN `GET /panel/api/kpis`
+- WHEN the Dashboard renders
+- THEN StatCards show contacts/derived/visit_requests and the motivos list with the window caption from the payload
+
+#### Scenario: No fabricated metrics
+
+- GIVEN the Dashboard
+- WHEN it is inspected
+- THEN no delta/autonomy/response-time values and no activity feed appear
+
+## Non-Goals
+
+- react-router / URL shareability (D7 follow-up); `_shared` relocation; token changes; InboxThread composer and state controls; ChatWithAgent; designed dashboard metrics (autonomy %, response time, deltas); activity feed.

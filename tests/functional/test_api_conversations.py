@@ -11,7 +11,7 @@ unauthenticated calls get 401, never a 302 (PDW-AUTH-1). No CORS (D1).
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
@@ -97,9 +97,74 @@ def test_conversation_endpoint_requires_login_401_json(client):
     assert "access-control-allow-origin" not in resp.headers, "no CORS (D1)"
 
 
+def test_conversations_list_requires_login_401_json(client):
+    """No session -> GET /conversations answers 401 JSON, never a 302."""
+    resp = client.get("/panel/api/conversations", follow_redirects=False)
+
+    assert resp.status_code == 401
+    assert "location" not in resp.headers
+    assert resp.headers["content-type"].startswith("application/json")
+    assert resp.json() == {"detail": "unauthorized"}
+
+
 # ---------------------------------------------------------------------------
 # PDW-API — GET /conversations/{id}: conversation + chronological messages
 # ---------------------------------------------------------------------------
+
+
+def test_conversations_list_returns_serialized_rows_in_activity_order(client, make_user):
+    """List is envelope-shaped, read-only, and ordered with nulls last."""
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56944445555", name="Sofía Rojas")
+        session.add(customer)
+        session.flush()
+        rows = [
+            Conversation(
+                customer_id=customer.id,
+                wa_phone=customer.phone_e164,
+                last_message_at=datetime(2026, 8, 24, 12, tzinfo=timezone.utc),
+            ),
+            Conversation(
+                customer_id=customer.id,
+                wa_phone=customer.phone_e164,
+                last_message_at=datetime(2026, 8, 24, 12, tzinfo=timezone.utc),
+            ),
+            Conversation(customer_id=customer.id, wa_phone=customer.phone_e164),
+            Conversation(
+                customer_id=customer.id,
+                wa_phone=customer.phone_e164,
+                last_message_at=datetime(2026, 8, 24, 13, tzinfo=timezone.utc),
+            ),
+        ]
+        session.add_all(rows)
+        session.flush()
+        expected_ids = [rows[3].id, rows[1].id, rows[0].id, rows[2].id]
+        session.commit()
+
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    resp = client.get("/panel/api/conversations", follow_redirects=False)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"conversations"}
+    assert [row["id"] for row in body["conversations"]] == expected_ids
+    assert all(
+        set(row)
+        == {
+            "id",
+            "customer_id",
+            "wa_phone",
+            "state",
+            "summary",
+            "last_message_at",
+            "created_at",
+            "closed_at",
+        }
+        for row in body["conversations"]
+    )
+    assert body["conversations"][-1]["last_message_at"] is None
 
 
 def test_conversation_returns_metadata_and_messages_chronological(client, make_user):

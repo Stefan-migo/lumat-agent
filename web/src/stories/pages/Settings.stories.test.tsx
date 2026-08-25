@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { settings } from "./_shared/mockData/settings";
+import { Settings } from "../../components/pages/Settings";
 import { SettingsView } from "./Settings.stories";
 
 describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () => {
@@ -144,5 +145,61 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     render(<SettingsView state="stale" />);
     const banner = screen.getByRole("status");
     expect(within(banner).getByText(/datos posiblemente desactualizados/i)).toBeInTheDocument();
+  });
+});
+
+describe("Settings API page", () => {
+  it("saves a changed tone through the admin settings endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (input === "/panel/api/settings" && !init?.method) {
+        return new Response(JSON.stringify(settings), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    render(<Settings />);
+    const tone = await screen.findByDisplayValue(settings.tone);
+    fireEvent.change(tone, { target: { value: "directa y breve" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar tono" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/settings/tone",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ tone: "directa y breve" }) }),
+    ));
+    expect(await screen.findByRole("status")).toHaveTextContent("Configuración guardada");
+    fetchMock.mockRestore();
+  });
+
+  it("saves both spend limits through the limits endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (input === "/panel/api/settings" && !init?.method) {
+        return new Response(JSON.stringify(settings), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    render(<Settings />);
+    const dailyLimit = await screen.findByLabelText("Límite diario (USD)");
+    await waitFor(() => expect(dailyLimit).toHaveValue(5));
+    fireEvent.change(dailyLimit, { target: { value: "7.5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar límites" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/settings/limits",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ conversation_limit: 1.5, daily_limit: 7.5 }) }),
+    ));
+    fetchMock.mockRestore();
+  });
+
+  it("renders permission denied when an operador receives 403", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail: "admin role required" }), { status: 403 }),
+    );
+
+    render(<Settings />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permiso para ver este panel");
+    expect(screen.queryByText("No pudimos cargar la configuración")).toBeNull();
+    fetchMock.mockRestore();
   });
 });

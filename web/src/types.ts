@@ -91,6 +91,10 @@ export interface Conversation {
   closed_at: string | null;
 }
 
+export interface ConversationsResponse {
+  conversations: Conversation[];
+}
+
 export type MessageDirection = 'inbound' | 'outbound';
 
 export interface Message {

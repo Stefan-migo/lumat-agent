@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { apiFetch, ApiError } from './api';
-import type { User } from './types';
+import { apiFetch, ApiError, postJson } from './api';
+import type { LoginResponse, User } from './types';
 import { AppShell } from './components/domain/AppShell';
+import { LoginAuth } from './components/pages/LoginAuth';
 
 /** Auth gate for the panel SPA (B6/T6.4; PDW-AUTH-1/2, D4).
  *
@@ -16,7 +17,7 @@ import { AppShell } from './components/domain/AppShell';
 type GateState =
   | { kind: 'loading' }
   | { kind: 'authed'; user: User }
-  | { kind: 'anon' }
+  | { kind: 'anon'; error?: string }
   | { kind: 'error'; detail: string };
 
 export default function App() {
@@ -37,6 +38,22 @@ export default function App() {
     }
   }, []);
 
+  const login = async ({ username, password }: { username: string; password: string }) => {
+    setState({ kind: 'anon' });
+    try {
+      const result = await postJson<LoginResponse>('/panel/api/login', { username, password });
+      setState({ kind: 'authed', user: { username, role: result.role } });
+    } catch (e) {
+      const detail = e instanceof ApiError ? e.detail.toLowerCase() : '';
+      setState({ kind: 'anon', error: detail.includes('locked') ? 'Cuenta bloqueada. Intenta más tarde.' : 'Credenciales inválidas' });
+    }
+  };
+
+  const logout = async () => {
+    await postJson('/panel/api/logout');
+    setState({ kind: 'anon' });
+  };
+
   useEffect(() => {
     void probe();
   }, [probe]);
@@ -46,16 +63,11 @@ export default function App() {
   }
 
   if (state.kind === 'authed') {
-    return <AppShell user={state.user} />;
+    return <AppShell user={state.user} onLogout={logout} />;
   }
 
   if (state.kind === 'anon') {
-    return (
-      <main>
-        <h1>Lumat Panel</h1>
-        <p>Para continuar debes iniciar sesión.</p>
-      </main>
-    );
+    return <LoginAuth error={state.error} onSubmit={login} />;
   }
 
   return (

@@ -44,3 +44,10 @@ export async function apiFetch<T>(
 
   return (await res.json()) as T;
 }
+
+export function postJson<T>(path: string, body?: unknown): Promise<T> {
+  return apiFetch<T>(path, {
+    method: 'POST',
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}

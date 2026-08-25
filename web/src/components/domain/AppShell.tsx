@@ -2,6 +2,14 @@ import { useState } from 'react';
 import type { User } from '../../types';
 import type { PanelView } from './PanelShell';
 import { PanelShell } from './PanelShell';
+import { Dashboard } from '../pages/Dashboard';
+import { ClientesList } from '../pages/ClientesList';
+import { ClientFicha } from '../pages/ClientFicha';
+import { CasesList } from '../pages/CasesList';
+import { ConversationsList } from '../pages/ConversationsList';
+import { ConversationThread } from '../pages/ConversationThread';
+import { KbList } from '../pages/KbList';
+import { Settings } from '../pages/Settings';
 
 /** Top-level SPA views, switched via AppShell state (D7 — no router; `ponytail:`
  *  no URL shareability, upgrade path = react-router hash router when desired).
@@ -9,35 +17,33 @@ import { PanelShell } from './PanelShell';
  *  views, not top-level nav, so they do not appear here. */
 export type View = PanelView;
 
-/** Label vocabulary for the placeholder page heading, mirroring the nav labels
- *  owned by PanelShell (which keeps the full NAVIGATION map private). */
-const VIEW_LABELS: Record<PanelView, string> = {
-  dashboard: 'Panel',
-  clients: 'Clientes',
-  conversations: 'Conversaciones',
-  cases: 'Casos',
-  kb: 'Base de conocimientos',
-  settings: 'Configuración',
-};
-
 export interface AppShellProps {
   user: User;
+  onLogout?: () => void | Promise<void>;
 }
 
-/** Application shell: PanelShell frame (role-gated nav + view switch, B6/T6.4).
- *  PanelShell owns the shell chrome and nav; AppShell owns the active view
- *  state and the placeholder page. Domain views land in B11-B13; until then
- *  the active view renders a placeholder. */
-export function AppShell({ user }: AppShellProps) {
+/** Application shell: PanelShell frame and D7 state-based page navigation. */
+export function AppShell({ user, onLogout }: AppShellProps) {
   const [view, setView] = useState<PanelView>('dashboard');
+  const [clientId, setClientId] = useState<number | null>(null);
+  const [conversationId, setConversationId] = useState<number | null>(null);
+
+  const navigate = (nextView: PanelView) => {
+    setClientId(null);
+    setConversationId(null);
+    setView(nextView);
+  };
+
+  const page = view === 'dashboard' ? <Dashboard />
+    : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} /> : <ClientesList onOpenClient={setClientId} />
+    : view === 'conversations' ? conversationId !== null ? <ConversationThread conversationId={conversationId} /> : <ConversationsList onOpenThread={setConversationId} />
+    : view === 'cases' ? <CasesList />
+    : view === 'kb' ? <KbList />
+    : <Settings />;
 
   return (
-    <PanelShell user={user} currentView={view} onNavigate={setView}>
-      <main>
-        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-          Vista {VIEW_LABELS[view]} disponible en un batch posterior.
-        </p>
-      </main>
+    <PanelShell user={user} currentView={view} onNavigate={navigate} onLogout={onLogout}>
+      {page}
     </PanelShell>
   );
 }
