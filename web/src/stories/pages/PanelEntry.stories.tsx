@@ -10,7 +10,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Storybook target for the authenticated Lumat entry layout. Desktop uses a compact 192px sidebar; tablet and mobile use a modal drawer opened from a compact brand/menu bar. The page owns its heading and actions, so the shell does not add a redundant desktop header. This design composes the current Dashboard story inside the production PanelShell promoted to `components/domain`.",
+          "Storybook target for the authenticated Lumat entry layout. Desktop uses a compact 192px sidebar; tablet and mobile use a modal drawer opened from a compact brand/menu bar. The shell renders a panel header (current view label) above the content area; the sidebar brand and the panel header share the same height, but the brand is dark green (`--corp-primary`) while the panel header is white (`--corp-surface`). The page still owns its own PageHeader for content context. This design composes the current Dashboard story inside the production PanelShell promoted to `components/domain`.",
       },
     },
   },
