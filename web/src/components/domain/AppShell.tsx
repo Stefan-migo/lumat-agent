@@ -34,7 +34,6 @@ export function AppShell({ user }: AppShellProps) {
   return (
     <PanelShell user={user} currentView={view} onNavigate={setView}>
       <main>
-        <h2 style={{ color: 'var(--text)' }}>{VIEW_LABELS[view]}</h2>
         <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
           Vista {VIEW_LABELS[view]} disponible en un batch posterior.
         </p>
