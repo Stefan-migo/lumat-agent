@@ -50,9 +50,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Production UI and Verification
 
-- [ ] 4.1 **RED**, `web/src/{api.ts,types.ts}`, `web/src/components/pages/{ConversationsList,ConversationThread}.tsx`: test filters, controls, composer, loading, 401/403/409/422, delivery/retry, refresh; acceptance: no optimistic corruption; dependency: 2.2/3.2; forecast: 80–120 lines.
-- [ ] 4.2 **GREEN**, same files plus `web/src/components/domain/AppShell.tsx`: wire typed commands/refetch without router/story changes; acceptance: PNL-APP-7/9 and frontend suite pass; dependency: 4.1; forecast: 90–130 lines.
-- [ ] 4.3 **REGRESSION**, `tests/functional/`, `tests/integration/`, `web/src/**/*.test.*`: run backend/frontend, migration repeat, authenticated E2E; acceptance: AO-1..10, WH-1..8, HH-1..5, AP-9/10 green; dependency: 4.2; forecast: 40–70 lines.
+- [x] 4.1 **RED**, `web/src/{api.ts,types.ts}`, `web/src/components/pages/{ConversationsList,ConversationThread}.tsx`: test filters, controls, composer, loading, 401/403/409/422, delivery/retry, refresh; acceptance: no optimistic corruption; dependency: 2.2/3.2; forecast: 80–120 lines.
+- [x] 4.2 **GREEN**, same files plus `web/src/components/domain/AppShell.tsx`: wire typed commands/refetch without router/story changes; acceptance: PNL-APP-7/9 and frontend suite pass; dependency: 4.1; forecast: 90–130 lines.
+- [x] 4.3 **REGRESSION**, `tests/functional/`, `tests/integration/`, `web/src/**/*.test.*`: run backend/frontend, migration repeat, authenticated E2E; acceptance: AO-1..10, WH-1..8, HH-1..5, AP-9/10 green; dependency: 4.2; forecast: 40–70 lines.
 
 ## Graphify Scope Record
 
