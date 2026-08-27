@@ -41,8 +41,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Operator Messaging
 
-- [ ] 3.1 **RED**, `tests/integration/test_operator_messaging.py`, `tests/integration/test_webhook_ingest.py`: cover rejection/window, commit-before-Meta, payload/no-token logging, duplicate races, 4xx failed, timeout unknown, failed-only retry, human/closed continuity; acceptance: OM/WH scenarios fail first; dependency: 2.2; forecast: 130–180 lines.
-- [ ] 3.2 **GREEN**, `app/services/send.py`, `app/panel/api/routes/conversations.py`, `app/services/audit.py`: lock claims, persist/audit before Meta, finalize statuses, retry failed only, retain WAMID/error/attempts, enforce latest inbound; acceptance: one durable operation/no duplicate send; dependency: 3.1; forecast: 130–180 lines.
+- [x] 3.1 **RED**, `tests/integration/test_operator_messaging.py`, `tests/integration/test_webhook_ingest.py`: cover rejection/window, commit-before-Meta, payload/no-token logging, duplicate races, 4xx failed, timeout unknown, failed-only retry, human/closed continuity; acceptance: OM/WH scenarios fail first; dependency: 2.2; forecast: 130–180 lines.
+- [x] 3.2 **GREEN**, `app/services/send.py`, `app/panel/api/routes/conversations.py`, `app/services/audit.py`: lock claims, persist/audit before Meta, finalize statuses, retry failed only, retain WAMID/error/attempts, enforce latest inbound; acceptance: one durable operation/no duplicate send; dependency: 3.1; forecast: 130–180 lines.
 
 ## Phase 4: Production UI and Verification
 
