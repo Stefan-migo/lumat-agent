@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from fastapi import HTTPException
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.chat.state import set_conversation_state
-from app.models import AuditLog, Conversation, ConversationState, User
+from app.models import AuditLog, Conversation, ConversationState, DeliveryStatus, Message, MessageDirection, MessageStatus, MessageType, User
 from app.services.audit import record_audit
 from app.panel.api.serializers import to_conversation_dict
+from app.services.send import deliver_message
 
 LEGAL_TRANSITIONS = {
     ConversationState.BOT: {ConversationState.HUMAN},
@@ -114,3 +117,64 @@ def assign(session: Session, conversation_id: int, actor: User, responsible_id: 
     )
     session.flush()
     return conversation
+
+
+def _latest_inbound(session: Session, conversation_id: int) -> Message | None:
+    return session.scalar(
+        select(Message)
+        .where(Message.conversation_id == conversation_id, Message.direction == MessageDirection.INBOUND)
+        .order_by(Message.created_at.desc(), Message.id.desc())
+    )
+
+
+def send_operator_message(session: Session, conversation_id: int, actor: User, text: str, request_id: str) -> Message:
+    conversation = session.scalar(select(Conversation).where(Conversation.id == conversation_id).with_for_update())
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    payload = {"text": text}
+    existing = session.scalar(select(Message).where(Message.request_id == request_id, Message.direction == MessageDirection.OUTBOUND))
+    if existing is not None:
+        if existing.conversation_id != conversation_id or existing.text != text:
+            _reject(session, conversation, actor, "message.send_rejected", request_id, "request_id already used for another message", payload, 409)
+        if existing.delivery_status == DeliveryStatus.SENT:
+            return existing
+        if existing.delivery_status in (DeliveryStatus.PENDING, DeliveryStatus.SENDING):
+            raise HTTPException(status_code=409, detail="message delivery in progress")
+        raise HTTPException(status_code=502, detail="message delivery failed")
+    if conversation.state != ConversationState.HUMAN:
+        _reject(session, conversation, actor, "message.send_rejected", request_id, "operator messages require human conversation", payload, 422)
+    inbound = _latest_inbound(session, conversation_id)
+    if inbound is None or inbound.created_at is None:
+        _reject(session, conversation, actor, "message.send_rejected", request_id, "customer reply window expired", payload, 422)
+    created = inbound.created_at
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) - created >= timedelta(hours=24):
+        _reject(session, conversation, actor, "message.send_rejected", request_id, "customer reply window expired", payload, 422)
+    message = Message(
+        conversation_id=conversation_id, author_id=actor.id, request_id=request_id,
+        direction=MessageDirection.OUTBOUND, msg_type=MessageType.TEXT, text=text,
+        status=MessageStatus.PROCESSED, delivery_status=DeliveryStatus.PENDING,
+    )
+    session.add(message)
+    session.flush()
+    record_audit(session, actor=actor.username, action="message.send_requested", entity="message", entity_id=str(message.id), after={"request_id": request_id, "conversation_id": conversation_id, "text": text})
+    session.commit()
+    return deliver_message(message.id)
+
+
+def retry_operator_message(session: Session, conversation_id: int, message_id: int, actor: User, request_id: str, expected_status: str) -> Message:
+    message = session.scalar(select(Message).where(Message.id == message_id, Message.direction == MessageDirection.OUTBOUND).with_for_update())
+    if message is None or message.conversation_id != conversation_id:
+        raise HTTPException(status_code=404, detail="message not found")
+    audits = session.scalars(select(AuditLog).where(AuditLog.entity_id == str(message.id), AuditLog.action == "message.retry_requested")).all()
+    for entry in audits:
+        if (entry.after or {}).get("request_id") == request_id:
+            return message
+    if expected_status != "failed" or message.delivery_status == DeliveryStatus.UNKNOWN:
+        raise HTTPException(status_code=409, detail="outcome unknown; manual reconciliation required" if message.delivery_status == DeliveryStatus.UNKNOWN else "only failed messages can be retried")
+    if message.delivery_status != DeliveryStatus.FAILED:
+        raise HTTPException(status_code=409, detail="only failed messages can be retried")
+    record_audit(session, actor=actor.username, action="message.retry_requested", entity="message", entity_id=str(message.id), after={"request_id": request_id, "conversation_id": message.conversation_id})
+    session.commit()
+    return deliver_message(message.id)

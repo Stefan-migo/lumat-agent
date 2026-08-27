@@ -17,11 +17,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Conversation, Message, User
+from app.models import Conversation, DeliveryStatus, Message, User
 from app.panel.api.deps import require_user_json
 from app.panel.api.serializers import to_conversation_dict, to_message_dict
 from app.panel.deps import get_db
-from app.services.conversations import assign, change_state
+from app.services.conversations import assign, change_state, retry_operator_message, send_operator_message
 from app.models import ConversationState
 
 router = APIRouter(tags=["panel-api-conversations"])
@@ -37,6 +37,16 @@ class AssignmentCommand(BaseModel):
     responsible_id: int | None
     expected_version: int = Field(ge=0)
     request_id: str = Field(min_length=1)
+
+
+class MessageCommand(BaseModel):
+    text: str
+    request_id: str = Field(min_length=1)
+
+
+class RetryCommand(BaseModel):
+    request_id: str = Field(min_length=1)
+    expected_status: str
 
 
 def _conversation_or_404(session: Session, conversation_id: int) -> Conversation:
@@ -77,6 +87,28 @@ def state_command(conversation_id: int, body: StateCommand, session: Session = D
 def assignment_command(conversation_id: int, body: AssignmentCommand, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
     conversation = assign(session, conversation_id, current, body.responsible_id, body.expected_version, body.request_id)
     return {"ok": True, "conversation": to_conversation_dict(conversation)}
+
+
+@router.post("/conversations/{conversation_id}/messages")
+def message_command(conversation_id: int, body: MessageCommand, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+    if not body.text.strip():
+        _conversation_or_404(session, conversation_id)
+        from app.services.audit import record_audit
+        record_audit(session, actor=current.username, action="message.send_rejected", entity="conversation", entity_id=str(conversation_id), after={"request_id": body.request_id, "detail": "message text must not be blank"})
+        session.commit()
+        raise HTTPException(status_code=422, detail="message text must not be blank")
+    message = send_operator_message(session, conversation_id, current, body.text, body.request_id)
+    if message.delivery_status != DeliveryStatus.SENT:
+        raise HTTPException(status_code=502, detail="message delivery failed")
+    return {"ok": True, "message": to_message_dict(message)}
+
+
+@router.post("/conversations/{conversation_id}/messages/{message_id}/retry")
+def retry_message(conversation_id: int, message_id: int, body: RetryCommand, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+    message = retry_operator_message(session, conversation_id, message_id, current, body.request_id, body.expected_status)
+    if message.delivery_status != DeliveryStatus.SENT:
+        raise HTTPException(status_code=502, detail="message delivery failed")
+    return {"ok": True, "message": to_message_dict(message)}
 
 
 @router.get("/conversations/{conversation_id}")

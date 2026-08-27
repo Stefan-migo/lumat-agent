@@ -14,13 +14,15 @@ calls — the token comes from env, SH-2).
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 import httpx
 from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import session_scope
-from app.models import Conversation, Message, MessageDirection, MessageStatus
+from app.models import Conversation, DeliveryStatus, Message, MessageDirection, MessageStatus, User
+from app.services.audit import record_audit
 from app.services.settings import get_setting
 
 logger = logging.getLogger(__name__)
@@ -55,6 +57,55 @@ def send_text(phone_e164: str, text: str) -> str:
     )
     response.raise_for_status()
     return response.json()["messages"][0]["id"]
+
+
+def deliver_message(message_id: int) -> Message:
+    """Claim one operator message, call Meta, and durably finalize its outcome."""
+    with session_scope() as session:
+        message = session.scalar(select(Message).where(Message.id == message_id).with_for_update())
+        if message is None:
+            raise ValueError("message not found")
+        if message.delivery_status == DeliveryStatus.SENT:
+            return message
+        if message.delivery_status in (DeliveryStatus.SENDING, DeliveryStatus.UNKNOWN):
+            return message
+        message.delivery_status = DeliveryStatus.SENDING
+        message.delivery_attempts += 1
+        message.last_attempt_at = datetime.now(timezone.utc)
+        phone = session.scalar(
+            select(Conversation.wa_phone).where(Conversation.id == message.conversation_id)
+        )
+
+    try:
+        wamid = send_text(phone, message.text or "")
+    except httpx.HTTPStatusError as exc:
+        _finalize_delivery(message_id, DeliveryStatus.FAILED, str(exc))
+    except httpx.HTTPError as exc:
+        _finalize_delivery(message_id, DeliveryStatus.UNKNOWN, "Meta transport outcome is unknown")
+        logger.warning("Meta transport outcome is unknown for outbound message %s", message_id)
+    except Exception:
+        _finalize_delivery(message_id, DeliveryStatus.UNKNOWN, "Meta response outcome is unknown")
+        logger.exception("Meta response outcome is unknown for outbound message %s", message_id)
+    else:
+        with session_scope() as session:
+            row = session.get(Message, message_id)
+            row.delivery_status = DeliveryStatus.SENT
+            row.wamid = wamid
+            row.delivery_error = None
+            row.delivered_at = datetime.now(timezone.utc)
+            actor = session.scalar(select(User.username).where(User.id == row.author_id))
+            record_audit(session, actor=actor or "system", action="message.delivery_sent", entity="message", entity_id=str(message_id), after={"request_id": row.request_id, "status": "sent", "wamid": wamid})
+    with session_scope() as session:
+        return session.get(Message, message_id)
+
+
+def _finalize_delivery(message_id: int, status: DeliveryStatus, error: str) -> None:
+    with session_scope() as session:
+        row = session.get(Message, message_id)
+        row.delivery_status = status
+        row.delivery_error = error[:2000]
+        actor = session.scalar(select(User.username).where(User.id == row.author_id))
+        record_audit(session, actor=actor or "system", action=f"message.delivery_{status.value}", entity="message", entity_id=str(message_id), after={"request_id": row.request_id, "status": status.value, "error": row.delivery_error})
 
 
 def meta_message_cost(session) -> float:
