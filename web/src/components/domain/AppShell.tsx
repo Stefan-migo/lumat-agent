@@ -27,6 +27,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   const [view, setView] = useState<PanelView>('dashboard');
   const [clientId, setClientId] = useState<number | null>(null);
   const [conversationId, setConversationId] = useState<number | null>(null);
+  const [conversationRefresh, setConversationRefresh] = useState(0);
 
   const navigate = (nextView: PanelView) => {
     setClientId(null);
@@ -36,7 +37,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
 
   const page = view === 'dashboard' ? <Dashboard />
     : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} /> : <ClientesList onOpenClient={setClientId} />
-    : view === 'conversations' ? conversationId !== null ? <ConversationThread conversationId={conversationId} /> : <ConversationsList onOpenThread={setConversationId} />
+     : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => setConversationId(null)} /> : <ConversationsList refreshKey={conversationRefresh} onOpenThread={setConversationId} />
     : view === 'cases' ? <CasesList />
     : view === 'kb' ? <KbList />
     : <Settings />;
