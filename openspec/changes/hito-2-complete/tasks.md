@@ -35,6 +35,10 @@ Chain strategy: stacked-to-main
 - [x] 2.1 **RED**, `tests/functional/test_api_conversations.py`: cover 401/403, legal/illegal commands, inactive owner, stale version, duplicate/mismatched request IDs, audit; acceptance: denials are JSON, audited, non-mutating; dependency: 1.2; forecast: 100–140 lines.
 - [x] 2.2 **GREEN**, `app/services/conversations.py`, `app/chat/state.py`, `app/panel/api/routes/conversations.py`: implement locked commands, roles, assignment, filters/order, version/idempotency; acceptance: AP-9/AP-10/HH-5 pass; dependency: 2.1; forecast: 100–140 lines.
 
+### PR2 Corrective Pass
+
+- [x] Validator correction: audit mismatched request IDs and add focused command, audit, and concurrency contract coverage; no new feature scope.
+
 ## Phase 3: Operator Messaging
 
 - [ ] 3.1 **RED**, `tests/integration/test_operator_messaging.py`, `tests/integration/test_webhook_ingest.py`: cover rejection/window, commit-before-Meta, payload/no-token logging, duplicate races, 4xx failed, timeout unknown, failed-only retry, human/closed continuity; acceptance: OM/WH scenarios fail first; dependency: 2.2; forecast: 130–180 lines.

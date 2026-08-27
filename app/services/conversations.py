@@ -22,14 +22,30 @@ def _audits(session: Session, conversation_id: int) -> list[AuditLog]:
     return list(session.scalars(select(AuditLog).where(AuditLog.entity_id == str(conversation_id))))
 
 
-def _duplicate(session: Session, conversation_id: int, request_id: str, operation: str, payload: dict):
-    for entry in _audits(session, conversation_id):
+def _duplicate(
+    session: Session,
+    conversation: Conversation,
+    actor: User,
+    request_id: str,
+    operation: str,
+    payload: dict,
+):
+    for entry in _audits(session, conversation.id):
         after = entry.after or {}
         if after.get("request_id") != request_id:
             continue
         if after.get("operation") == operation and after.get("payload") == payload:
             return True
-        raise HTTPException(status_code=409, detail="request_id already used for another command")
+        _reject(
+            session,
+            conversation,
+            actor,
+            "conversation.request_rejected",
+            request_id,
+            "request_id already used for another command",
+            payload,
+            409,
+        )
     return False
 
 
@@ -48,7 +64,7 @@ def change_state(session: Session, conversation_id: int, actor: User, state: Con
     if conversation is None:
         raise HTTPException(status_code=404, detail="conversation not found")
     payload = {"state": state.value, "expected_version": expected_version}
-    if _duplicate(session, conversation_id, request_id, "state", payload):
+    if _duplicate(session, conversation, actor, request_id, "state", payload):
         return conversation
     if conversation.version != expected_version:
         _reject(session, conversation, actor, "conversation.state_rejected", request_id, "conversation version conflict", payload)
@@ -76,7 +92,7 @@ def assign(session: Session, conversation_id: int, actor: User, responsible_id: 
     if conversation is None:
         raise HTTPException(status_code=404, detail="conversation not found")
     payload = {"responsible_id": responsible_id, "expected_version": expected_version}
-    if _duplicate(session, conversation_id, request_id, "assignment", payload):
+    if _duplicate(session, conversation, actor, request_id, "assignment", payload):
         return conversation
     if conversation.version != expected_version:
         _reject(session, conversation, actor, "conversation.assignment_rejected", request_id, "conversation version conflict", payload)

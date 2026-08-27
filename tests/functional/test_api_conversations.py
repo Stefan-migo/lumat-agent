@@ -11,8 +11,11 @@ unauthenticated calls get 401, never a 302 (PDW-AUTH-1). No CORS (D1).
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from threading import Barrier
 
+from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.db import SessionLocal  # noqa: E402
@@ -26,6 +29,7 @@ from app.models import (  # noqa: E402
     MessageType,
     User,
 )
+from app.services.conversations import change_state
 
 
 def _seed_conversation(
@@ -438,3 +442,124 @@ def test_command_contract_rejects_missing_preconditions_as_json_422(client, make
     )
     assert response.status_code == 422
     assert response.headers["content-type"].startswith("application/json")
+
+
+def test_illegal_transition_is_rejected_and_audited(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "closed", "expected_version": 0, "request_id": "illegal"},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "illegal conversation state transition"}
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        audit = session.scalar(
+            select(AuditLog).where(AuditLog.after["request_id"].as_string() == "illegal")
+        )
+        assert conversation.state == ConversationState.BOT
+        assert conversation.version == 0
+        assert audit.action == "conversation.state_rejected"
+
+
+def test_nonexistent_assignment_target_is_rejected_and_audited(client, make_user):
+    _, conversation_id = _seed_conversation()
+    make_user("admin", "admin-pass", role="admin")
+    _login(client, "admin", "admin-pass")
+
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/assignment",
+        json={"responsible_id": 999999, "expected_version": 0, "request_id": "missing-target"},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "assignment target must be an active operator"}
+    with SessionLocal() as session:
+        audit = session.scalar(
+            select(AuditLog).where(
+                AuditLog.after["request_id"].as_string() == "missing-target"
+            )
+        )
+        assert audit.action == "conversation.assignment_rejected"
+
+
+def test_successful_command_is_audited(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    operator_id = make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "human", "expected_version": 0, "request_id": "audited-take"},
+    )
+
+    assert response.status_code == 200
+    with SessionLocal() as session:
+        audit = session.scalar(
+            select(AuditLog).where(
+                AuditLog.after["request_id"].as_string() == "audited-take"
+            )
+        )
+        assert audit.action == "conversation.state_changed"
+        assert audit.actor == "oper"
+        assert audit.after["responsible_id"] == operator_id
+
+
+def test_mismatched_request_id_is_rejected_and_audited(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+    payload = {"state": "human", "expected_version": 0, "request_id": "reused"}
+    assert client.post(f"/panel/api/conversations/{conversation_id}/state", json=payload).status_code == 200
+
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "closed", "expected_version": 1, "request_id": "reused"},
+    )
+
+    assert response.status_code == 409
+    with SessionLocal() as session:
+        audit = session.scalar(
+            select(AuditLog).where(
+                AuditLog.after["request_id"].as_string() == "reused",
+                AuditLog.after["detail"].as_string()
+                == "request_id already used for another command",
+            )
+        )
+        assert audit is not None
+        assert audit.action == "conversation.request_rejected"
+
+
+def test_concurrent_state_commands_serialize_on_conversation_row(make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    first_id = make_user("first", "first-pass", role="operador")
+    second_id = make_user("second", "second-pass", role="operador")
+    barrier = Barrier(2)
+
+    def submit(actor_id: int):
+        with SessionLocal() as session:
+            actor = session.get(User, actor_id)
+            barrier.wait()
+            try:
+                change_state(
+                    session, conversation_id, actor, ConversationState.HUMAN, 0,
+                    f"race-{actor_id}",
+                )
+                session.commit()
+                return "ok"
+            except HTTPException as error:
+                session.rollback()
+                return error.status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(submit, (first_id, second_id)))
+
+    assert set(results) == {"ok", 409}
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        assert conversation.state == ConversationState.HUMAN
+        assert conversation.version == 1
