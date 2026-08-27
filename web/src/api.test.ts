@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -99,5 +99,27 @@ describe('postJson', () => {
       status: 401,
       detail: 'Credenciales inválidas',
     });
+  });
+});
+
+describe('conversation API contracts', () => {
+  beforeEach(() => { globalThis.fetch = vi.fn(); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('encodes production filters and mutation payloads', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ conversations: [] }), { status: 200 }));
+    await listConversations({ state: 'human', responsible_id: 7 });
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/conversations?state=human&responsible_id=7', expect.anything());
+
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ ok: true, message: { id: 3 } }), { status: 200 }));
+    await sendMessage(9, { text: 'Hola', request_id: 'req-1' });
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/conversations/9/messages', expect.objectContaining({ method: 'POST', body: JSON.stringify({ text: 'Hola', request_id: 'req-1' }) }));
+  });
+
+  it('keeps conflict and policy errors typed for callers', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ detail: 'stale' }), { status: 409 }));
+    await expect(sendMessage(9, { text: 'Hola', request_id: 'req-2' })).rejects.toMatchObject({ status: 409, detail: 'stale' });
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ detail: 'window closed' }), { status: 422 }));
+    await expect(sendMessage(9, { text: 'Hola', request_id: 'req-3' })).rejects.toMatchObject({ status: 422, detail: 'window closed' });
   });
 });

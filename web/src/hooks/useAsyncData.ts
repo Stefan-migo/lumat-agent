@@ -7,16 +7,18 @@ export interface AsyncData<T> {
   data: T | null;
   state: AsyncDataState;
   retry: () => void;
+  error: unknown;
 }
 
 function isEmpty<T>(data: T): boolean {
   return Array.isArray(data) && data.length === 0;
 }
 
-export function useAsyncData<T>(fetcher: () => Promise<T>, enabled = true): AsyncData<T> {
+export function useAsyncData<T>(fetcher: () => Promise<T>, enabled = true, refreshKey = 0): AsyncData<T> {
   const [data, setData] = useState<T | null>(null);
   const [state, setState] = useState<AsyncDataState>("loading");
   const [attempt, setAttempt] = useState(0);
+  const [error, setError] = useState<unknown>(null);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
   const retry = useCallback(() => setAttempt((current) => current + 1), []);
@@ -25,6 +27,7 @@ export function useAsyncData<T>(fetcher: () => Promise<T>, enabled = true): Asyn
     if (!enabled) return;
     let active = true;
     setState("loading");
+    setError(null);
     fetcherRef.current().then(
       (next) => {
         if (!active) return;
@@ -34,12 +37,13 @@ export function useAsyncData<T>(fetcher: () => Promise<T>, enabled = true): Asyn
       (error: unknown) => {
         if (!active) return;
         setState(error instanceof ApiError && error.status === 403 ? "denied" : "error");
+        setError(error);
       },
     );
     return () => {
       active = false;
     };
-  }, [attempt, enabled]);
+  }, [attempt, enabled, refreshKey]);
 
-  return { data, state, retry };
+  return { data, state, retry, error };
 }
