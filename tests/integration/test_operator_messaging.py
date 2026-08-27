@@ -54,18 +54,12 @@ def _seed(operator_role=UserRole.OPERADOR, inbound_age=timedelta(minutes=5), pho
         session.add(inbound)
         session.commit()
         return user.id, conversation.id
-
-
 def _login(client):
     response = client.post("/panel/api/login", json={"username": "operator", "password": "pass"})
     assert response.status_code == 200
-
-
 def _rows(conversation_id):
     with SessionLocal() as session:
         return list(session.scalars(select(Message).where(Message.conversation_id == conversation_id).order_by(Message.id)))
-
-
 def test_operator_message_commits_before_exact_meta_call_without_secret_logging(client, caplog):
     _, conversation_id = _seed()
     _login(client)
@@ -74,7 +68,6 @@ def test_operator_message_commits_before_exact_meta_call_without_secret_logging(
         def send(request):
             observed.extend(_rows(conversation_id))
             return httpx.Response(200, json={"messages": [{"id": "wamid.operator"}]})
-
         route = router.post("/v20.0/123456789/messages").mock(side_effect=send)
         with caplog.at_level(logging.DEBUG):
             response = client.post(
