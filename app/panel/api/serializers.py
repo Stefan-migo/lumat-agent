@@ -61,10 +61,17 @@ def to_message_dict(message: Message) -> dict:
     return {
         "id": message.id,
         "conversation_id": message.conversation_id,
+        "author_id": message.author_id,
+        "request_id": message.request_id,
         "direction": message.direction.value,
         "msg_type": message.msg_type.value,
         "text": message.text,
         "media_url": message.media_url,
+        "delivery_status": message.delivery_status.value if message.delivery_status else None,
+        "delivery_error": message.delivery_error,
+        "delivery_attempts": message.delivery_attempts,
+        "last_attempt_at": _iso(message.last_attempt_at),
+        "delivered_at": _iso(message.delivered_at),
         "created_at": _iso(message.created_at),
     }
 
@@ -76,6 +83,8 @@ def to_conversation_dict(conversation: Conversation) -> dict:
         "customer_id": conversation.customer_id,
         "wa_phone": conversation.wa_phone,
         "state": conversation.state.value,
+        "responsible_id": conversation.responsible_id,
+        "version": conversation.version,
         "summary": conversation.summary,
         "last_message_at": _iso(conversation.last_message_at),
         "created_at": _iso(conversation.created_at),

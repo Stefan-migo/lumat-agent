@@ -161,6 +161,8 @@ def test_conversations_list_returns_serialized_rows_in_activity_order(client, ma
             "last_message_at",
             "created_at",
             "closed_at",
+            "responsible_id",
+            "version",
         }
         for row in body["conversations"]
     )
@@ -183,6 +185,8 @@ def test_conversation_returns_metadata_and_messages_chronological(client, make_u
     assert conversation["state"] == "human"
     assert conversation["summary"] == "needs visita"
     assert conversation["customer_id"] is not None
+    assert conversation["responsible_id"] is None
+    assert conversation["version"] == 0
     datetime.fromisoformat(conversation["created_at"])  # ISO-8601 parseable
     # messages: chronological (created_at then id), media_url as plain URL
     messages = body["messages"]
@@ -194,6 +198,11 @@ def test_conversation_returns_metadata_and_messages_chronological(client, make_u
     ]
     assert messages[0]["direction"] == "inbound"
     assert messages[0]["msg_type"] == "text"
+    assert messages[0]["author_id"] is None
+    assert messages[0]["request_id"] is None
+    assert messages[0]["delivery_status"] is None
+    assert messages[0]["delivery_attempts"] == 0
+    assert messages[0]["delivery_error"] is None
     assert [m["created_at"] for m in messages] == sorted(m["created_at"] for m in messages)
     # media link renders as a URL on the message that carries it (PDW-TST-3 pattern)
     media_message = messages[2]

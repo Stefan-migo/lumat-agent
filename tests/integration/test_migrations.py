@@ -100,6 +100,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("007_case_created_at",),
         ("008_local_embeddings",),
         ("009_memory",),
+        ("010_h2_human_inbox",),
     ]
 
 
@@ -277,3 +278,72 @@ def test_enums_materialized(migrated_db, admin_conn):
         "received", "processing", "processed", "failed",
     ]
     assert by_type["document_format"] == ["pdf", "md", "csv"]
+
+
+# --- H2 schema/domain contracts --------------------------------------------
+
+def test_h2_conversation_contract_columns_and_indexes(migrated_db, admin_conn):
+    columns = admin_conn.execute(
+        "SELECT column_name, column_default, is_nullable "
+        "FROM information_schema.columns WHERE table_name = 'conversations' "
+        "AND column_name IN ('responsible_id', 'version') ORDER BY column_name"
+    ).fetchall()
+    assert columns == [
+        ("responsible_id", None, "YES"),
+        ("version", "0", "NO"),
+    ]
+    index = admin_conn.execute(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = "
+        "'idx_conversations_responsible_id'"
+    ).fetchone()
+    assert index is not None
+
+
+def test_h2_outbound_contract_and_delivery_enum(migrated_db, admin_conn):
+    columns = admin_conn.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_name = 'messages' AND column_name IN "
+        "('author_id', 'request_id', 'delivery_status', 'delivery_error', "
+        "'delivery_attempts', 'last_attempt_at', 'delivered_at') "
+        "ORDER BY column_name"
+    ).fetchall()
+    assert [column for (column,) in columns] == [
+        "author_id", "delivered_at", "delivery_attempts", "delivery_error",
+        "delivery_status", "last_attempt_at", "request_id",
+    ]
+    rows = admin_conn.execute(
+        "SELECT enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
+        "WHERE t.typname = 'delivery_status' ORDER BY enumsortorder"
+    ).fetchall()
+    assert rows == [(label,) for label in ("pending", "sending", "sent", "failed", "unknown")]
+    index = admin_conn.execute(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = "
+        "'uq_messages_outbound_request_id'"
+    ).fetchone()
+    assert index is not None
+    assert "direction = 'outbound'" in index[0]
+
+
+def test_h2_outbound_request_key_is_unique_only_for_outbound(migrated_db, admin_conn):
+    admin_conn.execute("INSERT INTO customers (phone_e164) VALUES ('+56977778888')")
+    customer_id = admin_conn.execute(
+        "SELECT id FROM customers WHERE phone_e164 = '+56977778888'"
+    ).fetchone()[0]
+    conversation_id = admin_conn.execute(
+        "INSERT INTO conversations (customer_id, wa_phone) VALUES (%s, %s) RETURNING id",
+        (customer_id, "+56977778888"),
+    ).fetchone()[0]
+    values = (conversation_id, "outbound", "text", "request-1")
+    admin_conn.execute(
+        "INSERT INTO messages (conversation_id, direction, msg_type, request_id) "
+        "VALUES (%s, %s, %s, %s)", values
+    )
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        admin_conn.execute(
+            "INSERT INTO messages (conversation_id, direction, msg_type, request_id) "
+            "VALUES (%s, %s, %s, %s)", values
+        )
+    admin_conn.execute(
+        "INSERT INTO messages (conversation_id, direction, msg_type, request_id) "
+        "VALUES (%s, 'inbound', 'text', %s)", (conversation_id, "request-1")
+    )
