@@ -86,6 +86,17 @@ def test_operator_message_commits_before_exact_meta_call_without_secret_logging(
         b'{"messaging_product":"whatsapp","to":"+56912345678","type":"text","text":{"body":"Voy en camino"}}'
     )
     assert "meta-test-token" not in caplog.text
+    with SessionLocal() as session:
+        audit = session.scalar(select(AuditLog).where(AuditLog.action == "message.delivery_sent"))
+        assert audit.actor == "operator"
+        assert audit.after == {
+            "conversation_id": conversation_id,
+            "request_id": "reply-1",
+            "status": "sent",
+            "error": None,
+            "cause": "Meta delivery succeeded",
+            "wamid": "wamid.operator",
+        }
 
 
 def test_latest_customer_inbound_controls_window_and_denial_is_audited(client):
@@ -152,6 +163,23 @@ def test_definite_failure_is_retryable_once_and_unknown_is_not(client):
     assert row.delivery_status == DeliveryStatus.SENT
     assert row.delivery_attempts == 2
     assert row.wamid == "wamid.retry"
+    with SessionLocal() as session:
+        failed_audit = session.scalar(select(AuditLog).where(AuditLog.action == "message.delivery_failed"))
+        sent_audit = session.scalar(select(AuditLog).where(AuditLog.action == "message.delivery_sent"))
+        assert failed_audit.actor == "operator"
+        assert failed_audit.after["conversation_id"] == conversation_id
+        assert failed_audit.after["request_id"] == "retry-source"
+        assert failed_audit.after["status"] == "failed"
+        assert failed_audit.after["cause"] == "Meta rejected delivery"
+        assert failed_audit.after["error"]
+        assert sent_audit.after == {
+            "conversation_id": conversation_id,
+            "request_id": "retry-source",
+            "status": "sent",
+            "error": None,
+            "cause": "Meta delivery succeeded",
+            "wamid": "wamid.retry",
+        }
 
     _, unknown_conversation_id = _seed(phone="+56987654321")
     with respx.mock(base_url="https://graph.facebook.com") as router:
@@ -163,6 +191,14 @@ def test_definite_failure_is_retryable_once_and_unknown_is_not(client):
         assert unknown.status_code == 502
     unknown_row = [row for row in _rows(unknown_conversation_id) if row.direction == MessageDirection.OUTBOUND][0]
     assert unknown_row.delivery_status == DeliveryStatus.UNKNOWN
+    with SessionLocal() as session:
+        unknown_audit = session.scalar(select(AuditLog).where(AuditLog.action == "message.delivery_unknown"))
+        assert unknown_audit.actor == "operator"
+        assert unknown_audit.after["conversation_id"] == unknown_conversation_id
+        assert unknown_audit.after["request_id"] == "unknown-source"
+        assert unknown_audit.after["status"] == "unknown"
+        assert unknown_audit.after["cause"] == "Meta transport outcome is unknown"
+        assert unknown_audit.after["error"]
     blocked = client.post(
         f"/panel/api/conversations/{unknown_conversation_id}/messages/{unknown_row.id}/retry",
         json={"request_id": "unknown-retry", "expected_status": "failed"},

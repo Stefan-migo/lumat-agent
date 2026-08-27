@@ -39,6 +39,10 @@ Chain strategy: stacked-to-main
 
 - [x] Validator correction: audit mismatched request IDs and add focused command, audit, and concurrency contract coverage; no new feature scope.
 
+### PR3 Corrective Pass
+
+- [x] Validator correction: include actor, cause, conversation ID, request ID, status, and delivery error in final delivery audits; add focused assertions and reproducible supported-environment evidence.
+
 ## Phase 3: Operator Messaging
 
 - [x] 3.1 **RED**, `tests/integration/test_operator_messaging.py`, `tests/integration/test_webhook_ingest.py`: cover rejection/window, commit-before-Meta, payload/no-token logging, duplicate races, 4xx failed, timeout unknown, failed-only retry, human/closed continuity; acceptance: OM/WH scenarios fail first; dependency: 2.2; forecast: 130–180 lines.

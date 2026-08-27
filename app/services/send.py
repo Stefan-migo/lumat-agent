@@ -94,7 +94,21 @@ def deliver_message(message_id: int) -> Message:
             row.delivery_error = None
             row.delivered_at = datetime.now(timezone.utc)
             actor = session.scalar(select(User.username).where(User.id == row.author_id))
-            record_audit(session, actor=actor or "system", action="message.delivery_sent", entity="message", entity_id=str(message_id), after={"request_id": row.request_id, "status": "sent", "wamid": wamid})
+            record_audit(
+                session,
+                actor=actor or "system",
+                action="message.delivery_sent",
+                entity="message",
+                entity_id=str(message_id),
+                after={
+                    "conversation_id": row.conversation_id,
+                    "request_id": row.request_id,
+                    "status": "sent",
+                    "error": None,
+                    "cause": "Meta delivery succeeded",
+                    "wamid": wamid,
+                },
+            )
     with session_scope() as session:
         return session.get(Message, message_id)
 
@@ -105,7 +119,25 @@ def _finalize_delivery(message_id: int, status: DeliveryStatus, error: str) -> N
         row.delivery_status = status
         row.delivery_error = error[:2000]
         actor = session.scalar(select(User.username).where(User.id == row.author_id))
-        record_audit(session, actor=actor or "system", action=f"message.delivery_{status.value}", entity="message", entity_id=str(message_id), after={"request_id": row.request_id, "status": status.value, "error": row.delivery_error})
+        cause = (
+            "Meta rejected delivery"
+            if status == DeliveryStatus.FAILED
+            else "Meta transport outcome is unknown"
+        )
+        record_audit(
+            session,
+            actor=actor or "system",
+            action=f"message.delivery_{status.value}",
+            entity="message",
+            entity_id=str(message_id),
+            after={
+                "conversation_id": row.conversation_id,
+                "request_id": row.request_id,
+                "status": status.value,
+                "error": row.delivery_error,
+                "cause": cause,
+            },
+        )
 
 
 def meta_message_cost(session) -> float:
