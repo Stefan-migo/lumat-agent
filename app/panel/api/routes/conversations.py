@@ -13,6 +13,7 @@ PDW-AUTH-1), 404 for a missing conversation. No redirects, no CORS (D1).
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,8 +21,22 @@ from app.models import Conversation, Message, User
 from app.panel.api.deps import require_user_json
 from app.panel.api.serializers import to_conversation_dict, to_message_dict
 from app.panel.deps import get_db
+from app.services.conversations import assign, change_state
+from app.models import ConversationState
 
 router = APIRouter(tags=["panel-api-conversations"])
+
+
+class StateCommand(BaseModel):
+    state: ConversationState
+    expected_version: int = Field(ge=0)
+    request_id: str = Field(min_length=1)
+
+
+class AssignmentCommand(BaseModel):
+    responsible_id: int | None
+    expected_version: int = Field(ge=0)
+    request_id: str = Field(min_length=1)
 
 
 def _conversation_or_404(session: Session, conversation_id: int) -> Conversation:
@@ -33,17 +48,35 @@ def _conversation_or_404(session: Session, conversation_id: int) -> Conversation
 
 @router.get("/conversations")
 def conversations_list(
+    state: ConversationState | None = None,
+    responsible_id: int | None = None,
     session: Session = Depends(get_db),
     current: User = Depends(require_user_json),
 ) -> dict:
     """List conversation metadata, most recently active first."""
-    rows = session.scalars(
-        select(Conversation).order_by(
+    query = select(Conversation)
+    if state is not None:
+        query = query.where(Conversation.state == state)
+    if responsible_id is not None:
+        query = query.where(Conversation.responsible_id == responsible_id)
+    rows = session.scalars(query.order_by(
             Conversation.last_message_at.desc().nulls_last(),
             Conversation.id.desc(),
         )
     ).all()
     return {"conversations": [to_conversation_dict(row) for row in rows]}
+
+
+@router.post("/conversations/{conversation_id}/state")
+def state_command(conversation_id: int, body: StateCommand, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+    conversation = change_state(session, conversation_id, current, body.state, body.expected_version, body.request_id)
+    return {"ok": True, "conversation": to_conversation_dict(conversation)}
+
+
+@router.post("/conversations/{conversation_id}/assignment")
+def assignment_command(conversation_id: int, body: AssignmentCommand, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+    conversation = assign(session, conversation_id, current, body.responsible_id, body.expected_version, body.request_id)
+    return {"ok": True, "conversation": to_conversation_dict(conversation)}
 
 
 @router.get("/conversations/{conversation_id}")

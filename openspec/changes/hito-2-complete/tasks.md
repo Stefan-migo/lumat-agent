@@ -32,8 +32,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Inbox Commands
 
-- [ ] 2.1 **RED**, `tests/functional/test_api_conversations.py`: cover 401/403, legal/illegal commands, inactive owner, stale version, duplicate/mismatched request IDs, audit; acceptance: denials are JSON, audited, non-mutating; dependency: 1.2; forecast: 100–140 lines.
-- [ ] 2.2 **GREEN**, `app/services/conversations.py`, `app/chat/state.py`, `app/panel/api/routes/conversations.py`: implement locked commands, roles, assignment, filters/order, version/idempotency; acceptance: AP-9/AP-10/HH-5 pass; dependency: 2.1; forecast: 100–140 lines.
+- [x] 2.1 **RED**, `tests/functional/test_api_conversations.py`: cover 401/403, legal/illegal commands, inactive owner, stale version, duplicate/mismatched request IDs, audit; acceptance: denials are JSON, audited, non-mutating; dependency: 1.2; forecast: 100–140 lines.
+- [x] 2.2 **GREEN**, `app/services/conversations.py`, `app/chat/state.py`, `app/panel/api/routes/conversations.py`: implement locked commands, roles, assignment, filters/order, version/idempotency; acceptance: AP-9/AP-10/HH-5 pass; dependency: 2.1; forecast: 100–140 lines.
 
 ## Phase 3: Operator Messaging
 

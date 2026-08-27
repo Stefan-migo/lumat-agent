@@ -17,12 +17,14 @@ from sqlalchemy import select
 
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
+    AuditLog,
     Conversation,
     ConversationState,
     Customer,
     Message,
     MessageDirection,
     MessageType,
+    User,
 )
 
 
@@ -279,3 +281,160 @@ def test_conversation_missing_returns_404_json(client, make_user):
     assert resp.status_code == 404
     assert resp.headers["content-type"].startswith("application/json")
     assert resp.json() == {"detail": "conversation not found"}
+
+
+def test_state_commands_require_json_auth_and_reject_stale_requests(client, make_user):
+    """Commands use JSON 401 and optimistic version conflicts without mutation."""
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "human", "expected_version": 0, "request_id": "take-1"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "unauthorized"}
+
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "human", "expected_version": 0, "request_id": "take-1"},
+    )
+    assert response.status_code == 200
+    assert response.json()["conversation"]["state"] == "human"
+    assert response.json()["conversation"]["responsible_id"] is not None
+    assert response.json()["conversation"]["version"] == 1
+
+    stale = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "closed", "expected_version": 0, "request_id": "close-stale"},
+    )
+    assert stale.status_code == 409
+    assert stale.json() == {"detail": "conversation version conflict"}
+
+    with SessionLocal() as session:
+        row = session.get(Conversation, conversation_id)
+        assert row.state == ConversationState.HUMAN
+        assert row.version == 1
+        audit = session.scalar(
+            select(AuditLog).where(AuditLog.action == "conversation.state_rejected")
+        )
+        assert audit is not None
+        assert audit.after["request_id"] == "close-stale"
+
+
+def test_state_command_duplicate_is_idempotent_and_payload_mismatch_conflicts(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+    payload = {"state": "human", "expected_version": 0, "request_id": "same-key"}
+    first = client.post(f"/panel/api/conversations/{conversation_id}/state", json=payload)
+    duplicate = client.post(f"/panel/api/conversations/{conversation_id}/state", json=payload)
+    assert first.status_code == duplicate.status_code == 200
+    assert duplicate.json() == first.json()
+
+    mismatch = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "closed", "expected_version": 1, "request_id": "same-key"},
+    )
+    assert mismatch.status_code == 409
+    assert mismatch.json() == {"detail": "request_id already used for another command"}
+
+
+def test_state_commands_follow_legal_return_and_close_transitions(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    operator_id = make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    take = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "human", "expected_version": 0, "request_id": "take"},
+    )
+    returned = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "bot", "expected_version": 1, "request_id": "return"},
+    )
+    closed = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "human", "expected_version": 2, "request_id": "take-again"},
+    )
+    closed = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "closed", "expected_version": 3, "request_id": "close"},
+    )
+    assert take.json()["conversation"]["responsible_id"] == operator_id
+    assert returned.json()["conversation"]["state"] == "bot"
+    assert returned.json()["conversation"]["responsible_id"] is None
+    assert closed.status_code == 200
+    assert closed.json()["conversation"]["state"] == "closed"
+
+
+def test_assignment_enforces_owner_rules_and_audits_denials(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.HUMAN)
+    operator_id = make_user("oper", "oper-pass", role="operador")
+    other_id = make_user("other", "other-pass", role="operador")
+    _login(client)
+
+    forbidden = client.post(
+        f"/panel/api/conversations/{conversation_id}/assignment",
+        json={"responsible_id": other_id, "expected_version": 0, "request_id": "assign-other"},
+    )
+    assert forbidden.status_code == 403
+    assert forbidden.json() == {"detail": "operators may assign only themselves"}
+
+    taken = client.post(
+        f"/panel/api/conversations/{conversation_id}/assignment",
+        json={"responsible_id": operator_id, "expected_version": 0, "request_id": "assign-self"},
+    )
+    assert taken.status_code == 200
+    assert taken.json()["conversation"]["responsible_id"] == operator_id
+
+    with SessionLocal() as session:
+        inactive = session.get(User, other_id)
+        inactive.active = False
+        session.commit()
+    make_user("admin", "admin-pass", role="admin")
+    _login(client, "admin", "admin-pass")
+    invalid = client.post(
+        f"/panel/api/conversations/{conversation_id}/assignment",
+        json={"responsible_id": other_id, "expected_version": 1, "request_id": "inactive"},
+    )
+    assert invalid.status_code == 422
+    assert invalid.json() == {"detail": "assignment target must be an active operator"}
+
+
+def test_list_supports_state_and_assignee_filters(client, make_user):
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56977778888")
+        session.add(customer)
+        session.flush()
+        rows = [
+            Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.BOT),
+            Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.HUMAN),
+        ]
+        session.add_all(rows)
+        session.flush()
+        operator = User(username="filter-oper", password_hash="unused", role="operador")
+        session.add(operator)
+        session.flush()
+        rows[1].responsible_id = operator.id
+        session.commit()
+        human_id, operator_id = rows[1].id, operator.id
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    state = client.get("/panel/api/conversations?state=human")
+    assignee = client.get(f"/panel/api/conversations?responsible_id={operator_id}")
+    assert [row["id"] for row in state.json()["conversations"]] == [human_id]
+    assert [row["id"] for row in assignee.json()["conversations"]] == [human_id]
+
+
+def test_command_contract_rejects_missing_preconditions_as_json_422(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "human", "expected_version": -1, "request_id": ""},
+    )
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith("application/json")
