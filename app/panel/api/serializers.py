@@ -61,22 +61,52 @@ def to_message_dict(message: Message) -> dict:
     return {
         "id": message.id,
         "conversation_id": message.conversation_id,
+        "author_id": message.author_id,
+        "request_id": message.request_id,
         "direction": message.direction.value,
         "msg_type": message.msg_type.value,
         "text": message.text,
         "media_url": message.media_url,
+        "delivery_status": message.delivery_status.value if message.delivery_status else None,
+        "delivery_error": message.delivery_error,
+        "delivery_attempts": message.delivery_attempts,
+        "last_attempt_at": _iso(message.last_attempt_at),
+        "delivered_at": _iso(message.delivered_at),
         "created_at": _iso(message.created_at),
     }
 
 
-def to_conversation_dict(conversation: Conversation) -> dict:
-    """Conversation row -> snake_case service dict (B3/T3.1)."""
+def to_conversation_dict(
+    conversation: Conversation,
+    *,
+    latest_inbound_at=None,
+    reply_window_open: bool = False,
+    delivery_summary: dict[str, int] | None = None,
+) -> dict:
+    """Conversation row -> snake_case service dict (B3/T3.1).
+
+    Window and delivery values are supplied by the API read model. Defaults
+    are deliberately closed and empty so internal audit payloads cannot imply
+    eligibility or pending work that was not observed.
+    """
+    delivery_summary = delivery_summary or {
+        "pending": 0,
+        "sending": 0,
+        "sent": 0,
+        "failed": 0,
+        "unknown": 0,
+    }
     return {
         "id": conversation.id,
         "customer_id": conversation.customer_id,
         "wa_phone": conversation.wa_phone,
         "state": conversation.state.value,
+        "responsible_id": conversation.responsible_id,
+        "version": conversation.version,
         "summary": conversation.summary,
+        "latest_inbound_at": _iso(latest_inbound_at),
+        "reply_window_open": reply_window_open,
+        "delivery_summary": delivery_summary,
         "last_message_at": _iso(conversation.last_message_at),
         "created_at": _iso(conversation.created_at),
         "closed_at": _iso(conversation.closed_at),

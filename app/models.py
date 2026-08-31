@@ -102,6 +102,14 @@ class MessageStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class DeliveryStatus(str, enum.Enum):
+    PENDING = "pending"
+    SENDING = "sending"
+    SENT = "sent"
+    FAILED = "failed"
+    UNKNOWN = "unknown"
+
+
 class DocumentFormat(str, enum.Enum):
     PDF = "pdf"
     MD = "md"
@@ -175,6 +183,7 @@ class Conversation(Base):
     __tablename__ = "conversations"
     __table_args__ = (
         Index("idx_conversations_customer_id", "customer_id"),
+        Index("idx_conversations_responsible_id", "responsible_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -187,6 +196,8 @@ class Conversation(Base):
         default=ConversationState.BOT,
         server_default="bot",
     )
+    responsible_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     summary: Mapped[str | None] = mapped_column(Text)
     captured_data: Mapped[dict | None] = mapped_column(JSONB)  # 003: CM-2 capture state
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -205,10 +216,18 @@ class Message(Base):
             unique=True,
             postgresql_where="direction = 'inbound' AND wamid IS NOT NULL",
         ),
+        Index(
+            "uq_messages_outbound_request_id",
+            "request_id",
+            unique=True,
+            postgresql_where="direction = 'outbound' AND request_id IS NOT NULL",
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     wamid: Mapped[str | None] = mapped_column(String(255))
+    author_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    request_id: Mapped[str | None] = mapped_column(String(255))
     conversation_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("conversations.id"), nullable=False
     )
@@ -228,6 +247,13 @@ class Message(Base):
         default=MessageStatus.RECEIVED,
         server_default="received",
     )
+    delivery_status: Mapped[DeliveryStatus | None] = mapped_column(
+        pg_enum(DeliveryStatus, "delivery_status")
+    )
+    delivery_error: Mapped[str | None] = mapped_column(Text)
+    delivery_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     payload: Mapped[dict | None] = mapped_column(JSONB)
     cost_llm: Mapped[float | None] = mapped_column(Numeric(12, 6))
     cost_meta: Mapped[float | None] = mapped_column(Numeric(12, 6))

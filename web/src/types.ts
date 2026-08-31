@@ -8,6 +8,7 @@
 export type Role = 'admin' | 'operador';
 
 export interface User {
+  id?: number;
   username: string;
   role: Role;
 }
@@ -85,6 +86,9 @@ export interface Conversation {
   customer_id: number;
   wa_phone: string | null;
   state: string;
+  responsible_id?: number | null;
+  version?: number;
+  reply_window_open?: boolean;
   summary: string | null;
   last_message_at: string | null;
   created_at: string | null;
@@ -105,7 +109,16 @@ export interface Message {
   text: string | null;
   media_url: string | null;
   created_at: string | null;
+  author_id?: number | null;
+  request_id?: string | null;
+  delivery_status?: DeliveryStatus | null;
+  delivery_error?: string | null;
+  delivery_attempts?: number;
+  delivered_at?: string | null;
 }
+
+export type ConversationState = 'bot' | 'human' | 'closed';
+export type DeliveryStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'unknown';
 
 export interface ConversationThread {
   conversation: Conversation;

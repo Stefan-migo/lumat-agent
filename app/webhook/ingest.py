@@ -354,7 +354,10 @@ def process_message(session, message: Message) -> None:
             # case BEFORE the graph runs — deterministic, audited, no-op otherwise.
             acknowledge_emergency_if_ack(session, message.conversation_id, message.text)
         conversation = session.get(Conversation, message.conversation_id)
-        if conversation is not None and conversation.state == ConversationState.HUMAN:
+        if conversation is not None and conversation.state in {
+            ConversationState.HUMAN,
+            ConversationState.CLOSED,
+        }:
             message.status = MessageStatus.PROCESSED  # HH-5: persisted, never retried
             return
         if message.text or message.msg_type in MEDIA_EVIDENCE_TYPES:

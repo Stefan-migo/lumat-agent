@@ -34,6 +34,7 @@ from app.db import SessionLocal  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.models import (  # noqa: E402
     Conversation,
+    ConversationState,
     Customer,
     Message,
     MessageDirection,
@@ -426,6 +427,73 @@ def test_processing_failure_marks_failed(monkeypatch, migrated_db):
 
     with SessionLocal() as session:
         assert session.get(Message, mid).status == MessageStatus.FAILED
+
+
+def test_human_inbound_is_processed_once_without_bot_outbound(migrated_db, mock_openai_chat):
+    """WH-8/HH-5: human ownership keeps inbound history continuous."""
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56955556666")
+        session.add(customer)
+        session.flush()
+        conv = Conversation(
+            customer_id=customer.id,
+            wa_phone=customer.phone_e164,
+            state=ConversationState.HUMAN,
+        )
+        session.add(conv)
+        session.flush()
+        session.add(Message(
+            wamid="wamid.human-regression",
+            conversation_id=conv.id,
+            direction=MessageDirection.INBOUND,
+            msg_type=MessageType.TEXT,
+            text="Sigo esperando",
+            status=MessageStatus.RECEIVED,
+        ))
+        session.commit()
+        conversation_id = conv.id
+
+    assert ingest.sweep_received() == 1
+    with SessionLocal() as session:
+        rows = list(session.scalars(select(Message).where(Message.conversation_id == conversation_id)))
+        assert len(rows) == 1
+        assert rows[0].status == MessageStatus.PROCESSED
+        assert not [row for row in rows if row.direction == MessageDirection.OUTBOUND]
+
+
+def test_closed_inbound_is_persisted_without_reopening_or_bot_outbound(migrated_db, mock_openai_chat):
+    """WH-8/closed continuity: closed history accepts inbound without reopening."""
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56977778888")
+        session.add(customer)
+        session.flush()
+        conv = Conversation(
+            customer_id=customer.id,
+            wa_phone=customer.phone_e164,
+            state=ConversationState.CLOSED,
+        )
+        session.add(conv)
+        session.flush()
+        session.add(Message(
+            wamid="wamid.closed-continuity",
+            conversation_id=conv.id,
+            direction=MessageDirection.INBOUND,
+            msg_type=MessageType.TEXT,
+            text="Necesito revisar el historial",
+            status=MessageStatus.RECEIVED,
+        ))
+        session.commit()
+        conversation_id = conv.id
+
+    assert ingest.sweep_received() == 1
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        rows = list(session.scalars(select(Message).where(Message.conversation_id == conversation_id)))
+        assert conversation.state == ConversationState.CLOSED
+        assert len(rows) == 1
+        assert rows[0].status == MessageStatus.PROCESSED
+        assert rows[0].text == "Necesito revisar el historial"
+        assert not [row for row in rows if row.direction == MessageDirection.OUTBOUND]
 
 
 # ---------------------------------------------------------------------------

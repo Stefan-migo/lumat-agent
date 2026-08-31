@@ -11,19 +11,26 @@ unauthenticated calls get 401, never a 302 (PDW-AUTH-1). No CORS (D1).
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from threading import Barrier
 
+from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
+    AuditLog,
     Conversation,
     ConversationState,
     Customer,
+    DeliveryStatus,
     Message,
     MessageDirection,
     MessageType,
+    User,
 )
+from app.services.conversations import change_state
 
 
 def _seed_conversation(
@@ -158,13 +165,24 @@ def test_conversations_list_returns_serialized_rows_in_activity_order(client, ma
             "wa_phone",
             "state",
             "summary",
+            "latest_inbound_at",
+            "reply_window_open",
+            "delivery_summary",
             "last_message_at",
             "created_at",
             "closed_at",
+            "responsible_id",
+            "version",
         }
         for row in body["conversations"]
     )
     assert body["conversations"][-1]["last_message_at"] is None
+    assert all("latest_inbound_at" in row and "reply_window_open" in row for row in body["conversations"])
+    assert all(row["latest_inbound_at"] is None and row["reply_window_open"] is False for row in body["conversations"])
+    assert all(
+        row["delivery_summary"] == {status.value: 0 for status in DeliveryStatus}
+        for row in body["conversations"]
+    )
 
 
 def test_conversation_returns_metadata_and_messages_chronological(client, make_user):
@@ -183,6 +201,10 @@ def test_conversation_returns_metadata_and_messages_chronological(client, make_u
     assert conversation["state"] == "human"
     assert conversation["summary"] == "needs visita"
     assert conversation["customer_id"] is not None
+    assert conversation["responsible_id"] is None
+    assert conversation["version"] == 0
+    assert conversation["latest_inbound_at"] is not None
+    assert conversation["reply_window_open"] is True
     datetime.fromisoformat(conversation["created_at"])  # ISO-8601 parseable
     # messages: chronological (created_at then id), media_url as plain URL
     messages = body["messages"]
@@ -194,11 +216,77 @@ def test_conversation_returns_metadata_and_messages_chronological(client, make_u
     ]
     assert messages[0]["direction"] == "inbound"
     assert messages[0]["msg_type"] == "text"
+    assert messages[0]["author_id"] is None
+    assert messages[0]["request_id"] is None
+    assert messages[0]["delivery_status"] is None
+    assert messages[0]["delivery_attempts"] == 0
+    assert messages[0]["delivery_error"] is None
     assert [m["created_at"] for m in messages] == sorted(m["created_at"] for m in messages)
     # media link renders as a URL on the message that carries it (PDW-TST-3 pattern)
     media_message = messages[2]
     assert media_message["media_url"] == "https://example.com/media/photo.jpg"
     assert media_message["msg_type"] == "image"
+
+
+def test_conversation_reply_window_is_closed_without_recent_customer_message(client, make_user):
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56988889999")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add(conversation)
+        session.flush()
+        session.add(
+            Message(
+                conversation_id=conversation.id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="old",
+                created_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+            )
+        )
+        conversation_id = conversation.id
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.get(f"/panel/api/conversations/{conversation_id}")
+
+    assert response.status_code == 200
+    assert response.json()["conversation"]["reply_window_open"] is False
+    assert response.json()["conversation"]["latest_inbound_at"].startswith("2020-01-01")
+
+
+def test_conversation_serializes_authoritative_delivery_summary(client, make_user):
+    _, conversation_id = _seed_conversation()
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        session.add_all(
+            [
+                Message(
+                    conversation_id=conversation.id,
+                    direction=MessageDirection.OUTBOUND,
+                    msg_type=MessageType.TEXT,
+                    text=status.value,
+                    delivery_status=status,
+                )
+                for status in (DeliveryStatus.PENDING, DeliveryStatus.FAILED, DeliveryStatus.FAILED)
+            ]
+        )
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.get(f"/panel/api/conversations/{conversation_id}")
+
+    assert response.status_code == 200
+    assert response.json()["conversation"]["delivery_summary"] == {
+        "pending": 1,
+        "sending": 0,
+        "sent": 0,
+        "failed": 2,
+        "unknown": 0,
+    }
 
 
 def test_conversation_messages_keep_order_by_id_when_timestamps_tie(client, make_user):
@@ -270,3 +358,281 @@ def test_conversation_missing_returns_404_json(client, make_user):
     assert resp.status_code == 404
     assert resp.headers["content-type"].startswith("application/json")
     assert resp.json() == {"detail": "conversation not found"}
+
+
+def test_state_commands_require_json_auth_and_reject_stale_requests(client, make_user):
+    """Commands use JSON 401 and optimistic version conflicts without mutation."""
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "human", "expected_version": 0, "request_id": "take-1"},
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "unauthorized"}
+
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "human", "expected_version": 0, "request_id": "take-1"},
+    )
+    assert response.status_code == 200
+    assert response.json()["conversation"]["state"] == "human"
+    assert response.json()["conversation"]["responsible_id"] is not None
+    assert response.json()["conversation"]["version"] == 1
+
+    stale = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "closed", "expected_version": 0, "request_id": "close-stale"},
+    )
+    assert stale.status_code == 409
+    assert stale.json() == {"detail": "conversation version conflict"}
+
+    with SessionLocal() as session:
+        row = session.get(Conversation, conversation_id)
+        assert row.state == ConversationState.HUMAN
+        assert row.version == 1
+        audit = session.scalar(
+            select(AuditLog).where(AuditLog.action == "conversation.state_rejected")
+        )
+        assert audit is not None
+        assert audit.after["request_id"] == "close-stale"
+
+
+def test_state_command_duplicate_is_idempotent_and_payload_mismatch_conflicts(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+    payload = {"state": "human", "expected_version": 0, "request_id": "same-key"}
+    first = client.post(f"/panel/api/conversations/{conversation_id}/state", json=payload)
+    duplicate = client.post(f"/panel/api/conversations/{conversation_id}/state", json=payload)
+    assert first.status_code == duplicate.status_code == 200
+    assert duplicate.json() == first.json()
+
+    mismatch = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "closed", "expected_version": 1, "request_id": "same-key"},
+    )
+    assert mismatch.status_code == 409
+    assert mismatch.json() == {"detail": "request_id already used for another command"}
+
+
+def test_state_commands_follow_legal_return_and_close_transitions(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    operator_id = make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    take = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "human", "expected_version": 0, "request_id": "take"},
+    )
+    returned = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "bot", "expected_version": 1, "request_id": "return"},
+    )
+    closed = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "human", "expected_version": 2, "request_id": "take-again"},
+    )
+    closed = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "closed", "expected_version": 3, "request_id": "close"},
+    )
+    assert take.json()["conversation"]["responsible_id"] == operator_id
+    assert returned.json()["conversation"]["state"] == "bot"
+    assert returned.json()["conversation"]["responsible_id"] is None
+    assert closed.status_code == 200
+    assert closed.json()["conversation"]["state"] == "closed"
+
+
+def test_assignment_enforces_owner_rules_and_audits_denials(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.HUMAN)
+    operator_id = make_user("oper", "oper-pass", role="operador")
+    other_id = make_user("other", "other-pass", role="operador")
+    _login(client)
+
+    forbidden = client.post(
+        f"/panel/api/conversations/{conversation_id}/assignment",
+        json={"responsible_id": other_id, "expected_version": 0, "request_id": "assign-other"},
+    )
+    assert forbidden.status_code == 403
+    assert forbidden.json() == {"detail": "operators may assign only themselves"}
+
+    taken = client.post(
+        f"/panel/api/conversations/{conversation_id}/assignment",
+        json={"responsible_id": operator_id, "expected_version": 0, "request_id": "assign-self"},
+    )
+    assert taken.status_code == 200
+    assert taken.json()["conversation"]["responsible_id"] == operator_id
+
+    with SessionLocal() as session:
+        inactive = session.get(User, other_id)
+        inactive.active = False
+        session.commit()
+    make_user("admin", "admin-pass", role="admin")
+    _login(client, "admin", "admin-pass")
+    invalid = client.post(
+        f"/panel/api/conversations/{conversation_id}/assignment",
+        json={"responsible_id": other_id, "expected_version": 1, "request_id": "inactive"},
+    )
+    assert invalid.status_code == 422
+    assert invalid.json() == {"detail": "assignment target must be an active operator"}
+
+
+def test_list_supports_state_and_assignee_filters(client, make_user):
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56977778888")
+        session.add(customer)
+        session.flush()
+        rows = [
+            Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.BOT),
+            Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.HUMAN),
+        ]
+        session.add_all(rows)
+        session.flush()
+        operator = User(username="filter-oper", password_hash="unused", role="operador")
+        session.add(operator)
+        session.flush()
+        rows[1].responsible_id = operator.id
+        session.commit()
+        human_id, operator_id = rows[1].id, operator.id
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    state = client.get("/panel/api/conversations?state=human")
+    assignee = client.get(f"/panel/api/conversations?responsible_id={operator_id}")
+    assert [row["id"] for row in state.json()["conversations"]] == [human_id]
+    assert [row["id"] for row in assignee.json()["conversations"]] == [human_id]
+
+
+def test_command_contract_rejects_missing_preconditions_as_json_422(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "human", "expected_version": -1, "request_id": ""},
+    )
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith("application/json")
+
+
+def test_illegal_transition_is_rejected_and_audited(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "closed", "expected_version": 0, "request_id": "illegal"},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "illegal conversation state transition"}
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        audit = session.scalar(
+            select(AuditLog).where(AuditLog.after["request_id"].as_string() == "illegal")
+        )
+        assert conversation.state == ConversationState.BOT
+        assert conversation.version == 0
+        assert audit.action == "conversation.state_rejected"
+
+
+def test_nonexistent_assignment_target_is_rejected_and_audited(client, make_user):
+    _, conversation_id = _seed_conversation()
+    make_user("admin", "admin-pass", role="admin")
+    _login(client, "admin", "admin-pass")
+
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/assignment",
+        json={"responsible_id": 999999, "expected_version": 0, "request_id": "missing-target"},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "assignment target must be an active operator"}
+    with SessionLocal() as session:
+        audit = session.scalar(
+            select(AuditLog).where(
+                AuditLog.after["request_id"].as_string() == "missing-target"
+            )
+        )
+        assert audit.action == "conversation.assignment_rejected"
+
+
+def test_successful_command_is_audited(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    operator_id = make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "human", "expected_version": 0, "request_id": "audited-take"},
+    )
+
+    assert response.status_code == 200
+    with SessionLocal() as session:
+        audit = session.scalar(
+            select(AuditLog).where(
+                AuditLog.after["request_id"].as_string() == "audited-take"
+            )
+        )
+        assert audit.action == "conversation.state_changed"
+        assert audit.actor == "oper"
+        assert audit.after["responsible_id"] == operator_id
+
+
+def test_mismatched_request_id_is_rejected_and_audited(client, make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+    payload = {"state": "human", "expected_version": 0, "request_id": "reused"}
+    assert client.post(f"/panel/api/conversations/{conversation_id}/state", json=payload).status_code == 200
+
+    response = client.post(
+        f"/panel/api/conversations/{conversation_id}/state",
+        json={"state": "closed", "expected_version": 1, "request_id": "reused"},
+    )
+
+    assert response.status_code == 409
+    with SessionLocal() as session:
+        audit = session.scalar(
+            select(AuditLog).where(
+                AuditLog.after["request_id"].as_string() == "reused",
+                AuditLog.after["detail"].as_string()
+                == "request_id already used for another command",
+            )
+        )
+        assert audit is not None
+        assert audit.action == "conversation.request_rejected"
+
+
+def test_concurrent_state_commands_serialize_on_conversation_row(make_user):
+    _, conversation_id = _seed_conversation(state=ConversationState.BOT)
+    first_id = make_user("first", "first-pass", role="operador")
+    second_id = make_user("second", "second-pass", role="operador")
+    barrier = Barrier(2)
+
+    def submit(actor_id: int):
+        with SessionLocal() as session:
+            actor = session.get(User, actor_id)
+            barrier.wait()
+            try:
+                change_state(
+                    session, conversation_id, actor, ConversationState.HUMAN, 0,
+                    f"race-{actor_id}",
+                )
+                session.commit()
+                return "ok"
+            except HTTPException as error:
+                session.rollback()
+                return error.status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(submit, (first_id, second_id)))
+
+    assert set(results) == {"ok", 409}
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        assert conversation.state == ConversationState.HUMAN
+        assert conversation.version == 1

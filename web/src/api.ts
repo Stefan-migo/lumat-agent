@@ -51,3 +51,19 @@ export function postJson<T>(path: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
+
+import type { Conversation, ConversationsResponse, ConversationState, ConversationThread, Message } from './types';
+export interface ConversationFilters { state?: ConversationState; responsible_id?: number; }
+const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
+export function listConversations(filters: ConversationFilters = {}) {
+  const params = new URLSearchParams();
+  if (filters.state) params.set('state', filters.state);
+  if (filters.responsible_id !== undefined) params.set('responsible_id', String(filters.responsible_id));
+  const query = params.toString();
+  return apiFetch<ConversationsResponse>(`/panel/api/conversations${query ? `?${query}` : ''}`);
+}
+export const getConversation = (id: number) => apiFetch<ConversationThread>(`/panel/api/conversations/${id}`);
+export const changeConversationState = (id: number, state: ConversationState, expected_version: number) => command<{ ok: true; conversation: Conversation }>(`/panel/api/conversations/${id}/state`, { state, expected_version, request_id: requestId() });
+export const sendMessage = (id: number, body: { text: string; request_id?: string }) => command<{ ok: true; message: Message }>(`/panel/api/conversations/${id}/messages`, { ...body, request_id: body.request_id ?? requestId() });
+export const retryMessage = (id: number, messageId: number) => command<{ ok: true; message: Message }>(`/panel/api/conversations/${id}/messages/${messageId}/retry`, { expected_status: 'failed', request_id: requestId() });
