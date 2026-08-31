@@ -24,6 +24,7 @@ from app.models import (  # noqa: E402
     Conversation,
     ConversationState,
     Customer,
+    DeliveryStatus,
     Message,
     MessageDirection,
     MessageType,
@@ -164,6 +165,9 @@ def test_conversations_list_returns_serialized_rows_in_activity_order(client, ma
             "wa_phone",
             "state",
             "summary",
+            "latest_inbound_at",
+            "reply_window_open",
+            "delivery_summary",
             "last_message_at",
             "created_at",
             "closed_at",
@@ -173,6 +177,12 @@ def test_conversations_list_returns_serialized_rows_in_activity_order(client, ma
         for row in body["conversations"]
     )
     assert body["conversations"][-1]["last_message_at"] is None
+    assert all("latest_inbound_at" in row and "reply_window_open" in row for row in body["conversations"])
+    assert all(row["latest_inbound_at"] is None and row["reply_window_open"] is False for row in body["conversations"])
+    assert all(
+        row["delivery_summary"] == {status.value: 0 for status in DeliveryStatus}
+        for row in body["conversations"]
+    )
 
 
 def test_conversation_returns_metadata_and_messages_chronological(client, make_user):
@@ -193,6 +203,8 @@ def test_conversation_returns_metadata_and_messages_chronological(client, make_u
     assert conversation["customer_id"] is not None
     assert conversation["responsible_id"] is None
     assert conversation["version"] == 0
+    assert conversation["latest_inbound_at"] is not None
+    assert conversation["reply_window_open"] is True
     datetime.fromisoformat(conversation["created_at"])  # ISO-8601 parseable
     # messages: chronological (created_at then id), media_url as plain URL
     messages = body["messages"]
@@ -214,6 +226,67 @@ def test_conversation_returns_metadata_and_messages_chronological(client, make_u
     media_message = messages[2]
     assert media_message["media_url"] == "https://example.com/media/photo.jpg"
     assert media_message["msg_type"] == "image"
+
+
+def test_conversation_reply_window_is_closed_without_recent_customer_message(client, make_user):
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56988889999")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add(conversation)
+        session.flush()
+        session.add(
+            Message(
+                conversation_id=conversation.id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="old",
+                created_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+            )
+        )
+        conversation_id = conversation.id
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.get(f"/panel/api/conversations/{conversation_id}")
+
+    assert response.status_code == 200
+    assert response.json()["conversation"]["reply_window_open"] is False
+    assert response.json()["conversation"]["latest_inbound_at"].startswith("2020-01-01")
+
+
+def test_conversation_serializes_authoritative_delivery_summary(client, make_user):
+    _, conversation_id = _seed_conversation()
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        session.add_all(
+            [
+                Message(
+                    conversation_id=conversation.id,
+                    direction=MessageDirection.OUTBOUND,
+                    msg_type=MessageType.TEXT,
+                    text=status.value,
+                    delivery_status=status,
+                )
+                for status in (DeliveryStatus.PENDING, DeliveryStatus.FAILED, DeliveryStatus.FAILED)
+            ]
+        )
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.get(f"/panel/api/conversations/{conversation_id}")
+
+    assert response.status_code == 200
+    assert response.json()["conversation"]["delivery_summary"] == {
+        "pending": 1,
+        "sending": 0,
+        "sent": 0,
+        "failed": 2,
+        "unknown": 0,
+    }
 
 
 def test_conversation_messages_keep_order_by_id_when_timestamps_tie(client, make_user):

@@ -12,12 +12,14 @@ PDW-AUTH-1), 404 for a missing conversation. No redirects, no CORS (D1).
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Conversation, DeliveryStatus, Message, User
+from app.models import Conversation, DeliveryStatus, Message, MessageDirection, User
 from app.panel.api.deps import require_user_json
 from app.panel.api.serializers import to_conversation_dict, to_message_dict
 from app.panel.deps import get_db
@@ -56,6 +58,36 @@ def _conversation_or_404(session: Session, conversation_id: int) -> Conversation
     return conversation
 
 
+def _conversation_payload(session: Session, conversation: Conversation) -> dict:
+    latest_inbound_at = session.scalar(
+        select(Message.created_at)
+        .where(
+            Message.conversation_id == conversation.id,
+            Message.direction == MessageDirection.INBOUND,
+        )
+        .order_by(Message.created_at.desc(), Message.id.desc())
+    )
+    created = latest_inbound_at
+    if created is not None and created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    open_window = created is not None and datetime.now(timezone.utc) - created < timedelta(hours=24)
+    delivery_summary = {status.value: 0 for status in DeliveryStatus}
+    for status in session.scalars(
+        select(Message.delivery_status).where(
+            Message.conversation_id == conversation.id,
+            Message.direction == MessageDirection.OUTBOUND,
+            Message.delivery_status.is_not(None),
+        )
+    ):
+        delivery_summary[status.value] += 1
+    return to_conversation_dict(
+        conversation,
+        latest_inbound_at=latest_inbound_at,
+        reply_window_open=open_window,
+        delivery_summary=delivery_summary,
+    )
+
+
 @router.get("/conversations")
 def conversations_list(
     state: ConversationState | None = None,
@@ -74,19 +106,19 @@ def conversations_list(
             Conversation.id.desc(),
         )
     ).all()
-    return {"conversations": [to_conversation_dict(row) for row in rows]}
+    return {"conversations": [_conversation_payload(session, row) for row in rows]}
 
 
 @router.post("/conversations/{conversation_id}/state")
 def state_command(conversation_id: int, body: StateCommand, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
     conversation = change_state(session, conversation_id, current, body.state, body.expected_version, body.request_id)
-    return {"ok": True, "conversation": to_conversation_dict(conversation)}
+    return {"ok": True, "conversation": _conversation_payload(session, conversation)}
 
 
 @router.post("/conversations/{conversation_id}/assignment")
 def assignment_command(conversation_id: int, body: AssignmentCommand, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
     conversation = assign(session, conversation_id, current, body.responsible_id, body.expected_version, body.request_id)
-    return {"ok": True, "conversation": to_conversation_dict(conversation)}
+    return {"ok": True, "conversation": _conversation_payload(session, conversation)}
 
 
 @router.post("/conversations/{conversation_id}/messages")
@@ -127,6 +159,6 @@ def conversation_thread(
         )
     )
     return {
-        "conversation": to_conversation_dict(conversation),
+        "conversation": _conversation_payload(session, conversation),
         "messages": [to_message_dict(m) for m in messages],
     }

@@ -76,8 +76,26 @@ def to_message_dict(message: Message) -> dict:
     }
 
 
-def to_conversation_dict(conversation: Conversation) -> dict:
-    """Conversation row -> snake_case service dict (B3/T3.1)."""
+def to_conversation_dict(
+    conversation: Conversation,
+    *,
+    latest_inbound_at=None,
+    reply_window_open: bool = False,
+    delivery_summary: dict[str, int] | None = None,
+) -> dict:
+    """Conversation row -> snake_case service dict (B3/T3.1).
+
+    Window and delivery values are supplied by the API read model. Defaults
+    are deliberately closed and empty so internal audit payloads cannot imply
+    eligibility or pending work that was not observed.
+    """
+    delivery_summary = delivery_summary or {
+        "pending": 0,
+        "sending": 0,
+        "sent": 0,
+        "failed": 0,
+        "unknown": 0,
+    }
     return {
         "id": conversation.id,
         "customer_id": conversation.customer_id,
@@ -86,6 +104,9 @@ def to_conversation_dict(conversation: Conversation) -> dict:
         "responsible_id": conversation.responsible_id,
         "version": conversation.version,
         "summary": conversation.summary,
+        "latest_inbound_at": _iso(latest_inbound_at),
+        "reply_window_open": reply_window_open,
+        "delivery_summary": delivery_summary,
         "last_message_at": _iso(conversation.last_message_at),
         "created_at": _iso(conversation.created_at),
         "closed_at": _iso(conversation.closed_at),

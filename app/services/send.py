@@ -175,6 +175,8 @@ def deliver_outbound(session, conversation_id: int) -> int:
             Message.direction == MessageDirection.OUTBOUND,
             Message.wamid.is_(None),
             Message.status == MessageStatus.PROCESSED,
+            Message.request_id.is_(None),
+            Message.delivery_status.is_(None),
         )
     ).all()
     unit = meta_message_cost(session)
@@ -197,6 +199,8 @@ def deliver_all_pending() -> int:
                 Message.direction == MessageDirection.OUTBOUND,
                 Message.wamid.is_(None),
                 Message.status == MessageStatus.PROCESSED,
+                Message.request_id.is_(None),
+                Message.delivery_status.is_(None),
             )
             .distinct()
         ).all()

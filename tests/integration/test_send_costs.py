@@ -144,6 +144,63 @@ def test_deliver_outbound_skips_already_sent_rows(mock_meta_send):
     assert len(mock_meta_send.calls) == calls_after_first  # no double-send
 
 
+def test_legacy_sweep_does_not_resend_h2_delivery_states(mock_meta_send):
+    conv_id, _ = _seed_outbound_row(text="legacy")
+    with SessionLocal() as session:
+        legacy = session.scalars(
+            select(Message).where(Message.conversation_id == conv_id)
+        ).one()
+        h2_rows = [
+            Message(
+                conversation_id=conv_id,
+                direction=MessageDirection.OUTBOUND,
+                msg_type=MessageType.TEXT,
+                text=status.value,
+                status=MessageStatus.PROCESSED,
+                request_id=f"h2-{status.value}",
+                delivery_status=status,
+            )
+            for status in (
+                send.DeliveryStatus.PENDING,
+                send.DeliveryStatus.SENDING,
+                send.DeliveryStatus.FAILED,
+                send.DeliveryStatus.UNKNOWN,
+            )
+        ]
+        session.add_all(h2_rows)
+        session.commit()
+
+    assert send.deliver_all_pending() == 1
+    assert len(mock_meta_send.calls) == 1
+    with SessionLocal() as session:
+        assert session.get(Message, legacy.id).wamid == "wamid.out123"
+        assert all(session.get(Message, row.id).wamid is None for row in h2_rows)
+
+
+def test_legacy_delivery_path_only_sends_unmarked_legacy_rows(mock_meta_send):
+    conv_id, _ = _seed_outbound_row(text="legacy")
+    with SessionLocal() as session:
+        h2_row = Message(
+            conversation_id=conv_id,
+            direction=MessageDirection.OUTBOUND,
+            msg_type=MessageType.TEXT,
+            text="h2",
+            status=MessageStatus.PROCESSED,
+            request_id="h2-request",
+            delivery_status=send.DeliveryStatus.PENDING,
+        )
+        session.add(h2_row)
+        session.commit()
+
+    with SessionLocal() as session:
+        assert send.deliver_outbound(session, conv_id) == 1
+        session.commit()
+
+    with SessionLocal() as session:
+        assert session.get(Message, h2_row.id).delivery_status == send.DeliveryStatus.PENDING
+        assert session.get(Message, h2_row.id).wamid is None
+
+
 # ---------------------------------------------------------------------------
 # costs.py — record_llm_cost + SQL SUMs (D6)
 # ---------------------------------------------------------------------------
