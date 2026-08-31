@@ -61,3 +61,11 @@ Nodes: `ConversationState`, `Conversation`, `Message`, `conversations.py`, `send
 ## Ponytail Review
 
 `shrink:` keep one command service and existing send primitive; no worker, router, provider, pagination, templates, media, or archived AO/UI changes. No further cut is safe: RED tasks preserve strict TDD and threat coverage.
+
+## Bounded Remediation — Hito 2 Verification Findings
+
+- [x] R1 **RED/GREEN**, `tests/integration/test_webhook_ingest.py`: add a real closed-conversation inbound continuity test; RED exposed that closed inbound incorrectly entered bot processing, then GREEN passed after the minimum guard in `app/webhook/ingest.py`.
+- [x] R2 **RED/GREEN**, `web/src/components/pages/ConversationThread.test.tsx`: add a real successful-close refetch test; GREEN passed against the existing production refresh boundary without router/provider changes.
+- [x] R3 **Evidence reconciliation**: merge exact remediation command results and explicitly document that historical PR1–PR3 RED/GREEN executions and corrective-pass executions cannot be reconstructed from repository history because their command output was not persisted.
+- [x] R4 **API contract correction**, `app/panel/api/{serializers.py,routes/conversations.py}`, `web/src/types.ts`: expose authoritative latest inbound, reply-window, and delivery-count fields; keep the UI fail-closed when the window field is absent; add API/UI regression coverage.
+- [x] R5 **Legacy delivery isolation**, `app/services/send.py`, `tests/integration/test_send_costs.py`: constrain the legacy sweep to unmarked legacy rows so H2 rows remain exclusively under claim/finalization delivery; add direct and sweep regression coverage.
