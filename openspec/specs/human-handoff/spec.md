@@ -52,14 +52,20 @@ Escalated cases MUST appear in the panel (pending/escalated view) with customer,
 - WHEN the operador opens the cases view
 - THEN the case is listed with customer, summary, and state
 
-### Requirement: HH-5 — Human Response Channel (H1)
+### Requirement: HH-5 — Human Response Channel
 
-During a `human` conversation, the webhook MUST continue receiving and persisting all messages (complete history retained). In H1 the human responds through the same WhatsApp number via the WhatsApp application or phone; replying from the panel is explicitly out of scope for H1 (H2).
+During `human`, the webhook MUST continue persisting every customer message to the same conversation and MUST suppress bot processing. Authorized panel operators MAY respond through the production outbound command; responses MUST obey OM-1/OM-2 and retain complete history. (Previously: human responded only through WhatsApp application/phone.)
 
-#### Scenario: Webhook keeps recording during human phase
+#### Scenario: Human inbound continuity
 - GIVEN a conversation is in `human` state
 - WHEN the customer sends further messages
 - THEN they are persisted to the same conversation history
+
+#### Scenario: Operator response
+
+- GIVEN a human conversation and authorized operator
+- WHEN an eligible reply is sent
+- THEN it is stored as outbound with actor and delivery state
 
 ## Boundary
 The `bot`/`human`/`closed` states are defined here; emergency escalation mechanics live in `emergency-detection`.

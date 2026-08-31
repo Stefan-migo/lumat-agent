@@ -98,21 +98,31 @@ The kb and settings views MUST handle an `ApiError` with status 403 by rendering
 - WHEN the page fetch returns 403
 - THEN a permission-denied state renders, not a fatal error
 
-### Requirement: PNL-APP-7 — Conversations List Consumption
+### Requirement: PNL-APP-7 — Production conversations
 
-ConversationsListView MUST consume `GET /panel/api/conversations` (AP-9) and MUST NOT render the demo-only Asignado column; each row MUST open the read-only ConversationThread (`GET /panel/api/conversations/{id}`).
+`ConversationsListView` MUST consume the filtered production list, show state/assignee/window and refresh after commands; each row MUST open a thread that loads current messages and outbound delivery states. (Previously: unfiltered read-only list and thread.)
 
-#### Scenario: List renders from the API
+#### Scenario: List and thread
 
 - GIVEN the conversations endpoint returns serialized conversations
 - WHEN the view loads
-- THEN rows render conversation/customer fields and no Asignado column
+- THEN production fields and chronological current messages render
 
-#### Scenario: Thread drill-down
+#### Scenario: Refresh after command
 
 - GIVEN a conversation row
-- WHEN it is activated
-- THEN the read-only thread renders from the thread endpoint
+- WHEN the command completes
+- THEN list and thread refresh, while loading/error states remain actionable
+
+### Requirement: PNL-APP-9 — Composer and permissions
+
+The SPA MUST expose take/return/close and a text composer with typed API contracts; it MUST show loading, disabled, policy, failed-delivery/retry, 401, 403, and conflict states without optimistic state corruption. Archived Storybook UI remains a dependency, not reimplementation.
+
+#### Scenario: Window and permission states
+
+- GIVEN stale-window, anonymous, or forbidden responses
+- WHEN the thread renders or submits
+- THEN the composer is disabled or a specific permission/policy state is shown
 
 ### Requirement: PNL-APP-8 — Dashboard Renders Real KPIs
 

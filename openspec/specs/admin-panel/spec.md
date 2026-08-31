@@ -90,7 +90,7 @@ The panel MUST show basic indicators: contacts received, reasons (motivos), deri
 
 ### Requirement: AP-9 — Conversations List Endpoint
 
-The system MUST expose `GET /panel/api/conversations` returning `{"conversations": [...]}` where each item is `to_conversation_dict(conversation)` — read-only (no assignee/responsible field, no reply/state mutation, no migration of existing conversations), following the JSON API router conventions in `app/panel/api/routes/conversations.py` (`require_user_json`, JSON 401/403, same-origin cookie, no redirects, no CORS). Rows MUST be ordered by most recent activity first (`last_message_at` DESC NULLS LAST, then `id` DESC). No pagination in this change (ponytail: add a cap only if the inbox grows).
+The system MUST expose `GET /panel/api/conversations` returning `{"conversations": [...]}` with state, persisted assignee, latest customer inbound timestamp, and delivery/window summary; it MUST support state and assignee filters. Rows MUST be ordered by most recent activity (`last_message_at` DESC NULLS LAST, then `id` DESC). JSON 401/no redirects apply. (Previously: read-only rows without assignee, filters, or mutation contract.)
 
 #### Scenario: List returns serialized conversations
 
@@ -98,11 +98,11 @@ The system MUST expose `GET /panel/api/conversations` returning `{"conversations
 - WHEN they request `GET /panel/api/conversations`
 - THEN the response is 200 with `{"conversations": [...]}` and every item matches the `to_conversation_dict` shape (snake_case, ISO dates, nullable timestamps)
 
-#### Scenario: Read-only, no assignee
+#### Scenario: Production fields and commands
 
-- GIVEN the response payload
+- GIVEN a serialized list response
 - WHEN it is inspected
-- THEN no assignee/responsible field appears and no mutation endpoint is added
+- THEN assignment/window/delivery fields are present and command endpoints are available separately
 
 #### Scenario: Most recent first
 
@@ -116,7 +116,7 @@ The system MUST expose `GET /panel/api/conversations` returning `{"conversations
 - WHEN the endpoint is requested
 - THEN it returns JSON 401 `{"detail": ...}` with no redirect
 
-#### Scenario: Backend tests cover the endpoint
+#### Scenario: Backend contract coverage
 
 - GIVEN the applied change
 - WHEN `pytest` runs against the functional suite
