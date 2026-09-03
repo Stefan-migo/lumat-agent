@@ -28,8 +28,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Slice 3 — Notification Center and Push (PR 3)
 
-- [ ] 3.1 **RED:** Backend/web tests cover NC-1/2/3 and NT-1/2/3: auth/filter/read isolation, fan-out, retries/exhaustion, and push failure/unsupported fallback audit.
-- [ ] 3.2 **GREEN:** Extend models/migration and `app/services/notifications.py`; add `app/services/push.py`, routers, `NotificationCenter.tsx`, `PushSettings.tsx`, API helpers, and `AppShell` wiring.
+- [x] 3.1 **RED:** Backend/web tests cover NC-1/2/3 and NT-1/2/3: auth/filter/read isolation, fan-out, retries/exhaustion, and push failure/unsupported fallback audit.
+- [x] 3.2 **GREEN:** Extend models/migration and `app/services/notifications.py`; add `app/services/push.py`, routers, `NotificationCenter.tsx`, `PushSettings.tsx`, API helpers, and `AppShell` wiring.
 
 ## Phase 4: Slice 4 — Internal Agent Chat (PR 4)
 
