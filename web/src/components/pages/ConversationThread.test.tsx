@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConversationThread } from './ConversationThread';
 
-const thread = { conversation: { id: 9, customer_id: 4, wa_phone: '+5694', state: 'human', responsible_id: 7, version: 2, summary: 'Help', last_message_at: '2026-08-27T10:00:00Z', created_at: '2026-08-27T09:00:00Z', closed_at: null }, messages: [{ id: 1, conversation_id: 9, direction: 'inbound' as const, msg_type: 'text', text: 'Hola', media_url: null, delivery_status: null, delivery_error: null, delivery_attempts: 0, last_attempt_at: null, delivered_at: null, created_at: '2026-08-27T09:00:00Z' }] };
+const thread = { conversation: { id: 9, customer_id: 4, wa_phone: '+5694', state: 'human', responsible_id: 7, version: 2, summary: 'Help', latest_inbound_at: '2026-08-27T10:00:00Z', reply_window_open: true, last_message_at: '2026-08-27T10:00:00Z', created_at: '2026-08-27T09:00:00Z', closed_at: null }, messages: [{ id: 1, conversation_id: 9, direction: 'inbound' as const, msg_type: 'text', text: 'Hola', media_url: null, delivery_status: null, delivery_error: null, delivery_attempts: 0, last_attempt_at: null, delivered_at: null, created_at: '2026-08-27T09:00:00Z' }] };
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -13,6 +13,25 @@ it('shows the composer and disables it outside the customer window', async () =>
   expect(await screen.findByText('Hola')).toBeInTheDocument();
   expect(screen.getByRole('textbox', { name: /respuesta/i })).toBeDisabled();
   expect(screen.getByText(/24 horas/i)).toBeInTheDocument();
+});
+
+it('permits replying when the API says the customer window is open', async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(thread), { status: 200 }));
+  render(<ConversationThread interactive conversationId={9} />);
+  expect(await screen.findByText('Hola')).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: /respuesta/i })).toBeEnabled();
+  expect(screen.getByRole('button', { name: /enviar/i })).toBeDisabled();
+});
+
+it('fails closed when the API omits the reply-window field', async () => {
+  const { conversation, ...withoutWindow } = thread;
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+    ...withoutWindow,
+    conversation: { ...conversation, reply_window_open: undefined },
+  }), { status: 200 }));
+  render(<ConversationThread interactive conversationId={9} />);
+  expect(await screen.findByText('Hola')).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: /respuesta/i })).toBeDisabled();
 });
 
 it('reports failed delivery and offers retry without optimistic message state', async () => {
@@ -29,4 +48,29 @@ it('reports failed delivery and offers retry without optimistic message state', 
   expect(await screen.findByRole('alert')).toHaveTextContent(/falló/i);
   expect(screen.getByRole('textbox', { name: /respuesta/i })).toHaveValue('Respuesta');
   expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations/9/messages', expect.anything());
+});
+
+it('refetches the thread after a successful close command', async () => {
+  const closedThread = {
+    ...thread,
+    conversation: { ...thread.conversation, state: 'closed' },
+  };
+  let threadRequests = 0;
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const path = String(input);
+    if (path.endsWith('/state')) {
+      return new Response(JSON.stringify({ ok: true, conversation: closedThread.conversation }), { status: 200 });
+    }
+    threadRequests += 1;
+    return new Response(JSON.stringify(threadRequests === 1 ? thread : closedThread), { status: 200 });
+  });
+  const user = userEvent.setup();
+
+  render(<ConversationThread interactive conversationId={9} />);
+  expect(await screen.findByText(/Atención humana/)).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Cerrar' }));
+
+  expect(await screen.findByText(/Cerrada/)).toBeInTheDocument();
+  expect(threadRequests).toBe(2);
+  expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations/9/state', expect.objectContaining({ method: 'POST' }));
 });

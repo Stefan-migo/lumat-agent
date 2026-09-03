@@ -28,7 +28,7 @@ export function ConversationThread({ conversationId, data: controlledData, state
   const conversation = data?.conversation;
   const messages = data?.messages ?? [];
   const refresh = fetched.retry;
-  const windowOpen = conversation?.reply_window_open ?? true;
+  const windowOpen = conversation?.reply_window_open === true;
   const mutate = async (action: () => Promise<unknown>) => { setBusy(true); setMutationError(null); try { await action(); setText(""); onMutate?.(); refresh(); } catch (error) { setMutationError(error instanceof ApiError ? `${error.status}: ${error.detail}` : "No se pudo completar la acción"); } finally { setBusy(false); } };
   const stateControls = conversation && <div><button type="button" disabled={busy || conversation.state === "human"} onClick={() => mutate(() => changeConversationState(conversation.id, "human", conversation.version ?? 0))}>Tomar</button><button type="button" disabled={busy || conversation.state !== "human"} onClick={() => mutate(() => changeConversationState(conversation.id, "bot", conversation.version ?? 0))}>Devolver</button><button type="button" disabled={busy || conversation.state !== "human"} onClick={() => mutate(() => changeConversationState(conversation.id, "closed", conversation.version ?? 0))}>Cerrar</button></div>;
   const loadError = fetched.error;
