@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.db import session_scope
 from app.models import DomainEvent
+from app.services.automation import evaluate_event
 
 DEFAULT_BATCH_SIZE = 50
 LEASE_SECONDS = 60
@@ -17,7 +18,8 @@ MAX_ATTEMPTS = 3
 
 
 def handle_event(session: Session, event: DomainEvent) -> None:
-    """Process an event; later slices register domain-specific side effects."""
+    """Evaluate rules in the event's transaction."""
+    evaluate_event(session, event)
 
 
 def _claim(session: Session, limit: int, owner: str, now: datetime) -> list[int]:

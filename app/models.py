@@ -607,6 +607,41 @@ class DomainEvent(Base):
     dedupe_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
 
 
+class AutomationRule(Base):
+    __tablename__ = "automation_rules"
+    __table_args__ = (Index("idx_automation_rules_event", "event_type", "enabled"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    conditions: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    channel: Mapped[str] = mapped_column(String(30), nullable=False)
+    template_event: Mapped[str] = mapped_column(String(100), nullable=False)
+    cooldown_seconds: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AutomationExecution(Base):
+    __tablename__ = "automation_executions"
+    __table_args__ = (
+        UniqueConstraint("execution_key"),
+        Index("idx_automation_executions_rule_time", "rule_id", "created_at"),
+        Index("idx_automation_executions_event", "event_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    rule_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("automation_rules.id"), nullable=False)
+    event_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("domain_events.id"), nullable=False)
+    execution_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    outcome: Mapped[str] = mapped_column(String(30), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    operation_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("notification_operations.id"))
+    created_at: Mapped[datetime] = _ts()
+
+
 class NotificationOperation(Base):
     __tablename__ = "notification_operations"
     __table_args__ = (Index("idx_notification_operations_due", "status", "next_attempt_at"),)
