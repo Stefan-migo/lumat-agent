@@ -18,8 +18,8 @@ __pycache__/
 # Exception: committed template documenting the required env names (design SH-2, T1.3)
 !infra/.env.example
 
-# Graphify runtime cache (outputs graph.json/GRAPH_REPORT.md stay tracked)
-graphify-out/cache/
+# Graphify knowledge-graph output — generated, never committed
+graphify-out/
 
 # Runtime data (design: media/ and backups/ are compose volumes)
 media/
@@ -35,7 +35,3 @@ temp/
 web/graphify-out/
 web/src/graphify-out/
 .opencode/skills/web-design-engineer/
-graphify-out/.graphify_detect.json
-graphify-out/.graphify_incremental.json
-graphify-out/2026-08-*/
-graphify-out/converted/
