@@ -10,7 +10,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.db import session_scope
-from app.models import Customer, NotificationAttempt, NotificationOperation, PanelNotification
+from app.models import AutomationExecution, AutomationRule, Customer, NotificationAttempt, NotificationOperation, PanelNotification
 from app.services.audit import record_audit
 from app.services.send import send_text
 from app.services.push import send_push
@@ -98,6 +98,49 @@ def create_due_reminder(
     )
 
 
+def _fallback_channel(session: Session, operation: NotificationOperation) -> str | None:
+    """Return the first enabled fallback channel allowed by the operation's rule."""
+    if operation.event_id is None:
+        return None
+    return session.scalar(
+        select(AutomationRule.channel)
+        .join(AutomationExecution, AutomationExecution.rule_id == AutomationRule.id)
+        .where(
+            AutomationExecution.event_id == operation.event_id,
+            AutomationExecution.operation_id == operation.id,
+            AutomationRule.enabled.is_(True),
+            AutomationRule.channel.in_(("whatsapp", "email")),
+        )
+        .order_by(AutomationExecution.id)
+    )
+
+
+def _process_push_fallback(session: Session, operation: NotificationOperation) -> None:
+    channel = _fallback_channel(session, operation)
+    if channel is None:
+        return
+    fallback = create_operation(
+        session,
+        recipient=operation.recipient,
+        channel=channel,
+        content=operation.content,
+        source_entity=operation.source_entity,
+        source_id=operation.source_id,
+        idempotency_key=f"{operation.idempotency_key}:fallback:{channel}",
+        event_id=operation.event_id,
+        user_id=operation.user_id,
+    )
+    record_audit(
+        session,
+        actor="system",
+        action="notification.fallback_attempt",
+        entity="notification_operation",
+        entity_id=str(fallback.id),
+        after={"from_operation_id": operation.id, "channel": channel},
+    )
+    process_operation(session, fallback.id)
+
+
 def process_operation(
     session: Session, operation_id: int, *, now: datetime | None = None, deliver=None
 ) -> bool:
@@ -124,6 +167,7 @@ def process_operation(
         error = str(exc)[:2000]
         if operation.channel == "push":
             record_audit(session, actor="system", action="notification.push_failed", entity="notification_operation", entity_id=str(operation.id), after={"error": error, "fallback": "whatsapp_or_email"})
+            _process_push_fallback(session, operation)
         attempt.status = "failed"
         attempt.error = error
         operation.error = error
