@@ -4,7 +4,7 @@ import type { User } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 
-export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "chat" | "kb" | "settings";
+export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings";
 
 /** Shell icon wrapper: 20px, stroke-based, `currentColor`, aria-hidden.
  *  Inline SVGs on purpose — no icon library (ponytail: no new deps). */
@@ -48,6 +48,15 @@ function UsersIcon() {
 
 function ChatIcon() {
   return icon(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />);
+}
+
+function BellIcon() {
+  return icon(
+    <>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </>,
+  );
 }
 
 function BriefcaseIcon() {
@@ -97,6 +106,8 @@ const NAVIGATION: Record<PanelView, NavigationItem> = {
   clients: { label: "Clientes", icon: UsersIcon },
   conversations: { label: "Conversaciones", icon: ChatIcon },
   cases: { label: "Casos", icon: BriefcaseIcon },
+  notifications: { label: "Notificaciones", icon: BellIcon },
+  push: { label: "Notificaciones push", icon: BellIcon },
   chat: { label: "Asistente Lumat", icon: ChatIcon, adminOnly: true },
   kb: { label: "Base de conocimientos", icon: BookIcon, adminOnly: true },
   settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
