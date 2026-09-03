@@ -112,3 +112,12 @@ def test_event_operation_linkage_and_health_counts(migrated_db):
     assert counts["pending"] == 1
     assert counts["failed"] == 0
     assert counts["leased"] == 0
+
+
+def test_worker_main_invokes_bounded_entrypoint(monkeypatch):
+    calls = []
+    monkeypatch.setenv("H4_WORKER_LIMIT", "7")
+    monkeypatch.setenv("H4_WORKER_OWNER", "cli-worker")
+    monkeypatch.setattr(worker, "run_cycle", lambda *, limit, owner: calls.append((limit, owner)) or 0)
+    worker.main()
+    assert calls == [(7, "cli-worker")]
