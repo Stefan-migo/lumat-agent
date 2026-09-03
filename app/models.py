@@ -581,6 +581,32 @@ class NotificationTemplateVersion(Base):
     created_at: Mapped[datetime] = _ts()
 
 
+class DomainEvent(Base):
+    """Durable transactional event consumed by the bounded H4 worker."""
+
+    __tablename__ = "domain_events"
+    __table_args__ = (
+        UniqueConstraint("dedupe_key"),
+        Index("idx_domain_events_claim", "status", "available_at", "leased_until", "id"),
+        Index("idx_domain_events_entity", "entity_type", "entity_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    occurred_at: Mapped[datetime] = _ts()
+    status: Mapped[str] = mapped_column(String(30), default="pending", server_default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    available_at: Mapped[datetime] = _ts()
+    leased_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lease_owner: Mapped[str | None] = mapped_column(String(100))
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+    dedupe_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+
+
 class NotificationOperation(Base):
     __tablename__ = "notification_operations"
     __table_args__ = (Index("idx_notification_operations_due", "status", "next_attempt_at"),)
@@ -592,6 +618,8 @@ class NotificationOperation(Base):
     source_entity: Mapped[str] = mapped_column(String(100), nullable=False)
     source_id: Mapped[str] = mapped_column(String(100), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("domain_events.id"))
+    user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(String(30), default="pending", server_default="pending")
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     max_attempts: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
