@@ -1,0 +1,126 @@
+"""Local appointment scheduling: timezone-safe, linked, and auditable."""
+
+from __future__ import annotations
+
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.models import Appointment, AppointmentHistory, AppointmentStatus, Case, Customer, TechnicianAvailability
+from app.services.audit import record_audit
+
+
+class NonexistentLocalTime(ValueError):
+    pass
+
+
+class AmbiguousLocalTime(ValueError):
+    pass
+
+
+class UnlinkedAppointment(ValueError):
+    pass
+
+
+class AppointmentConflict(ValueError):
+    pass
+
+
+class Unavailable(ValueError):
+    pass
+
+
+def _zone(name: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(f"unknown timezone: {name}") from exc
+
+
+def local_interval(day: date, clock: time, timezone_name: str, duration_minutes: int) -> tuple[datetime, datetime]:
+    if duration_minutes <= 0:
+        raise ValueError("duration must be positive")
+    zone = _zone(timezone_name)
+    naive = datetime.combine(day, clock)
+    candidates = [naive.replace(tzinfo=zone, fold=fold) for fold in (0, 1)]
+    valid = [
+        candidate
+        for candidate in candidates
+        if candidate.astimezone(timezone.utc).astimezone(zone).replace(tzinfo=None) == naive
+    ]
+    if not valid:
+        raise NonexistentLocalTime(f"nonexistent local time: {naive}")
+    if len(valid) > 1 and valid[0].utcoffset() != valid[1].utcoffset():
+        raise AmbiguousLocalTime(f"ambiguous local time: {naive}")
+    starts = valid[0].astimezone(timezone.utc)
+    return starts, starts + timedelta(minutes=duration_minutes)
+
+
+def _history(session: Session, appointment: Appointment, *, actor: str, action: str, previous: AppointmentStatus | None, details: dict | None = None) -> None:
+    session.add(AppointmentHistory(appointment_id=appointment.id, actor=actor, action=action, from_status=previous, to_status=appointment.status, details=details))
+
+
+def book(session: Session, *, service: str, customer_id: int, case_id: int, technician_id: int, local_date: date, local_time: time, timezone_name: str, duration_minutes: int, actor: str) -> Appointment:
+    customer = session.get(Customer, customer_id)
+    case = session.get(Case, case_id)
+    if customer is None or case is None or case.customer_id != customer_id:
+        raise UnlinkedAppointment("appointment requires a valid customer and matching case")
+    starts, ends = local_interval(local_date, local_time, timezone_name, duration_minutes)
+    configured = session.scalar(select(TechnicianAvailability.id).where(TechnicianAvailability.technician_id == technician_id)) is not None
+    if configured and not availability(session, technician_id, starts, ends):
+        raise Unavailable("technician is not available for the requested interval")
+    overlap = session.scalar(select(Appointment).where(
+        Appointment.status == AppointmentStatus.BOOKED,
+        ((Appointment.technician_id == technician_id) | (Appointment.customer_id == customer_id)),
+        Appointment.starts_at < ends, Appointment.ends_at > starts,
+    ))
+    if overlap is not None:
+        raise AppointmentConflict("technician or customer has an overlapping booking")
+    appointment = Appointment(service=service, customer_id=customer_id, case_id=case_id, technician_id=technician_id, local_start=datetime.combine(local_date, local_time), timezone=timezone_name, starts_at=starts, ends_at=ends, duration_minutes=duration_minutes)
+    session.add(appointment)
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise AppointmentConflict("technician or customer has an overlapping booking") from exc
+    _history(session, appointment, actor=actor, action="booked", previous=None)
+    record_audit(session, actor=actor, action="appointment.booked", entity="appointment", entity_id=str(appointment.id), after={"customer_id": customer_id, "case_id": case_id, "technician_id": technician_id})
+    return appointment
+
+
+def cancel(session: Session, appointment: Appointment, *, actor: str, reason: str | None = None) -> Appointment:
+    if appointment.status is not AppointmentStatus.BOOKED:
+        raise ValueError("only booked appointments can be cancelled")
+    previous = appointment.status
+    appointment.status = AppointmentStatus.CANCELLED
+    session.flush()
+    _history(session, appointment, actor=actor, action="cancelled", previous=previous, details={"reason": reason} if reason else None)
+    record_audit(session, actor=actor, action="appointment.cancelled", entity="appointment", entity_id=str(appointment.id), after={"reason": reason})
+    return appointment
+
+
+def availability(session: Session, technician_id: int, starts_at: datetime, ends_at: datetime) -> bool:
+    if ends_at <= starts_at:
+        raise ValueError("availability interval must be positive")
+    return session.scalar(select(TechnicianAvailability.id).where(TechnicianAvailability.technician_id == technician_id, TechnicianAvailability.available.is_(True), TechnicianAvailability.starts_at <= starts_at, TechnicianAvailability.ends_at >= ends_at)) is not None
+
+
+def add_availability(session: Session, *, technician_id: int, starts_at: datetime, ends_at: datetime, available: bool = True) -> TechnicianAvailability:
+    if ends_at <= starts_at:
+        raise ValueError("availability interval must be positive")
+    block = TechnicianAvailability(
+        technician_id=technician_id,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        available=available,
+    )
+    session.add(block)
+    session.flush()
+    return block
+
+
+def list_for_customer(session: Session, customer_id: int) -> list[Appointment]:
+    return list(session.scalars(select(Appointment).where(Appointment.customer_id == customer_id).order_by(Appointment.starts_at, Appointment.id)))

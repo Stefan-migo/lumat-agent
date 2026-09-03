@@ -19,6 +19,7 @@ from app.config import get_settings
 from app.panel.routes import panel_router
 from app.webhook.ingest import reset_stale_processing, sweep_received
 from app.webhook.router import router as webhook_router
+from app.ops.sweep import run as run_notification_sweep
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI):
     try:
         reset_stale_processing()
         sweep_received()
+        run_notification_sweep()
     except Exception:
         logger.exception("startup webhook sweep failed")
     yield

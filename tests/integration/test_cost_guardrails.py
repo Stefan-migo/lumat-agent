@@ -50,7 +50,7 @@ def clean_db(migrated_db):
     """Reset chat + settings tables before every test (shared test DB)."""
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
-            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
+            "TRUNCATE notification_attempts, notification_operations, settings, audit_log, conversation_events, cases, messages, "
             "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
         )
     yield

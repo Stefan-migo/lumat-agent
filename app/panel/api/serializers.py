@@ -21,6 +21,10 @@ from app.models import (
     Memory,
     Message,
     User,
+    Appointment,
+    AppointmentCalendarSync,
+    NotificationTemplateVersion,
+    NotificationOperation,
 )
 
 
@@ -136,6 +140,65 @@ def to_case_dict(case: Case) -> dict:
 def to_user_dict(user: User) -> dict:
     """User row -> minimal {id, username} dict (D8 — embedded in cases, no /users)."""
     return {"id": user.id, "username": user.username}
+
+
+def to_appointment_dict(appointment: Appointment) -> dict:
+    return {
+        "id": appointment.id,
+        "service": appointment.service,
+        "customer_id": appointment.customer_id,
+        "case_id": appointment.case_id,
+        "technician_id": appointment.technician_id,
+        "local_start": appointment.local_start.isoformat(),
+        "timezone": appointment.timezone,
+        "starts_at": _iso(appointment.starts_at),
+        "ends_at": _iso(appointment.ends_at),
+        "duration_minutes": appointment.duration_minutes,
+        "status": appointment.status.value,
+        "history": [
+            {"id": h.id, "actor": h.actor, "action": h.action,
+             "from_status": h.from_status.value if h.from_status else None,
+             "to_status": h.to_status.value, "details": h.details,
+             "created_at": _iso(h.created_at)}
+            for h in appointment.history
+        ],
+    }
+
+
+def to_calendar_dict(sync: AppointmentCalendarSync) -> dict:
+    return {
+        "id": sync.id, "appointment_id": sync.appointment_id, "provider": sync.provider,
+        "uid": sync.uid, "idempotency_key": sync.idempotency_key, "status": sync.status,
+        "timezone": sync.timezone, "cancelled": sync.cancelled, "error": sync.error,
+        "attempts": sync.attempts, "retry": sync.status in {"failed", "pending"},
+        "synced_at": _iso(sync.synced_at),
+    }
+
+
+def to_template_dict(template: NotificationTemplateVersion) -> dict:
+    return {
+        "id": template.id, "event": template.event, "channel": template.channel,
+        "locale": template.locale, "version": template.version, "content": template.content,
+        "required_variables": template.required_variables, "approved": template.approved,
+        "smtp_allowed": template.smtp_allowed, "created_at": _iso(template.created_at),
+    }
+
+
+def to_notification_dict(operation: NotificationOperation) -> dict:
+    return {
+        "id": operation.id,
+        "recipient": operation.recipient,
+        "channel": operation.channel,
+        "source_entity": operation.source_entity,
+        "source_id": operation.source_id,
+        "status": operation.status,
+        "attempts": operation.attempts,
+        "error": operation.error,
+        "next_attempt_at": _iso(operation.next_attempt_at),
+        "last_attempt_at": _iso(operation.last_attempt_at),
+        "delivered_at": _iso(operation.delivered_at),
+        "action": "retry" if operation.status in {"retryable", "failed", "permanently_failed"} else None,
+    }
 
 
 def to_doc_dict(doc: KbDocument) -> dict:

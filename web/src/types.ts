@@ -88,7 +88,9 @@ export interface Conversation {
   state: string;
   responsible_id?: number | null;
   version?: number;
-  reply_window_open?: boolean;
+  latest_inbound_at: string | null;
+  reply_window_open: boolean;
+  delivery_summary: Record<DeliveryStatus, number>;
   summary: string | null;
   last_message_at: string | null;
   created_at: string | null;
@@ -220,9 +222,39 @@ export interface ClientFichaResponse {
       media_url: string | null;
       created_at: string | null;
     }>;
+    appointments?: Appointment[];
+    visit_history?: VisitHistoryEvent[];
   };
   notes: CustomerNote[];
   /** CR-7: latest customer_memo (empty string when none yet). */
   memo: string;
   states: CustomerState[];
+}
+
+export interface Appointment {
+  id: number;
+  service: string;
+  customer_id: number;
+  case_id: number;
+  technician_id: number;
+  local_start: string;
+  timezone: string;
+  starts_at: string;
+  ends_at: string;
+  duration_minutes: number;
+  status: string;
+  calendar_status?: string | null;
+  calendar_error?: string | null;
+}
+
+export interface VisitHistoryEvent {
+  id: number;
+  appointment_id: number;
+  actor: string;
+  action: string;
+  from_status?: string | null;
+  to_status: string;
+  status: string;
+  details?: Record<string, unknown> | null;
+  created_at: string | null;
 }

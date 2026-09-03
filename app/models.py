@@ -24,7 +24,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, REAL
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
@@ -131,6 +131,13 @@ class MemoryStatus(str, enum.Enum):
     ACTIVE = "active"
     NEEDS_REVIEW = "needs_review"
     ARCHIVED = "archived"
+
+
+class AppointmentStatus(str, enum.Enum):
+    BOOKED = "booked"
+    CANCELLED = "cancelled"
+    COMPLETED = "completed"
+    NO_SHOW = "no_show"
 
 
 class ObservationType(str, enum.Enum):
@@ -477,3 +484,137 @@ class AuditLog(Base):
     before: Mapped[dict | None] = mapped_column(JSONB)
     after: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = _ts()
+
+
+class TechnicianAvailability(Base):
+    __tablename__ = "technician_availability"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    technician_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    available: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
+
+class Appointment(Base):
+    __tablename__ = "appointments"
+    __table_args__ = (
+        Index("idx_appointments_customer", "customer_id", "starts_at"),
+        Index("idx_appointments_case", "case_id", "starts_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    service: Mapped[str] = mapped_column(String(100), nullable=False)
+    customer_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("customers.id"), nullable=False)
+    case_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cases.id"), nullable=False)
+    technician_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    local_start: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(100), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[AppointmentStatus] = mapped_column(
+        pg_enum(AppointmentStatus, "appointment_status"),
+        default=AppointmentStatus.BOOKED, server_default="booked",
+    )
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    history: Mapped[list["AppointmentHistory"]] = relationship(
+        back_populates="appointment", order_by="AppointmentHistory.created_at, AppointmentHistory.id"
+    )
+    calendar_sync: Mapped["AppointmentCalendarSync | None"] = relationship(
+        back_populates="appointment", uselist=False
+    )
+
+
+class AppointmentHistory(Base):
+    __tablename__ = "appointment_history"
+    __table_args__ = (Index("idx_appointment_history_appointment", "appointment_id", "created_at", "id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    appointment_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("appointments.id"), nullable=False)
+    actor: Mapped[str] = mapped_column(String(100), nullable=False)
+    action: Mapped[str] = mapped_column(String(30), nullable=False)
+    from_status: Mapped[AppointmentStatus | None] = mapped_column(pg_enum(AppointmentStatus, "appointment_status"))
+    to_status: Mapped[AppointmentStatus] = mapped_column(pg_enum(AppointmentStatus, "appointment_status"), nullable=False)
+    details: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = _ts()
+    appointment: Mapped[Appointment] = relationship(back_populates="history")
+
+
+class AppointmentCalendarSync(Base):
+    __tablename__ = "appointment_calendar_sync"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    appointment_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("appointments.id"), unique=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(100), nullable=False, default="ics")
+    uid: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    timezone: Mapped[str] = mapped_column(String(100), nullable=False)
+    cancelled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    external_id: Mapped[str | None] = mapped_column(String(255))
+    payload: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    appointment: Mapped[Appointment] = relationship(back_populates="calendar_sync")
+
+
+class NotificationTemplateVersion(Base):
+    __tablename__ = "notification_template_versions"
+    __table_args__ = (UniqueConstraint("event", "channel", "locale", "version"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    event: Mapped[str] = mapped_column(String(100), nullable=False)
+    channel: Mapped[str] = mapped_column(String(30), nullable=False)
+    locale: Mapped[str] = mapped_column(String(20), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    required_variables: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    approved: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    smtp_allowed: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = _ts()
+
+
+class NotificationOperation(Base):
+    __tablename__ = "notification_operations"
+    __table_args__ = (Index("idx_notification_operations_due", "status", "next_attempt_at"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    recipient: Mapped[str] = mapped_column(String(255), nullable=False)
+    channel: Mapped[str] = mapped_column(String(30), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    source_entity: Mapped[str] = mapped_column(String(100), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="pending", server_default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
+    next_attempt_at: Mapped[datetime] = _ts()
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    attempts_log: Mapped[list["NotificationAttempt"]] = relationship(
+        back_populates="operation", order_by="NotificationAttempt.id"
+    )
+
+
+class NotificationAttempt(Base):
+    __tablename__ = "notification_attempts"
+    __table_args__ = (UniqueConstraint("operation_id", "attempt_number"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    operation_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("notification_operations.id"), nullable=False)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    external_id: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = _ts()
+    operation: Mapped[NotificationOperation] = relationship(back_populates="attempts_log")

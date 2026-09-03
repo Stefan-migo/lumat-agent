@@ -1,0 +1,76 @@
+"""Authenticated local scheduling operations (AP-10/11)."""
+
+from datetime import date, datetime, time
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from app.models import User
+from app.panel.api.deps import require_user_json
+from app.panel.api.serializers import to_appointment_dict
+from app.panel.deps import get_db
+from app.services import scheduling
+
+router = APIRouter(tags=["panel-api-appointments"])
+
+
+class AppointmentBody(BaseModel):
+    service: str
+    customer_id: int
+    case_id: int
+    technician_id: int
+    local_date: date
+    local_time: time
+    timezone: str
+    duration_minutes: int = Field(gt=0)
+
+
+class CancelBody(BaseModel):
+    reason: str | None = None
+
+
+@router.get("/availability/{technician_id}")
+def technician_availability(technician_id: int, starts_at: datetime, ends_at: datetime, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+    try:
+        available = scheduling.availability(session, technician_id, starts_at, ends_at)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"technician_id": technician_id, "starts_at": starts_at.isoformat(), "ends_at": ends_at.isoformat(), "available": available}
+
+
+@router.post("/appointments")
+def create_appointment(body: AppointmentBody, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+    try:
+        appointment = scheduling.book(session, service=body.service, customer_id=body.customer_id, case_id=body.case_id, technician_id=body.technician_id, local_date=body.local_date, local_time=body.local_time, timezone_name=body.timezone, duration_minutes=body.duration_minutes, actor=current.username)
+    except scheduling.UnlinkedAppointment as exc:
+        raise HTTPException(status_code=400, detail={"code": "unlinked_appointment", "message": str(exc)}) from exc
+    except scheduling.AppointmentConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": "appointment_conflict", "message": str(exc)}) from exc
+    except scheduling.Unavailable as exc:
+        raise HTTPException(status_code=409, detail={"code": "technician_unavailable", "message": str(exc)}) from exc
+    except (scheduling.NonexistentLocalTime, scheduling.AmbiguousLocalTime, ValueError) as exc:
+        raise HTTPException(status_code=400, detail={"code": "invalid_local_time", "message": str(exc)}) from exc
+    session.commit()
+    return {"ok": True, "appointment": to_appointment_dict(appointment)}
+
+
+@router.get("/appointments/{appointment_id}")
+def get_appointment(appointment_id: int, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+    appointment = session.get(scheduling.Appointment, appointment_id)
+    if appointment is None:
+        raise HTTPException(status_code=404, detail="appointment not found")
+    return {"appointment": to_appointment_dict(appointment)}
+
+
+@router.post("/appointments/{appointment_id}/cancel")
+def cancel_appointment(appointment_id: int, body: CancelBody, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+    appointment = session.get(scheduling.Appointment, appointment_id)
+    if appointment is None:
+        raise HTTPException(status_code=404, detail="appointment not found")
+    try:
+        scheduling.cancel(session, appointment, actor=current.username, reason=body.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": "invalid_lifecycle", "message": str(exc)}) from exc
+    session.commit()
+    return {"ok": True, "appointment": to_appointment_dict(appointment)}

@@ -40,6 +40,7 @@ from app.models import (  # noqa: E402
     MessageDirection,
     MessageStatus,
     MessageType,
+    NotificationOperation,
 )
 from app.services import notify  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
@@ -60,7 +61,7 @@ def clean_db(migrated_db):
     """Reset chat + settings tables before every test (shared test DB)."""
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
-            "TRUNCATE settings, audit_log, conversation_events, cases, messages, "
+            "TRUNCATE notification_attempts, notification_operations, settings, audit_log, conversation_events, cases, messages, "
             "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
         )
     yield
@@ -279,6 +280,9 @@ def test_both_channels_fail_audits_and_never_raises(mock_meta_send, monkeypatch)
     failed = [a for a in _audit_rows() if a.action == "notification.failed"]
     assert len(failed) == 2  # whatsapp attempt + email attempt
     assert {a.after["channel"] for a in failed} == {"whatsapp", "email"}
+    with SessionLocal() as session:
+        operation = session.scalar(select(NotificationOperation).where(NotificationOperation.source_id == str(case_id)))
+        assert operation.status == "retryable"
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +386,29 @@ def test_ack_ignored_when_already_acknowledged():
         assert notify.acknowledge_emergency_if_ack(session, conv_id, "ok") is False
         session.commit()
     assert len([a for a in _audit_rows() if a.action == "case.acknowledged"]) == 0
+
+
+def test_emergency_failure_preserves_existing_ack_and_audits_durable_attempt(
+    mock_meta_send, monkeypatch
+):
+    mock_meta_send.routes[0].mock(
+        return_value=httpx.Response(400, json={"error": {"message": "invalid"}})
+    )
+    monkeypatch.setattr("app.services.notify.smtplib.SMTP", _failing_smtp)
+    acknowledged = datetime.now(timezone.utc)
+    case_id, _, _ = _seed_case(acknowledged_at=acknowledged, ack_by="panel")
+
+    result = _call_notification(case_id, "incendio", address="Pasaje 1")
+
+    assert result["channel"] == "none"
+    with SessionLocal() as session:
+        case = session.get(Case, case_id)
+        operation = session.scalar(
+            select(NotificationOperation).where(NotificationOperation.source_id == str(case_id))
+        )
+        assert case.acknowledged_at == acknowledged
+        assert case.ack_by == "panel"
+        assert operation.status == "retryable"
 
 
 def test_ack_ignored_without_emergency_case():

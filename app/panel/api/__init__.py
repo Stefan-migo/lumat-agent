@@ -11,6 +11,9 @@ from fastapi import APIRouter
 
 from app.panel.api.routes import (
     auth,
+    appointments,
+    calendar_templates,
+    notifications,
     cases,
     clients,
     conversations,
@@ -24,6 +27,9 @@ from app.panel.api.routes import (
 api_router = APIRouter(prefix="/api")
 
 api_router.include_router(auth.router)
+api_router.include_router(appointments.router)
+api_router.include_router(calendar_templates.router)
+api_router.include_router(notifications.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(clients.router)
 api_router.include_router(conversations.router)

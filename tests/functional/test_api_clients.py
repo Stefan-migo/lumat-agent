@@ -28,6 +28,9 @@ from app.models import (  # noqa: E402
     Message,
     MessageDirection,
     MessageType,
+    Appointment,
+    AppointmentHistory,
+    AppointmentStatus,
 )
 
 
@@ -222,6 +225,39 @@ def test_client_ficha_returns_full_payload(client, make_user):
         "nuevo", "contactado", "pendiente", "agendado",
         "en_evaluacion", "finalizado", "cancelado", "postventa",
     ]
+
+
+def test_client_ficha_returns_chronological_visit_lifecycle_history(client, make_user):
+    customer_id = _seed_customer(messages=0)
+    technician = make_user("history-tech", "history-pass", role="operador")
+    with SessionLocal() as session:
+        customer = session.get(Customer, customer_id)
+        case = session.scalar(select(Case).where(Case.customer_id == customer_id))
+        appointment = Appointment(
+            service="calefont", customer_id=customer.id, case_id=case.id,
+            technician_id=technician, local_start=datetime(2026, 7, 15, 10),
+            timezone="America/Santiago", starts_at=datetime.fromisoformat("2026-07-15T14:00:00+00:00"),
+            ends_at=datetime.fromisoformat("2026-07-15T15:00:00+00:00"), duration_minutes=60,
+        )
+        session.add(appointment)
+        session.flush()
+        session.add_all([
+            AppointmentHistory(appointment_id=appointment.id, actor="oper", action="booked",
+                               to_status=AppointmentStatus.BOOKED, details={"source": "panel"}),
+            AppointmentHistory(appointment_id=appointment.id, actor="oper", action="cancelled",
+                               from_status=AppointmentStatus.BOOKED, to_status=AppointmentStatus.CANCELLED,
+                               details={"reason": "customer request"}),
+        ])
+        session.commit()
+    _login(client, "history-tech", "history-pass")
+
+    response = client.get(f"/panel/api/clients/{customer_id}")
+
+    assert response.status_code == 200
+    history = response.json()["history"]
+    assert len(history["appointments"]) == 1
+    assert [event["action"] for event in history["visit_history"]] == ["booked", "cancelled"]
+    assert history["visit_history"][1]["appointment_id"] == history["appointments"][0]["id"]
 
 
 def test_client_ficha_includes_notes(client, make_user):

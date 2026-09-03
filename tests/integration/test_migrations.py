@@ -43,6 +43,13 @@ EXPECTED_TABLES = {
     "memories",  # 009_memory.sql (MEM-1 persistent memory layer)
     "memory_relations",
     "memory_observations",
+    "technician_availability",
+    "appointments",
+    "appointment_history",
+    "appointment_calendar_sync",
+    "notification_template_versions",
+    "notification_operations",
+    "notification_attempts",
     "schema_migrations",
 }
 
@@ -66,7 +73,7 @@ def clean_db(migrated_db):
     """Reset all tables before this module's tests (dedicated test DB only)."""
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
-            "TRUNCATE settings, audit_log, kb_chunks, kb_documents, "
+            "TRUNCATE notification_attempts, notification_operations, settings, audit_log, kb_chunks, kb_documents, "
             "conversation_events, cases, messages, conversations, users, customers, "
             "customer_notes, memories, memory_relations, memory_observations "
             "RESTART IDENTITY CASCADE"
@@ -101,6 +108,9 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("008_local_embeddings",),
         ("009_memory",),
         ("010_h2_human_inbox",),
+        ("011_h3_scheduling",),
+        ("012_h3_calendar_templates",),
+        ("013_h3_notifications",),
     ]
 
 

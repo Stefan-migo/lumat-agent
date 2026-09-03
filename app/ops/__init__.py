@@ -1,0 +1,1 @@
+"""Owned operational entry points."""
