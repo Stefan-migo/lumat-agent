@@ -3,7 +3,11 @@ import { PageFrame } from "../../stories/pages/_shared/PageFrame";
 import { Button } from "../primitives/Button";
 
 export function PushSettings({ supported = typeof window !== "undefined" && "PushManager" in window }: { supported?: boolean }) {
-  const [enabled, setEnabled] = useState(false);
-  const enable = async () => { if (!supported || !("Notification" in window)) return; setEnabled((await Notification.requestPermission()) === "granted"); };
-  return <PageFrame title="Notificaciones push"><p>{supported ? "Activa avisos del navegador para recibir novedades." : "Este navegador no admite push. Recibirás notificaciones por correo o WhatsApp."}</p>{supported ? <Button onClick={() => void enable()}>{enabled ? "Push activado" : "Activar push"}</Button> : null}</PageFrame>;
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+  const enable = async () => {
+    if (!supported || !("Notification" in window)) { setPermission("unsupported"); return; }
+    setPermission(await Notification.requestPermission());
+  };
+  const fallback = "Recibirás notificaciones por correo o WhatsApp.";
+  return <PageFrame title="Notificaciones push"><p>{!supported || permission === "unsupported" ? `Este navegador no admite push. ${fallback}` : permission === "denied" ? `Denegaste los avisos del navegador. ${fallback}` : permission === "granted" ? "Push activado." : "Activa avisos del navegador para recibir novedades."}</p>{supported && permission !== "unsupported" && permission !== "denied" ? <Button onClick={() => void enable()}>{permission === "granted" ? "Push activado" : "Activar push"}</Button> : null}</PageFrame>;
 }

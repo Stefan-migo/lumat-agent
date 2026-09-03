@@ -1,0 +1,23 @@
+{
+  "name": "Lumat Panel",
+  "short_name": "Lumat",
+  "start_url": "/panel/",
+  "scope": "/panel/",
+  "display": "standalone",
+  "theme_color": "#17324d",
+  "background_color": "#f7f8fa",
+  "icons": [
+    {
+      "src": "/panel/brand/lumat-mark.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/panel/brand/lumat-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
