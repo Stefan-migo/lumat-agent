@@ -1,5 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import './tokens/tokens.css';
+import './components/primitives/primitives.css';
 import App from './app';
 import { registerPwa } from './pwa';
 
