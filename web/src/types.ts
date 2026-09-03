@@ -75,6 +75,11 @@ export interface MemoriesResponse {
 export interface PanelNotification { id: number; user_id: number; operation_id: number; title: string; content: string; source: string; channel: string | null; status: string; read_at: string | null; created_at: string | null; }
 export interface NotificationsResponse { notifications: PanelNotification[]; }
 
+export type InternalChatStatus = 'processing' | 'processed' | 'failed';
+export interface InternalChatThread { id: number; user_id?: number; status: string; created_at?: string | null; updated_at?: string | null; }
+export interface InternalChatMessage { id: number; thread_id?: number; author: 'admin' | 'agent'; content: string; status: InternalChatStatus; error?: string | null; created_at?: string | null; completed_at?: string | null; }
+export interface InternalChatResponse { thread: InternalChatThread; messages: InternalChatMessage[]; }
+
 export interface Kpis {
   contacts: number;
   motivos: Array<[string, number]>;

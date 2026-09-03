@@ -12,6 +12,7 @@ import { KbList } from '../pages/KbList';
 import { Settings } from '../pages/Settings';
 import { NotificationCenter } from '../pages/NotificationCenter';
 import { PushSettings } from '../pages/PushSettings';
+import { AgentChat } from '../pages/AgentChat';
 
 /** Top-level SPA views, switched via AppShell state (D7 — no router; `ponytail:`
  *  no URL shareability, upgrade path = react-router hash router when desired).
@@ -43,6 +44,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
      : view === 'cases' ? <CasesList />
      : view === 'notifications' ? <NotificationCenter />
      : view === 'push' ? <PushSettings />
+      : view === 'chat' ? <AgentChat />
      : view === 'kb' ? <KbList />
     : <Settings />;
 

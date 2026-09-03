@@ -697,6 +697,31 @@ class PushSubscription(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class InternalChatThread(Base):
+    __tablename__ = "internal_chat_threads"
+    __table_args__ = (Index("idx_internal_chat_threads_user_updated", "user_id", "updated_at", "id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="open", server_default="open")
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class InternalChatMessage(Base):
+    __tablename__ = "internal_chat_messages"
+    __table_args__ = (Index("idx_internal_chat_messages_thread_created", "thread_id", "created_at", "id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    thread_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("internal_chat_threads.id", ondelete="CASCADE"), nullable=False)
+    author: Mapped[str] = mapped_column(String(30), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="processing", server_default="processing")
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = _ts()
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class NotificationAttempt(Base):
     __tablename__ = "notification_attempts"
     __table_args__ = (UniqueConstraint("operation_id", "attempt_number"),)

@@ -33,8 +33,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Slice 4 — Internal Agent Chat (PR 4)
 
-- [ ] 4.1 **RED:** `tests/integration/test_h4_chat.py` and Vitest cover IAC-1/2/3: admin audit, operador denial, constrained response, privileged-action refusal, and recoverable failure.
-- [ ] 4.2 **GREEN:** Add `app/services/agent_chat.py`, chat routers/serializers/ORM, constrained `app/chat/graph.py` boundary, `AgentChat.tsx`, and `PanelShell` navigation.
+- [x] 4.1 **RED:** `tests/integration/test_h4_chat.py` and Vitest cover IAC-1/2/3: admin audit, operador denial, constrained response, privileged-action refusal, and recoverable failure.
+- [x] 4.2 **GREEN:** Add `app/services/agent_chat.py`, chat routers/serializers/ORM, constrained `app/chat/graph.py` boundary, `AgentChat.tsx`, and `PanelShell` navigation.
 
 ## Phase 5: Slice 5 — Dashboards (PR 5)
 
