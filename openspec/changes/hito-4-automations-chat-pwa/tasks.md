@@ -43,8 +43,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 6: Slice 6 — PWA Shell (PR 6)
 
-- [ ] 6.1 **RED:** Vitest covers PWA-1/2/3: manifest/icons, insecure fallback, API non-cache, version replacement, explicit permission denial/unsupported state.
-- [ ] 6.2 **GREEN:** Add `web/public/manifest.webmanifest`, `web/public/sw.js` and icons; update `web/src/main.tsx`, `index.html`, and cache/registration helpers.
+- [x] 6.1 **RED:** Vitest covers PWA-1/2/3: manifest/icons, insecure fallback, API non-cache, version replacement, explicit permission denial/unsupported state.
+- [x] 6.2 **GREEN:** Add `web/public/manifest.webmanifest`, `web/public/sw.js` and icons; update `web/src/main.tsx`, `index.html`, and cache/registration helpers.
 
 ## Review Workload Forecast
 
