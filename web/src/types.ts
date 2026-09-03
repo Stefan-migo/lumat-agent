@@ -72,6 +72,9 @@ export interface MemoriesResponse {
   memories: Memory[];
 }
 
+export interface PanelNotification { id: number; user_id: number; operation_id: number; title: string; content: string; source: string; channel: string | null; status: string; read_at: string | null; created_at: string | null; }
+export interface NotificationsResponse { notifications: PanelNotification[]; }
+
 export interface Kpis {
   contacts: number;
   motivos: Array<[string, number]>;

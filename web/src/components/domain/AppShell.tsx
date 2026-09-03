@@ -10,6 +10,8 @@ import { ConversationsList } from '../pages/ConversationsList';
 import { ConversationThread } from '../pages/ConversationThread';
 import { KbList } from '../pages/KbList';
 import { Settings } from '../pages/Settings';
+import { NotificationCenter } from '../pages/NotificationCenter';
+import { PushSettings } from '../pages/PushSettings';
 
 /** Top-level SPA views, switched via AppShell state (D7 — no router; `ponytail:`
  *  no URL shareability, upgrade path = react-router hash router when desired).
@@ -38,8 +40,10 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   const page = view === 'dashboard' ? <Dashboard />
     : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} /> : <ClientesList onOpenClient={setClientId} />
      : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => setConversationId(null)} /> : <ConversationsList refreshKey={conversationRefresh} onOpenThread={setConversationId} />
-    : view === 'cases' ? <CasesList />
-    : view === 'kb' ? <KbList />
+     : view === 'cases' ? <CasesList />
+     : view === 'notifications' ? <NotificationCenter />
+     : view === 'push' ? <PushSettings />
+     : view === 'kb' ? <KbList />
     : <Settings />;
 
   return (
