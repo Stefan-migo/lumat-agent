@@ -55,6 +55,8 @@ EXPECTED_TABLES = {
     "automation_executions",
     "panel_notifications",
     "push_subscriptions",
+    "internal_chat_threads",
+    "internal_chat_messages",
     "schema_migrations",
 }
 
@@ -119,6 +121,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("014_h4_automations_chat_pwa",),
         ("015_h4_automations",),
         ("016_h4_notification_center",),
+        ("017_h4_internal_chat",),
     ]
 
 
