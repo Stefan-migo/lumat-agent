@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Appointment, AppointmentHistory, AppointmentStatus, Case, Customer, TechnicianAvailability
 from app.services.audit import record_audit
+from app.services.events import publish_event
 
 
 class NonexistentLocalTime(ValueError):
@@ -88,6 +89,7 @@ def book(session: Session, *, service: str, customer_id: int, case_id: int, tech
         raise AppointmentConflict("technician or customer has an overlapping booking") from exc
     _history(session, appointment, actor=actor, action="booked", previous=None)
     record_audit(session, actor=actor, action="appointment.booked", entity="appointment", entity_id=str(appointment.id), after={"customer_id": customer_id, "case_id": case_id, "technician_id": technician_id})
+    publish_event(session, event_type="appointment.booked", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": customer_id, "case_id": case_id, "recipient": customer.phone_e164, "service": service}, dedupe_key=f"appointment:{appointment.id}:booked")
     return appointment
 
 
@@ -99,6 +101,8 @@ def cancel(session: Session, appointment: Appointment, *, actor: str, reason: st
     session.flush()
     _history(session, appointment, actor=actor, action="cancelled", previous=previous, details={"reason": reason} if reason else None)
     record_audit(session, actor=actor, action="appointment.cancelled", entity="appointment", entity_id=str(appointment.id), after={"reason": reason})
+    customer = session.get(Customer, appointment.customer_id)
+    publish_event(session, event_type="appointment.cancelled", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": appointment.customer_id, "case_id": appointment.case_id, "recipient": customer.phone_e164 if customer else None, "reason": reason}, dedupe_key=f"appointment:{appointment.id}:cancelled")
     return appointment
 
 

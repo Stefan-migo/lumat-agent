@@ -581,6 +581,67 @@ class NotificationTemplateVersion(Base):
     created_at: Mapped[datetime] = _ts()
 
 
+class DomainEvent(Base):
+    """Durable transactional event consumed by the bounded H4 worker."""
+
+    __tablename__ = "domain_events"
+    __table_args__ = (
+        UniqueConstraint("dedupe_key"),
+        Index("idx_domain_events_claim", "status", "available_at", "leased_until", "id"),
+        Index("idx_domain_events_entity", "entity_type", "entity_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    occurred_at: Mapped[datetime] = _ts()
+    status: Mapped[str] = mapped_column(String(30), default="pending", server_default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    available_at: Mapped[datetime] = _ts()
+    leased_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lease_owner: Mapped[str | None] = mapped_column(String(100))
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+    dedupe_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+
+
+class AutomationRule(Base):
+    __tablename__ = "automation_rules"
+    __table_args__ = (Index("idx_automation_rules_event", "event_type", "enabled"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    conditions: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    channel: Mapped[str] = mapped_column(String(30), nullable=False)
+    template_event: Mapped[str] = mapped_column(String(100), nullable=False)
+    cooldown_seconds: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AutomationExecution(Base):
+    __tablename__ = "automation_executions"
+    __table_args__ = (
+        UniqueConstraint("execution_key"),
+        Index("idx_automation_executions_rule_time", "rule_id", "created_at"),
+        Index("idx_automation_executions_event", "event_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    rule_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("automation_rules.id"), nullable=False)
+    event_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("domain_events.id"), nullable=False)
+    execution_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    outcome: Mapped[str] = mapped_column(String(30), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    operation_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("notification_operations.id"))
+    created_at: Mapped[datetime] = _ts()
+
+
 class NotificationOperation(Base):
     __tablename__ = "notification_operations"
     __table_args__ = (Index("idx_notification_operations_due", "status", "next_attempt_at"),)
@@ -592,6 +653,8 @@ class NotificationOperation(Base):
     source_entity: Mapped[str] = mapped_column(String(100), nullable=False)
     source_id: Mapped[str] = mapped_column(String(100), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("domain_events.id"))
+    user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(String(30), default="pending", server_default="pending")
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     max_attempts: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
@@ -604,6 +667,59 @@ class NotificationOperation(Base):
     attempts_log: Mapped[list["NotificationAttempt"]] = relationship(
         back_populates="operation", order_by="NotificationAttempt.id"
     )
+
+
+class PanelNotification(Base):
+    __tablename__ = "panel_notifications"
+    __table_args__ = (UniqueConstraint("user_id", "operation_id"),)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    operation_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("notification_operations.id"), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = _ts()
+    operation: Mapped[NotificationOperation] = relationship()
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    p256dh: Mapped[str] = mapped_column(Text, nullable=False)
+    auth: Mapped[str] = mapped_column(Text, nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class InternalChatThread(Base):
+    __tablename__ = "internal_chat_threads"
+    __table_args__ = (Index("idx_internal_chat_threads_user_updated", "user_id", "updated_at", "id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="open", server_default="open")
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class InternalChatMessage(Base):
+    __tablename__ = "internal_chat_messages"
+    __table_args__ = (Index("idx_internal_chat_messages_thread_created", "thread_id", "created_at", "id"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    thread_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("internal_chat_threads.id", ondelete="CASCADE"), nullable=False)
+    author: Mapped[str] = mapped_column(String(30), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), default="processing", server_default="processing")
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = _ts()
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class NotificationAttempt(Base):

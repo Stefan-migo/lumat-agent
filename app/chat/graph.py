@@ -60,10 +60,26 @@ from app.chat.nodes.respond import respond
 from app.chat.nodes.summary import summary
 from app.chat.state import ConversationState
 from app.chat.subgraphs.research_triage import build_research_triage_subgraph
-from app.models import Message, MessageDirection, MessageStatus, MessageType
+from app.models import InternalChatThread, Message, MessageDirection, MessageStatus, MessageType
 from app.services.memory import persist_memory_session
 
 __all__ = ["build_graph", "run_conversation"]
+
+
+PRIVILEGED_INTERNAL_ACTIONS = ("delete", "drop", "grant access", "reveal password", "send money")
+
+
+def run_internal_conversation(session: Session, thread: InternalChatThread, text: str) -> str:
+    """Constrained internal boundary: answer or refuse, never execute tools.
+
+    Internal chat deliberately has no customer conversation state, tools, or
+    privileged side effects. It remains a graph-owned boundary so the service
+    cannot accidentally grow a second agent runtime.
+    """
+    lowered = text.casefold()
+    if any(action in lowered for action in PRIVILEGED_INTERNAL_ACTIONS):
+        return "I cannot perform privileged actions from internal chat. Please use the approved operational workflow."
+    return f"I can help with that operational question: {text.strip()}"
 
 
 def _flow_start(state: ConversationState) -> str:

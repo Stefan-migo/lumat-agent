@@ -52,7 +52,7 @@ export function postJson<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-import type { Conversation, ConversationsResponse, ConversationState, ConversationThread, Message } from './types';
+import type { AdvancedDashboardData, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -67,3 +67,19 @@ export const getConversation = (id: number) => apiFetch<ConversationThread>(`/pa
 export const changeConversationState = (id: number, state: ConversationState, expected_version: number) => command<{ ok: true; conversation: Conversation }>(`/panel/api/conversations/${id}/state`, { state, expected_version, request_id: requestId() });
 export const sendMessage = (id: number, body: { text: string; request_id?: string }) => command<{ ok: true; message: Message }>(`/panel/api/conversations/${id}/messages`, { ...body, request_id: body.request_id ?? requestId() });
 export const retryMessage = (id: number, messageId: number) => command<{ ok: true; message: Message }>(`/panel/api/conversations/${id}/messages/${messageId}/retry`, { expected_status: 'failed', request_id: requestId() });
+export interface NotificationFilters { unread?: boolean; status?: string; source?: string; }
+export function listNotifications(filters: NotificationFilters = {}) { const params = new URLSearchParams(); if (filters.unread !== undefined) params.set('unread', String(filters.unread)); if (filters.status) params.set('status', filters.status); if (filters.source) params.set('source', filters.source); const query = params.toString(); return apiFetch<NotificationsResponse>(`/panel/api/notifications${query ? `?${query}` : ''}`); }
+export const markNotificationRead = (id: number) => postJson<{ notification: PanelNotification }>(`/panel/api/notifications/${id}/read`);
+export const createChatThread = () => postJson<InternalChatResponse>('/panel/api/chat/threads', {});
+export const sendChatMessage = (id: number, content: string) => postJson<{ message: InternalChatMessage }> (`/panel/api/chat/threads/${id}/messages`, { content });
+export const getChatThread = (id: number) => apiFetch<InternalChatResponse>(`/panel/api/chat/threads/${id}`);
+export function getAdvancedDashboard(): Promise<AdvancedDashboardData> {
+  const end = new Date();
+  const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const params = new URLSearchParams({ start: start.toISOString(), end: end.toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, metric: 'cases', bucket: 'day' });
+  const base = params.toString();
+  return Promise.all([
+    apiFetch<Pick<AdvancedDashboardData, 'period' | 'metrics'>>(`/panel/api/dashboard/summary?${base}`),
+    apiFetch<Pick<AdvancedDashboardData, 'trend'>>(`/panel/api/dashboard/trend?${base}`),
+  ]).then(([summary, trend]) => ({ ...summary, ...trend }));
+}

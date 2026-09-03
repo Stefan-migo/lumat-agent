@@ -5,6 +5,7 @@ import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { PageFrame } from "../../stories/pages/_shared/PageFrame";
 import { StateMessage } from "../../stories/pages/_shared/StateMessage";
 import { StatCard } from "../../stories/pages/_shared/StatCard";
+import { AdvancedDashboard } from "./AdvancedDashboard";
 
 export interface DashboardProps {
   data?: Kpis | null;

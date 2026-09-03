@@ -43,6 +43,7 @@ from app.models import (
     MessageType,
 )
 from app.services.customers import get_or_create_customer, normalize_phone_e164
+from app.services.events import publish_event
 from app.services.notify import acknowledge_emergency_if_ack, send_pending_emergency_reminders
 from app.services.send import deliver_outbound
 
@@ -262,6 +263,12 @@ def persist_message(session, normalized: NormalizedMessage) -> bool:
     )
     result = session.execute(stmt)
     session.flush()
+    if result.rowcount == 1:
+        publish_event(
+            session, event_type="message.received", entity_type="message", entity_id=str(normalized.wamid),
+            payload={"phone": normalized.phone_e164, "phone_e164": normalized.phone_e164, "text": normalized.text, "msg_type": normalized.msg_type.value},
+            dedupe_key=f"message:{normalized.wamid}:received",
+        )
     return result.rowcount == 1
 
 

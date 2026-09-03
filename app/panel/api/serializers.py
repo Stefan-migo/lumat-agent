@@ -25,6 +25,9 @@ from app.models import (
     AppointmentCalendarSync,
     NotificationTemplateVersion,
     NotificationOperation,
+    PanelNotification,
+    InternalChatMessage,
+    InternalChatThread,
 )
 
 
@@ -198,6 +201,31 @@ def to_notification_dict(operation: NotificationOperation) -> dict:
         "last_attempt_at": _iso(operation.last_attempt_at),
         "delivered_at": _iso(operation.delivered_at),
         "action": "retry" if operation.status in {"retryable", "failed", "permanently_failed"} else None,
+    }
+
+
+def to_panel_notification_dict(notification: PanelNotification) -> dict:
+    operation = notification.operation if hasattr(notification, "operation") else None
+    return {
+        "id": notification.id, "user_id": notification.user_id, "operation_id": notification.operation_id,
+        "title": notification.title, "content": notification.content, "source": notification.source,
+        "channel": operation.channel if operation else None, "status": notification.status,
+        "read_at": _iso(notification.read_at), "created_at": _iso(notification.created_at),
+    }
+
+
+def to_internal_chat_thread_dict(thread: InternalChatThread) -> dict:
+    return {
+        "id": thread.id, "user_id": thread.user_id, "status": thread.status,
+        "created_at": _iso(thread.created_at), "updated_at": _iso(thread.updated_at),
+    }
+
+
+def to_internal_chat_message_dict(message: InternalChatMessage) -> dict:
+    return {
+        "id": message.id, "thread_id": message.thread_id, "author": message.author,
+        "content": message.content, "status": message.status, "error": message.error,
+        "created_at": _iso(message.created_at), "completed_at": _iso(message.completed_at),
     }
 
 

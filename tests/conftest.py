@@ -67,7 +67,7 @@ ADMIN_DB_URL = os.environ.get(
 # Tables truncated before each test (full set — shared test DB).
 TRUNCATE_TABLES = (
     "notification_attempts, notification_operations, appointment_history, appointments, technician_availability, settings, audit_log, kb_chunks, kb_documents, conversation_events, "
-    "cases, messages, conversations, customer_notes, users, customers"
+    "cases, internal_chat_messages, internal_chat_threads, messages, conversations, customer_notes, users, customers"
 )
 
 

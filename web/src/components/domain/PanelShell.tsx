@@ -4,7 +4,7 @@ import type { User } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 
-export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "kb" | "settings";
+export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "chat" | "kb" | "settings";
 
 /** Shell icon wrapper: 20px, stroke-based, `currentColor`, aria-hidden.
  *  Inline SVGs on purpose — no icon library (ponytail: no new deps). */
@@ -97,6 +97,7 @@ const NAVIGATION: Record<PanelView, NavigationItem> = {
   clients: { label: "Clientes", icon: UsersIcon },
   conversations: { label: "Conversaciones", icon: ChatIcon },
   cases: { label: "Casos", icon: BriefcaseIcon },
+  chat: { label: "Asistente Lumat", icon: ChatIcon, adminOnly: true },
   kb: { label: "Base de conocimientos", icon: BookIcon, adminOnly: true },
   settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
 };
