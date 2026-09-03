@@ -1,7 +1,7 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { apiFetch } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { ClientFichaResponse, Memory, MemoriesResponse } from "../../types";
+import type { Appointment, ClientFichaResponse, Memory, MemoriesResponse, VisitHistoryEvent } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
 import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
@@ -23,6 +23,7 @@ export interface ClientFichaProps {
   data?: ClientFichaResponse;
   memories?: Memory[];
   isSaving?: boolean;
+  onRetryCalendar?: (appointmentId: number) => void;
 }
 
 type FichaState = AsyncDataState | "fatal-error";
@@ -36,7 +37,8 @@ function stateMessage(state: FichaState) {
   return null;
 }
 
-export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, isSaving = false }: ClientFichaProps) {
+export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, isSaving = false, onRetryCalendar }: ClientFichaProps) {
+  const [retryingCalendarId, setRetryingCalendarId] = useState<number | null>(null);
   const fetchFicha = useCallback(async () => {
     if (customerId === undefined) throw new Error("customer id is required");
     const [ficha, memoryResponse] = await Promise.all([
@@ -55,6 +57,17 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   }
 
   const { customer, history } = data;
+  const appointments = history.appointments ?? [];
+  const visitHistory = history.visit_history ?? [];
+  const retryCalendar = async (appointmentId: number) => {
+    setRetryingCalendarId(appointmentId);
+    try {
+      await apiFetch(`/panel/api/appointments/${appointmentId}/calendar/sync`, { method: "POST" });
+      onRetryCalendar?.(appointmentId);
+    } finally {
+      setRetryingCalendarId(null);
+    }
+  };
   const conversationColumns: Column<(typeof history.conversations)[number]>[] = [
     { key: "id", header: "#", render: (row) => `#${row.id}` },
     { key: "state", header: "Estado", render: (row) => conversationLabel(row.state) },
@@ -100,6 +113,18 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
       </Card>
 
       <Card title="Historial">
+        <h3>Visitas</h3>
+        <p>Historial de visitas ordenado cronológicamente</p>
+        {appointments.length ? appointments.map((appointment: Appointment) => (
+          <div key={appointment.id}>
+            <p>{appointment.service} · {appointment.starts_at.slice(0, 16)} · {appointment.status === "cancelled" ? "Cancelada" : "Agendada"}</p>
+            {appointment.calendar_error ? (
+              <StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`} />
+            ) : null}
+            {appointment.calendar_error ? <button type="button" disabled={retryingCalendarId === appointment.id} onClick={() => void retryCalendar(appointment.id)}>Reintentar calendario</button> : null}
+          </div>
+        )) : <EmptyState title="No hay visitas" />}
+        {visitHistory.length ? <ol aria-label="Ciclo de vida de visitas">{visitHistory.map((event: VisitHistoryEvent) => <li key={event.id}>{event.created_at?.slice(0, 16) ?? "—"} · {event.action === "cancelled" ? "Cancelada" : "Agendada"} · {event.actor}</li>)}</ol> : null}
         <h3>Conversaciones</h3>
         <DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row) => String(row.id)} />
         <h3>Casos</h3>

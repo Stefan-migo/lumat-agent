@@ -11,6 +11,8 @@ const ficha: ClientFichaResponse = {
     conversations: [],
     cases: [],
     messages: [],
+    appointments: [],
+    visit_history: [],
   },
   notes: [],
   memo: memories.find((memory) => memory.topic_key === "customer_memo")?.contenido ?? "",

@@ -29,6 +29,7 @@ from app.models import (
     CustomerNote,
     CustomerState,
     Message,
+    Appointment,
 )
 from app.services.audit import record_audit
 
@@ -243,6 +244,27 @@ def customer_history(session: Session, customer_id: int) -> dict:
         .where(Conversation.customer_id == customer_id)
         .order_by(Message.created_at, Message.id)
     ).all()
+    appointments = session.scalars(
+        select(Appointment)
+        .where(Appointment.customer_id == customer_id)
+        .order_by(Appointment.starts_at, Appointment.id)
+    ).all()
+    visit_history = [
+        {
+            "id": event.id,
+            "appointment_id": event.appointment_id,
+            "actor": event.actor,
+            "action": event.action,
+            "from_status": event.from_status.value if event.from_status else None,
+            "to_status": event.to_status.value,
+            "status": event.to_status.value,
+            "details": event.details,
+            "created_at": event.created_at,
+        }
+        for appointment in appointments
+        for event in appointment.history
+    ]
+    visit_history.sort(key=lambda event: (event["created_at"], event["id"]))
     return {
         "conversations": [
             {
@@ -277,6 +299,23 @@ def customer_history(session: Session, customer_id: int) -> dict:
             }
             for m in messages
         ],
+        "appointments": [
+            {
+                "id": a.id,
+                "case_id": a.case_id,
+                "service": a.service,
+                "technician_id": a.technician_id,
+                "local_start": a.local_start,
+                "timezone": a.timezone,
+                "starts_at": a.starts_at,
+                "ends_at": a.ends_at,
+                "status": a.status.value,
+                "calendar_status": a.calendar_sync.status if a.calendar_sync else None,
+                "calendar_error": a.calendar_sync.error if a.calendar_sync else None,
+            }
+            for a in appointments
+        ],
+        "visit_history": visit_history,
     }
 
 

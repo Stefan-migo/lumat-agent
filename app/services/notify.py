@@ -44,6 +44,7 @@ from app.services.settings import (
     DEFAULT_SMTP_HOST,
     get_setting,
 )
+from app.services.notifications import create_operation, process_operation
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +183,26 @@ def send_emergency_notification(
     unit_cost = meta_message_cost(session)
 
     try:
-        wamid = send_template(owner_whatsapp, [customer.phone_e164, location, context])
+        operation = create_operation(
+            session,
+            recipient=owner_whatsapp,
+            channel="whatsapp",
+            content=f"{customer.phone_e164}|{location}|{context}",
+            source_entity="case",
+            source_id=str(case.id),
+            idempotency_key=f"case:{case.id}:emergency",
+        )
+        wamid_holder = {}
+        delivered = process_operation(
+            session,
+            operation.id,
+            deliver=lambda recipient, content: wamid_holder.setdefault(
+                "wamid", send_template(recipient, content.split("|"))
+            ),
+        )
+        if not delivered:
+            raise RuntimeError(operation.error or "emergency notification failed")
+        wamid = wamid_holder["wamid"]
     except Exception as exc:  # Meta error / template not approved -> email
         logger.warning(
             "emergency WhatsApp notification failed (email fallback): %s", exc
