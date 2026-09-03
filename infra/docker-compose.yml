@@ -76,6 +76,19 @@ services:
       # password is unset). Values live in infra/.env, never in the repo (SH-2).
       PANEL_ADMIN_USERNAME: ${PANEL_ADMIN_USERNAME:-admin}
       PANEL_ADMIN_PASSWORD: ${PANEL_ADMIN_PASSWORD:-}
+      # Chat LLM (D3 multi-provider): consumed at use time by llm.openai_client();
+      # SMTP for notification email fallback. Optional at boot — the API starts
+      # even when unset and fails fast only when the active provider is used.
+      CHAT_PROVIDER: ${CHAT_PROVIDER:-deepseek}
+      CHAT_MODEL: ${CHAT_MODEL:-deepseek-chat}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TO: ${SMTP_TO:-}
     depends_on:
       db:
         condition: service_healthy
