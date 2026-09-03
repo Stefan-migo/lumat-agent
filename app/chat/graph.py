@@ -44,6 +44,8 @@ the greeting/menu into the safety protocol (EM-2 full flow interrupt).
 
 from __future__ import annotations
 
+import logging
+
 from langgraph.graph import END, START, StateGraph
 from sqlalchemy.orm import Session
 
@@ -62,11 +64,19 @@ from app.chat.state import ConversationState
 from app.chat.subgraphs.research_triage import build_research_triage_subgraph
 from app.models import InternalChatThread, Message, MessageDirection, MessageStatus, MessageType
 from app.services.memory import persist_memory_session
+from app.services import llm
 
 __all__ = ["build_graph", "run_conversation"]
 
 
 PRIVILEGED_INTERNAL_ACTIONS = ("delete", "drop", "grant access", "reveal password", "send money")
+INTERNAL_SYSTEM_PROMPT = (
+    "You are Lumat's internal operations assistant for an owner or admin. "
+    "Answer operational questions concisely using only the user's message. "
+    "You have no tools, customer data, or ability to perform actions; never "
+    "claim that you executed a change or accessed privileged information."
+)
+logger = logging.getLogger(__name__)
 
 
 def run_internal_conversation(session: Session, thread: InternalChatThread, text: str) -> str:
@@ -79,7 +89,19 @@ def run_internal_conversation(session: Session, thread: InternalChatThread, text
     lowered = text.casefold()
     if any(action in lowered for action in PRIVILEGED_INTERNAL_ACTIONS):
         return "I cannot perform privileged actions from internal chat. Please use the approved operational workflow."
-    return f"I can help with that operational question: {text.strip()}"
+    try:
+        response = llm.openai_client().chat.completions.create(
+            model=llm.CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": INTERNAL_SYSTEM_PROMPT},
+                {"role": "user", "content": text.strip()},
+            ],
+            temperature=0,
+        )
+    except Exception:
+        logger.exception("Internal agent chat model call failed")
+        raise
+    return response.choices[0].message.content or "I could not produce an answer. Please try again."
 
 
 def _flow_start(state: ConversationState) -> str:
