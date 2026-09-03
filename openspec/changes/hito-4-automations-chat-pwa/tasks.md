@@ -23,8 +23,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Slice 2 — Rules and Fan-out (PR 2)
 
-- [ ] 2.1 **RED:** `tests/integration/test_h4_automations.py` covers AR-1/2/3: match/nonmatch, disabled audit, cooldown, retry reuse, and publisher rollback/no event.
-- [ ] 2.2 **GREEN:** Extend migration/models; implement `app/services/automation.py`; publish transactionally from `app/webhook/ingest.py`, `app/services/cases.py`, and `app/services/scheduling.py`.
+- [x] 2.1 **RED:** `tests/integration/test_h4_automations.py` covers AR-1/2/3: match/nonmatch, disabled audit, cooldown, retry reuse, and publisher rollback/no event.
+- [x] 2.2 **GREEN:** Extend migration/models; implement `app/services/automation.py`; publish transactionally from `app/webhook/ingest.py`, `app/services/cases.py`, and `app/services/scheduling.py`.
 
 ## Phase 3: Slice 3 — Notification Center and Push (PR 3)
 

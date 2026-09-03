@@ -51,6 +51,8 @@ EXPECTED_TABLES = {
     "notification_operations",
     "notification_attempts",
     "domain_events",
+    "automation_rules",
+    "automation_executions",
     "schema_migrations",
 }
 
@@ -113,6 +115,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("012_h3_calendar_templates",),
         ("013_h3_notifications",),
         ("014_h4_automations_chat_pwa",),
+        ("015_h4_automations",),
     ]
 
 
