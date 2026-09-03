@@ -38,8 +38,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 5: Slice 5 — Dashboards (PR 5)
 
-- [ ] 5.1 **RED:** `tests/functional/test_h4_dashboard.py` and Vitest cover AD-1/2: timezone metrics, invalid bounded period, zero buckets, matching drill-down.
-- [ ] 5.2 **GREEN:** Implement `app/services/dashboard.py`, summary/trend/drill-down routers/serializers, and `AdvancedDashboard.tsx` integrated with `Dashboard.tsx`.
+- [x] 5.1 **RED:** `tests/functional/test_h4_dashboard.py` and Vitest cover AD-1/2: timezone metrics, invalid bounded period, zero buckets, matching drill-down.
+- [x] 5.2 **GREEN:** Implement `app/services/dashboard.py`, summary/trend/drill-down routers/serializers, and `AdvancedDashboard.tsx` integrated with `Dashboard.tsx`.
 
 ## Phase 6: Slice 6 — PWA Shell (PR 6)
 

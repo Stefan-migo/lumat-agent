@@ -21,6 +21,7 @@ from app.panel.api.routes import (
     kb,
     settings,
     chat,
+    advanced_dashboard,
 )
 
 # Per-domain sub-routers are included as they land, batch by batch.
@@ -38,3 +39,4 @@ api_router.include_router(cases.router)
 api_router.include_router(kb.router)
 api_router.include_router(settings.router)
 api_router.include_router(chat.router)
+api_router.include_router(advanced_dashboard.router)

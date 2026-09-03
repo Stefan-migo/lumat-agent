@@ -89,6 +89,21 @@ export interface Kpis {
   window_start: string;
 }
 
+export interface DashboardPeriod { start: string; end: string; timezone: string; }
+export interface DashboardTrendBucket { start: string; count: number; }
+export interface DashboardMetrics {
+  contacts: number;
+  cases: number;
+  appointments: number;
+  notification_health: Record<string, number>;
+  automation_outcomes: Record<string, number>;
+}
+export interface AdvancedDashboardData {
+  period: DashboardPeriod;
+  metrics: DashboardMetrics;
+  trend: DashboardTrendBucket[];
+}
+
 export interface Conversation {
   id: number;
   customer_id: number;
