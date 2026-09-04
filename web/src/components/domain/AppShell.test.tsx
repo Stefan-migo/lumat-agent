@@ -17,7 +17,7 @@ function sidebar(container: HTMLElement) {
 describe('AppShell (T6.4)', () => {
   it('shows the authenticated user (username + role) and the app name', () => {
     const { container } = render(<AppShell user={admin} />);
-    expect(sidebar(container).getByLabelText('Lumat, panel operativo').querySelector('.panel-shell__brand-image')).toHaveAttribute('src', '/panel/brand/lumat-logo.png');
+    expect(sidebar(container).getByLabelText('Lumat, panel operativo').querySelector('.panel-shell__brand-image')).toHaveAttribute('src', '/panel/app/brand/lumat-logo.png');
     expect(sidebar(container).getByText('ana')).toBeInTheDocument();
     expect(sidebar(container).getByText('Administrador')).toBeInTheDocument();
   });

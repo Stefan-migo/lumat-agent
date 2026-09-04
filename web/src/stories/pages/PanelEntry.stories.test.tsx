@@ -43,17 +43,17 @@ describe("Panel entry layout", () => {
     const { container } = render(<PanelShell user={{ username: "ana", role: "admin" }}>{dashboard}</PanelShell>);
     const sidebar = container.querySelector(".panel-shell__sidebar") as HTMLElement;
 
-    expect(sidebar.querySelector(".panel-shell__brand-image")).toHaveAttribute("src", "/panel/brand/lumat-logo.png");
+    expect(sidebar.querySelector(".panel-shell__brand-image")).toHaveAttribute("src", "/panel/app/brand/lumat-logo.png");
     expect(sidebar.querySelector(".panel-shell__brand-image")).toHaveAttribute("alt", "Lumat");
 
     await user.click(container.querySelector<HTMLButtonElement>(".panel-shell__collapse-button")!);
-    expect(sidebar.querySelector(".panel-shell__brand-mark")).toHaveAttribute("src", "/panel/brand/lumat-mark.png");
+    expect(sidebar.querySelector(".panel-shell__brand-mark")).toHaveAttribute("src", "/panel/app/brand/lumat-mark.png");
     expect(sidebar.querySelector(".panel-shell__brand-mark")).toHaveAttribute("alt", "");
     expect(sidebar.querySelector(".panel-shell__brand")).toHaveAttribute("aria-label", "Lumat, panel operativo");
 
     await user.click(screen.getByRole("button", { name: "Menú" }));
     const drawer = screen.getByRole("dialog", { name: "Navegación" });
-    expect(within(drawer).getByAltText("Lumat")).toHaveAttribute("src", "/panel/brand/lumat-logo.png");
+    expect(within(drawer).getByAltText("Lumat")).toHaveAttribute("src", "/panel/app/brand/lumat-logo.png");
   });
 
   it("resets the document margin and gives the shell the full viewport height", () => {

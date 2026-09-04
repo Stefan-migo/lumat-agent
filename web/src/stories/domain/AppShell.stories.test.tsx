@@ -31,7 +31,7 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
     const brands = screen.getAllByLabelText(/lumat, panel operativo/i);
     expect(brands.length).toBeGreaterThan(0);
     const brand = brands[0];
-    expect(brand.querySelector('.panel-shell__brand-image')).toHaveAttribute('src', '/panel/brand/lumat-logo.png');
+    expect(brand.querySelector('.panel-shell__brand-image')).toHaveAttribute('src', '/panel/app/brand/lumat-logo.png');
     // The "Design system · v1.0" tag is gone in this iteration.
     expect(within(brand).queryByText(/design system\s+·\s+v1\.0/i)).toBeNull();
   });
