@@ -1,6 +1,6 @@
 # LumatAgent — Server Hardening Checklist (SH-1..SH-3)
 
-> Change: `hito-1-setup-whatsapp` · Task: **T6.4** (doc) / **T7.1** (execution) · Date: 2026-08-15
+> Change: `panel-spa-delivery` · Tasks: **3.1–3.2** · Date: 2026-09-04
 > Target: Hostinger KVM 2 — Ubuntu LTS (São Paulo), Docker + Compose
 > Hosts: `agente.lumat.cl` (bot API) · `panel.lumat.cl` (admin panel)
 > How to use: run every block as `root` (sections 1–4) or `deploy` (5–9) on the
@@ -235,6 +235,20 @@ Sun 2026-08-16 03:21:19 UTC  4h 3min -  -  lumat-certbot-renew.timer  lumat-cert
 ---
 
 ## 5. Container hardening — read-only fs, no privileged (SH-2)
+
+The production nginx container remains `read_only: true`, with only its
+existing tmpfs paths writable. The `/panel/app/` SPA is now embedded in the
+custom nginx image at `/usr/share/nginx/html/panel/app/`; its bytes are
+immutable for the deployed tag. The image is built with
+`docker build -f infra/nginx/Dockerfile .` and validated with `nginx -t`
+before compose restart.
+
+Previously, production bind-mounted the host nginx configuration into
+`/etc/nginx/conf.d`. The production override now builds and owns both nginx
+server configurations, snippets, and the SPA in one image, so the old config
+bind mount must not be restored: it would hide the image files and reintroduce
+deployment drift. Certbot volumes remain read-only mounts for TLS material and
+the webroot.
 
 `infra/docker-compose.prod.yml` (created in T7.1) MUST declare for the api
 service (the WhatsApp-facing surface):
