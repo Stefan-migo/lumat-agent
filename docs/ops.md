@@ -1,6 +1,6 @@
 # LumatAgent — Operations & Meta Onboarding Checklist
 
-> Change: `hito-1-setup-whatsapp` · Task: **T2.1** (ops, NOT code) · Updated: 2026-08-12
+> Change: `panel-spa-delivery` · Tasks: **3.1–3.2** · Updated: 2026-09-04
 > Status: **BLOCKED on client action** — waiting on Meta credentials from Lumat (Max).
 > This file is the T2.1 deliverable (onboarding notes structure). The full ops
 > runbook (deploy/rollback, backup restore drill, monitoring triage, go-live
@@ -85,6 +85,10 @@ cd /opt/lumat
 sudo -u deploy git fetch origin main
 sudo -u deploy git checkout <tag>            # e.g. v1.4.0
 sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml config >/tmp/lumat-compose-config.yml
+sudo -u deploy docker build -f infra/nginx/Dockerfile -t lumat-nginx:prod .
+sudo -u deploy docker run --rm lumat-nginx:prod nginx -t
+sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
   -f infra/docker-compose.prod.yml up -d --build
 # Migrate runs automatically inside the api container before uvicorn (compose
 # command chain); re-run it explicitly to prove/refresh idempotence:
@@ -111,6 +115,34 @@ sudo -u deploy /opt/lumat/infra/monitor.sh && echo monitor=OK
 
 Expected: `/health` returns 200; the verify handshake echoes the challenge;
 monitor exits 0. If any smoke fails → roll back (§2.2).
+
+### 2.1.2 Panel SPA release smoke checklist
+
+Run this checklist against `https://panel.lumat.cl` after the tagged compose
+deploy. Browser checks are authenticated with the normal panel account; do not
+put credentials or session cookies in the repository or shell history.
+
+- [ ] Open `https://panel.lumat.cl/panel/app/`; submit valid credentials and
+  confirm the authenticated shell loads under `/panel/app/`.
+- [ ] Open a client-side deep link directly below `/panel/app/` and confirm it
+  returns the SPA shell rather than a 404.
+- [ ] In browser DevTools Network, confirm the shell, manifest, worker, brand
+  icons, and at least one hashed `/panel/app/assets/` file return `200`.
+- [ ] Confirm the browser offers PWA installation over HTTPS; install it and
+  load the previously visited `/panel/app/` shell once with the network
+  disabled. The offline shell must load, while authenticated `/panel/api/`
+  requests must not be served from the service-worker cache.
+- [ ] From the authenticated panel, export clients or cases and confirm
+  `/panel/export/clients.csv` or `/panel/export/cases.csv` returns a CSV
+  download, not `index.html`.
+- [ ] Run the agent checks and record green results:
+  `curl -fsS https://agente.lumat.cl/health`, the webhook verification probe
+  from §2.1, and `sudo -u deploy /opt/lumat/infra/monitor.sh` (exit 0).
+
+Record the tag, timestamp, operator, and any failed check in the go-live record
+(§2.9). These panel checks require the VPS DNS, TLS certificates, and valid
+panel credentials; they are not reproducible in the local repository test
+environment.
 
 ### 2.1.1 T7.2 deploy rehearsal record — rehearsal complete, VPS pending
 
@@ -189,10 +221,19 @@ record.
 ```bash
 cd /opt/lumat
 sudo -u deploy git checkout <previous-tag>   # the last known-good tag
-sudo -u deploy docker compose -f infra/docker-compose.yml \
+sudo -u deploy docker build -f infra/nginx/Dockerfile -t lumat-nginx:prod .
+sudo -u deploy docker run --rm lumat-nginx:prod nginx -t
+sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
   -f infra/docker-compose.prod.yml up -d --build
-sudo -u deploy bash db/migrate.sh            # safe: migrations are idempotent, never destructive
+sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml exec -T api sh -c \
+  'DATABASE_URL=postgresql://lumat:$POSTGRES_PASSWORD@db:5432/lumat db/migrate.sh'
 ```
+
+The checkout and rebuild restore the nginx image, embedded SPA bytes, routing,
+and legacy `/panel/` proxy behavior from the known-good tag. This is a code and
+static-artifact rollback only: never roll back database data or an already-run
+schema migration. Re-run §2.1.2 and record the incident in §10.
 
 **Rule: never roll back a schema migration that already ran** (the app
 migrates forward only). If the bad release included a migration, roll back
