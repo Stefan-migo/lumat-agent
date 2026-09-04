@@ -6,7 +6,7 @@ import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
 import { Input } from "../primitives/Input";
 import { Textarea } from "../primitives/Textarea";
-import { DataTable, tabularNum, type Column } from "../../stories/pages/_shared/DataTable";
+import { DataTable, tabularNum, type Column } from "../shared/DataTable";
 import { PageFrame } from "../../stories/pages/_shared/PageFrame";
 import { StateMessage } from "../../stories/pages/_shared/StateMessage";
 

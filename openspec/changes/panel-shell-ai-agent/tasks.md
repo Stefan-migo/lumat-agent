@@ -21,8 +21,8 @@ Chain strategy: stacked-to-main
 - [x] 1.2 **GREEN** Objective: add typed History routes. **Files:** `panelRoutes.ts`, `AppShell.tsx`. **Done:** views/drill-downs/history pass. **Verify:** `npm test -- panelRoutes.test.ts AppShell.test.tsx`.
 
 ## Phase 2: Slice 2
-- [ ] 2.1 **RED** Objective: test component imports/story compatibility. **Files:** boundary/story tests. **Done:** scan fails. **Verify:** `npm test -- helpers.test.tsx`.
-- [ ] 2.2 **GREEN** Objective: promote four core helpers and wrappers. **Files:** `web/src/components/shared/`, `web/src/stories/pages/_shared/`. **Done:** contracts pass. **Verify:** `npm test -- helpers.test.tsx`.
+- [x] 2.1 **RED** Objective: test component imports/story compatibility. **Files:** boundary/story tests. **Done:** scan fails. **Verify:** `npm test -- helpers.test.tsx`.
+- [x] 2.2 **GREEN** Objective: promote four core helpers and wrappers. **Files:** `web/src/components/shared/`, `web/src/stories/pages/_shared/`. **Done:** contracts pass. **Verify:** `npm test -- helpers.test.tsx`.
 
 ## Phase 3: Slice 3
 - [ ] 3.1 **RED** Objective: detect remaining story dependencies. **Files:** boundary/helper tests. **Done:** detection fails. **Verify:** `npm test -- PageFrame.test.tsx StateMessage.test.tsx`.
