@@ -3,10 +3,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // Lumat Panel SPA — dev proxy + test hookup (PDW-SRV-1).
-// base '/panel/' so the prod bundle lives under /panel/ (nginx dual-host, D5).
+// The production bundle is bounded to /panel/app/; API URLs remain same-origin.
 export default defineConfig({
   plugins: [react()],
-  base: '/panel/',
+  base: '/panel/app/',
   server: {
     port: 5173,
     proxy: {
