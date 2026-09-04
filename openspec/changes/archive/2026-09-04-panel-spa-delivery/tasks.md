@@ -38,8 +38,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Documentation / Verification
 
-- [ ] 3.1 **Objective:** make operations reproducible. **Files:** `docs/ops.md`, `docs/hardening.md`. **Done:** tagged build/deploy, nginx/read-only probes, panel login/deep-link/asset/PWA/offline/export/agent smoke evidence, manual limits, and previous-tag rollback are documented. **Verify:** review commands against the documented VPS smoke procedure.
-- [ ] 3.2 **Objective:** prove the release. **Files:** test/build outputs only. **Done:** all invariants and existing suites pass; VPS-only checks are explicitly unexecuted when DNS/credentials are unavailable. **Verify:** `cd web && npm ci && npm run build && npm test`; `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml config`; `docker run --rm <nginx-image> nginx -t`; `pytest tests/`.
+- [x] 3.1 **Objective:** make operations reproducible. **Files:** `docs/ops.md`, `docs/hardening.md`. **Done:** tagged build/deploy, nginx/read-only probes, panel login/deep-link/asset/PWA/offline/export/agent smoke evidence, manual limits, and previous-tag rollback are documented. **Verify:** review commands against the documented VPS smoke procedure.
+- [x] 3.2 **Objective:** prove the release. **Files:** test/build outputs only. **Done:** all invariants and existing suites pass; VPS-only checks are explicitly unexecuted when DNS/credentials are unavailable. **Verify:** `cd web && npm ci && npm run build && npm test`; `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml config`; `docker run --rm <nginx-image> nginx -t`; `pytest tests/`.
 
 ## Graph Nodes Consulted
 

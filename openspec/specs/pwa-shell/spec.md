@@ -8,35 +8,34 @@ Make the React/Vite panel installable while preserving authenticated online beha
 
 ### Requirement: PWA-1 — Installable Shell
 
-The web app MUST provide a valid manifest, application icons, and service-worker registration sufficient for supported browsers to offer installation over HTTPS.
+The web app MUST provide valid metadata, unchanged application icons, and service-worker registration sufficient for supported browsers to offer installation over HTTPS. The manifest MUST use `/panel/app/` for its start URL and scope.
+(Previously: The manifest and installation paths were not bound to the production `/panel/app/` subtree.)
 
-#### Scenario: Manifest is valid
-
-- GIVEN a supported browser loads the panel over HTTPS
-- WHEN it reads the application metadata
-- THEN the manifest and required icons identify an installable application
+#### Scenario: App is installable at its production path
+- GIVEN a supported browser loads `https://panel.lumat.cl/panel/app/`
+- WHEN it reads the manifest
+- THEN `start_url` and `scope` are within `/panel/app/` and the existing icons resolve
 
 #### Scenario: Insecure development
-
 - GIVEN the panel is served without HTTPS in local development
 - WHEN the app starts
 - THEN it remains usable and does not falsely promise installation or push support
 
 ### Requirement: PWA-2 — Safe Cache Policy
 
-The service worker MUST cache only the versioned application shell and public static assets, MUST NOT cache authenticated API responses, and MUST allow a new shell version to replace an old one.
+The service worker MUST cache only the versioned `/panel/app/` shell and public static assets, MUST NOT cache authenticated API responses, and MUST allow a new shell version to replace an old one.
+(Previously: Cache and worker URL rules were rooted at `/panel/`.)
 
-#### Scenario: API data is never cached
-
-- GIVEN an authenticated API request
-- WHEN the service worker handles it
-- THEN the response is fetched according to the online session and is not stored in the shell cache
+#### Scenario: Shell works offline without API leakage
+- GIVEN the shell was previously loaded and the browser is offline
+- WHEN a user opens a cached `/panel/app/` shell route
+- THEN the shell loads from cache, while `/panel/api/` responses are never cached
 
 #### Scenario: Asset update
-
 - GIVEN a new application shell version is deployed
 - WHEN the service worker updates
 - THEN stale shell assets are replaced without retaining old authenticated data
+
 
 ### Requirement: PWA-3 — Permission Fallback
 
