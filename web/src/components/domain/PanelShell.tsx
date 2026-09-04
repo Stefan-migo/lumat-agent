@@ -50,15 +50,6 @@ function ChatIcon() {
   return icon(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />);
 }
 
-function BellIcon() {
-  return icon(
-    <>
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </>,
-  );
-}
-
 function BriefcaseIcon() {
   return icon(
     <>
@@ -86,11 +77,22 @@ function GearIcon() {
   );
 }
 
-function CollapseIcon() {
+function PanelToggleIcon({ collapsed }: { collapsed: boolean }) {
   return icon(
     <>
-      <path d="m11 17-5-5 5-5" />
-      <path d="m18 17-5-5 5-5" />
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18" />
+      {collapsed ? <path d="m13 9 3 3-3 3" /> : <path d="m16 9-3 3 3 3" />}
+    </>,
+  );
+}
+
+function LogoutIcon() {
+  return icon(
+    <>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="m16 17 5-5-5-5" />
+      <path d="M21 12H9" />
     </>,
   );
 }
@@ -106,12 +108,14 @@ const NAVIGATION: Record<PanelView, NavigationItem> = {
   clients: { label: "Clientes", icon: UsersIcon },
   conversations: { label: "Conversaciones", icon: ChatIcon },
   cases: { label: "Casos", icon: BriefcaseIcon },
-  notifications: { label: "Notificaciones", icon: BellIcon },
-  push: { label: "Notificaciones push", icon: BellIcon },
+  notifications: { label: "Notificaciones", icon: ChatIcon },
+  push: { label: "Notificaciones push", icon: ChatIcon },
   chat: { label: "Asistente Lumat", icon: ChatIcon, adminOnly: true },
   kb: { label: "Base de conocimientos", icon: BookIcon, adminOnly: true },
   settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
 };
+
+const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
 
 const PANEL_SHELL_STYLES = `
   .panel-shell,
@@ -120,7 +124,7 @@ const PANEL_SHELL_STYLES = `
   }
 
   .panel-shell {
-    min-height: 100vh;
+    min-height: 100dvh;
     background: var(--corp-bg);
     color: var(--corp-fg);
     font-family: var(--font-sans);
@@ -159,7 +163,8 @@ const PANEL_SHELL_STYLES = `
 
   .panel-shell__brand {
     display: grid;
-    gap: var(--space-1);
+    justify-items: center;
+    align-items: center;
     padding: var(--space-5) var(--space-4);
     border-left: var(--space-1) solid var(--brand-lime);
     background: var(--corp-primary);
@@ -167,30 +172,27 @@ const PANEL_SHELL_STYLES = `
   }
 
   .panel-shell__mobile-brand {
-    display: grid;
-    gap: 0;
+    display: flex;
+    align-items: center;
+    min-width: 0;
   }
 
-  .panel-shell__brand-name {
-    font-size: var(--text-lg);
-    font-weight: var(--weight-bold);
-    line-height: var(--leading-tight);
-    letter-spacing: -0.02em;
+  .panel-shell__brand-image,
+  .panel-shell__brand-mark {
+    display: block;
+    width: 100%;
+    object-fit: contain;
+    object-position: center;
   }
 
-  .panel-shell__brand-context {
-    color: var(--brand-aqua);
-    font-size: var(--text-xs);
-    font-weight: var(--weight-medium);
-    line-height: var(--leading-snug);
+  .panel-shell__brand-image {
+    max-width: var(--brand-logo-max-width);
+    max-height: var(--brand-logo-max-height);
   }
 
-  .panel-shell__mobile-brand .panel-shell__brand-name {
-    color: var(--corp-primary);
-  }
-
-  .panel-shell__mobile-brand .panel-shell__brand-context {
-    color: var(--corp-accent);
+  .panel-shell__brand-mark {
+    max-width: var(--brand-mark-size);
+    max-height: var(--brand-mark-size);
   }
 
   .panel-shell__sidebar {
@@ -253,6 +255,20 @@ const PANEL_SHELL_STYLES = `
     color: var(--brand-aqua);
   }
 
+  .panel-shell__sidebar .panel-shell__logout {
+    border-color: color-mix(in srgb, var(--corp-primary-fg) 35%, transparent);
+    color: var(--corp-primary-fg);
+  }
+
+  .panel-shell__sidebar .panel-shell__logout:hover {
+    background: var(--primary-700);
+    border-color: var(--corp-primary-fg);
+  }
+
+  .panel-shell__sidebar .panel-shell__logout:focus-visible {
+    outline-color: var(--brand-lime);
+  }
+
   .panel-shell__navigation {
     min-width: 0;
     padding: var(--space-4) var(--space-3);
@@ -296,9 +312,7 @@ const PANEL_SHELL_STYLES = `
 
   .panel-shell__nav-label {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   .panel-shell__navigation-button:hover {
@@ -311,10 +325,8 @@ const PANEL_SHELL_STYLES = `
     color: var(--corp-primary);
   }
 
-  /* Desktop sidebar collapse toggle: small ghost square icon button
-   * (WAI-ARIA disclosure pattern — text equivalent lives in aria-label).
-   * Bug 1: the shared 44px min-height (calc(space-8 + space-3)) is escaped by
-   * an explicit 2.25rem while the 2.5rem box keeps a >=40px hit target. */
+  /* Desktop sidebar toggle: the control lives beside the content title so it
+   * remains visible without competing with the brand or navigation. */
   .panel-shell__collapse-button {
     display: flex;
     align-items: center;
@@ -322,14 +334,16 @@ const PANEL_SHELL_STYLES = `
     width: 2.5rem;
     height: 2.5rem;
     min-height: 2.25rem;
-    margin: 0 var(--space-3) var(--space-3);
+    margin: 0;
     padding: 0;
-    background: transparent;
-    color: var(--corp-primary-fg);
+    border-color: var(--corp-border);
+    background: var(--corp-surface);
+    color: var(--corp-primary);
   }
 
   .panel-shell__collapse-button:hover {
-    background: var(--primary-700);
+    border-color: var(--border-strong);
+    background: var(--primary-100);
   }
 
   .panel-shell__navigation-button:focus-visible,
@@ -350,7 +364,7 @@ const PANEL_SHELL_STYLES = `
 
   .panel-shell__user {
     display: grid;
-    grid-template-columns: var(--space-8) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);
     align-items: center;
     margin-top: auto;
@@ -363,6 +377,14 @@ const PANEL_SHELL_STYLES = `
     display: grid;
     min-width: 0;
     gap: var(--space-1);
+  }
+
+  .panel-shell__user-identity {
+    display: grid;
+    grid-template-columns: var(--space-8) minmax(0, 1fr);
+    gap: var(--space-2);
+    align-items: center;
+    min-width: 0;
   }
 
   .panel-shell__username {
@@ -378,11 +400,44 @@ const PANEL_SHELL_STYLES = `
     font-size: var(--text-xs);
   }
 
+  .panel-shell__logout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: calc(var(--space-8) + var(--space-3));
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--corp-border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    cursor: pointer;
+    transition: background-color var(--duration-base) var(--ease-out), border-color var(--duration-base) var(--ease-out);
+  }
+
+  .panel-shell__logout:hover {
+    background: var(--corp-surface-hover);
+    border-color: var(--border-strong);
+  }
+
+  .panel-shell__logout:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .panel-shell__logout svg {
+    flex: none;
+  }
+
   .panel-shell__content-area {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
     min-width: 0;
-    min-height: 0;
+    min-height: 100dvh;
   }
 
   .panel-shell__header-row {
@@ -401,7 +456,9 @@ const PANEL_SHELL_STYLES = `
     min-width: 0;
     align-items: center;
     padding: var(--space-4) var(--space-6);
+    gap: var(--space-3);
     color: var(--corp-fg);
+    max-width: 78rem;
   }
 
   .panel-shell__header-badge {
@@ -419,9 +476,17 @@ const PANEL_SHELL_STYLES = `
     color: var(--corp-fg);
   }
 
+  .panel-shell__header .panel-shell__collapse-button {
+    display: none;
+    flex: none;
+  }
+
   .panel-shell__content {
     min-width: 0;
     padding: var(--space-4);
+    width: 100%;
+    max-width: 82rem;
+    margin: 0 auto;
   }
 
   .panel-shell__content:focus {
@@ -481,7 +546,7 @@ const PANEL_SHELL_STYLES = `
   @media (min-width: 64rem) {
     .panel-shell {
       display: grid;
-      grid-template-columns: calc(var(--space-8) * 6) minmax(0, 1fr);
+      grid-template-columns: calc(var(--space-8) * 7.5) minmax(0, 1fr);
     }
 
     .panel-shell__mobile-bar,
@@ -504,14 +569,23 @@ const PANEL_SHELL_STYLES = `
       padding: var(--space-6);
     }
 
-    /* Collapsed (icon-only) sidebar: narrow column, centered marks. */
+    .panel-shell__header .panel-shell__collapse-button {
+      display: flex;
+    }
+
+    /* Collapsed (icon-only) sidebar: narrow column, centered marks and
+     * consistent touch targets. */
     .panel-shell--collapsed {
-      grid-template-columns: calc(var(--space-8) * 3) minmax(0, 1fr);
+      grid-template-columns: calc(var(--space-8) * 2) minmax(0, 1fr);
     }
 
     .panel-shell--collapsed .panel-shell__brand {
       justify-items: center;
       padding: var(--space-5) var(--space-2);
+    }
+
+    .panel-shell--collapsed .panel-shell__brand-mark {
+      width: var(--brand-mark-size);
     }
 
     .panel-shell--collapsed .panel-shell__navigation {
@@ -520,21 +594,41 @@ const PANEL_SHELL_STYLES = `
 
     .panel-shell--collapsed .panel-shell__navigation-button {
       justify-content: center;
+      width: calc(var(--space-8) + var(--space-2));
+      min-width: calc(var(--space-8) + var(--space-2));
+      margin-inline: auto;
       padding: var(--space-2);
-    }
-
-    .panel-shell--collapsed .panel-shell__collapse-button {
-      align-self: center;
-      margin-bottom: var(--space-3);
-    }
-
-    .panel-shell--collapsed .panel-shell__collapse-button svg {
-      transform: rotate(180deg);
     }
 
     .panel-shell--collapsed .panel-shell__user {
       grid-template-columns: 1fr;
       justify-items: center;
+      padding: var(--space-3) var(--space-2) var(--space-4);
+    }
+
+    .panel-shell--collapsed .panel-shell__user-identity {
+      grid-template-columns: 1fr;
+      justify-items: center;
+    }
+
+    .panel-shell--collapsed .panel-shell__user-copy {
+      display: none;
+    }
+
+    .panel-shell--collapsed .panel-shell__logout-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .panel-shell--collapsed .panel-shell__logout {
+      width: calc(var(--space-8) + var(--space-2));
+      min-width: calc(var(--space-8) + var(--space-2));
+      padding: var(--space-2);
     }
   }
 
@@ -561,9 +655,16 @@ export interface PanelShellProps {
 
 function Brand({ mobile = false, compact = false }: { mobile?: boolean; compact?: boolean }) {
   return (
-    <div className={mobile ? "panel-shell__mobile-brand" : "panel-shell__brand"} aria-label="Lumat, panel operativo">
-      <span className="panel-shell__brand-name">{compact ? "L" : "Lumat"}</span>
-      {compact ? null : <span className="panel-shell__brand-context">Panel operativo</span>}
+    <div
+      className={mobile ? "panel-shell__mobile-brand" : "panel-shell__brand"}
+      role="img"
+      aria-label="Lumat, panel operativo"
+    >
+      {compact ? (
+        <img className="panel-shell__brand-mark" src={`${BRAND_ASSET_BASE}/lumat-mark.png`} alt="" aria-hidden="true" />
+      ) : (
+        <img className="panel-shell__brand-image" src={`${BRAND_ASSET_BASE}/lumat-logo.png`} alt="Lumat" />
+      )}
     </div>
   );
 }
@@ -576,14 +677,27 @@ function UserContext({ user, compact = false, onLogout }: { user: User; compact?
       aria-label={compact ? `${user.username} — ${role}` : undefined}
       title={compact ? `${user.username} — ${role}` : undefined}
     >
-      <Avatar name={user.username} className="panel-shell__user-avatar" />
-      {compact ? null : (
-        <span className="panel-shell__user-copy">
-          <span className="panel-shell__username">{user.username}</span>
-          <span className="panel-shell__role">{role}</span>
-          {onLogout ? <button type="button" onClick={() => void onLogout()}>Cerrar sesión</button> : null}
-        </span>
-      )}
+      <span className="panel-shell__user-identity">
+        <Avatar name={user.username} className="panel-shell__user-avatar" />
+        {compact ? null : (
+          <span className="panel-shell__user-copy">
+            <span className="panel-shell__username">{user.username}</span>
+            <span className="panel-shell__role">{role}</span>
+          </span>
+        )}
+      </span>
+      {onLogout ? (
+        <button
+          type="button"
+          className="panel-shell__logout"
+          aria-label="Cerrar sesión"
+          title="Cerrar sesión"
+          onClick={() => void onLogout()}
+        >
+          <LogoutIcon />
+          <span className="panel-shell__logout-label">Cerrar sesión</span>
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -687,17 +801,6 @@ export function PanelShell({
       <aside id="panel-shell-sidebar" className="panel-shell__sidebar" aria-label="Panel de navegación">
         <div className="panel-shell__sidebar-inner">
           <Brand compact={collapsed} />
-          <button
-            type="button"
-            className="panel-shell__collapse-button"
-            aria-expanded={!collapsed}
-            aria-controls="panel-shell-sidebar"
-            aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
-            title={collapsed ? "Expandir menú" : "Colapsar menú"}
-            onClick={() => setCollapsed((value) => !value)}
-          >
-            <CollapseIcon />
-          </button>
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} collapsed={collapsed} />
           <UserContext user={user} compact={collapsed} onLogout={onLogout} />
         </div>
@@ -749,6 +852,17 @@ export function PanelShell({
       <div className="panel-shell__content-area">
         <div className="panel-shell__header-row">
           <header className="panel-shell__header" aria-label="Encabezado de la vista">
+            <button
+              type="button"
+              className="panel-shell__collapse-button"
+              aria-expanded={!collapsed}
+              aria-controls="panel-shell-sidebar"
+              aria-label={collapsed ? "Expandir panel lateral" : "Colapsar panel lateral"}
+              title={collapsed ? "Expandir panel lateral" : "Colapsar panel lateral"}
+              onClick={() => setCollapsed((value) => !value)}
+            >
+              <PanelToggleIcon collapsed={collapsed} />
+            </button>
             <h2 className="panel-shell__header-title">{NAVIGATION[currentView].label}</h2>
           </header>
           {statusBadge ? (

@@ -35,8 +35,8 @@ function stubMePending() {
   vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
 }
 
-// PanelShell renders three "Lumat" brand nodes (desktop sidebar, mobile bar,
-// closed drawer), so app-name/username assertions are scoped to the sidebar.
+// PanelShell renders three brand nodes (desktop sidebar, mobile bar, closed
+// drawer), so app-name/username assertions are scoped to the sidebar.
 function sidebar(container: HTMLElement) {
   return within(container.querySelector('.panel-shell__sidebar') as HTMLElement);
 }
@@ -52,7 +52,7 @@ describe('App /me auth gate (T6.4)', () => {
     stubMeOk();
     const { container } = render(<App />);
     await waitFor(() =>
-      expect(sidebar(container).getByText('Lumat')).toBeInTheDocument(),
+      expect(container.querySelector('.panel-shell__sidebar .panel-shell__brand-image')).toBeInTheDocument(),
     );
     expect(sidebar(container).getByText('ana')).toBeInTheDocument();
   });
@@ -83,7 +83,7 @@ describe('App /me auth gate (T6.4)', () => {
     );
     await user.click(screen.getByRole('button', { name: /reintentar|retry/i }));
 
-    await waitFor(() => expect(sidebar(container).getByText('Lumat')).toBeInTheDocument());
+    await waitFor(() => expect(container.querySelector('.panel-shell__sidebar .panel-shell__brand-image')).toBeInTheDocument());
     expect(sidebar(container).getByText('vero')).toBeInTheDocument();
   });
 

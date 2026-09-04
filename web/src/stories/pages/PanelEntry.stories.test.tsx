@@ -1,12 +1,71 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { DashboardOverview } from "./Dashboard.stories";
 import { PanelShell } from "../../components/domain/PanelShell";
 
 const dashboard = <DashboardOverview />;
+const panelShellRaw = readFileSync(
+  join(process.cwd(), "src", "components", "domain", "PanelShell.tsx"),
+  "utf8",
+);
 
 describe("Panel entry layout", () => {
+  it("keeps logout visible and accessible in expanded and collapsed account blocks", async () => {
+    const onLogout = vi.fn();
+    const user = userEvent.setup();
+    const { container } = render(
+      <PanelShell user={{ username: "ana", role: "admin" }} onLogout={onLogout}>
+        {dashboard}
+      </PanelShell>,
+    );
+
+    const sidebar = container.querySelector(".panel-shell__sidebar") as HTMLElement;
+    const logout = sidebar.querySelector<HTMLButtonElement>(".panel-shell__logout")!;
+    expect(logout).toHaveAccessibleName("Cerrar sesión");
+    expect(logout).toHaveAttribute("title", "Cerrar sesión");
+    await user.click(logout);
+    expect(onLogout).toHaveBeenCalledOnce();
+
+    const toggle = container.querySelector<HTMLButtonElement>(".panel-shell__collapse-button")!;
+    expect(toggle).toHaveAttribute("aria-label", "Colapsar panel lateral");
+    expect(toggle).toHaveAttribute("title", "Colapsar panel lateral");
+    await user.click(toggle);
+    const compactLogout = sidebar.querySelector<HTMLButtonElement>(".panel-shell__logout")!;
+    expect(compactLogout).toHaveAccessibleName("Cerrar sesión");
+    expect(compactLogout).toHaveAttribute("aria-label", "Cerrar sesión");
+  });
+
+  it("renders the confirmed logo assets for expanded, collapsed, and drawer brands", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<PanelShell user={{ username: "ana", role: "admin" }}>{dashboard}</PanelShell>);
+    const sidebar = container.querySelector(".panel-shell__sidebar") as HTMLElement;
+
+    expect(sidebar.querySelector(".panel-shell__brand-image")).toHaveAttribute("src", "/panel/brand/lumat-logo.png");
+    expect(sidebar.querySelector(".panel-shell__brand-image")).toHaveAttribute("alt", "Lumat");
+
+    await user.click(container.querySelector<HTMLButtonElement>(".panel-shell__collapse-button")!);
+    expect(sidebar.querySelector(".panel-shell__brand-mark")).toHaveAttribute("src", "/panel/brand/lumat-mark.png");
+    expect(sidebar.querySelector(".panel-shell__brand-mark")).toHaveAttribute("alt", "");
+    expect(sidebar.querySelector(".panel-shell__brand")).toHaveAttribute("aria-label", "Lumat, panel operativo");
+
+    await user.click(screen.getByRole("button", { name: "Menú" }));
+    const drawer = screen.getByRole("dialog", { name: "Navegación" });
+    expect(within(drawer).getByAltText("Lumat")).toHaveAttribute("src", "/panel/brand/lumat-logo.png");
+  });
+
+  it("resets the document margin and gives the shell the full viewport height", () => {
+    const tokens = readFileSync(join(process.cwd(), "src", "tokens", "tokens.css"), "utf8");
+    const { container } = render(<PanelShell user={{ username: "ana", role: "admin" }}>{dashboard}</PanelShell>);
+
+    expect(tokens).toMatch(/body\s*\{[^}]*margin:\s*0/);
+    expect(container.querySelector(".panel-shell")).toBeInTheDocument();
+    expect(panelShellRaw).toMatch(/\.panel-shell\s*\{[^}]*min-height:\s*100dvh/);
+    expect(panelShellRaw).toMatch(/\.panel-shell__content-area\s*\{[^}]*min-height:\s*100dvh/);
+  });
+
   it("composes the dashboard main landmark with the complete admin information architecture", () => {
     render(
       <PanelShell user={{ username: "ana", role: "admin" }} drawerInitiallyOpen>

@@ -17,7 +17,7 @@ function sidebar(container: HTMLElement) {
 describe('AppShell (T6.4)', () => {
   it('shows the authenticated user (username + role) and the app name', () => {
     const { container } = render(<AppShell user={admin} />);
-    expect(sidebar(container).getByText('Lumat')).toBeInTheDocument();
+    expect(sidebar(container).getByLabelText('Lumat, panel operativo').querySelector('.panel-shell__brand-image')).toHaveAttribute('src', '/panel/brand/lumat-logo.png');
     expect(sidebar(container).getByText('ana')).toBeInTheDocument();
     expect(sidebar(container).getByText('Administrador')).toBeInTheDocument();
   });
@@ -143,8 +143,7 @@ describe('AppShell — desktop sidebar collapse (icon-only ⇄ full nav)', () =>
       container.querySelectorAll<HTMLButtonElement>('.panel-shell__sidebar .panel-shell__navigation-button'),
     ).find((button) => button.getAttribute('aria-label') === label);
 
-  /** Collapse toggle: icon-only button (no visible label); find it by class
-   *  since role queries exclude the `display: none` sidebar in jsdom. */
+  /** Desktop collapse toggle lives beside the content heading. */
   const collapseButton = (container: HTMLElement) =>
     container.querySelector<HTMLButtonElement>('.panel-shell__collapse-button')!;
 
@@ -153,23 +152,24 @@ describe('AppShell — desktop sidebar collapse (icon-only ⇄ full nav)', () =>
     const { container } = render(<AppShell user={admin} />);
     const s = sidebar(container);
 
-    // Expanded by default: full labels; the toggle is icon-only, named via aria-label.
+    // Expanded by default: full labels and a named panel control.
     const toggle = collapseButton(container);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(toggle).toHaveAttribute('aria-label', 'Colapsar menú');
+    expect(toggle).toHaveAttribute('aria-label', 'Colapsar panel lateral');
+    expect(toggle.querySelector('svg')).toHaveAttribute('stroke', 'currentColor');
     expect(s.getByText('Clientes')).toBeInTheDocument();
     expect(s.getByText('Conversaciones')).toBeInTheDocument();
 
     await user.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(toggle).toHaveAttribute('aria-label', 'Expandir menú');
+    expect(toggle).toHaveAttribute('aria-label', 'Expandir panel lateral');
     // Labels are gone, but the icon-only buttons keep an accessible name.
     expect(s.queryByText('Clientes')).not.toBeInTheDocument();
     expect(s.queryByText('Conversaciones')).not.toBeInTheDocument();
     expect(navButtonByLabel(container, 'Clientes')).toHaveAttribute('aria-label', 'Clientes');
     expect(navButtonByLabel(container, 'Clientes')).toHaveAttribute('title', 'Clientes');
-    // The compact brand mark keeps its label; the user block its tooltip text.
-    expect(s.getByText('L')).toBeInTheDocument();
+    // The compact brand mark is decorative; the Brand container keeps its accessible name.
+    expect(s.getByLabelText('Lumat, panel operativo')).toBeInTheDocument();
     expect(s.getByLabelText('ana — Administrador')).toBeInTheDocument();
 
     await user.click(toggle);
@@ -191,5 +191,11 @@ describe('AppShell — desktop sidebar collapse (icon-only ⇄ full nav)', () =>
     expect(screen.getByRole('heading', { name: 'Clientes', level: 1 })).toBeInTheDocument();
     expect(panelBtn).not.toHaveAttribute('aria-current', 'page');
     expect(clientesBtn).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps long navigation labels available instead of clipping them', () => {
+    const { container } = render(<AppShell user={admin} />);
+    const label = within(container.querySelector('.panel-shell__sidebar') as HTMLElement).getByText('Base de conocimientos');
+    expect(label).toHaveTextContent('Base de conocimientos');
   });
 });
