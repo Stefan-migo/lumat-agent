@@ -12,8 +12,8 @@
 #   - api + db: on the `internal` network (internal: true — no gateway, no
 #     egress for db); api also stays on `default` so it can reach
 #     OpenAI/Meta outbound and nginx.
-#   - nginx: containerized reverse proxy (infra/nginx/*.conf, read-only
-#     mount) terminating TLS on 80/443, hardened the same way as api.
+#   - nginx: immutable custom image containing infra/nginx/*.conf and the SPA,
+#     terminating TLS on 80/443 and hardened the same way as api.
 #   - certbot: one-shot webroot issuance + renewal into the certbot-certs
 #     volume nginx reads (profile "certbot" — see infra/certbot/README.md).
 #   - restart: unless-stopped + healthchecks inherited/added on every service.
@@ -63,7 +63,10 @@ services:
       - internal
 
   nginx:
-    image: nginx:1.27-alpine
+    build:
+      context: ..
+      dockerfile: infra/nginx/Dockerfile
+    image: lumat-nginx:prod
     restart: unless-stopped
     # Master runs as root ONLY to read certbot's 0600 root-owned privkey and
     # chown the cache dirs; workers drop to the nginx user (default config).
@@ -87,7 +90,6 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx:/etc/nginx/conf.d:ro
       - certbot-webroot:/var/www/certbot:ro
       - certbot-certs:/etc/letsencrypt:ro
     depends_on:
