@@ -24,10 +24,10 @@ rules:
   apply:
     - Follow existing code patterns
     tdd: true
-    test_command: "pytest tests/"
+    test_command: "uv run pytest tests/"
   verify:
-    test_command: ""
-    build_command: ""
+    test_command: "uv run pytest tests/"
+    build_command: "cd web && npm run build"
     coverage_threshold: 0
   archive:
     - Warn before merging destructive deltas
