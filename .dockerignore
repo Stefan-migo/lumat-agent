@@ -1,5 +1,5 @@
-# T7.1 — keep the production build context lean. The image ships only
-# app/ + db/ (see Dockerfile); everything else is build noise or secret
+# T7.1 — keep the production build context lean. The image ships app/ + db/
+# and the nginx delivery sources (see infra/nginx/Dockerfile); everything else is build noise or secret
 # material (SH-2: no secrets, no dev state in the image).
 .venv/
 .git/
@@ -14,5 +14,7 @@ node_modules/
 tests/
 docs/
 openspec/
-infra/
+infra/*
+!infra/nginx/
+!infra/nginx/**
 .env*
