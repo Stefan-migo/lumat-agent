@@ -1,110 +1,224 @@
-# Solicitud de requerimientos y accesos — LumatAgent
+# Guía para configurar WhatsApp de LumatAgent
 
-> **Para:** Lumat (Maximiliano) · **De:** Desarrollo LumatAgent · **Fecha:** 12 de agosto de 2026
-> **Contexto:** Contrato firmado y Pago 1 recibido. Kickoff oficial: lunes 17 de agosto de 2026.
+> **Para:** Maxi, Lumat
+> **De:** Desarrollo LumatAgent
 
----
+Esta guía explica qué debe preparar Lumat en Meta y qué información debe compartir
+con Stefan/desarrollo. La configuración se hace primero con el número de prueba de
+Meta. El número real se incorpora después de confirmar sus condiciones y el impacto
+de desvincularlo de WhatsApp.
 
-## 1. Propósito de este documento
+## Antes de comenzar
 
-Para construir el asistente de WhatsApp de Lumat necesitamos que la empresa prepare
-y nos entregue ciertos accesos, datos y contenidos. Cuanto antes lleguen, antes
-terminamos: **el trámite de Meta es el único paso que depende de ustedes y que puede
-tardar semanas**.
+- Use una cuenta personal de Facebook con permisos administrativos sobre el negocio.
+- Tenga disponibles los datos legales de Lumat y un teléfono o correo al que pueda
+  acceder durante las verificaciones de Meta.
+- No comparta contraseñas, tokens ni secretos por WhatsApp o correo electrónico. Para
+  esos datos, acuerde con Stefan un canal seguro de transferencia o una sesión guiada.
+- Si ya existe una estructura de negocio en Meta, no cree otra sin confirmarlo:
+  primero hay que identificar el Meta Business Portfolio existente.
 
-Este documento lista exactamente qué necesitamos, para qué, y para cuándo.
+## Recorrido rápido
 
----
+1. Crear o confirmar el Meta Business Portfolio de Lumat.
+2. Crear o confirmar el acceso a Meta for Developers.
+3. Crear una aplicación de tipo **Business**.
+4. Agregar y configurar **WhatsApp Business Platform**.
+5. Validar el webhook y el envío con el número de prueba.
+6. Preparar el número real dedicado, si se confirma que puede migrarse.
+7. Generar los identificadores y credenciales, y entregarlos por un canal seguro.
+8. Configurar el webhook junto con Stefan/desarrollo.
 
-## 2. Lo que necesitamos de Lumat
+## 1. Crear o confirmar el Meta Business Portfolio
 
-### 2.1. Meta (WhatsApp Business API) — URGENTE
+Meta puede mostrar el nombre conocido **Business Manager** para esta estructura. La
+denominación actual es **Meta Business Portfolio**.
 
-Este es el bloque crítico. Sin esto, el bot no puede conectarse a WhatsApp.
+1. Ingrese a [Meta Business](https://business.facebook.com/).
+2. Revise si Lumat ya tiene un portfolio de negocio. Busque el nombre legal y la
+   información comercial de la empresa.
+3. Si ya existe, confirme quién tiene acceso de administrador y continúe con ese
+   portfolio.
+4. Si no existe, cree uno para Lumat desde el panel de configuración del negocio.
+5. Complete la información solicitada por Meta y, cuando el panel lo permita, inicie
+   la verificación del negocio.
 
-| # | Requerimiento | ¿Para qué? | ¿Cómo lo hacemos? |
-|---|---|---|---|
-| 1 | **Cuenta de negocio en Meta** (Facebook Business Manager) creada o verificada | Es el contenedor de todo lo demás | Ustedes crean la cuenta o nos dan acceso como desarrollador a la existente |
-| 2 | **Número de teléfono dedicado** para el bot | Es el número desde el que responderá LumatAgent en WhatsApp | Idealmente un número nuevo que no use otra persona |
-| 3 | **Suscripción a WhatsApp Business API** (WhatsApp Business Platform) | Habilita el envío/recepción de mensajes programáticos | Se vincula a la cuenta de negocio; el costo de uso es por mensaje según tarifas de Meta |
-| 4 | **Verificación de negocio** de Meta | Requisito para usar la API de forma estable y mensajes de plantilla | Documentación de la empresa; los guiamos paso a paso |
-| 5 | **Token de acceso permanente** y PIN de 2 pasos | Credenciales que usa el servidor para hablar con WhatsApp | Ustedes lo generan, nosotros lo instalamos de forma segura en el servidor |
-| 6 | **Número de prueba** (test number) | Verificar el flujo completo antes de mover el número real | Se configura desde el panel de desarrollador de Meta |
-| 7 | **Dominio o subdominio** para el webhook (ej. `agente.lumat.cl`) | Meta necesita una URL HTTPS pública donde entregar los mensajes | Nosotros coordinamos el DNS; ustedes confirman el dominio |
-| 8 | **Aprobación de plantilla** `emergency_alert` | Enviar alertas de emergencia (gas, incendio, etc.) aunque el cliente no haya escrito primero | Nosotros la redactamos y la enviamos; Meta la aprueba |
+La verificación puede ser necesaria para la operación estable y para determinadas
+funciones, como las plantillas. El estado debe revisarse en el panel de Meta; no
+asumimos una fecha de aprobación.
 
-> ⚠️ **Por qué es urgente:** la revisión de la verificación de negocio y la aprobación
-> de plantillas puede tomar días o semanas en Meta. Nuestro primer hito intermedio
-> (servidor + webhook vivo) está fijado para el **24 de agosto** y depende de este bloque.
+## 2. Crear la cuenta de Meta for Developers
 
-### 2.2. Base de conocimiento del negocio
+1. Ingrese a [Meta for Developers](https://developers.facebook.com/).
+2. Inicie sesión con la cuenta que administra el portfolio de Lumat.
+3. Si Meta solicita registrarse como desarrollador, complete el registro y acepte los
+   términos que correspondan.
+4. Confirme que la cuenta de desarrollador puede trabajar con el portfolio de Lumat.
 
-Para que el bot responda con información real y confiable (no inventada), necesitamos
-los documentos con el conocimiento de Lumat:
+Si Maxi ya tiene una cuenta de desarrollador, no es necesario crear otra. Solo hay que
+confirmar que tiene acceso al portfolio correcto.
 
-| # | Contenido | Formato preferido |
+## 3. Crear la aplicación de tipo Business
+
+1. En Meta for Developers, abra **My Apps** y seleccione **Create App**.
+2. Elija el tipo de aplicación **Business**.
+3. Asigne un nombre reconocible para LumatAgent y vincule la aplicación al portfolio
+   de Lumat cuando Meta lo solicite.
+4. Finalice la creación y abra el **App Dashboard**.
+5. Guarde para referencia el **App ID** y confirme que la aplicación quedó asociada al
+   portfolio correcto.
+
+No envíe todavía secretos ni tokens. En este punto solo necesitamos confirmar que la
+aplicación existe y que el acceso administrativo es correcto.
+
+## 4. Agregar WhatsApp Business Platform
+
+En el **App Dashboard** de la aplicación:
+
+1. Seleccione **Add Product**.
+2. Agregue **WhatsApp** y abra la sección de configuración o **API Setup**.
+3. Confirme o cree la **WhatsApp Business Account (WABA)** asociada al portfolio de
+   Lumat.
+4. Revise que la empresa, la WABA y la aplicación pertenezcan al mismo portfolio.
+5. Identifique el **Phone Number ID** que muestre Meta para el número configurado.
+
+La WABA es la cuenta de WhatsApp Business que contiene los números y la configuración
+de la plataforma. No la confunda con el número de teléfono ni con el App ID.
+
+## 5. Validar con el número de prueba de Meta
+
+El número de prueba que aparece en **WhatsApp > API Setup** pertenece a Meta. No es el
+número real de Lumat y no requiere migrar el número que usa actualmente el negocio.
+
+1. En **WhatsApp > API Setup**, seleccione el número de prueba que ofrece Meta.
+2. Agregue como destinatario de prueba el teléfono autorizado para las pruebas. Use
+   los límites que indique el panel.
+3. Envíe un mensaje de prueba desde ese teléfono y confirme que la aplicación puede
+   responder.
+4. Registre el **Phone Number ID** del número de prueba y manténgalo identificado como
+   `test`, separado del número real.
+5. Coordine con Stefan/desarrollo la prueba de recepción, respuesta y webhook.
+
+El número de prueba sirve para validar la integración inicial. No debe presentarse a
+los clientes como el número comercial de Lumat.
+
+## 6. Preparar el número real dedicado
+
+Antes de registrarlo, confirmen con Stefan que el número cumple estas condiciones:
+
+- Es un número dedicado para LumatAgent y Lumat puede controlar la SIM o el método de
+  verificación por SMS o llamada.
+- Está disponible para recibir el código de registro y definir el PIN de verificación
+  en dos pasos.
+- No se encuentra activo en la aplicación de WhatsApp ni en WhatsApp Business.
+- Lumat acepta que el registro en WhatsApp Business Platform puede requerir
+  desvincular o migrar la cuenta existente.
+
+Un número usado en WhatsApp o WhatsApp Business puede no poder registrarse directamente
+en la Cloud API. **No borren ni migren la cuenta antes de confirmarlo con
+Stefan/desarrollo.** Primero hay que revisar qué conversaciones, dispositivos,
+automatizaciones o usos actuales dependen de ese número y acordar el momento de la
+migración.
+
+Cuando se autorice el cambio:
+
+1. Confirme el número en formato internacional y su titularidad operativa.
+2. Coordine la desvinculación o migración de la cuenta existente.
+3. Registre el número real desde **WhatsApp > API Setup**.
+4. Complete la verificación por SMS o llamada y configure el PIN de dos pasos.
+5. Confirme que Meta muestra el número real dentro de la WABA correcta.
+6. Entregue a desarrollo el nuevo `META_PHONE_NUMBER_ID`, nunca el del número de
+   prueba por error.
+
+## 7. Generar y entregar identificadores y credenciales
+
+### Datos que deben identificarse
+
+Para referencia y coordinación, registren en el panel de Meta:
+
+- **App ID** de la aplicación.
+- **Business ID** del Meta Business Portfolio.
+- **WABA ID** de la WhatsApp Business Account.
+- **Phone Number ID** del número que se vaya a usar en cada entorno.
+
+### Credenciales que debe recibir desarrollo
+
+El servidor utiliza estos nombres de variables, definidos también en
+`infra/.env.example`:
+
+| Variable | Qué representa | Cómo se obtiene o define |
 |---|---|---|
-| 1 | **Catálogo de servicios**: qué servicios ofrecen y descripción de cada uno | PDF, Word o texto |
-| 2 | **Tarifas y precios** vigentes (si no son públicos, nos indican qué responder y qué derivar) | PDF, Excel o texto |
-| 3 | **Cobertura geográfica**: comunas/zonas donde trabajan | texto |
-| 4 | **Garantías y condiciones** de los trabajos | PDF o texto |
-| 5 | **Procedimientos típicos**: cómo se toma un trabajo, plazos, qué se necesita del cliente | PDF o texto |
-| 6 | **Preguntas frecuentes** (si tienen o quieren que las redactemos juntos) | texto |
-| 7 | **Protocolos de emergencia**: qué hacer ante gas, incendio, fugas, etc. | texto (si tienen) |
+| `META_ACCESS_TOKEN` | Token de acceso de larga duración para enviar mensajes | Se genera desde la configuración de usuarios del sistema y permisos de la aplicación, siguiendo el flujo que muestre Meta |
+| `META_PHONE_NUMBER_ID` | Identificador del número conectado a la API | **WhatsApp > API Setup** |
+| `APP_SECRET` | Secreto de la aplicación para validar la firma del webhook | **App settings > Basic** |
+| `VERIFY_TOKEN` | Valor acordado para el handshake del webhook | Lo define Stefan/desarrollo y debe coincidir con el valor configurado en Meta |
 
-> Si no tienen estos documentos formalizados, no es problema: hacemos una sesión
-> de captura de conocimiento (una entrevista guiada) y nosotros redactamos la base.
-> Solo necesitamos que alguien con el conocimiento del negocio nos dedique 1–2 horas.
+El PIN de dos pasos sirve para el registro y la administración del número. No es una
+variable del servidor ni debe incluirse en un correo o mensaje. Si hace falta durante
+una operación guiada, introdúzcalo directamente en Meta o compártalo solo mediante el
+canal seguro acordado.
 
-### 2.3. Datos operativos
+Para generar el token, Stefan/desarrollo indicará el usuario del sistema y los permisos
+que correspondan al flujo de la aplicación. No invente permisos ni copie un token de
+otra aplicación.
 
-| Dato | Uso |
-|---|---|
-| Horarios de atención | El bot responde "estamos fuera de horario" o deriva correctamente |
-| Contactos de emergencia (teléfonos) | Alerta de emergencia si el cliente no responde |
-| Nombre/identidad con la que responde el bot | Tono y presentación |
-| Persona encargada de revisar las derivaciones a humano | Quién recibe los avisos del panel |
+## 8. Configurar el webhook con Stefan/desarrollo
 
-### 2.4. Decisiones de marca y tono
+No es necesario que Maxi configure el servidor ni escriba código. La configuración se
+coordina en una sesión conjunta:
 
-- Nombre visible y presentación del asistente (ej. "Asistente Lumat").
-- Tono: formal / cercano / técnico.
-- Mensajes estándar que quieran que el bot use (saludo, despedida, fuera de horario).
-- (Opcional) Logo para el panel de administración.
+1. Desarrollo confirma el endpoint HTTPS público y el valor de `VERIFY_TOKEN`.
+2. En **WhatsApp > Configuration**, se registra la URL del callback y el token de
+   verificación.
+3. Se verifica el handshake y se suscribe la aplicación al campo `messages`.
+4. Desarrollo instala los secretos en el entorno del servidor, nunca en el repositorio.
+5. Se prueba la recepción de mensajes, la firma, la respuesta y los reintentos.
+6. Se deja constancia de si la prueba corresponde al número `test` o al número real.
 
----
+El runbook técnico de despliegue, secretos, validación y operación está en
+[`docs/ops.md`](ops.md). Esta guía no lo duplica.
 
-## 3. Qué NO necesitamos de ustedes
+## 9. Checklist de información para entregar
 
-- **No necesitan escribir código ni configurar servidores** — lo hacemos nosotros.
-- **No necesitan comprar licencias de software** adicionales.
-- **No necesitan conocimientos técnicos** — solo entregar accesos y datos.
-- Los costos de Meta (mensajes, verificación) se facturan según lo acordado en el contrato.
+### Meta y WhatsApp
 
----
+- [ ] Nombre legal del negocio y portfolio de Meta que se utilizará.
+- [ ] Nombre y correo de la cuenta administradora de Meta, compartidos solo para
+      confirmar permisos, no como contraseña.
+- [ ] Estado de la verificación del negocio.
+- [ ] App ID.
+- [ ] Business ID.
+- [ ] WABA ID.
+- [ ] Phone Number ID del número de prueba.
+- [ ] Phone Number ID del número real, cuando se apruebe su migración.
+- [ ] Confirmación explícita de que el número real está dedicado y puede desvincularse
+      de WhatsApp o WhatsApp Business, si corresponde.
+- [ ] `META_ACCESS_TOKEN`, `APP_SECRET` y `VERIFY_TOKEN`, entregados únicamente por el
+      canal seguro acordado con Stefan/desarrollo.
+- [ ] Estado de la verificación del número real y del PIN de dos pasos, sin enviar el
+      PIN por WhatsApp o correo.
+- [ ] Dominio o subdominio que Lumat autoriza para el webhook, si corresponde.
 
-## 4. Formato y plazos de entrega
+### Información del negocio
 
-| Bloque | Fecha deseada | Notas |
-|---|---|---|
-| 2.1 Meta (al menos ítems 1, 2, 6) | **Lo antes posible** — idealmente antes del 17 de agosto | Puede ser en paralelo con todo lo demás |
-| 2.2 Base de conocimiento | Antes del **24 de agosto** | Si falta, coordinamos la sesión de captura |
-| 2.3 Datos operativos | Antes del **31 de agosto** | |
-| 2.4 Decisiones de marca | Antes del **31 de agosto** | Se puede ajustar después sin problema |
+- [ ] Catálogo y descripción de servicios.
+- [ ] Tarifas y precios vigentes, o instrucciones sobre qué informar y qué derivar.
+- [ ] Comunas o zonas de cobertura.
+- [ ] Garantías y condiciones de los trabajos.
+- [ ] Procedimientos habituales, plazos y datos que debe solicitar el bot.
+- [ ] Preguntas frecuentes.
+- [ ] Protocolos para gas, incendio, fugas y otras emergencias.
+- [ ] Horarios de atención y contactos de emergencia.
+- [ ] Persona responsable de revisar las derivaciones a un humano.
+- [ ] Nombre, presentación y tono del asistente.
+- [ ] Mensajes estándar de saludo, despedida y fuera de horario.
+- [ ] Logo para el panel, si desean incorporarlo.
 
----
+Si algún documento todavía no existe, podemos realizar una sesión de captura de
+conocimiento con una persona que conozca la operación de Lumat.
 
-## 5. Próximo paso
+## Próximo paso
 
-Agendar 30 minutos en la semana del **17 de agosto** para:
-
-1. Guiarlos en la configuración de Meta (cuenta, verificación, token).
-2. Resolver dudas sobre los puntos de este documento.
-3. Agendar la sesión de captura de conocimiento si no hay documentos.
-
-Cualquier duda, respondemos por este mismo canal.
-
----
-
-*Documento entregado como parte del hito 1 del proyecto LumatAgent. Los accesos y datos
-solicitados se manejan de forma confidencial y se usan exclusivamente para el sistema.*
+Coordinar una sesión con Maxi y Stefan para confirmar el portfolio, revisar la
+aplicación y validar primero el número de prueba. El número real se agenda únicamente
+después de revisar la desvinculación o migración necesaria.
