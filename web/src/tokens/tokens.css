@@ -8,6 +8,19 @@
  * text #1a202c, danger #b71c1c, success #1b5e20, radii 6px/8px.
  */
 
+/* The SPA owns the viewport. Keep the browser's user-agent margin from
+ * creating a white frame around the shell, while leaving Storybook's own
+ * canvas layout untouched. */
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
 :root {
   /* Primary scale — seeded from brand #143c2c (HSL 156° 50% 16%) */
   --primary-50: #f0faf6;
@@ -123,6 +136,12 @@
   --brand-forest: #576f31;
   --brand-graphite: #656665;
   --info: #14788f;
+
+  /* Brand asset sizing — bounded so logo images stay aligned inside the
+   * 240px expanded and 64px collapsed sidebar columns. */
+  --brand-logo-max-width: 11rem;
+  --brand-logo-max-height: 4rem;
+  --brand-mark-size: 2.5rem;
 
   /* Corp catalog alias layer (DC-004 Corporate family) — slice-1.
    * Maps CortexDesign slots onto the frozen Lumat tokens above. Every slot

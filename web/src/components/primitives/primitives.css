@@ -425,7 +425,7 @@
 }
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(var(--space-8), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-4);
 }
 .kpi {
@@ -449,4 +449,39 @@
 .kpi__value {
   font-size: var(--text-2xl);
   font-variant-numeric: var(--corp-value); /* D3 / CST-ALIAS-5: tabular-nums */
+}
+
+/* Page composition: shared by the real panel and Storybook page stories. */
+.page-frame {
+  width: 100%;
+  max-width: 78rem;
+  margin: 0 auto;
+}
+.page-frame__content {
+  min-width: 0;
+}
+.page-frame__titlebar h1 {
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.02em;
+}
+.page-frame__titlebar header {
+  flex-wrap: wrap;
+}
+.page-frame__titlebar header > div:first-child {
+  min-width: min(100%, 16rem);
+}
+.page-frame__titlebar header > div:last-child {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 40rem) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+  .page-frame__titlebar header {
+    align-items: flex-start;
+  }
+  .page-frame__titlebar header > div:last-child {
+    width: 100%;
+  }
 }

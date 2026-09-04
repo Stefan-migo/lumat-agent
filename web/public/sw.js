@@ -1,13 +1,19 @@
 const CACHE_NAME = "lumat-shell-v1";
+const SHELL_URL = "/panel/app/";
 
 function isCacheableAsset(url, method = "GET") {
-  if (method !== "GET" || url.pathname === "/panel/api" || url.pathname.startsWith("/panel/api/")) return false;
-  return url.pathname.startsWith("/panel/assets/")
-    || url.pathname.startsWith("/panel/brand/")
-    || url.pathname === "/panel/manifest.webmanifest";
+  if (method !== "GET" || url.pathname === "/panel/api" || url.pathname.startsWith("/panel/api/") || url.pathname.endsWith(".html")) return false;
+  return url.pathname === SHELL_URL
+    || url.pathname.startsWith("/panel/app/assets/")
+    || url.pathname.startsWith("/panel/app/brand/")
+    || url.pathname === "/panel/app/manifest.webmanifest";
 }
 
-self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.add(SHELL_URL)).then(() => self.skipWaiting()),
+  );
+});
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(

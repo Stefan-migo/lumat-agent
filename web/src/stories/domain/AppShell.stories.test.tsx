@@ -25,15 +25,13 @@ const panelShellRaw = readFileSync(
  *  fill, no lime rule — so the page reads as content, not chrome (per the
  *  friendly dashboard reference; this is the post-pivot DS-V1-SHELL shape). */
 describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-SHELL)', () => {
-  it('renders the sidebar brand block with "Lumat" + "Panel operativo" and no tag', () => {
+  it('renders the sidebar brand image and accessible name with no tag', () => {
     render(<AppShell user={admin} />);
-    // Brand appears in the desktop sidebar AND in the off-screen drawer;
-    // assert at least one and verify the first one carries the lockup.
+    // Brand appears in the desktop sidebar AND in the off-screen drawer.
     const brands = screen.getAllByLabelText(/lumat, panel operativo/i);
     expect(brands.length).toBeGreaterThan(0);
     const brand = brands[0];
-    expect(within(brand).getByText('Lumat')).toBeInTheDocument();
-    expect(within(brand).getByText(/panel operativo/i)).toBeInTheDocument();
+    expect(brand.querySelector('.panel-shell__brand-image')).toHaveAttribute('src', '/panel/app/brand/lumat-logo.png');
     // The "Design system · v1.0" tag is gone in this iteration.
     expect(within(brand).queryByText(/design system\s+·\s+v1\.0/i)).toBeNull();
   });
@@ -82,9 +80,9 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
     );
   });
 
-  it('also renders the brand lockup for the operador shell', () => {
+  it('also renders the brand image for the operador shell', () => {
     render(<AppShell user={operador} />);
-    expect(screen.getAllByLabelText(/lumat, panel operativo/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByAltText('Lumat').length).toBeGreaterThan(0);
   });
 
   it('uses cream (#F1F1E8) as the v1 page bg', () => {
@@ -111,15 +109,12 @@ describe('AppShell — shell contract port + sidebar bug fixes (DS-SHELL-1..5)',
     );
   });
 
-  it('anchors the toggle in the sidebar rhythm expanded and collapsed (DS-SHELL-1)', () => {
-    // Expanded: flush to the nav left/right edges with the shared gap.
+  it('anchors the toggle beside the content heading (DS-SHELL-1)', () => {
+    // The control is no longer competing with the sidebar brand/navigation.
     expect(panelShellRaw).toMatch(
-      /\.panel-shell__collapse-button\s*\{[^}]*margin:\s*0\s+var\(--space-3\)\s+var\(--space-3\)/,
+      /\.panel-shell__header \.panel-shell__collapse-button\s*\{[^}]*display:\s*none/,
     );
-    // Collapsed: centered under the brand mark.
-    expect(panelShellRaw).toMatch(
-      /\.panel-shell--collapsed\s+\.panel-shell__collapse-button\s*\{[^}]*align-self:\s*center/,
-    );
+    expect(panelShellRaw).toMatch(/\.panel-shell__header \.panel-shell__collapse-button/);
   });
 
   it('contains sidebar hover paint via the min-width chain + overflow (DS-SHELL-2)', () => {
