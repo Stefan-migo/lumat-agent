@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { User } from '../../types';
 import type { PanelView } from './PanelShell';
 import { PanelShell } from './PanelShell';
+import { parsePanelPath, pathForRoute, pathForView, type PanelRoute } from './panelRoutes';
 import { Dashboard } from '../pages/Dashboard';
 import { ClientesList } from '../pages/ClientesList';
 import { ClientFicha } from '../pages/ClientFicha';
@@ -14,10 +15,8 @@ import { NotificationCenter } from '../pages/NotificationCenter';
 import { PushSettings } from '../pages/PushSettings';
 import { AgentChat } from '../pages/AgentChat';
 
-/** Top-level SPA views, switched via AppShell state (D7 — no router; `ponytail:`
- *  no URL shareability, upgrade path = react-router hash router when desired).
- *  Client ficha and conversation thread are drill-downs rendered from list
- *  views, not top-level nav, so they do not appear here. */
+/** Top-level SPA views. Client ficha and conversation thread are drill-downs
+ * rendered from list views, not top-level nav, so they do not appear here. */
 export type View = PanelView;
 
 export interface AppShellProps {
@@ -25,22 +24,47 @@ export interface AppShellProps {
   onLogout?: () => void | Promise<void>;
 }
 
-/** Application shell: PanelShell frame and D7 state-based page navigation. */
+/** Application shell: PanelShell frame and native History API navigation. */
 export function AppShell({ user, onLogout }: AppShellProps) {
-  const [view, setView] = useState<PanelView>('dashboard');
-  const [clientId, setClientId] = useState<number | null>(null);
-  const [conversationId, setConversationId] = useState<number | null>(null);
+  const [route, setRoute] = useState<PanelRoute>(() => parsePanelPath(window.location.pathname));
   const [conversationRefresh, setConversationRefresh] = useState(0);
 
+  useEffect(() => {
+    const parsed = parsePanelPath(window.location.pathname);
+    const canonicalPath = pathForRoute(parsed);
+    if (window.location.pathname !== canonicalPath) {
+      window.history.replaceState({}, '', canonicalPath);
+      setRoute(parsed);
+    }
+
+    const handlePopState = () => {
+      const nextRoute = parsePanelPath(window.location.pathname);
+      const nextPath = pathForRoute(nextRoute);
+      if (window.location.pathname !== nextPath) window.history.replaceState({}, '', nextPath);
+      setRoute(nextRoute);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const navigate = (nextView: PanelView) => {
-    setClientId(null);
-    setConversationId(null);
-    setView(nextView);
+    const nextRoute = { view: nextView } satisfies PanelRoute;
+    window.history.pushState({}, '', pathForView(nextView));
+    setRoute(nextRoute);
   };
 
+  const navigateToRoute = (nextRoute: PanelRoute) => {
+    window.history.pushState({}, '', pathForRoute(nextRoute));
+    setRoute(nextRoute);
+  };
+
+  const view = route.view;
+  const clientId = route.clientId ?? null;
+  const conversationId = route.conversationId ?? null;
+
   const page = view === 'dashboard' ? <Dashboard />
-    : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} /> : <ClientesList onOpenClient={setClientId} />
-     : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => setConversationId(null)} /> : <ConversationsList refreshKey={conversationRefresh} onOpenThread={setConversationId} />
+      : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
+      : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
      : view === 'cases' ? <CasesList />
      : view === 'notifications' ? <NotificationCenter />
      : view === 'push' ? <PushSettings />

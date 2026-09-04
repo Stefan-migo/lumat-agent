@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
@@ -6,6 +6,14 @@ import type { User } from '../../types';
 
 const admin: User = { username: 'ana', role: 'admin' };
 const operador: User = { username: 'vero', role: 'operador' };
+
+beforeEach(() => {
+  window.history.replaceState({}, '', '/panel/app/');
+});
+
+afterEach(() => {
+  window.history.replaceState({}, '', '/panel/app/');
+});
 
 /** Desktop sidebar landmark. In jsdom the `@media (min-width: 64rem)` rule is
  *  not applied, so the sidebar keeps its base `display: none` and role queries
@@ -43,7 +51,7 @@ describe('AppShell (T6.4)', () => {
   it('switches views on nav click and marks the active view', async () => {
     const user = userEvent.setup();
     const { container } = render(<AppShell user={operador} />);
-    expect(screen.getByRole('heading', { name: 'Panel', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Panel', level: 1 })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Menú' }));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
@@ -197,5 +205,45 @@ describe('AppShell — desktop sidebar collapse (icon-only ⇄ full nav)', () =>
     const { container } = render(<AppShell user={admin} />);
     const label = within(container.querySelector('.panel-shell__sidebar') as HTMLElement).getByText('Base de conocimientos');
     expect(label).toHaveTextContent('Base de conocimientos');
+  });
+});
+
+describe('AppShell — native History API routing', () => {
+  it('derives the initial view from the URL and updates clean paths on navigation', async () => {
+    window.history.replaceState({}, '', '/panel/app/clients');
+    const user = userEvent.setup();
+    const { container } = render(<AppShell user={operador} />);
+
+    expect(screen.getByRole('heading', { name: 'Clientes', level: 1 })).toBeInTheDocument();
+    expect(sidebar(container).getByText('Clientes').closest('button')).toHaveAttribute('aria-current', 'page');
+
+    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Conversaciones' }));
+    expect(window.location.pathname).toBe('/panel/app/conversations');
+    expect(screen.getByRole('heading', { name: 'Conversaciones', level: 1 })).toBeInTheDocument();
+  });
+
+  it('supports popstate navigation and falls back unknown paths without leaking listeners', async () => {
+    const user = userEvent.setup();
+    const addSpy = vi.spyOn(window, 'addEventListener');
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    const { unmount } = render(<AppShell user={operador} />);
+
+    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Clientes' }));
+    window.history.pushState({}, '', '/panel/app/conversations');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    expect(await screen.findByRole('heading', { name: 'Conversaciones', level: 1 })).toBeInTheDocument();
+
+    window.history.pushState({}, '', '/panel/app/not-a-view');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    expect(window.location.pathname).toBe('/panel/app/');
+    expect(await screen.findByRole('heading', { name: 'Panel', level: 1 })).toBeInTheDocument();
+
+    unmount();
+    expect(addSpy.mock.calls.some(([type]) => type === 'popstate')).toBe(true);
+    expect(removeSpy.mock.calls.some(([type]) => type === 'popstate')).toBe(true);
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
   });
 });
