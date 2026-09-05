@@ -37,8 +37,8 @@ Chain strategy: stacked-to-main
 - [x] 5.2 **GREEN** Objective: move base/layout rules. **Files:** `primitives.css`. **Done:** equivalent layout. **Verify:** `npm test -- AppShell.stories.test.tsx`.
 
 ## Phase 6: Slice 6
-- [ ] 6.1 **RED** Objective: lock nav, focus, collapse, drawer. **Files:** `PanelEntry.stories.test.tsx`. **Done:** regression fails. **Verify:** `npm test -- PanelEntry.stories.test.tsx`.
-- [ ] 6.2 **GREEN** Objective: migrate nav/drawer/focus rules. **Files:** `primitives.css`, `PanelShell.tsx`. **Done:** keyboard/responsive pass. **Verify:** `npm test -- PanelEntry.stories.test.tsx`.
+- [x] 6.1 **RED** Objective: lock nav, focus, collapse, drawer. **Files:** `PanelEntry.stories.test.tsx`. **Done:** regression fails. **Verify:** `npm test -- PanelEntry.stories.test.tsx`.
+- [x] 6.2 **GREEN** Objective: migrate nav/drawer/focus rules. **Files:** `primitives.css`, `PanelShell.tsx`. **Done:** keyboard/responsive pass. **Verify:** `npm test -- PanelEntry.stories.test.tsx`.
 
 ## Phase 7: Slice 7
 - [ ] 7.1 **RED** Objective: guard no injection/hex and reduced motion. **Files:** shell tests. **Done:** guards fail. **Verify:** `npm test -- AppShell.stories.test.tsx`.

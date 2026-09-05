@@ -66,6 +66,17 @@ describe("Panel entry layout", () => {
     expect(primitivesRaw).toMatch(/\.panel-shell__content-area\s*\{[^}]*min-height:\s*100dvh/);
   });
 
+  it("keeps navigation, drawer, focus, collapse, and motion rules in the token stylesheet", () => {
+    expect(primitivesRaw).toMatch(/\.panel-shell__navigation\s*\{[\s\S]*?padding:\s*var\(--space-4\)/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__navigation-button\s*\{[\s\S]*?background:\s*transparent/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__drawer-layer\s*\{[\s\S]*?position:\s*fixed/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__drawer\s*\{[\s\S]*?animation:\s*panel-drawer-in/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__navigation-button:focus-visible[\s\S]*?outline:\s*var\(--focus-ring-width\)/);
+    expect(primitivesRaw).toMatch(/\.panel-shell--collapsed\s*\{[\s\S]*?grid-template-columns:/);
+    expect(primitivesRaw).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.panel-shell__drawer-layer[\s\S]*?animation:\s*none/);
+    expect(primitivesRaw).not.toMatch(/#[0-9a-f]{3,8}/i);
+  });
+
   it("composes the dashboard main landmark with the complete admin information architecture", () => {
     render(
       <PanelShell user={{ username: "ana", role: "admin" }} drawerInitiallyOpen>
