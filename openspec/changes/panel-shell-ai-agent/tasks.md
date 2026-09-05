@@ -41,8 +41,8 @@ Chain strategy: stacked-to-main
 - [x] 6.2 **GREEN** Objective: migrate nav/drawer/focus rules. **Files:** `primitives.css`, `PanelShell.tsx`. **Done:** keyboard/responsive pass. **Verify:** `npm test -- PanelEntry.stories.test.tsx`.
 
 ## Phase 7: Slice 7
-- [ ] 7.1 **RED** Objective: guard no injection/hex and reduced motion. **Files:** shell tests. **Done:** guards fail. **Verify:** `npm test -- AppShell.stories.test.tsx`.
-- [ ] 7.2 **GREEN** Objective: migrate remainder; remove `PANEL_SHELL_STYLES`. **Files:** `PanelShell.tsx`, `primitives.css`. **Done:** build/tests pass. **Verify:** `cd web && npm run build && npm test`.
+- [x] 7.1 **RED** Objective: guard no injection/hex and reduced motion. **Files:** shell tests. **Done:** guards fail. **Verify:** `npm test -- AppShell.stories.test.tsx`.
+- [x] 7.2 **GREEN** Objective: migrate remainder; remove `PANEL_SHELL_STYLES`. **Files:** `PanelShell.tsx`, `primitives.css`. **Done:** build/tests pass. **Verify:** `cd web && npm run build && npm test`.
 
 ## Graph Nodes Consulted
 Nodes: `AppShell.tsx`, `PanelShell.tsx`, page/helper nodes, `primitives.css`; edge AppShell→PanelShell.
