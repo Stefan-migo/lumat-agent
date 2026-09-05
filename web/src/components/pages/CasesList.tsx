@@ -7,9 +7,9 @@ import { Button } from "../primitives/Button";
 import { Select } from "../primitives/Select";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
-import { PageFrame } from "../../stories/pages/_shared/PageFrame";
-import { StateMessage } from "../../stories/pages/_shared/StateMessage";
-import { caseStatusLabel, caseStatusTone } from "../../stories/pages/_shared/toneMaps";
+import { PageFrame } from "../shared/PageFrame";
+import { StateMessage } from "../shared/StateMessage";
+import { caseStatusLabel, caseStatusTone } from "../shared/toneMaps";
 
 export type CasesListState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
 

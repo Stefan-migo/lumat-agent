@@ -5,8 +5,8 @@ import type { Conversation, ConversationsResponse, ConversationState } from "../
 import { StatusBadge, type Status } from "../primitives/StatusBadge";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
-import { PageFrame } from "../../stories/pages/_shared/PageFrame";
-import { StateMessage } from "../../stories/pages/_shared/StateMessage";
+import { PageFrame } from "../shared/PageFrame";
+import { StateMessage } from "../shared/StateMessage";
 
 export type ConversationsListState = AsyncDataState | "fatal-error";
 export interface ConversationsListProps { data?: ConversationsResponse | null; state?: ConversationsListState; onRetry?: () => void; onOpenThread?: (id: number) => void; customerName?: (id: number) => string; refreshKey?: number; }

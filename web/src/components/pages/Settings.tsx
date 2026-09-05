@@ -7,8 +7,8 @@ import { Card } from "../primitives/Card";
 import { Input } from "../primitives/Input";
 import { Textarea } from "../primitives/Textarea";
 import { DataTable, tabularNum, type Column } from "../shared/DataTable";
-import { PageFrame } from "../../stories/pages/_shared/PageFrame";
-import { StateMessage } from "../../stories/pages/_shared/StateMessage";
+import { PageFrame } from "../shared/PageFrame";
+import { StateMessage } from "../shared/StateMessage";
 
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
 export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; }

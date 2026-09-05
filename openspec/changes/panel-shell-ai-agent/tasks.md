@@ -25,8 +25,8 @@ Chain strategy: stacked-to-main
 - [x] 2.2 **GREEN** Objective: promote four core helpers and wrappers. **Files:** `web/src/components/shared/`, `web/src/stories/pages/_shared/`. **Done:** contracts pass. **Verify:** `npm test -- helpers.test.tsx`.
 
 ## Phase 3: Slice 3
-- [ ] 3.1 **RED** Objective: detect remaining story dependencies. **Files:** boundary/helper tests. **Done:** detection fails. **Verify:** `npm test -- PageFrame.test.tsx StateMessage.test.tsx`.
-- [ ] 3.2 **GREEN** Objective: promote `PageFrame`, `StateMessage`, `toneMaps`. **Files:** `web/src/components/shared/`. **Done:** closure has no story dependency. **Verify:** `npm test -- PageFrame.test.tsx StateMessage.test.tsx`.
+- [x] 3.1 **RED** Objective: detect remaining story dependencies. **Files:** boundary/helper tests. **Done:** `closure.test.tsx` failed before promoted modules existed. **Verify:** `npm test -- --run src/components/shared/closure.test.tsx`.
+- [x] 3.2 **GREEN** Objective: promote `PageFrame`, `StateMessage`, `toneMaps`. **Files:** `web/src/components/shared/`. **Done:** closure has no production story dependency. **Verify:** focused closure/helper tests pass.
 
 ## Phase 4: Slice 4
 - [ ] 4.1 **RED** Objective: test no story/hash links and 403 safety. **Files:** page/domain tests. **Done:** scans fail. **Verify:** `npm test -- src/components/pages`.

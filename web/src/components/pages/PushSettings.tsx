@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PageFrame } from "../../stories/pages/_shared/PageFrame";
+import { PageFrame } from "../shared/PageFrame";
 import { Button } from "../primitives/Button";
 
 export function PushSettings({ supported = typeof window !== "undefined" && "PushManager" in window }: { supported?: boolean }) {

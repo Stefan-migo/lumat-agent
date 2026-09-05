@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { getAdvancedDashboard } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AdvancedDashboardData } from "../../types";
-import { StateMessage } from "../../stories/pages/_shared/StateMessage";
+import { StateMessage } from "../shared/StateMessage";
 import { StatCard } from "../shared/StatCard";
 
 export interface AdvancedDashboardProps { data?: AdvancedDashboardData | null; state?: AsyncDataState; }

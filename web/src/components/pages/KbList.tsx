@@ -10,9 +10,9 @@ import { Select } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
 import { DataTable, tabularNum, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
-import { PageFrame } from "../../stories/pages/_shared/PageFrame";
-import { StateMessage } from "../../stories/pages/_shared/StateMessage";
-import { kbStatusLabel } from "../../stories/pages/_shared/toneMaps";
+import { PageFrame } from "../shared/PageFrame";
+import { StateMessage } from "../shared/StateMessage";
+import { kbStatusLabel } from "../shared/toneMaps";
 
 export type KbListState = AsyncDataState | "processing" | "disable-confirmation";
 export interface KbListProps { data?: DocsResponse | null; state?: KbListState; onRetry?: () => void; }

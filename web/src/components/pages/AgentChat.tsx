@@ -3,8 +3,8 @@ import { ApiError, createChatThread, getChatThread, sendChatMessage } from "../.
 import type { InternalChatMessage, InternalChatThread } from "../../types";
 import { Button } from "../primitives/Button";
 import { Textarea } from "../primitives/Textarea";
-import { PageFrame } from "../../stories/pages/_shared/PageFrame";
-import { StateMessage } from "../../stories/pages/_shared/StateMessage";
+import { PageFrame } from "../shared/PageFrame";
+import { StateMessage } from "../shared/StateMessage";
 
 export function AgentChat() {
   const [thread, setThread] = useState<InternalChatThread | null>(null);
