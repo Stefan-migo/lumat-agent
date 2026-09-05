@@ -283,28 +283,25 @@ The change MUST add a CSF story per page under `web/src/stories/pages/*.stories.
 - WHEN it is reviewed
 - THEN no file under `web/src/components/**` is modified
 
-### Requirement: R-PRD-PG-2 — Shared Story Patterns
+### Requirement: R-PRD-PG-2 — Production Helper Boundary (Slice 2)
 
-The change MUST add DataTable, PageHeader, StatCard, EmptyState, FlashMessage as story-local helpers under `web/src/stories/pages/_shared/` (StateMessage, PageFrame, and toneMaps were added by later slices), MUST NOT define them under `src/components/**`, and MUST consume existing `primitives.css` classes (`.table`, `.kpi`, `.empty-state`, `.flash-message`, `.spinner`) with zero new CSS. `src/components/**` MAY import `_shared` helpers from `stories/` — the shipped precedent is `components/domain/ClientMemories.tsx`, which imports `DataTable` and `PageHeader` from `stories/pages/_shared`; the helpers MUST NOT be relocated out of `stories/` in this change.
-(Previously: the boundary guard forbade any `src/components/**` import from `stories/pages/_shared/`. Panel adoption consumes the helpers from `components/pages/*` and the existing `ClientMemories` precedent, so the guard is amended to permit the import while keeping helpers defined in `stories/`.)
+The production helper closure MUST be available under `web/src/components/`, including EmptyState, DataTable, PageHeader, StatCard, PageFrame, StateMessage, and toneMaps. Production pages MUST import that closure from components; story wrappers MAY preserve existing story exports, but production code MUST NOT depend on story infrastructure.
+(Previously: helpers were defined in `stories/pages/_shared/`, and component imports from that directory were permitted.)
 
-#### Scenario: Helper exists
+#### Scenario: Production imports use components
+- GIVEN a production page imports a shared helper
+- WHEN imports are scanned
+- THEN the helper resolves from `web/src/components/`, not `stories/pages/_shared/`
 
-- GIVEN a page story needs DataTable, PageHeader, StatCard, EmptyState, or FlashMessage
-- WHEN it is implemented
-- THEN it resolves from `stories/pages/_shared/`, never from `src/components/**`
+#### Scenario: Story compatibility remains
+- GIVEN an existing story imports a shared helper or wrapper export
+- WHEN the story suite runs
+- THEN the export remains available and renders the same contract
 
-#### Scenario: Components may import shared helpers
-
-- GIVEN `src/components/**` consuming a page helper
-- WHEN the imports are scanned
-- THEN they reference `stories/pages/_shared/` (ClientMemories precedent) and no helper is redefined in components
-
-#### Scenario: CSS reuse
-
-- GIVEN the diff
-- WHEN CSS is reviewed
-- THEN no new CSS is added; helpers consume existing `primitives.css` classes
+#### Scenario: Closure is complete
+- GIVEN production pages use PageFrame, StateMessage, or toneMaps
+- WHEN the boundary test inspects dependencies
+- THEN those dependencies are promoted alongside the four named helpers
 
 ### Requirement: R-PRD-PG-3 — Typed Mocks
 
@@ -589,21 +586,20 @@ The desktop sidebar MUST NOT widen beyond its fixed grid column (192px expanded,
 - WHEN hovered or marked `aria-current`
 - THEN paint stays within the fixed column, verified at 390/640/768/1024/1280px × expanded/collapsed in a real Storybook render (jsdom cannot test media-query overflow)
 
-### Requirement: DS-SHELL-3 — Shell Consumes the Contract (Hex-Free)
+### Requirement: DS-SHELL-3 — Tokenized Shell Styles Without Injection (Slice 2)
 
-Every color/spacing in `PANEL_SHELL_STYLES` MUST resolve through `--corp-*` slots or existing tokens; no hex literal MAY appear (extends `DS-TKN-1`/`CST-PRIM-1` to `PanelShell`). The dark-hover conflict MUST be a documented shell-scoped exception: `--corp-surface-hover` resolves light (`--table-head-bg`), so the local hover references the brand scale (`--primary-700`) with a ponytail note.
+Shell layout, navigation, drawer, focus, motion, and responsive styles MUST consume `--corp-*` or existing design tokens, MUST contain no hard-coded hex values, and MUST be loaded through the tokenized stylesheet boundary. PanelShell MUST NOT inject the former `PANEL_SHELL_STYLES` `<style>` block. Existing visual, responsive, focus, collapse, drawer, and reduced-motion behavior MUST remain unchanged.
+(Previously: the injected `PANEL_SHELL_STYLES` block was the shell style boundary and was only required to be hex-free.)
 
-#### Scenario: Hex-free re-target
+#### Scenario: Stylesheet boundary is tokenized
+- GIVEN PanelShell is rendered
+- WHEN its DOM and source are inspected
+- THEN no shell-owned injected `<style>` exists and all shell values resolve through tokens
 
-- GIVEN `PANEL_SHELL_STYLES`
-- WHEN scanned
-- THEN every color/spacing is a `--corp-*`/existing token and no hex literal appears
-
-#### Scenario: Dark-hover exception documented
-
-- GIVEN the shell-local dark hover rule
-- WHEN reviewed
-- THEN it references a brand-scale token (hex-free) with a ponytail note on the light `--corp-surface-hover` gap
+#### Scenario: Accessibility behavior is preserved
+- GIVEN desktop, mobile, expanded, collapsed, and reduced-motion states
+- WHEN navigation and drawer interactions are tested
+- THEN focus, roles, keyboard behavior, responsive collapse, and motion preferences remain valid
 
 ### Requirement: DS-SHELL-4 — Primitive Reuse
 
