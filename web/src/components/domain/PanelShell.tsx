@@ -118,18 +118,6 @@ const NAVIGATION: Record<PanelView, NavigationItem> = {
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
 
 const PANEL_SHELL_STYLES = `
-  .panel-shell,
-  .panel-shell * {
-    box-sizing: border-box;
-  }
-
-  .panel-shell {
-    min-height: 100dvh;
-    background: var(--corp-bg);
-    color: var(--corp-fg);
-    font-family: var(--font-sans);
-  }
-
   .panel-shell__skip-link {
     position: fixed;
     inset: var(--space-2) auto auto var(--space-2);
@@ -145,72 +133,6 @@ const PANEL_SHELL_STYLES = `
     transform: translateY(0);
     outline: var(--focus-ring-width) solid var(--brand-lime);
     outline-offset: var(--focus-ring-offset);
-  }
-
-  .panel-shell__mobile-bar {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    display: flex;
-    min-height: calc(var(--space-8) + var(--space-8));
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-2) var(--space-4);
-    border-bottom: 1px solid var(--corp-border);
-    background: var(--corp-surface);
-  }
-
-  .panel-shell__brand {
-    display: grid;
-    justify-items: center;
-    align-items: center;
-    padding: var(--space-5) var(--space-4);
-    border-left: var(--space-1) solid var(--brand-lime);
-    background: var(--corp-primary);
-    color: var(--corp-primary-fg);
-  }
-
-  .panel-shell__mobile-brand {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-  }
-
-  .panel-shell__brand-image,
-  .panel-shell__brand-mark {
-    display: block;
-    width: 100%;
-    object-fit: contain;
-    object-position: center;
-  }
-
-  .panel-shell__brand-image {
-    max-width: var(--brand-logo-max-width);
-    max-height: var(--brand-logo-max-height);
-  }
-
-  .panel-shell__brand-mark {
-    max-width: var(--brand-mark-size);
-    max-height: var(--brand-mark-size);
-  }
-
-  .panel-shell__sidebar {
-    display: none;
-    min-width: 0;
-    overflow: hidden;
-    border-right: 1px solid color-mix(in srgb, var(--corp-primary-fg) 25%, transparent);
-    background: var(--corp-primary);
-  }
-
-  /* Desktop sidebar renders as one continuous dark-green panel; the mobile
-   * drawer keeps the cream base (split from the shared rule below). */
-  .panel-shell__sidebar-inner {
-    display: flex;
-    min-width: 0;
-    min-height: 100%;
-    flex-direction: column;
-    background: var(--corp-primary);
   }
 
   .panel-shell__drawer {
@@ -433,64 +355,9 @@ const PANEL_SHELL_STYLES = `
     flex: none;
   }
 
-  .panel-shell__content-area {
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    min-width: 0;
-    min-height: 100dvh;
-  }
-
-  .panel-shell__header-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding-right: var(--space-4);
-    background: var(--corp-surface);
-    border-bottom: 1px solid var(--corp-border);
-  }
-
-  .panel-shell__header {
-    display: flex;
-    flex: 1;
-    min-width: 0;
-    align-items: center;
-    padding: var(--space-4) var(--space-6);
-    gap: var(--space-3);
-    color: var(--corp-fg);
-    max-width: 78rem;
-  }
-
-  .panel-shell__header-badge {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .panel-shell__header-title {
-    margin: 0;
-    font-size: var(--text-lg);
-    font-weight: var(--weight-semibold);
-    line-height: var(--leading-tight);
-    letter-spacing: -0.01em;
-    color: var(--corp-fg);
-  }
-
   .panel-shell__header .panel-shell__collapse-button {
     display: none;
     flex: none;
-  }
-
-  .panel-shell__content {
-    min-width: 0;
-    padding: var(--space-4);
-    width: 100%;
-    max-width: 82rem;
-    margin: 0 auto;
-  }
-
-  .panel-shell__content:focus {
-    outline: none;
   }
 
   .panel-shell__drawer-layer {
@@ -537,38 +404,7 @@ const PANEL_SHELL_STYLES = `
     to { opacity: 1; }
   }
 
-  @media (min-width: 40rem) {
-    .panel-shell__content {
-      padding: var(--space-5);
-    }
-  }
-
   @media (min-width: 64rem) {
-    .panel-shell {
-      display: grid;
-      grid-template-columns: calc(var(--space-8) * 7.5) minmax(0, 1fr);
-    }
-
-    .panel-shell__mobile-bar,
-    .panel-shell__drawer-layer {
-      display: none;
-    }
-
-    .panel-shell__sidebar {
-      position: sticky;
-      top: 0;
-      display: block;
-      height: 100vh;
-    }
-
-    .panel-shell__content-area {
-      grid-column: 2;
-    }
-
-    .panel-shell__content {
-      padding: var(--space-6);
-    }
-
     .panel-shell__header .panel-shell__collapse-button {
       display: flex;
     }

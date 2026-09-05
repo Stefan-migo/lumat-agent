@@ -33,8 +33,8 @@ Chain strategy: stacked-to-main
 - [x] 4.2 **GREEN** Objective: update imports and drill-down links. **Files:** `web/src/components/pages/*.tsx`, `ClientMemories.tsx`, `StatusBadge.tsx`. **Done:** clean links, safe 403. **Verify:** `npm test -- src/components/pages`.
 
 ## Phase 5: Slice 5
-- [ ] 5.1 **RED** Objective: guard tokenized base layout. **Files:** `AppShell.stories.test.tsx`. **Done:** guard fails. **Verify:** `npm test -- AppShell.stories.test.tsx`.
-- [ ] 5.2 **GREEN** Objective: move base/layout rules. **Files:** `primitives.css`. **Done:** equivalent layout. **Verify:** `npm test -- AppShell.stories.test.tsx`.
+- [x] 5.1 **RED** Objective: guard tokenized base layout. **Files:** `AppShell.stories.test.tsx`. **Done:** guard fails. **Verify:** `npm test -- AppShell.stories.test.tsx`.
+- [x] 5.2 **GREEN** Objective: move base/layout rules. **Files:** `primitives.css`. **Done:** equivalent layout. **Verify:** `npm test -- AppShell.stories.test.tsx`.
 
 ## Phase 6: Slice 6
 - [ ] 6.1 **RED** Objective: lock nav, focus, collapse, drawer. **Files:** `PanelEntry.stories.test.tsx`. **Done:** regression fails. **Verify:** `npm test -- PanelEntry.stories.test.tsx`.

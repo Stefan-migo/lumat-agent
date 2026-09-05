@@ -16,6 +16,10 @@ const panelShellRaw = readFileSync(
   join(process.cwd(), 'src', 'components', 'domain', 'PanelShell.tsx'),
   'utf8',
 );
+const primitivesRaw = readFileSync(
+  join(process.cwd(), 'src', 'components', 'primitives', 'primitives.css'),
+  'utf8',
+);
 
 /** DS-V1-SHELL — V1 shell. The sidebar brand lives inside `PanelShell`
  *  (sidebar + drawer + mobile bar) with its lime left rule on the V1 green
@@ -39,13 +43,13 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
   it('uses the --corp-primary contract token for the sidebar brand bg', () => {
     // ponytail: spot-check the raw CSS string so a future "tidy-up" cannot
     // silently swap the brand bg onto a v1 token outside the --corp-* contract.
-    expect(panelShellRaw).toMatch(
+    expect(primitivesRaw).toMatch(
       /\.panel-shell__brand\s*\{[^}]*background:\s*var\(--corp-primary\)/,
     );
   });
 
   it('keeps the lime left rule on the sidebar brand', () => {
-    expect(panelShellRaw).toMatch(
+    expect(primitivesRaw).toMatch(
       /\.panel-shell__brand\s*\{[^}]*border-left:\s*var\(--space-1\)\s+solid\s+var\(--brand-lime\)/,
     );
   });
@@ -59,23 +63,23 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
   it('renders the panel header as text-only — no green fill, no lime rule', () => {
     // ponytail: spot-check the raw CSS string so a future "tidy-up" cannot
     // silently re-add the V1 continuous-bar pattern.
-    expect(panelShellRaw).not.toMatch(
+    expect(primitivesRaw).not.toMatch(
       /\.panel-shell__header\s*\{[^}]*background:\s*var\(--primary-800\)/,
     );
-    expect(panelShellRaw).not.toMatch(
+    expect(primitivesRaw).not.toMatch(
       /\.panel-shell__header\s*\{[^}]*border-bottom:\s*[^}]*var\(--brand-lime\)/,
     );
   });
 
   it('uses dark text and semibold text-lg for the panel header title', () => {
     // --corp-fg resolves --text; the header title stays dark after the port.
-    expect(panelShellRaw).toMatch(
+    expect(primitivesRaw).toMatch(
       /\.panel-shell__header-title\s*\{[^}]*color:\s*var\(--corp-fg\)/,
     );
-    expect(panelShellRaw).toMatch(
+    expect(primitivesRaw).toMatch(
       /\.panel-shell__header-title\s*\{[^}]*font-weight:\s*var\(--weight-semibold\)/,
     );
-    expect(panelShellRaw).toMatch(
+    expect(primitivesRaw).toMatch(
       /\.panel-shell__header-title\s*\{[^}]*font-size:\s*var\(--text-lg\)/,
     );
   });
@@ -120,13 +124,13 @@ describe('AppShell — shell contract port + sidebar bug fixes (DS-SHELL-1..5)',
   it('contains sidebar hover paint via the min-width chain + overflow (DS-SHELL-2)', () => {
     // Bug 2: the flex column min-width:auto shrink-block must be cleared and
     // the sidebar must clip any residual paint past the fixed track.
-    expect(panelShellRaw).toMatch(
+    expect(primitivesRaw).toMatch(
       /\.panel-shell__sidebar-inner\s*\{[^}]*min-width:\s*0/,
     );
     expect(panelShellRaw).toMatch(
       /\.panel-shell__navigation\s*\{[^}]*min-width:\s*0/,
     );
-    expect(panelShellRaw).toMatch(
+    expect(primitivesRaw).toMatch(
       /\.panel-shell__sidebar\s*\{[^}]*overflow:\s*hidden/,
     );
   });
@@ -134,10 +138,24 @@ describe('AppShell — shell contract port + sidebar bug fixes (DS-SHELL-1..5)',
   it('resolves every PANEL_SHELL_STYLES color/spacing through --corp-*/tokens (DS-SHELL-3)', () => {
     // The whole shell style sheet must be hex-free with no v1 --surface or
     // --primary-8xx leakage (the documented dark-hover exception is --primary-700).
-    expect(panelShellRaw).toMatch(/\.panel-shell__sidebar-inner\s*\{[^}]*background:\s*var\(--corp-primary\)/);
-    expect(panelShellRaw).toMatch(/\.panel-shell__sidebar\s*\{[^}]*background:\s*var\(--corp-primary\)/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__sidebar-inner\s*\{[^}]*background:\s*var\(--corp-primary\)/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__sidebar\s*\{[^}]*background:\s*var\(--corp-primary\)/);
     expect(panelShellRaw).not.toMatch(/--primary-8\d\d/);
     expect(panelShellRaw).not.toMatch(/--surface/);
     expect(panelShellRaw).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+});
+
+describe('AppShell — tokenized base layout boundary (DS-SHELL-3)', () => {
+  it('loads the shell base layout from the tokenized primitives stylesheet', () => {
+    expect(primitivesRaw).toMatch(/\.panel-shell\s*\{[^}]*min-height:\s*100dvh/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__content-area\s*\{[^}]*grid-template-rows:/);
+    expect(primitivesRaw).toMatch(/@media\s*\(min-width:\s*64rem\)[\s\S]*\.panel-shell\s*\{[\s\S]*grid-template-columns:/);
+    expect(primitivesRaw).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+
+  it('does not inject the migrated base layout rules from PanelShell', () => {
+    expect(panelShellRaw).not.toMatch(/\.panel-shell,\s*\.panel-shell \*\s*\{/);
+    expect(panelShellRaw).not.toMatch(/\.panel-shell__content-area\s*\{[\s\S]*grid-template-rows:/);
   });
 });

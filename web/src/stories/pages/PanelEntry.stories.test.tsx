@@ -7,8 +7,8 @@ import { DashboardOverview } from "./Dashboard.stories";
 import { PanelShell } from "../../components/domain/PanelShell";
 
 const dashboard = <DashboardOverview />;
-const panelShellRaw = readFileSync(
-  join(process.cwd(), "src", "components", "domain", "PanelShell.tsx"),
+const primitivesRaw = readFileSync(
+  join(process.cwd(), "src", "components", "primitives", "primitives.css"),
   "utf8",
 );
 
@@ -62,8 +62,8 @@ describe("Panel entry layout", () => {
 
     expect(tokens).toMatch(/body\s*\{[^}]*margin:\s*0/);
     expect(container.querySelector(".panel-shell")).toBeInTheDocument();
-    expect(panelShellRaw).toMatch(/\.panel-shell\s*\{[^}]*min-height:\s*100dvh/);
-    expect(panelShellRaw).toMatch(/\.panel-shell__content-area\s*\{[^}]*min-height:\s*100dvh/);
+    expect(primitivesRaw).toMatch(/\.panel-shell\s*\{[^}]*min-height:\s*100dvh/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__content-area\s*\{[^}]*min-height:\s*100dvh/);
   });
 
   it("composes the dashboard main landmark with the complete admin information architecture", () => {
