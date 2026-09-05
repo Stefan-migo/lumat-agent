@@ -2,8 +2,8 @@ import { useCallback } from "react";
 import { apiFetch } from "../../api";
 import type { Kpis } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import { PageFrame } from "../../stories/pages/_shared/PageFrame";
-import { StateMessage } from "../../stories/pages/_shared/StateMessage";
+import { PageFrame } from "../shared/PageFrame";
+import { StateMessage } from "../shared/StateMessage";
 import { StatCard } from "../shared/StatCard";
 
 const DASHBOARD_STYLES = `

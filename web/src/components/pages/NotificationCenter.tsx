@@ -3,8 +3,8 @@ import { ApiError, listNotifications, markNotificationRead } from "../../api";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import type { NotificationsResponse } from "../../types";
 import { EmptyState } from "../shared/EmptyState";
-import { PageFrame } from "../../stories/pages/_shared/PageFrame";
-import { StateMessage } from "../../stories/pages/_shared/StateMessage";
+import { PageFrame } from "../shared/PageFrame";
+import { StateMessage } from "../shared/StateMessage";
 
 export function NotificationCenter() {
   const [unread, setUnread] = useState(false);

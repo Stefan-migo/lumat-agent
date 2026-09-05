@@ -4,9 +4,9 @@ import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { ConversationThread as ThreadData, Message } from "../../types";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
-import { PageFrame } from "../../stories/pages/_shared/PageFrame";
-import { StateMessage } from "../../stories/pages/_shared/StateMessage";
-import { conversationLabel, directionLabel } from "../../stories/pages/_shared/toneMaps";
+import { PageFrame } from "../shared/PageFrame";
+import { StateMessage } from "../shared/StateMessage";
+import { conversationLabel, directionLabel } from "../shared/toneMaps";
 
 export interface ConversationThreadProps { conversationId?: number; data?: ThreadData | null; state?: AsyncDataState; customerName?: (id: number) => string; refreshKey?: number; onMutate?: () => void; onBack?: () => void; interactive?: boolean; }
 export function NoReplyNote() { return <StateMessage tone="info" role="status" title="Canal automático" detail="Este es un canal automático — no respondas a este mensaje (HH-5)." />; }

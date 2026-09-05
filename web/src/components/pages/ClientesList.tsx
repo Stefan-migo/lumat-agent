@@ -7,9 +7,9 @@ import { Button } from "../primitives/Button";
 import { SearchInput } from "../primitives/SearchInput";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
-import { PageFrame } from "../../stories/pages/_shared/PageFrame";
-import { StateMessage } from "../../stories/pages/_shared/StateMessage";
-import { customerStateLabel, customerStateTone } from "../../stories/pages/_shared/toneMaps";
+import { PageFrame } from "../shared/PageFrame";
+import { StateMessage } from "../shared/StateMessage";
+import { customerStateLabel, customerStateTone } from "../shared/toneMaps";
 
 export type ClientesListState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
 

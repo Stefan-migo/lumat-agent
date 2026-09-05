@@ -7,8 +7,8 @@ import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
-import { PageFrame } from "../../stories/pages/_shared/PageFrame";
-import { StateMessage } from "../../stories/pages/_shared/StateMessage";
+import { PageFrame } from "../shared/PageFrame";
+import { StateMessage } from "../shared/StateMessage";
 import {
   caseStatusLabel,
   caseStatusTone,
@@ -16,7 +16,7 @@ import {
   customerStateLabel,
   customerStateTone,
   directionLabel,
-} from "../../stories/pages/_shared/toneMaps";
+} from "../shared/toneMaps";
 
 export interface ClientFichaProps {
   customerId?: number;

@@ -1,6 +1,6 @@
 import { Badge } from "./Badge";
 import type { BadgeTone } from "./Badge";
-import { conversationLabel } from "../../stories/pages/_shared/toneMaps";
+import { conversationLabel } from "../shared/toneMaps";
 
 export type Status = "bot" | "human" | "closed" | "pending" | "escalated";
 export const statusTone: Record<Status, BadgeTone> = {
