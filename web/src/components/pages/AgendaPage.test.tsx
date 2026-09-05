@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { AgendaPage } from './AgendaPage';
 import type { AgendaAppointment } from '../../types';
+import { cancelAppointment, listAppointments, retryCalendarSync } from '../../api';
+import { appointmentStatusLabel, appointmentSyncLabel } from '../shared/toneMaps';
+
+vi.mock('../../api', () => ({
+  listAppointments: vi.fn(),
+  cancelAppointment: vi.fn(),
+  retryCalendarSync: vi.fn(),
+}));
 
 const appointment = (overrides: Partial<AgendaAppointment> = {}): AgendaAppointment => ({
   id: 1,
@@ -25,6 +34,11 @@ beforeEach(() => vi.setSystemTime(new Date('2026-09-05T12:00:00-04:00')));
 afterEach(() => vi.useRealTimers());
 
 describe('AgendaPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(listAppointments).mockResolvedValue({ appointments: [] });
+  });
+
   it('renders loading, forbidden, error, and stale recovery states', () => {
     const retry = vi.fn();
     const { rerender } = render(<AgendaPage state="loading" data={null} onRetry={retry} />);
@@ -54,5 +68,53 @@ describe('AgendaPage', () => {
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
     expect(container.querySelector('.agenda-page__table-wrap')).toBeInTheDocument();
     expect(screen.queryByText(/disponibilidad|crear|editar|reagendar/i)).not.toBeInTheDocument();
+  });
+
+  it('offers cancellation only for booked rows and refreshes after confirming a reason', async () => {
+    const user = userEvent.setup();
+    const cancelled = appointment({ status: 'cancelled' });
+    vi.mocked(cancelAppointment).mockResolvedValue({ ok: true, appointment: cancelled });
+    vi.mocked(listAppointments).mockResolvedValue({ appointments: [cancelled] });
+
+    render(<AgendaPage data={[appointment()]} state="ready" />);
+    await user.click(screen.getByRole('button', { name: 'Cancelar visita' }));
+    expect(screen.getByRole('dialog', { name: 'Cancelar visita' })).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Motivo de cancelación'), 'Cliente avisó');
+    await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }));
+
+    await waitFor(() => expect(cancelAppointment).toHaveBeenCalledWith(1, 'Cliente avisó'));
+    await waitFor(() => expect(listAppointments).toHaveBeenCalled());
+    expect(await screen.findByText('Cancelada')).toBeInTheDocument();
+  });
+
+  it('does not offer cancellation or issue a request for non-booked rows', () => {
+    render(<AgendaPage data={[appointment({ status: 'completed' }), appointment({ id: 2, status: 'no_show' }), appointment({ id: 3, status: 'cancelled' })]} state="ready" />);
+    expect(screen.queryByRole('button', { name: 'Cancelar visita' })).not.toBeInTheDocument();
+    expect(cancelAppointment).not.toHaveBeenCalled();
+  });
+
+  it('retries pending and failed calendar sync from keyboard-operable actions', async () => {
+    const user = userEvent.setup();
+    vi.mocked(retryCalendarSync).mockResolvedValue({ ok: true, calendar: { status: 'synced', error: null } });
+    render(<AgendaPage data={[appointment({ sync: { status: 'failed', error: 'Proveedor no disponible', retry: true } })]} state="ready" />);
+
+    expect(screen.getByText(appointmentStatusLabel('booked'))).toBeInTheDocument();
+    expect(screen.getByText(appointmentSyncLabel('failed'))).toBeInTheDocument();
+    const retry = screen.getByRole('button', { name: 'Reintentar calendario' });
+    retry.focus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(retryCalendarSync).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(listAppointments).toHaveBeenCalled());
+  });
+
+  it('shows actionable inline mutation failures without changing the row', async () => {
+    const user = userEvent.setup();
+    vi.mocked(cancelAppointment).mockRejectedValue(new Error('No se pudo cancelar'));
+    render(<AgendaPage data={[appointment()]} state="ready" />);
+    await user.click(screen.getByRole('button', { name: 'Cancelar visita' }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cancelar');
+    expect(screen.getByText(appointmentStatusLabel('booked'))).toBeInTheDocument();
   });
 });
