@@ -2,27 +2,31 @@
 
 ## ADDED Requirements
 
-### Requirement: PNL-APP-1 — D7 State Routing Without a Router
+### Requirement: PNL-APP-1 — D7 URL Routing Without a Router (Slice 1)
 
-The SPA MUST switch top-level views through AppShell `useState<PanelView>` (D7; PanelShell owns the `NAVIGATION` map), MUST NOT add react-router or any routing dependency to `web/package.json`, and MUST open drill-downs (ClientFicha, ConversationThread) from list views via component state/`onClick`, never hash links.
+The SPA MUST use a small typed native History API route table in AppShell, MUST NOT add a router dependency, and MUST synchronize the nine top-level views plus `/panel/app/clients/:id` and `/panel/app/conversations/:id`. Navigation MUST use clean links or equivalent controls with `aria-current="page"`; hash navigation MUST NOT be used.
+(Previously: AppShell used state-only routing, drill-down callbacks, and treated URL shareability as a non-goal.)
 
-#### Scenario: Nav switches the active view
+#### Scenario: View navigation updates URL
+- GIVEN an authenticated user at `/panel/app/`
+- WHEN they activate Clients
+- THEN the Clients view renders and the URL is `/panel/app/clients`
+- AND its navigation item has `aria-current="page"`
 
-- GIVEN an authenticated user in the shell
-- WHEN they click a NAVIGATION item
-- THEN AppShell renders the matching page without any URL change
+#### Scenario: Deep link and refresh
+- GIVEN a valid client or conversation drill-down URL
+- WHEN the SPA loads or refreshes at that URL
+- THEN the authenticated shell renders the matching detail view
 
-#### Scenario: No router dependency
+#### Scenario: Back, forward, and unknown paths
+- GIVEN navigation has produced multiple valid history entries
+- WHEN the user uses browser back/forward or opens an unknown `/panel/app/*` path
+- THEN the matching prior view renders, or the unknown path safely falls back to `/panel/app/`
 
-- GIVEN `web/package.json`
-- WHEN the change is reviewed
-- THEN no react-router or other routing package is added
-
-#### Scenario: Drill-down stays in place
-
-- GIVEN a row in ClientesList or ConversationsList
-- WHEN it is activated
-- THEN ClientFicha / ConversationThread renders in place via state, no hash navigation
+#### Scenario: Role-safe admin deep link
+- GIVEN an operador opens a KB or Settings deep link
+- WHEN the view loads and the API returns 403
+- THEN the permission-denied state renders and the shell does not crash or bypass authorization
 
 ### Requirement: PNL-APP-2 — Auth Gate with Real Login
 
