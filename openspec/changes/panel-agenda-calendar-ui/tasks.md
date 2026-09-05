@@ -39,9 +39,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Slice 3 — Cancellation, Retry, Status Tones
 
-- [ ] 3.1 RED: in `AgendaPage.test.tsx`, prove booked-only cancel/reason/refresh, no non-booked request, sync retry/refresh, separate labels, keyboard actions, and errors.
-- [ ] 3.2 Add Dialog cancellation and existing cancel/sync calls in `AgendaPage.tsx`; refresh and show inline failures.
-- [ ] 3.3 Extend `web/src/components/shared/toneMaps.ts` with appointment lifecycle/sync labels and tones; make Slice 3 tests pass.
+- [x] 3.1 RED: in `AgendaPage.test.tsx`, prove booked-only cancel/reason/refresh, no non-booked request, sync retry/refresh, separate labels, keyboard actions, and errors.
+- [x] 3.2 Add Dialog cancellation and existing cancel/sync calls in `AgendaPage.tsx`; refresh and show inline failures.
+- [x] 3.3 Extend `web/src/components/shared/toneMaps.ts` with appointment lifecycle/sync labels and tones; make Slice 3 tests pass.
 
 ## Phase 4: Slice 4 — Storybook Matrix and Frontend Verification
 
