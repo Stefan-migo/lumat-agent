@@ -270,6 +270,30 @@ export interface Appointment {
   calendar_error?: string | null;
 }
 
+export type AppointmentSyncStatus = 'pending' | 'synced' | 'failed';
+
+export interface AgendaAppointment {
+  id: number;
+  service: string;
+  customer_id: number;
+  customer_name: string | null;
+  case_id: number | null;
+  case_name: string | null;
+  technician_id: number | null;
+  technician_name: string | null;
+  local_start: string;
+  timezone: string;
+  starts_at: string;
+  ends_at: string;
+  duration_minutes?: number;
+  status: string;
+  sync: { status: AppointmentSyncStatus; error: string | null; retry: boolean };
+}
+
+export interface AgendaResponse {
+  appointments: AgendaAppointment[];
+}
+
 export interface VisitHistoryEvent {
   id: number;
   appointment_id: number;

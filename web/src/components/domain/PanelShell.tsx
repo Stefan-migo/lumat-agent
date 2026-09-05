@@ -4,7 +4,7 @@ import type { User } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 
-export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings";
+export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda";
 
 /** Shell icon wrapper: 20px, stroke-based, `currentColor`, aria-hidden.
  *  Inline SVGs on purpose — no icon library (ponytail: no new deps). */
@@ -77,6 +77,15 @@ function GearIcon() {
   );
 }
 
+function CalendarIcon() {
+  return icon(
+    <>
+      <rect x="3" y="4" width="18" height="17" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </>,
+  );
+}
+
 function PanelToggleIcon({ collapsed }: { collapsed: boolean }) {
   return icon(
     <>
@@ -113,6 +122,7 @@ const NAVIGATION: Record<PanelView, NavigationItem> = {
   chat: { label: "Asistente Lumat", icon: ChatIcon, adminOnly: true },
   kb: { label: "Base de conocimientos", icon: BookIcon, adminOnly: true },
   settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
+  agenda: { label: "Agenda", icon: CalendarIcon },
 };
 
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
