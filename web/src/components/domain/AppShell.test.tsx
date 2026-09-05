@@ -115,6 +115,19 @@ describe('AppShell (T6.4)', () => {
     fetchMock.mockRestore();
   });
 
+  it('deep-links to Agenda and exposes it to operadores with an active nav state', async () => {
+    window.history.replaceState({}, '', '/panel/app/agenda');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ appointments: [] }), { status: 200 }));
+
+    const { container } = render(<AppShell user={operador} />);
+    expect(await screen.findByRole('heading', { name: 'Agenda', level: 1 })).toBeInTheDocument();
+    expect(sidebar(container).getByText('Agenda').closest('button')).toHaveAttribute('aria-current', 'page');
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Menú' }));
+    expect(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Agenda' })).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
   it('keeps client and conversation drill-downs inside D7 state navigation', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const path = new URL(String(input), 'http://localhost').pathname;
