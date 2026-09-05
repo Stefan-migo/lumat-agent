@@ -65,7 +65,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   const page = view === 'dashboard' ? <Dashboard />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
       : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
-     : view === 'cases' ? <CasesList />
+      : view === 'cases' ? <CasesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
      : view === 'notifications' ? <NotificationCenter />
      : view === 'push' ? <PushSettings />
       : view === 'chat' ? <AgentChat />
