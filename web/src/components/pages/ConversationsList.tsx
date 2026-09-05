@@ -3,8 +3,8 @@ import { ApiError, listConversations } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Conversation, ConversationsResponse, ConversationState } from "../../types";
 import { StatusBadge, type Status } from "../primitives/StatusBadge";
-import { DataTable, type Column } from "../../stories/pages/_shared/DataTable";
-import { EmptyState } from "../../stories/pages/_shared/EmptyState";
+import { DataTable, type Column } from "../shared/DataTable";
+import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../../stories/pages/_shared/PageFrame";
 import { StateMessage } from "../../stories/pages/_shared/StateMessage";
 

@@ -3,9 +3,9 @@ import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
 import { Textarea } from "../primitives/Textarea";
-import type { Column } from "../../stories/pages/_shared/DataTable";
-import { DataTable } from "../../stories/pages/_shared/DataTable";
-import { PageHeader } from "../../stories/pages/_shared/PageHeader";
+import type { Column } from "../shared/DataTable";
+import { DataTable } from "../shared/DataTable";
+import { PageHeader } from "../shared/PageHeader";
 import type { Memory } from "../../types";
 
 export type MemoryHandler = (memoryId: number) => void;

@@ -4,7 +4,7 @@ import type { Kpis } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { PageFrame } from "../../stories/pages/_shared/PageFrame";
 import { StateMessage } from "../../stories/pages/_shared/StateMessage";
-import { StatCard } from "../../stories/pages/_shared/StatCard";
+import { StatCard } from "../shared/StatCard";
 
 const DASHBOARD_STYLES = `
   .dashboard-motivos {

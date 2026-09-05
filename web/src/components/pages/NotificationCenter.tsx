@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { ApiError, listNotifications, markNotificationRead } from "../../api";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import type { NotificationsResponse } from "../../types";
-import { EmptyState } from "../../stories/pages/_shared/EmptyState";
+import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../../stories/pages/_shared/PageFrame";
 import { StateMessage } from "../../stories/pages/_shared/StateMessage";
 

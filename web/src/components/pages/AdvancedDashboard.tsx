@@ -3,7 +3,7 @@ import { getAdvancedDashboard } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AdvancedDashboardData } from "../../types";
 import { StateMessage } from "../../stories/pages/_shared/StateMessage";
-import { StatCard } from "../../stories/pages/_shared/StatCard";
+import { StatCard } from "../shared/StatCard";
 
 export interface AdvancedDashboardProps { data?: AdvancedDashboardData | null; state?: AsyncDataState; }
 
