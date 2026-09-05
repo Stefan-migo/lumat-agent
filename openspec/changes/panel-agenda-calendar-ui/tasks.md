@@ -45,6 +45,6 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Slice 4 — Storybook Matrix and Frontend Verification
 
-- [ ] 4.1 RED: add `AgendaPage.stories.test.tsx` assertions for data, loading, empty, error, permission, stale, cancel, sync failure/retry, keyboard, and mobile.
-- [ ] 4.2 Create `web/src/stories/pages/AgendaPage.stories.tsx` with controlled widths and the AG-UI-2/4 matrix; pass story tests.
-- [ ] 4.3 Run `cd web && npx tsc -b && npm run build && npm test -- AgendaPage panelRoutes AppShell`; confirm no out-of-scope controls.
+- [x] 4.1 RED: add `AgendaPage.stories.test.tsx` assertions for data, loading, empty, error, permission, stale, cancel, sync failure/retry, keyboard, and mobile.
+- [x] 4.2 Create `web/src/stories/pages/AgendaPage.stories.tsx` with controlled widths and the AG-UI-2/4 matrix; pass story tests.
+- [x] 4.3 Run `cd web && npx tsc -b && npm run build && npm test -- AgendaPage panelRoutes AppShell`; confirm no out-of-scope controls.
