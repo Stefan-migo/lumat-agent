@@ -102,23 +102,23 @@ describe('AppShell — shell contract port + sidebar bug fixes (DS-SHELL-1..5)',
   it('sizes the collapse toggle 32-36px with a >=40px hit target (DS-SHELL-1)', () => {
     // Bug 1: the shared 44px min-height (calc(space-8 + space-3)) must be
     // escaped by an explicit min-height while the 2.5rem box keeps the hit target.
-    expect(panelShellRaw).toMatch(
+    expect(primitivesRaw).toMatch(
       /\.panel-shell__collapse-button\s*\{[^}]*min-height:\s*2\.25rem/,
     );
-    expect(panelShellRaw).toMatch(
+    expect(primitivesRaw).toMatch(
       /\.panel-shell__collapse-button\s*\{[^}]*width:\s*2\.5rem/,
     );
-    expect(panelShellRaw).toMatch(
+    expect(primitivesRaw).toMatch(
       /\.panel-shell__collapse-button\s*\{[^}]*height:\s*2\.5rem/,
     );
   });
 
   it('anchors the toggle beside the content heading (DS-SHELL-1)', () => {
     // The control is no longer competing with the sidebar brand/navigation.
-    expect(panelShellRaw).toMatch(
+    expect(primitivesRaw).toMatch(
       /\.panel-shell__header \.panel-shell__collapse-button\s*\{[^}]*display:\s*none/,
     );
-    expect(panelShellRaw).toMatch(/\.panel-shell__header \.panel-shell__collapse-button/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__header \.panel-shell__collapse-button/);
   });
 
   it('contains sidebar hover paint via the min-width chain + overflow (DS-SHELL-2)', () => {
@@ -127,7 +127,7 @@ describe('AppShell — shell contract port + sidebar bug fixes (DS-SHELL-1..5)',
     expect(primitivesRaw).toMatch(
       /\.panel-shell__sidebar-inner\s*\{[^}]*min-width:\s*0/,
     );
-    expect(panelShellRaw).toMatch(
+    expect(primitivesRaw).toMatch(
       /\.panel-shell__navigation\s*\{[^}]*min-width:\s*0/,
     );
     expect(primitivesRaw).toMatch(

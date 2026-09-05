@@ -7,6 +7,10 @@ import { DashboardOverview } from "./Dashboard.stories";
 import { PanelShell } from "../../components/domain/PanelShell";
 
 const dashboard = <DashboardOverview />;
+const panelShellRaw = readFileSync(
+  join(process.cwd(), "src", "components", "domain", "PanelShell.tsx"),
+  "utf8",
+);
 const primitivesRaw = readFileSync(
   join(process.cwd(), "src", "components", "primitives", "primitives.css"),
   "utf8",
@@ -75,6 +79,14 @@ describe("Panel entry layout", () => {
     expect(primitivesRaw).toMatch(/\.panel-shell--collapsed\s*\{[\s\S]*?grid-template-columns:/);
     expect(primitivesRaw).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.panel-shell__drawer-layer[\s\S]*?animation:\s*none/);
     expect(primitivesRaw).not.toMatch(/#[0-9a-f]{3,8}/i);
+  });
+
+  it("removes all PanelShell style injection and keeps reduced motion in primitives", () => {
+    expect(panelShellRaw).not.toMatch(/PANEL_SHELL_STYLES|<style>/);
+    expect(panelShellRaw).not.toMatch(/#[0-9a-f]{3,8}/i);
+    expect(primitivesRaw).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.panel-shell__drawer[\s\S]*?animation:\s*none/,
+    );
   });
 
   it("composes the dashboard main landmark with the complete admin information architecture", () => {
