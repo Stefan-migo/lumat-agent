@@ -10,6 +10,7 @@ import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { caseStatusLabel, caseStatusTone } from "../shared/toneMaps";
+import { pathForRoute } from "../domain/panelRoutes";
 
 export type CasesListState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
 
@@ -17,6 +18,7 @@ export interface CasesListProps {
   data?: CasesResponse | null;
   state?: CasesListState;
   onRetry?: () => void;
+  onOpenClient?: (id: number) => void;
 }
 
 const CASE_STATUSES = ["abierto", "en_evaluacion", "escalado", "cerrado"];
@@ -101,7 +103,7 @@ function EmergencyCell({ c }: { c: Case }) {
 
 const columns: Column<Case>[] = [
   { key: "id", header: "#", render: (c) => `#${c.id}` },
-  { key: "customer", header: "Cliente", render: (c) => <a href={`#/clientes/${c.customer.id}`} style={{ color: "var(--primary-700)" }}>{c.customer.name ?? "—"}</a> },
+  { key: "customer", header: "Cliente", render: (c) => <a href={pathForRoute({ view: "clients", clientId: c.customer.id })} style={{ color: "var(--primary-700)" }}>{c.customer.name ?? "—"}</a> },
   { key: "service", header: "Servicio", render: (c) => c.service ?? "—" },
   { key: "status", header: "Estado", render: (c) => <Badge tone={caseStatusTone(c.status)}>{caseStatusLabel(c.status)}</Badge> },
   { key: "summary", header: "Resumen", render: (c) => c.summary ?? "—" },
@@ -119,7 +121,7 @@ function stateMessage(state: CasesListState, unanswered: number) {
   return null;
 }
 
-export function CasesList({ data: controlledData, state: controlledState, onRetry }: CasesListProps) {
+export function CasesList({ data: controlledData, state: controlledState, onRetry, onOpenClient }: CasesListProps) {
   const fetchCases = useCallback(() => apiFetch<CasesResponse>("/panel/api/cases"), []);
   const fetched = useAsyncData(fetchCases, controlledData === undefined);
   const data = controlledData ?? fetched.data;
@@ -143,7 +145,7 @@ export function CasesList({ data: controlledData, state: controlledState, onRetr
         <EmptyState title="No hay registros" description="No existen casos abiertos pendientes o escalados." />
       ) : data ? (
         <DataTable
-          columns={columns.map((column) => column.key === "responsible" ? { ...column, render: (c: Case) => responsibleLabel(c.responsible_id, users) } : column)}
+          columns={columns.map((column) => column.key === "responsible" ? { ...column, render: (c: Case) => responsibleLabel(c.responsible_id, users) } : column.key === "customer" && onOpenClient ? { ...column, render: (c: Case) => <a href={pathForRoute({ view: "clients", clientId: c.customer.id })} onClick={(event) => { event.preventDefault(); onOpenClient(c.customer.id); }} style={{ color: "var(--primary-700)" }}>{c.customer.name ?? "—"}</a> } : column)}
           rows={cases}
           rowKey={(c) => String(c.id)}
           actions={(c) => <CaseActions c={c} users={users} onUpdate={controlledData === undefined ? updateCase : undefined} onAcknowledge={controlledData === undefined ? acknowledgeCase : undefined} />}

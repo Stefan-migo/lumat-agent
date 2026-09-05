@@ -29,8 +29,8 @@ Chain strategy: stacked-to-main
 - [x] 3.2 **GREEN** Objective: promote `PageFrame`, `StateMessage`, `toneMaps`. **Files:** `web/src/components/shared/`. **Done:** closure has no production story dependency. **Verify:** focused closure/helper tests pass.
 
 ## Phase 4: Slice 4
-- [ ] 4.1 **RED** Objective: test no story/hash links and 403 safety. **Files:** page/domain tests. **Done:** scans fail. **Verify:** `npm test -- src/components/pages`.
-- [ ] 4.2 **GREEN** Objective: update imports and drill-down links. **Files:** `web/src/components/pages/*.tsx`, `ClientMemories.tsx`, `StatusBadge.tsx`. **Done:** clean links, safe 403. **Verify:** `npm test -- src/components/pages`.
+- [x] 4.1 **RED** Objective: test no story/hash links and 403 safety. **Files:** page/domain tests. **Done:** scans fail. **Verify:** `npm test -- src/components/pages`.
+- [x] 4.2 **GREEN** Objective: update imports and drill-down links. **Files:** `web/src/components/pages/*.tsx`, `ClientMemories.tsx`, `StatusBadge.tsx`. **Done:** clean links, safe 403. **Verify:** `npm test -- src/components/pages`.
 
 ## Phase 5: Slice 5
 - [ ] 5.1 **RED** Objective: guard tokenized base layout. **Files:** `AppShell.stories.test.tsx`. **Done:** guard fails. **Verify:** `npm test -- AppShell.stories.test.tsx`.

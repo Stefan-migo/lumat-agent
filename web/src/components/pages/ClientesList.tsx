@@ -10,6 +10,7 @@ import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { customerStateLabel, customerStateTone } from "../shared/toneMaps";
+import { pathForRoute } from "../domain/panelRoutes";
 
 export type ClientesListState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
 
@@ -25,7 +26,7 @@ const columns = (onOpenClient?: (id: number) => void): Column<Customer>[] => [
     key: "name",
     header: "Cliente",
     render: (customer) => (
-      <a href={`#/clientes/${customer.id}`} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined} style={{ color: "var(--primary-700)" }}>
+      <a href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined} style={{ color: "var(--primary-700)" }}>
         {customer.name ?? "—"}
       </a>
     ),
