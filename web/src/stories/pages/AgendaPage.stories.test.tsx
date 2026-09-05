@@ -73,6 +73,10 @@ describe("AgendaPage Storybook state matrix", () => {
     expect(Mobile.parameters?.viewport).toEqual({ defaultViewport: "mobile-compact" });
     expect(SyncFailure.parameters?.viewport).toEqual({ defaultViewport: "bp-sm" });
     expect(CancelConfirmation).toBeDefined();
+
+    render(<AgendaPageStory data={Data.args?.data} state="ready" />);
+    expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
     expect(screen.queryByText(/crear|editar|reagendar|disponibilidad/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /crear|editar|reagendar/i })).not.toBeInTheDocument();
   });
 });
