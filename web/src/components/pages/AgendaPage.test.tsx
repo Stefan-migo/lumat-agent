@@ -96,11 +96,12 @@ describe('AgendaPage', () => {
   it('retries pending and failed calendar sync from keyboard-operable actions', async () => {
     const user = userEvent.setup();
     vi.mocked(retryCalendarSync).mockResolvedValue({ ok: true, calendar: { status: 'synced', error: null } });
-    render(<AgendaPage data={[appointment({ sync: { status: 'failed', error: 'Proveedor no disponible', retry: true } })]} state="ready" />);
+    render(<AgendaPage data={[appointment({ sync: { status: 'failed', error: 'Proveedor no disponible', retry: true } }), appointment({ id: 2, sync: { status: 'pending', error: null, retry: true } }), appointment({ id: 3 })]} state="ready" />);
 
-    expect(screen.getByText(appointmentStatusLabel('booked'))).toBeInTheDocument();
+    expect(screen.getAllByText(appointmentStatusLabel('booked'))).toHaveLength(3);
     expect(screen.getByText(appointmentSyncLabel('failed'))).toBeInTheDocument();
-    const retry = screen.getByRole('button', { name: 'Reintentar calendario' });
+    expect(screen.getAllByRole('button', { name: 'Reintentar calendario' })).toHaveLength(2);
+    const retry = screen.getAllByRole('button', { name: 'Reintentar calendario' })[0];
     retry.focus();
     await user.keyboard('{Enter}');
     await waitFor(() => expect(retryCalendarSync).toHaveBeenCalledWith(1));
