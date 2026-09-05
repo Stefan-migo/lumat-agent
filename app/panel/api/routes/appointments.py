@@ -2,13 +2,13 @@
 
 from datetime import date, datetime, time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.models import User
 from app.panel.api.deps import require_user_json
-from app.panel.api.serializers import to_appointment_dict
+from app.panel.api.serializers import to_agenda_dict, to_appointment_dict
 from app.panel.deps import get_db
 from app.services import scheduling
 
@@ -28,6 +28,17 @@ class AppointmentBody(BaseModel):
 
 class CancelBody(BaseModel):
     reason: str | None = None
+
+
+@router.get("/appointments")
+def list_appointments(from_date: date = Query(alias="from"), to_date: date = Query(alias="to"), timezone_name: str = Query(alias="timezone"), session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+    try:
+        rows = scheduling.list_for_range(session, from_date, to_date, timezone_name)
+    except scheduling.InvalidTimezone as exc:
+        raise HTTPException(status_code=400, detail={"code": "invalid_timezone", "message": str(exc)}) from exc
+    except scheduling.InvalidRange as exc:
+        raise HTTPException(status_code=400, detail={"code": "invalid_range", "message": str(exc)}) from exc
+    return {"appointments": [to_agenda_dict(appointment, customer_name=customer_name, case_name=case_name, technician_name=technician_name, timezone_name=timezone_name, sync=sync) for appointment, customer_name, case_name, technician_name, sync in rows]}
 
 
 @router.get("/availability/{technician_id}")

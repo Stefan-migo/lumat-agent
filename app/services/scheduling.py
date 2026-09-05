@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Appointment, AppointmentHistory, AppointmentStatus, Case, Customer, TechnicianAvailability
+from app.models import Appointment, AppointmentCalendarSync, AppointmentHistory, AppointmentStatus, Case, Customer, TechnicianAvailability, User
 from app.services.audit import record_audit
 from app.services.events import publish_event
 
@@ -34,11 +34,19 @@ class Unavailable(ValueError):
     pass
 
 
+class InvalidTimezone(ValueError):
+    pass
+
+
+class InvalidRange(ValueError):
+    pass
+
+
 def _zone(name: str) -> ZoneInfo:
     try:
         return ZoneInfo(name)
     except ZoneInfoNotFoundError as exc:
-        raise ValueError(f"unknown timezone: {name}") from exc
+        raise InvalidTimezone(f"unknown timezone: {name}") from exc
 
 
 def local_interval(day: date, clock: time, timezone_name: str, duration_minutes: int) -> tuple[datetime, datetime]:
@@ -128,3 +136,22 @@ def add_availability(session: Session, *, technician_id: int, starts_at: datetim
 
 def list_for_customer(session: Session, customer_id: int) -> list[Appointment]:
     return list(session.scalars(select(Appointment).where(Appointment.customer_id == customer_id).order_by(Appointment.starts_at, Appointment.id)))
+
+
+def list_for_range(session: Session, from_date: date, to_date: date, timezone_name: str) -> list[tuple[Appointment, str | None, str | None, str | None, AppointmentCalendarSync | None]]:
+    """Return the read-only agenda projection for an inclusive local date range."""
+    zone = _zone(timezone_name)
+    if from_date > to_date or (to_date - from_date).days >= 31:
+        raise InvalidRange("range must be ordered and no longer than 31 days")
+    starts_at = datetime.combine(from_date, time.min, tzinfo=zone).astimezone(timezone.utc)
+    ends_at = datetime.combine(to_date + timedelta(days=1), time.min, tzinfo=zone).astimezone(timezone.utc)
+    statement = (
+        select(Appointment, Customer.name, Case.service, User.username, AppointmentCalendarSync)
+        .join(Customer, Customer.id == Appointment.customer_id)
+        .join(Case, Case.id == Appointment.case_id)
+        .join(User, User.id == Appointment.technician_id)
+        .outerjoin(AppointmentCalendarSync, AppointmentCalendarSync.appointment_id == Appointment.id)
+        .where(Appointment.starts_at >= starts_at, Appointment.starts_at < ends_at)
+        .order_by(Appointment.starts_at, Appointment.id)
+    )
+    return list(session.execute(statement).all())

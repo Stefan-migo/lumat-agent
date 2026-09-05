@@ -12,6 +12,8 @@ the SPA must show the same fields the current panel shows.
 
 from __future__ import annotations
 
+from zoneinfo import ZoneInfo
+
 from app.models import (
     Case,
     Conversation,
@@ -165,6 +167,30 @@ def to_appointment_dict(appointment: Appointment) -> dict:
              "created_at": _iso(h.created_at)}
             for h in appointment.history
         ],
+    }
+
+
+def to_agenda_dict(appointment: Appointment, *, customer_name: str | None, case_name: str | None, technician_name: str | None, timezone_name: str, sync: AppointmentCalendarSync | None) -> dict:
+    local_start = appointment.starts_at.astimezone(ZoneInfo(timezone_name))
+    return {
+        "id": appointment.id,
+        "service": appointment.service,
+        "customer_id": appointment.customer_id,
+        "customer_name": customer_name,
+        "case_id": appointment.case_id,
+        "case_name": case_name,
+        "technician_id": appointment.technician_id,
+        "technician_name": technician_name,
+        "local_start": local_start.isoformat(),
+        "timezone": timezone_name,
+        "starts_at": _iso(appointment.starts_at),
+        "ends_at": _iso(appointment.ends_at),
+        "status": appointment.status.value,
+        "sync": {
+            "status": sync.status if sync else "pending",
+            "error": sync.error if sync else None,
+            "retry": sync.status in {"pending", "failed"} if sync else True,
+        },
     }
 
 
