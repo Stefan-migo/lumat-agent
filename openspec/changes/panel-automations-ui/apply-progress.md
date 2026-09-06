@@ -172,3 +172,47 @@ Consulted `AppShell.tsx`, `AutomationRulesPage.tsx`, `AutomationRuleDetailPage.t
 ### Deviations / Issues
 
 None. The create screen uses the existing in-memory panel navigation seam rather than adding a new URL shape for an unsaved rule; successful creation immediately navigates to the canonical persisted detail URL.
+
+## Slice 4 — Stories and Final Gates
+
+**Mode:** Strict TDD (RED → GREEN → triangulate → refactor)
+**Delivery:** stacked-to-main, branch `feat/panel-automations-stories` from `main` `4f3321b0`
+**Boundary:** frontend Storybook state matrix and final verification gates only; backend and evaluator untouched
+**Estimated authored lines:** ~180, within the 400-line slice budget
+
+### Completed Tasks
+
+- [x] 4.1 RED/GREEN: Storybook stories and tests cover data, loading, empty, error, forbidden, create, edit, and confirmation for automation list/detail (ARP-1/2/3).
+- [x] 4.2 Final gates: backend full suite, frontend full suite/typecheck/build, and no-delete/no-template-linkage/no-evaluator-change checks (AR-4/5/6).
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 4.1 | `web/src/stories/pages/AutomationRulesPage.stories.test.tsx` | Component/jsdom | ✅ Existing automation page/detail tests: 10/10 | ✅ Missing story modules produced 2 collection failures | ✅ Focused story tests: 7/7 | ✅ Data plus four list states; create/edit plus confirmation detail paths | ✅ Shared production-shaped fixtures and `excludeStories` wrappers |
+| 4.2 | `web/src/stories/pages/AutomationRuleDetailPage.stories.test.tsx` | Component/jsdom + repository gates | ✅ Existing story/page suite preserved | ✅ Covered by 4.1 RED | ✅ Full frontend/backend/build gates passed | ✅ Full matrix plus static diff checks | ✅ No production logic changes; stories remain controlled fixtures |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result | `cd web && npx vitest run src/stories/pages/AutomationRulesPage.stories.test.tsx src/stories/pages/AutomationRuleDetailPage.stories.test.tsx` → **2 files, 7 tests passed** |
+| Runtime harness command/scenario and exact result | Same Vitest jsdom path rendered list/detail Storybook fixtures, state labels, admin create/edit controls, Dialog confirmation, status mutation, and API refresh → **7 passed** |
+| Rollback boundary | Revert `web/src/stories/pages/AutomationRulesPage.stories.tsx`, `AutomationRulesPage.stories.test.tsx`, `AutomationRuleDetailPage.stories.tsx`, and `AutomationRuleDetailPage.stories.test.tsx`; Slices 1–3 production code remains intact |
+
+### Gate Evidence
+
+- `uv run pytest tests/` → **583 passed**.
+- `cd web && npx vitest run` → **408 passed** across 62 files.
+- `cd web && npx tsc -b` → **passed**.
+- `cd web && npm run build` → **passed**.
+- `git status --short` → only this progress/tasks artifact plus the four Slice 4 story/test files; no backend or evaluator files changed.
+- `git diff --check` → passed; story/test content contains no delete controls or template-version linkage.
+
+### Graph Check
+
+Consulted `GRAPH_REPORT.md` nodes `AutomationRulesPage.tsx`, `AutomationRuleDetailPage.tsx`, `AgendaPage.stories.tsx`, `AgendaPage.stories.test.tsx`, `PageFrame.tsx`, `DataTable.tsx`, `StateMessage.tsx`, `Dialog.tsx`, `api.ts`, `types.ts`, and `Panel Automations UI Design`. Consulted edges included `AutomationRulesPage.tsx → PageFrame()`, `AutomationRulesPage.tsx → DataTable()`, `AutomationRuleDetailPage.tsx → Dialog()`, `AutomationRuleDetailPage.tsx → getAutomationRule()`, and `AgendaPage.stories.test.tsx → AgendaPage.stories.tsx`.
+
+### Deviations / Issues
+
+None. Story fixtures use the existing controlled `data`/`state` seams and neutral Spanish labels already established by the panel; no production page or backend code was changed.
