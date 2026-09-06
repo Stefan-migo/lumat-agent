@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, createChatThread, getChatThread, sendChatMessage } from "../../api";
 import type { InternalChatMessage, InternalChatThread } from "../../types";
+import { Avatar } from "../primitives/Avatar";
 import { Button } from "../primitives/Button";
 import { Textarea } from "../primitives/Textarea";
 import { PageFrame } from "../shared/PageFrame";
@@ -46,15 +47,31 @@ export function AgentChat() {
   };
 
   const state = loading ? <StateMessage tone="info" role="status" spinner title="Cargando chat" /> : error ? <StateMessage tone="danger" role="alert" title={error} /> : null;
+  const canRenderThread = !loading && thread !== null;
+  const composerDisabled = loading || processing || thread === null;
   return <PageFrame title="Asistente Lumat" meta="Chat interno con el agente virtual." state={state}>
-    <div aria-live="polite">
-      {messages.length === 0 && !loading ? <p>No hay mensajes todavía</p> : messages.map((message) => <article key={message.id} aria-label={`Mensaje de ${message.author === "agent" ? "agente" : "administrador"}`}>
-        <strong>{message.author === "agent" ? "Agente Lumat" : "Administrador"}</strong>
-        <p>{message.content}</p>
-        {message.status === "failed" ? <button type="button" onClick={() => setContent(message.content)}>Reintentar</button> : null}
-      </article>)}
+    <div className="ai-agent-grammar__thread-area" aria-label="Mensajes del chat interno" aria-live="polite">
+      {canRenderThread && messages.length === 0 && !error ? <StateMessage tone="info" role="status" title="Chat interno vacío" detail="Escribe un mensaje para iniciar la conversación." /> : null}
+      {canRenderThread && processing ? <StateMessage tone="info" role="status" title="Procesando respuesta" /> : null}
+      {canRenderThread ? messages.map((message) => {
+        const author = message.author === "agent" ? "Agente Lumat" : "Administrador";
+        const outbound = message.author === "admin";
+        return <article key={message.id} className={`ai-agent-grammar__bubble-row${outbound ? " ai-agent-grammar__bubble-row--outbound" : ""}`} aria-label={`Mensaje de ${message.author === "agent" ? "agente" : "administrador"}`}>
+          {!outbound ? <Avatar name={author} /> : null}
+          <div className={`ai-agent-grammar__bubble${outbound ? " ai-agent-grammar__bubble--outbound" : ""}`}>
+            <span className="ai-agent-grammar__message-meta">{author}</span>
+            <p>{message.content}</p>
+            {message.status === "failed" ? <Button variant="secondary" onClick={() => setContent(message.content)}>Reintentar</Button> : null}
+          </div>
+          {outbound ? <Avatar name={author} /> : null}
+        </article>;
+      }) : null}
     </div>
-    <Textarea label="Mensaje" value={content} onChange={(event) => setContent(event.target.value)} disabled={loading || processing} placeholder="Escribe tu mensaje al asistente..." />
-    <Button onClick={() => void send()} disabled={loading || processing || !content.trim()}>Enviar</Button>
+    <div className="ai-agent-grammar__composer" aria-label="Enviar mensaje al chat interno">
+      <Textarea label="Mensaje" value={content} onChange={(event) => setContent(event.target.value)} disabled={composerDisabled} placeholder="Escribe tu mensaje al asistente..." />
+      <div className="ai-agent-grammar__composer-actions">
+        <Button onClick={() => void send()} disabled={composerDisabled || !content.trim()}>Enviar</Button>
+      </div>
+    </div>
   </PageFrame>;
 }

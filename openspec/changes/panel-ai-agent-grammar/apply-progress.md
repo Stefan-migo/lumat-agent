@@ -2,9 +2,10 @@
 
 ## Slice
 
-Phase 2: Thread and List Presentation (tasks 2.1–2.2), applied after the
-merged Phase 1 shell. Delivery is `auto-chain`, `stacked-to-main`; this slice
-is under the 400-line budget. Phases 3–5 remain intentionally unimplemented.
+Phase 3: Internal AgentChat (tasks 3.1–3.2), applied after the merged Phase 2
+thread/list presentation. Delivery is `auto-chain`, `stacked-to-main`; this
+slice is under the 400-line budget. Phases 4–5 remain intentionally
+unimplemented.
 
 ## Completed Tasks
 
@@ -31,6 +32,15 @@ is under the 400-line budget. Phases 3–5 remain intentionally unimplemented.
   delivery errors/retry, and human-owner/reply-window composer gating. Kept
   API calls, mutation refresh, submitted-content recovery, permissions, and
   list filters/DataTable behavior unchanged; added selected-row semantics.
+- [x] 3.1 RED — Extended `AgentChat.test.tsx` with failing-first coverage for
+  agent/administrator directional bubbles and avatars, persisted empty state,
+  processing and disabled composer, failed delivery/retry recovery, operator
+  denial, and preserved authorized refusal text.
+- [x] 3.2 GREEN — Restyled `AgentChat.tsx` with the existing Avatar, Button,
+  Textarea, StateMessage, and `ai-agent-grammar__*` primitives/classes. Kept
+  `createChatThread`, `sendChatMessage`, `getChatThread`, authorization
+  handling, refusal content, and failed submitted content behavior unchanged;
+  added no realtime transport, fake activity, endpoints, or backend changes.
 
 ## TDD Cycle Evidence
 
@@ -42,6 +52,8 @@ is under the 400-line budget. Phases 3–5 remain intentionally unimplemented.
 | 1.4 | `AppShell.stories.test.tsx`, `AiAgentGrammar.stories.test.tsx` | ✅ CSS assertions failed before implementation | ✅ 38/38 focused tests | ✅ shell and concept grammar consumers | ✅ Clean |
 | 2.1 | `ConversationThread.test.tsx`, `ConversationsList.test.tsx` | ✅ Focused run failed 5 new assertions before presentation changes | ✅ 15/15 focused page tests | ✅ Existing story contract updated for bubbles | ✅ Clean |
 | 2.2 | `ConversationThread.tsx`, `ConversationsList.tsx` | ✅ Same RED tests drove missing bubbles, labels, handoff, retry, selection, and filter region | ✅ Focused page run 15/15 | ✅ Full suite and build gates | ✅ Clean |
+| 3.1 | `AgentChat.test.tsx` | ✅ 2/2 baseline | ✅ New assertions failed 4/6 before implementation | ✅ 6/6 focused after GREEN | ✅ Clean |
+| 3.2 | `AgentChat.tsx`, `AgentChat.test.tsx` | ✅ RED assertions drove missing surface states and recoverable rendering | ✅ Focused run 6/6 | ✅ Full suite 428/428; refusal/403 fixtures | ✅ Clean |
 
 ## Work Unit Evidence
 
@@ -63,6 +75,17 @@ is under the 400-line budget. Phases 3–5 remain intentionally unimplemented.
 | Build | `cd web && npm run build` — PASS (`vite v6.4.3`, 70 modules transformed) |
 | Rollback boundary | Revert `ConversationThread.tsx`, `ConversationsList.tsx`, their page tests, and `ConversationThread.stories.test.tsx`; no API, route, backend, shell, or token changes are involved. |
 
+### Phase 3 evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command | `cd web && npx vitest run src/components/pages/AgentChat.test.tsx` — PASS, 1 file, 6 tests |
+| Runtime harness | `cd web && npm test` — PASS, 62 files, 428 tests; authorized refusal, 403 denial, and failed-message recovery fixtures included |
+| Typecheck | `cd web && npx tsc -b` — PASS |
+| Build | `cd web && npm run build` — PASS (`vite v6.4.3`, 70 modules transformed) |
+| Realtime boundary | No WebSocket, SSE, polling, streaming truth, fake writing/activity state, new API calls, or backend files added; existing post-send `getChatThread` refresh remains unchanged. |
+| Rollback boundary | Revert `web/src/components/pages/AgentChat.tsx` and `web/src/components/pages/AgentChat.test.tsx`; no API, backend, route, CSS, token, or Phase 4–5 files are involved. |
+
 ## Graph Check
 
 Consulted `graphify-out/GRAPH_REPORT.md` (AppShell hub, `types.ts`,
@@ -75,7 +98,6 @@ community and `AppShell` route edges used here.
 
 ## Remaining Slices
 
-- Phase 3: Internal AgentChat (tasks 3.1–3.2)
 - Phase 4: Inspector/Ficha Alignment (tasks 4.1–4.2)
 - Phase 5: Stories and Regression Gates (tasks 5.1–5.3)
 
@@ -93,8 +115,28 @@ The directed path check between `ConversationThread` and
 `ConversationsList` was ambiguous/no directed path; the query exposed both
 pages in the `api.ts` community and their shared API/primitive edges.
 
+## Graph Check — Phase 3
+
+Consulted `graphify-out/GRAPH_REPORT.md` and ran
+`graphify query "AgentChat internal chat"` plus
+`graphify query "AgentChat role bubbles composer processing retry authorization refusal"`.
+Relevant nodes: `AgentChat.tsx`, `AgentChat.test.tsx`, `AgentChat()`,
+`createChatThread()`, `getChatThread()`, `sendChatMessage()`, `api.ts`,
+`types.ts`, `Avatar.tsx`, `Button.tsx`, `Textarea.tsx`, `StateMessage.tsx`,
+`AiAgentGrammar.stories.tsx`, `IAC-4 Conversation Surface Presentation`, and
+`IAC-5 Authorization and Context Non-Regression`. Path check:
+`AgentChat.tsx` → `api.ts` via `imports_from` (1 hop); no directed path was
+found to the spec node, so the query/report supplied the spec and primitive
+community edges used here.
+
 ## Phase 2 deviations
 
 None — implementation follows the binding design. The stale thread story test
 was updated because the approved presentation replaces the message table with
 directional bubbles; `ConversationsList` remains a DataTable.
+
+## Phase 3 deviations
+
+None — implementation follows the binding design. The existing empty copy was
+reframed as a labelled `StateMessage`; persisted APIs, refusal text, and
+error/recovery content remain unchanged.

@@ -16,8 +16,8 @@ Web-only. Every GREEN task follows RED; each slice compiles and passes focused t
 
 ## Phase 3: Internal AgentChat (IAC-4/5, DS-GRAMMAR-1/3)
 
-- [ ] 3.1 RED: Extend `AgentChat.test.tsx` for role bubbles, empty/processing/failure-retry, disabled composer, denial, and refusal context.
-- [ ] 3.2 GREEN: Modify `AgentChat.tsx` with existing APIs/primitives; preserve persistence, authorization, refusal text, and recoverable content.
+- [x] 3.1 RED: Extend `AgentChat.test.tsx` for role bubbles, empty/processing/failure-retry, disabled composer, denial, and refusal context.
+- [x] 3.2 GREEN: Modify `AgentChat.tsx` with existing APIs/primitives; preserve persistence, authorization, refusal text, and recoverable content.
 
 ## Phase 4: Inspector/Ficha Alignment (PNL-APP-12, DS-GRAMMAR-1/3)
 
