@@ -77,6 +77,12 @@ export function listAppointments(from: string, to: string, timezone: string): Pr
   const params = new URLSearchParams({ from, to, timezone });
   return apiFetch<AgendaResponse>(`/panel/api/appointments?${params.toString()}`);
 }
+export function cancelAppointment(id: number, reason?: string) {
+  return postJson<{ ok: true; appointment: unknown }>(`/panel/api/appointments/${id}/cancel`, { reason });
+}
+export function retryCalendarSync(id: number) {
+  return postJson<{ ok: boolean; calendar: { status: string; error: string | null } }>(`/panel/api/appointments/${id}/calendar/sync`);
+}
 export function getAdvancedDashboard(): Promise<AdvancedDashboardData> {
   const end = new Date();
   const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);

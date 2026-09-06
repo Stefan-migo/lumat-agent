@@ -1,12 +1,15 @@
-import { useCallback } from "react";
-import { listAppointments } from "../../api";
+import { useCallback, useState } from "react";
+import { cancelAppointment, listAppointments, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AgendaAppointment } from "../../types";
 import { Badge } from "../primitives/Badge";
+import { Button } from "../primitives/Button";
+import { Dialog } from "../primitives/Dialog";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
+import { appointmentStatusLabel, appointmentStatusTone, appointmentSyncLabel, appointmentSyncTone } from "../shared/toneMaps";
 
 export type AgendaPageState = AsyncDataState | "stale";
 
@@ -44,31 +47,78 @@ const columns: Column<AgendaAppointment>[] = [
   { key: "service", header: "Servicio", render: (row) => row.service },
   { key: "customer", header: "Cliente", render: (row) => row.customer_name ?? "—" },
   { key: "technician", header: "Técnico", render: (row) => row.technician_name ?? "—" },
-  { key: "status", header: "Estado", render: (row) => <Badge>{row.status}</Badge> },
+  { key: "status", header: "Estado", render: (row) => <div><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge><br /><Badge tone={appointmentSyncTone(row.sync.status)}>{appointmentSyncLabel(row.sync.status)}</Badge>{row.sync.error ? <small>{row.sync.error}</small> : null}</div> },
 ];
 
 export function AgendaPage({ data: controlledData, state: controlledState, onRetry, timezone = Intl.DateTimeFormat().resolvedOptions().timeZone }: AgendaPageProps) {
+  const [updatedData, setUpdatedData] = useState<AgendaAppointment[] | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<AgendaAppointment | null>(null);
+  const [reason, setReason] = useState("");
+  const [mutatingId, setMutatingId] = useState<number | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const fetchAgenda = useCallback(() => {
     const dates = requestDates(timezone);
     return listAppointments(dates.from, dates.to, timezone).then((response) => response.appointments);
   }, [timezone]);
   const fetched = useAsyncData(fetchAgenda, controlledData === undefined);
-  const data = controlledData === undefined ? fetched.data : controlledData;
+  const data = updatedData ?? (controlledData === undefined ? fetched.data : controlledData);
   const state = controlledState ?? fetched.state;
   const retry = onRetry ?? fetched.retry;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
   const appointments = data ?? [];
+  const refreshAgenda = async () => {
+    const dates = requestDates(timezone);
+    const response = await listAppointments(dates.from, dates.to, timezone);
+    setUpdatedData(response.appointments);
+  };
+  const cancel = async () => {
+    if (!cancelTarget || mutatingId !== null) return;
+    setMutatingId(cancelTarget.id);
+    setMutationError(null);
+    try {
+      await cancelAppointment(cancelTarget.id, reason.trim() || undefined);
+      setCancelTarget(null);
+      setReason("");
+      await refreshAgenda();
+    } catch (error) {
+      setMutationError(error instanceof Error ? error.message : "No se pudo cancelar la visita");
+    } finally {
+      setMutatingId(null);
+    }
+  };
+  const retrySync = async (id: number) => {
+    if (mutatingId !== null) return;
+    setMutatingId(id);
+    setMutationError(null);
+    try {
+      await retryCalendarSync(id);
+      await refreshAgenda();
+    } catch (error) {
+      setMutationError(error instanceof Error ? error.message : "No se pudo sincronizar el calendario");
+    } finally {
+      setMutatingId(null);
+    }
+  };
   const todayRows = appointments.filter((row) => localDate(row.local_start) === today).sort((a, b) => a.local_start.localeCompare(b.local_start));
   const upcomingRows = appointments.filter((row) => localDate(row.local_start) !== today).sort((a, b) => a.local_start.localeCompare(b.local_start));
+  const actions = (row: AgendaAppointment) => <>
+    {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setCancelTarget(row); setMutationError(null); }}>Cancelar visita</Button> : null}
+    {row.sync.status === "pending" || row.sync.status === "failed" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void retrySync(row.id)} aria-label="Reintentar calendario">Reintentar calendario</Button> : null}
+  </>;
   const section = (title: string, rows: AgendaAppointment[]) => (
     <section className="agenda-page__section" aria-labelledby={`agenda-${title.toLowerCase()}`}>
       <h2 id={`agenda-${title.toLowerCase()}`}>{title}</h2>
-      <div className="agenda-page__table-wrap"><DataTable columns={columns} rows={rows} emptyMessage="No hay visitas" rowKey={(row) => String(row.id)} /></div>
+      <div className="agenda-page__table-wrap"><DataTable columns={columns} rows={rows} emptyMessage="No hay visitas" rowKey={(row) => String(row.id)} actions={actions} actionsHeader="Acciones" /></div>
     </section>
   );
 
-  return <PageFrame title="Agenda" meta={data ? `${appointments.length} visitas` : undefined} state={stateMessage(state, retry)}>
+  return <PageFrame title="Agenda" meta={data ? `${appointments.length} visitas` : undefined} state={<>{stateMessage(state, retry)}{mutationError ? <StateMessage tone="danger" role="alert" title="No se pudo completar la acción" detail={mutationError} /> : null}</>}>
     <style>{PAGE_STYLES}</style>
     {state === "loading" || state === "error" || state === "denied" ? null : data?.length === 0 || state === "empty" ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : <>{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</>}
+    <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title="Cancelar visita">
+      <label htmlFor="cancel-reason">Motivo de cancelación</label>
+      <textarea id="cancel-reason" value={reason} onChange={(event) => setReason(event.target.value)} />
+      <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void cancel()}>Confirmar cancelación</Button>
+    </Dialog>
   </PageFrame>;
 }
