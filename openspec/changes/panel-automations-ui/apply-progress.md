@@ -90,3 +90,85 @@ Consulted `GRAPH_REPORT.md` god/community nodes `domain/AppShell.tsx`, `domain/P
 ### Deviations / Issues
 
 The detail route is canonical and history-addressable in Slice 2, while the full detail/edit surface remains intentionally deferred to Slice 3. The list uses `template_event` as notification event/content text and does not expose a template-version selector. Existing Vitest output contains pre-existing React `act(...)` warnings in AppShell tests; assertions and exit status pass.
+
+## Slice 3 — Detail, Edit, Enable/Disable
+
+**Mode:** Strict TDD (RED → GREEN → triangulate → refactor)
+**Delivery:** auto-chain, stacked-to-main, branch `feat/panel-automations-detail` from `main` `116aad78`
+**Boundary:** frontend detail/edit/status mutations only; backend untouched
+**Estimated authored lines:** ~290, within the 400-line slice budget
+
+### Completed Tasks
+
+- [x] 3.1 RED: admin form validation, operator read-only controls, confirmation, enable/disable, API errors, and refresh-after-mutation
+- [x] 3.2 GREEN: detail/edit form, bounded fields, Dialog confirmation, refresh-after-mutation, and AppShell detail dispatch
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 3.1 | `web/src/components/pages/AutomationRuleDetailPage.test.tsx` | Component/jsdom | N/A (new file) | ✅ Import failed before detail page existed | ✅ Focused command passed: 5/5 | ✅ Admin validation, edit refresh, operator read-only, confirmation/status refresh, API error | ✅ Shared validation/input mapping and mutation error path |
+| 3.2 | `web/src/components/pages/AutomationRuleDetailPage.test.tsx` + `AppShell.tsx` | Component/jsdom | ✅ Existing domain/list suite preserved | ✅ Tests referenced missing detail implementation | ✅ Focused 5/5; full suite 399/399; typecheck passed | ✅ Detail route dispatch, PATCH refresh, status confirmation/refresh, role boundary | ✅ Reused `PageFrame`, `Button`, `Dialog`, `StateMessage`, and `useAsyncData`; no new dependency |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result | `cd web && npx vitest run src/components/pages/AutomationRuleDetailPage.test.tsx` → **1 file, 5 tests passed** |
+| Runtime harness command/scenario and exact result | Vitest jsdom exercised admin edit validation/PATCH refresh, operator read-only rendering, Dialog-confirmed disable/refresh, and mutation error rendering → **5 passed** |
+| Rollback boundary | Revert `web/src/components/pages/AutomationRuleDetailPage.tsx`, `web/src/components/pages/AutomationRuleDetailPage.test.tsx`, and the detail dispatch line/import in `web/src/components/domain/AppShell.tsx`; Slices 1–2 API/list/routing remain intact |
+
+### Gate Evidence
+
+- `cd web && npx vitest run` → **399 passed** across 60 files.
+- `cd web && npx tsc -b` → **passed**.
+- Backend files untouched; backend suite not rerun per slice scope.
+- Existing AppShell tests continue to emit non-failing React `act(...)` warnings.
+
+### Graph Check
+
+Consulted `GRAPH_REPORT.md` god/community nodes `AppShell.tsx`, `AutomationRulesPage.tsx`, `api.ts`, `types.ts`, `Dialog.tsx`, `PageFrame.tsx`, `StateMessage.tsx`, `useAsyncData.ts`, and `Panel Automations UI Design`. Consulted edges included `AppShell.tsx → panelRoutes.ts`, `AppShell.tsx → AutomationRulesPage.tsx`, `api.ts → getAutomationRule()/updateAutomationRule()/enableAutomationRule()/disableAutomationRule()`, `AutomationRuleDetailPage.tsx → Dialog()`, and `AutomationRuleDetailPage.tsx → useAsyncData()`.
+
+### Deviations / Issues
+
+None from the Slice 3 design. The detail component also supports an optional create mode for the design's create/edit wording, while the existing canonical route only dispatches persisted rule IDs. No backend or Slice 2 list behavior changed.
+
+## Slice 3 Contract Remediation
+
+**Mode:** Strict TDD RED → GREEN
+**Boundary:** frontend-only correction for ARP-3 create reachability and create refresh; backend untouched
+**Estimated authored lines:** ~90
+
+### Completed Corrections
+
+- [x] Exposed `Crear regla` only to admins on `AutomationRulesPage` and wired AppShell to mount the existing detail form in create mode.
+- [x] After successful POST creation, fetched the persisted rule with `GET /panel/api/automation-rules/{id}` before invoking navigation to the canonical detail route.
+
+### TDD Cycle Evidence
+
+| Correction | Test file | RED | GREEN | Evidence |
+|---|---|---|---|---|
+| Admin create access | `web/src/components/pages/AutomationRulesPage.test.tsx` | ✅ Button lookup failed before the admin action existed | ✅ Admin action invokes callback; operator action is absent | 4/4 page tests passed |
+| Create refresh | `web/src/components/pages/AutomationRuleDetailPage.test.tsx` | ✅ `getAutomationRule(8)` was not called after POST | ✅ POST → GET persisted rule → `onCreated(8)` | 6/6 detail tests passed |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result | `cd web && npx vitest run src/components/pages/AutomationRulesPage.test.tsx src/components/pages/AutomationRuleDetailPage.test.tsx` → **2 files, 10 tests passed** |
+| Runtime harness command/scenario and exact result | Vitest jsdom exercised admin-only create entry, operator omission, create POST/GET refresh, and navigation callback → **10 passed** |
+| Rollback boundary | Revert the create props/state in `AutomationRulesPage.tsx`, `AutomationRuleDetailPage.tsx`, `AppShell.tsx`, and the two updated test files; prior Slice 3 detail/edit/status behavior remains intact |
+
+### Gate Evidence
+
+- `cd web && npx vitest run` → **401 passed** across 60 files.
+- `cd web && npx tsc -b` → **passed**.
+- Backend files untouched.
+
+### Graph Check
+
+Consulted `AppShell.tsx`, `AutomationRulesPage.tsx`, `AutomationRuleDetailPage.tsx`, `api.ts`, `useAsyncData.ts`, `PageFrame.tsx`, `Button.tsx`, and `panelRoutes.ts`. Consulted edges included `AutomationRulesPage.tsx ← AppShell.tsx`, `AutomationRuleDetailPage.tsx → createAutomationRule()`, `AutomationRuleDetailPage.tsx → getAutomationRule()`, and `AppShell.tsx → pathForRoute()`.
+
+### Deviations / Issues
+
+None. The create screen uses the existing in-memory panel navigation seam rather than adding a new URL shape for an unsaved rule; successful creation immediately navigates to the canonical persisted detail URL.

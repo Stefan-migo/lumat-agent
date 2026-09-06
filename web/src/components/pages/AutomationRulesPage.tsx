@@ -1,7 +1,8 @@
 import { useCallback } from "react";
 import { listAutomationRules } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { Rule } from "../../types";
+import type { Rule, User } from "../../types";
+import { Button } from "../primitives/Button";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
@@ -13,6 +14,8 @@ export interface AutomationRulesPageProps {
   state?: AsyncDataState;
   onRetry?: () => void;
   onOpenRule?: (id: number) => void;
+  onOpenCreate?: () => void;
+  user?: User;
 }
 
 function columnsFor(onOpenRule?: (id: number) => void): Column<Rule>[] {
@@ -29,7 +32,7 @@ function columnsFor(onOpenRule?: (id: number) => void): Column<Rule>[] {
   ];
 }
 
-export function AutomationRulesPage({ data: controlledData, state: controlledState, onRetry, onOpenRule }: AutomationRulesPageProps) {
+export function AutomationRulesPage({ data: controlledData, state: controlledState, onRetry, onOpenRule, onOpenCreate, user }: AutomationRulesPageProps) {
   const fetchRules = useCallback(() => listAutomationRules().then((response) => response.rules), []);
   const fetched = useAsyncData(fetchRules, controlledData === undefined);
   const data = controlledData === undefined ? fetched.data : controlledData;
@@ -41,6 +44,7 @@ export function AutomationRulesPage({ data: controlledData, state: controlledSta
     : null;
 
   return <PageFrame title="Reglas de automatización" meta={data ? `${data.length} reglas` : undefined} state={stateMessage}>
+    {user?.role === "admin" && onOpenCreate ? <Button onClick={onOpenCreate}>Crear regla</Button> : null}
     {state === "loading" || state === "error" || state === "denied" ? null : data?.length === 0 || state === "empty" ? <EmptyState title="No hay reglas de automatización" description="No hay reglas configuradas para mostrar." /> : <DataTable columns={columnsFor(onOpenRule)} rows={data ?? []} rowKey={(rule) => String(rule.id)} />}
   </PageFrame>;
 }

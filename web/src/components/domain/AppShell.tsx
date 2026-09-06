@@ -16,6 +16,7 @@ import { PushSettings } from '../pages/PushSettings';
 import { AgentChat } from '../pages/AgentChat';
 import { AgendaPage } from '../pages/AgendaPage';
 import { AutomationRulesPage } from '../pages/AutomationRulesPage';
+import { AutomationRuleDetailPage } from '../pages/AutomationRuleDetailPage';
 
 /** Top-level SPA views. Client ficha and conversation thread are drill-downs
  * rendered from list views, not top-level nav, so they do not appear here. */
@@ -30,6 +31,7 @@ export interface AppShellProps {
 export function AppShell({ user, onLogout }: AppShellProps) {
   const [route, setRoute] = useState<PanelRoute>(() => parsePanelPath(window.location.pathname));
   const [conversationRefresh, setConversationRefresh] = useState(0);
+  const [creatingAutomationRule, setCreatingAutomationRule] = useState(false);
 
   useEffect(() => {
     const parsed = parsePanelPath(window.location.pathname);
@@ -44,6 +46,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
       const nextPath = pathForRoute(nextRoute);
       if (window.location.pathname !== nextPath) window.history.replaceState({}, '', nextPath);
       setRoute(nextRoute);
+      setCreatingAutomationRule(false);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -58,6 +61,13 @@ export function AppShell({ user, onLogout }: AppShellProps) {
   const navigateToRoute = (nextRoute: PanelRoute) => {
     window.history.pushState({}, '', pathForRoute(nextRoute));
     setRoute(nextRoute);
+    setCreatingAutomationRule(false);
+  };
+
+  const navigateToCreateAutomationRule = () => {
+    window.history.pushState({}, '', pathForView('automation-rules'));
+    setRoute({ view: 'automation-rules' });
+    setCreatingAutomationRule(true);
   };
 
   const view = route.view;
@@ -66,7 +76,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
 
   const page = view === 'dashboard' ? <Dashboard />
       : view === 'agenda' ? <AgendaPage />
-      : view === 'automation-rules' ? <AutomationRulesPage onOpenRule={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} />
+      : view === 'automation-rules' ? route.automationRuleId !== undefined || creatingAutomationRule ? <AutomationRuleDetailPage ruleId={creatingAutomationRule ? null : route.automationRuleId} user={user} onCreated={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} onBack={() => { setCreatingAutomationRule(false); window.history.back(); }} /> : <AutomationRulesPage user={user} onOpenCreate={navigateToCreateAutomationRule} onOpenRule={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
       : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
       : view === 'cases' ? <CasesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { AutomationRulesPage } from './AutomationRulesPage';
 import { listAutomationRules } from '../../api';
 import type { Rule } from '../../types';
+import type { User } from '../../types';
 
 vi.mock('../../api', () => ({ listAutomationRules: vi.fn() }));
 
@@ -11,6 +12,8 @@ const rule = (overrides: Partial<Rule> = {}): Rule => ({
   id: 7, name: 'Avisar caso nuevo', event_type: 'case.created', conditions: { priority: 'alta' }, channel: 'whatsapp',
   template_event: 'case.created', cooldown_seconds: 300, enabled: true, created_by: 'ana', created_at: '2026-09-05T12:00:00Z', updated_at: '2026-09-05T12:00:00Z', ...overrides,
 });
+const admin: User = { username: 'ana', role: 'admin' };
+const operator: User = { username: 'vero', role: 'operador' };
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.restoreAllMocks());
@@ -48,5 +51,17 @@ describe('AutomationRulesPage', () => {
     render(<AutomationRulesPage />);
     expect(await screen.findByRole('link', { name: 'Segunda regla' })).toBeInTheDocument();
     expect(listAutomationRules).toHaveBeenCalledOnce();
+  });
+
+  it('offers rule creation to admins but not operators', async () => {
+    const user = userEvent.setup();
+    const onOpenCreate = vi.fn();
+    const { rerender } = render(<AutomationRulesPage user={admin} data={[]} state="empty" onOpenCreate={onOpenCreate} />);
+    expect(screen.getByRole('button', { name: 'Crear regla' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Crear regla' }));
+    expect(onOpenCreate).toHaveBeenCalledOnce();
+
+    rerender(<AutomationRulesPage user={operator} data={[]} state="empty" onOpenCreate={onOpenCreate} />);
+    expect(screen.queryByRole('button', { name: 'Crear regla' })).not.toBeInTheDocument();
   });
 });
