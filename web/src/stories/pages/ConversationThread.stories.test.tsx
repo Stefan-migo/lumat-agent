@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { ConversationThread } from "../../components/pages/ConversationThread";
 import { ConversationThreadBubbles, ConversationThreadView } from "./ConversationThread.stories";
 import { conversations, messages } from "./_shared/mockData/conversations";
@@ -11,14 +11,14 @@ describe("ConversationThread", () => {
     render(<ConversationThread conversationId={conversation.id} />);
     expect(await screen.findByText(messages[0].text!)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(`/panel/api/conversations/${conversation.id}`, expect.objectContaining({ credentials: "include" }));
-    expect(screen.getByRole("status")).toHaveTextContent(/canal automático/i);
+    expect(screen.getAllByText(/canal automático/i).length).toBeGreaterThan(0);
     fetchMock.mockRestore();
   });
 
-  it("renders message rows and no reply controls", () => {
+  it("renders directional bubbles and no reply controls", () => {
     render(<ConversationThread data={{ conversation, messages }} />);
-    const table = screen.getByRole("table");
-    expect(within(table).getByRole("columnheader", { name: "Dirección" })).toBeInTheDocument();
+    expect(screen.queryAllByRole("table")).toHaveLength(0);
+    expect(screen.getAllByText(/Marcela Fuentes|Lumat/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
   });
@@ -32,6 +32,7 @@ describe("ConversationThread", () => {
     render(<ConversationThreadView />);
     expect(screen.getByRole("heading", { name: `# ${conversation.id}` })).toBeInTheDocument();
     render(<ConversationThreadBubbles />);
-    expect(screen.getAllByRole("table").length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole("table")).toHaveLength(0);
+    expect(screen.getAllByLabelText(/mensaje/i).length).toBeGreaterThan(0);
   });
 });
