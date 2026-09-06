@@ -40,8 +40,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Slice 3 — Detail, Edit, Enable/Disable
 
-- [ ] 3.1 RED: test admin form validation, operator read-only controls, confirmation, enable/disable, API errors, and refresh-after-mutation; command: `cd web && npx vitest run src/components/pages/AutomationRuleDetailPage.test.tsx` (ARP-3, AP-12).
-- [ ] 3.2 GREEN: create `web/src/components/pages/AutomationRuleDetailPage.tsx` with bounded fields, detail/edit mode, `Dialog` confirmation, and refresh after mutations (ARP-1/3).
+- [x] 3.1 RED: test admin form validation, operator read-only controls, confirmation, enable/disable, API errors, and refresh-after-mutation; command: `cd web && npx vitest run src/components/pages/AutomationRuleDetailPage.test.tsx` (ARP-3, AP-12).
+- [x] 3.2 GREEN: create `web/src/components/pages/AutomationRuleDetailPage.tsx` with bounded fields, detail/edit mode, `Dialog` confirmation, and refresh after mutations (ARP-1/3).
 
 ## Phase 4: Slice 4 — Stories and Gates
 
