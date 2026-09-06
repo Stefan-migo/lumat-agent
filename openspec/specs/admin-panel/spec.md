@@ -151,6 +151,25 @@ The panel MUST show appointment conflicts, failed/pending synchronization, faile
 - WHEN the agenda row renders
 - THEN the cancellation action is available and requires confirmation before mutation
 
+### Requirement: AP-12 — Automation Rule Role Access
+
+The panel MUST expose automation-rule reads to authenticated admins and operadores. Only admins MAY create, update, enable, or disable rules; unauthenticated requests MUST receive JSON 401 and operator mutation attempts MUST receive JSON 403 without changing state.
+
+#### Scenario: Operator reads rules
+- GIVEN an authenticated operador
+- WHEN they request the automation list or detail
+- THEN the API returns the authorized rule data
+
+#### Scenario: Operator mutation is forbidden
+- GIVEN an authenticated operador
+- WHEN they submit an automation mutation
+- THEN the API returns JSON 403 and the rule is unchanged
+
+#### Scenario: Anonymous request is rejected
+- GIVEN no valid session
+- WHEN the automation API is requested
+- THEN it returns JSON 401 without an HTML redirect
+
 ## Non-Goals
 
 - Assignee/responsible column on conversations; reply/state mutation endpoints (HH-5); pagination; migration of existing conversation rows.
