@@ -11,8 +11,8 @@ Web-only. Every GREEN task follows RED; each slice compiles and passes focused t
 
 ## Phase 2: Thread and List Presentation (PNL-APP-12, DS-GRAMMAR-1/3)
 
-- [ ] 2.1 RED: Extend `ConversationThread.test.tsx`/`ConversationsList.test.tsx` for bubbles, labels, handoff, reply-window reasons, retry/error, selection, and tables.
-- [ ] 2.2 GREEN: Modify `ConversationThread.tsx`/`ConversationsList.tsx` with existing primitives; preserve APIs/mutations and no fake activity.
+- [x] 2.1 RED: Extend `ConversationThread.test.tsx`/`ConversationsList.test.tsx` for bubbles, labels, handoff, reply-window reasons, retry/error, selection, and tables.
+- [x] 2.2 GREEN: Modify `ConversationThread.tsx`/`ConversationsList.tsx` with existing primitives; preserve APIs/mutations and no fake activity.
 
 ## Phase 3: Internal AgentChat (IAC-4/5, DS-GRAMMAR-1/3)
 
