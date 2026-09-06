@@ -7,6 +7,7 @@ import {
   Error,
   Forbidden,
   Loading,
+  OperatorData,
 } from "./AutomationRulesPage.stories";
 
 describe("AutomationRulesPage Storybook state matrix", () => {
@@ -27,5 +28,13 @@ describe("AutomationRulesPage Storybook state matrix", () => {
   ])("renders the %s state", (story, label) => {
     render(<AutomationRulesPageStory {...(story.args ?? {})} />);
     expect(screen.getByText(label)).toBeInTheDocument();
+  });
+
+  it("renders the operator story without mutation controls", () => {
+    render(<AutomationRulesPageStory {...(OperatorData.args ?? {})} />);
+
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Crear regla" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /editar|habilitar|deshabilitar/i })).not.toBeInTheDocument();
   });
 });

@@ -47,3 +47,9 @@ Chain strategy: stacked-to-main
 
 - [x] 4.1 RED/GREEN: add stories/tests for data, loading, empty, error, forbidden, create, edit, and confirmation; command: `cd web && npx vitest run` (ARP-1/2/3).
 - [x] 4.2 Run `uv run pytest tests/`; then `cd web && npx tsc -b && npm run build`; verify no delete, template linkage, or evaluator changes (AR-4/5/6).
+
+### Slice 4 Contract Remediation
+
+- [x] Add operator read-only fixtures and story tests for list/detail role boundaries (ARP-3).
+- [x] Make the confirmation story open its Dialog through a Storybook `play` function (ARP-3).
+- [x] Rename detail `Empty` to `NotFound`, matching the detail page's actual state contract (ARP-2).

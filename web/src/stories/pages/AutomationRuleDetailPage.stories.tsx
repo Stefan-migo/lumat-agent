@@ -41,9 +41,16 @@ type Story = StoryObj<typeof meta>;
 
 export const Data: Story = { args: { ruleId: 7, user: admin, data: rule, state: "ready", width: 720 } };
 export const Loading: Story = { args: { ruleId: 7, user: admin, data: null, state: "loading", width: 720 } };
-export const Empty: Story = { args: { ruleId: 7, user: admin, data: null, state: "ready", width: 720 } };
+export const NotFound: Story = { args: { ruleId: 7, user: admin, data: null, state: "ready", width: 720 } };
 export const Error: Story = { args: { ruleId: 7, user: admin, data: null, state: "error", width: 720 } };
 export const Forbidden: Story = { args: { ruleId: 7, user: admin, data: null, state: "denied", width: 720 } };
 export const Create: Story = { args: { ruleId: null, user: admin, width: 720 } };
 export const Edit: Story = { args: { ruleId: 7, user: admin, data: rule, state: "ready", width: 720 } };
-export const Confirmation: Story = { args: { ruleId: 7, user: admin, data: rule, state: "ready", width: 720 } };
+export const OperatorData: Story = { args: { ruleId: 7, user: { username: "vero", role: "operador" }, data: rule, state: "ready", width: 720 } };
+export const Confirmation: Story = {
+  args: { ruleId: 7, user: admin, data: rule, state: "ready", width: 720 },
+  play: async ({ canvasElement }) => {
+    const button = Array.from(canvasElement.querySelectorAll("button")).find((item) => item.textContent === "Deshabilitar regla");
+    button?.click();
+  },
+};

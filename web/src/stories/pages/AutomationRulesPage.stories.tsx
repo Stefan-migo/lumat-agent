@@ -46,6 +46,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Data: Story = { args: { data: DATA, state: "ready", user: admin, width: 1280 } };
+export const OperatorData: Story = { args: { data: DATA, state: "ready", user: { username: "vero", role: "operador" }, width: 1280 } };
 export const Loading: Story = { args: { data: null, state: "loading", width: 1280 } };
 export const Empty: Story = { args: { data: [], state: "empty", width: 1280 } };
 export const Error: Story = { args: { data: null, state: "error", width: 1280 } };

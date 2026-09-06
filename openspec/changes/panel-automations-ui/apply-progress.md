@@ -216,3 +216,33 @@ Consulted `GRAPH_REPORT.md` nodes `AutomationRulesPage.tsx`, `AutomationRuleDeta
 ### Deviations / Issues
 
 None. Story fixtures use the existing controlled `data`/`state` seams and neutral Spanish labels already established by the panel; no production page or backend code was changed.
+
+## Slice 4 Contract Remediation
+
+**Mode:** Strict TDD RED → GREEN → triangulate → refactor
+**Boundary:** story coverage only; no production, backend, evaluator, delete, or template-linkage changes
+
+### Completed Corrections
+
+- [x] Added `OperatorData` stories for list/detail with `role: "operador"`; tests verify absent mutation controls and read-only detail fields.
+- [x] Added a Storybook `play` function to `Confirmation`; it clicks `Deshabilitar regla` and leaves the Dialog visibly open.
+- [x] Renamed detail `Empty` to `NotFound`; detail has no collection-empty state, while ARP-2 empty applies to the list page.
+
+### TDD Cycle Evidence
+
+| Correction | Test file | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|
+| Operator list/detail | `web/src/stories/pages/AutomationRulesPage.stories.test.tsx`, `AutomationRuleDetailPage.stories.test.tsx` | ✅ Missing OperatorData/NotFound exports failed | ✅ 11 focused tests passed | ✅ Admin and operator control boundaries plus readonly fields | ✅ Reused existing story fixtures and page seams |
+| Confirmation play | `web/src/stories/pages/AutomationRuleDetailPage.stories.test.tsx` | ✅ Test failed because `Confirmation.play` was undefined | ✅ Play function opens Dialog; assertion passed | ✅ Direct user interaction and play-driven interaction | ✅ Native DOM click avoids an unavailable direct `@storybook/test` dependency |
+| Detail naming | `web/src/stories/pages/AutomationRuleDetailPage.stories.test.tsx` | ✅ Test failed because `NotFound` was undefined | ✅ `NotFound` renders `Regla no encontrada` | ✅ Confirms absence of list-empty copy | ✅ No production seam added |
+
+### Remediation Evidence
+
+- Focused: `cd web && npx vitest run src/stories/pages/AutomationRulesPage.stories.test.tsx src/stories/pages/AutomationRuleDetailPage.stories.test.tsx` → **11 passed**.
+- Full frontend: `cd web && npx vitest run` → **412 passed** across 62 files.
+- Typecheck: `cd web && npx tsc -b` → **passed**.
+- Scope: only four story/test files plus cumulative OpenSpec artifacts changed; backend and evaluator untouched.
+
+### Graph Check
+
+Consulted updated `GRAPH_REPORT.md` nodes `AutomationRulesPage.stories.tsx`, `AutomationRulesPage.stories.test.tsx`, `AutomationRuleDetailPage.stories.tsx`, `AutomationRuleDetailPage.stories.test.tsx`, `AutomationRuleDetailPage.tsx`, `User`, `Dialog.tsx`, and `api.ts`. Edges included story → page imports, detail story → `AutomationRuleDetailPage()`, detail page → `Dialog()`, and story test → `Confirmation.play`.

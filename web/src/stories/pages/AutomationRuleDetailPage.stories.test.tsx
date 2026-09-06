@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { act } from "react";
 import { disableAutomationRule, getAutomationRule } from "../../api";
 import {
   AutomationRuleDetailPageStory,
   Confirmation,
   Create,
   Edit,
+  NotFound,
+  OperatorData,
 } from "./AutomationRuleDetailPage.stories";
 
 vi.mock("../../api", () => ({
@@ -40,5 +43,30 @@ describe("AutomationRuleDetailPage Storybook state matrix", () => {
 
     expect(disableAutomationRule).toHaveBeenCalledWith(7);
     expect(await screen.findByText("Deshabilitada")).toBeInTheDocument();
+  });
+
+  it("renders the operator story read-only without mutation controls", () => {
+    render(<AutomationRuleDetailPageStory {...(OperatorData.args ?? {})} />);
+
+    expect(screen.queryByRole("button", { name: /editar|crear|habilitar|deshabilitar|guardar/i })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Nombre")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Evento")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Canal")).toHaveAttribute("readonly");
+  });
+
+  it("names the missing detail state as not found, not empty", () => {
+    render(<AutomationRuleDetailPageStory {...(NotFound.args ?? {})} />);
+    expect(screen.getByText("Regla no encontrada")).toBeInTheDocument();
+    expect(screen.queryByText("No hay reglas de automatización")).not.toBeInTheDocument();
+  });
+
+  it("defines Confirmation as an interactive story that opens its Dialog", async () => {
+    render(<AutomationRuleDetailPageStory {...(Confirmation.args ?? {})} />);
+
+    expect(Confirmation.play).toBeTypeOf("function");
+    await act(async () => {
+      await Confirmation.play?.({ canvasElement: document.body } as Parameters<NonNullable<typeof Confirmation.play>>[0]);
+    });
+    expect(screen.getByRole("dialog", { name: "Deshabilitar regla" })).toBeInTheDocument();
   });
 });
