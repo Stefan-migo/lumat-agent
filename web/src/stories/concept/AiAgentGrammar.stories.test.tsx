@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AiAgentGrammarView } from "./AiAgentGrammar.stories";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const defaultProps = { railExpanded: true, inspectorVisible: true, scenario: "emergencia" as const, composerState: "enabled" as const };
+const storyRaw = readFileSync(join(process.cwd(), "src", "stories", "concept", "AiAgentGrammar.stories.tsx"), "utf8");
+const primitivesRaw = readFileSync(join(process.cwd(), "src", "components", "primitives", "primitives.css"), "utf8");
 
 describe("AI-agent grammar concept page", () => {
   it("renders the operational shell, agent events, and inspector roles", () => {
@@ -25,5 +29,22 @@ describe("AI-agent grammar concept page", () => {
     expect(screen.getByText("Revisión de calefacción")).toBeInTheDocument();
     expect(screen.getByText("Solicitud de visita creada")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reconocer emergencia" })).toBeNull();
+  });
+
+  it("uses the shared tokenized stylesheet without injected styles or hard-coded grammar colors", () => {
+    render(<AiAgentGrammarView {...defaultProps} />);
+    expect(document.querySelector(".ai-agent-grammar__rail")).toBeInTheDocument();
+    expect(document.querySelector("style")).toBeNull();
+    expect(storyRaw).not.toMatch(/<style>|const styles/);
+    expect(primitivesRaw).toMatch(/\.ai-agent-grammar__rail\s*\{[^}]*background:\s*var\(--primary-800\)/s);
+    expect(primitivesRaw).not.toMatch(/\.ai-agent-grammar__rail\s*\{[^}]*#[0-9a-f]{3,8}/i);
+  });
+
+  it("exposes accessible regions and honors reduced-motion rules", () => {
+    render(<AiAgentGrammarView {...defaultProps} railExpanded={false} inspectorVisible={false} />);
+    expect(screen.getByRole("navigation", { name: "Secciones del panel" })).toBeInTheDocument();
+    expect(screen.getByRole("main", { name: "Conversación con María González" })).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Inspector operacional" })).toBeNull();
+    expect(primitivesRaw).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.ai-agent-grammar__/);
   });
 });

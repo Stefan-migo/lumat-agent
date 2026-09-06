@@ -290,3 +290,36 @@ describe('AppShell — native History API routing', () => {
     removeSpy.mockRestore();
   });
 });
+
+describe('AppShell — agent shell grammar', () => {
+  it('renders a truthful active-thread region without making a conversation request', () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    render(<AppShell user={operador} />);
+
+    expect(screen.getByRole('region', { name: 'Conversaciones activas' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Conversaciones activas' })).toHaveTextContent('No hay conversaciones activas');
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining('/panel/api/conversations'), expect.anything());
+    fetchMock.mockRestore();
+  });
+
+  it('keeps supplied active threads structural and renders the optional inspector', () => {
+    render(
+      <AppShell
+        user={admin}
+        activeThreads={{ status: 'ready', threads: [{ id: 9, label: 'María González', status: 'human', active: true }] }}
+        inspector={<div>Contexto del cliente</div>}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /María González/ })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('complementary', { name: 'Inspector operacional' })).toHaveTextContent('Contexto del cliente');
+  });
+
+  it('renders explicit active-thread loading and failure semantics', () => {
+    const { rerender } = render(<AppShell user={operador} activeThreads={{ status: 'loading' }} />);
+    expect(screen.getByRole('status', { name: 'Conversaciones activas' })).toHaveTextContent('Cargando conversaciones activas');
+
+    rerender(<AppShell user={operador} activeThreads={{ status: 'error', message: 'No se pudo cargar el resumen' }} />);
+    expect(screen.getByRole('alert', { name: 'Conversaciones activas' })).toHaveTextContent('No se pudo cargar el resumen');
+  });
+});

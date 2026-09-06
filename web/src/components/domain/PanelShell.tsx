@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import type { User } from "../../types";
+import type { ConversationState, User } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 
@@ -139,7 +139,13 @@ export interface PanelShellProps {
    *  stale-data indicator). Kept narrow on purpose — full banner copy still
    *  belongs in the page content, not the chrome. */
   statusBadge?: ReactNode;
+  activeThreads?: ActiveThreadsState;
+  inspector?: ReactNode;
 }
+
+export type ActiveThreadsState =
+  | { status: "loading" | "empty" | "error" | "placeholder"; message?: string }
+  | { status: "ready"; threads: Array<{ id: number; label: string; status: ConversationState; active?: boolean }> };
 
 function Brand({ mobile = false, compact = false }: { mobile?: boolean; compact?: boolean }) {
   return (
@@ -234,6 +240,8 @@ export function PanelShell({
   user,
   statusBadge,
   onLogout,
+  activeThreads,
+  inspector,
 }: PanelShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
@@ -282,13 +290,14 @@ export function PanelShell({
   };
 
   return (
-    <div className={`panel-shell${collapsed ? " panel-shell--collapsed" : ""}`}>
+    <div className={`panel-shell${collapsed ? " panel-shell--collapsed" : ""}${inspector ? " panel-shell--with-inspector" : ""}`}>
       <a className="panel-shell__skip-link" href="#panel-main-content">Saltar al contenido</a>
 
-      <aside id="panel-shell-sidebar" className="panel-shell__sidebar" aria-label="Panel de navegación">
+      <aside id="panel-shell-sidebar" className="panel-shell__sidebar panel-shell__rail" aria-label="Panel de navegación">
         <div className="panel-shell__sidebar-inner">
           <Brand compact={collapsed} />
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} collapsed={collapsed} />
+          {!collapsed ? <ActiveThreads state={activeThreads} /> : null}
           <UserContext user={user} compact={collapsed} onLogout={onLogout} />
         </div>
       </aside>
@@ -362,6 +371,38 @@ export function PanelShell({
           {children}
         </div>
       </div>
+      {inspector ? <aside className="panel-shell__inspector" aria-label="Inspector operacional">{inspector}</aside> : null}
     </div>
+  );
+}
+
+function ActiveThreads({ state }: { state?: ActiveThreadsState }) {
+  const current = state ?? { status: "placeholder" as const };
+  const message = current.status === "loading"
+    ? "Cargando conversaciones activas"
+    : current.status === "error"
+      ? current.message ?? "No se pudieron cargar las conversaciones activas"
+      : current.status === "empty"
+        ? current.message ?? "No hay conversaciones activas"
+        : current.status === "placeholder"
+          ? current.message ?? "No hay conversaciones activas"
+          : undefined;
+
+  return (
+    <section className="panel-shell__active-threads" aria-labelledby="panel-active-threads-title">
+      <h2 id="panel-active-threads-title" className="panel-shell__active-threads-title">Conversaciones activas</h2>
+      {current.status === "ready" ? (
+        <ul className="panel-shell__active-thread-list">
+          {current.threads.map((thread) => (
+            <li key={thread.id}>
+              <button type="button" className="panel-shell__active-thread" aria-current={thread.active ? "page" : undefined}>
+                <span>{thread.label}</span>
+                <span className="panel-shell__active-thread-status">{thread.status === "human" ? "Atención humana" : thread.status === "bot" ? "Agente atendiendo" : "Cerrada"}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : <div className="panel-shell__active-threads-state" role={current.status === "error" ? "alert" : "status"} aria-label="Conversaciones activas">{message}</div>}
+    </section>
   );
 }

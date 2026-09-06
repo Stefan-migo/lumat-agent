@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { User } from '../../types';
-import type { PanelView } from './PanelShell';
+import type { ActiveThreadsState, PanelView } from './PanelShell';
 import { PanelShell } from './PanelShell';
 import { parsePanelPath, pathForRoute, pathForView, type PanelRoute } from './panelRoutes';
 import { Dashboard } from '../pages/Dashboard';
@@ -25,10 +26,12 @@ export type View = PanelView;
 export interface AppShellProps {
   user: User;
   onLogout?: () => void | Promise<void>;
+  activeThreads?: ActiveThreadsState;
+  inspector?: ReactNode;
 }
 
 /** Application shell: PanelShell frame and native History API navigation. */
-export function AppShell({ user, onLogout }: AppShellProps) {
+export function AppShell({ user, onLogout, activeThreads, inspector }: AppShellProps) {
   const [route, setRoute] = useState<PanelRoute>(() => parsePanelPath(window.location.pathname));
   const [conversationRefresh, setConversationRefresh] = useState(0);
   const [creatingAutomationRule, setCreatingAutomationRule] = useState(false);
@@ -87,7 +90,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
     : <Settings />;
 
   return (
-    <PanelShell user={user} currentView={view} onNavigate={navigate} onLogout={onLogout}>
+    <PanelShell user={user} currentView={view} onNavigate={navigate} onLogout={onLogout} activeThreads={activeThreads} inspector={inspector}>
       {page}
     </PanelShell>
   );

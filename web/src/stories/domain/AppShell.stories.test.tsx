@@ -159,3 +159,19 @@ describe('AppShell — tokenized base layout boundary (DS-SHELL-3)', () => {
     expect(panelShellRaw).not.toMatch(/\.panel-shell__content-area\s*\{[\s\S]*grid-template-rows:/);
   });
 });
+
+describe('AppShell stories — agent grammar slots', () => {
+  it('exposes semantic rail and active-thread classes in the shared shell', () => {
+    render(<AppShell user={operador} />);
+    expect(document.querySelector('.panel-shell__rail')).toBeInTheDocument();
+    expect(document.querySelector('.panel-shell__active-threads')).toBeInTheDocument();
+    expect(primitivesRaw).toMatch(/\.panel-shell__rail\s*\{/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__active-threads\s*\{/);
+  });
+
+  it('keeps compact rail labels accessible and does not add shell-owned fetch code', () => {
+    render(<AppShell user={operador} />);
+    expect(panelShellRaw).not.toMatch(/listConversations|fetch\s*\(/);
+    expect(primitivesRaw).toMatch(/\.panel-shell--collapsed[\s\S]*\.panel-shell__active-threads[\s\S]*display:\s*none/);
+  });
+});
