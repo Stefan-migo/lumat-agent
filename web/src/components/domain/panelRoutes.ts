@@ -4,6 +4,7 @@ export type PanelRoute = {
   view: PanelView;
   clientId?: number;
   conversationId?: number;
+  automationRuleId?: number;
 };
 
 export const PANEL_BASE_PATH = '/panel/app/';
@@ -19,6 +20,7 @@ export const PANEL_ROUTES: Readonly<Record<PanelView, string>> = {
   kb: '/panel/app/kb',
   settings: '/panel/app/settings',
   agenda: '/panel/app/agenda',
+  'automation-rules': '/panel/app/automation-rules',
 };
 
 const panelViews = new Set<PanelView>(Object.keys(PANEL_ROUTES) as PanelView[]);
@@ -34,6 +36,9 @@ export function pathForRoute(route: PanelRoute): string {
   }
   if (route.view === 'conversations' && route.conversationId !== undefined && Number.isSafeInteger(route.conversationId) && route.conversationId > 0) {
     return `${base}/${route.conversationId}`;
+  }
+  if (route.view === 'automation-rules' && route.automationRuleId !== undefined && Number.isSafeInteger(route.automationRuleId) && route.automationRuleId > 0) {
+    return `${base}/${route.automationRuleId}`;
   }
   return base;
 }
@@ -64,6 +69,7 @@ export function parsePanelPath(pathname: string): PanelRoute {
   if (segments.length !== 4) return fallback();
 
   const id = positiveId(segments[3]);
-  if (id === null || (view !== 'clients' && view !== 'conversations')) return fallback();
+  if (id === null || !['clients', 'conversations', 'automation-rules'].includes(view)) return fallback();
+  if (view === 'automation-rules') return { view, automationRuleId: id };
   return view === 'clients' ? { view, clientId: id } : { view, conversationId: id };
 }

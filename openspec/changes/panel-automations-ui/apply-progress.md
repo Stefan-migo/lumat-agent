@@ -44,3 +44,49 @@ Consulted `AutomationRule`, `automation.py`, `record_audit()`, `AuditLog`, `pane
 ### Deviations / Issues
 
 None from the corrected design. The shared functional fixture does not truncate `automation_rules`, so the new test file owns cleanup for that table to keep tests isolated.
+
+## Slice 2 — Frontend Route, Navigation, Client, List
+
+**Mode:** Strict TDD (RED → GREEN → triangulate → refactor)
+**Delivery:** auto-chain, stacked-to-main, branch `feat/panel-automations-page` from `main` `400fc551`
+**Boundary:** frontend route/navigation/client/list only; backend unchanged
+**Estimated authored lines:** ~260, within the 400-line slice budget
+
+### Completed Tasks
+
+- [x] 2.1 RED: canonical list/detail routing, malformed-ID fallback, deep links, `aria-current`, operator visibility, and browser-back coverage
+- [x] 2.2 RED: list page loading, empty, error/retry, forbidden, accessible table, fields, and notification event/content labeling
+- [x] 2.3 GREEN: Rule types, six API functions, route parsing/dispatch, operator-visible navigation entry
+- [x] 2.4 GREEN: `AutomationRulesPage` with `PageFrame`, `DataTable`, `StateMessage`, `EmptyState`, and accessible detail links
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 2.1 | `web/src/components/domain/{panelRoutes,AppShell}.test*` | Integration/jsdom | Existing domain suite preserved; final 20/20 then 23/23 focused | ✅ New route/detail and navigation assertions failed before implementation | ✅ `npx vitest run src/components/domain` → 20/20, final focused domain 20/20 | ✅ Canonical list/detail, malformed IDs, operator nav, active state, deep link, back path | ✅ Reused `PanelRoute` parser/history seam and kept existing routes intact |
+| 2.2 | `web/src/components/pages/AutomationRulesPage.test.tsx` | Component/jsdom | N/A (new file) | ✅ Collection failed to resolve missing page before implementation | ✅ `npx vitest run src/components/pages/AutomationRulesPage.test.tsx` → 3/3 | ✅ Data table plus loading, empty, error/retry, forbidden, API-loaded states | ✅ Shared async/state primitives and pure column mapping |
+| 2.3 | Domain tests + page API path | Integration/jsdom | Full web suite after change: 394/394 | ✅ Route tests referenced missing automation route/type | ✅ Focused domain/page tests and `npx tsc -b` passed | ✅ Read API shapes, list/detail URL generation, PATCH/status client functions | ✅ Thin API wrappers mirror existing `apiFetch`/`postJson` patterns |
+| 2.4 | `web/src/components/pages/AutomationRulesPage.test.tsx` | Component/jsdom | N/A (new file) | ✅ Import failed before page existed | ✅ 3/3 focused tests | ✅ Non-empty table and all state branches exercised | ✅ Reused existing page primitives; no template selector or mutation controls |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result | `cd web && npx vitest run src/components/domain src/components/pages/AutomationRulesPage.test.tsx` → **3 files, 23 tests passed** |
+| Runtime harness command/scenario and exact result | Vitest jsdom runtime exercised deep-link parsing, History API push/back, operator navigation, API-backed list loading, and all list states → **23 passed** |
+| Rollback boundary | Revert `web/src/api.ts`, `web/src/types.ts`, `web/src/components/domain/{panelRoutes,PanelShell,AppShell}.tsx`, `web/src/components/pages/AutomationRulesPage.tsx`, and the two modified/new test files; Slice 1 backend remains untouched |
+
+### Gate Evidence
+
+- `cd web && npx vitest run src/components/domain src/components/pages/AutomationRulesPage.test.tsx` → **23 passed**.
+- `cd web && npx vitest run` → **394 passed**.
+- `cd web && npx tsc -b` → **passed**.
+- `uv run pytest tests/` → **583 passed** in 260.51s; no backend files were changed.
+
+### Graph Check
+
+Consulted `GRAPH_REPORT.md` god/community nodes `domain/AppShell.tsx`, `domain/PanelShell.tsx`, `api.ts`, `types.ts`, `AgendaPage.tsx`, `automation_rules.py`, and `Panel Automations UI Design`. Consulted edges included `AppShell.tsx → panelRoutes.ts`, `api.ts → AgendaPage.tsx`, `AppShell.tsx → AgendaPage.tsx`, `automation_rules.py → serializers.py`, and `panelRoutes.ts → pathForRoute()/parsePanelPath()`.
+
+### Deviations / Issues
+
+The detail route is canonical and history-addressable in Slice 2, while the full detail/edit surface remains intentionally deferred to Slice 3. The list uses `template_event` as notification event/content text and does not expose a template-version selector. Existing Vitest output contains pre-existing React `act(...)` warnings in AppShell tests; assertions and exit status pass.

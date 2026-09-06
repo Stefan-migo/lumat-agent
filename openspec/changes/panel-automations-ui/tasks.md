@@ -33,10 +33,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Slice 2 — Route, Navigation, Client, List
 
-- [ ] 2.1 RED: test canonical list/detail routes, malformed-ID dashboard fallback, deep links, `aria-current`, operator visibility, and back behavior; command: `cd web && npx vitest run src/components/domain` (ARP-1/2).
-- [ ] 2.2 RED: test `AutomationRulesPage` loading, empty, error/retry, forbidden, accessible table, fields, and event/content labeling (not template selector); command: `cd web && npx vitest run src/components/pages/AutomationRulesPage.test.tsx` (ARP-1/2).
-- [ ] 2.3 GREEN: modify `web/src/{api.ts,types.ts}` and `web/src/components/domain/{panelRoutes,PanelShell,AppShell}.tsx` with rule types, six API functions, route dispatch, and nav entry (ARP-1/2).
-- [ ] 2.4 GREEN: create `web/src/components/pages/AutomationRulesPage.tsx` using `PageFrame`, `DataTable`, `StateMessage`, and accessible links (ARP-1/2).
+- [x] 2.1 RED: test canonical list/detail routes, malformed-ID dashboard fallback, deep links, `aria-current`, operator visibility, and back behavior; command: `cd web && npx vitest run src/components/domain` (ARP-1/2).
+- [x] 2.2 RED: test `AutomationRulesPage` loading, empty, error/retry, forbidden, accessible table, fields, and event/content labeling (not template selector); command: `cd web && npx vitest run src/components/pages/AutomationRulesPage.test.tsx` (ARP-1/2).
+- [x] 2.3 GREEN: modify `web/src/{api.ts,types.ts}` and `web/src/components/domain/{panelRoutes,PanelShell,AppShell}.tsx` with rule types, six API functions, route dispatch, and nav entry (ARP-1/2).
+- [x] 2.4 GREEN: create `web/src/components/pages/AutomationRulesPage.tsx` using `PageFrame`, `DataTable`, `StateMessage`, and accessible links (ARP-1/2).
 
 ## Phase 3: Slice 3 — Detail, Edit, Enable/Disable
 

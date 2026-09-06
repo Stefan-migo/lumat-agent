@@ -13,6 +13,23 @@ export interface User {
   role: Role;
 }
 
+export interface Rule {
+  id: number;
+  name: string;
+  event_type: string;
+  conditions: Record<string, string | number | boolean | null>;
+  channel: string;
+  template_event: string;
+  cooldown_seconds: number;
+  enabled: boolean;
+  created_by: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface AutomationRulesResponse { rules: Rule[]; }
+export interface AutomationRuleResponse { rule: Rule; }
+
 export interface LoginResponse {
   ok: true;
   role: Role;
