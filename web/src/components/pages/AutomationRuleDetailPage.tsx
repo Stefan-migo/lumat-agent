@@ -23,6 +23,7 @@ export interface AutomationRuleDetailPageProps {
   state?: AsyncDataState;
   onRetry?: () => void;
   onBack?: () => void;
+  onCreated?: (id: number) => void;
 }
 
 const emptyRule: RuleInput = {
@@ -69,7 +70,7 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "No se pudo completar la acción";
 }
 
-export function AutomationRuleDetailPage({ ruleId = null, user, data: controlledData, state: controlledState, onRetry, onBack }: AutomationRuleDetailPageProps) {
+export function AutomationRuleDetailPage({ ruleId = null, user, data: controlledData, state: controlledState, onRetry, onBack, onCreated }: AutomationRuleDetailPageProps) {
   const isCreate = ruleId === null || ruleId === undefined;
   const fetchRule = useCallback(() => getAutomationRule(ruleId as number).then((response) => response.rule), [ruleId]);
   const fetched = useAsyncData(fetchRule, !isCreate && controlledData === undefined);
@@ -105,9 +106,11 @@ export function AutomationRuleDetailPage({ ruleId = null, user, data: controlled
     try {
       if (isCreate) {
         const response = await createAutomationRule(form);
-        setRule(response.rule);
-        setForm(inputFromRule(response.rule));
+        const persisted = await getAutomationRule(response.rule.id);
+        setRule(persisted.rule);
+        setForm(inputFromRule(persisted.rule));
         setEditing(false);
+        onCreated?.(persisted.rule.id);
       } else {
         await updateAutomationRule(ruleId, form);
         await refresh();

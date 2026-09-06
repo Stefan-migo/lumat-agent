@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
+  createAutomationRule,
   disableAutomationRule,
   enableAutomationRule,
   getAutomationRule,
@@ -11,6 +12,7 @@ import type { Rule, User } from '../../types';
 import { AutomationRuleDetailPage } from './AutomationRuleDetailPage';
 
 vi.mock('../../api', () => ({
+  createAutomationRule: vi.fn(),
   disableAutomationRule: vi.fn(),
   enableAutomationRule: vi.fn(),
   getAutomationRule: vi.fn(),
@@ -38,6 +40,25 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(() => vi.restoreAllMocks());
 
 describe('AutomationRuleDetailPage', () => {
+  it('refreshes the persisted rule through GET after admin creation', async () => {
+    const user = userEvent.setup();
+    const onCreated = vi.fn();
+    vi.mocked(createAutomationRule).mockResolvedValue({ rule: rule({ id: 8, name: 'Regla creada' }) });
+    vi.mocked(getAutomationRule).mockResolvedValue({ rule: rule({ id: 8, name: 'Regla persistida' }) });
+    render(<AutomationRuleDetailPage ruleId={null} user={admin} onCreated={onCreated} />);
+
+    await user.type(screen.getByLabelText('Nombre'), 'Regla creada');
+    await user.type(screen.getByLabelText('Evento'), 'case.created');
+    await user.type(screen.getByLabelText('Canal'), 'whatsapp');
+    await user.type(screen.getByLabelText('Contenido de notificación'), 'case.created');
+    await user.click(screen.getByRole('button', { name: 'Crear regla' }));
+
+    expect(createAutomationRule).toHaveBeenCalledOnce();
+    expect(getAutomationRule).toHaveBeenCalledWith(8);
+    expect(onCreated).toHaveBeenCalledWith(8);
+    expect(await screen.findByDisplayValue('Regla persistida')).toBeInTheDocument();
+  });
+
   it('lets admins edit bounded fields and shows validation before submitting', async () => {
     const user = userEvent.setup();
     render(<AutomationRuleDetailPage ruleId={7} user={admin} data={rule()} state="ready" />);

@@ -132,3 +132,43 @@ Consulted `GRAPH_REPORT.md` god/community nodes `AppShell.tsx`, `AutomationRules
 ### Deviations / Issues
 
 None from the Slice 3 design. The detail component also supports an optional create mode for the design's create/edit wording, while the existing canonical route only dispatches persisted rule IDs. No backend or Slice 2 list behavior changed.
+
+## Slice 3 Contract Remediation
+
+**Mode:** Strict TDD RED → GREEN
+**Boundary:** frontend-only correction for ARP-3 create reachability and create refresh; backend untouched
+**Estimated authored lines:** ~90
+
+### Completed Corrections
+
+- [x] Exposed `Crear regla` only to admins on `AutomationRulesPage` and wired AppShell to mount the existing detail form in create mode.
+- [x] After successful POST creation, fetched the persisted rule with `GET /panel/api/automation-rules/{id}` before invoking navigation to the canonical detail route.
+
+### TDD Cycle Evidence
+
+| Correction | Test file | RED | GREEN | Evidence |
+|---|---|---|---|---|
+| Admin create access | `web/src/components/pages/AutomationRulesPage.test.tsx` | ✅ Button lookup failed before the admin action existed | ✅ Admin action invokes callback; operator action is absent | 4/4 page tests passed |
+| Create refresh | `web/src/components/pages/AutomationRuleDetailPage.test.tsx` | ✅ `getAutomationRule(8)` was not called after POST | ✅ POST → GET persisted rule → `onCreated(8)` | 6/6 detail tests passed |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result | `cd web && npx vitest run src/components/pages/AutomationRulesPage.test.tsx src/components/pages/AutomationRuleDetailPage.test.tsx` → **2 files, 10 tests passed** |
+| Runtime harness command/scenario and exact result | Vitest jsdom exercised admin-only create entry, operator omission, create POST/GET refresh, and navigation callback → **10 passed** |
+| Rollback boundary | Revert the create props/state in `AutomationRulesPage.tsx`, `AutomationRuleDetailPage.tsx`, `AppShell.tsx`, and the two updated test files; prior Slice 3 detail/edit/status behavior remains intact |
+
+### Gate Evidence
+
+- `cd web && npx vitest run` → **401 passed** across 60 files.
+- `cd web && npx tsc -b` → **passed**.
+- Backend files untouched.
+
+### Graph Check
+
+Consulted `AppShell.tsx`, `AutomationRulesPage.tsx`, `AutomationRuleDetailPage.tsx`, `api.ts`, `useAsyncData.ts`, `PageFrame.tsx`, `Button.tsx`, and `panelRoutes.ts`. Consulted edges included `AutomationRulesPage.tsx ← AppShell.tsx`, `AutomationRuleDetailPage.tsx → createAutomationRule()`, `AutomationRuleDetailPage.tsx → getAutomationRule()`, and `AppShell.tsx → pathForRoute()`.
+
+### Deviations / Issues
+
+None. The create screen uses the existing in-memory panel navigation seam rather than adding a new URL shape for an unsaved rule; successful creation immediately navigates to the canonical persisted detail URL.
