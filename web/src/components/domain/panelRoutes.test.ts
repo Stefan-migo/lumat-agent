@@ -19,7 +19,8 @@ describe('panel routes', () => {
       chat: '/panel/app/chat',
       kb: '/panel/app/kb',
       settings: '/panel/app/settings',
-      agenda: '/panel/app/agenda',
+    agenda: '/panel/app/agenda',
+    'automation-rules': '/panel/app/automation-rules',
     });
 
     expect(pathForView('clients')).toBe('/panel/app/clients');
@@ -45,5 +46,18 @@ describe('panel routes', () => {
   it('falls back safely from malformed agenda paths', () => {
     expect(parsePanelPath('/panel/app/agenda/1')).toEqual({ view: 'dashboard' });
     expect(parsePanelPath('/panel/app/%E0%A4%A')).toEqual({ view: 'dashboard' });
+  });
+
+  it('builds and parses canonical automation rule list and detail routes', () => {
+    expect(pathForView('automation-rules')).toBe('/panel/app/automation-rules');
+    expect(pathForRoute({ view: 'automation-rules', automationRuleId: 12 })).toBe('/panel/app/automation-rules/12');
+    expect(parsePanelPath('/panel/app/automation-rules')).toEqual({ view: 'automation-rules' });
+    expect(parsePanelPath('/panel/app/automation-rules/12')).toEqual({ view: 'automation-rules', automationRuleId: 12 });
+  });
+
+  it('falls back to dashboard for malformed automation rule IDs', () => {
+    expect(parsePanelPath('/panel/app/automation-rules/0')).toEqual({ view: 'dashboard' });
+    expect(parsePanelPath('/panel/app/automation-rules/not-an-id')).toEqual({ view: 'dashboard' });
+    expect(parsePanelPath('/panel/app/automation-rules/1/extra')).toEqual({ view: 'dashboard' });
   });
 });

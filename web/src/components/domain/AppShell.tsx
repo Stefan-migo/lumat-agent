@@ -15,6 +15,7 @@ import { NotificationCenter } from '../pages/NotificationCenter';
 import { PushSettings } from '../pages/PushSettings';
 import { AgentChat } from '../pages/AgentChat';
 import { AgendaPage } from '../pages/AgendaPage';
+import { AutomationRulesPage } from '../pages/AutomationRulesPage';
 
 /** Top-level SPA views. Client ficha and conversation thread are drill-downs
  * rendered from list views, not top-level nav, so they do not appear here. */
@@ -65,6 +66,7 @@ export function AppShell({ user, onLogout }: AppShellProps) {
 
   const page = view === 'dashboard' ? <Dashboard />
       : view === 'agenda' ? <AgendaPage />
+      : view === 'automation-rules' ? <AutomationRulesPage onOpenRule={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
       : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
       : view === 'cases' ? <CasesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />

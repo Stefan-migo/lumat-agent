@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './AppShell';
 import type { User } from '../../types';
@@ -125,6 +125,36 @@ describe('AppShell (T6.4)', () => {
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Menú' }));
     expect(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Agenda' })).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
+  it('deep-links to automation rules and exposes the read-only route to operadores', async () => {
+    window.history.replaceState({}, '', '/panel/app/automation-rules');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ rules: [] }), { status: 200 }));
+
+    const { container } = render(<AppShell user={operador} />);
+    expect(await screen.findByRole('heading', { name: 'Reglas de automatización', level: 1 })).toBeInTheDocument();
+    expect(sidebar(container).getByText('Automatizaciones').closest('button')).toHaveAttribute('aria-current', 'page');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Menú' }));
+    const drawer = screen.getByRole('dialog', { name: 'Navegación' });
+    expect(within(drawer).getByRole('button', { name: 'Automatizaciones' })).toBeInTheDocument();
+    expect(within(drawer).queryByRole('button', { name: /crear|editar|habilitar|deshabilitar/i })).not.toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
+  it('uses browser back after opening an automation rule detail route', async () => {
+    window.history.replaceState({}, '', '/panel/app/automation-rules');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      const body = { rules: [{ id: 12, name: 'Aviso', event_type: 'case.created', conditions: {}, channel: 'whatsapp', template_event: 'case.created', cooldown_seconds: 0, enabled: true, created_by: 'ana', created_at: null, updated_at: null }] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    render(<AppShell user={operador} />);
+    expect(await screen.findByRole('heading', { name: 'Reglas de automatización', level: 1 })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('link', { name: 'Aviso' }));
+    expect(window.location.pathname).toBe('/panel/app/automation-rules/12');
+    window.history.back();
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(() => expect(window.location.pathname).toBe('/panel/app/automation-rules'));
     vi.restoreAllMocks();
   });
 

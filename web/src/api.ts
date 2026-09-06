@@ -52,7 +52,7 @@ export function postJson<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-import type { AdvancedDashboardData, AgendaResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage } from './types';
+import type { AdvancedDashboardData, AgendaResponse, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, Rule } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -83,6 +83,12 @@ export function cancelAppointment(id: number, reason?: string) {
 export function retryCalendarSync(id: number) {
   return postJson<{ ok: boolean; calendar: { status: string; error: string | null } }>(`/panel/api/appointments/${id}/calendar/sync`);
 }
+export const listAutomationRules = () => apiFetch<AutomationRulesResponse>('/panel/api/automation-rules');
+export const getAutomationRule = (id: number) => apiFetch<AutomationRuleResponse>(`/panel/api/automation-rules/${id}`);
+export const createAutomationRule = (rule: Omit<Rule, 'id' | 'enabled' | 'created_by' | 'created_at' | 'updated_at'>) => postJson<AutomationRuleResponse>('/panel/api/automation-rules', rule);
+export const updateAutomationRule = (id: number, rule: Omit<Rule, 'id' | 'enabled' | 'created_by' | 'created_at' | 'updated_at'>) => apiFetch<AutomationRuleResponse>(`/panel/api/automation-rules/${id}`, { method: 'PATCH', body: JSON.stringify(rule) });
+export const enableAutomationRule = (id: number) => postJson<{ ok: true; rule: Rule }>(`/panel/api/automation-rules/${id}/enable`);
+export const disableAutomationRule = (id: number) => postJson<{ ok: true; rule: Rule }>(`/panel/api/automation-rules/${id}/disable`);
 export function getAdvancedDashboard(): Promise<AdvancedDashboardData> {
   const end = new Date();
   const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
