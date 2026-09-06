@@ -4,10 +4,10 @@ Web-only. Every GREEN task follows RED; each slice compiles and passes focused t
 
 ## Phase 1: Shell and Shared Grammar (PNL-APP-10/11, DS-GRAMMAR-1/2/3)
 
-- [ ] 1.1 RED: Extend `AppShell.test.tsx`/`AppShell.stories.test.tsx` for compact roles, History paths, no fetch, rail states, and inspector.
-- [ ] 1.2 GREEN: Modify `PanelShell.tsx`, `AppShell.tsx`, `panelRoutes.ts` with semantic slots; preserve drawer, focus, `aria-current`, filtering, and routes.
-- [ ] 1.3 RED: Extend `AiAgentGrammar.stories.test.tsx` for token colors, no injected style, reduced motion, and accessible regions.
-- [ ] 1.4 GREEN: Modify `primitives.css` with minimal tokenized rail, active-thread, inspector, responsive, and motion rules; no new tokens/dependencies.
+- [x] 1.1 RED: Extend `AppShell.test.tsx`/`AppShell.stories.test.tsx` for compact roles, History paths, no fetch, rail states, and inspector.
+- [x] 1.2 GREEN: Modify `PanelShell.tsx`, `AppShell.tsx`, `panelRoutes.ts` with semantic slots; preserve drawer, focus, `aria-current`, filtering, and routes.
+- [x] 1.3 RED: Extend `AiAgentGrammar.stories.test.tsx` for token colors, no injected style, reduced motion, and accessible regions.
+- [x] 1.4 GREEN: Modify `primitives.css` with minimal tokenized rail, active-thread, inspector, responsive, and motion rules; no new tokens/dependencies.
 
 ## Phase 2: Thread and List Presentation (PNL-APP-12, DS-GRAMMAR-1/3)
 

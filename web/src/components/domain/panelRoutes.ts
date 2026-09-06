@@ -43,6 +43,10 @@ export function pathForRoute(route: PanelRoute): string {
   return base;
 }
 
+export function isConversationRoute(route: PanelRoute): boolean {
+  return route.view === 'conversations';
+}
+
 function fallback(): PanelRoute {
   return { view: 'dashboard' };
 }

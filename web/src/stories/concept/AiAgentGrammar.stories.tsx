@@ -15,62 +15,6 @@ const activeThreads = [
   { name: "Casa López", status: "bot" as const, label: "Agente atendiendo" },
 ];
 
-const styles = `
-  .ai-agent-grammar { min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font-sans); }
-  .ai-agent-grammar *, .ai-agent-grammar *::before, .ai-agent-grammar *::after { box-sizing: border-box; }
-  .ai-agent-grammar__shell { display: grid; grid-template-columns: 15rem minmax(0, 1fr) 18rem; min-height: 100vh; }
-  .ai-agent-grammar__shell--compact { grid-template-columns: 4rem minmax(0, 1fr) 18rem; }
-  .ai-agent-grammar__shell--wide { grid-template-columns: 15rem minmax(0, 1fr); }
-  .ai-agent-grammar__rail { display: flex; flex-direction: column; gap: var(--space-5); padding: var(--space-4) var(--space-3); background: var(--primary-800); color: var(--surface); }
-  .ai-agent-grammar__brand { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-lg); font-weight: var(--weight-bold); }
-  .ai-agent-grammar__facet { width: var(--space-2); height: var(--space-8); background: var(--brand-lime); border-radius: var(--radius-sm); }
-  .ai-agent-grammar__nav { display: grid; gap: var(--space-1); }
-  .ai-agent-grammar__nav a { display: block; padding: var(--space-2); color: var(--surface); border-radius: var(--radius-sm); text-decoration: none; font-size: var(--text-sm); }
-  .ai-agent-grammar__nav a[aria-current="page"] { border-left: var(--space-1) solid var(--brand-lime); padding-left: var(--space-1); background: var(--primary-100); color: var(--primary-800); font-weight: var(--weight-semibold); }
-  .ai-agent-grammar__admin { padding-top: var(--space-3); border-top: 1px solid var(--primary-700); }
-  .ai-agent-grammar__section-label { margin: 0 0 var(--space-2); color: var(--primary-200); font-size: var(--text-xs); font-weight: var(--weight-semibold); }
-  .ai-agent-grammar__thread-list { display: grid; gap: var(--space-1); }
-  .ai-agent-grammar__thread { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--surface); text-align: left; }
-  .ai-agent-grammar__thread--active { border-left: var(--space-1) solid var(--brand-lime); background: var(--primary-700); }
-  .ai-agent-grammar__thread-name { font-size: var(--text-sm); font-weight: var(--weight-semibold); }
-  .ai-agent-grammar__thread-status { color: var(--primary-200); font-size: var(--text-xs); }
-  .ai-agent-grammar__footer { display: grid; gap: var(--space-2); margin-top: auto; padding-top: var(--space-3); border-top: 1px solid var(--primary-700); font-size: var(--text-xs); }
-  .ai-agent-grammar__main { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; }
-  .ai-agent-grammar__header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border); background: var(--surface); }
-  .ai-agent-grammar__title { margin: 0; font-size: var(--text-lg); font-weight: var(--weight-semibold); }
-  .ai-agent-grammar__freshness { color: var(--text-muted); font-size: var(--text-xs); }
-  .ai-agent-grammar__window { margin-left: auto; color: var(--success); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
-  .ai-agent-grammar__window--closed { color: var(--danger); }
-  .ai-agent-grammar__composer-hint--muted { color: var(--text-muted); }
-  .ai-agent-grammar__thread-area { display: grid; align-content: start; gap: var(--space-4); max-width: 52rem; width: 100%; margin: 0 auto; padding: var(--space-5); }
-  .ai-agent-grammar__bubble-row { display: flex; gap: var(--space-2); }
-  .ai-agent-grammar__bubble-row--outbound { justify-content: flex-end; }
-  .ai-agent-grammar__bubble { max-width: 75%; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
-  .ai-agent-grammar__bubble--outbound { border-color: var(--primary-800); background: var(--primary-800); color: var(--surface); }
-  .ai-agent-grammar__message-meta { display: block; margin-bottom: var(--space-1); font-size: var(--text-xs); font-weight: var(--weight-semibold); }
-  .ai-agent-grammar__message-time { display: block; margin-top: var(--space-2); font-size: var(--text-xs); opacity: .8; }
-  .ai-agent-grammar__activity { display: flex; align-items: center; justify-content: center; gap: var(--space-2); color: var(--info); font-size: var(--text-xs); text-align: center; }
-  .ai-agent-grammar__activity-chip { padding: var(--space-1) var(--space-2); border: 1px solid var(--brand-aqua); border-radius: var(--radius-sm); background: var(--info-tint); }
-  .ai-agent-grammar__handoff { padding: var(--space-2); border-top: 1px solid var(--warning-border); border-bottom: 1px solid var(--warning-border); color: var(--warning); font-size: var(--text-xs); text-align: center; }
-  .ai-agent-grammar__streaming { display: flex; justify-content: center; color: var(--info); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
-  .ai-agent-grammar__composer { display: grid; gap: var(--space-2); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--border); background: var(--surface); }
-  .ai-agent-grammar__composer-hint { color: var(--success); font-size: var(--text-xs); font-weight: var(--weight-semibold); }
-  .ai-agent-grammar__composer-actions { display: flex; align-items: center; gap: var(--space-3); }
-  .ai-agent-grammar__reason { color: var(--text-muted); font-size: var(--text-sm); }
-  .ai-agent-grammar__inspector { display: grid; align-content: start; gap: var(--space-4); padding: var(--space-4); border-left: 1px solid var(--border); background: var(--surface); }
-  .ai-agent-grammar__inspector section { display: grid; gap: var(--space-2); padding-bottom: var(--space-4); border-bottom: 1px solid var(--border); }
-  .ai-agent-grammar__inspector h2 { margin: 0; font-size: var(--text-md); font-weight: var(--weight-semibold); }
-  .ai-agent-grammar__detail { display: flex; justify-content: space-between; gap: var(--space-2); font-size: var(--text-sm); }
-  .ai-agent-grammar__detail dt { color: var(--text-muted); }
-  .ai-agent-grammar__detail dd { margin: 0; text-align: right; }
-  .ai-agent-grammar__chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-  .ai-agent-grammar__chip { padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: var(--text-xs); }
-  .ai-agent-grammar__actions { display: grid; gap: var(--space-2); }
-  .ai-agent-grammar .emergency-action { color: var(--danger); border-color: var(--danger-border); }
-  @media (max-width: 64rem) { .ai-agent-grammar__shell, .ai-agent-grammar__shell--compact { grid-template-columns: 4rem minmax(0, 1fr); } .ai-agent-grammar__inspector { display: none; } .ai-agent-grammar__brand-label, .ai-agent-grammar__rail .ai-agent-grammar__section-label, .ai-agent-grammar__rail .ai-agent-grammar__thread-list, .ai-agent-grammar__footer { display: none; } .ai-agent-grammar__nav a { text-align: center; } }
-  @media (max-width: 40rem) { .ai-agent-grammar__shell, .ai-agent-grammar__shell--compact { display: block; } .ai-agent-grammar__rail { min-height: auto; } .ai-agent-grammar__nav { display: flex; overflow-x: auto; } .ai-agent-grammar__nav a { white-space: nowrap; } .ai-agent-grammar__thread-area, .ai-agent-grammar__composer { padding: var(--space-3); } .ai-agent-grammar__bubble { max-width: 90%; } }
-`;
-
 function Activity({ children }: { children: string }) {
   return <div className="ai-agent-grammar__activity" role="status"><span aria-hidden="true">✦</span><span className="ai-agent-grammar__activity-chip">{children}</span></div>;
 }
@@ -92,7 +36,6 @@ export function AiAgentGrammarView({ railExpanded, inspectorVisible, scenario, c
   const disabled = composerState !== "enabled";
   const reason = composerState === "streaming" ? "Esperando respuesta del agente" : composerState === "disabled_window" ? "Fuera de la ventana de 24 horas" : composerState === "disabled_not_taken" ? "Toma la conversación para responder" : undefined;
   return <div className="ai-agent-grammar">
-    <style>{styles}</style>
     <div className={`ai-agent-grammar__shell${railExpanded ? "" : " ai-agent-grammar__shell--compact"}${inspectorVisible ? "" : " ai-agent-grammar__shell--wide"}`}>
       <aside className="ai-agent-grammar__rail" aria-label="Navegación principal">
         <div className="ai-agent-grammar__brand"><span className="ai-agent-grammar__facet" aria-hidden="true" /><span className="ai-agent-grammar__brand-label">Lumat</span></div>
