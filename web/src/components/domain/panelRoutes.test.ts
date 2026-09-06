@@ -19,10 +19,12 @@ describe('panel routes', () => {
       chat: '/panel/app/chat',
       kb: '/panel/app/kb',
       settings: '/panel/app/settings',
+      agenda: '/panel/app/agenda',
     });
 
     expect(pathForView('clients')).toBe('/panel/app/clients');
     expect(pathForView('dashboard')).toBe(PANEL_BASE_PATH);
+    expect(parsePanelPath('/panel/app/agenda')).toEqual({ view: 'agenda' });
   });
 
   it('builds and parses positive client and conversation drill-down IDs', () => {
@@ -38,5 +40,10 @@ describe('panel routes', () => {
     expect(parsePanelPath('/panel/app/clients/0')).toEqual({ view: 'dashboard' });
     expect(parsePanelPath('/other/app/clients')).toEqual({ view: 'dashboard' });
     expect(parsePanelPath('/panel/app/unknown?view=settings#ignored')).toEqual({ view: 'dashboard' });
+  });
+
+  it('falls back safely from malformed agenda paths', () => {
+    expect(parsePanelPath('/panel/app/agenda/1')).toEqual({ view: 'dashboard' });
+    expect(parsePanelPath('/panel/app/%E0%A4%A')).toEqual({ view: 'dashboard' });
   });
 });

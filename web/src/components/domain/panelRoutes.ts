@@ -18,6 +18,7 @@ export const PANEL_ROUTES: Readonly<Record<PanelView, string>> = {
   chat: '/panel/app/chat',
   kb: '/panel/app/kb',
   settings: '/panel/app/settings',
+  agenda: '/panel/app/agenda',
 };
 
 const panelViews = new Set<PanelView>(Object.keys(PANEL_ROUTES) as PanelView[]);

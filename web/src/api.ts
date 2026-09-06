@@ -52,7 +52,7 @@ export function postJson<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-import type { AdvancedDashboardData, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage } from './types';
+import type { AdvancedDashboardData, AgendaResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -73,6 +73,10 @@ export const markNotificationRead = (id: number) => postJson<{ notification: Pan
 export const createChatThread = () => postJson<InternalChatResponse>('/panel/api/chat/threads', {});
 export const sendChatMessage = (id: number, content: string) => postJson<{ message: InternalChatMessage }> (`/panel/api/chat/threads/${id}/messages`, { content });
 export const getChatThread = (id: number) => apiFetch<InternalChatResponse>(`/panel/api/chat/threads/${id}`);
+export function listAppointments(from: string, to: string, timezone: string): Promise<AgendaResponse> {
+  const params = new URLSearchParams({ from, to, timezone });
+  return apiFetch<AgendaResponse>(`/panel/api/appointments?${params.toString()}`);
+}
 export function getAdvancedDashboard(): Promise<AdvancedDashboardData> {
   const end = new Date();
   const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
