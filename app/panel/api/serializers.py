@@ -30,6 +30,7 @@ from app.models import (
     PanelNotification,
     InternalChatMessage,
     InternalChatThread,
+    AutomationRule,
 )
 
 
@@ -167,6 +168,22 @@ def to_appointment_dict(appointment: Appointment) -> dict:
              "created_at": _iso(h.created_at)}
             for h in appointment.history
         ],
+    }
+
+
+def to_automation_rule_dict(rule: AutomationRule) -> dict:
+    return {
+        "id": rule.id,
+        "name": rule.name,
+        "event_type": rule.event_type,
+        "conditions": rule.conditions or {},
+        "channel": rule.channel,
+        "template_event": rule.template_event,
+        "cooldown_seconds": rule.cooldown_seconds,
+        "enabled": rule.enabled,
+        "created_by": rule.created_by,
+        "created_at": _iso(rule.created_at),
+        "updated_at": _iso(rule.updated_at),
     }
 
 
