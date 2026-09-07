@@ -13,7 +13,8 @@ the DB on every request, so a deactivated account loses access immediately
 
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException
+from starlette.requests import HTTPConnection
 from sqlalchemy.orm import Session
 
 from app.models import User
@@ -25,7 +26,7 @@ def _unauthorized() -> HTTPException:
 
 
 def get_current_user_json(
-    request: Request, session: Session = Depends(get_db)
+    request: HTTPConnection, session: Session = Depends(get_db)
 ) -> User:
     """Resolve the signed-session user; JSON 401 when absent (PDW-AUTH-1)."""
     user_id = request.session.get("user_id")

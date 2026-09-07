@@ -18,6 +18,7 @@ from app.panel.routes import (
     kb,
     settings,
 )
+from app.panel.api.routes import realtime
 
 panel_router = APIRouter(prefix="/panel", tags=["panel"])
 
@@ -30,3 +31,4 @@ panel_router.include_router(cases.router)
 panel_router.include_router(kb.router)
 panel_router.include_router(settings.router)
 panel_router.include_router(export.router)
+panel_router.include_router(realtime.router)
