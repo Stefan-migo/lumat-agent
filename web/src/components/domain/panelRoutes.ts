@@ -21,6 +21,7 @@ export const PANEL_ROUTES: Readonly<Record<PanelView, string>> = {
   settings: '/panel/app/settings',
   agenda: '/panel/app/agenda',
   'automation-rules': '/panel/app/automation-rules',
+  'advanced-dashboard': '/panel/app/advanced-dashboard',
 };
 
 const panelViews = new Set<PanelView>(Object.keys(PANEL_ROUTES) as PanelView[]);

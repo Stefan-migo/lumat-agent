@@ -67,7 +67,7 @@ export const disableKbDocument = (id: number) => postJson<KbMutationResponse>(`/
 export const restoreKbDocument = (id: number, version: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/restore`, { version });
 export const refreshKbDocuments = () => apiFetch<DocsResponse>('/panel/api/kb');
 
-import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState } from './types';
+import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -112,8 +112,10 @@ export function getAdvancedDashboard(): Promise<AdvancedDashboardData> {
   const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
   const params = new URLSearchParams({ start: start.toISOString(), end: end.toISOString(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, metric: 'cases', bucket: 'day' });
   const base = params.toString();
+  const drilldown = new URLSearchParams({ ...Object.fromEntries(params), bucket_start: start.toISOString().slice(0, 10) });
   return Promise.all([
     apiFetch<Pick<AdvancedDashboardData, 'period' | 'metrics'>>(`/panel/api/dashboard/summary?${base}`),
-    apiFetch<Pick<AdvancedDashboardData, 'trend'>>(`/panel/api/dashboard/trend?${base}`),
-  ]).then(([summary, trend]) => ({ ...summary, ...trend }));
+    apiFetch<{ buckets: DashboardTrendBucket[] }>(`/panel/api/dashboard/trend?${base}`),
+    apiFetch<{ rows: DashboardDrilldownRow[] }>(`/panel/api/dashboard/drilldown?${drilldown}`),
+  ]).then(([summary, trend, drilldownResponse]) => ({ ...summary, trend: trend.buckets, drilldown: drilldownResponse.rows }));
 }

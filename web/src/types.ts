@@ -116,6 +116,7 @@ export interface Kpis {
 
 export interface DashboardPeriod { start: string; end: string; timezone: string; }
 export interface DashboardTrendBucket { start: string; count: number; }
+export interface DashboardDrilldownRow { service?: string; count?: number; [key: string]: unknown; }
 export interface DashboardMetrics {
   contacts: number;
   cases: number;
@@ -127,6 +128,7 @@ export interface AdvancedDashboardData {
   period: DashboardPeriod;
   metrics: DashboardMetrics;
   trend: DashboardTrendBucket[];
+  drilldown?: DashboardDrilldownRow[];
 }
 
 export interface Conversation {

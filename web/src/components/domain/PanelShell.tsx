@@ -5,7 +5,7 @@ import type { ConnectionStatus } from "../../realtime";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 
-export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules";
+export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard";
 
 /** Shell icon wrapper: 20px, stroke-based, `currentColor`, aria-hidden.
  *  Inline SVGs on purpose — no icon library (ponytail: no new deps). */
@@ -125,6 +125,7 @@ const NAVIGATION: Record<PanelView, NavigationItem> = {
   settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
   agenda: { label: "Agenda", icon: CalendarIcon },
   'automation-rules': { label: "Automatizaciones", icon: GearIcon },
+  'advanced-dashboard': { label: "Dashboard avanzado", icon: PanelIcon },
 };
 
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
