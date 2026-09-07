@@ -47,4 +47,22 @@ describe("AI-agent grammar concept page", () => {
     expect(screen.queryByRole("complementary", { name: "Inspector operacional" })).toBeNull();
     expect(primitivesRaw).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*\.ai-agent-grammar__/);
   });
+
+  it("models processing without presenting realtime streaming or fabricated writing", () => {
+    render(<AiAgentGrammarView {...defaultProps} composerState="processing" />);
+    expect(screen.getByRole("status", { name: "Procesando respuesta" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Respuesta" })).toBeDisabled();
+    expect(screen.queryByText(/está escribiendo/i)).toBeNull();
+    expect(storyRaw).not.toMatch(/streaming|Lumat está escribiendo/i);
+  });
+
+  it("keeps the dense operational inspector available only with context", () => {
+    const { rerender } = render(<AiAgentGrammarView {...defaultProps} scenario="visita" />);
+    expect(screen.getByRole("complementary", { name: "Inspector operacional" })).toBeInTheDocument();
+    expect(screen.getByText("Solicitud de visita creada")).toBeInTheDocument();
+
+    rerender(<AiAgentGrammarView {...defaultProps} scenario="visita" inspectorVisible={false} />);
+    expect(screen.queryByRole("complementary", { name: "Inspector operacional" })).toBeNull();
+    expect(screen.getByRole("main", { name: "Conversación con María González" })).toBeInTheDocument();
+  });
 });

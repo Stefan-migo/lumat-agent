@@ -59,7 +59,7 @@ export function ChatWithAgentView({ status }: { status: "idle" | "processing" })
   return (
     <PageFrame
       title="Asistente Lumat"
-      meta="Chat con el agente virtual — responde en tiempo real."
+       meta="Chat con el agente virtual — estado de procesamiento visible."
     >
       <AgentStatusBar status={status} />
       <div style={{ display: "grid", gap: "var(--space-2)", marginTop: "var(--space-3)" }}>
@@ -132,6 +132,7 @@ const meta = {
   title: "pages/ChatWithAgent",
   parameters: {
     layout: "fullscreen",
+    viewport: { defaultViewport: "responsive" },
     docs: {
       description: {
         component:

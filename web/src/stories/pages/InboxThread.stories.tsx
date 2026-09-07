@@ -5,12 +5,14 @@ import { PageFrame } from "./_shared/PageFrame";
 import { StateMessage } from "./_shared/StateMessage";
 import { Textarea } from "../../components/primitives/Textarea";
 import { Button } from "../../components/primitives/Button";
+import { Avatar } from "../../components/primitives/Avatar";
 import { conversations, messages } from "./_shared/mockData/conversations";
 import { clients } from "./_shared/mockData/clients";
 import { conversationLabel } from "./_shared/toneMaps";
 import type { Conversation } from "../../types";
 
 const HOURS_24 = 24 * 60 * 60 * 1000;
+const STORY_NOW = Date.parse("2026-08-20T12:00:00-04:00");
 
 /** Pure reply-window helper (R-PRD-PG-10): a conversation is "open" when its
  *  last_message_at falls within the last 24h of `nowMs`. Exported for tests. */
@@ -21,6 +23,9 @@ export const isWithinReplyWindow = (lastMessageAt: string | null, nowMs: number)
 
 const customerName = (customer_id: number): string =>
   clients.find((c) => c.id === customer_id)?.name ?? "—";
+
+const messageAuthor = (direction: "inbound" | "outbound", customer_id: number): string =>
+  direction === "inbound" ? customerName(customer_id) : "Lumat";
 
 /** State controls (R-PRD-PG-9): take -> human (pauses bot S2), close -> closed,
  *  return to agent. Only the actions relevant to the current state are shown.
@@ -134,7 +139,7 @@ export function InboxThreadView({
           <div
             key={m.id}
             data-bubble
-            aria-label={m.direction}
+             aria-label={`Mensaje ${m.direction === "inbound" ? "entrante" : "saliente"} de ${messageAuthor(m.direction, conversation.customer_id)}`}
             style={{
               alignSelf: m.direction === "inbound" ? "flex-start" : "flex-end",
               justifySelf: m.direction === "inbound" ? "flex-start" : "flex-end",
@@ -147,10 +152,17 @@ export function InboxThreadView({
               fontSize: "var(--text-md)",
             }}
           >
-            {m.text ?? "—"}
+            {m.direction === "inbound" ? <Avatar name={messageAuthor(m.direction, conversation.customer_id)} /> : null}
+            <span>{m.text ?? "—"}</span>
+            {m.direction === "outbound" ? <Avatar name={messageAuthor(m.direction, conversation.customer_id)} /> : null}
           </div>
         ))}
       </div>
+      {convState === "human" ? (
+        <div className="ai-agent-grammar__handoff" aria-label="Traspaso a atención humana">
+          La conversación está en atención humana.
+        </div>
+      ) : null}
       <InboxThreadStateControls state={convState} onStateChange={setState} />
       <InboxComposer disabled={!composerEnabled} reason={reason} />
     </PageFrame>
@@ -161,6 +173,7 @@ const meta = {
   title: "pages/InboxThread",
   parameters: {
     layout: "fullscreen",
+    viewport: { defaultViewport: "responsive" },
     docs: {
       description: {
         component:
@@ -178,21 +191,21 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const ComposerEnabled: Story = {
-  render: () => <InboxThreadView conversation={conversations.find((c) => c.id === 103)!} />,
+  render: () => <InboxThreadView conversation={conversations.find((c) => c.id === 103)!} nowMs={STORY_NOW} />,
 };
 
 export const ComposerDisabledClosed: Story = {
-  render: () => <InboxThreadView conversation={conversations.find((c) => c.id === 102)!} />,
+  render: () => <InboxThreadView conversation={conversations.find((c) => c.id === 102)!} nowMs={STORY_NOW} />,
 };
 
 export const ComposerDisabledBot: Story = {
-  render: () => <InboxThreadView conversation={conversations.find((c) => c.id === 101)!} />,
+  render: () => <InboxThreadView conversation={conversations.find((c) => c.id === 101)!} nowMs={STORY_NOW} />,
 };
 
 export const OutsideWindow: Story = {
-  render: () => <InboxThreadView conversation={conversations.find((c) => c.id === 105)!} />,
+  render: () => <InboxThreadView conversation={conversations.find((c) => c.id === 105)!} nowMs={STORY_NOW} />,
 };
 
 export const Stale: Story = {
-  render: () => <InboxThreadView conversation={conversations.find((c) => c.id === 103)!} state="stale" />,
+  render: () => <InboxThreadView conversation={conversations.find((c) => c.id === 103)!} nowMs={STORY_NOW} state="stale" />,
 };
