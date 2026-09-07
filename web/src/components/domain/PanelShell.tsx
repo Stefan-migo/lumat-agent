@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import type { ConversationState, User } from "../../types";
+import type { ConnectionStatus } from "../../realtime";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 
@@ -141,6 +142,8 @@ export interface PanelShellProps {
   statusBadge?: ReactNode;
   activeThreads?: ActiveThreadsState;
   inspector?: ReactNode;
+  connectionStatus?: ConnectionStatus;
+  onActiveThread?: (id: number) => void;
 }
 
 export type ActiveThreadsState =
@@ -242,6 +245,8 @@ export function PanelShell({
   onLogout,
   activeThreads,
   inspector,
+  connectionStatus = "disconnected",
+  onActiveThread,
 }: PanelShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
@@ -297,7 +302,7 @@ export function PanelShell({
         <div className="panel-shell__sidebar-inner">
           <Brand compact={collapsed} />
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} collapsed={collapsed} />
-          {!collapsed ? <ActiveThreads state={activeThreads} /> : null}
+          {!collapsed ? <ActiveThreads state={activeThreads} connectionStatus={connectionStatus} onActiveThread={onActiveThread} /> : null}
           <UserContext user={user} compact={collapsed} onLogout={onLogout} />
         </div>
       </aside>
@@ -376,7 +381,7 @@ export function PanelShell({
   );
 }
 
-function ActiveThreads({ state }: { state?: ActiveThreadsState }) {
+function ActiveThreads({ state, connectionStatus, onActiveThread }: { state?: ActiveThreadsState; connectionStatus: ConnectionStatus; onActiveThread?: (id: number) => void }) {
   const current = state ?? { status: "placeholder" as const };
   const message = current.status === "loading"
     ? "Cargando conversaciones activas"
@@ -391,11 +396,12 @@ function ActiveThreads({ state }: { state?: ActiveThreadsState }) {
   return (
     <section className="panel-shell__active-threads" aria-labelledby="panel-active-threads-title">
       <h2 id="panel-active-threads-title" className="panel-shell__active-threads-title">Conversaciones activas</h2>
+      {connectionStatus !== "connected" ? <div className="panel-shell__active-threads-connection" role="status">Conexión en tiempo real: {connectionStatus === "reconnecting" ? "reconectando" : "desconectada"}. Los datos seguirán disponibles.</div> : null}
       {current.status === "ready" ? (
         <ul className="panel-shell__active-thread-list">
           {current.threads.map((thread) => (
             <li key={thread.id}>
-              <button type="button" className="panel-shell__active-thread" aria-current={thread.active ? "page" : undefined}>
+              <button type="button" className="panel-shell__active-thread" aria-current={thread.active ? "page" : undefined} onClick={() => onActiveThread?.(thread.id)}>
                 <span>{thread.label}</span>
                 <span className="panel-shell__active-thread-status">{thread.status === "human" ? "Atención humana" : thread.status === "bot" ? "Agente atendiendo" : "Cerrada"}</span>
               </button>

@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { listActiveConversations } from '../../api';
+import { realtimeClient, type ConnectionStatus } from '../../realtime';
+import type { ActiveConversationsResponse } from '../../types';
 import type { User } from '../../types';
 import type { ActiveThreadsState, PanelView } from './PanelShell';
 import { PanelShell } from './PanelShell';
@@ -27,14 +30,44 @@ export interface AppShellProps {
   user: User;
   onLogout?: () => void | Promise<void>;
   activeThreads?: ActiveThreadsState;
+  loadActiveThreads?: boolean;
   inspector?: ReactNode;
 }
 
 /** Application shell: PanelShell frame and native History API navigation. */
-export function AppShell({ user, onLogout, activeThreads, inspector }: AppShellProps) {
+export function AppShell({ user, onLogout, activeThreads, loadActiveThreads = false, inspector }: AppShellProps) {
   const [route, setRoute] = useState<PanelRoute>(() => parsePanelPath(window.location.pathname));
   const [conversationRefresh, setConversationRefresh] = useState(0);
   const [creatingAutomationRule, setCreatingAutomationRule] = useState(false);
+  const [railState, setRailState] = useState<ActiveThreadsState>({ status: 'loading' });
+  const [connection, setConnection] = useState<ConnectionStatus>('disconnected');
+
+  useEffect(() => {
+    if (!loadActiveThreads || activeThreads !== undefined) return;
+    let mounted = true;
+    const load = async () => {
+      setRailState((state) => state.status === 'ready' ? state : { status: 'loading' });
+      try {
+        const response: ActiveConversationsResponse = await listActiveConversations();
+        if (mounted) setRailState(response.conversations.length === 0 ? { status: 'empty' } : {
+          status: 'ready',
+          threads: response.conversations.map((conversation) => ({
+            id: conversation.id,
+            label: conversation.customer_name ?? `Cliente #${conversation.id}`,
+            status: conversation.state as 'bot' | 'human' | 'closed',
+          })),
+        });
+      } catch {
+        if (mounted) setRailState({ status: 'error' });
+      }
+    };
+    const unsubscribe = realtimeClient.subscribe((event) => {
+      if (event.type === 'conversation' || event.type === 'message' || event.type === 'snapshot') void load();
+    });
+    const unsubscribeStatus = realtimeClient.subscribeStatus(setConnection);
+    void load();
+    return () => { mounted = false; unsubscribe(); unsubscribeStatus(); };
+  }, [activeThreads, loadActiveThreads]);
 
   useEffect(() => {
     const parsed = parsePanelPath(window.location.pathname);
@@ -90,7 +123,7 @@ export function AppShell({ user, onLogout, activeThreads, inspector }: AppShellP
     : <Settings />;
 
   return (
-    <PanelShell user={user} currentView={view} onNavigate={navigate} onLogout={onLogout} activeThreads={activeThreads} inspector={inspector}>
+    <PanelShell user={user} currentView={view} onNavigate={navigate} onLogout={onLogout} activeThreads={activeThreads ?? railState} connectionStatus={connection} onActiveThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} inspector={inspector}>
       {page}
     </PanelShell>
   );

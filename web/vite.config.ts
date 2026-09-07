@@ -13,6 +13,7 @@ export default defineConfig({
       // Same-origin cookie round-trips in dev: the SPA origin is :5173, the
       // API stays on :8000 but the proxy makes fetches LOOK same-origin.
       '/panel/api': 'http://localhost:8000',
+      '/panel/ws': { target: 'ws://localhost:8000', ws: true },
     },
   },
   test: {
