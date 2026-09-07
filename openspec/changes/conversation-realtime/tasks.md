@@ -19,8 +19,8 @@ Strict TDD: each phase is a stacked, independently verifiable slice under 400 ch
 - [x] 4.2 GREEN — Modify `app/chat/nodes/classify_intent.py`, `app/chat/subgraphs/research_triage.py`, `app/chat/nodes/handoff.py`, `app/webhook/ingest.py`, `app/services/agent_chat.py`, `app/panel/api/routes/chat.py`, and serializers (CM-3/10, HH-1/6); est 190; deps 4.1; evidence `uv run pytest tests/` focused pass.
 
 ## Phase 5: Active Summary API
-- [ ] 5.1 RED — Test authorized `GET /panel/api/conversations/active`, customer-name join, bot/human + 24-hour/non-null exclusions, ordering, and null behavior (CRT-4); files `tests/functional/test_api_conversations.py`; est 55; deps Phase 4; evidence failing endpoint tests.
-- [ ] 5.2 GREEN — Add active query/serializers in `app/panel/api/routes/conversations.py`, `app/panel/api/serializers.py`, and migration `db/migrations/018_conversation_realtime.sql` (CRT-4); est 150; deps 5.1; evidence focused endpoint and migration tests.
+- [x] 5.1 RED — Test authorized `GET /panel/api/conversations/active`, customer-name join, bot/human + 24-hour/non-null exclusions, ordering, and null behavior (CRT-4); files `tests/functional/test_api_conversations.py`; est 55; deps Phase 4; evidence failing endpoint tests.
+- [x] 5.2 GREEN — Add active query/serializers in `app/panel/api/routes/conversations.py`, `app/panel/api/serializers.py`, and migration `db/migrations/018_conversation_realtime.sql` (CRT-4); est 150; deps 5.1; evidence focused endpoint and migration tests.
 
 ## Phase 6: SPA Realtime Client
 - [ ] 6.1 RED — Add deterministic fake-WebSocket Vitest coverage for reconnect/cleanup, reducers, activity `role=status`, token states, and REST refetch (PNL-APP-13/15, DS-RT-1); files `web/src/realtime.test.ts`; est 85; deps Phase 5; evidence `cd web && npm test` failures.

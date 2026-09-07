@@ -122,6 +122,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("015_h4_automations",),
         ("016_h4_notification_center",),
         ("017_h4_internal_chat",),
+        ("018_conversation_realtime",),
     ]
 
 
@@ -318,6 +319,20 @@ def test_h2_conversation_contract_columns_and_indexes(migrated_db, admin_conn):
         "'idx_conversations_responsible_id'"
     ).fetchone()
     assert index is not None
+
+
+def test_active_conversation_partial_index(migrated_db, admin_conn):
+    """CRT-4 active reads have a partial recency index."""
+    row = admin_conn.execute(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = "
+        "'idx_conversations_active_recency'"
+    ).fetchone()
+
+    assert row is not None
+    assert "last_message_at DESC" in row[0]
+    assert "'bot'::conversation_state" in row[0]
+    assert "'human'::conversation_state" in row[0]
+    assert "last_message_at IS NOT NULL" in row[0]
 
 
 def test_h2_outbound_contract_and_delivery_enum(migrated_db, admin_conn):

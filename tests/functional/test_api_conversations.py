@@ -12,7 +12,7 @@ unauthenticated calls get 401, never a 302 (PDW-AUTH-1). No CORS (D1).
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from threading import Barrier
 
 from fastapi import HTTPException
@@ -112,6 +112,70 @@ def test_conversations_list_requires_login_401_json(client):
     assert "location" not in resp.headers
     assert resp.headers["content-type"].startswith("application/json")
     assert resp.json() == {"detail": "unauthorized"}
+
+
+def test_active_conversations_requires_login_401_json(client):
+    """The active summary keeps the panel JSON authentication contract."""
+    resp = client.get("/panel/api/conversations/active", follow_redirects=False)
+
+    assert resp.status_code == 401
+    assert "location" not in resp.headers
+    assert resp.headers["content-type"].startswith("application/json")
+    assert resp.json() == {"detail": "unauthorized"}
+
+
+def test_active_conversations_joins_customer_and_filters_recent_open_rows(client, make_user):
+    """Active rows include customer names and exclude closed, stale, and null recency."""
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        customers = [
+            Customer(phone_e164="+56950000001", name="Newest Customer"),
+            Customer(phone_e164="+56950000002", name="Tie Later ID"),
+            Customer(phone_e164="+56950000003", name=None),
+            Customer(phone_e164="+56950000004", name="Closed Customer"),
+            Customer(phone_e164="+56950000005", name="Stale Customer"),
+            Customer(phone_e164="+56950000006", name="Null Recency"),
+        ]
+        session.add_all(customers)
+        session.flush()
+        rows = [
+            Conversation(customer_id=customers[0].id, wa_phone=customers[0].phone_e164,
+                         state=ConversationState.BOT, last_message_at=now),
+            Conversation(customer_id=customers[1].id, wa_phone=customers[1].phone_e164,
+                         state=ConversationState.HUMAN, last_message_at=now - timedelta(hours=1)),
+            Conversation(customer_id=customers[2].id, wa_phone=customers[2].phone_e164,
+                         state=ConversationState.BOT, last_message_at=now - timedelta(hours=2)),
+            Conversation(customer_id=customers[3].id, wa_phone=customers[3].phone_e164,
+                         state=ConversationState.CLOSED, last_message_at=now),
+            Conversation(customer_id=customers[4].id, wa_phone=customers[4].phone_e164,
+                         state=ConversationState.HUMAN, last_message_at=now - timedelta(hours=25)),
+            Conversation(customer_id=customers[5].id, wa_phone=customers[5].phone_e164,
+                         state=ConversationState.BOT),
+        ]
+        session.add_all(rows)
+        session.flush()
+        # Same timestamp proves the secondary id DESC ordering.
+        rows[1].last_message_at = rows[0].last_message_at
+        expected = [rows[1].id, rows[0].id, rows[2].id]
+        session.commit()
+
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    resp = client.get("/panel/api/conversations/active", follow_redirects=False)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"conversations"}
+    assert [row["id"] for row in body["conversations"]] == expected
+    assert [row["customer_name"] for row in body["conversations"]] == [
+        "Tie Later ID", "Newest Customer", None
+    ]
+    assert [row["state"] for row in body["conversations"]] == ["human", "bot", "bot"]
+    assert all(set(row) == {"id", "customer_name", "state", "last_message_at"}
+               for row in body["conversations"])
+    assert all(datetime.fromisoformat(row["last_message_at"]) <= now
+               for row in body["conversations"])
 
 
 # ---------------------------------------------------------------------------
