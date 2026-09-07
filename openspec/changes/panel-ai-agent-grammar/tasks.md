@@ -21,8 +21,8 @@ Web-only. Every GREEN task follows RED; each slice compiles and passes focused t
 
 ## Phase 4: Inspector/Ficha Alignment (PNL-APP-12, DS-GRAMMAR-1/3)
 
-- [ ] 4.1 RED: Create `ClientFicha.test.tsx` for page rhythm, conditional inspector, and retained cards, memories, notes, badges, and history tables.
-- [ ] 4.2 GREEN: Modify `ClientFicha.tsx` for aligned chrome/inspector hierarchy; retain dense operational sections.
+- [x] 4.1 RED: Create `ClientFicha.test.tsx` for page rhythm, conditional inspector, and retained cards, memories, notes, badges, and history tables.
+- [x] 4.2 GREEN: Modify `ClientFicha.tsx` for aligned chrome/inspector hierarchy; retain dense operational sections.
 
 ## Phase 5: Stories and Regression Gates (all requirements)
 
