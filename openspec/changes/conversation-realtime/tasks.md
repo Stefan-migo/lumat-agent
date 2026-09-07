@@ -3,8 +3,8 @@
 Strict TDD: each phase is a stacked, independently verifiable slice under 400 changed lines; RED precedes GREEN.
 
 ## Phase 1: Event Foundation
-- [ ] 1.1 RED — Add backend tests for `classified`/`kb_retrieved` validation, escalation reuse, activity-only history, bounded filtering/drop cleanup, and no ghost publication (CM-3, CM-10, CRT-3); files `tests/unit/test_realtime.py`, `tests/integration/test_realtime.py`; est 90; deps none; evidence focused pytest failures.
-- [ ] 1.2 GREEN — Create `app/services/realtime.py`; modify `app/db.py`, `app/models.py`, `app/panel/api/routes/conversations.py`; implement validator, query filter, per-subscriber queues, conversation filtering, post-commit dispatch; est 190; deps 1.1; evidence `uv run pytest tests/` focused pass.
+- [x] 1.1 RED — Add backend tests for `classified`/`kb_retrieved` validation, escalation reuse, activity-only history, bounded filtering/drop cleanup, and no ghost publication (CM-3, CM-10, CRT-3); files `tests/unit/test_realtime.py`, `tests/integration/test_realtime.py`; est 90; deps none; evidence focused pytest failures.
+- [x] 1.2 GREEN — Create `app/services/realtime.py`; modify `app/db.py`, `app/models.py`, `app/panel/api/routes/conversations.py`; implement validator, query filter, per-subscriber queues, conversation filtering, post-commit dispatch; est 190; deps 1.1; evidence `uv run pytest tests/` focused pass.
 
 ## Phase 2: Internal Chat Tokens
 - [ ] 2.1 RED — Test ordered token callback delivery, unchanged synchronous response, delivery failure, and operator denial (IAC-6, CRT-3); files `tests/integration/test_agent_chat_realtime.py`; est 55; deps Phase 1; evidence focused pytest failures.
