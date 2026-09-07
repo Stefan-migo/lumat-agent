@@ -17,9 +17,49 @@ describe("ClientesList page story (R-PRD-PG-6)", () => {
     expect(screen.getByRole("searchbox", { name: "Buscar clientes" })).toBeInTheDocument();
   });
 
-  it("renders the Export CSV secondary action", () => {
+  it("renders authenticated client and case export links", () => {
     render(<ClientesListView />);
-    expect(screen.getByRole("link", { name: "Exportar CSV" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Exportar clientes CSV" }).getAttribute("href")).toBe(
+      "/panel/export/clients.csv",
+    );
+    expect(screen.getByRole("link", { name: "Exportar casos CSV" }).getAttribute("href")).toBe(
+      "/panel/export/cases.csv",
+    );
+  });
+
+  it("uses same-origin navigation when an export is activated", () => {
+    render(<ClientesListView />);
+    const exportLink = screen.getByRole("link", { name: "Exportar clientes CSV" });
+
+    fireEvent.click(exportLink);
+
+    expect(exportLink.getAttribute("href")).toBe("/panel/export/clients.csv");
+    expect(exportLink.getAttribute("href")).not.toMatch(/^data:text\/csv;base64,/);
+  });
+
+  it("keeps denied exports server-controlled without a fabricated fallback", () => {
+    render(<ClientesListView />);
+
+    for (const link of screen.getAllByRole("link", { name: /Exportar (clientes|casos) CSV/ })) {
+      expect(link.getAttribute("href")).toMatch(/^\/panel\/export\/(clients|cases)\.csv$/);
+      expect(link.getAttribute("href")).not.toMatch(/^data:/);
+    }
+  });
+
+  it("does not fabricate a client-side download when export is server-denied", () => {
+    const createObjectURL = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+
+    render(<ClientesListView />);
+    const exportLink = screen.getByRole("link", { name: "Exportar clientes CSV" });
+    const serverEndpoint = "/panel/export/clients.csv";
+
+    fireEvent.click(exportLink);
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(exportLink).toBeInTheDocument();
+    expect(exportLink).toHaveAttribute("href", serverEndpoint);
+    expect(exportLink.getAttribute("href")).not.toMatch(/^data:|^blob:/);
   });
 
   it("renders the customer table with R-PRD-PG-6 fields", () => {
