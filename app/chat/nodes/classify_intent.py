@@ -33,6 +33,7 @@ from app.services.cases import get_or_create_case
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
 from app.services.settings import get_scope_mode
+from app.services.realtime import record_activity
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,13 @@ def classify_intent(state: ConversationState) -> dict:
     if result["intent"] == "unknown":
         with session_scope() as session:
             unknown_count = _record_unknown_intent(session, state, text)
+            record_activity(
+                session,
+                state.conversation_id,
+                "classified",
+                cause="intent:unknown",
+                actor="bot",
+            )
         return {
             "intent": "unknown",
             "unknown_count": unknown_count,
@@ -194,6 +202,13 @@ def classify_intent(state: ConversationState) -> dict:
 
     with session_scope() as session:
         case_update = _store_classification(session, state, result)
+        record_activity(
+            session,
+            state.conversation_id,
+            "classified",
+            cause=f"intent:{result['intent']}",
+            actor="bot",
+        )
         # HH-3 trigger 5 (T4.4): an SS-1 `always_escalate` category escalates
         # regardless of the answer path. Evaluated here, where the category is
         # known — the handoff gate owns the pre-LLM triggers.

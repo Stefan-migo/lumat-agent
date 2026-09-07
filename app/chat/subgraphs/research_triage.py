@@ -37,6 +37,7 @@ from app.chat.nodes.orchestrate import RESEARCH_TRIAGE, is_tool_whitelisted
 from app.chat.state import ConversationState
 from app.db import session_scope
 from app.services import kb
+from app.services.realtime import record_activity
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,14 @@ def _kb_check(state: ConversationState) -> dict:
             min_sim=kb.DEFAULT_MIN_SIM,
             scope=scope,
         )
+        if chunks:
+            record_activity(
+                session,
+                state.conversation_id,
+                "kb_retrieved",
+                cause=f"chunks:{len(chunks)}",
+                actor="bot",
+            )
     if chunks:
         # Scoped hit — delegate the grounded answer to the reused respond node.
         return {"next_step": "respond"}
