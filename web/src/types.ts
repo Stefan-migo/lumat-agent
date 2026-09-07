@@ -58,6 +58,9 @@ export interface CustomerNote {
   created_at: string | null;
 }
 
+export interface ClientStateMutationResponse { ok: true; state: CustomerState; }
+export interface ClientNoteMutationResponse { ok: true; note: CustomerNote; }
+
 export type MemoryType =
   | 'decision'
   | 'discovery'

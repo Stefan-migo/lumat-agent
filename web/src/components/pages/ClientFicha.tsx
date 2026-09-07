@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { apiFetch } from "../../api";
+import { addClientNote, ApiError, apiFetch, changeClientState } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { Appointment, ClientFichaResponse, Memory, MemoriesResponse, VisitHistoryEvent } from "../../types";
+import type { Appointment, ClientFichaResponse, CustomerState, Memory, MemoriesResponse, VisitHistoryEvent } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
 import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
@@ -39,6 +39,11 @@ function stateMessage(state: FichaState) {
 
 export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, isSaving = false, onRetryCalendar }: ClientFichaProps) {
   const [retryingCalendarId, setRetryingCalendarId] = useState<number | null>(null);
+  const [refreshed, setRefreshed] = useState<{ ficha: ClientFichaResponse; memories: Memory[] } | null>(null);
+  const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
+  const [note, setNote] = useState("");
+  const [mutation, setMutation] = useState<"state" | "note" | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; title: string; detail?: string } | null>(null);
   const fetchFicha = useCallback(async () => {
     if (customerId === undefined) throw new Error("customer id is required");
     const [ficha, memoryResponse] = await Promise.all([
@@ -48,8 +53,8 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     return { ficha, memories: memoryResponse.memories };
   }, [customerId]);
   const fetched = useAsyncData(fetchFicha, controlledData === undefined);
-  const data = controlledData ?? fetched.data?.ficha;
-  const memories = controlledMemories ?? fetched.data?.memories ?? [];
+  const data = refreshed?.ficha ?? controlledData ?? fetched.data?.ficha;
+  const memories = refreshed?.memories ?? controlledMemories ?? fetched.data?.memories ?? [];
   const state: FichaState = controlledData ? "ready" : fetched.state;
 
   if (!data) {
@@ -67,6 +72,33 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     } finally {
       setRetryingCalendarId(null);
     }
+  };
+  const refresh = async () => {
+    if (customerId === undefined) return;
+    const next = await fetchFicha();
+    setRefreshed(next);
+  };
+  const safeError = (error: unknown, action: "estado" | "nota") => {
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return { title: `No tienes permiso para guardar ${action}` };
+    if (error instanceof ApiError && (error.status === 400 || error.status === 422)) return { title: `Revisa el ${action} e inténtalo de nuevo` };
+    return { title: `No pudimos guardar ${action}`, detail: "Inténtalo nuevamente." };
+  };
+  const saveState = async () => {
+    if (customerId === undefined || !selectedState || mutation) return;
+    setMutation("state"); setFeedback(null);
+    try { await changeClientState(customerId, selectedState); await refresh(); setFeedback({ tone: "success", title: "Estado guardado" }); }
+    catch (error) { setFeedback({ tone: "danger", ...safeError(error, "estado") }); }
+    finally { setMutation(null); }
+  };
+  const saveNote = async () => {
+    if (customerId === undefined || !note.trim() || mutation) {
+      if (!note.trim()) setFeedback({ tone: "danger", title: "La nota no puede estar vacía" });
+      return;
+    }
+    setMutation("note"); setFeedback(null);
+    try { await addClientNote(customerId, note.trim()); await refresh(); setNote(""); setFeedback({ tone: "success", title: "Nota agregada" }); }
+    catch (error) { setFeedback({ tone: "danger", ...safeError(error, "nota") }); }
+    finally { setMutation(null); }
   };
   const conversationColumns: Column<(typeof history.conversations)[number]>[] = [
     { key: "id", header: "#", render: (row) => `#${row.id}` },
@@ -93,12 +125,17 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     <PageFrame
       title={`Ficha: ${customer.name ?? customer.phone_e164 ?? "—"}`}
       meta={`${customer.phone_e164 ?? "—"} · Estado: ${customerStateLabel(customer.state)}`}
-      state={stateMessage(state)}
+      state={<>{stateMessage(state)}{feedback ? <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.title} detail={feedback.detail} /> : null}</>}
     >
       <section aria-label="Resumen del cliente">
         <Card>
           <p>{customer.phone_e164 ?? "—"}</p>
           <Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge>
+          <label htmlFor="client-state">Estado del cliente</label>
+          <select id="client-state" value={selectedState ?? customer.state} disabled={mutation !== null || customerId === undefined} onChange={(event) => setSelectedState(event.target.value as CustomerState)}>
+            {(data.states ?? []).map((option) => <option key={option} value={option}>{customerStateLabel(option)}</option>)}
+          </select>
+          <button type="button" disabled={mutation !== null || customerId === undefined || !selectedState || selectedState === customer.state} onClick={() => void saveState()}>{mutation === "state" ? "Guardando…" : "Guardar estado"}</button>
           <p>Consentimiento: {customer.consent_status ? "Sí" : "No"}</p>
           {customer.email ? <p>{customer.email}</p> : null}
           {customer.comuna ? <p>{customer.comuna}</p> : null}
@@ -116,6 +153,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
 
       <Card title="Notas">
         {data.notes.length ? data.notes.map((note) => <p key={note.id}>{note.author ?? "—"} · {note.note}</p>) : <EmptyState title="No hay notas" />}
+        <label htmlFor="new-note">Nueva nota</label>
+        <textarea id="new-note" value={note} disabled={mutation !== null || customerId === undefined} onChange={(event) => setNote(event.target.value)} />
+        <button type="button" disabled={mutation !== null || customerId === undefined} onClick={() => void saveNote()}>{mutation === "note" ? "Guardando…" : "Agregar nota"}</button>
       </Card>
 
       <Card title="Historial">
