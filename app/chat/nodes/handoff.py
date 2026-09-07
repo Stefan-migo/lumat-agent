@@ -26,12 +26,12 @@ from app.chat.state import ConversationState, set_conversation_state
 from app.db import session_scope
 from app.models import (
     Conversation,
-    ConversationEvent,
     ConversationState as ConversationStateEnum,
     Customer,
 )
 from app.services.audit import record_audit
 from app.services.cases import create_handoff_case
+from app.services.realtime import record_activity
 
 logger = logging.getLogger(__name__)
 
@@ -79,13 +79,12 @@ def handoff(state: ConversationState) -> dict:
                 cause=f"handoff:{reason}",
                 actor="rule",
             )
-        session.add(
-            ConversationEvent(
-                conversation_id=state.conversation_id,
-                event="escalation",
-                cause=f"handoff:{reason}",
-                actor="rule",
-            )
+        record_activity(
+            session,
+            state.conversation_id,
+            "escalation",
+            cause=f"handoff:{reason}",
+            actor="rule",
         )
         record_audit(
             session,

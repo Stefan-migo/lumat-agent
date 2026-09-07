@@ -15,8 +15,8 @@ Strict TDD: each phase is a stacked, independently verifiable slice under 400 ch
 - [x] 3.2 GREEN — Create `app/panel/api/routes/realtime.py`; register directly in `app/panel/routes/__init__.py`; reuse `app/panel/api/deps.py` session auth and snapshot subscription (CRT-1/2/3); est 150; deps 3.1; evidence focused pytest pass.
 
 ## Phase 4: Activity and Recency Writers
-- [ ] 4.1 RED — Test classification/retrieval activities, webhook/chat/panel `last_message_at`, escalation publication, and reconnect-safe history (CM-3, CM-10, HH-1/6); files existing integration tests plus `test_realtime_writers.py`; est 70; deps Phase 3; evidence failing integration tests.
-- [ ] 4.2 GREEN — Modify `app/chat/nodes/classify_intent.py`, `app/chat/subgraphs/research_triage.py`, `app/chat/nodes/handoff.py`, `app/webhook/ingest.py`, `app/services/agent_chat.py`, `app/panel/api/routes/chat.py`, and serializers (CM-3/10, HH-1/6); est 190; deps 4.1; evidence `uv run pytest tests/` focused pass.
+- [x] 4.1 RED — Test classification/retrieval activities, webhook/chat/panel `last_message_at`, escalation publication, and reconnect-safe history (CM-3, CM-10, HH-1/6); files existing integration tests plus `test_realtime_writers.py`; est 70; deps Phase 3; evidence failing integration tests.
+- [x] 4.2 GREEN — Modify `app/chat/nodes/classify_intent.py`, `app/chat/subgraphs/research_triage.py`, `app/chat/nodes/handoff.py`, `app/webhook/ingest.py`, `app/services/agent_chat.py`, `app/panel/api/routes/chat.py`, and serializers (CM-3/10, HH-1/6); est 190; deps 4.1; evidence `uv run pytest tests/` focused pass.
 
 ## Phase 5: Active Summary API
 - [ ] 5.1 RED — Test authorized `GET /panel/api/conversations/active`, customer-name join, bot/human + 24-hour/non-null exclusions, ordering, and null behavior (CRT-4); files `tests/functional/test_api_conversations.py`; est 55; deps Phase 4; evidence failing endpoint tests.

@@ -158,6 +158,7 @@ def send_operator_message(session: Session, conversation_id: int, actor: User, t
     )
     session.add(message)
     session.flush()
+    conversation.last_message_at = datetime.now(timezone.utc)
     record_audit(session, actor=actor.username, action="message.send_requested", entity="message", entity_id=str(message.id), after={"request_id": request_id, "conversation_id": conversation_id, "text": text})
     session.commit()
     return deliver_message(message.id)

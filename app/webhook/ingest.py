@@ -22,6 +22,7 @@ import re
 import time
 from collections import deque
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -263,6 +264,12 @@ def persist_message(session, normalized: NormalizedMessage) -> bool:
     )
     result = session.execute(stmt)
     session.flush()
+    message = session.scalar(select(Message).where(Message.wamid == normalized.wamid))
+    if message is not None and (
+        conversation.last_message_at is None
+        or message.created_at > conversation.last_message_at
+    ):
+        conversation.last_message_at = message.created_at or datetime.now(timezone.utc)
     if result.rowcount == 1:
         publish_event(
             session, event_type="message.received", entity_type="message", entity_id=str(normalized.wamid),
