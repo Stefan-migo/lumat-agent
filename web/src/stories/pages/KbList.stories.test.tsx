@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { docs } from "./_shared/mockData/kb";
 import { kbStatusLabel } from "./_shared/toneMaps";
 import { KbList } from "../../components/pages/KbList";
@@ -153,6 +154,7 @@ describe("KbList API page", () => {
       .mockResolvedValue(new Response(JSON.stringify({ docs }), { status: 200 }));
 
     render(<KbList />);
+    await screen.findByText(docs[0].title);
 
     expect(await screen.findByText(docs[0].title)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/panel/api/kb", expect.objectContaining({ credentials: "include" }));
@@ -168,6 +170,95 @@ describe("KbList API page", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permiso para ver este panel");
     expect(screen.queryByText("No pudimos cargar la base de conocimientos")).toBeNull();
+    fetchMock.mockRestore();
+  });
+
+  it("uploads a document as FormData without manually setting Content-Type, then refreshes", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, doc: docs[0] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
+
+    render(<KbList />);
+    await screen.findByText(docs[0].title);
+    const file = new File(["# Content"], "guide.md", { type: "text/markdown" });
+    const addCard = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
+    await user.type(within(addCard).getByLabelText("Título"), "Guide");
+    await user.upload(within(addCard).getByLabelText(/archivo/i), file);
+    await user.click(within(addCard).getByRole("button", { name: "Agregar" }));
+
+    const uploadRequest = fetchMock.mock.calls[1][1] as RequestInit;
+    expect(uploadRequest.method).toBe("POST");
+    expect(uploadRequest.body).toBeInstanceOf(FormData);
+    expect((uploadRequest.body as FormData).get("title")).toBe("Guide");
+    expect((uploadRequest.body as FormData).get("file")).toBeInstanceOf(File);
+    expect((uploadRequest.headers as Record<string, string> | undefined)?.["Content-Type"]).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    fetchMock.mockRestore();
+  });
+
+  it("posts edit, disable, and restore JSON mutations and refreshes after each commit", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      if (init?.method === "POST") return new Response(JSON.stringify({ ok: true, doc: docs[0] }), { status: 200 });
+      return new Response(JSON.stringify({ docs }), { status: 200 });
+    });
+
+    render(<KbList data={{ docs }} />);
+    const row = within(screen.getByRole("table")).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
+    await user.click(within(row).getByText("Editar"));
+    await user.click(within(row).getByRole("button", { name: /guardar/i }));
+    await user.click(within(row).getByRole("button", { name: "Deshabilitar" }));
+    const restoreRow = within(screen.getByRole("table")).getByText(`#${docs.find((doc) => doc.version > 1)!.id}`).closest("tr") as HTMLElement;
+    await user.click(within(restoreRow).getByRole("button", { name: "Restaurar" }));
+
+    const mutationCalls = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
+    expect(mutationCalls).toHaveLength(3);
+    expect((mutationCalls[0][1]?.body as string)).toContain('"content"');
+    expect((mutationCalls[1][0] as string)).toContain(`/kb/${docs[0].id}/disable`);
+    expect((mutationCalls[2][0] as string)).toContain(`/kb/${docs.find((doc) => doc.version > 1)!.id}/restore`);
+    expect(fetchMock.mock.calls.filter(([, init]) => !init?.method || init.method === "GET")).toHaveLength(3);
+    fetchMock.mockRestore();
+  });
+
+  it.each([400, 422])("maps %i validation failures to safe actionable feedback", async (status) => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "database secret" }), { status }));
+    render(<KbList data={{ docs }} />);
+    const row = within(screen.getByRole("table")).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
+    await user.click(within(row).getByText("Editar"));
+    await user.click(within(row).getByRole("button", { name: /guardar/i }));
+    expect(await screen.findByRole("heading", { name: /revisa los campos/i })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).not.toHaveTextContent("database secret");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    fetchMock.mockRestore();
+  });
+
+  it("shows permission state for a mutation denied with 403", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail: "admin role required" }), { status: 403 }),
+    );
+    render(<KbList data={{ docs }} />);
+    const row = within(screen.getByRole("table")).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
+    await user.click(within(row).getByRole("button", { name: "Deshabilitar" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permiso para modificar la base de conocimientos");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("admin role required");
+    fetchMock.mockRestore();
+  });
+
+  it("disables mutation controls while a commit is in flight", async () => {
+    const user = userEvent.setup();
+    let resolve!: (response: Response) => void;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise((next) => { resolve = next; }));
+    render(<KbList data={{ docs }} />);
+    const row = within(screen.getByRole("table")).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
+    const disable = within(row).getByRole("button", { name: "Deshabilitar" });
+    await user.click(disable);
+    expect(disable).toBeDisabled();
+    resolve(new Response(JSON.stringify({ ok: true, doc: docs[0] }), { status: 200 }));
     fetchMock.mockRestore();
   });
 });
