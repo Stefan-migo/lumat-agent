@@ -15,8 +15,8 @@ Strict RED→GREEN TDD; stacked slices.
 - [x] 3.2 GREEN — Modify `web/src/components/pages/ClientesList.tsx` for `/panel/export/clients.csv` and `cases.csv`; remove data URIs; est 55; deps 3.1; evidence Vitest passes.
 
 ## Phase 4: Slice 4
-- [ ] 4.1 RED — Test `web/src/components/domain/{panelRoutes.test.ts,AppShell.test.tsx}` and `web/src/components/pages/AdvancedDashboard.test.tsx` for nav, `aria-current`, states, 403; est 105; deps Slices 1–3; evidence Vitest fails.
-- [ ] 4.2 GREEN — Modify `web/src/components/domain/{panelRoutes.ts,PanelShell.tsx,AppShell.tsx}`, `web/src/components/pages/AdvancedDashboard.tsx`, `web/src/{api.ts,types.ts}` for nav and three calls; est 155; deps 4.1; evidence Vitest passes.
+- [x] 4.1 RED — Test `web/src/components/domain/{panelRoutes.test.ts,AppShell.test.tsx}` and `web/src/components/pages/AdvancedDashboard.test.tsx` for nav, `aria-current`, states, 403; est 105; deps Slices 1–3; evidence Vitest fails.
+- [x] 4.2 GREEN — Modify `web/src/components/domain/{panelRoutes.ts,PanelShell.tsx,AppShell.tsx}`, `web/src/components/pages/AdvancedDashboard.tsx`, `web/src/{api.ts,types.ts}` for nav and three calls; est 155; deps 4.1; evidence Vitest passes.
 
 ## Phase 5: Slice 5
 - [ ] 5.1 RED — Convert `tests/functional/{test_auth.py,test_clients.py,test_cases.py,test_kb_settings.py,test_dashboard_export.py}` to API/SPA contracts; est 125; deps Slices 1–4; evidence functional pytest fails.
