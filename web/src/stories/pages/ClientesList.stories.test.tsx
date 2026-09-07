@@ -46,6 +46,22 @@ describe("ClientesList page story (R-PRD-PG-6)", () => {
     }
   });
 
+  it("does not fabricate a client-side download when export is server-denied", () => {
+    const createObjectURL = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+
+    render(<ClientesListView />);
+    const exportLink = screen.getByRole("link", { name: "Exportar clientes CSV" });
+    const serverEndpoint = "/panel/export/clients.csv";
+
+    fireEvent.click(exportLink);
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(exportLink).toBeInTheDocument();
+    expect(exportLink).toHaveAttribute("href", serverEndpoint);
+    expect(exportLink.getAttribute("href")).not.toMatch(/^data:|^blob:/);
+  });
+
   it("renders the customer table with R-PRD-PG-6 fields", () => {
     render(<ClientesListView />);
     const table = screen.getByRole("table");
