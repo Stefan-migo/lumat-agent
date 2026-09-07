@@ -63,7 +63,7 @@ export default function App() {
   }
 
   if (state.kind === 'authed') {
-    return <AppShell user={state.user} onLogout={logout} />;
+    return <AppShell user={state.user} onLogout={logout} loadActiveThreads />;
   }
 
   if (state.kind === 'anon') {

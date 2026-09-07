@@ -27,8 +27,8 @@ Strict TDD: each phase is a stacked, independently verifiable slice under 400 ch
 - [x] 6.2 GREEN — Create `web/src/realtime.ts`; modify `web/src/api.ts`, `web/src/types.ts`, `ConversationThread.tsx`, `ConversationsList.tsx`, and `AgentChat.tsx` for live updates, reconnect recovery, and accessible activity/error states (PNL-APP-13/15, DS-RT-1); est 210; deps 6.1; evidence focused Vitest pass.
 
 ## Phase 7: Rail and Deployment Wiring
-- [ ] 7.1 RED — Test active-summary loading/error/disconnected rail behavior, compact keyboard/reduced-motion states, Vite `ws:true`, and nginx upgrade headers/timeouts (PNL-APP-14, DS-RT-1/2, CRT-5, threat routing); files shell/config/infra tests; est 65; deps Phase 6; evidence failing web/infra assertions.
-- [ ] 7.2 GREEN — Wire `AppShell.tsx` → `PanelShell.tsx` active rail; modify `web/vite.config.ts`, `infra/nginx/panel.lumat.cl.conf`, and `infra/nginx/agente.lumat.cl.conf` (PNL-APP-14, DS-RT-1/2, CRT-5); run all gates; est 180; deps 7.1; evidence tests/typecheck/build pass.
+- [x] 7.1 RED — Test active-summary loading/error/disconnected rail behavior, compact keyboard/reduced-motion states, Vite `ws:true`, and nginx upgrade headers/timeouts (PNL-APP-14, DS-RT-1/2, CRT-5, threat routing); files shell/config/infra tests; est 65; deps Phase 6; evidence failing web/infra assertions.
+- [x] 7.2 GREEN — Wire `AppShell.tsx` → `PanelShell.tsx` active rail; modify `web/vite.config.ts`, `infra/nginx/panel.lumat.cl.conf`, and `infra/nginx/agente.lumat.cl.conf` (PNL-APP-14, DS-RT-1/2, CRT-5); run all gates; est 180; deps 7.1; evidence tests/typecheck/build pass.
 
 ## Review Workload Forecast
 | Phase | Est. lines | Focused test / runtime harness | Rollback boundary |

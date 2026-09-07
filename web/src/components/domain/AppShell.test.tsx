@@ -293,12 +293,12 @@ describe('AppShell — native History API routing', () => {
 
 describe('AppShell — agent shell grammar', () => {
   it('renders a truthful active-thread region without making a conversation request', () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch');
-    render(<AppShell user={operador} />);
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ conversations: [] }), { status: 200 }));
+    render(<AppShell user={operador} loadActiveThreads />);
 
     expect(screen.getByRole('region', { name: 'Conversaciones activas' })).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Conversaciones activas' })).toHaveTextContent('No hay conversaciones activas');
-    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining('/panel/api/conversations'), expect.anything());
+    expect(screen.getByRole('status', { name: 'Conversaciones activas' })).toHaveTextContent('Cargando');
+    expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations/active', expect.anything());
     fetchMock.mockRestore();
   });
 
