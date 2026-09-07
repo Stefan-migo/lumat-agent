@@ -90,16 +90,22 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   ];
 
   return (
-    <PageFrame title={`Ficha: ${customer.name ?? customer.phone_e164 ?? "—"}`} state={stateMessage(state)}>
-      <Card>
-        <p>{customer.phone_e164 ?? "—"}</p>
-        <Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge>
-        <p>Consentimiento: {customer.consent_status ? "Sí" : "No"}</p>
-        {customer.email ? <p>{customer.email}</p> : null}
-        {customer.comuna ? <p>{customer.comuna}</p> : null}
-        {customer.address ? <p>{customer.address}</p> : null}
-        <p>Creado: {customer.created_at?.slice(0, 10) ?? "—"}</p>
-      </Card>
+    <PageFrame
+      title={`Ficha: ${customer.name ?? customer.phone_e164 ?? "—"}`}
+      meta={`${customer.phone_e164 ?? "—"} · Estado: ${customerStateLabel(customer.state)}`}
+      state={stateMessage(state)}
+    >
+      <section aria-label="Resumen del cliente">
+        <Card>
+          <p>{customer.phone_e164 ?? "—"}</p>
+          <Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge>
+          <p>Consentimiento: {customer.consent_status ? "Sí" : "No"}</p>
+          {customer.email ? <p>{customer.email}</p> : null}
+          {customer.comuna ? <p>{customer.comuna}</p> : null}
+          {customer.address ? <p>{customer.address}</p> : null}
+          <p>Creado: {customer.created_at?.slice(0, 10) ?? "—"}</p>
+        </Card>
+      </section>
 
       <Card title="Memo del cliente">
         <p>{data.memo || "Todavía no hay memo para este cliente."}</p>

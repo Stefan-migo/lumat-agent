@@ -2,10 +2,10 @@
 
 ## Slice
 
-Phase 3: Internal AgentChat (tasks 3.1–3.2), applied after the merged Phase 2
-thread/list presentation. Delivery is `auto-chain`, `stacked-to-main`; this
-slice is under the 400-line budget. Phases 4–5 remain intentionally
-unimplemented.
+Phase 4: Inspector/Ficha Alignment (tasks 4.1–4.2), applied after the merged
+Phase 3 internal AgentChat presentation. Delivery is `auto-chain`,
+`stacked-to-main`; this slice is under the 400-line budget. Phase 5 remains
+intentionally unimplemented.
 
 ## Completed Tasks
 
@@ -41,6 +41,17 @@ unimplemented.
   `createChatThread`, `sendChatMessage`, `getChatThread`, authorization
   handling, refusal content, and failed submitted content behavior unchanged;
   added no realtime transport, fake activity, endpoints, or backend changes.
+
+- [x] 4.1 RED — Created `web/src/components/pages/ClientFicha.test.tsx` with
+  page rhythm, customer context, conditional inspector, retained cards,
+  memories, notes, badges, and four DataTable assertions. The initial focused
+  run failed only because the note matcher ignored the rendered
+  `author · note` contract.
+- [x] 4.2 GREEN — Aligned `ClientFicha.tsx` chrome with the existing
+  `PageFrame` meta line and a labelled customer-summary region while retaining
+  memo, `ClientMemories`, notes, badges, visits, appointments, visit history,
+  and the three history DataTables. No inspector column or chat surface was
+  added.
 
 ## TDD Cycle Evidence
 
@@ -96,9 +107,24 @@ Consulted `graphify-out/GRAPH_REPORT.md` (AppShell hub, `types.ts`,
 ambiguous; the report and query exposed the `PanelShell.tsx`/`AppShell.tsx`
 community and `AppShell` route edges used here.
 
+## Phase 4 TDD Cycle Evidence
+
+| Task | Test file | RED | GREEN | Triangulate | Refactor |
+|---|---|---|---|---|---|
+| 4.1 | `ClientFicha.test.tsx` | ✅ Focused RED failed 1 stale note matcher | ✅ Focused run 2/2 after matching `author · note` | ✅ Populated dense sections plus empty appointments path | ✅ Clean |
+| 4.2 | `ClientFicha.tsx`, `ClientFicha.test.tsx` | ✅ Existing RED contract exposed the required hierarchy | ✅ Focused run 2/2 | ✅ Cards, memories, notes, badges, and four tables remain rendered | ✅ Clean |
+
+## Phase 4 Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command | `cd web && npx vitest run src/components/pages/ClientFicha.test.tsx` — PASS, 1 file, 2 tests |
+| Runtime harness | `cd web && npm test` — PASS, 63 files, 430 tests; dense ficha fixture included |
+| Typecheck | `cd web && npx tsc -b` — PASS |
+| Rollback boundary | Revert `web/src/components/pages/ClientFicha.tsx`, `web/src/components/pages/ClientFicha.test.tsx`, and the Phase 4 task/progress rows; no API, backend, route, shell, CSS, or Phase 5 files are involved. |
+
 ## Remaining Slices
 
-- Phase 4: Inspector/Ficha Alignment (tasks 4.1–4.2)
 - Phase 5: Stories and Regression Gates (tasks 5.1–5.3)
 
 ## Graph Check — Phase 2
@@ -140,3 +166,22 @@ directional bubbles; `ConversationsList` remains a DataTable.
 None — implementation follows the binding design. The existing empty copy was
 reframed as a labelled `StateMessage`; persisted APIs, refusal text, and
 error/recovery content remain unchanged.
+
+## Graph Check — Phase 4
+
+Consulted `graphify-out/GRAPH_REPORT.md` and ran
+`graphify query "ClientFicha client ficha"`.
+Relevant nodes: `ClientFicha()`, `pages/ClientFicha.tsx`, `ClientFicha.test.tsx`,
+`ClientMemories.tsx`, `PageFrame()`, `shared/PageFrame.tsx`, `DataTable()`,
+`shared/DataTable.tsx`, `Badge.tsx`, `api.ts`, `types.ts`, and
+`AiAgentGrammar.stories.tsx`. Path check:
+`ClientFicha()` → `PageFrame()` resolved through `pages/ClientFicha.tsx` →
+`PageFrame()` in two hops; the direct ClientFicha → ClientMemories lookup was
+ambiguous/no directed path, so the query/report supplied the imported domain
+component and shared primitive edges.
+
+## Phase 4 deviations
+
+None — implementation matches the design. The interrupted working-tree GREEN
+was completed by correcting the test to assert the actual `author · note` DOM
+contract; dense operational sections remain unchanged.
