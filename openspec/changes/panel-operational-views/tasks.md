@@ -11,8 +11,8 @@ Strict RED→GREEN TDD; stacked slices.
 - [x] 2.2 GREEN — Modify `web/src/components/pages/KbList.tsx`, `web/src/api.ts`, `web/src/types.ts` for multipart/JSON mutations, errors, refresh; est 165; deps 2.1; evidence Vitest passes.
 
 ## Phase 3: Slice 3
-- [ ] 3.1 RED — Test `web/src/stories/pages/ClientesList.stories.test.tsx` for export URLs and denied-download behavior; est 45; deps Slice 2; evidence Vitest fails.
-- [ ] 3.2 GREEN — Modify `web/src/components/pages/ClientesList.tsx` for `/panel/export/clients.csv` and `cases.csv`; remove data URIs; est 55; deps 3.1; evidence Vitest passes.
+- [x] 3.1 RED — Test `web/src/stories/pages/ClientesList.stories.test.tsx` for export URLs and denied-download behavior; est 45; deps Slice 2; evidence Vitest fails.
+- [x] 3.2 GREEN — Modify `web/src/components/pages/ClientesList.tsx` for `/panel/export/clients.csv` and `cases.csv`; remove data URIs; est 55; deps 3.1; evidence Vitest passes.
 
 ## Phase 4: Slice 4
 - [ ] 4.1 RED — Test `web/src/components/domain/{panelRoutes.test.ts,AppShell.test.tsx}` and `web/src/components/pages/AdvancedDashboard.test.tsx` for nav, `aria-current`, states, 403; est 105; deps Slices 1–3; evidence Vitest fails.

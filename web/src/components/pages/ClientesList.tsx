@@ -79,7 +79,8 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       actions={
         <>
           <SearchInput aria-label="Buscar clientes" onSearch={setQuery} />
-          <Button variant="secondary" href="data:text/csv;base64,">Exportar CSV</Button>
+          <Button variant="secondary" href="/panel/export/clients.csv">Exportar clientes CSV</Button>
+          <Button variant="secondary" href="/panel/export/cases.csv">Exportar casos CSV</Button>
         </>
       }
       state={stateMessage(state, retry)}
