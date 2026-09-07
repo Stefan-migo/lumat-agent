@@ -7,8 +7,8 @@ Strict TDD: each phase is a stacked, independently verifiable slice under 400 ch
 - [x] 1.2 GREEN — Create `app/services/realtime.py`; modify `app/db.py`, `app/models.py`, `app/panel/api/routes/conversations.py`; implement validator, query filter, per-subscriber queues, conversation filtering, post-commit dispatch; est 190; deps 1.1; evidence `uv run pytest tests/` focused pass.
 
 ## Phase 2: Internal Chat Tokens
-- [ ] 2.1 RED — Test ordered token callback delivery, unchanged synchronous response, delivery failure, and operator denial (IAC-6, CRT-3); files `tests/integration/test_agent_chat_realtime.py`; est 55; deps Phase 1; evidence focused pytest failures.
-- [ ] 2.2 GREEN — Add optional callback to `app/chat/graph.py`; publish chunks in `app/services/agent_chat.py` without changing POST persistence/authorization (IAC-6, CRT-3); est 145; deps 2.1; evidence focused pytest pass and existing chat tests.
+- [x] 2.1 RED — Test ordered token callback delivery, unchanged synchronous response, delivery failure, and operator denial (IAC-6, CRT-3); files `tests/integration/test_agent_chat_realtime.py`; est 55; deps Phase 1; evidence focused pytest failures.
+- [x] 2.2 GREEN — Add optional callback to `app/chat/graph.py`; publish chunks in `app/services/agent_chat.py` without changing POST persistence/authorization (IAC-6, CRT-3); est 145; deps 2.1; evidence focused pytest pass and existing chat tests.
 
 ## Phase 3: Authenticated WebSocket
 - [ ] 3.1 RED — Add `TestClient.websocket_connect` tests for `/panel/ws` mount, cookie/role rejection, snapshot-first ordering, and disconnect cleanup (CRT-1, CRT-2, threat HTTP/WebSocket routing); files `tests/functional/test_api_realtime.py`; est 75; deps Phase 1; evidence failing websocket tests.

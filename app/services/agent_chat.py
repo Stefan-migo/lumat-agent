@@ -9,6 +9,7 @@ from app.chat import graph
 from app.models import InternalChatMessage, InternalChatThread, User
 from app.panel.api.serializers import to_internal_chat_message_dict, to_internal_chat_thread_dict
 from app.services.audit import record_audit
+from app.services.realtime import stage_event
 
 
 def thread_dict(thread: InternalChatThread) -> dict:
@@ -33,11 +34,34 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
     session.add(message)
     session.flush()
     try:
-        response = graph.run_internal_conversation(session, thread, message.content)
+        def publish_token(token: str) -> None:
+            stage_event(
+                session,
+                type="token",
+                conversation_id=thread.id,
+                data={"token": token},
+            )
+
+        response = graph.run_internal_conversation(
+            session, thread, message.content, on_token=publish_token
+        )
         message.status = "processed"
         message.completed_at = datetime.now(timezone.utc)
-        session.add(InternalChatMessage(thread_id=thread.id, author="agent", content=response,
-                                         status="processed", completed_at=datetime.now(timezone.utc)))
+        response_message = InternalChatMessage(
+            thread_id=thread.id,
+            author="agent",
+            content=response,
+            status="processed",
+            completed_at=datetime.now(timezone.utc),
+        )
+        session.add(response_message)
+        session.flush()
+        stage_event(
+            session,
+            type="message",
+            conversation_id=thread.id,
+            data=message_dict(response_message),
+        )
     except Exception:
         message.status = "failed"
         message.error = "The agent could not process this message. Retry it."
