@@ -21,6 +21,7 @@ import { AgentChat } from '../pages/AgentChat';
 import { AgendaPage } from '../pages/AgendaPage';
 import { AutomationRulesPage } from '../pages/AutomationRulesPage';
 import { AutomationRuleDetailPage } from '../pages/AutomationRuleDetailPage';
+import { AdvancedDashboard } from '../pages/AdvancedDashboard';
 
 /** Top-level SPA views. Client ficha and conversation thread are drill-downs
  * rendered from list views, not top-level nav, so they do not appear here. */
@@ -111,6 +112,7 @@ export function AppShell({ user, onLogout, activeThreads, loadActiveThreads = fa
   const conversationId = route.conversationId ?? null;
 
   const page = view === 'dashboard' ? <Dashboard />
+      : view === 'advanced-dashboard' ? <AdvancedDashboard />
       : view === 'agenda' ? <AgendaPage />
       : view === 'automation-rules' ? route.automationRuleId !== undefined || creatingAutomationRule ? <AutomationRuleDetailPage ruleId={creatingAutomationRule ? null : route.automationRuleId} user={user} onCreated={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} onBack={() => { setCreatingAutomationRule(false); window.history.back(); }} /> : <AutomationRulesPage user={user} onOpenCreate={navigateToCreateAutomationRule} onOpenRule={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />

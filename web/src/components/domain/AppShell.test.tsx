@@ -128,6 +128,22 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
+  it('deep-links to AdvancedDashboard and exposes it with an active nav state', async () => {
+    window.history.replaceState({}, '', '/panel/app/advanced-dashboard');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      if (path.includes('/dashboard/')) return new Response(JSON.stringify({ period: { start: '2026-08-01', end: '2026-08-04', timezone: 'UTC' }, metrics: { contacts: 2, cases: 1, appointments: 0, notification_health: {}, automation_outcomes: {} }, trend: [{ start: '2026-08-01', count: 1 }], drilldown: [] }), { status: 200 });
+      return new Response(JSON.stringify({ contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' }), { status: 200 });
+    });
+
+    const { container } = render(<AppShell user={operador} />);
+    expect(await screen.findByText('Indicadores operacionales')).toBeInTheDocument();
+    expect(sidebar(container).getByText('Dashboard avanzado').closest('button')).toHaveAttribute('aria-current', 'page');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Menú' }));
+    expect(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Dashboard avanzado' })).toHaveAttribute('aria-current', 'page');
+    vi.restoreAllMocks();
+  });
+
   it('deep-links to automation rules and exposes the read-only route to operadores', async () => {
     window.history.replaceState({}, '', '/panel/app/automation-rules');
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ rules: [] }), { status: 200 }));

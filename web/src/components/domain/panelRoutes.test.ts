@@ -21,11 +21,14 @@ describe('panel routes', () => {
       settings: '/panel/app/settings',
     agenda: '/panel/app/agenda',
     'automation-rules': '/panel/app/automation-rules',
+      'advanced-dashboard': '/panel/app/advanced-dashboard',
     });
 
     expect(pathForView('clients')).toBe('/panel/app/clients');
     expect(pathForView('dashboard')).toBe(PANEL_BASE_PATH);
     expect(parsePanelPath('/panel/app/agenda')).toEqual({ view: 'agenda' });
+    expect(pathForView('advanced-dashboard')).toBe('/panel/app/advanced-dashboard');
+    expect(parsePanelPath('/panel/app/advanced-dashboard')).toEqual({ view: 'advanced-dashboard' });
   });
 
   it('builds and parses positive client and conversation drill-down IDs', () => {
