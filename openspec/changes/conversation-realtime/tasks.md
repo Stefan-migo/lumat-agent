@@ -23,8 +23,8 @@ Strict TDD: each phase is a stacked, independently verifiable slice under 400 ch
 - [x] 5.2 GREEN — Add active query/serializers in `app/panel/api/routes/conversations.py`, `app/panel/api/serializers.py`, and migration `db/migrations/018_conversation_realtime.sql` (CRT-4); est 150; deps 5.1; evidence focused endpoint and migration tests.
 
 ## Phase 6: SPA Realtime Client
-- [ ] 6.1 RED — Add deterministic fake-WebSocket Vitest coverage for reconnect/cleanup, reducers, activity `role=status`, token states, and REST refetch (PNL-APP-13/15, DS-RT-1); files `web/src/realtime.test.ts`; est 85; deps Phase 5; evidence `cd web && npm test` failures.
-- [ ] 6.2 GREEN — Create `web/src/realtime.ts`; modify `web/src/api.ts`, `web/src/types.ts`, `ConversationThread.tsx`, `ConversationsList.tsx`, and `AgentChat.tsx` for live updates, reconnect recovery, and accessible activity/error states (PNL-APP-13/15, DS-RT-1); est 210; deps 6.1; evidence focused Vitest pass.
+- [x] 6.1 RED — Add deterministic fake-WebSocket Vitest coverage for reconnect/cleanup, reducers, activity `role=status`, token states, and REST refetch (PNL-APP-13/15, DS-RT-1); files `web/src/realtime.test.ts`; est 85; deps Phase 5; evidence `cd web && npm test` failures.
+- [x] 6.2 GREEN — Create `web/src/realtime.ts`; modify `web/src/api.ts`, `web/src/types.ts`, `ConversationThread.tsx`, `ConversationsList.tsx`, and `AgentChat.tsx` for live updates, reconnect recovery, and accessible activity/error states (PNL-APP-13/15, DS-RT-1); est 210; deps 6.1; evidence focused Vitest pass.
 
 ## Phase 7: Rail and Deployment Wiring
 - [ ] 7.1 RED — Test active-summary loading/error/disconnected rail behavior, compact keyboard/reduced-motion states, Vite `ws:true`, and nginx upgrade headers/timeouts (PNL-APP-14, DS-RT-1/2, CRT-5, threat routing); files shell/config/infra tests; est 65; deps Phase 6; evidence failing web/infra assertions.

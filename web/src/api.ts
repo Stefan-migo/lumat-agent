@@ -52,7 +52,7 @@ export function postJson<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-import type { AdvancedDashboardData, AgendaResponse, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, Rule } from './types';
+import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, Rule } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -63,6 +63,7 @@ export function listConversations(filters: ConversationFilters = {}) {
   const query = params.toString();
   return apiFetch<ConversationsResponse>(`/panel/api/conversations${query ? `?${query}` : ''}`);
 }
+export const listActiveConversations = () => apiFetch<ActiveConversationsResponse>('/panel/api/conversations/active');
 export const getConversation = (id: number) => apiFetch<ConversationThread>(`/panel/api/conversations/${id}`);
 export const changeConversationState = (id: number, state: ConversationState, expected_version: number) => command<{ ok: true; conversation: Conversation }>(`/panel/api/conversations/${id}/state`, { state, expected_version, request_id: requestId() });
 export const sendMessage = (id: number, body: { text: string; request_id?: string }) => command<{ ok: true; message: Message }>(`/panel/api/conversations/${id}/messages`, { ...body, request_id: body.request_id ?? requestId() });

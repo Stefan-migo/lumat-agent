@@ -97,6 +97,11 @@ export interface InternalChatThread { id: number; user_id?: number; status: stri
 export interface InternalChatMessage { id: number; thread_id?: number; author: 'admin' | 'agent'; content: string; status: InternalChatStatus; error?: string | null; created_at?: string | null; completed_at?: string | null; }
 export interface InternalChatResponse { thread: InternalChatThread; messages: InternalChatMessage[]; }
 
+export type RealtimeEnvelopeType = 'token' | 'message' | 'conversation' | 'activity' | 'snapshot';
+export interface RealtimeEnvelope<T = unknown> { type: RealtimeEnvelopeType; conversation_id?: number | null; data: T; }
+export interface RealtimeActivity { id?: number; conversation_id?: number; event: string; cause?: string | null; actor?: string | null; created_at?: string; }
+export interface RealtimeSnapshot { conversations: Conversation[]; activity: RealtimeActivity[]; }
+
 export interface Kpis {
   contacts: number;
   motivos: Array<[string, number]>;
@@ -140,6 +145,14 @@ export interface Conversation {
 export interface ConversationsResponse {
   conversations: Conversation[];
 }
+
+export interface ActiveConversation {
+  id: number;
+  customer_name: string | null;
+  state: ConversationState | string;
+  last_message_at: string | null;
+}
+export interface ActiveConversationsResponse { conversations: ActiveConversation[]; }
 
 export type MessageDirection = 'inbound' | 'outbound';
 
