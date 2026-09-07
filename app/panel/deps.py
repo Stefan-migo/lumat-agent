@@ -48,6 +48,9 @@ def get_db() -> Generator[Session, None, None]:
     try:
         yield session
         session.commit()
+        from app.services.realtime import dispatch_staged_events
+
+        dispatch_staged_events(session)
     except Exception:
         session.rollback()
         raise
