@@ -26,9 +26,9 @@ Web-only. Every GREEN task follows RED; each slice compiles and passes focused t
 
 ## Phase 5: Stories and Regression Gates (all requirements)
 
-- [ ] 5.1 RED: Extend `web/src/stories/pages/ChatWithAgent.stories.test.tsx`, `InboxThread.stories.test.tsx`, and `web/src/stories/concept/AiAgentGrammar.stories.test.tsx` for viewports, states, inspector, motion, and dense pages.
-- [ ] 5.2 GREEN: Modify those stories to trace production contracts without production mocks or realtime behavior.
-- [ ] 5.3 Verify: `cd web && npm test`; `cd web && npx tsc -b`; `cd web && npm run build`; confirm no backend files, new endpoints, fetch in `PanelShell`, fabricated threads, streaming, or dependencies.
+- [x] 5.1 RED: Extend `web/src/stories/pages/ChatWithAgent.stories.test.tsx`, `InboxThread.stories.test.tsx`, and `web/src/stories/concept/AiAgentGrammar.stories.test.tsx` for viewports, states, inspector, motion, and dense pages.
+- [x] 5.2 GREEN: Modify those stories to trace production contracts without production mocks or realtime behavior.
+- [x] 5.3 Verify: `cd web && npm test`; `cd web && npx tsc -b`; `cd web && npm run build`; confirm no backend files, new endpoints, fetch in `PanelShell`, fabricated threads, streaming, or dependencies.
 
 ## Review Workload Forecast
 

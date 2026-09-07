@@ -33,10 +33,29 @@ describe("InboxThread composer + window (R-PRD-PG-9 / R-PRD-PG-10)", () => {
     const bubbles = document.querySelectorAll("[data-bubble]");
     expect(bubbles.length).toBeGreaterThanOrEqual(convMsgs.length);
     const inBubble = Array.from(bubbles).find(
-      (b) => b.getAttribute("aria-label") === "inbound",
+      (b) => b.getAttribute("aria-label") === "Mensaje entrante de Marcela Fuentes",
     );
     expect(inBubble).toBeDefined();
     expect(screen.getByRole("heading", { name: `# ${conv.id}` })).toBeInTheDocument();
+  });
+
+  it("traces production direction, identity, and handoff semantics", () => {
+    const conv = findByConvId(101);
+    render(<InboxThreadView conversation={conv} nowMs={nowMs} />);
+    const convMsgs = messages.filter((m) => m.conversation_id === conv.id);
+    const bubbles = Array.from(document.querySelectorAll<HTMLElement>("[data-bubble]"));
+
+    expect(document.querySelectorAll(".avatar")).toHaveLength(convMsgs.length);
+    expect(bubbles).toHaveLength(convMsgs.length);
+    expect(bubbles.map((bubble) => bubble.getAttribute("aria-label"))).toContain(
+      "Mensaje entrante de Marcela Fuentes",
+    );
+    expect(bubbles.map((bubble) => bubble.getAttribute("aria-label"))).toContain(
+      "Mensaje saliente de Lumat",
+    );
+
+    render(<InboxThreadView conversation={findByConvId(103)} nowMs={nowMs} />);
+    expect(screen.getByText("La conversación está en atención humana.")).toBeInTheDocument();
   });
 
   it("renders the conversation state in the header meta as the approved Spanish label, never the raw key", () => {

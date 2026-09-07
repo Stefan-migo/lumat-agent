@@ -35,9 +35,15 @@ describe("ChatWithAgent AgentThinking (R-PRD-PG-11)", () => {
   it("shows the processing spinner and disables the composer", () => {
     render(<ChatWithAgentView status="processing" />);
     expect(document.querySelector(".spinner")).not.toBeNull();
-    expect(screen.getByText("El agente está pensando…")).toBeInTheDocument();
+    expect(screen.getByText("Procesando respuesta")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /escribe un mensaje/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Enviar" })).toBeDisabled();
+  });
+
+  it("keeps processing truthful without realtime or streaming copy", () => {
+    render(<ChatWithAgentView status="processing" />);
+    expect(screen.getByRole("status")).toHaveTextContent("Procesando respuesta");
+    expect(screen.queryByText(/tiempo real|escribiendo|streaming/i)).toBeNull();
   });
 });
 

@@ -2,10 +2,9 @@
 
 ## Slice
 
-Phase 4: Inspector/Ficha Alignment (tasks 4.1–4.2), applied after the merged
-Phase 3 internal AgentChat presentation. Delivery is `auto-chain`,
-`stacked-to-main`; this slice is under the 400-line budget. Phase 5 remains
-intentionally unimplemented.
+Phase 5: Stories and Regression Gates (tasks 5.1–5.3), applied after the
+merged Phase 4 inspector/ficha alignment. Delivery is `auto-chain`,
+`stacked-to-main`; this slice is under the 400-line budget.
 
 ## Completed Tasks
 
@@ -125,7 +124,49 @@ community and `AppShell` route edges used here.
 
 ## Remaining Slices
 
-- Phase 5: Stories and Regression Gates (tasks 5.1–5.3)
+- None — Phase 5 is complete.
+
+## Phase 5 TDD Cycle Evidence
+
+| Task | Test file | RED | GREEN | Triangulate | Refactor |
+|---|---|---|---|---|---|
+| 5.1 | `ChatWithAgent.stories.test.tsx`, `InboxThread.stories.test.tsx`, `AiAgentGrammar.stories.test.tsx` | ✅ New viewport/state/identity/inspector assertions failed before story updates | ✅ Focused run 24/24 | ✅ Processing, compact/inspector-hidden, inbound/outbound, handoff | ✅ Clean |
+| 5.2 | Same story files and shared chat fixture | ✅ Contract expectations written first | ✅ Focused run 3 files, 24 tests | ✅ Deterministic reply window and dense inspector context | ✅ Removed streaming language and aligned production labels |
+| 5.3 | Full web gates | ✅ Baseline focused suite 20/20 before additions | ✅ Full suite and build gates pass | ✅ Storybook production build pass | ✅ Clean |
+
+## Phase 5 Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command | `cd web && npx vitest run src/stories/pages/ChatWithAgent.stories.test.tsx src/stories/pages/InboxThread.stories.test.tsx src/stories/concept/AiAgentGrammar.stories.test.tsx` — PASS, 3 files, 24 tests |
+| Runtime harness | `cd web && npm run build-storybook` — PASS, Storybook 8.6.18 preview built; responsive story viewport metadata and all three stories compiled |
+| Full test command | `cd web && npm test` — PASS, 63 files, 434 tests |
+| Typecheck | `cd web && npx tsc -b` — PASS |
+| Build | `cd web && npm run build` — PASS (`vite v6.4.3`, 70 modules transformed) |
+| Rollback boundary | Revert the seven changed story/test/fixture files; no production components, APIs, backend files, tokens, or dependencies are involved. |
+| Negative gates | PASS: no backend files, new endpoints, `fetch` in `PanelShell`, fabricated threads, streaming/realtime behavior, or new dependencies. Existing story fixtures remain the source of rendered rows/messages. |
+
+## Graph Check — Phase 5
+
+Consulted `graphify-out/GRAPH_REPORT.md` and ran
+`graphify query "ChatWithAgent InboxThread AiAgentGrammar stories"`.
+Relevant nodes: `ChatWithAgent.stories.tsx`, `ChatWithAgent.stories.test.tsx`,
+`InboxThread.stories.tsx`, `InboxThread.stories.test.tsx`,
+`AiAgentGrammar.stories.tsx`, `AiAgentGrammar.stories.test.tsx`,
+`Stories _shared Helpers Origin (pre-promotion)`, `ConversationThread.tsx`,
+`ConversationsList.tsx`, `AgentChat.tsx`, `Avatar.tsx`, `StatusBadge.tsx`,
+`Textarea.tsx`, `Button.tsx`, `primitives.css`, and `types.ts`.
+Edges consulted: story files → shared mock fixtures/primitives; production
+conversation and agent pages → `api.ts` and shared grammar primitives. Directed
+paths requested from `ChatWithAgent` → `ConversationThread`, `InboxThread` →
+`ConversationsList`, and `AiAgentGrammar` → `AgentChat` were absent/ambiguous;
+the graph query and communities supplied the story-to-contract boundaries.
+
+## Phase 5 Deviations
+
+None — implementation matches the design. Story-only processing copy now uses
+the persisted production terminology and removes the pre-existing realtime/
+streaming wording; no production behavior was changed.
 
 ## Graph Check — Phase 2
 

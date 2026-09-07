@@ -5,7 +5,7 @@ import { StatusBadge } from "../../components/primitives/StatusBadge";
 import { Textarea } from "../../components/primitives/Textarea";
 
 type Scenario = "emergencia" | "visita";
-type ComposerState = "enabled" | "streaming" | "disabled_window" | "disabled_not_taken";
+type ComposerState = "enabled" | "processing" | "disabled_window" | "disabled_not_taken";
 
 const navItems = ["Panel", "Clientes", "Conversaciones", "Casos", "Notificaciones", "Asistente Lumat"];
 const adminItems = ["Base de conocimientos", "Configuración"];
@@ -34,7 +34,7 @@ export function AiAgentGrammarView({ railExpanded, inspectorVisible, scenario, c
 }) {
   const emergency = scenario === "emergencia";
   const disabled = composerState !== "enabled";
-  const reason = composerState === "streaming" ? "Esperando respuesta del agente" : composerState === "disabled_window" ? "Fuera de la ventana de 24 horas" : composerState === "disabled_not_taken" ? "Toma la conversación para responder" : undefined;
+  const reason = composerState === "processing" ? "Procesando respuesta" : composerState === "disabled_window" ? "Fuera de la ventana de 24 horas" : composerState === "disabled_not_taken" ? "Toma la conversación para responder" : undefined;
   return <div className="ai-agent-grammar">
     <div className={`ai-agent-grammar__shell${railExpanded ? "" : " ai-agent-grammar__shell--compact"}${inspectorVisible ? "" : " ai-agent-grammar__shell--wide"}`}>
       <aside className="ai-agent-grammar__rail" aria-label="Navegación principal">
@@ -53,7 +53,7 @@ export function AiAgentGrammarView({ railExpanded, inspectorVisible, scenario, c
           {emergency ? <><Activity>Lumat clasificó la solicitud</Activity><Activity>Detectó emergencia probable</Activity><Activity>Consultó la base de conocimientos</Activity><Activity>Derivó a atención humana</Activity></> : <Activity>Lumat consultó la base de conocimientos · Creó una solicitud de visita</Activity>}
           <Message outbound name="Lumat" time="14:32">{emergency ? "María, lamento la situación. Ya avisamos al equipo para que te contacten a la brevedad. Si puedes hacerlo de forma segura, cierra la llave de paso del agua." : "María, podemos coordinar una visita desde $35.000. Hay disponibilidad esta semana; dejaré creada la solicitud para confirmar el horario."}</Message>
           {emergency ? <><div className="ai-agent-grammar__handoff">Rodrigo tomó la conversación · 14:40</div><Message outbound name="Rodrigo" time="14:40">María, soy Rodrigo del equipo técnico. ¿Pudiste cerrar la llave de paso? Así coordinamos la visita.</Message><Message name="María González" time="14:41">Sí, ya la cerré. ¿Cuándo podría venir alguien?</Message></> : <Message name="María González" time="14:35">Perfecto, gracias. Ojalá pueda ser durante la tarde.</Message>}
-          {composerState === "streaming" ? <div className="ai-agent-grammar__streaming" role="status">Lumat está escribiendo…</div> : null}
+          {composerState === "processing" ? <div className="ai-agent-grammar__processing" role="status" aria-label="Procesando respuesta">Procesando respuesta</div> : null}
         </section>
         <form className="ai-agent-grammar__composer" aria-label="Responder a la conversación"><span className={`ai-agent-grammar__composer-hint${disabled ? " ai-agent-grammar__composer-hint--muted" : ""}`}>{composerState === "enabled" ? "Respuesta disponible · Ventana de 24 h abierta" : reason}</span><Textarea label="Respuesta" disabled={disabled} placeholder="Escribe una respuesta…" /><div className="ai-agent-grammar__composer-actions"><Button disabled={disabled}>Enviar respuesta</Button>{reason ? <span className="ai-agent-grammar__reason">{reason}</span> : null}</div></form>
       </main>
@@ -72,8 +72,8 @@ export function AiAgentGrammarView({ railExpanded, inspectorVisible, scenario, c
   </div>;
 }
 
-const meta = { title: "Concepto/Gramática AI Agent", component: AiAgentGrammarView, parameters: { layout: "fullscreen" }, argTypes: {
-  railExpanded: { control: "boolean" }, inspectorVisible: { control: "boolean" }, scenario: { control: "select", options: ["emergencia", "visita"] }, composerState: { control: "select", options: ["enabled", "streaming", "disabled_window", "disabled_not_taken"] },
+const meta = { title: "Concepto/Gramática AI Agent", component: AiAgentGrammarView, parameters: { layout: "fullscreen", viewport: { defaultViewport: "responsive" } }, argTypes: {
+  railExpanded: { control: "boolean" }, inspectorVisible: { control: "boolean" }, scenario: { control: "select", options: ["emergencia", "visita"] }, composerState: { control: "select", options: ["enabled", "processing", "disabled_window", "disabled_not_taken"] },
 } } satisfies Meta<typeof AiAgentGrammarView>;
 
 export default meta;
