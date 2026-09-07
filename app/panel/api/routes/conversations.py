@@ -19,13 +19,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Conversation, DeliveryStatus, Message, MessageDirection, User
+from app.models import Conversation, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, User
 from app.panel.api.deps import require_user_json
-from app.panel.api.serializers import to_conversation_dict, to_message_dict
+from app.panel.api.serializers import to_active_conversation_dict, to_conversation_dict, to_message_dict
 from app.panel.deps import get_db
 from app.services.conversations import assign, change_state, retry_operator_message, send_operator_message
-from app.models import ConversationState
-
 router = APIRouter(tags=["panel-api-conversations"])
 
 
@@ -107,6 +105,31 @@ def conversations_list(
         )
     ).all()
     return {"conversations": [_conversation_payload(session, row) for row in rows]}
+
+
+@router.get("/conversations/active")
+def active_conversations(
+    session: Session = Depends(get_db),
+    current: User = Depends(require_user_json),
+) -> dict:
+    """List bot/human conversations with activity in the last 24 hours."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    rows = session.execute(
+        select(Conversation, Customer.name)
+        .join(Customer, Customer.id == Conversation.customer_id)
+        .where(
+            Conversation.state.in_((ConversationState.BOT, ConversationState.HUMAN)),
+            Conversation.last_message_at.is_not(None),
+            Conversation.last_message_at >= cutoff,
+        )
+        .order_by(Conversation.last_message_at.desc(), Conversation.id.desc())
+    ).all()
+    return {
+        "conversations": [
+            to_active_conversation_dict(conversation, customer_name=customer_name)
+            for conversation, customer_name in rows
+        ]
+    }
 
 
 @router.post("/conversations/{conversation_id}/state")

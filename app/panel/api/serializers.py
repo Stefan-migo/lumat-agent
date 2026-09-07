@@ -123,6 +123,18 @@ def to_conversation_dict(
     }
 
 
+def to_active_conversation_dict(
+    conversation: Conversation, *, customer_name: str | None
+) -> dict:
+    """Conversation row -> the compact active-summary rail shape."""
+    return {
+        "id": conversation.id,
+        "customer_name": customer_name,
+        "state": conversation.state.value,
+        "last_message_at": _iso(conversation.last_message_at),
+    }
+
+
 def to_case_dict(case: Case) -> dict:
     """Case row -> snake_case service dict (B3/T3.2)."""
     return {
