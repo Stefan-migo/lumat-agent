@@ -7,8 +7,8 @@ Strict RED→GREEN TDD; stacked slices.
 - [x] 1.2 GREEN — Modify `web/src/components/pages/ClientFicha.tsx`, `web/src/api.ts`, `web/src/types.ts` for typed mutations, `ApiError`, refetch; est 140; deps 1.1; evidence Vitest passes.
 
 ## Phase 2: Slice 2
-- [ ] 2.1 RED — Test `web/src/stories/pages/KbList.stories.test.tsx` for `FormData`, lifecycle, validation, 403, refresh; est 95; deps Slice 1; evidence Vitest fails.
-- [ ] 2.2 GREEN — Modify `web/src/components/pages/KbList.tsx`, `web/src/api.ts`, `web/src/types.ts` for multipart/JSON mutations, errors, refresh; est 165; deps 2.1; evidence Vitest passes.
+- [x] 2.1 RED — Test `web/src/stories/pages/KbList.stories.test.tsx` for `FormData`, lifecycle, validation, 403, refresh; est 95; deps Slice 1; evidence Vitest fails.
+- [x] 2.2 GREEN — Modify `web/src/components/pages/KbList.tsx`, `web/src/api.ts`, `web/src/types.ts` for multipart/JSON mutations, errors, refresh; est 165; deps 2.1; evidence Vitest passes.
 
 ## Phase 3: Slice 3
 - [ ] 3.1 RED — Test `web/src/stories/pages/ClientesList.stories.test.tsx` for export URLs and denied-download behavior; est 45; deps Slice 2; evidence Vitest fails.

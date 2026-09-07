@@ -229,6 +229,7 @@ export interface Doc {
 export interface DocsResponse {
   docs: Doc[];
 }
+export interface KbMutationResponse { ok: true; doc: Doc; }
 
 export interface SpendSnapshot {
   date: string;

@@ -22,10 +22,13 @@ export async function apiFetch<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
+  const headers = options?.body instanceof FormData
+    ? options.headers
+    : { 'Content-Type': 'application/json', ...options?.headers };
   const res = await fetch(path, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers,
   });
 
   if (!res.ok) {
@@ -51,6 +54,18 @@ export function postJson<T>(path: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
+
+import type { DocsResponse, KbMutationResponse } from './types';
+export const uploadKbDocument = (title: string, file: File) => {
+  const body = new FormData();
+  body.append('title', title);
+  body.append('file', file);
+  return apiFetch<KbMutationResponse>('/panel/api/kb', { method: 'POST', body });
+};
+export const editKbDocument = (id: number, body: { title: string; content: string }) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/edit`, body);
+export const disableKbDocument = (id: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/disable`);
+export const restoreKbDocument = (id: number, version: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/restore`, { version });
+export const refreshKbDocuments = () => apiFetch<DocsResponse>('/panel/api/kb');
 
 import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; }
