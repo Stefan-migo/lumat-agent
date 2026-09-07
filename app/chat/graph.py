@@ -45,6 +45,7 @@ the greeting/menu into the safety protocol (EM-2 full flow interrupt).
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from langgraph.graph import END, START, StateGraph
 from sqlalchemy.orm import Session
@@ -79,7 +80,12 @@ INTERNAL_SYSTEM_PROMPT = (
 logger = logging.getLogger(__name__)
 
 
-def run_internal_conversation(session: Session, thread: InternalChatThread, text: str) -> str:
+def run_internal_conversation(
+    session: Session,
+    thread: InternalChatThread,
+    text: str,
+    on_token: Callable[[str], None] | None = None,
+) -> str:
     """Constrained internal boundary: answer or refuse, never execute tools.
 
     Internal chat deliberately has no customer conversation state, tools, or
@@ -90,18 +96,34 @@ def run_internal_conversation(session: Session, thread: InternalChatThread, text
     if any(action in lowered for action in PRIVILEGED_INTERNAL_ACTIONS):
         return "I cannot perform privileged actions from internal chat. Please use the approved operational workflow."
     try:
-        response = llm.openai_client().chat.completions.create(
-            model=llm.CHAT_MODEL,
-            messages=[
+        request = {
+            "model": llm.CHAT_MODEL,
+            "messages": [
                 {"role": "system", "content": INTERNAL_SYSTEM_PROMPT},
                 {"role": "user", "content": text.strip()},
             ],
-            temperature=0,
-        )
+            "temperature": 0,
+        }
+        if on_token is None:
+            response = llm.openai_client().chat.completions.create(**request)
+            return response.choices[0].message.content or "I could not produce an answer. Please try again."
+
+        response = llm.openai_client().chat.completions.create(**request, stream=True)
+        if not hasattr(response, "__iter__"):
+            return response.choices[0].message.content or "I could not produce an answer. Please try again."
+        chunks: list[str] = []
+        for chunk in response:
+            token = chunk.choices[0].delta.content or ""
+            if token:
+                chunks.append(token)
+                try:
+                    on_token(token)
+                except Exception:
+                    logger.exception("Internal agent token callback failed")
+        return "".join(chunks) or "I could not produce an answer. Please try again."
     except Exception:
         logger.exception("Internal agent chat model call failed")
         raise
-    return response.choices[0].message.content or "I could not produce an answer. Please try again."
 
 
 def _flow_start(state: ConversationState) -> str:
