@@ -11,8 +11,8 @@ Strict TDD: each phase is a stacked, independently verifiable slice under 400 ch
 - [x] 2.2 GREEN — Add optional callback to `app/chat/graph.py`; publish chunks in `app/services/agent_chat.py` without changing POST persistence/authorization (IAC-6, CRT-3); est 145; deps 2.1; evidence focused pytest pass and existing chat tests.
 
 ## Phase 3: Authenticated WebSocket
-- [ ] 3.1 RED — Add `TestClient.websocket_connect` tests for `/panel/ws` mount, cookie/role rejection, snapshot-first ordering, and disconnect cleanup (CRT-1, CRT-2, threat HTTP/WebSocket routing); files `tests/functional/test_api_realtime.py`; est 75; deps Phase 1; evidence failing websocket tests.
-- [ ] 3.2 GREEN — Create `app/panel/api/routes/realtime.py`; register directly in `app/panel/routes/__init__.py`; reuse `app/panel/api/deps.py` session auth and snapshot subscription (CRT-1/2/3); est 150; deps 3.1; evidence focused pytest pass.
+- [x] 3.1 RED — Add `TestClient.websocket_connect` tests for `/panel/ws` mount, cookie/role rejection, snapshot-first ordering, and disconnect cleanup (CRT-1, CRT-2, threat HTTP/WebSocket routing); files `tests/functional/test_api_realtime.py`; est 75; deps Phase 1; evidence failing websocket tests.
+- [x] 3.2 GREEN — Create `app/panel/api/routes/realtime.py`; register directly in `app/panel/routes/__init__.py`; reuse `app/panel/api/deps.py` session auth and snapshot subscription (CRT-1/2/3); est 150; deps 3.1; evidence focused pytest pass.
 
 ## Phase 4: Activity and Recency Writers
 - [ ] 4.1 RED — Test classification/retrieval activities, webhook/chat/panel `last_message_at`, escalation publication, and reconnect-safe history (CM-3, CM-10, HH-1/6); files existing integration tests plus `test_realtime_writers.py`; est 70; deps Phase 3; evidence failing integration tests.
