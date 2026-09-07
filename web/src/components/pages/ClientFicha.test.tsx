@@ -1,7 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { ApiError, apiFetch, addClientNote, changeClientState } from "../../api";
 import { ClientFicha } from "./ClientFicha";
 import type { ClientFichaResponse, Memory } from "../../types";
+
+vi.mock("../../api", async () => {
+  const actual = await vi.importActual<typeof import("../../api")>("../../api");
+  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn() };
+});
 
 const ficha: ClientFichaResponse = {
   customer: {
@@ -43,6 +50,9 @@ const memories: Memory[] = [{
 }];
 
 describe("ClientFicha page grammar", () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.restoreAllMocks());
+
   it("uses page rhythm and customer context without reserving a shell inspector", () => {
     render(<ClientFicha data={ficha} memories={memories} />);
 
@@ -60,11 +70,56 @@ describe("ClientFicha page grammar", () => {
     expect(screen.getByRole("heading", { name: "Notas" })).toBeInTheDocument();
     expect(screen.getAllByText("Prefiere contacto por la tarde.")).toHaveLength(2);
     expect(screen.getByText("operador · Confirmar por WhatsApp")).toBeInTheDocument();
-    expect(screen.getByText("Activo")).toBeInTheDocument();
+    expect(screen.getAllByText("Activo").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("table")).toHaveLength(4);
     expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Conversaciones" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Casos" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Mensajes" })).toBeInTheDocument();
+  });
+
+  it("posts state changes and notes, then refreshes ficha and memories", async () => {
+    const user = userEvent.setup();
+    vi.mocked(changeClientState).mockResolvedValue({ ok: true, state: "inactivo" });
+    vi.mocked(addClientNote).mockResolvedValue({ ok: true, note: ficha.notes[0] });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.selectOptions(screen.getByLabelText("Estado del cliente"), "inactivo");
+    await user.click(screen.getByRole("button", { name: "Guardar estado" }));
+    await user.type(screen.getByLabelText("Nueva nota"), "Llamar mañana");
+    await user.click(screen.getByRole("button", { name: "Agregar nota" }));
+
+    expect(changeClientState).toHaveBeenCalledWith(7, "inactivo");
+    expect(addClientNote).toHaveBeenCalledWith(7, "Llamar mañana");
+    expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7");
+    expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7/memories");
+    expect(await screen.findByRole("heading", { name: "Nota agregada" })).toBeInTheDocument();
+  });
+
+  it("shows safe mutation errors and disables controls while saving", async () => {
+    const user = userEvent.setup();
+    let reject!: (error: unknown) => void;
+    vi.mocked(changeClientState).mockReturnValue(new Promise((_, nextReject) => { reject = nextReject; }));
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.selectOptions(screen.getByLabelText("Estado del cliente"), "inactivo");
+    const save = screen.getByRole("button", { name: "Guardar estado" });
+    await user.click(save);
+    expect(save).toBeDisabled();
+    reject(new ApiError(500, "database password leaked"));
+
+    expect(await screen.findByRole("heading", { name: "No pudimos guardar estado" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).not.toHaveTextContent("database password leaked");
+  });
+
+  it("rejects an empty note before making the request", async () => {
+    const user = userEvent.setup();
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("button", { name: "Agregar nota" }));
+
+    expect(addClientNote).not.toHaveBeenCalled();
+    expect(screen.getByText("La nota no puede estar vacía")).toBeInTheDocument();
   });
 });

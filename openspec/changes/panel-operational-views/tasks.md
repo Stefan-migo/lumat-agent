@@ -3,8 +3,8 @@
 Strict RED→GREEN TDD; stacked slices.
 
 ## Phase 1: Slice 1
-- [ ] 1.1 RED — Test `web/src/components/pages/ClientFicha.test.tsx` for state/note POSTs, states, errors, and refresh; est 80; deps none; evidence Vitest fails.
-- [ ] 1.2 GREEN — Modify `web/src/components/pages/ClientFicha.tsx`, `web/src/api.ts`, `web/src/types.ts` for typed mutations, `ApiError`, refetch; est 140; deps 1.1; evidence Vitest passes.
+- [x] 1.1 RED — Test `web/src/components/pages/ClientFicha.test.tsx` for state/note POSTs, states, errors, and refresh; est 80; deps none; evidence Vitest fails.
+- [x] 1.2 GREEN — Modify `web/src/components/pages/ClientFicha.tsx`, `web/src/api.ts`, `web/src/types.ts` for typed mutations, `ApiError`, refetch; est 140; deps 1.1; evidence Vitest passes.
 
 ## Phase 2: Slice 2
 - [ ] 2.1 RED — Test `web/src/stories/pages/KbList.stories.test.tsx` for `FormData`, lifecycle, validation, 403, refresh; est 95; deps Slice 1; evidence Vitest fails.
