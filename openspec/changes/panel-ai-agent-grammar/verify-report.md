@@ -4,7 +4,7 @@ evidence_revision: sha256:82a389dedc344a83824cd24a625af7b67455a2a67f57be07018ccf
 verdict: pass_with_warnings
 blockers: 0
 critical_findings: 0
-requirements: 7/7
+requirements: 8/8
 scenarios: 17/17
 test_command: cd web && npm test
 test_exit_code: 0
@@ -23,14 +23,14 @@ build_output_hash: sha256:82a389dedc344a83824cd24a625af7b67455a2a67f57be07018ccf
 
 ### Executive Summary
 
-Independent verification of the complete merged change passed all web runtime and build gates. All 7 requirements and 17 scenarios are compliant; no production backend or dependency changes are present. The verdict is PASS WITH WARNINGS because the full suite emits existing React act warnings and Storybook emits a non-failing chunk-size warning.
+Independent verification of the complete merged change passed all web runtime and build gates. All 8 requirements and 17 scenarios are compliant; no production backend or dependency changes are present. The verdict is PASS WITH WARNINGS because the full suite emits existing React act warnings and Storybook emits a non-failing chunk-size warning.
 
 ### Completeness
 
 | Metric | Value |
 |---|---:|
-| Requirements total | 7 |
-| Requirements complete | 7 |
+| Requirements total | 8 |
+| Requirements complete | 8 |
 | Scenarios total from retrieved specs | 17 |
 | Scenarios compliant | 17 |
 | Tasks total | 13 |
@@ -130,4 +130,4 @@ Coverage: not available; no coverage tool is configured.
 
 **PASS WITH WARNINGS**
 
-All seven requirements, seventeen scenarios, and thirteen tasks are complete with independent runtime/build evidence; warnings are non-blocking.
+All eight requirements, seventeen scenarios, and thirteen tasks are complete with independent runtime/build evidence; warnings are non-blocking.
