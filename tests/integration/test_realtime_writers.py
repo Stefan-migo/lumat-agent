@@ -198,3 +198,71 @@ def test_activity_history_remains_queryable_after_new_session(migrated_db):
             "kb_retrieved",
             "escalation",
         ]
+
+
+def test_state_transition_publishes_conversation_event(migrated_db, monkeypatch):
+    published = []
+
+    async def capture(envelope):
+        published.append(envelope)
+
+    monkeypatch.setattr("app.services.realtime.publisher.publish", capture)
+    with SessionLocal() as session:
+        _, conversation = _conversation(session)
+        session.commit()
+
+    from app.chat.state import set_conversation_state
+
+    with session_scope() as session:
+        conversation = session.get(Conversation, conversation.id)
+        set_conversation_state(
+            session,
+            conversation,
+            ConversationStateEnum.HUMAN,
+            cause="persona",
+            actor="rule",
+        )
+
+    events = [event for event in published if event.type == "conversation"]
+    assert len(events) == 1
+    assert events[0].conversation_id == conversation.id
+    assert events[0].data == {
+        "conversation_id": conversation.id,
+        "from_state": "bot",
+        "state": "human",
+        "cause": "persona",
+        "actor": "rule",
+    }
+
+
+def test_state_transition_publication_failure_does_not_rollback_transition(
+    migrated_db, monkeypatch
+):
+    attempts = []
+
+    async def fail(envelope):
+        attempts.append(envelope)
+        raise RuntimeError("subscriber disappeared")
+
+    monkeypatch.setattr("app.services.realtime.publisher.publish", fail)
+    with SessionLocal() as session:
+        _, conversation = _conversation(session)
+        session.commit()
+
+    from app.chat.state import set_conversation_state
+
+    with session_scope() as session:
+        conversation = session.get(Conversation, conversation.id)
+        set_conversation_state(
+            session,
+            conversation,
+            ConversationStateEnum.HUMAN,
+            cause="persona",
+            actor="rule",
+        )
+
+    with SessionLocal() as session:
+        persisted = session.get(Conversation, conversation.id)
+        assert persisted.state == ConversationStateEnum.HUMAN
+    assert len(attempts) == 1
+    assert attempts[0].type == "conversation"

@@ -29,6 +29,7 @@ from app.models import (
 )
 from app.services.customers import get_or_create_customer
 from app.services.memory import load_customer_context, close_conversation
+from app.services.realtime import stage_event
 
 # CM-1: the 8-category menu shown on first contact (LumatRequest §1.x).
 MENU_CATEGORIES: list[str] = [
@@ -118,6 +119,18 @@ def set_conversation_state(
         )
     )
     session.flush()
+    stage_event(
+        session,
+        type="conversation",
+        conversation_id=conversation.id,
+        data={
+            "conversation_id": conversation.id,
+            "from_state": before,
+            "state": new_state.value,
+            "cause": cause,
+            "actor": actor,
+        },
+    )
     return conversation
 
 
