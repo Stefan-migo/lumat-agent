@@ -1,5 +1,7 @@
 # Local AI runtime state
 .atl/
+.gentle-ai-instance
+**/.gentle-ai-instance
 
 # Dependencies — never commit
 node_modules/
