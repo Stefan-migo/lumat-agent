@@ -66,3 +66,38 @@ export const Rail1024: Story = {
   ...DesktopAdmin,
   parameters: { viewport: { width: 1024, height: 900 } },
 };
+
+export const HeaderZero: Story = {
+  ...DesktopAdmin,
+  args: { ...DesktopAdmin.args, notificationState: { status: "ready", unread: 0 } },
+};
+
+export const HeaderUnread: Story = {
+  ...DesktopAdmin,
+  args: { ...DesktopAdmin.args, notificationState: { status: "ready", unread: 3 } },
+};
+
+export const HeaderError: Story = {
+  ...DesktopAdmin,
+  args: { ...DesktopAdmin.args, notificationState: { status: "error" } },
+};
+
+export const ConversationsSegment: Story = {
+  ...DesktopAdmin,
+  args: {
+    ...DesktopAdmin.args,
+    currentView: "conversations",
+    conversationTab: "conversations",
+    onConversationTabChange: () => undefined,
+  },
+};
+
+export const CasesSegment: Story = {
+  ...DesktopAdmin,
+  args: {
+    ...DesktopAdmin.args,
+    currentView: "conversations",
+    conversationTab: "cases",
+    onConversationTabChange: () => undefined,
+  },
+};

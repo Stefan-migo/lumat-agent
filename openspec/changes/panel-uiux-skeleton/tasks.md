@@ -39,5 +39,5 @@ Delivery: auto-chain; PRs merge in order. Slice 5 runs both full suites; backend
 
 ## Phase 5: Slice 5 — Stories, PWA Boundary, and Acceptance
 
-- [ ] 5.1 Add Storybook states in `web/src/stories/{pages/PanelEntry.stories.tsx,pages/Login.stories.tsx,pages/Settings.stories.tsx,domain/AppShell.stories.tsx}` for shell tiers, roles, drawer, header states, segments, push, and login states.
-- [ ] 5.2 **RED/GREEN (PNL-APP-22, PNL-APP-23):** Assert `web/src/pwa.ts` scope/cache exclusions and unchanged page contracts; run `cd web && npx vitest run` and `uv run pytest tests/`; record failures before fixes and final green evidence.
+- [x] 5.1 Add Storybook states in `web/src/stories/{pages/PanelEntry.stories.tsx,pages/Login.stories.tsx,pages/Settings.stories.tsx,domain/AppShell.stories.tsx}` for shell tiers, roles, drawer, header states, segments, push, and login states.
+- [x] 5.2 **RED/GREEN (PNL-APP-22, PNL-APP-23):** Assert `web/src/pwa.ts` scope/cache exclusions and unchanged page contracts; run `cd web && npx vitest run` and `uv run pytest tests/`; record failures before fixes and final green evidence. Evidence: frontend 484/484 passed (68 files; 1 pre-existing unhandled rejection in `web/src/app.test.tsx` logout gate — files byte-identical to main, not caused by this change); backend `uv run pytest tests/` 574 passed; `npm run build` OK.

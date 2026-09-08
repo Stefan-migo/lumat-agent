@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { render, screen, within } from '@testing-library/react';
 import { AppShell } from '../../components/domain/AppShell';
 import type { User } from '../../types';
+import * as appShellStories from './AppShell.stories';
 
 const admin: User = { username: 'ana', role: 'admin' };
 const operador: User = { username: 'vero', role: 'operador' };
@@ -29,6 +30,13 @@ const primitivesRaw = readFileSync(
  *  fill, no lime rule — so the page reads as content, not chrome (per the
  *  friendly dashboard reference; this is the post-pivot DS-V1-SHELL shape). */
 describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-SHELL)', () => {
+  it('publishes role and responsive shell review states', () => {
+    expect(appShellStories.Admin).toBeDefined();
+    expect(appShellStories.Operador).toBeDefined();
+    expect(appShellStories.MobileOperator).toBeDefined();
+    expect(appShellStories.TabletAdmin).toBeDefined();
+  });
+
   it('renders the sidebar brand image and accessible name with no tag', () => {
     render(<AppShell user={admin} />);
     // Brand appears in the desktop sidebar AND in the off-screen drawer.

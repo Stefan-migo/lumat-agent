@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { Settings, type SettingsState } from "../../components/pages/Settings";
+import { PushSettings } from "../../components/pages/PushSettings";
 import { settings } from "./_shared/mockData/settings";
 
 /** Settings page body grouped by business consequence (design §Configuración).
@@ -43,3 +44,11 @@ export const Saving: Story = { render: () => <SettingsView state="saving" /> };
 export const Validation: Story = { render: () => <SettingsView state="validation" /> };
 export const ServerError: Story = { render: () => <SettingsView state="server-error" /> };
 export const Stale: Story = { render: () => <SettingsView state="stale" /> };
+
+export const PushPermission: Story = {
+  render: () => <PushSettings embedded supported />,
+};
+
+export const PushFallback: Story = {
+  render: () => <PushSettings embedded supported={false} />,
+};

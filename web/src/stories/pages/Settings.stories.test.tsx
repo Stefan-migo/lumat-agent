@@ -3,8 +3,15 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { settings } from "./_shared/mockData/settings";
 import { Settings } from "../../components/pages/Settings";
 import { SettingsView } from "./Settings.stories";
+import * as settingsStories from "./Settings.stories";
 
 describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () => {
+  it("publishes the composed push support and fallback states", () => {
+    expect(settingsStories.PushPermission).toBeDefined();
+    expect(settingsStories.PushFallback).toBeDefined();
+    expect(settingsStories.PushFallback).toBeDefined();
+  });
+
   it("renders the Spanish page title 'Configuración'", () => {
     render(<SettingsView />);
     expect(screen.getByRole("heading", { name: "Configuración" })).toBeInTheDocument();
