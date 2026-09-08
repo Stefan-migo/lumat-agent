@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { listActiveConversations } from '../../api';
+import { listActiveConversations, listNotifications } from '../../api';
 import { realtimeClient, type ConnectionStatus } from '../../realtime';
-import type { ActiveConversationsResponse } from '../../types';
+import type { ActiveConversationsResponse, NotificationsResponse } from '../../types';
 import type { User } from '../../types';
-import type { ActiveThreadsState, ConversationTab, PanelView } from './PanelShell';
+import type { ActiveThreadsState, ConversationTab, NotificationState, PanelView } from './PanelShell';
 import { PanelShell } from './PanelShell';
 import { parsePanelPath, pathForRoute, pathForView, type PanelRoute } from './panelRoutes';
 import { Dashboard } from '../pages/Dashboard';
@@ -43,6 +43,17 @@ export function AppShell({ user, onLogout, activeThreads, loadActiveThreads = fa
   const [creatingAutomationRule, setCreatingAutomationRule] = useState(false);
   const [railState, setRailState] = useState<ActiveThreadsState>({ status: 'loading' });
   const [connection, setConnection] = useState<ConnectionStatus>('disconnected');
+  const [notificationState, setNotificationState] = useState<NotificationState>({ status: 'loading' });
+
+  useEffect(() => {
+    let mounted = true;
+    void listNotifications().then((response: NotificationsResponse) => {
+      if (mounted) setNotificationState({ status: 'ready', unread: response.notifications.filter((notification) => notification.read_at === null).length });
+    }).catch(() => {
+      if (mounted) setNotificationState({ status: 'error' });
+    });
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     if (!loadActiveThreads || activeThreads !== undefined) return;
@@ -130,7 +141,7 @@ export function AppShell({ user, onLogout, activeThreads, loadActiveThreads = fa
     : <Settings />;
 
   return (
-    <PanelShell user={user} currentView={shellView} conversationTab={conversationTab} onConversationTabChange={setConversationTab} onNavigate={navigate} onLogout={onLogout} activeThreads={activeThreads ?? railState} connectionStatus={connection} onActiveThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} inspector={inspector}>
+    <PanelShell user={user} currentView={shellView} conversationTab={conversationTab} onConversationTabChange={setConversationTab} onNavigate={navigate} onLogout={onLogout} notificationState={notificationState} activeThreads={activeThreads ?? railState} connectionStatus={connection} onActiveThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} inspector={inspector}>
       {page}
     </PanelShell>
   );

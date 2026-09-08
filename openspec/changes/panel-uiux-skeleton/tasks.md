@@ -24,8 +24,8 @@ Delivery: auto-chain; PRs merge in order. Slice 5 runs both full suites; backend
 
 ## Phase 2: Slice 2 — Header Notifications and Settings Composition
 
-- [ ] 2.1 **RED (PNL-APP-10, PNL-APP-22, NC-4):** Test bell/avatar names and focus, fetch-on-mount unread loading/zero/error states, mark-read reachability, logout, and Settings push permission/unsupported/fallback states.
-- [ ] 2.2 **GREEN:** Modify `PanelShell.tsx`, `AppShell.tsx`, `Settings.tsx`, `PushSettings.tsx`, `NotificationCenter.tsx`, and existing API/types only as needed; link the bell to the center and add no polling/realtime behavior.
+- [x] 2.1 **RED (PNL-APP-10, PNL-APP-22, NC-4):** Test bell/avatar names and focus, fetch-on-mount unread loading/zero/error states, mark-read reachability, logout, and Settings push permission/unsupported/fallback states.
+- [x] 2.2 **GREEN:** Modify `PanelShell.tsx`, `AppShell.tsx`, `Settings.tsx`, `PushSettings.tsx`, `NotificationCenter.tsx`, and existing API/types only as needed; link the bell to the center and add no polling/realtime behavior.
 
 ## Phase 3: Slice 3 — Responsive Shell and Icon Coherence
 

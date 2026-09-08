@@ -99,6 +99,10 @@ function LogoutIcon() {
   );
 }
 
+function BellIcon() {
+  return icon(<><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>);
+}
+
 interface NavigationItem {
   label: string;
   icon: () => ReactNode;
@@ -135,11 +139,14 @@ export interface PanelShellProps {
   onActiveThread?: (id: number) => void;
   conversationTab?: ConversationTab;
   onConversationTabChange?: (tab: ConversationTab) => void;
+  notificationState?: NotificationState;
 }
 
 export type ActiveThreadsState =
   | { status: "loading" | "empty" | "error" | "placeholder"; message?: string }
   | { status: "ready"; threads: Array<{ id: number; label: string; status: ConversationState; active?: boolean }> };
+
+export type NotificationState = { status: "loading" } | { status: "ready"; unread: number } | { status: "error" };
 
 function Brand({ mobile = false, compact = false }: { mobile?: boolean; compact?: boolean }) {
   return (
@@ -240,12 +247,14 @@ export function PanelShell({
   onActiveThread,
   conversationTab,
   onConversationTabChange,
+  notificationState = { status: "loading" },
 }: PanelShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const closeDrawer = () => {
     setDrawerOpen(false);
@@ -358,6 +367,16 @@ export function PanelShell({
               <PanelToggleIcon collapsed={collapsed} />
             </button>
             <h2 className="panel-shell__header-title">{NAVIGATION[currentView as keyof typeof NAVIGATION]?.label ?? "Panel"}</h2>
+            <div className="panel-shell__header-actions">
+              <button type="button" className="panel-shell__header-action" aria-label={notificationState.status === "loading" ? "Cargando notificaciones" : notificationState.status === "error" ? "Notificaciones no disponibles" : notificationState.unread > 0 ? `Notificaciones (${notificationState.unread} sin leer)` : "Notificaciones"} title="Notificaciones" onClick={() => handleNavigation("notifications")}>
+                <BellIcon />
+                {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
+              </button>
+              <div className="panel-shell__user-menu">
+                <button type="button" className="panel-shell__header-action" aria-label="Abrir menú de usuario" aria-expanded={userMenuOpen} onClick={() => setUserMenuOpen((open) => !open)}><Avatar name={user.username} /></button>
+                {userMenuOpen ? <div role="menu" aria-label="Menú de usuario"><span>{user.username}</span><span>{user.role === "admin" ? "Administrador" : "Operador"}</span>{onLogout ? <button type="button" role="menuitem" onClick={() => void onLogout()}>Cerrar sesión</button> : null}</div> : null}
+              </div>
+            </div>
           </header>
           {statusBadge ? (
             <div className="panel-shell__header-badge">

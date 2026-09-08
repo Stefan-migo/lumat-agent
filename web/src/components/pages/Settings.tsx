@@ -9,6 +9,7 @@ import { Textarea } from "../primitives/Textarea";
 import { DataTable, tabularNum, type Column } from "../shared/DataTable";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
+import { PushSettings } from "./PushSettings";
 
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
 export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; }
@@ -79,7 +80,8 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     <Card title="Tono"><p>Define cómo suenan las respuestas del agente en cada conversación.</p><Input label="Tono" value={tone} onChange={(event) => setTone(event.target.value)} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/tone", { tone })}>Guardar tono</Button></Card>
     <Card title="Límites de gasto"><p>Topes de gasto por conversación y por día. Al 80% el agente se vuelve más conservador; al 100% se detienen las llamadas de pago y la conversación pasa a una persona.</p><Input label="Límite por conversación (USD)" type="number" value={conversationLimit} onChange={(event) => setConversationLimit(event.target.value)} /><Input label="Límite diario (USD)" type="number" value={dailyLimit} onChange={(event) => setDailyLimit(event.target.value)} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/limits", { conversation_limit: Number(conversationLimit), daily_limit: Number(dailyLimit) })}>Guardar límites</Button></Card>
     <Card title="Precio Meta"><p>Costo por mensaje de servicio (USD), vigente desde 2026-10-01.</p><Input label="Costo por mensaje (USD)" type="number" value={metaCost} onChange={(event) => setMetaCost(event.target.value)} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/meta", { service_message_cost: Number(metaCost) })}>Guardar precio</Button></Card>
-    <Card title="Gasto actual"><DataTable columns={columns} rows={spendRows} rowKey={(row) => row.label} />{snapshot?.conversation_percent !== null ? <p>Conversación {snapshot?.conversation_percent}% de ${snapshot?.conversation_limit.toFixed(2)}</p> : null}</Card>
+     <Card title="Gasto actual"><DataTable columns={columns} rows={spendRows} rowKey={(row) => row.label} />{snapshot?.conversation_percent !== null ? <p>Conversación {snapshot?.conversation_percent}% de ${snapshot?.conversation_limit.toFixed(2)}</p> : null}</Card>
+     <Card title="Notificaciones push"><PushSettings embedded /></Card>
     {state === "empty" ? <Button onClick={retry}>Reintentar</Button> : null}
   </PageFrame>;
 }

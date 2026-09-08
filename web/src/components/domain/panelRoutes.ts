@@ -22,6 +22,8 @@ export const PANEL_ROUTES = {
 
 const COMPATIBILITY_ROUTES: Readonly<Partial<Record<PanelView, string>>> = {
   cases: '/panel/app/cases',
+  notifications: '/panel/app/notifications',
+  push: '/panel/app/push',
   'advanced-dashboard': '/panel/app/advanced-dashboard',
 };
 
