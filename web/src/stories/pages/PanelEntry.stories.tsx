@@ -25,7 +25,7 @@ export const DesktopAdmin: Story = {
     currentView: "dashboard",
     children: <DashboardOverview />,
   },
-  parameters: { viewport: { defaultViewport: "bp-lg" } },
+  parameters: { viewport: { width: 1280, height: 900 } },
 };
 
 export const DesktopOperator: Story = {
@@ -34,7 +34,7 @@ export const DesktopOperator: Story = {
     currentView: "dashboard",
     children: <DashboardOverview />,
   },
-  parameters: { viewport: { defaultViewport: "bp-lg" } },
+  parameters: { viewport: { width: 1280, height: 900 } },
 };
 
 export const TabletDrawerOpen: Story = {
@@ -44,7 +44,7 @@ export const TabletDrawerOpen: Story = {
     drawerInitiallyOpen: true,
     children: <DashboardOverview />,
   },
-  parameters: { viewport: { defaultViewport: "tablet-compact" } },
+  parameters: { viewport: { width: 768, height: 900 } },
 };
 
 export const MobileDrawerOpen: Story = {
@@ -54,6 +54,15 @@ export const MobileDrawerOpen: Story = {
     drawerInitiallyOpen: true,
     children: <DashboardOverview />,
   },
-  parameters: { viewport: { defaultViewport: "mobile-compact" } },
+  parameters: { viewport: { width: 390, height: 844 } },
 };
 
+export const Narrow640: Story = {
+  ...TabletDrawerOpen,
+  parameters: { viewport: { width: 640, height: 900 } },
+};
+
+export const Rail1024: Story = {
+  ...DesktopAdmin,
+  parameters: { viewport: { width: 1024, height: 900 } },
+};

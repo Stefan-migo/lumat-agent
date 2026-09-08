@@ -15,6 +15,8 @@ const primitivesRaw = readFileSync(
   join(process.cwd(), "src", "components", "primitives", "primitives.css"),
   "utf8",
 );
+const tokensRaw = readFileSync(join(process.cwd(), "src", "tokens", "tokens.css"), "utf8");
+const panelEntryStoryRaw = readFileSync(join(process.cwd(), "src", "stories", "pages", "PanelEntry.stories.tsx"), "utf8");
 
 describe("Panel entry layout", () => {
   it("keeps logout visible and accessible in expanded and collapsed account blocks", async () => {
@@ -158,5 +160,52 @@ describe("Panel entry layout", () => {
     fireEvent.click(menu);
     fireEvent.mouseDown(screen.getByTestId("panel-drawer-backdrop"));
     expect(menu).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("defines the five shell review tiers and tokenized breakpoint contract", () => {
+    for (const width of [390, 640, 768, 1024, 1280]) expect(panelEntryStoryRaw).toContain(`width: ${width}`);
+    expect(tokensRaw).toMatch(/--bp-sm:\s*640px/);
+    expect(tokensRaw).toMatch(/--bp-md:\s*1024px/);
+    expect(tokensRaw).toMatch(/--bp-lg:\s*1280px/);
+    expect(primitivesRaw).toMatch(/@media\s*\(max-width:\s*39\.99rem\)/);
+    expect(primitivesRaw).toMatch(/@media\s*\(min-width:\s*40rem\)/);
+    expect(primitivesRaw).toMatch(/@media\s*\(min-width:\s*64rem\)/);
+    expect(primitivesRaw).toMatch(/@media\s*\(min-width:\s*80rem\)/);
+  });
+
+  it("keeps shell controls at least 44px and preserves critical overflow", () => {
+    expect(primitivesRaw).toMatch(/\.panel-shell__menu-button[\s\S]*?min-height:\s*44px/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__drawer-close[\s\S]*?min-height:\s*44px/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__header-action[\s\S]*?min-width:\s*44px/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__content[\s\S]*?overflow-x:\s*auto/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__header-actions[\s\S]*?flex-wrap:\s*wrap/);
+  });
+
+  it("makes the page inert and locks scroll while the drawer is open", () => {
+    const { container } = render(<PanelShell user={{ username: "ana", role: "admin" }} drawerInitiallyOpen>{dashboard}</PanelShell>);
+
+    expect(container.querySelector(".panel-shell__content-area")).toHaveAttribute("inert");
+    expect(document.body).toHaveStyle({ overflow: "hidden" });
+  });
+
+  it("closes the drawer when the viewport reaches the desktop rail tier", async () => {
+    const user = userEvent.setup();
+    render(<PanelShell user={{ username: "ana", role: "admin" }}>{dashboard}</PanelShell>);
+    const menu = screen.getByRole("button", { name: "Menú" });
+    await user.click(menu);
+    expect(screen.getByRole("dialog", { name: "Navegación" })).toBeVisible();
+
+    window.innerWidth = 1024;
+    window.dispatchEvent(new Event("resize"));
+    await waitFor(() => expect(menu).toHaveAttribute("aria-expanded", "false"));
+  });
+
+  it("uses distinct inline SVG geometry for each navigation destination", () => {
+    render(<PanelShell user={{ username: "ana", role: "admin" }} drawerInitiallyOpen>{dashboard}</PanelShell>);
+    const drawer = screen.getByRole("dialog", { name: "Navegación" });
+    const icons = ["Panel unificado", "Asistente Lumat", "Conversaciones", "Clientes", "Agenda", "Base de Conocimientos", "Automatizaciones", "Configuración"]
+      .map((label) => within(drawer).getByRole("button", { name: label }).querySelector("svg")?.innerHTML);
+
+    expect(new Set(icons).size).toBe(8);
   });
 });
