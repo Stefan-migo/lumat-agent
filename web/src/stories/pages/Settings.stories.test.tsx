@@ -146,6 +146,24 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     const banner = screen.getByRole("status");
     expect(within(banner).getByText(/datos posiblemente desactualizados/i)).toBeInTheDocument();
   });
+
+  it("composes push settings inside Configuración", () => {
+    render(<SettingsView />);
+    const push = screen.getByRole("heading", { name: "Notificaciones push" }).closest(".card") as HTMLElement;
+    expect(push).toBeInTheDocument();
+    expect(within(push).getByText(/correo o whatsapp|activa avisos/i)).toBeInTheDocument();
+  });
+
+  it("preserves push permission and fallback states in the composed section", async () => {
+    const requestPermission = vi.fn().mockResolvedValue("denied");
+    vi.stubGlobal("Notification", { requestPermission });
+    vi.stubGlobal("PushManager", function PushManager() {});
+    render(<Settings data={settings} state="ready" />);
+    const push = screen.getByRole("heading", { name: "Notificaciones push" }).closest(".card") as HTMLElement;
+    fireEvent.click(within(push).getByRole("button", { name: /activar push/i }));
+    await waitFor(() => expect(within(push).getByText(/denegaste/i)).toBeInTheDocument());
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("Settings API page", () => {
