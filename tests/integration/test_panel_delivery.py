@@ -69,7 +69,6 @@ def test_panel_locations_preserve_backend_and_legacy_authority():
     content = PANEL_CONF.read_text()
     fallback = "location ^~ /panel/app/ {"
     fallback_index = content.index(fallback)
-    legacy = "location /panel/ {"
 
     assert content.index("location = /panel/app") < fallback_index
     assert content.index("location = /panel/api") < fallback_index
@@ -78,7 +77,7 @@ def test_panel_locations_preserve_backend_and_legacy_authority():
     assert content.index("location ^~ /panel/export/") < fallback_index
     assert content.index("location = /panel/app/index.html") < fallback_index
     assert content.index("location ^~ /panel/app/assets/") < fallback_index
-    assert content.index(legacy) > fallback_index
+    assert "    location /panel/ {" not in content
     assert "try_files $uri $uri/ /panel/app/index.html;" in content
     assert 'add_header Cache-Control "no-cache" always;' in content
     assert 'add_header Cache-Control "public, max-age=31536000, immutable" always;' in content
@@ -87,6 +86,35 @@ def test_panel_locations_preserve_backend_and_legacy_authority():
     agent_content = AGENT_CONF.read_text()
     assert "/panel/app/" not in agent_content
     assert "try_files" not in agent_content
+
+
+def test_panel_nginx_narrows_runtime_to_spa_and_explicit_backend_prefixes():
+    content = PANEL_CONF.read_text()
+
+    for location in ("= /", "= /panel/", "= /panel/login"):
+        block_start = content.index(f"location {location} {{")
+        block_end = content.index("\n    }", block_start)
+        assert "return 301 /panel/app/;" in content[block_start:block_end]
+
+    for location in (
+        "= /panel/api",
+        "^~ /panel/api/",
+        "= /panel/ws",
+        "= /panel/export",
+        "^~ /panel/export/",
+    ):
+        block_start = content.index(f"location {location} {{")
+        block_end = content.index("\n    }", block_start)
+        assert "proxy-pass.conf" in content[block_start:block_end]
+
+    assert "    location /panel/ {" not in content
+    assert "location ^~ /panel/app/ {" in content
+    assert "try_files $uri $uri/ /panel/app/index.html;" in content
+
+    agent_content = AGENT_CONF.read_text()
+    assert "location /panel/ {" in agent_content
+    assert "proxy-pass.conf" in agent_content
+    assert "/usr/share/nginx/html" not in agent_content
 
 
 def test_compose_override_remains_valid_yaml():
