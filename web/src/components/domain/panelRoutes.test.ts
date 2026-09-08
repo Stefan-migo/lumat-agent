@@ -9,26 +9,27 @@ import {
 
 describe('panel routes', () => {
   it('maps every top-level view to a clean panel path', () => {
-    expect(PANEL_ROUTES).toEqual({
+    expect(PANEL_ROUTES).toMatchObject({
       dashboard: '/panel/app/',
       clients: '/panel/app/clients',
       conversations: '/panel/app/conversations',
-      cases: '/panel/app/cases',
-      notifications: '/panel/app/notifications',
-      push: '/panel/app/push',
       chat: '/panel/app/chat',
+      agenda: '/panel/app/agenda',
       kb: '/panel/app/kb',
+      'automation-rules': '/panel/app/automation-rules',
       settings: '/panel/app/settings',
-    agenda: '/panel/app/agenda',
-    'automation-rules': '/panel/app/automation-rules',
-      'advanced-dashboard': '/panel/app/advanced-dashboard',
     });
+    expect(Object.keys(PANEL_ROUTES)).toEqual([
+      'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings',
+    ]);
 
     expect(pathForView('clients')).toBe('/panel/app/clients');
     expect(pathForView('dashboard')).toBe(PANEL_BASE_PATH);
     expect(parsePanelPath('/panel/app/agenda')).toEqual({ view: 'agenda' });
-    expect(pathForView('advanced-dashboard')).toBe('/panel/app/advanced-dashboard');
+    expect(pathForRoute({ view: 'cases' })).toBe('/panel/app/cases');
+    expect(pathForRoute({ view: 'advanced-dashboard' })).toBe('/panel/app/advanced-dashboard');
     expect(parsePanelPath('/panel/app/advanced-dashboard')).toEqual({ view: 'advanced-dashboard' });
+    expect(parsePanelPath('/panel/app/cases')).toEqual({ view: 'cases' });
   });
 
   it('builds and parses positive client and conversation drill-down IDs', () => {
@@ -43,6 +44,7 @@ describe('panel routes', () => {
     expect(parsePanelPath('/panel/app//conversations')).toEqual({ view: 'conversations' });
     expect(parsePanelPath('/panel/app/clients/0')).toEqual({ view: 'dashboard' });
     expect(parsePanelPath('/other/app/clients')).toEqual({ view: 'dashboard' });
+    expect(parsePanelPath('/panel/app/conversations?surface=cases')).toEqual({ view: 'conversations' });
     expect(parsePanelPath('/panel/app/unknown?view=settings#ignored')).toEqual({ view: 'dashboard' });
   });
 

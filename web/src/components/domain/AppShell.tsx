@@ -4,7 +4,7 @@ import { listActiveConversations } from '../../api';
 import { realtimeClient, type ConnectionStatus } from '../../realtime';
 import type { ActiveConversationsResponse } from '../../types';
 import type { User } from '../../types';
-import type { ActiveThreadsState, PanelView } from './PanelShell';
+import type { ActiveThreadsState, ConversationTab, PanelView } from './PanelShell';
 import { PanelShell } from './PanelShell';
 import { parsePanelPath, pathForRoute, pathForView, type PanelRoute } from './panelRoutes';
 import { Dashboard } from '../pages/Dashboard';
@@ -38,6 +38,7 @@ export interface AppShellProps {
 /** Application shell: PanelShell frame and native History API navigation. */
 export function AppShell({ user, onLogout, activeThreads, loadActiveThreads = false, inspector }: AppShellProps) {
   const [route, setRoute] = useState<PanelRoute>(() => parsePanelPath(window.location.pathname));
+  const [conversationTab, setConversationTab] = useState<ConversationTab>(() => parsePanelPath(window.location.pathname).view === 'cases' ? 'cases' : 'conversations');
   const [conversationRefresh, setConversationRefresh] = useState(0);
   const [creatingAutomationRule, setCreatingAutomationRule] = useState(false);
   const [railState, setRailState] = useState<ActiveThreadsState>({ status: 'loading' });
@@ -83,6 +84,7 @@ export function AppShell({ user, onLogout, activeThreads, loadActiveThreads = fa
       const nextPath = pathForRoute(nextRoute);
       if (window.location.pathname !== nextPath) window.history.replaceState({}, '', nextPath);
       setRoute(nextRoute);
+      setConversationTab(nextRoute.view === 'cases' ? 'cases' : 'conversations');
       setCreatingAutomationRule(false);
     };
     window.addEventListener('popstate', handlePopState);
@@ -93,11 +95,14 @@ export function AppShell({ user, onLogout, activeThreads, loadActiveThreads = fa
     const nextRoute = { view: nextView } satisfies PanelRoute;
     window.history.pushState({}, '', pathForView(nextView));
     setRoute(nextRoute);
+    setConversationTab(nextView === 'conversations' ? 'conversations' : conversationTab);
   };
 
   const navigateToRoute = (nextRoute: PanelRoute) => {
     window.history.pushState({}, '', pathForRoute(nextRoute));
     setRoute(nextRoute);
+    if (nextRoute.view === 'cases') setConversationTab('cases');
+    if (nextRoute.view === 'conversations') setConversationTab('conversations');
     setCreatingAutomationRule(false);
   };
 
@@ -108,6 +113,7 @@ export function AppShell({ user, onLogout, activeThreads, loadActiveThreads = fa
   };
 
   const view = route.view;
+  const shellView = view === 'cases' ? 'conversations' : view;
   const clientId = route.clientId ?? null;
   const conversationId = route.conversationId ?? null;
 
@@ -116,8 +122,7 @@ export function AppShell({ user, onLogout, activeThreads, loadActiveThreads = fa
       : view === 'agenda' ? <AgendaPage />
       : view === 'automation-rules' ? route.automationRuleId !== undefined || creatingAutomationRule ? <AutomationRuleDetailPage ruleId={creatingAutomationRule ? null : route.automationRuleId} user={user} onCreated={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} onBack={() => { setCreatingAutomationRule(false); window.history.back(); }} /> : <AutomationRulesPage user={user} onOpenCreate={navigateToCreateAutomationRule} onOpenRule={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
-      : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
-      : view === 'cases' ? <CasesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
+       : view === 'conversations' || view === 'cases' ? conversationTab === 'cases' ? <CasesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} /> : conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
      : view === 'notifications' ? <NotificationCenter />
      : view === 'push' ? <PushSettings />
       : view === 'chat' ? <AgentChat />
@@ -125,7 +130,7 @@ export function AppShell({ user, onLogout, activeThreads, loadActiveThreads = fa
     : <Settings />;
 
   return (
-    <PanelShell user={user} currentView={view} onNavigate={navigate} onLogout={onLogout} activeThreads={activeThreads ?? railState} connectionStatus={connection} onActiveThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} inspector={inspector}>
+    <PanelShell user={user} currentView={shellView} conversationTab={conversationTab} onConversationTabChange={setConversationTab} onNavigate={navigate} onLogout={onLogout} activeThreads={activeThreads ?? railState} connectionStatus={connection} onActiveThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} inspector={inspector}>
       {page}
     </PanelShell>
   );

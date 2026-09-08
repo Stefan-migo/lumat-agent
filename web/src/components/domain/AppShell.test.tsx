@@ -46,6 +46,44 @@ describe('AppShell (T6.4)', () => {
       within(operadorDrawer).queryByRole('button', { name: /base de conocimientos/i }),
     ).not.toBeInTheDocument();
     expect(within(operadorDrawer).queryByRole('button', { name: /configuraci[oó]n/i })).not.toBeInTheDocument();
+    expect(within(operadorDrawer).queryByRole('button', { name: 'Asistente Lumat' })).not.toBeInTheDocument();
+  });
+
+  it('exposes exactly eight approved destinations and keeps legacy routes out of navigation', async () => {
+    const user = userEvent.setup();
+    render(<AppShell user={admin} />);
+    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    const drawer = screen.getByRole('dialog', { name: 'Navegación' });
+    expect(drawer.querySelectorAll('.panel-shell__navigation-button')).toHaveLength(8);
+    for (const label of [
+      'Panel unificado', 'Asistente Lumat', 'Conversaciones', 'Clientes',
+      'Agenda', 'Base de Conocimientos', 'Automatizaciones', 'Configuración',
+    ]) {
+      expect(within(drawer).getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    for (const label of ['Notificaciones', 'Notificaciones push', 'Casos', 'Dashboard avanzado']) {
+      expect(within(drawer).queryByRole('button', { name: label })).not.toBeInTheDocument();
+    }
+  });
+
+  it('keeps the Conversations/Cases segment internal to the destination', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ cases: [], users: [] }), { status: 200 }),
+    );
+    render(<AppShell user={operador} />);
+    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Conversaciones' }));
+    const conversationsSegment = screen.getAllByRole('button', { name: /^Conversaciones$/ })
+      .find((button) => button.hasAttribute('aria-pressed'))!;
+    const casesSegment = screen.getByRole('button', { name: /^Casos$/ });
+    expect(conversationsSegment).toHaveAttribute('aria-pressed', 'true');
+    await user.click(casesSegment);
+    expect(window.location.pathname).toBe('/panel/app/conversations');
+    expect(window.location.search).toBe('');
+    expect(casesSegment).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('heading', { name: 'Casos' })).toBeInTheDocument();
+    fetchMock.mockRestore();
   });
 
   it('switches views on nav click and marks the active view', async () => {
@@ -55,7 +93,7 @@ describe('AppShell (T6.4)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Menú' }));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
-    const panelBtn = within(drawer).getByRole('button', { name: 'Panel' });
+    const panelBtn = within(drawer).getByRole('button', { name: 'Panel unificado' });
     expect(panelBtn).toHaveAttribute('aria-current', 'page');
     const clientesBtn = within(drawer).getByRole('button', { name: 'Clientes' });
     expect(clientesBtn).not.toHaveAttribute('aria-current', 'page');
@@ -63,7 +101,7 @@ describe('AppShell (T6.4)', () => {
     await user.click(clientesBtn);
 
     // Drawer closes on navigate; the desktop sidebar nav marks the active view.
-    expect(sidebar(container).getByText('Panel').closest('button')).not.toHaveAttribute('aria-current', 'page');
+    expect(sidebar(container).getByText('Panel unificado').closest('button')).not.toHaveAttribute('aria-current', 'page');
     expect(sidebar(container).getByText('Clientes').closest('button')).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('heading', { name: 'Clientes', level: 1 })).toBeInTheDocument();
   });
@@ -103,11 +141,12 @@ describe('AppShell (T6.4)', () => {
 
     await user.click(within(await drawer()).getByRole('button', { name: 'Clientes' }));
     expect(await screen.findByText('Cliente vivo')).toBeInTheDocument();
-    await user.click(within(await drawer()).getByRole('button', { name: 'Casos' }));
+    await user.click(within(await drawer()).getByRole('button', { name: 'Conversaciones' }));
+    await user.click(screen.getByRole('button', { name: /^Casos$/ }));
     expect(await screen.findByText('No hay registros')).toBeInTheDocument();
     await user.click(within(await drawer()).getByRole('button', { name: 'Conversaciones' }));
     expect(await screen.findByText('Conversación viva')).toBeInTheDocument();
-    await user.click(within(await drawer()).getByRole('button', { name: 'Base de conocimientos' }));
+    await user.click(within(await drawer()).getByRole('button', { name: 'Base de Conocimientos' }));
     expect(await screen.findByText('No hay documentos')).toBeInTheDocument();
     await user.click(within(await drawer()).getByRole('button', { name: 'Configuración' }));
     expect(await screen.findByDisplayValue('Claro')).toBeInTheDocument();
@@ -128,7 +167,7 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
-  it('deep-links to AdvancedDashboard and exposes it with an active nav state', async () => {
+  it('deep-links to AdvancedDashboard without exposing a visible navigation item', async () => {
     window.history.replaceState({}, '', '/panel/app/advanced-dashboard');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const path = new URL(String(input), 'http://localhost').pathname;
@@ -138,9 +177,22 @@ describe('AppShell (T6.4)', () => {
 
     const { container } = render(<AppShell user={operador} />);
     expect(await screen.findByText('Indicadores operacionales')).toBeInTheDocument();
-    expect(sidebar(container).getByText('Dashboard avanzado').closest('button')).toHaveAttribute('aria-current', 'page');
+    expect(sidebar(container).queryByText('Dashboard avanzado')).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Menú' }));
-    expect(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Dashboard avanzado' })).toHaveAttribute('aria-current', 'page');
+    expect(within(screen.getByRole('dialog', { name: 'Navegación' })).queryByRole('button', { name: 'Dashboard avanzado' })).not.toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
+  it('renders the cases compatibility path as the selected internal segment', async () => {
+    window.history.replaceState({}, '', '/panel/app/cases');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ cases: [], users: [] }), { status: 200 }));
+    const user = userEvent.setup();
+    render(<AppShell user={operador} />);
+
+    expect(window.location.pathname).toBe('/panel/app/cases');
+    expect(screen.getByRole('button', { name: /^Casos$/ })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: /^Conversaciones$/, pressed: false }));
+    expect(window.location.pathname).toBe('/panel/app/cases');
     vi.restoreAllMocks();
   });
 
@@ -249,7 +301,7 @@ describe('AppShell — desktop sidebar collapse (icon-only ⇄ full nav)', () =>
     const { container } = render(<AppShell user={operador} />);
     await user.click(collapseButton(container));
 
-    const panelBtn = navButtonByLabel(container, 'Panel');
+    const panelBtn = navButtonByLabel(container, 'Panel unificado');
     expect(panelBtn).toHaveAttribute('aria-current', 'page');
     const clientesBtn = navButtonByLabel(container, 'Clientes')!;
     expect(clientesBtn).not.toHaveAttribute('aria-current', 'page');
@@ -262,8 +314,8 @@ describe('AppShell — desktop sidebar collapse (icon-only ⇄ full nav)', () =>
 
   it('keeps long navigation labels available instead of clipping them', () => {
     const { container } = render(<AppShell user={admin} />);
-    const label = within(container.querySelector('.panel-shell__sidebar') as HTMLElement).getByText('Base de conocimientos');
-    expect(label).toHaveTextContent('Base de conocimientos');
+    const label = within(container.querySelector('.panel-shell__sidebar') as HTMLElement).getByText('Base de Conocimientos');
+    expect(label).toHaveTextContent('Base de Conocimientos');
   });
 });
 

@@ -19,8 +19,8 @@ Delivery: auto-chain; PRs merge in order. Slice 5 runs both full suites; backend
 
 ## Phase 1: Slice 1 — Routing and Information Architecture
 
-- [ ] 1.1 **RED (PNL-APP-1, PNL-APP-21):** Add failing Vitest coverage for exactly eight role-filtered destinations, pathname-only parsing, `/cases` and `/advanced-dashboard` aliases, history safety, and Conversations/Cases selection without URL mutation.
-- [ ] 1.2 **GREEN:** Modify `web/src/components/domain/panelRoutes.ts`, `PanelShell.tsx`, and `AppShell.tsx` to implement the eight-item IA, role gates, internal `ConversationTab`, aliases, and accessible active state; preserve existing page/API ownership.
+- [x] 1.1 **RED (PNL-APP-1, PNL-APP-21):** Add failing Vitest coverage for exactly eight role-filtered destinations, pathname-only parsing, `/cases` and `/advanced-dashboard` aliases, history safety, and Conversations/Cases selection without URL mutation.
+- [x] 1.2 **GREEN:** Modify `web/src/components/domain/panelRoutes.ts`, `PanelShell.tsx`, and `AppShell.tsx` to implement the eight-item IA, role gates, internal `ConversationTab`, aliases, and accessible active state; preserve existing page/API ownership.
 
 ## Phase 2: Slice 2 — Header Notifications and Settings Composition
 

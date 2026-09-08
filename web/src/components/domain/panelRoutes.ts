@@ -9,25 +9,29 @@ export type PanelRoute = {
 
 export const PANEL_BASE_PATH = '/panel/app/';
 
-export const PANEL_ROUTES: Readonly<Record<PanelView, string>> = {
+export const PANEL_ROUTES = {
   dashboard: PANEL_BASE_PATH,
-  clients: '/panel/app/clients',
-  conversations: '/panel/app/conversations',
-  cases: '/panel/app/cases',
-  notifications: '/panel/app/notifications',
-  push: '/panel/app/push',
   chat: '/panel/app/chat',
-  kb: '/panel/app/kb',
-  settings: '/panel/app/settings',
+  conversations: '/panel/app/conversations',
+  clients: '/panel/app/clients',
   agenda: '/panel/app/agenda',
+  kb: '/panel/app/kb',
   'automation-rules': '/panel/app/automation-rules',
+  settings: '/panel/app/settings',
+} as const satisfies Readonly<Partial<Record<PanelView, string>>>;
+
+const COMPATIBILITY_ROUTES: Readonly<Partial<Record<PanelView, string>>> = {
+  cases: '/panel/app/cases',
   'advanced-dashboard': '/panel/app/advanced-dashboard',
 };
 
-const panelViews = new Set<PanelView>(Object.keys(PANEL_ROUTES) as PanelView[]);
+const panelViews = new Set<PanelView>([
+  ...(Object.keys(PANEL_ROUTES) as PanelView[]),
+  ...(Object.keys(COMPATIBILITY_ROUTES) as PanelView[]),
+]);
 
 export function pathForView(view: PanelView): string {
-  return PANEL_ROUTES[view];
+  return PANEL_ROUTES[view as keyof typeof PANEL_ROUTES] ?? COMPATIBILITY_ROUTES[view] ?? PANEL_BASE_PATH;
 }
 
 export function pathForRoute(route: PanelRoute): string {
@@ -61,7 +65,7 @@ function positiveId(value: string): number | null {
 export function parsePanelPath(pathname: string): PanelRoute {
   let segments: string[];
   try {
-    segments = pathname.split('/').filter(Boolean).map((segment) => decodeURIComponent(segment));
+    segments = pathname.split(/[?#]/, 1)[0].split('/').filter(Boolean).map((segment) => decodeURIComponent(segment));
   } catch {
     return fallback();
   }

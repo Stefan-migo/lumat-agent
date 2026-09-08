@@ -54,10 +54,10 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
     );
   });
 
-  it('renders the panel header with the current view label ("Panel" by default)', () => {
+  it('renders the panel header with the approved Panel unificado label by default', () => {
     render(<AppShell user={admin} />);
     const header = screen.getByLabelText(/encabezado de la vista/i);
-    expect(within(header).getByText('Panel')).toBeInTheDocument();
+    expect(within(header).getByText('Panel unificado')).toBeInTheDocument();
   });
 
   it('renders the panel header as text-only — no green fill, no lime rule', () => {
