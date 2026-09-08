@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { isCacheableAsset, isObsoleteCache, SERVICE_WORKER_PATH, shouldRegisterPwa } from "./pwa";
+import { parsePanelPath, pathForView } from "./components/domain/panelRoutes";
 
 describe("PWA shell", () => {
   it("ships install metadata and both required icon purposes", () => {
@@ -54,5 +55,25 @@ describe("PWA shell", () => {
     expect(registration).toContain('scope: "/panel/app/"');
     expect(worker).toContain('url.pathname.startsWith("/panel/app/assets/")');
     expect(worker).toContain('url.pathname.startsWith("/panel/api/")');
+  });
+
+  it("preserves the eight page destinations and compatibility page contracts", () => {
+    const destinations = [
+      ["/panel/app/", "dashboard"],
+      ["/panel/app/chat", "chat"],
+      ["/panel/app/conversations", "conversations"],
+      ["/panel/app/clients", "clients"],
+      ["/panel/app/agenda", "agenda"],
+      ["/panel/app/kb", "kb"],
+      ["/panel/app/automation-rules", "automation-rules"],
+      ["/panel/app/settings", "settings"],
+    ] as const;
+
+    for (const [pathname, view] of destinations) {
+      expect(parsePanelPath(pathname).view).toBe(view);
+      expect(pathForView(view)).toBe(pathname);
+    }
+    expect(parsePanelPath("/panel/app/cases").view).toBe("cases");
+    expect(parsePanelPath("/panel/app/advanced-dashboard").view).toBe("advanced-dashboard");
   });
 });

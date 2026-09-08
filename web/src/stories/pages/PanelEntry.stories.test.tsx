@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { DashboardOverview } from "./Dashboard.stories";
 import { PanelShell } from "../../components/domain/PanelShell";
+import * as panelEntryStories from "./PanelEntry.stories";
 
 const dashboard = <DashboardOverview />;
 const panelShellRaw = readFileSync(
@@ -19,6 +20,16 @@ const tokensRaw = readFileSync(join(process.cwd(), "src", "tokens", "tokens.css"
 const panelEntryStoryRaw = readFileSync(join(process.cwd(), "src", "stories", "pages", "PanelEntry.stories.tsx"), "utf8");
 
 describe("Panel entry layout", () => {
+  it("publishes the final shell state stories without duplicating the base tiers", () => {
+    expect(panelEntryStories.HeaderZero).toBeDefined();
+    expect(panelEntryStories.HeaderUnread).toBeDefined();
+    expect(panelEntryStories.HeaderError).toBeDefined();
+    expect(panelEntryStories.ConversationsSegment).toBeDefined();
+    expect(panelEntryStories.CasesSegment).toBeDefined();
+    expect(panelEntryStories.Narrow640.parameters?.viewport?.width).toBe(640);
+    expect(panelEntryStories.Rail1024.parameters?.viewport?.width).toBe(1024);
+  });
+
   it("keeps logout visible and accessible in expanded and collapsed account blocks", async () => {
     const onLogout = vi.fn();
     const user = userEvent.setup();

@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { LoginAuth, LoginDefault, LoginError, LoginLoading } from "./Login.stories";
+import * as loginStories from "./Login.stories";
 
 describe("Login default (T5.4, R-PRD-PG-1)", () => {
+  it("publishes desktop and mobile frame states", () => {
+    expect(loginStories.DesktopSplit).toBeDefined();
+    expect(loginStories.MobileStacked).toBeDefined();
+    expect(loginStories.Default.parameters?.viewport?.width).toBe(1280);
+    expect(loginStories.MobileStacked.parameters?.viewport?.width).toBe(390);
+  });
+
   it("renders the Lumat typographic lockup (Lumat + Panel operativo)", () => {
     const { container } = render(<LoginDefault />);
     expect(screen.getByText("Lumat")).toBeInTheDocument();
