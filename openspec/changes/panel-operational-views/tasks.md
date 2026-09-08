@@ -27,8 +27,20 @@ Strict RED→GREEN TDD; stacked slices.
 - [x] 6.2 GREEN — Delete `app/panel/routes/{auth,dashboard,clients,cases,conversations,kb,settings}.py` and `app/panel/templates/**`; move KPI code to `app/services/dashboard.py`, clean `app/panel/deps.py`, update `app/panel/routes/__init__.py`; est 235; deps 6.1; evidence focused delivery tests 13 passed and full suite 573 passed.
 
 ## Phase 7: Slice 7
-- [ ] 7.1 RED — Extend `test_panel_delivery.py` for redirects, deep links, API/WS/export precedence, no fallback, unchanged agent, and immutable artifact; est 90; deps Slice 6; evidence delivery tests fail.
-- [ ] 7.2 GREEN — Modify `infra/nginx/panel.lumat.cl.conf`, leave `agente.lumat.cl.conf` unchanged, verify Docker static copy, and sync `openspec/changes/panel-operational-views/specs/**`; est 170; deps 7.1; evidence `uv run pytest tests/` plus `cd web && npx vitest run && npx tsc -b && npm run build` passes.
+- [x] 7.1 RED — Extend `test_panel_delivery.py` for redirects, deep links, API/WS/export precedence, no fallback, unchanged agent, and immutable artifact; est 90; deps Slice 6; evidence delivery tests failed on the pre-change root redirect.
+- [x] 7.2 GREEN — Modify `infra/nginx/panel.lumat.cl.conf`, leave `agente.lumat.cl.conf` unchanged, verify Docker static copy, and sync `openspec/changes/panel-operational-views/specs/**`; est 170; deps 7.1; evidence `uv run pytest tests/` (574 passed) plus `cd web && npx vitest run && npx tsc -b && npm run build` (459 tests passed, build passed).
+
+## TDD Cycle Evidence — Slice 7
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 7.1 | `tests/integration/test_panel_delivery.py` | Integration/static contract | ✅ 13/13 | ✅ Failed on pre-change `/` redirect | ✅ 14/14 | ✅ Entry paths, backend prefixes, agent host | ➖ None needed |
+| 7.2 | `tests/integration/test_panel_delivery.py` | Integration/static contract | ✅ 14/14 | ✅ Existing contract failed on legacy fallback | ✅ 14/14 | ✅ Explicit locations and artifact assertions | ➖ None needed |
+
+## Work Unit Evidence — Slice 7
+- **Focused test command**: `uv run pytest tests/integration/test_panel_delivery.py -q` — 14 passed.
+- **Runtime harness**: `uv run pytest tests/` — 574 passed, 1 pre-existing `RuntimeWarning` (`_publish_all` was never awaited); frontend `npx vitest run && npx tsc -b && npm run build` — 66 files / 459 tests passed, typecheck and production build passed.
+- **Rollback boundary**: revert the Slice 7 commit to restore the prior panel nginx routing and delivery assertions; `agente.lumat.cl.conf` remains untouched.
+- **Graph consulted**: `test_panel_delivery.py`, `panel.lumat.cl`, `Servicio nginx (imagen custom inmutable)`, `SPA Delivery Specification`; edges `Dockerfile → panel SPA artifact`, `panel nginx → SPA index`, `panel delivery test → nginx locations`.
 
 ## Review Workload Forecast
 | Slice | Lines | Test / harness | Rollback |
