@@ -360,6 +360,43 @@ describe('AppShell — native History API routing', () => {
 });
 
 describe('AppShell — agent shell grammar', () => {
+  it('exposes focused header notification and avatar actions', async () => {
+    const user = userEvent.setup();
+    const logout = vi.fn();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => String(input).includes('/notifications')
+      ? new Response(JSON.stringify({ notifications: [{ id: 1, title: 'Aviso', content: 'Caso', source: 'case', channel: 'email', status: 'sent', read_at: null, created_at: null }] }), { status: 200 })
+      : new Response(JSON.stringify({ contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' }), { status: 200 }));
+    render(<AppShell user={admin} onLogout={logout} />);
+
+    const bell = await screen.findByRole('button', { name: 'Notificaciones (1 sin leer)' });
+
+    await user.click(bell);
+    expect(bell).toHaveFocus();
+    expect(window.location.pathname).toBe('/panel/app/notifications');
+    expect(await screen.findByRole('heading', { name: 'Notificaciones' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /abrir menú de usuario/i }));
+    const menu = screen.getByRole('menu', { name: 'Menú de usuario' });
+    expect(within(menu).getByText('ana')).toBeInTheDocument();
+    await user.click(within(menu).getByRole('menuitem', { name: 'Cerrar sesión' }));
+    expect(logout).toHaveBeenCalledOnce();
+  });
+
+  it('shows a truthful notification loading and error state without polling', async () => {
+    const requests: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      requests.push(String(input));
+      if (String(input).includes('/notifications')) return new Response('failure', { status: 500 });
+      return new Response(JSON.stringify({ contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' }), { status: 200 });
+    });
+    render(<AppShell user={admin} />);
+
+    expect(screen.getByRole('button', { name: /cargando notificaciones/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /notificaciones no disponibles/i })).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(requests.filter((path) => path.includes('/notifications'))).toHaveLength(1);
+  });
+
   it('renders a truthful active-thread region without making a conversation request', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ conversations: [] }), { status: 200 }));
     render(<AppShell user={operador} loadActiveThreads />);
