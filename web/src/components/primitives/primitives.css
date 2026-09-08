@@ -599,6 +599,7 @@
   width: 100%;
   max-width: 82rem;
   margin: 0 auto;
+  overflow-x: auto;
 }
 .panel-shell__content:focus {
   outline: none;
@@ -710,6 +711,11 @@
   font-weight: var(--weight-semibold);
   cursor: pointer;
 }
+.panel-shell__menu-button,
+.panel-shell__drawer-close,
+.panel-shell__header-action {
+  min-height: 44px;
+}
 .panel-shell__navigation-button {
   display: flex;
   align-items: center;
@@ -765,6 +771,34 @@
   border-color: var(--border-strong);
   background: var(--corp-surface);
   color: var(--corp-primary);
+}
+.panel-shell__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.panel-shell__header-action {
+  display: inline-flex;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--corp-fg);
+  cursor: pointer;
+}
+.panel-shell__header-action:hover {
+  background: var(--corp-surface-hover);
+}
+.panel-shell__header-action:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .panel-shell__user {
   display: grid;
@@ -921,6 +955,62 @@
   }
   .panel-shell--collapsed .panel-shell__active-threads {
     display: none;
+  }
+}
+@media (max-width: 39.99rem) {
+  .panel-shell__header-row {
+    align-items: flex-start;
+  }
+  .panel-shell__header {
+    flex-wrap: wrap;
+    padding: var(--space-3) var(--space-4);
+  }
+  .panel-shell__header-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .panel-shell__header-actions {
+    width: 100%;
+  }
+}
+@media (min-width: 40rem) and (max-width: 63.99rem) {
+  .panel-shell__content {
+    padding: var(--space-5);
+  }
+  .panel-shell__drawer {
+    width: min(22rem, calc(100vw - var(--space-8)));
+  }
+}
+@media (min-width: 64rem) and (max-width: 79.99rem) {
+  .panel-shell {
+    grid-template-columns: var(--shell-rail-compact) minmax(0, 1fr);
+  }
+  .panel-shell__nav-label,
+  .panel-shell__active-threads,
+  .panel-shell__user-copy,
+  .panel-shell__logout-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .panel-shell__navigation-button,
+  .panel-shell__logout {
+    justify-content: center;
+    padding-inline: var(--space-2);
+  }
+  .panel-shell__user,
+  .panel-shell__user-identity {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+}
+@media (min-width: 80rem) {
+  .panel-shell {
+    grid-template-columns: var(--shell-rail-expanded) minmax(0, 1fr);
   }
 }
 @media (prefers-reduced-motion: reduce) {
