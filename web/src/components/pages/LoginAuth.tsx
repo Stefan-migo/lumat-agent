@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '../primitives/Button';
-import { Card } from '../primitives/Card';
 import { Input } from '../primitives/Input';
+import { PageFrame } from '../shared/PageFrame';
 
 export interface LoginAuthProps {
   error?: string | null;
@@ -25,16 +25,19 @@ export function LoginAuth({ error, username = '', isLoading = false, onSubmit }:
   };
 
   return (
-    <main>
-      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: '3rem' }}>
-        <Card className="card--auth">
-          <style>{LOGIN_BRAND_STYLES}</style>
+    <PageFrame title="Bienvenido">
+      <div className="login-frame">
+        <section className="login-frame__brand" aria-labelledby="login-brand-name">
           <div className="login-brand">
-            <span className="login-brand__name">Lumat</span>
+            <span className="login-brand__name" id="login-brand-name">Lumat</span>
             <span className="login-brand__context">Panel operativo</span>
           </div>
-          <form onSubmit={submit} style={{ maxWidth: '24rem', display: 'grid', gap: 'var(--space-3)' }}>
-            {error ? <p role="alert" style={{ color: 'var(--danger, inherit)', margin: 0 }}>{error}</p> : null}
+          <p className="login-frame__welcome">Gestioná tus conversaciones y operaciones desde un solo lugar.</p>
+        </section>
+        <section className="login-frame__form" aria-labelledby="login-form-title">
+          <h2 id="login-form-title">Acceso al panel</h2>
+          <form onSubmit={submit} aria-label="Formulario de acceso">
+            {error ? <p className="login-frame__error" role="alert">{error}</p> : null}
             <Input
               label="Usuario"
               type="text"
@@ -49,19 +52,13 @@ export function LoginAuth({ error, username = '', isLoading = false, onSubmit }:
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
             />
-            <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+            <div className="login-frame__submit">
               <Button type="submit" disabled={isLoading || submitting}>Iniciar sesión</Button>
-              {isLoading || submitting ? <p role="status" style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>Iniciando sesión…</p> : null}
+              {isLoading || submitting ? <p className="login-frame__status" role="status">Iniciando sesión…</p> : null}
             </div>
           </form>
-        </Card>
+        </section>
       </div>
-    </main>
+    </PageFrame>
   );
 }
-
-const LOGIN_BRAND_STYLES = `
-  .login-brand { display: grid; gap: var(--space-1); padding: var(--space-4); border-left: var(--space-1) solid var(--brand-lime); border-radius: var(--radius-md); background: var(--primary-800); color: var(--surface); }
-  .login-brand__name { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: var(--leading-tight); letter-spacing: -0.02em; }
-  .login-brand__context { color: var(--brand-aqua); font-size: var(--text-xs); font-weight: var(--weight-medium); }
-`;
