@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.models import User
 from app.panel.api.deps import require_user_json
 from app.panel.deps import get_db
-from app.panel.routes.dashboard import compute_kpis
+from app.services.dashboard import compute_kpis
 from app.services.settings import get_setting
 
 router = APIRouter(tags=["panel-api-dashboard"])
