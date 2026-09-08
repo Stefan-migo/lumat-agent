@@ -52,6 +52,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   render: () => <LoginDefault />,
+  parameters: { viewport: { width: 1280, height: 900 } },
 };
 
 export const Error: Story = {
@@ -60,4 +61,14 @@ export const Error: Story = {
 
 export const Loading: Story = {
   render: () => <LoginLoading />,
+};
+
+export const DesktopSplit: Story = {
+  ...Default,
+  parameters: { viewport: { width: 1280, height: 900 } },
+};
+
+export const MobileStacked: Story = {
+  ...Default,
+  parameters: { viewport: { width: 390, height: 844 } },
 };

@@ -41,6 +41,16 @@ export const Operador: Story = {
   render: (args) => <AppShell {...args} />,
 };
 
+export const MobileOperator: Story = {
+  ...Operador,
+  parameters: { viewport: { width: 390, height: 844 } },
+};
+
+export const TabletAdmin: Story = {
+  ...Admin,
+  parameters: { viewport: { width: 768, height: 900 } },
+};
+
 export const Matrix: StoryObj = {
   render: () => (
     <MatrixGrid
