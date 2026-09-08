@@ -21,6 +21,39 @@ from app.panel.api.serializers import to_appointment_dict, to_case_dict, to_mess
 MAX_PERIOD = timedelta(days=31)
 
 
+def compute_kpis(session, window_days: int) -> dict:
+    """Return the legacy panel KPI counts for the API dashboard."""
+    start = datetime.now(timezone.utc) - timedelta(days=window_days)
+    contacts = session.scalar(
+        select(func.count(func.distinct(Message.conversation_id))).where(
+            Message.direction == MessageDirection.INBOUND,
+            Message.created_at >= start,
+        )
+    )
+    motivos = session.execute(
+        select(Case.service, func.count().label("n"))
+        .where(Case.created_at >= start)
+        .group_by(Case.service)
+        .order_by(func.count().desc(), Case.service)
+    ).all()
+    derived = session.scalar(
+        select(func.count()).select_from(Case).where(Case.escalated_at >= start)
+    )
+    visits = session.scalar(
+        select(func.count()).select_from(Case).where(
+            Case.service == "visita", Case.created_at >= start
+        )
+    )
+    return {
+        "contacts": contacts or 0,
+        "motivos": [(service, count) for service, count in motivos],
+        "derived": derived or 0,
+        "visit_requests": visits or 0,
+        "window_days": window_days,
+        "window_start": start.date().isoformat(),
+    }
+
+
 def parse_period(start: datetime, end: datetime, timezone_name: str) -> tuple[datetime, datetime, ZoneInfo]:
     if start.tzinfo is None or end.tzinfo is None or end <= start or end - start > MAX_PERIOD:
         raise HTTPException(status_code=422, detail="period must be a valid range of at most 31 days")

@@ -23,8 +23,8 @@ Strict RED→GREEN TDD; stacked slices.
 - [x] 5.2 GREEN — Update those tests and `tests/functional/conftest.py`, preserving auth, roles, audit, validation, CSV; est 115; deps 5.1; evidence `uv run pytest tests/functional/ -q` and `uv run pytest tests/` pass.
 
 ## Phase 6: Slice 6
-- [ ] 6.1 RED — Add `tests/integration/test_panel_delivery.py` checks for absent Jinja, retained API/export/WS, and `compute_kpis`; est 65; deps Slice 5; evidence focused pytest fails.
-- [ ] 6.2 GREEN — Delete `app/panel/routes/{auth,dashboard,clients,cases,conversations,kb,settings}.py` and `app/panel/templates/**`; move KPI code to `app/services/dashboard.py`, clean `app/panel/deps.py`, update `app/panel/routes/__init__.py`; est 235; deps 6.1; evidence pytest passes.
+- [x] 6.1 RED — Add `tests/integration/test_panel_delivery.py` checks for absent Jinja, retained API/export/WS, and `compute_kpis`; est 65; deps Slice 5; evidence focused pytest failed 7 retirement/import assertions before implementation.
+- [x] 6.2 GREEN — Delete `app/panel/routes/{auth,dashboard,clients,cases,conversations,kb,settings}.py` and `app/panel/templates/**`; move KPI code to `app/services/dashboard.py`, clean `app/panel/deps.py`, update `app/panel/routes/__init__.py`; est 235; deps 6.1; evidence focused delivery tests 13 passed and full suite 573 passed.
 
 ## Phase 7: Slice 7
 - [ ] 7.1 RED — Extend `test_panel_delivery.py` for redirects, deep links, API/WS/export precedence, no fallback, unchanged agent, and immutable artifact; est 90; deps Slice 6; evidence delivery tests fail.
@@ -46,3 +46,9 @@ Decision needed before apply: No
 Chained PRs recommended: Yes
 Chain strategy: stacked-to-main
 400-line budget risk: High
+
+## Work Unit Evidence — Slice 6
+- Focused test command: `uv run pytest tests/integration/test_panel_delivery.py -q` — 13 passed.
+- Runtime harness: `uv run pytest tests/` — 573 passed, 1 pre-existing RuntimeWarning (`_publish_all` was never awaited).
+- Rollback boundary: revert the Slice 6 commit to restore the seven legacy route modules, nine templates, KPI location, dependency cleanup, router aggregation, and delivery assertions.
+- Graph consulted: `panel/deps.py`, `compute_kpis()`, `app/services/dashboard.py`, `test_panel_delivery.py`; edges `api/routes/dashboard.py → compute_kpis()`, `routes/__init__.py → api_router/export/realtime`.
