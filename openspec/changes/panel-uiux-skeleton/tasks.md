@@ -29,8 +29,8 @@ Delivery: auto-chain; PRs merge in order. Slice 5 runs both full suites; backend
 
 ## Phase 3: Slice 3 — Responsive Shell and Icon Coherence
 
-- [ ] 3.1 **RED (DS-RESP-1, DS-SHELL-6):** Add failing tests/stories for 390/640/768/1024/1280 tiers, 44px targets, Escape/outside/resize drawer behavior, inert background, scroll lock, focus return, reduced motion, overflow, and distinct inline icons.
-- [ ] 3.2 **GREEN:** Modify `PanelShell.tsx`, `web/src/components/primitives/primitives.css`, and `web/src/tokens/tokens.css` for tiered rail/drawer behavior, accessibility lifecycle, touch targets, overflow, motion, and semantic native SVGs.
+- [x] 3.1 **RED (DS-RESP-1, DS-SHELL-6):** Add failing tests/stories for 390/640/768/1024/1280 tiers, 44px targets, Escape/outside/resize drawer behavior, inert background, scroll lock, focus return, reduced motion, overflow, and distinct inline icons.
+- [x] 3.2 **GREEN:** Modify `PanelShell.tsx`, `web/src/components/primitives/primitives.css`, and `web/src/tokens/tokens.css` for tiered rail/drawer behavior, accessibility lifecycle, touch targets, overflow, motion, and semantic native SVGs.
 
 ## Phase 4: Slice 4 — Login and Tokenized Shared Chrome
 

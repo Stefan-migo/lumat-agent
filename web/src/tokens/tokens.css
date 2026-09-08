@@ -117,10 +117,13 @@ body {
   --ease-out: cubic-bezier(0.33, 1, 0.68, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 
-  /* Breakpoints — DS-TKN-6 (reference only; no layout consumption this slice) */
+  /* Breakpoints — DS-TKN-6 (mobile-first shell tiers). */
   --bp-sm: 640px;
   --bp-md: 1024px;
   --bp-lg: 1280px;
+  --shell-rail-compact: 4rem;
+  --shell-rail-expanded: 15rem;
+  --touch-target: 44px;
 
   /* Shadow */
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.08);

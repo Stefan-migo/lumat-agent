@@ -52,6 +52,14 @@ function ChatIcon() {
   return icon(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />);
 }
 
+function AssistantIcon() {
+  return icon(<><path d="M12 3a7 7 0 0 0-7 7v4a4 4 0 0 0 4 4h6a4 4 0 0 0 4-4v-4a7 7 0 0 0-7-7Z" /><path d="M9 12h.01M15 12h.01M9 16h6" /></>);
+}
+
+function AutomationIcon() {
+  return icon(<><path d="M6 4v16M18 4v16M6 8h12M6 16h12" /><circle cx="6" cy="4" r="2" /><circle cx="18" cy="20" r="2" /></>);
+}
+
 function BookIcon() {
   return icon(
     <>
@@ -111,12 +119,12 @@ interface NavigationItem {
 
 const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" | "advanced-dashboard">, NavigationItem> = {
   dashboard: { label: "Panel unificado", icon: PanelIcon },
-  chat: { label: "Asistente Lumat", icon: ChatIcon, adminOnly: true },
+  chat: { label: "Asistente Lumat", icon: AssistantIcon, adminOnly: true },
   conversations: { label: "Conversaciones", icon: ChatIcon },
   clients: { label: "Clientes", icon: UsersIcon },
   agenda: { label: "Agenda", icon: CalendarIcon },
   kb: { label: "Base de Conocimientos", icon: BookIcon, adminOnly: true },
-  'automation-rules': { label: "Automatizaciones", icon: GearIcon },
+  'automation-rules': { label: "Automatizaciones", icon: AutomationIcon },
   settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
 };
 
@@ -254,6 +262,7 @@ export function PanelShell({
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
+  const contentAreaRef = useRef<HTMLDivElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const closeDrawer = () => {
@@ -266,12 +275,32 @@ export function PanelShell({
   }, [drawerOpen]);
 
   useEffect(() => {
-    if (!drawerOpen) return;
+    const contentArea = contentAreaRef.current;
+    if (!contentArea) return;
+
+    if (!drawerOpen) {
+      contentArea.removeAttribute("inert");
+      document.body.style.overflow = "";
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    contentArea.setAttribute("inert", "");
+    document.body.style.overflow = "hidden";
     const handleEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") closeDrawer();
     };
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) closeDrawer();
+    };
     document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
+    window.addEventListener("resize", handleResize);
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("resize", handleResize);
+      contentArea.removeAttribute("inert");
+      document.body.style.overflow = previousOverflow;
+    };
   }, [drawerOpen]);
 
   const keepFocusInDrawer = (event: KeyboardEvent<HTMLElement>) => {
@@ -352,7 +381,7 @@ export function PanelShell({
         </section>
       </div>
 
-      <div className="panel-shell__content-area">
+      <div ref={contentAreaRef} className="panel-shell__content-area">
         <div className="panel-shell__header-row">
           <header className="panel-shell__header" aria-label="Encabezado de la vista">
             <button
