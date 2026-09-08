@@ -34,8 +34,8 @@ Delivery: auto-chain; PRs merge in order. Slice 5 runs both full suites; backend
 
 ## Phase 4: Slice 4 — Login and Tokenized Shared Chrome
 
-- [ ] 4.1 **RED (DS-UI-LOGIN, DS-SHELL-6):** Test desktop two-region/mobile stacked LoginAuth, preserved username-safe errors and Spanish labels, absent `card--auth`, token usage, and responsive PageHeader action wrapping.
-- [ ] 4.2 **GREEN:** Modify `web/src/components/pages/LoginAuth.tsx`, `web/src/components/shared/PageHeader.tsx`, and shared CSS to use `PageFrame`/existing tokens; remove inline auth chrome and the phantom class without broad page sweeps.
+- [x] 4.1 **RED (DS-UI-LOGIN, DS-SHELL-6):** Test desktop two-region/mobile stacked LoginAuth, preserved username-safe errors and Spanish labels, absent `card--auth`, token usage, and responsive PageHeader action wrapping.
+- [x] 4.2 **GREEN:** Modify `web/src/components/pages/LoginAuth.tsx`, `web/src/components/shared/PageHeader.tsx`, and shared CSS to use `PageFrame`/existing tokens; remove inline auth chrome and the phantom class without broad page sweeps.
 
 ## Phase 5: Slice 5 — Stories, PWA Boundary, and Acceptance
 
