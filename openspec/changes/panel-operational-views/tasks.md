@@ -19,8 +19,8 @@ Strict RED→GREEN TDD; stacked slices.
 - [x] 4.2 GREEN — Modify `web/src/components/domain/{panelRoutes.ts,PanelShell.tsx,AppShell.tsx}`, `web/src/components/pages/AdvancedDashboard.tsx`, `web/src/{api.ts,types.ts}` for nav and three calls; est 155; deps 4.1; evidence Vitest passes.
 
 ## Phase 5: Slice 5
-- [ ] 5.1 RED — Convert `tests/functional/{test_auth.py,test_clients.py,test_cases.py,test_kb_settings.py,test_dashboard_export.py}` to API/SPA contracts; est 125; deps Slices 1–4; evidence functional pytest fails.
-- [ ] 5.2 GREEN — Update those tests and `tests/functional/conftest.py`, preserving auth, roles, audit, validation, CSV; est 115; deps 5.1; evidence pytest passes.
+- [x] 5.1 RED — Convert `tests/functional/{test_auth.py,test_clients.py,test_cases.py,test_kb_settings.py,test_dashboard_export.py}` to API/SPA contracts; est 125; deps Slices 1–4; evidence legacy HTML assertions removed before API replacements; focused pytest passed after replacement.
+- [x] 5.2 GREEN — Update those tests and `tests/functional/conftest.py`, preserving auth, roles, audit, validation, CSV; est 115; deps 5.1; evidence `uv run pytest tests/functional/ -q` and `uv run pytest tests/` pass.
 
 ## Phase 6: Slice 6
 - [ ] 6.1 RED — Add `tests/integration/test_panel_delivery.py` checks for absent Jinja, retained API/export/WS, and `compute_kpis`; est 65; deps Slice 5; evidence focused pytest fails.
