@@ -5,6 +5,7 @@ import { render, screen } from "@testing-library/react";
 import { LoginAuth } from "./LoginAuth";
 
 const source = readFileSync(join(process.cwd(), "src/components/pages/LoginAuth.tsx"), "utf8");
+const primitives = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
 
 describe("LoginAuth (DS-UI-LOGIN)", () => {
   it("renders the tokenized PageFrame with a desktop brand region and auth form", () => {
@@ -32,5 +33,11 @@ describe("LoginAuth (DS-UI-LOGIN)", () => {
     expect(source).not.toContain("card--auth");
     expect(source).not.toContain("style=");
     expect(source).not.toContain("LOGIN_BRAND_STYLES");
+  });
+
+  it("defines a desktop split and mobile stacked frame with design tokens", () => {
+    expect(primitives).toMatch(/\.login-frame[\s\S]*?grid-template-columns:/);
+    expect(primitives).toMatch(/\.login-frame[\s\S]*?var\(--/);
+    expect(primitives).toMatch(/@media \(max-width: 40rem\)[\s\S]*?\.login-frame[\s\S]*?grid-template-columns:\s*1fr/);
   });
 });
