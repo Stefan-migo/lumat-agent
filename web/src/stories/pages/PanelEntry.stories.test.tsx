@@ -102,9 +102,10 @@ describe("Panel entry layout", () => {
     expect(within(main).getByRole("heading", { name: "Panel" })).toBeInTheDocument();
     const drawer = screen.getByRole("dialog", { name: "Navegación" });
     expect(within(drawer).getByRole("navigation", { name: "Navegación principal" })).toBeInTheDocument();
-    for (const label of ["Panel", "Clientes", "Conversaciones", "Casos", "Base de conocimientos", "Configuración"]) {
+    for (const label of ["Panel unificado", "Asistente Lumat", "Conversaciones", "Clientes", "Agenda", "Base de Conocimientos", "Automatizaciones", "Configuración"]) {
       expect(within(drawer).getByRole("button", { name: label })).toBeInTheDocument();
     }
+    expect(within(drawer).queryByRole("button", { name: "Casos" })).not.toBeInTheDocument();
   });
 
   it("hides admin-only destinations from operators and marks the current item", () => {
@@ -115,7 +116,7 @@ describe("Panel entry layout", () => {
     );
 
     const drawer = screen.getByRole("dialog", { name: "Navegación" });
-    expect(within(drawer).queryByRole("button", { name: "Base de conocimientos" })).not.toBeInTheDocument();
+    expect(within(drawer).queryByRole("button", { name: "Base de Conocimientos" })).not.toBeInTheDocument();
     expect(within(drawer).queryByRole("button", { name: "Configuración" })).not.toBeInTheDocument();
     expect(within(drawer).getByRole("button", { name: "Conversaciones" })).toHaveAttribute("aria-current", "page");
   });

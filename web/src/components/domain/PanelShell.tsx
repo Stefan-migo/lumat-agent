@@ -6,6 +6,7 @@ import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 
 export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard";
+export type ConversationTab = "conversations" | "cases";
 
 /** Shell icon wrapper: 20px, stroke-based, `currentColor`, aria-hidden.
  *  Inline SVGs on purpose — no icon library (ponytail: no new deps). */
@@ -49,15 +50,6 @@ function UsersIcon() {
 
 function ChatIcon() {
   return icon(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />);
-}
-
-function BriefcaseIcon() {
-  return icon(
-    <>
-      <rect x="2" y="7" width="20" height="14" rx="2" />
-      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-    </>,
-  );
 }
 
 function BookIcon() {
@@ -113,19 +105,15 @@ interface NavigationItem {
   adminOnly?: boolean;
 }
 
-const NAVIGATION: Record<PanelView, NavigationItem> = {
-  dashboard: { label: "Panel", icon: PanelIcon },
-  clients: { label: "Clientes", icon: UsersIcon },
-  conversations: { label: "Conversaciones", icon: ChatIcon },
-  cases: { label: "Casos", icon: BriefcaseIcon },
-  notifications: { label: "Notificaciones", icon: ChatIcon },
-  push: { label: "Notificaciones push", icon: ChatIcon },
+const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" | "advanced-dashboard">, NavigationItem> = {
+  dashboard: { label: "Panel unificado", icon: PanelIcon },
   chat: { label: "Asistente Lumat", icon: ChatIcon, adminOnly: true },
-  kb: { label: "Base de conocimientos", icon: BookIcon, adminOnly: true },
-  settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
+  conversations: { label: "Conversaciones", icon: ChatIcon },
+  clients: { label: "Clientes", icon: UsersIcon },
   agenda: { label: "Agenda", icon: CalendarIcon },
+  kb: { label: "Base de Conocimientos", icon: BookIcon, adminOnly: true },
   'automation-rules': { label: "Automatizaciones", icon: GearIcon },
-  'advanced-dashboard': { label: "Dashboard avanzado", icon: PanelIcon },
+  settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
 };
 
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
@@ -145,6 +133,8 @@ export interface PanelShellProps {
   inspector?: ReactNode;
   connectionStatus?: ConnectionStatus;
   onActiveThread?: (id: number) => void;
+  conversationTab?: ConversationTab;
+  onConversationTabChange?: (tab: ConversationTab) => void;
 }
 
 export type ActiveThreadsState =
@@ -206,7 +196,7 @@ function Navigation({
   user,
   collapsed = false,
 }: Pick<PanelShellProps, "currentView" | "onNavigate" | "user"> & { collapsed?: boolean }) {
-  const items = (Object.keys(NAVIGATION) as PanelView[]).filter(
+  const items = (Object.keys(NAVIGATION) as Array<keyof typeof NAVIGATION>).filter(
     (view) => !NAVIGATION[view].adminOnly || user.role === "admin",
   );
 
@@ -248,6 +238,8 @@ export function PanelShell({
   inspector,
   connectionStatus = "disconnected",
   onActiveThread,
+  conversationTab,
+  onConversationTabChange,
 }: PanelShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
@@ -365,7 +357,7 @@ export function PanelShell({
             >
               <PanelToggleIcon collapsed={collapsed} />
             </button>
-            <h2 className="panel-shell__header-title">{NAVIGATION[currentView].label}</h2>
+            <h2 className="panel-shell__header-title">{NAVIGATION[currentView as keyof typeof NAVIGATION]?.label ?? "Panel"}</h2>
           </header>
           {statusBadge ? (
             <div className="panel-shell__header-badge">
@@ -373,6 +365,20 @@ export function PanelShell({
             </div>
           ) : null}
         </div>
+        {currentView === "conversations" && conversationTab && onConversationTabChange ? (
+          <div role="group" aria-label="Sección de conversaciones" className="panel-shell__conversation-tabs">
+            {(["conversations", "cases"] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                aria-pressed={conversationTab === tab}
+                onClick={() => onConversationTabChange(tab)}
+              >
+                {tab === "conversations" ? "Conversaciones" : "Casos"}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div id="panel-main-content" className="panel-shell__content" tabIndex={-1}>
           {children}
         </div>
