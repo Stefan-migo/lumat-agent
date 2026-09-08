@@ -99,13 +99,23 @@ def test_panel_nginx_narrows_runtime_to_spa_and_explicit_backend_prefixes():
     for location in (
         "= /panel/api",
         "^~ /panel/api/",
-        "= /panel/ws",
         "= /panel/export",
         "^~ /panel/export/",
     ):
         block_start = content.index(f"location {location} {{")
         block_end = content.index("\n    }", block_start)
         assert "proxy-pass.conf" in content[block_start:block_end]
+
+    # /panel/ws is deliberately self-contained (NOT the plain-HTTP snippet,
+    # which sets Connection "" and would duplicate scalar directives). It must
+    # carry the WebSocket upgrade contract directly (fix 10165a6d).
+    ws_start = content.index("location = /panel/ws {")
+    ws_end = content.index("\n    }", ws_start)
+    ws_block = content[ws_start:ws_end]
+    assert "proxy-pass.conf" not in ws_block
+    assert "proxy_pass http://api:8000;" in ws_block
+    assert "proxy_http_version 1.1;" in ws_block
+    assert 'proxy_set_header Connection "Upgrade";' in ws_block
 
     assert "    location /panel/ {" not in content
     assert "location ^~ /panel/app/ {" in content
