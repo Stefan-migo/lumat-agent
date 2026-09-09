@@ -4,7 +4,7 @@ Strict TDD: every GREEN follows RED. PRs stack to main as `feat/panel-user-manag
 
 ## Slice A — Backend (PR A: `feat/panel-user-management-sliceA`)
 
-- [ ] **A.1 RED — API contract/security.** PR A; add `tests/functional/test_api_users.py` covering every endpoint’s JSON 401/403, safe ordered shape/no hashes-locks, valid roles, blank/short/invalid input, duplicate no-row, missing target, audits, and self toggle/reset 403. Test: `.venv/bin/python -m pytest tests/functional/test_api_users.py`. Depends: none. Estimate: ~150 lines.
+- [x] **A.1 RED — API contract/security.** PR A; add `tests/functional/test_api_users.py` covering every endpoint’s JSON 401/403, safe ordered shape/no hashes-locks, valid roles, blank/short/invalid input, duplicate no-row, missing target, audits, and self toggle/reset 403. Test: `.venv/bin/python -m pytest tests/functional/test_api_users.py`. Depends: none. Estimate: ~150 lines.
 - [ ] **A.2 GREEN — service/routes.** PR A; extend `app/services/users.py` with `list_users`, `create_user`, `set_user_active`, `reset_password`; add `to_admin_user_dict` in `app/panel/api/serializers.py`; create/register `app/panel/api/routes/users.py` and router in `app/panel/api/__init__.py` using `require_admin_json`, hashing, commits, and `record_audit`. DoD: focused pytest, then `.venv/bin/python -m pytest tests/`; depends A.1. Estimate: ~190 lines.
 
 ## Slice B — Frontend (PR B: `feat/panel-user-management-sliceB`, stacked on Slice A)

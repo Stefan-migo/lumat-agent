@@ -161,6 +161,16 @@ def to_user_dict(user: User) -> dict:
     return {"id": user.id, "username": user.username}
 
 
+def to_admin_user_dict(user: User) -> dict:
+    """User row -> the allow-listed shape for administrative user management."""
+    return {
+        "id": user.id,
+        "username": user.username,
+        "role": user.role.value,
+        "active": user.active,
+    }
+
+
 def to_appointment_dict(appointment: Appointment) -> dict:
     return {
         "id": appointment.id,
