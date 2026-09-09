@@ -1,10 +1,10 @@
-# Apply Progress: Panel Asistente Lumat — PR 2
+# Apply Progress: Panel Asistente Lumat — PR 3
 
 ## Status
 
-PR 1 is complete. PR 2 is complete and ready for verification. Delivery is
-`auto-chain` with `stacked-to-main`; this slice is limited to native assistant
-tools, bounded web evidence, and confirmed automation authoring.
+PR 1, PR 2, and PR 3 are complete and ready for verification. Delivery is
+`auto-chain` with `stacked-to-main`; PR 3 is limited to frontend assistant chat
+lifecycle UX. Attachments upload UI remains in PR 5.
 
 ## Completed Tasks
 
@@ -18,6 +18,12 @@ tools, bounded web evidence, and confirmed automation authoring.
   results, JSON schemas, and graph executor dispatch.
 - [x] 2.3 Automation audit — AT-2, AR-6/7, AO-3; assistant writes require an
   executor-origin marker and retain the existing audit/worker path.
+- [x] 3.1 RED UI states — IAC-3/6; component RED tests cover streamed plan,
+  evidence, approval/rejection, and recovery after reload; Storybook covers
+  approval, evidence, and streaming states.
+- [x] 3.2 Render lifecycle — IAC-2/3/6; typed plan/approval/evidence/events,
+  fetch ReadableStream SSE consumption, plan controls, evidence cards, and
+  persisted recovery rendering.
 
 ## Commits
 
@@ -28,6 +34,7 @@ tools, bounded web evidence, and confirmed automation authoring.
 - `4f42d0a6` — preserve streamed chat compatibility.
 - `4328867d` — enforce approval expiry and digests.
 - `a4e9776c` — sequence recoverable SSE events.
+- `726aaa4b` — add assistant chat lifecycle UX.
 
 ## Verification Evidence
 
@@ -57,8 +64,8 @@ God nodes consulted from `GRAPH_REPORT.md`: `InternalChatThread`, `AssistantStat
 
 ## Scope Exclusions
 
-No tools registry, web search, attachments, agent configuration rebuild,
-frontend UX, WhatsApp pipeline, or dashboard changes are included.
+No tools registry, web search, attachments upload UI, agent configuration
+rebuild, WhatsApp pipeline, or dashboard changes are included in PR 3.
 
 ## Validator Remediation
 
@@ -119,6 +126,43 @@ baseline) and queried:
 
 No graph refresh was run mid-session; the graph remains the PR 1 baseline as
 required by the project session policy.
+
+## PR 3 TDD Evidence
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 3.1 UI states | Added failing lifecycle/approval/SSE tests before production changes | `AgentChat.test.tsx` and Storybook state tests pass | Reused Card, Badge, Button, and existing chat fixtures; no new dependency |
+| 3.2 Render lifecycle | Component suite initially failed on absent SSE rendering/approval controls | Typed SSE parser, reducer-style event handling, plan/evidence cards, and recovery pass | Kept fetch ReadableStream local to `api.ts`; no state library or SSE package |
+
+## PR 3 Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused tests | `npm test -- --run src/components/pages/AgentChat.test.tsx src/stories/pages/ChatWithAgent.stories.test.tsx` — **2 files passed, 14 tests passed**. |
+| Runtime harness | Storybook lifecycle harness via `ChatWithAgent.stories.test.tsx` — **6 tests passed**; mocked fetch SSE path exercises plan → tool → evidence → response rendering. |
+| Typecheck | `npx tsc --noEmit` — **passed**. |
+| Frontend suite | `npm test` — **69 files passed, 490 tests passed**. |
+| Build sanity | `npm run build` — **passed**, Vite production bundle generated. |
+| Backend regression | `DATABASE_URL="postgresql+psycopg://app:app@localhost:5432/lumat_test_asistente" TEST_ADMIN_DB_URL="postgresql://lumat:lumat@localhost:5432/lumat_test_asistente" .venv/bin/pytest tests/integration/test_assistant_chat.py -q` — **10 passed**. |
+| Rollback boundary | Revert commit `726aaa4b` for `web/src/{api.ts,types.ts,components/pages/AgentChat.tsx,components/pages/AgentChat.test.tsx,stories/pages/ChatWithAgent.stories.tsx}`; no backend, dashboard, WhatsApp, infra, or attachment files changed. |
+
+## PR 3 Graph Check
+
+Graph baseline: `graphify-out/graph.json` from `4f42d0a6`; no refresh was run
+mid-session. Consulted before the task and before each affected module:
+
+- `AgentChat()` → `createChatThread()` / `getChatThread()` / `sendChatMessage()`
+  → `api.ts` frontend API client.
+- `stream_events()` → `recover_events()` → `InternalChatThread` for event
+  payload and persisted recovery shape.
+- `stream_thread()` → `stream_events()` for the dedicated SSE route.
+- `ChatWithAgent.stories.tsx` → `PlanCard()` → `Button()` / `Card()` / `Badge()`
+  for Storybook primitive reuse.
+- `types.ts` frontend API client community and `Agent Chat UI` community.
+
+God nodes consulted: `InternalChatThread`, `agent_chat.py`, `stage_event()`,
+`models.py`; communities: Frontend API Client, Recovery Helpers, Agent Chat UI,
+Shared UI Components, Frontend Test & Storybook Deps.
 
 ## Validator Remediation — PR 2
 
