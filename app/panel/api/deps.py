@@ -39,7 +39,19 @@ def get_current_user_json(
 
 
 def require_user_json(current: User = Depends(get_current_user_json)) -> User:
-    """Any authenticated user (admin or operador) — shared JSON routes."""
+    """Any authenticated panel user, including technician agenda users."""
+    return current
+
+
+def require_operator_json(current: User = Depends(get_current_user_json)) -> User:
+    if current.role.value not in {"admin", "operador"}:
+        raise HTTPException(status_code=403, detail="panel role required")
+    return current
+
+
+def require_tecnico(current: User = Depends(get_current_user_json)) -> User:
+    if current.role.value != "tecnico":
+        raise HTTPException(status_code=403, detail="tecnico role required")
     return current
 
 

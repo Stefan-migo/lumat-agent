@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { ReactNode } from "react";
 import { apiFetch, getDashboardToday, getDashboardTrend } from "../../api";
-import type { DashboardToday, Kpis } from "../../types";
+import type { DashboardToday, Kpis, Role } from "../../types";
 import type { PanelView } from "../domain/PanelShell";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { PageFrame } from "../shared/PageFrame";
@@ -14,7 +14,7 @@ export interface DashboardProps {
   data?: Kpis | null;
   state?: AsyncDataState;
   onRetry?: () => void;
-  role?: "admin" | "operador";
+  role?: Role;
   onNavigate?: (view: PanelView) => void;
 }
 

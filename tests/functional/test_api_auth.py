@@ -93,6 +93,22 @@ def test_me_with_admin_session_returns_admin_role(client, make_user):
     assert resp.json() == {"username": "adm", "role": "admin"}
 
 
+def test_me_with_tecnico_session_returns_tecnico_role(client, make_user):
+    make_user("tech", "tech-pass", role="tecnico")
+    login = client.post(
+        "/panel/api/login",
+        json={"username": "tech", "password": "tech-pass"},
+        follow_redirects=False,
+    )
+    assert login.status_code == 200
+    assert login.json() == {"ok": True, "role": "tecnico"}
+
+    resp = client.get("/panel/api/me", follow_redirects=False)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"username": "tech", "role": "tecnico"}
+
+
 def test_me_deactivated_user_returns_401(client, make_user):
     """active=False loses access immediately (same as the Jinja dep)."""
     user_id = make_user("oper", "oper-pass", role="operador")
@@ -146,6 +162,29 @@ def test_json_login_returns_operador_role(client, make_user):
     assert resp.status_code == 200
     assert resp.json() == {"ok": True, "role": "operador"}
     assert "session" in resp.cookies
+
+
+def test_tecnico_is_denied_admin_and_operational_json_surfaces(client, make_user):
+    make_user("tech", "tech-pass", role="tecnico")
+    client.post(
+        "/panel/api/login",
+        json={"username": "tech", "password": "tech-pass"},
+        follow_redirects=False,
+    )
+
+    for method, path in (
+        ("get", "/panel/api/settings"),
+        ("get", "/panel/api/conversations"),
+        ("get", "/panel/api/clients"),
+        ("get", "/panel/api/cases"),
+        ("post", "/panel/api/chat/threads"),
+    ):
+        if method == "post":
+            response = client.post(path, json={}, follow_redirects=False)
+        else:
+            response = client.get(path, follow_redirects=False)
+        assert response.status_code == 403, path
+        assert response.headers["content-type"].startswith("application/json")
 
 
 def test_json_login_invalid_credentials(client, make_user):

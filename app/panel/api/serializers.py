@@ -183,6 +183,26 @@ def to_appointment_dict(appointment: Appointment) -> dict:
     }
 
 
+def to_technician_appointment_dict(
+    appointment: Appointment, *, customer: Customer, case: Case
+) -> dict:
+    return {
+        "id": appointment.id,
+        "service": appointment.service,
+        "local_start": appointment.local_start.isoformat(),
+        "starts_at": _iso(appointment.starts_at),
+        "ends_at": _iso(appointment.ends_at),
+        "timezone": appointment.timezone,
+        "customer": {
+            "name": customer.name,
+            "address": customer.address,
+            "comuna": customer.comuna,
+            "phone": customer.phone_e164,
+        },
+        "case_summary": case.summary,
+    }
+
+
 def to_today_appointment_dict(appointment: Appointment, customer_name: str | None) -> dict:
     return {
         "id": appointment.id,

@@ -138,6 +138,17 @@ def list_for_customer(session: Session, customer_id: int) -> list[Appointment]:
     return list(session.scalars(select(Appointment).where(Appointment.customer_id == customer_id).order_by(Appointment.starts_at, Appointment.id)))
 
 
+def list_for_technician(session: Session, technician_id: int) -> list[tuple[Appointment, Customer, Case]]:
+    statement = (
+        select(Appointment, Customer, Case)
+        .join(Customer, Customer.id == Appointment.customer_id)
+        .join(Case, Case.id == Appointment.case_id)
+        .where(Appointment.technician_id == technician_id)
+        .order_by(Appointment.starts_at, Appointment.id)
+    )
+    return list(session.execute(statement).all())
+
+
 def list_for_range(session: Session, from_date: date, to_date: date, timezone_name: str) -> list[tuple[Appointment, str | None, str | None, str | None, AppointmentCalendarSync | None]]:
     """Return the read-only agenda projection for an inclusive local date range."""
     zone = _zone(timezone_name)

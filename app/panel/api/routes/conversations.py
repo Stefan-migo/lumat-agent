@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Conversation, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, User
-from app.panel.api.deps import require_user_json
+from app.panel.api.deps import require_operator_json
 from app.panel.api.serializers import to_active_conversation_dict, to_conversation_dict, to_message_dict
 from app.panel.deps import get_db
 from app.services.conversations import assign, change_state, retry_operator_message, send_operator_message
@@ -91,7 +91,7 @@ def conversations_list(
     state: ConversationState | None = None,
     responsible_id: int | None = None,
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """List conversation metadata, most recently active first."""
     query = select(Conversation)
@@ -110,7 +110,7 @@ def conversations_list(
 @router.get("/conversations/active")
 def active_conversations(
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """List bot/human conversations with activity in the last 24 hours."""
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -133,19 +133,19 @@ def active_conversations(
 
 
 @router.post("/conversations/{conversation_id}/state")
-def state_command(conversation_id: int, body: StateCommand, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+def state_command(conversation_id: int, body: StateCommand, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
     conversation = change_state(session, conversation_id, current, body.state, body.expected_version, body.request_id)
     return {"ok": True, "conversation": _conversation_payload(session, conversation)}
 
 
 @router.post("/conversations/{conversation_id}/assignment")
-def assignment_command(conversation_id: int, body: AssignmentCommand, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+def assignment_command(conversation_id: int, body: AssignmentCommand, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
     conversation = assign(session, conversation_id, current, body.responsible_id, body.expected_version, body.request_id)
     return {"ok": True, "conversation": _conversation_payload(session, conversation)}
 
 
 @router.post("/conversations/{conversation_id}/messages")
-def message_command(conversation_id: int, body: MessageCommand, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+def message_command(conversation_id: int, body: MessageCommand, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
     if not body.text.strip():
         _conversation_or_404(session, conversation_id)
         from app.services.audit import record_audit
@@ -159,7 +159,7 @@ def message_command(conversation_id: int, body: MessageCommand, session: Session
 
 
 @router.post("/conversations/{conversation_id}/messages/{message_id}/retry")
-def retry_message(conversation_id: int, message_id: int, body: RetryCommand, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+def retry_message(conversation_id: int, message_id: int, body: RetryCommand, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
     message = retry_operator_message(session, conversation_id, message_id, current, body.request_id, body.expected_status)
     if message.delivery_status != DeliveryStatus.SENT:
         raise HTTPException(status_code=502, detail="message delivery failed")
@@ -170,7 +170,7 @@ def retry_message(conversation_id: int, message_id: int, body: RetryCommand, ses
 def conversation_thread(
     conversation_id: int,
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """Conversation metadata + chronological messages (media as URL links)."""
     conversation = _conversation_or_404(session, conversation_id)

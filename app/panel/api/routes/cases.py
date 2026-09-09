@@ -25,7 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import User
-from app.panel.api.deps import require_user_json
+from app.panel.api.deps import require_operator_json
 from app.panel.api.serializers import to_case_dict, to_customer_dict, to_user_dict
 from app.panel.deps import get_db
 from app.services import cases as cases_service
@@ -55,7 +55,7 @@ def _case_or_404(session: Session, case_id: int) -> cases_service.Case:
 @router.get("/cases")
 def cases_list(
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """Open cases (escalated first) with customer embedded + users (D8)."""
     rows = cases_service.list_open_cases(session)  # list[tuple[Case, Customer]]
@@ -74,7 +74,7 @@ def case_update(
     case_id: int,
     body: CaseUpdateBody,
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """AP-5: change case status and/or responsible; null clears assignment."""
     case = _case_or_404(session, case_id)
@@ -93,7 +93,7 @@ def case_update(
 def case_ack(
     case_id: int,
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """EM-4: acknowledge an emergency case from the panel (audited)."""
     case = _case_or_404(session, case_id)
