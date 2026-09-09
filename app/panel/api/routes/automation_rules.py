@@ -42,7 +42,7 @@ def _get_rule(session: Session, rule_id: int) -> AutomationRule:
 
 
 @router.get("/automation-rules")
-def list_rules(session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+def list_rules(session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
     rules = session.scalars(select(AutomationRule).order_by(AutomationRule.id.asc())).all()
     return {"rules": [to_automation_rule_dict(rule) for rule in rules]}
 
@@ -58,7 +58,7 @@ def create_rule(body: RuleBody, session: Session = Depends(get_db), current: Use
 
 
 @router.get("/automation-rules/{rule_id}")
-def get_rule(rule_id: int, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+def get_rule(rule_id: int, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
     return {"rule": to_automation_rule_dict(_get_rule(session, rule_id))}
 
 
