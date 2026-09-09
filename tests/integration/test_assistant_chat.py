@@ -1,11 +1,13 @@
 """PR1 contract tests for the isolated assistant graph boundary."""
 
 import json
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
 
 from app.db import SessionLocal
+from app.chat.assistant.approval import issue_approval, validate_approval
 from app.models import InternalChatThread, User
 from app.services.users import hash_password
 @pytest.fixture(autouse=True)
@@ -128,3 +130,20 @@ def test_failed_run_does_not_persist_partial_response(client, monkeypatch):
     assert response.json()["message"]["status"] == "failed"
     messages = client.get(f"/panel/api/chat/threads/{thread_id}").json()["messages"]
     assert not any(message["author"] == "agent" for message in messages)
+
+
+def test_approval_rejects_expired_token():
+    plan = {"tool": "automation.create_rule", "arguments": {"name": "notify"}}
+    approval = issue_approval(plan, expires_at=datetime.now(timezone.utc) - timedelta(seconds=1))
+
+    assert validate_approval(plan, approval, approval["token"]) is False
+
+
+def test_approval_rejects_changed_tool_or_arguments():
+    plan = {"tool": "automation.create_rule", "arguments": {"name": "notify"}}
+    approval = issue_approval(plan)
+
+    assert validate_approval({**plan, "tool": "customers.list"}, approval, approval["token"]) is False
+    assert validate_approval(
+        {"tool": plan["tool"], "arguments": {"name": "changed"}}, approval, approval["token"]
+    ) is False
