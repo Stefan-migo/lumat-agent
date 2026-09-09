@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.models import User
+from app.agent_registry import get_registry
+from app.chat.assistant.tools.registry import get_tool
 from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
 from app.services.agent_chat import approve_plan, create_thread, get_thread, message_dict, resume_thread, stream_events, submit_message, thread_dict
@@ -39,6 +41,29 @@ def read_thread(thread_id: int, session: Session = Depends(get_db), current: Use
     resume_thread(session, thread, current)
     messages = get_thread(session, thread_id, current.id)[1]
     return {"thread": thread_dict(thread), "messages": [message_dict(row) for row in messages]}
+
+
+@router.get("/assistant/capabilities")
+def assistant_capabilities(current: User = Depends(require_admin_json)) -> dict:
+    """Return the validated assistant configuration without mutation controls."""
+    registry = get_registry()
+    assistant = registry.assistant
+    tools = [
+        {
+            "name": name,
+            "description": get_tool(name).description,
+            "read_only": get_tool(name).read_only,
+            "write": get_tool(name).write,
+        }
+        for name in assistant.tools_whitelist
+    ]
+    return {
+        "tools": tools,
+        "personas": [assistant.persona],
+        "prompts": list(assistant.prompts.values()),
+        "kb_available": "kb.retrieve" in assistant.tools_whitelist,
+        "memory_available": any(name.startswith("memory.") for name in assistant.tools_whitelist),
+    }
 
 
 @router.post("/chat/threads/{thread_id}/messages", status_code=201)
