@@ -704,6 +704,9 @@ class InternalChatThread(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="open", server_default="open")
+    assistant_state: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    current_plan: Mapped[dict | None] = mapped_column(JSONB)
+    active_run_id: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

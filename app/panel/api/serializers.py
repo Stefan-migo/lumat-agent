@@ -303,6 +303,9 @@ def to_panel_notification_dict(notification: PanelNotification) -> dict:
 def to_internal_chat_thread_dict(thread: InternalChatThread) -> dict:
     return {
         "id": thread.id, "user_id": thread.user_id, "status": thread.status,
+        "assistant_state": thread.assistant_state or {},
+        "current_plan": thread.current_plan,
+        "active_run_id": thread.active_run_id,
         "created_at": _iso(thread.created_at), "updated_at": _iso(thread.updated_at),
     }
 
