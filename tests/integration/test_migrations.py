@@ -57,6 +57,7 @@ EXPECTED_TABLES = {
     "push_subscriptions",
     "internal_chat_threads",
     "internal_chat_messages",
+    "assistant_attachments",  # 022_assistant_attachments.sql (assistant file attachments)
     "schema_migrations",
 }
 
@@ -124,6 +125,8 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("017_h4_internal_chat",),
         ("018_conversation_realtime",),
         ("019_tecnico_role",),
+        ("020_assistant_metadata",),
+        ("022_assistant_attachments",),
     ]
 
 
