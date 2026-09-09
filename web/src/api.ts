@@ -67,7 +67,7 @@ export const disableKbDocument = (id: number) => postJson<KbMutationResponse>(`/
 export const restoreKbDocument = (id: number, version: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/restore`, { version });
 export const refreshKbDocuments = () => apiFetch<DocsResponse>('/panel/api/kb');
 
-import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket } from './types';
+import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -120,3 +120,11 @@ export function getAdvancedDashboard(): Promise<AdvancedDashboardData> {
     apiFetch<{ rows: DashboardDrilldownRow[] }>(`/panel/api/dashboard/drilldown?${drilldown}`),
   ]).then(([summary, trend, drilldownResponse]) => ({ ...summary, trend: trend.buckets, drilldown: drilldownResponse.rows }));
 }
+
+export const getDashboardToday = (timezone: string) => apiFetch<DashboardToday>(`/panel/api/dashboard/today?timezone=${encodeURIComponent(timezone)}`);
+export const getDashboardTrend = (timezone: string) => {
+  const end = new Date();
+  const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const params = new URLSearchParams({ start: start.toISOString(), end: end.toISOString(), timezone, metric: 'contacts' });
+  return apiFetch<{ buckets: DashboardTrendBucket[] }>(`/panel/api/dashboard/trend?${params}`);
+};

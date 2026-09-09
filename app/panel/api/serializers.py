@@ -183,6 +183,37 @@ def to_appointment_dict(appointment: Appointment) -> dict:
     }
 
 
+def to_today_appointment_dict(appointment: Appointment, customer_name: str | None) -> dict:
+    return {
+        "id": appointment.id,
+        "service": appointment.service,
+        "customer_name": customer_name,
+        "local_start": appointment.local_start.isoformat(),
+        "starts_at": _iso(appointment.starts_at),
+        "ends_at": _iso(appointment.ends_at),
+    }
+
+
+def to_today_conversation_dict(conversation: Conversation, customer_name: str | None, last_message_at) -> dict:
+    return {
+        "id": conversation.id,
+        "customer_name": customer_name,
+        "last_message_at": _iso(last_message_at),
+        "state": conversation.state.value.upper(),
+    }
+
+
+def to_today_case_dict(case: Case, customer_name: str | None) -> dict:
+    return {
+        "id": case.id,
+        "customer_name": customer_name,
+        "service": case.service,
+        "summary": case.summary,
+        "emergency": case.emergency,
+        "escalated_at": _iso(case.escalated_at),
+    }
+
+
 def to_automation_rule_dict(rule: AutomationRule) -> dict:
     return {
         "id": rule.id,

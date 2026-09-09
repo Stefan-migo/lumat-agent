@@ -4,10 +4,10 @@ Strict TDD: every GREEN follows RED. PRs stack as `feat/panel-dashboard-operativ
 
 ## Slice 1 — Dashboard (PR 1: `feat/panel-dashboard-operativo-slice1`)
 
-- [ ] **1.1 RED — API.** Slice 1/PR1. Add `tests/functional/test_api_dashboard.py`: 401/403/422, timezone/DST, cancellation, ordering, predicates, caps, `new_customers`. Test: `.venv/bin/python -m pytest tests/functional/test_api_dashboard.py`. Depends: none.
-- [ ] **1.2 GREEN — API.** Slice 1/PR1. Modify `app/panel/api/routes/dashboard.py`, `app/panel/api/serializers.py`, `app/services/dashboard.py` for bounded today queries and additive KPI key. Verify: focused pytest. Depends: 1.1.
-- [ ] **1.3 RED — UI.** Slice 1/PR1. Extend `web/src/components/pages/Dashboard.test.tsx` for HOY navigation, role bento, four accents, trend/chips, loading/empty/error/403. Test: `cd web && npx vitest run src/components/pages/Dashboard.test.tsx`. Depends: none.
-- [ ] **1.4 GREEN — UI.** Slice 1/PR1. Modify `Dashboard.tsx` with existing `useAsyncData`, state primitives, `onNavigate`/`pathForView`, CSS bars. Verify Vitest + `cd web && npx tsc -b`. Depends: 1.2, 1.3.
+- [x] **1.1 RED — API.** Slice 1/PR1. Add `tests/functional/test_api_dashboard.py`: 401/403/422, timezone/DST, cancellation, ordering, predicates, caps, `new_customers`. Test: `.venv/bin/python -m pytest tests/functional/test_api_dashboard.py`. Depends: none.
+- [x] **1.2 GREEN — API.** Slice 1/PR1. Modify `app/panel/api/routes/dashboard.py`, `app/panel/api/serializers.py`, `app/services/dashboard.py` for bounded today queries and additive KPI key. Verify: focused pytest. Depends: 1.1.
+- [x] **1.3 RED — UI.** Slice 1/PR1. Extend `web/src/components/pages/Dashboard.test.tsx` for HOY navigation, role bento, four accents, trend/chips, loading/empty/error/403. Test: `cd web && npx vitest run src/components/pages/Dashboard.test.tsx`. Depends: none.
+- [x] **1.4 GREEN — UI.** Slice 1/PR1. Modify `Dashboard.tsx` with existing `useAsyncData`, state primitives, `onNavigate`/`pathForView`, CSS bars. Verify Vitest + `cd web && npx tsc -b`. Depends: 1.2, 1.3.
 - **Budget/DoD:** ~360/Medium; pytest + Vitest + typecheck. Rollback: dashboard files/tests.
 
 ## Slice 2 — Technician (PR 2: `feat/panel-dashboard-operativo-slice2`, stacked on PR1)
