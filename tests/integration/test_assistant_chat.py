@@ -7,8 +7,13 @@ from types import SimpleNamespace
 import pytest
 
 from app.db import SessionLocal
-from app.chat.assistant.approval import issue_approval, validate_approval
-from app.models import InternalChatThread, User
+from app.chat.assistant.approval import (
+    consume_approval,
+    issue_approval,
+    validate_approval,
+    validate_execution,
+)
+from app.models import InternalChatMessage, InternalChatThread, User
 from app.services.users import hash_password
 @pytest.fixture(autouse=True)
 def assistant_client(monkeypatch):
@@ -152,3 +157,61 @@ def test_approval_rejects_changed_tool_or_arguments():
     assert validate_approval(
         {"tool": plan["tool"], "arguments": {"name": "changed"}}, approval, approval["token"]
     ) is False
+
+
+def test_approval_is_consumed_once_and_execution_requires_consumed_state():
+    plan = {"tool": "automation.create_rule", "arguments": {"name": "notify"}}
+    approval = issue_approval(plan)
+
+    assert consume_approval(approval, approval["token"]) is True
+    assert consume_approval(approval, approval["token"]) is False
+    assert validate_execution(plan, approval) is True
+
+
+def test_approved_plan_route_records_execution_audit(client):
+    _user("assistant-approval", "admin")
+    _login(client, "assistant-approval")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+
+    pending = client.post(
+        f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"}
+    )
+    approval = pending.json()["message"]["assistant_metadata"]["approval"]
+
+    response = client.post(
+        f"/panel/api/chat/threads/{thread_id}/approval",
+        json={"run_id": pending.json()["message"]["assistant_metadata"]["run_id"], "token": approval["token"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "processed"
+    with SessionLocal() as session:
+        from app.models import AuditLog
+
+        assert session.query(AuditLog).filter_by(action="internal_chat.execution").count() == 1
+
+
+def test_recovery_resumes_pending_execution_once():
+    from app.services.agent_chat import resume_thread
+
+    with SessionLocal() as session:
+        user = User(username="recovery-executor", password_hash=hash_password("pass"), role="admin")
+        session.add(user)
+        session.flush()
+        thread = InternalChatThread(
+            user_id=user.id,
+            active_run_id="recover-run",
+            current_plan={"tool": "stub", "arguments": {}, "requires_approval": False},
+            assistant_state={"stage": "executing", "execution_status": "pending", "recoverable": True},
+        )
+        session.add(thread)
+        session.flush()
+        session.add(InternalChatMessage(
+            thread_id=thread.id, author="admin", content="resume this", status="processing",
+            assistant_metadata={"run_id": "recover-run"},
+        ))
+        session.commit()
+
+        assert resume_thread(session, thread, user) is True
+        session.commit()
+        assert resume_thread(session, thread, user) is False

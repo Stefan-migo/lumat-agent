@@ -1,13 +1,16 @@
 """Persistence boundary for the panel assistant graph."""
 
 from datetime import datetime, timezone
+import json
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.chat.assistant.graph import run_assistant
-from app.chat.assistant.recovery import recover_events
+from app.chat.assistant.approval import validate_approval
+from app.chat.assistant.nodes import execute
+from app.chat.assistant.recovery import claim_execution, recover_events
 from app.models import InternalChatMessage, InternalChatThread, User
 from app.services.audit import record_audit
 from app.services.realtime import stage_event
@@ -55,14 +58,19 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             content=message.content,
             run_id=run_id,
             on_token=publish_token,
+            session=session,
+            actor=user.username,
         )
         thread.active_run_id = run_id
         thread.current_plan = result.get("plan")
         thread.assistant_state = {
             "stage": result.get("status", "completed"),
             "recoverable": True,
+            "approval": result.get("approval"),
+            "execution_status": "pending" if result.get("status") == "approval_pending" else "completed",
             "events": _events_for(result, thread.id, run_id),
         }
+        message.assistant_metadata = {"run_id": run_id, "approval": result.get("approval")}
         if result.get("status") == "approval_pending":
             message.status = "approval_pending"
         else:
@@ -132,6 +140,105 @@ def _events_for(result: dict, thread_id: int, run_id: str) -> list[dict]:
 
 def stream_events(session: Session, thread: InternalChatThread, run_id: str | None = None) -> list[dict]:
     return recover_events(thread, run_id)
+
+
+def approve_plan(session: Session, thread: InternalChatThread, user: User, run_id: str, token: str, *, reject: bool = False) -> InternalChatMessage | None:
+    """Atomically consume or reject the approval stored on the thread."""
+    plan = thread.current_plan or {}
+    state = thread.assistant_state or {}
+    approval = state.get("approval") or {}
+    if thread.active_run_id != run_id or not validate_approval(plan, approval, token):
+        return None
+    status = "rejected" if reject else "consumed"
+    updated = session.execute(
+        text("""
+            UPDATE internal_chat_threads
+            SET assistant_state = jsonb_set(assistant_state, '{approval,status}', CAST(:status AS jsonb))
+            WHERE id = :thread_id
+              AND active_run_id = :run_id
+              AND assistant_state #>> '{approval,status}' = 'pending'
+            RETURNING id
+        """),
+        {"status": json.dumps(status), "thread_id": thread.id, "run_id": run_id},
+    ).scalar_one_or_none()
+    if updated is None:
+        return None
+    session.refresh(thread)
+    message = session.scalar(
+        select(InternalChatMessage).where(
+            InternalChatMessage.thread_id == thread.id,
+            InternalChatMessage.assistant_metadata["run_id"].as_string() == run_id,
+        ).order_by(InternalChatMessage.id.desc())
+    )
+    if message is None:
+        return None
+    if reject:
+        message.status = "rejected"
+        return message
+    thread.assistant_state = {
+        **thread.assistant_state,
+        "stage": "executing",
+        "execution_status": "pending",
+    }
+    session.flush()
+    if not claim_execution(session, thread):
+        return None
+    result = execute({
+        "thread_id": thread.id,
+        "run_id": run_id,
+        "content": message.content,
+        "plan": plan,
+        "approval": thread.assistant_state["approval"],
+        "session": session,
+        "actor": user.username,
+    })
+    message.status = "processed"
+    message.completed_at = datetime.now(timezone.utc)
+    thread.assistant_state = {**thread.assistant_state, "stage": "completed", "execution_status": "completed"}
+    response_message = InternalChatMessage(
+        thread_id=thread.id, author="agent", content=result["response"], status="processed",
+        completed_at=datetime.now(timezone.utc), assistant_metadata={"run_id": run_id},
+    )
+    session.add(response_message)
+    session.flush()
+    return message
+
+
+def resume_thread(session: Session, thread: InternalChatThread, user: User) -> bool:
+    """Resume a persisted execution after interruption, with an atomic claim."""
+    state = thread.assistant_state or {}
+    if state.get("stage") != "executing" or not claim_execution(session, thread):
+        return False
+    run_id = thread.active_run_id
+    if not run_id:
+        return False
+    message = session.scalar(
+        select(InternalChatMessage).where(
+            InternalChatMessage.thread_id == thread.id,
+            InternalChatMessage.assistant_metadata["run_id"].as_string() == run_id,
+            InternalChatMessage.status == "processing",
+        ).order_by(InternalChatMessage.id.desc())
+    )
+    if message is None:
+        return False
+    result = execute({
+        "thread_id": thread.id,
+        "run_id": run_id,
+        "content": message.content,
+        "plan": thread.current_plan or {},
+        "approval": thread.assistant_state.get("approval"),
+        "session": session,
+        "actor": user.username,
+    })
+    message.status = "processed"
+    message.completed_at = datetime.now(timezone.utc)
+    thread.assistant_state = {**thread.assistant_state, "stage": "completed", "execution_status": "completed"}
+    session.add(InternalChatMessage(
+        thread_id=thread.id, author="agent", content=result["response"], status="processed",
+        completed_at=datetime.now(timezone.utc), assistant_metadata={"run_id": run_id},
+    ))
+    session.flush()
+    return True
 
 
 def get_thread(session: Session, thread_id: int, user_id: int) -> tuple[InternalChatThread, list[InternalChatMessage]] | None:
