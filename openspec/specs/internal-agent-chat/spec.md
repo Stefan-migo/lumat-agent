@@ -24,29 +24,40 @@ The system MUST restrict internal agent chat to the owner/admin authorization bo
 
 ### Requirement: IAC-2 — Context Boundary
 
-The agent MUST use only the existing conversation graph/model boundary and MUST NOT gain tools, data access, or permissions beyond that model through internal chat.
+The agent MUST use the separate `AssistantState` graph for panel requests, with only declared typed tools and admin authorization. It MUST persist plan, approval, execution, and evidence metadata in the existing thread boundary and MUST NOT couple to WhatsApp state.
+(Previously: internal chat used only the existing conversation graph/model and had no tools or privileged data access.)
 
-#### Scenario: Normal response
+#### Scenario: Assistant response
 
-- GIVEN an authorized internal message
-- WHEN the agent responds
-- THEN the response is persisted in the same thread with its processing status
+- GIVEN an authorized administrator submits a panel request
+- WHEN the assistant processes it
+- THEN the response and assistant metadata are persisted in the same thread with evidence
 
-#### Scenario: Tool escalation denied
+#### Scenario: Operator denied
 
-- GIVEN an internal prompt requesting an unavailable privileged action
-- WHEN the agent processes it
-- THEN the action is refused or escalated without unauthorized side effects
+- GIVEN an authenticated operador requests assistant data or a tool
+- WHEN authorization is evaluated
+- THEN no thread, tool, or evidence data is exposed
 
 ### Requirement: IAC-3 — Panel States
 
-The panel MUST render loading, empty, processing, success, and error states without losing persisted messages.
+The panel MUST render loading, empty, planning, approval-pending, streaming, success, and error states without losing persisted messages or recoverable assistant metadata.
+
+#### Scenario: Approval recovery
+- GIVEN a persisted plan awaits approval
+- WHEN the administrator reloads the thread
+- THEN the approval state and exact proposed action remain visible
 
 #### Scenario: Processing recovery
 
 - GIVEN a message request is processing
 - WHEN the response fails
 - THEN the error is actionable and the submitted message remains recoverable
+
+#### Scenario: Stream failure
+- GIVEN an SSE stream fails after a run starts
+- WHEN the panel reconnects or reloads
+- THEN persisted state is authoritative and no partial response is treated as complete
 
 ### Requirement: IAC-4 — Conversation Surface Presentation
 
@@ -83,19 +94,25 @@ The `AgentChat` presentation MUST remain inside the existing owner/admin authori
 
 ### Requirement: IAC-6 — Compatible Token Streaming
 
-For an authorized owner/admin internal chat request, the system MUST publish ordered `token` events on `/panel/ws` as response text becomes available, while the existing synchronous POST MUST continue to persist the complete response and return its current response shape. Internal chat MUST NOT gain tools, global commands, or new authorization scope.
+The assistant MUST stream ordered plan, approval, tool, evidence, response, and error events over its dedicated SSE endpoint. Existing thread endpoints MUST remain compatible, while the assistant graph replaces `run_internal_conversation` as the chat backend.
+(Previously: token events were published on `/panel/ws` while synchronous POST remained authoritative and tool-free.)
 
-#### Scenario: Stream and POST coexist
-- GIVEN an authorized owner/admin submits an internal message
-- WHEN the agent generates a response
-- THEN token events identify the thread and the POST eventually returns the persisted complete response
+#### Scenario: SSE and thread persistence coexist
+- GIVEN an authorized administrator submits a message
+- WHEN the assistant generates a response
+- THEN SSE events identify the thread and the existing endpoint returns the persisted compatible thread shape
 
 #### Scenario: Streaming failure
-- GIVEN token delivery fails after the request starts
-- WHEN the POST completes
-- THEN the existing synchronous success or error contract remains authoritative and no partial token is persisted as a complete message
+- GIVEN SSE delivery fails after the request starts
+- WHEN the assistant run completes
+- THEN no partial stream is persisted as a complete response and the persisted error remains recoverable
+
+#### Scenario: Existing endpoint remains safe
+- GIVEN an existing client uses thread creation, retrieval, or message endpoints
+- WHEN it calls them after the assistant rollout
+- THEN authorization and persistence contracts remain compatible
 
 #### Scenario: Operator remains denied
-- GIVEN an authenticated operador requests internal chat
-- WHEN the request or WebSocket subscription is authorized
-- THEN access is rejected and no token or thread data is exposed
+- GIVEN an authenticated operador requests assistant chat or its SSE stream
+- WHEN authorization is checked
+- THEN access is rejected and no token, plan, or thread data is exposed
