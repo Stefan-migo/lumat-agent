@@ -1,10 +1,10 @@
-# Apply Progress: Panel Asistente Lumat — PR 3
+# Apply Progress: Panel Asistente Lumat — PR 5
 
 ## Status
 
-PR 1, PR 2, and PR 3 are complete and ready for verification. Delivery is
-`auto-chain` with `stacked-to-main`; PR 3 is limited to frontend assistant chat
-lifecycle UX. Attachments upload UI remains in PR 5.
+PR 1 through PR 5 are complete and ready for verification. Delivery is
+`auto-chain` with `stacked-to-main`; PR 5 is the final attachment and multimodal
+slice.
 
 Validator remediation is complete: PR 3 now supports explicit thread recovery,
 stream-owned processing state, and the complete serialized approval contract.
@@ -69,6 +69,45 @@ God nodes consulted from `GRAPH_REPORT.md`: `InternalChatThread`, `AssistantStat
 
 No tools registry, web search, attachments upload UI, agent configuration
 rebuild, WhatsApp pipeline, or dashboard changes are included in PR 3.
+
+## PR 5 — Attachments and Multimodal Context
+
+- [x] 5.1 RED upload/context — AA-1/2/3 validation, extraction, image limits, cleanup, and audit coverage.
+- [x] 5.2 Isolated uploads — admin-only thread-owned multipart endpoint, migration 022, opaque private storage, and metadata serialization.
+- [x] 5.3 Multimodal context — bounded `kb.extract_text()` documents and OpenRouter image parts with configurable assistant provider/model; DeepSeek default WhatsApp path unchanged.
+
+### PR 5 TDD Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 5.1 | `tests/integration/test_assistant_attachments.py` | Integration/pure seam | N/A (new) | ✅ Import failed before attachment module | ✅ 6 passed | ✅ type, size, extraction, image, cleanup, endpoint | ✅ Shared validation/constants |
+| 5.2 | `tests/integration/test_assistant_attachments.py` | Integration | ✅ Assistant suite baseline | ✅ Endpoint test failed before route | ✅ Admin private upload passed | ✅ ownership/count checks in route | ✅ Reused `get_thread` and multipart pattern |
+| 5.3 | `tests/integration/test_assistant_attachments.py`, `web/src/components/pages/AgentChat.test.tsx` | Integration/component | ✅ 20 backend / 11 frontend baseline | ✅ Missing context/UI failed | ✅ backend 6 and frontend 12 passed | ✅ document/image/error paths | ✅ Existing API and primitives reused |
+
+### PR 5 Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result | `DATABASE_URL="postgresql+psycopg://app:app@localhost:5432/lumat_test_asistente" TEST_ADMIN_DB_URL="postgresql://lumat:lumat@localhost:5432/lumat_test_asistente" .venv/bin/pytest tests/ -k "assistant or attachment or upload or tools" -q` — **39 passed**; `npm test -- --run src/components/pages/AgentChat.test.tsx` — **12 passed**. |
+| Runtime harness command/scenario and exact result | TestClient admin uploaded `notes.txt` to `/panel/api/chat/threads/{id}/attachments`; response returned opaque metadata without `stored_path`, and the private thread directory contained the file — **passed**. |
+| Rollback boundary | Revert migration 022, `app/chat/assistant/attachments.py`, attachment route/context/provider changes, and the attachment UI/test/API/type changes; WhatsApp, dashboard, and infra remain untouched. |
+
+### PR 5 Verification Evidence
+
+- `npm test -- --run` — **69 files passed, 494 tests passed**.
+- `npm run build` — **passed** after TypeScript fix.
+- `npx tsc --noEmit` — **passed**.
+- Backend assistant/tools/attachment selection — **39 passed**.
+
+### PR 5 Graph Check
+
+Graph baseline: `graphify-out/graph.json` (3,803 nodes, 8,926 edges, 236 communities); no refresh during apply. Consulted per task:
+
+- 5.1: `services/kb.py → extract_text`; `AssistantAttachment`/`InternalChatThread` model seam; `record_audit() → AuditLog`.
+- 5.2: `chat.py → require_admin_json → get_thread`; `media_dir` config; `AssistantAttachment → internal_chat_threads` ownership and migration 022.
+- 5.3: `assistant/graph.py → nodes.execute()`; `llm.py → get_settings → provider factory`; `AgentChat.tsx → api.ts → types.ts`.
+
+God nodes consulted: `record_audit`, `InternalChatThread`, `AssistantState`, `services/kb.py`, `llm.py`, `AgentChat.tsx`, and `api.ts`. No graph refresh was run mid-session.
 
 ## Validator Remediation
 
