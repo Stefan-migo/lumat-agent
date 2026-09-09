@@ -366,3 +366,24 @@ No attachment upload/context work, WhatsApp pipeline changes, dashboard changes,
 ### Remediation Graph Check
 
 Consulted `test_agent_registry.py` → `_load()` → `load_registry()` → `_runtime_path()` and the `agent/registry.yaml` runtime tree. Existing Agent Registry and Agent Registry & Skills communities were used; no graph refresh was run.
+
+## PR 5 Validator Remediation
+
+- [x] AA-2 context now preserves attachment filename, kind, and opaque ID in labeled bounded sections passed to the model.
+- [x] Attachment size, allowed kinds, per-thread count, context characters, image bytes, and expiry are configurable through `Settings` with the prior sane defaults.
+- [x] Uploads run a bounded expiry sweep for assistant rows; expired files are deleted even on active threads, while WhatsApp media is never queried or touched.
+- [x] Runtime coverage now exercises rejected type/size, cross-thread denial, upload audit, OpenRouter multimodal request shape, provider-use audit, active-thread expiry, and metadata deletion.
+
+### Remediation Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused backend | `DATABASE_URL="postgresql+psycopg://app:app@localhost:5432/lumat_test_asistente" TEST_ADMIN_DB_URL="postgresql://lumat:lumat@localhost:5432/lumat_test_asistente" .venv/bin/pytest tests/integration/test_assistant_attachments.py -q` — **13 passed**. |
+| Requested backend | Same isolated environment, `.venv/bin/pytest tests/integration/test_assistant_attachments.py tests/integration/test_assistant_chat.py tests/ -k "assistant or attachment or upload or tools" -q` — **46 passed**. |
+| Frontend | `npm test -- --run` — **69 files passed, 494 tests passed**; `npx tsc --noEmit` — **passed**. |
+| Runtime multimodal | Respx intercepted OpenRouter `/chat/completions`; request asserted configurable Gemini model and `image_url` content part; attachment-use audit asserted. |
+| Rollback boundary | Revert remediation changes in `attachments.py`, `config.py`, `nodes.py`, `chat.py`, the attachment runtime tests, and this progress record; prior PR 5 storage/UI behavior remains independently revertible. |
+
+### Remediation Graph Check
+
+Consulted `Assistant Attachments Spec` → `attachments.py` → `kb.extract_text`; `chat.py` → `require_admin_json` → `get_thread` → `record_audit`; `nodes.execute` → `llm.openai_client` → OpenRouter; `AssistantAttachment` → `InternalChatThread` and migration 022. Baseline graph remains 3,803 nodes, 8,926 edges, 236 communities; no refresh during remediation.
