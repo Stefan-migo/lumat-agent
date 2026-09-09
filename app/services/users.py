@@ -18,7 +18,7 @@ import bcrypt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import User
+from app.models import User, UserRole
 
 # AP-1: lock after this many consecutive failures, for this long.
 MAX_FAILED_LOGINS = 5
@@ -72,3 +72,35 @@ def reset_login_state(session: Session, user: User) -> None:
     """Clear the failed-login counter and any lock on success (AP-1)."""
     user.failed_logins = 0
     user.locked_until = None
+
+
+def list_users(session: Session) -> list[User]:
+    """Return panel users in the stable administrative order."""
+    return list(session.scalars(select(User).order_by(User.username.asc(), User.id.asc())))
+
+
+def create_user(session: Session, username: str, password: str, role: str) -> User:
+    """Create a panel user; callers validate input and commit the session."""
+    if session.scalar(select(User).where(User.username == username)) is not None:
+        raise ValueError("username already exists")
+    user = User(
+        username=username,
+        password_hash=hash_password(password),
+        role=UserRole(role),
+        active=True,
+    )
+    session.add(user)
+    session.flush()
+    return user
+
+
+def set_user_active(session: Session, user: User, active: bool) -> User:
+    """Set a user's active state; callers commit the session."""
+    user.active = active
+    return user
+
+
+def reset_password(session: Session, user: User, password: str) -> User:
+    """Replace a user's password with a bcrypt hash; callers commit."""
+    user.password_hash = hash_password(password)
+    return user
