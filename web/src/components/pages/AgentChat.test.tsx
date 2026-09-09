@@ -103,6 +103,17 @@ describe("AgentChat", () => {
     expect(screen.getByRole("textbox", { name: /mensaje/i })).toHaveValue("Retry me");
   });
 
+  it("uploads an attachment from the composer and shows its filename", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ attachment: { id: 9, thread_id: 4, filename: "photo.png", kind: "image", size: 3 } }), { status: 201 }));
+    render(<AgentChat />);
+    await screen.findByText("Chat interno vacío");
+    fireEvent.change(screen.getByLabelText(/adjuntar/i), { target: { files: [new File(["png"], "photo.png", { type: "image/png" })] } });
+    expect(await screen.findByText("photo.png")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenLastCalledWith("/panel/api/chat/threads/4/attachments", expect.objectContaining({ method: "POST" }));
+  });
+
   it("keeps the existing refusal text in the authorized thread without escalation copy", async () => {
     const refusal = "No puedo realizar esa acción fuera del approved operational workflow.";
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({

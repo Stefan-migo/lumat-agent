@@ -67,7 +67,7 @@ export const disableKbDocument = (id: number) => postJson<KbMutationResponse>(`/
 export const restoreKbDocument = (id: number, version: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/restore`, { version });
 export const refreshKbDocuments = () => apiFetch<DocsResponse>('/panel/api/kb');
 
-import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AssistantCapabilities, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse } from './types';
+import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AssistantAttachment, AssistantCapabilities, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -88,7 +88,8 @@ export function listNotifications(filters: NotificationFilters = {}) { const par
 export const markNotificationRead = (id: number) => postJson<{ notification: PanelNotification }>(`/panel/api/notifications/${id}/read`);
 export const markAllNotificationsRead = () => postJson<{ ok: true; read: number }>('/panel/api/notifications/read-all');
 export const createChatThread = () => postJson<InternalChatResponse>('/panel/api/chat/threads', {});
-export const sendChatMessage = (id: number, content: string) => postJson<{ message: InternalChatMessage }> (`/panel/api/chat/threads/${id}/messages`, { content });
+export const sendChatMessage = (id: number, content: string, attachment_ids: number[] = []) => postJson<{ message: InternalChatMessage }> (`/panel/api/chat/threads/${id}/messages`, { content, attachment_ids });
+export const uploadAssistantAttachment = (id: number, file: File) => { const body = new FormData(); body.append('file', file); return apiFetch<{ attachment: AssistantAttachment }>(`/panel/api/chat/threads/${id}/attachments`, { method: 'POST', body }); };
 export const getChatThread = (id: number) => apiFetch<InternalChatResponse>(`/panel/api/chat/threads/${id}`);
 export const approveChatPlan = (id: number, run_id: string, token: string, reject = false) => postJson<{ status: string; message: InternalChatMessage }>(`/panel/api/chat/threads/${id}/approval`, { run_id, token, reject });
 export async function streamChatEvents(id: number, runId: string, onEvent: (event: AssistantEvent) => void): Promise<void> {
