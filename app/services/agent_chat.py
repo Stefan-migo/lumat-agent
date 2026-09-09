@@ -11,7 +11,6 @@ from app.chat.assistant.recovery import recover_events
 from app.models import InternalChatMessage, InternalChatThread, User
 from app.panel.api.serializers import to_internal_chat_message_dict, to_internal_chat_thread_dict
 from app.services.audit import record_audit
-from app.services.realtime import stage_event
 
 
 def thread_dict(thread: InternalChatThread) -> dict:
