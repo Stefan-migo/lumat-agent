@@ -53,3 +53,27 @@ God nodes consulted from `GRAPH_REPORT.md`: `InternalChatThread`, `AssistantStat
 
 No tools registry, web search, attachments, agent configuration rebuild,
 frontend UX, WhatsApp pipeline, or dashboard changes are included.
+
+## Validator Remediation
+
+- AO-1: `app/chat/assistant/recovery.py` now atomically claims pending
+  executions; `resume_thread()` resumes persisted runs and marks completion so
+  a second recovery attempt does not execute again.
+- AO-2: `assistant_state.approval` is persisted on `InternalChatThread`; the
+  admin approval route validates the persisted run/plan/token and atomically
+  changes pending to consumed (or rejected). `nodes.execute()` requires the
+  consumed approval and exact argument digest.
+- AO-3: `nodes.execute()` records `internal_chat.execution` through
+  `record_audit()` at executor time, including the run and tool result.
+
+### Remediation TDD Evidence
+
+| Cycle | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| Durable approval | Missing `consume_approval`/route failed collection | `test_approval_is_consumed_once_and_execution_requires_consumed_state`, `test_approved_plan_route_records_execution_audit` passed | Shared digest/expiry validation retained in `approval.py` |
+| Recovery deduplication | Missing `resume_thread` failed collection | `test_recovery_resumes_pending_execution_once` passed | Atomic claim isolated in `recovery.py` |
+
+### Final Verification
+
+- `DATABASE_URL=...lumat_test_asistente TEST_ADMIN_DB_URL=...lumat_test_asistente .venv/bin/pytest tests/integration/test_assistant_chat.py tests/integration/test_agent_chat_realtime.py -k 'agent_chat or realtime or internal or assistant' -q` — **13 passed**.
+- `... .venv/bin/pytest tests/ -k 'assistant or internal_chat or agent_chat or realtime or internal' -q` — **36 passed**.
