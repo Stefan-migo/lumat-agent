@@ -131,7 +131,7 @@ const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" |
   clients: { label: "Clientes", icon: UsersIcon },
   agenda: { label: "Agenda", icon: CalendarIcon },
   kb: { label: "Base de Conocimientos", icon: BookIcon, adminOnly: true },
-  'automation-rules': { label: "Automatizaciones", icon: AutomationIcon },
+  'automation-rules': { label: "Automatizaciones", icon: AutomationIcon, adminOnly: true },
   settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
 };
 

@@ -131,6 +131,7 @@ describe("Panel entry layout", () => {
     const drawer = screen.getByRole("dialog", { name: "Navegación" });
     expect(within(drawer).queryByRole("button", { name: "Base de Conocimientos" })).not.toBeInTheDocument();
     expect(within(drawer).queryByRole("button", { name: "Configuración" })).not.toBeInTheDocument();
+    expect(within(drawer).queryByRole("button", { name: "Automatizaciones" })).not.toBeInTheDocument();
     expect(within(drawer).getByRole("button", { name: "Conversaciones" })).toHaveAttribute("aria-current", "page");
   });
 
