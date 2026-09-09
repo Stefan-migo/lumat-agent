@@ -254,3 +254,21 @@ Shared UI Components, Frontend Test & Storybook Deps.
 Graph checks consulted the assistant search/evidence path, automation approval
 and worker path, and the database migration/test cleanup path. No graph refresh
 was run mid-session.
+
+## PR 3 Verify Critical Remediation
+
+- Fixed `approve_plan()` to append the post-approval `tool`, `evidence`,
+  `status`, and `response` events to the existing persisted run event list.
+  Sequence numbers continue contiguously after `plan` and `approval`, and the
+  same persistence is applied to recovery execution.
+- Added `test_approved_plan_stream_replays_complete_execution_sequence`, which
+  approves a real pending route and verifies the complete six-event sequence,
+  shared thread/run identifiers, and contiguous sequences.
+
+| Evidence | Result |
+|---|---|
+| Focused backend | `DATABASE_URL="postgresql+psycopg://app:app@localhost:5432/lumat_test_asistente" TEST_ADMIN_DB_URL="postgresql://lumat:lumat@localhost:5432/lumat_test_asistente" .venv/bin/pytest tests/integration/test_assistant_chat.py tests/unit/test_assistant_tools.py -q -rA` — **20 passed**. |
+| Frontend | `npm test -- --run` — **69 files passed, 492 tests passed**. |
+| Typecheck | `npx tsc --noEmit` — **passed**. |
+| Graph check | Consulted `agent_chat.py → approve_plan() → execute() → _execution_events() → recover_events() → stream_events()` and `InternalChatThread` persistence path. |
+| Rollback boundary | Revert commit `eeaa3f30`; removes the approval-event persistence fix and its integration test without touching frontend, WhatsApp, dashboard, or infra. |
