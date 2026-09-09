@@ -4,8 +4,8 @@ evidence_revision: sha256:4cdb4f469bec1ed841907606b150d2734a7409887fa5dd6206ed2d
 verdict: pass
 blockers: 0
 critical_findings: 0
-requirements: 6/6
-scenarios: 15/15
+requirements: 6/17
+scenarios: 15/39
 test_command: DATABASE_URL="postgresql+psycopg://app:app@localhost:5432/lumat_test_asistente" TEST_ADMIN_DB_URL="postgresql://lumat:lumat@localhost:5432/lumat_test_asistente" .venv/bin/pytest tests/integration/test_assistant_chat.py tests/integration/test_agent_chat_realtime.py -q
 test_exit_code: 0
 test_output_hash: sha256:cfc14fd2dc11c362cccf5421245ca5ab0e9d286b54a604a80bd2dd5522f6feb9
@@ -29,8 +29,9 @@ PR 1 is complete for its declared assistant-boundary scope. The isolated contrac
 | PR 1 tasks total | 3 |
 | PR 1 tasks complete | 3 |
 | PR 1 tasks incomplete | 0 |
-| Requirements verified | 6/6 (AO-1..3, IAC-2/3/6) |
-| Scenarios verified | 15/15 |
+| Requirements verified (PR 1 scope) | 6/6 (AO-1..3, IAC-2/3/6) |
+| Requirements of the change | 6/17 verified — AT-1..3, AA-1..3, AC-1..3, AR-1..2 and remaining IAC scenarios are pending PR 2-5 |
+| Scenarios verified | 15/39 (PR 1 scope); remaining 24 pending PR 2-5 |
 
 ### Artifacts inspected
 - `openspec/changes/panel-asistente-lumat/specs/assistant-operations/spec.md`
