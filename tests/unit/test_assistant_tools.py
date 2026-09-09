@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -8,7 +9,7 @@ from app.chat.assistant.tools.registry import (
     get_tool,
     tool_schemas,
 )
-from app.chat.assistant.tools.search import DuckDuckGoSearch
+from app.chat.assistant.tools.search import DuckDuckGoSearch, SearchFailure
 
 
 def test_registry_exposes_typed_bounded_tools():
@@ -65,3 +66,63 @@ def test_web_search_is_bounded_and_failures_are_empty():
     results = DuckDuckGoSearch(Client()).search("safe query", limit=99)
     assert len(results) == 5
     assert all(len(result["title"]) <= 1000 for result in results)
+
+
+def test_conversations_and_appointments_use_service_seams(monkeypatch):
+    conversation = SimpleNamespace(id=1)
+    appointment = SimpleNamespace(id=2, starts_at=datetime.now(timezone.utc) + timedelta(days=1))
+    monkeypatch.setattr(
+        "app.services.conversations.list_conversations",
+        lambda session, query, limit: [conversation],
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.scheduling.list_for_range",
+        lambda *args, **kwargs: [(appointment, None, None, None, None)],
+    )
+    assert execute_tool(SimpleNamespace(), "conversations.search", {"query": "a"})["result"] == [{"id": 1}]
+    assert execute_tool(SimpleNamespace(), "appointments.upcoming", {})["result"][0]["id"] == 2
+
+
+def test_memory_read_is_bounded_and_uses_memory_service(monkeypatch):
+    memories = [SimpleNamespace(id=index, topic_key="topic") for index in range(30)]
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.memory.list_for_entity",
+        lambda *args, **kwargs: memories,
+    )
+    result = execute_tool(
+        SimpleNamespace(),
+        "memory.read",
+        {"scope": "customer", "entity_id": "42", "topic": "topic", "limit": 5},
+    )
+    assert result["status"] == "completed"
+    assert len(result["result"]) == 5
+
+
+def test_websearch_failure_is_error_evidence(monkeypatch):
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.websearch.search",
+        lambda *args, **kwargs: (_ for _ in ()).throw(SearchFailure("timeout")),
+    )
+    result = execute_tool(SimpleNamespace(), "web.search", {"query": "status"})
+    assert result["status"] == "error"
+    assert result["evidence"]["status"] == "error"
+    assert result["evidence"]["reason"] == "timeout"
+
+
+def test_approval_failure_records_error_evidence_before_raising(monkeypatch):
+    from app.chat.assistant.nodes import execute
+
+    state = {
+        "thread_id": 4,
+        "run_id": "run-4",
+        "plan": {"tool": "automation.create_rule", "arguments": {}, "requires_approval": True},
+        "approval": None,
+        "evidence": [],
+        "session": SimpleNamespace(),
+    }
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    with pytest.raises(PermissionError, match="approval") as caught:
+        execute(state)
+    assert state["evidence"][0]["status"] == "error"
+    assert "approval" in state["evidence"][0]["detail"]
+    assert caught.value.evidence[0]["status"] == "error"

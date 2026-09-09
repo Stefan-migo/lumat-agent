@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.chat.state import set_conversation_state
-from app.models import AuditLog, Conversation, ConversationState, DeliveryStatus, Message, MessageDirection, MessageStatus, MessageType, User
+from app.models import AuditLog, Conversation, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, MessageStatus, MessageType, User
 from app.services.audit import record_audit
 from app.panel.api.serializers import to_conversation_dict
 from app.services.send import deliver_message
@@ -19,6 +19,16 @@ LEGAL_TRANSITIONS = {
     ConversationState.HUMAN: {ConversationState.BOT, ConversationState.CLOSED},
     ConversationState.CLOSED: {ConversationState.BOT},
 }
+
+
+def list_conversations(session: Session, query: str | None = None, limit: int = 20) -> list[Conversation]:
+    """Bounded conversation read projection for panel consumers."""
+    statement = select(Conversation).join(Customer, Customer.id == Conversation.customer_id)
+    if query:
+        statement = statement.where(
+            Customer.name.ilike(f"%{query}%") | Conversation.wa_phone.contains(query)
+        )
+    return list(session.scalars(statement.order_by(Conversation.last_message_at.desc().nulls_last(), Conversation.id.desc()).limit(limit)))
 
 
 def _audits(session: Session, conversation_id: int) -> list[AuditLog]:

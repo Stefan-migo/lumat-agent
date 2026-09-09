@@ -12,12 +12,10 @@ from enum import Enum
 from typing import Any, Callable
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
-
 from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.tools import search as websearch
-from app.models import Appointment, Case, Conversation, Customer
-from app.services import automation, cases, customers, kb
+from app.chat.assistant.tools.search import SearchFailure
+from app.services import automation, cases, customers, kb, memory, scheduling
 
 MAX_ITEMS = 20
 
@@ -63,6 +61,14 @@ class KpiArgs(BaseModel):
     window_days: int = Field(default=7, ge=1, le=31)
 
 
+class MemoryArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scope: str = Field(min_length=1, max_length=100)
+    entity_id: str = Field(min_length=1, max_length=100)
+    topic: str | None = Field(default=None, max_length=255)
+    limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
+
+
 class WebSearchArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(min_length=1, max_length=500)
@@ -90,6 +96,8 @@ def _plain(value: Any) -> Any:
         return [_plain(v) for v in list(value)[:MAX_ITEMS]]
     if hasattr(value, "__table__"):
         return {column.name: _plain(getattr(value, column.name)) for column in value.__table__.columns}
+    if hasattr(value, "__dict__"):
+        return {str(k): _plain(v) for k, v in list(vars(value).items())[:MAX_ITEMS] if not str(k).startswith("_")}
     return value
 
 
@@ -98,21 +106,17 @@ def _search_customers(session, args: SearchArgs):
 
 
 def _search_conversations(session, args: QueryArgs):
-    statement = select(Conversation).join(Customer, Customer.id == Conversation.customer_id)
-    if args.query:
-        statement = statement.where(
-            Customer.name.ilike(f"%{args.query}%") | Conversation.wa_phone.contains(args.query)
-        )
-    return list(session.scalars(statement.order_by(Conversation.created_at.desc()).limit(args.limit)))
+    # The conversation service imports panel serializers; defer it to avoid
+    # loading the panel router during assistant registry import.
+    from app.services import conversations
+
+    return conversations.list_conversations(session, args.query, args.limit)
 
 
 def _upcoming_appointments(session, args: AppointmentArgs):
-    return list(session.scalars(
-        select(Appointment)
-        .where(Appointment.starts_at >= datetime.now(timezone.utc))
-        .order_by(Appointment.starts_at, Appointment.id)
-        .limit(args.limit)
-    ))
+    now = datetime.now(timezone.utc)
+    rows = scheduling.list_for_range(session, now.date(), now.date() + timedelta(days=30), "UTC")
+    return [row[0] for row in rows if row[0].starts_at is not None and row[0].starts_at >= now][: args.limit]
 
 
 def _open_cases(session, args: CasesArgs):
@@ -129,6 +133,13 @@ def _kpis(session, args: KpiArgs):
     from app.services import dashboard
 
     return dashboard.compute_kpis(session, args.window_days)
+
+
+def _read_memory(session, args: MemoryArgs):
+    rows = memory.list_for_entity(session, scope=args.scope, entity_id=args.entity_id)
+    if args.topic:
+        rows = [row for row in rows if row.topic_key == args.topic]
+    return rows[: args.limit]
 
 
 def _create_rule(session, args: RuleArgs):
@@ -164,6 +175,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "cases.list": ToolDefinition("cases.list", CasesArgs, True, _open_cases),
     "kb.retrieve": ToolDefinition("kb.retrieve", KbArgs, True, _retrieve_kb),
     "memory.kpis": ToolDefinition("memory.kpis", KpiArgs, True, _kpis),
+    "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory),
     "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis),
     "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search),
     "automation.create_rule": ToolDefinition("automation.create_rule", RuleArgs, False, _create_rule),
@@ -194,6 +206,14 @@ def execute_tool(session, name: str, arguments: dict, *, approval: dict | None =
         raise ToolValidationError("approval does not match exact tool arguments")
     try:
         result = _plain(definition.handler(session, parsed))
+    except SearchFailure as exc:
+        return {
+            "tool": name,
+            "status": "error",
+            "read_only": definition.read_only,
+            "error": str(exc),
+            "evidence": {"tool": name, "status": "error", "reason": str(exc)},
+        }
     except ToolValidationError:
         raise
     except Exception as exc:

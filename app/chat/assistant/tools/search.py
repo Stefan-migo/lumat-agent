@@ -12,6 +12,10 @@ MAX_QUERY_LENGTH = 500
 MAX_TEXT_LENGTH = 1000
 
 
+class SearchFailure(RuntimeError):
+    """The provider failed; an empty result is reserved for a valid no-hit response."""
+
+
 class _ResultParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -58,8 +62,10 @@ class DuckDuckGoSearch:
             parser = _ResultParser()
             parser.feed(response.text[:100_000])
             return parser.results[: min(max(limit, 0), MAX_RESULTS)]
-        except (httpx.HTTPError, ValueError):
-            return []
+        except httpx.HTTPError as exc:
+            raise SearchFailure("network request failed") from exc
+        except (ValueError, UnicodeError) as exc:
+            raise SearchFailure("malformed search response") from exc
         finally:
             if owned:
                 request.close()
