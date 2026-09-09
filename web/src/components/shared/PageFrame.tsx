@@ -29,15 +29,16 @@ export interface PageFrameProps {
   meta?: ReactNode;
   actions?: ReactNode;
   state?: ReactNode;
+  headerClassName?: string;
   children: ReactNode;
 }
 
-export function PageFrame({ title, meta, actions, state, children }: PageFrameProps) {
+export function PageFrame({ title, meta, actions, state, headerClassName, children }: PageFrameProps) {
   return (
     <main className="page-frame">
       <style>{PAGE_FRAME_STYLES}</style>
       <div className="page-frame__titlebar">
-        <PageHeader title={title} meta={meta} actions={actions} />
+        <PageHeader title={title} meta={meta} actions={actions} headerClassName={headerClassName} />
       </div>
       {state ? <div className="page-frame__banner">{state}</div> : null}
       <div className="page-frame__content">{children}</div>
