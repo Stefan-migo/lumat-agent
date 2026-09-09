@@ -283,6 +283,7 @@ def test_valid_registry_resolves_assistant_runtime_configuration(repo_root):
 
 @pytest.mark.parametrize("field", ["persona", "prompt"])
 def test_missing_assistant_runtime_reference_rejected(repo_root, tmp_path, field):
+    import shutil
     import yaml
 
     source = yaml.safe_load((repo_root / "agent" / "registry.yaml").read_text(encoding="utf-8"))
@@ -290,12 +291,18 @@ def test_missing_assistant_runtime_reference_rejected(repo_root, tmp_path, field
         source["assistant"]["persona"] = "personas/missing.md"
     else:
         source["assistant"]["prompts"]["plan"] = "prompts/missing.md"
-    registry_path = tmp_path / "registry.yaml"
+    # Keep the base registry references valid so this test reaches the
+    # assistant-specific reference under test instead of failing on the
+    # orchestrator or WhatsApp roster files first.
+    agent_dir = tmp_path / "agent"
+    shutil.copytree(repo_root / "agent", agent_dir)
+    registry_path = agent_dir / "registry.yaml"
     registry_path.write_text(yaml.safe_dump(source), encoding="utf-8")
 
     from app.agent_registry import RegistryError
 
-    with pytest.raises(RegistryError, match="does not exist"):
+    expected_reference = "assistant.persona" if field == "persona" else "assistant.prompts.plan"
+    with pytest.raises(RegistryError, match=expected_reference):
         from app.agent_registry import load_registry
 
         load_registry(registry_path)

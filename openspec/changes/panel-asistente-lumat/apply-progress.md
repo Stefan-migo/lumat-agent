@@ -305,3 +305,25 @@ Graph baseline: `graphify-out/graph.json` (3,803 nodes, 8,926 edges, 236 communi
 ## PR 4 Scope Exclusions
 
 No attachment upload/context work, WhatsApp pipeline changes, dashboard changes, infrastructure changes, or assistant configuration editing routes.
+
+## PR 4 Validator Remediation
+
+- [x] Corrected `tests/unit/test_agent_registry.py` temporary fixture to copy the
+  real `agent/` runtime tree before mutating assistant references.
+- [x] Assertions now identify `assistant.persona` and
+  `assistant.prompts.plan` specifically, while the unchanged copied fixture
+  proves the complete registry still passes.
+
+### Remediation Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused backend | `DATABASE_URL="postgresql+psycopg://app:app@localhost:5432/lumat_test_asistente" TEST_ADMIN_DB_URL="postgresql://lumat:lumat@localhost:5432/lumat_test_asistente" .venv/bin/pytest tests/unit/test_agent_registry.py tests/functional/test_api_assistant_capabilities.py -q` — **17 passed**. |
+| Related backend | Same isolated DB env, `.venv/bin/pytest tests/ -k "assistant or registry or capabilities" -q` — **40 passed**. |
+| Frontend | `npm test -- --run` — **69 files passed, 493 tests passed**; `npx tsc --noEmit` — **passed**. |
+| Runtime harness | Temporary registry copied all base personas/prompts; mutated assistant persona and plan references each failed with the exact field path; complete copied configuration passed. |
+| Rollback boundary | Revert the single remediation commit affecting `tests/unit/test_agent_registry.py` and this progress record; PR4 production behavior and PR1–3 remain unchanged. |
+
+### Remediation Graph Check
+
+Consulted `test_agent_registry.py` → `_load()` → `load_registry()` → `_runtime_path()` and the `agent/registry.yaml` runtime tree. Existing Agent Registry and Agent Registry & Skills communities were used; no graph refresh was run.
