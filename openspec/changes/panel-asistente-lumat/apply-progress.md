@@ -119,3 +119,35 @@ baseline) and queried:
 
 No graph refresh was run mid-session; the graph remains the PR 1 baseline as
 required by the project session policy.
+
+## Validator Remediation — PR 2
+
+- Conversations now use `app.services.conversations.list_conversations`; appointments
+  use `app.services.scheduling.list_for_range`. Registry handlers no longer query
+  those models directly.
+- Added bounded `memory.read` through `app.services.memory.list_for_entity`, with
+  scope/entity/topic validation and a maximum of 20 results.
+- `DuckDuckGoSearch` raises `SearchFailure` for network/malformed responses;
+  `execute_tool` converts it to explicit error evidence while valid no-hit results
+  remain completed with an empty result.
+- Approval rejection now appends error evidence and records
+  `internal_chat.execution_rejected` before raising. The persisted agent-chat
+  failure event includes that evidence.
+
+### Remediation TDD Evidence
+
+| Gap | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| Service-backed reads | Registry service-seam test failed because handlers used raw SQL | Conversation and appointment seam tests pass | Read query ownership remains in existing service modules |
+| Memory read | Import/registry test failed because no memory tool existed | Bounded `memory.read` test passes | Reused `list_for_entity`; no new memory abstraction |
+| Web failure evidence | `SearchFailure` import/test failed | Search failure returns explicit error evidence; valid empty remains distinct | Provider adapter keeps one replaceable interface |
+| Approval evidence | Approval test observed `PermissionError` without evidence | State, exception, audit, and persisted failure event carry error evidence | Existing consume-once approval validation unchanged |
+
+### Remediation Verification
+
+| Evidence | Result |
+|---|---|
+| Focused tests | `... .venv/bin/pytest tests/unit/test_assistant_tools.py tests/integration/test_assistant_chat.py tests/integration/test_agent_chat_realtime.py -q` — **21 passed**. |
+| Runtime harness | `... .venv/bin/pytest tests/ -k 'assistant or tools or automation or agent_chat' -q` — **33 passed**. |
+| Sanity import | Settings-backed import of `tool_schemas()` and `build_assistant_graph()` — **13 tools, CompiledStateGraph**. |
+| Rollback boundary | Revert service seam additions, registry/search/nodes/agent-chat remediation, tests, and this progress section; no infra, dashboard, or WhatsApp files involved. |

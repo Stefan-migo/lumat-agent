@@ -32,7 +32,22 @@ def approval_gate(state: AssistantState) -> AssistantState:
 def execute(state: AssistantState) -> AssistantState:
     plan_data = state["plan"]
     if plan_data["requires_approval"] and not validate_execution(plan_data, state.get("approval") or {}):
-        raise PermissionError("approval is missing, expired, tampered, or already consumed")
+        detail = "approval is missing, expired, tampered, or already consumed"
+        evidence = make_evidence(tool=plan_data.get("tool"), status="error", detail=detail)
+        state.setdefault("evidence", []).append(evidence)
+        session = state.get("session")
+        if session is not None:
+            record_audit(
+                session,
+                actor=state.get("actor") or "assistant",
+                action="internal_chat.execution_rejected",
+                entity="internal_chat_thread",
+                entity_id=str(state.get("thread_id")),
+                after={"run_id": state.get("run_id"), "tool": plan_data.get("tool"), "reason": detail},
+            )
+        error = PermissionError(detail)
+        error.evidence = [evidence]
+        raise error
     tool_name = plan_data.get("tool")
     if tool_name:
         try:
@@ -46,6 +61,15 @@ def execute(state: AssistantState) -> AssistantState:
             detail = str(exc)
             return {
                 "tool_result": {"tool": tool_name, "status": "error", "error": detail},
+                "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],
+                "error": detail,
+                "response": f"Tool execution failed: {detail}",
+                "status": "error",
+            }
+        if result.get("status") == "error":
+            detail = result.get("error", "tool failed")
+            return {
+                "tool_result": result,
                 "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],
                 "error": detail,
                 "response": f"Tool execution failed: {detail}",

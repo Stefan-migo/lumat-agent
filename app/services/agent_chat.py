@@ -105,6 +105,7 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
                 "run_id": run_id,
                 "sequence": 0,
                 "error": str(exc),
+                "evidence": getattr(exc, "evidence", []),
             }],
         }
         thread.active_run_id = run_id
