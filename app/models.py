@@ -70,6 +70,7 @@ class CustomerState(str, enum.Enum):
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
     OPERADOR = "operador"
+    TECNICO = "tecnico"
 
 
 class ConversationState(str, enum.Enum):

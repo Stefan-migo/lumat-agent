@@ -123,6 +123,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("016_h4_notification_center",),
         ("017_h4_internal_chat",),
         ("018_conversation_realtime",),
+        ("019_tecnico_role",),
     ]
 
 
@@ -293,7 +294,7 @@ def test_enums_materialized(migrated_db, admin_conn):
         "nuevo", "contactado", "pendiente", "agendado", "en_evaluacion",
         "finalizado", "cancelado", "postventa",
     ]
-    assert by_type["user_role"] == ["admin", "operador"]
+    assert by_type["user_role"] == ["admin", "operador", "tecnico"]
     assert by_type["conversation_state"] == ["bot", "human", "closed"]
     assert by_type["message_direction"] == ["inbound", "outbound"]
     assert by_type["message_status"] == [

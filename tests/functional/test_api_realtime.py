@@ -87,3 +87,15 @@ def test_panel_websocket_rejects_unauthorized_role(client):
         app.dependency_overrides.pop(get_current_user_json, None)
 
     assert denied.value.status_code == 403
+
+
+def test_tecnico_websocket_is_denied(client, make_user):
+    """Technicians cannot access the operational realtime surface."""
+    make_user("tech", "tech-pass", role="tecnico")
+    _login(client, "tech", "tech-pass")
+
+    with pytest.raises(WebSocketDenialResponse) as denied:
+        with client.websocket_connect("/panel/ws"):
+            pass
+
+    assert denied.value.status_code == 403
