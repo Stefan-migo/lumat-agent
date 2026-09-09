@@ -151,3 +151,40 @@ required by the project session policy.
 | Runtime harness | `... .venv/bin/pytest tests/ -k 'assistant or tools or automation or agent_chat' -q` — **33 passed**. |
 | Sanity import | Settings-backed import of `tool_schemas()` and `build_assistant_graph()` — **13 tools, CompiledStateGraph**. |
 | Rollback boundary | Revert service seam additions, registry/search/nodes/agent-chat remediation, tests, and this progress section; no infra, dashboard, or WhatsApp files involved. |
+
+## Verify Remediation — PR 2
+
+- Web search now validates the HTML document shape and every result candidate;
+  missing document structure or unsafe result URLs raise `SearchFailure` and
+  become error evidence through the registry. Valid no-hit HTML remains an
+  empty successful result.
+- Added an isolated-DB runtime test covering approval consumption, real
+  `automation.create_rule(... actor="assistant", executor_origin=True)`, rule
+  listing alongside a UI-created rule, audit actor/history, and worker event
+  evaluation.
+- H4 cleanup and test database fallbacks now derive the admin URL from
+  `DATABASE_URL` when `TEST_ADMIN_DB_URL` is absent. No cleanup path targets
+  the hardcoded default database.
+
+### Verify Remediation Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused tests | `... .venv/bin/pytest tests/integration/test_assistant_chat.py tests/unit/test_assistant_tools.py tests/integration/test_agent_chat_realtime.py tests/integration/test_h4_automations.py -q` — **27 passed**. |
+| Runtime harness | `... .venv/bin/pytest tests/ -k 'assistant or tools or automation or agent_chat' -q` — **35 passed**. |
+| Malformed search test | Unsafe DDG result HTML raises `SearchFailure`; registry failure evidence path remains covered. |
+| Runtime automation test | `tests/integration/test_assistant_tools.py::test_approved_assistant_rule_is_persisted_audited_and_worker_visible` — passed against isolated PostgreSQL. |
+| Database isolation | `tests/conftest.py`, `tests/integration/conftest.py`, and H4 cleanup derive `postgresql://` admin URL from configured `DATABASE_URL`; no hardcoded cleanup URL remains in the exercised paths. |
+
+## Verify Remediation Follow-up
+
+- H4 worker and notification cleanup fixtures were also switched to the same
+  derived `ADMIN_DB_URL`, preventing adjacent H4 suites from cleaning the
+  default database when the isolated admin URL is omitted.
+- Final requested verification: focused assistant/tools/realtime/H4 suite
+  **27 passed**; related assistant/tools/automation/agent-chat selection
+  **35 passed**; H4 worker/notification isolation suites **12 passed**.
+
+Graph checks consulted the assistant search/evidence path, automation approval
+and worker path, and the database migration/test cleanup path. No graph refresh
+was run mid-session.
