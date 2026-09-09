@@ -280,7 +280,10 @@ def test_today_projection_uses_local_bounds_and_operational_predicates(client, m
 
 
 def test_today_excludes_cancelled_and_replied_rows_and_caps_each_projection(client, make_user):
-    now = datetime.now(timezone.utc)
+    # Anchored to 12:00 UTC (08:00 in America/Santiago): the 21 appointments
+    # span up to +10.35h, so a wall-clock "now" late in the day would push the
+    # tail across the local midnight and make the cap assertion time-dependent.
+    now = datetime(2026, 9, 9, 12, 0, tzinfo=timezone.utc)
     make_user("oper", "oper-pass", role="operador")
     with SessionLocal() as session:
         for index in range(21):
