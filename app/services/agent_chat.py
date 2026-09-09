@@ -11,6 +11,7 @@ from app.chat.assistant.recovery import recover_events
 from app.models import InternalChatMessage, InternalChatThread, User
 from app.panel.api.serializers import to_internal_chat_message_dict, to_internal_chat_thread_dict
 from app.services.audit import record_audit
+from app.services.realtime import stage_event
 
 
 def thread_dict(thread: InternalChatThread) -> dict:
@@ -42,7 +43,16 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
     session.add(message)
     session.flush()
     try:
-        result = run_assistant(thread_id=thread.id, user_id=user.id, content=message.content, run_id=run_id)
+        def publish_token(token: str) -> None:
+            stage_event(session, type="token", conversation_id=thread.id, data={"token": token})
+
+        result = run_assistant(
+            thread_id=thread.id,
+            user_id=user.id,
+            content=message.content,
+            run_id=run_id,
+            on_token=publish_token,
+        )
         thread.active_run_id = run_id
         thread.current_plan = result.get("plan")
         thread.assistant_state = {
@@ -65,6 +75,12 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             )
             session.add(response_message)
             session.flush()
+            stage_event(
+                session,
+                type="message",
+                conversation_id=thread.id,
+                data=message_dict(response_message),
+            )
     except Exception as exc:
         message.status = "failed"
         message.error = "The agent could not process this message. Retry it."

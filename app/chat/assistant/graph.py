@@ -26,12 +26,13 @@ def build_assistant_graph():
     return builder.compile()
 
 
-def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str) -> AssistantState:
+def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, on_token=None) -> AssistantState:
     state: AssistantState = {
         "thread_id": thread_id,
         "user_id": user_id,
         "content": content,
         "run_id": run_id,
         "evidence": [],
+        "on_token": on_token,
     }
     return build_assistant_graph().invoke(state)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.chat.assistant.approval import issue_approval
 from app.chat.assistant.evidence import make_evidence
 from app.chat.assistant.state import AssistantState
+from app.services import llm
 
 
 def plan(state: AssistantState) -> AssistantState:
@@ -28,9 +29,28 @@ def approval_gate(state: AssistantState) -> AssistantState:
 
 def execute(state: AssistantState) -> AssistantState:
     content = state["content"].strip()
+    response = f"I received your request: {content}"
+    on_token = state.get("on_token")
+    if on_token is not None:
+        completion = llm.openai_client().chat.completions.create(
+            model=llm.CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": "You are Lumat's internal operations assistant."},
+                {"role": "user", "content": content},
+            ],
+            temperature=0,
+            stream=True,
+        )
+        chunks: list[str] = []
+        for chunk in completion:
+            token = chunk.choices[0].delta.content or ""
+            if token:
+                chunks.append(token)
+                on_token(token)
+        response = "".join(chunks) or response
     return {
         "tool_result": {"status": "completed", "tool": None},
-        "response": f"I received your request: {content}",
+        "response": response,
         "status": "completed",
     }
 

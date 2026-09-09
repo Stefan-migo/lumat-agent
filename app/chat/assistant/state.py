@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TypedDict
 
 
@@ -17,3 +18,4 @@ class AssistantState(TypedDict, total=False):
     status: str
     response: str | None
     error: str | None
+    on_token: Callable[[str], None] | None

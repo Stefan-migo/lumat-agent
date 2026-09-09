@@ -1,11 +1,25 @@
 """PR1 contract tests for the isolated assistant graph boundary."""
 
 import json
+from types import SimpleNamespace
+
+import pytest
 
 from app.db import SessionLocal
 from app.models import InternalChatThread, User
 from app.services.users import hash_password
-from tests.integration.conftest import ADMIN_DB_URL
+@pytest.fixture(autouse=True)
+def assistant_client(monkeypatch):
+    client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(
+                create=lambda **kwargs: [
+                    SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="assistant response"))])
+                ]
+            )
+        )
+    )
+    monkeypatch.setattr("app.services.llm.openai_client", lambda: client)
 
 
 def _user(username: str, role: str) -> None:
