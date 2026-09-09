@@ -114,6 +114,8 @@ export interface AssistantState { stage?: string; recoverable?: boolean; executi
 export interface InternalChatThread { id: number; user_id?: number; status: string; assistant_state?: AssistantState; current_plan?: AssistantPlan | null; active_run_id?: string | null; created_at?: string | null; updated_at?: string | null; }
 export interface InternalChatMessage { id: number; thread_id?: number; author: 'admin' | 'agent'; content: string; status: InternalChatStatus; error?: string | null; assistant_metadata?: { run_id?: string; approval?: AssistantApproval | null }; created_at?: string | null; completed_at?: string | null; }
 export interface InternalChatResponse { thread: InternalChatThread; messages: InternalChatMessage[]; }
+export interface AssistantCapabilityTool { name: string; description: string; read_only: boolean; write: boolean; }
+export interface AssistantCapabilities { tools: AssistantCapabilityTool[]; personas: string[]; prompts: string[]; kb_available: boolean; memory_available: boolean; }
 
 export type RealtimeEnvelopeType = 'token' | 'message' | 'conversation' | 'activity' | 'snapshot';
 export interface RealtimeEnvelope<T = unknown> { type: RealtimeEnvelopeType; conversation_id?: number | null; data: T; }

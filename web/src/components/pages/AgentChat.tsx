@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiError, approveChatPlan, createChatThread, getChatThread, listActiveConversations, listConversations, sendChatMessage, streamChatEvents } from "../../api";
-import type { AssistantApproval, AssistantEvidence, AssistantEvent, AssistantPlan, InternalChatMessage, InternalChatThread } from "../../types";
+import type { AssistantApproval, AssistantCapabilities, AssistantEvidence, AssistantEvent, AssistantPlan, InternalChatMessage, InternalChatThread } from "../../types";
 import { Avatar } from "../primitives/Avatar";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -35,7 +35,18 @@ function EvidenceList({ evidence }: { evidence: AssistantEvidence[] }) {
 
 export interface AgentChatProps { threadId?: number }
 
-export function AgentChat({ threadId }: AgentChatProps = {}) {
+export function AssistantCapabilitiesView({ capabilities }: { capabilities: AssistantCapabilities }) {
+  return <Card title="Capacidades del asistente">
+    <h3>Herramientas</h3>
+    <ul>{capabilities.tools.map((tool) => <li key={tool.name}><strong>{tool.name}</strong>: {tool.description} <Badge tone={tool.read_only ? "neutral" : "warning"}>{tool.read_only ? "Solo lectura" : "Puede escribir"}</Badge></li>)}</ul>
+    <h3>Configuración activa</h3>
+    <p>Personas: {capabilities.personas.join(", ")}</p>
+    <p>Prompts: {capabilities.prompts.join(", ")}</p>
+    <p>{capabilities.kb_available ? "KB disponible" : "KB no disponible"} · {capabilities.memory_available ? "Memoria disponible" : "Memoria no disponible"}</p>
+  </Card>;
+}
+
+export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabilities?: AssistantCapabilities } = {}) {
   // The panel's stateful navigation has no router params; preserve a deep-link
   // seam through `?thread_id=` while allowing AppShell to pass an explicit id.
   const requestedThreadId = threadId ?? (Number(new URLSearchParams(globalThis.location.search).get("thread_id")) || undefined);
@@ -155,6 +166,7 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
   const canRenderThread = !loading && thread !== null;
   const composerDisabled = loading || processing || thread === null;
   return <PageFrame title="Asistente Lumat" meta="Chat interno con el agente virtual." state={state}>
+     {capabilities ? <AssistantCapabilitiesView capabilities={capabilities} /> : null}
      <div className="ai-agent-grammar__thread-area" aria-label="Mensajes del chat interno" aria-live="polite">
        {connection !== "connected" && <p role="status">Conexión en tiempo real: {connection === "reconnecting" ? "reconectando" : "desconectada"}.</p>}
       {canRenderThread && messages.length === 0 && !error ? <StateMessage tone="info" role="status" title="Chat interno vacío" detail="Escribe un mensaje para iniciar la conversación." /> : null}

@@ -1,7 +1,4 @@
-# registry.yaml — declarative agent registry (data-only, AC-4).
-# D-A7: this file is validated by a test; there is NO runtime reader until
-# the H2 multi-agent router (Fase-2). No tools/KB/memory rule is enforced
-# from here today. See agent/README.md for D6 migration triggers.
+# registry.yaml — declarative agent registry and assistant runtime config.
 agent:
   name: orchestrator
   persona: personas/orchestrator.md
@@ -56,3 +53,27 @@ sub_agents:
     memoria_scope: "customer"
     model: deepseek-chat
     temperature: 0
+assistant:
+  name: assistant
+  persona: personas/assistant.md
+  prompts:
+    plan: prompts/assistant_plan.md
+    respond: prompts/assistant_respond.md
+    classify: prompts/assistant_classify.md
+  tools_whitelist:
+    - customers.search
+    - customers.list
+    - conversations.search
+    - conversations.list
+    - appointments.upcoming
+    - appointments.list
+    - cases.list
+    - kb.retrieve
+    - memory.kpis
+    - memory.read
+    - dashboard.summary
+    - web.search
+    - automation.create_rule
+  kb_scope: null
+  memoria_scope: panel
+  model: deepseek-chat

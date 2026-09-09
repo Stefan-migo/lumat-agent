@@ -156,6 +156,7 @@ class ToolDefinition:
     args_model: type[BaseModel]
     read_only: bool
     handler: Callable[[Any, BaseModel], Any]
+    description: str
 
     @property
     def write(self) -> bool:
@@ -166,19 +167,19 @@ class ToolDefinition:
 
 
 TOOL_REGISTRY: dict[str, ToolDefinition] = {
-    "customers.search": ToolDefinition("customers.search", SearchArgs, True, _search_customers),
-    "customers.list": ToolDefinition("customers.list", SearchArgs, True, _search_customers),
-    "conversations.search": ToolDefinition("conversations.search", QueryArgs, True, _search_conversations),
-    "conversations.list": ToolDefinition("conversations.list", QueryArgs, True, _search_conversations),
-    "appointments.upcoming": ToolDefinition("appointments.upcoming", AppointmentArgs, True, _upcoming_appointments),
-    "appointments.list": ToolDefinition("appointments.list", AppointmentArgs, True, _upcoming_appointments),
-    "cases.list": ToolDefinition("cases.list", CasesArgs, True, _open_cases),
-    "kb.retrieve": ToolDefinition("kb.retrieve", KbArgs, True, _retrieve_kb),
-    "memory.kpis": ToolDefinition("memory.kpis", KpiArgs, True, _kpis),
-    "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory),
-    "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis),
-    "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search),
-    "automation.create_rule": ToolDefinition("automation.create_rule", RuleArgs, False, _create_rule),
+    "customers.search": ToolDefinition("customers.search", SearchArgs, True, _search_customers, "Search customer records."),
+    "customers.list": ToolDefinition("customers.list", SearchArgs, True, _search_customers, "List customer records."),
+    "conversations.search": ToolDefinition("conversations.search", QueryArgs, True, _search_conversations, "Search panel conversations."),
+    "conversations.list": ToolDefinition("conversations.list", QueryArgs, True, _search_conversations, "List panel conversations."),
+    "appointments.upcoming": ToolDefinition("appointments.upcoming", AppointmentArgs, True, _upcoming_appointments, "List upcoming appointments."),
+    "appointments.list": ToolDefinition("appointments.list", AppointmentArgs, True, _upcoming_appointments, "List appointments."),
+    "cases.list": ToolDefinition("cases.list", CasesArgs, True, _open_cases, "List open cases."),
+    "kb.retrieve": ToolDefinition("kb.retrieve", KbArgs, True, _retrieve_kb, "Retrieve grounded knowledge-base results."),
+    "memory.kpis": ToolDefinition("memory.kpis", KpiArgs, True, _kpis, "Read operational KPI totals."),
+    "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory, "Read scoped customer memory."),
+    "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis, "Read the operational dashboard summary."),
+    "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter."),
+    "automation.create_rule": ToolDefinition("automation.create_rule", RuleArgs, False, _create_rule, "Create an automation after approval."),
 }
 
 

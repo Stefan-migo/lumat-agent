@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { listNotifications, markAllNotificationsRead } from '../../api';
-import type { NotificationsResponse, PanelNotification } from '../../types';
+import { getAssistantCapabilities, listNotifications, markAllNotificationsRead } from '../../api';
+import type { AssistantCapabilities, NotificationsResponse, PanelNotification } from '../../types';
 import type { User } from '../../types';
 import type { ConversationTab, NotificationState, PanelView } from './PanelShell';
 import { PanelShell } from './PanelShell';
@@ -40,6 +40,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const [creatingAutomationRule, setCreatingAutomationRule] = useState(false);
   const [notificationState, setNotificationState] = useState<NotificationState>({ status: 'loading' });
   const [notifications, setNotifications] = useState<PanelNotification[]>([]);
+  const [assistantCapabilities, setAssistantCapabilities] = useState<AssistantCapabilities | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -53,6 +54,11 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
     });
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (user.role !== 'admin') return;
+    void getAssistantCapabilities().then(setAssistantCapabilities).catch(() => setAssistantCapabilities(null));
+  }, [user.role]);
 
   const markAllRead = async () => {
     await markAllNotificationsRead();
@@ -115,7 +121,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
        : view === 'conversations' || view === 'cases' ? conversationTab === 'cases' ? <CasesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} /> : conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
      : view === 'notifications' ? <NotificationCenter />
      : view === 'push' ? <PushSettings />
-      : view === 'chat' ? <AgentChat />
+       : view === 'chat' ? <AgentChat capabilities={assistantCapabilities ?? undefined} />
      : view === 'kb' ? <KbList />
     : <Settings />;
 
