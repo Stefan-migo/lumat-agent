@@ -28,7 +28,7 @@ PROVIDER_BASE_URLS = {
 CHAT_MODEL = get_settings().chat_model
 
 
-def openai_client() -> OpenAI:
+def openai_client(provider: str | None = None) -> OpenAI:
     """Return a chat-completions client for the ACTIVE provider (env, SH-2).
 
     Raises a clear error when the active provider's key is missing (fail-fast:
@@ -36,16 +36,16 @@ def openai_client() -> OpenAI:
     call is actually made).
     """
     settings = get_settings()
-    provider = settings.chat_provider
+    provider = provider or settings.chat_provider
     if provider not in PROVIDER_BASE_URLS:
         raise RuntimeError(
-            f"unsupported CHAT_PROVIDER {provider!r} "
+            f"unsupported chat provider {provider!r} "
             "(expected 'deepseek' or 'openrouter')"
         )
     key = settings.deepseek_api_key if provider == "deepseek" else settings.openrouter_api_key
     if not key:
         raise RuntimeError(
-            f"{provider.upper()}_API_KEY is required when CHAT_PROVIDER={provider}"
+            f"{provider.upper()}_API_KEY is required when using the assistant provider"
         )
     return OpenAI(
         api_key=key,

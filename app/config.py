@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = None
     openrouter_api_key: str | None = None
     chat_model: str = "deepseek-chat"
+    assistant_chat_provider: str = "openrouter"
+    assistant_chat_model: str = "google/gemini-2.5-flash"
 
     # Local embeddings (fastembed, ONNX Runtime — no API key, no token
     # billing). Multilingual model, 384 dims (db/migrations/008_local_embeddings.sql).
