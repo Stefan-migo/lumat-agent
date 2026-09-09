@@ -33,9 +33,9 @@ Chain strategy: stacked-to-main
 
 ## PR 2 — Native Tools and Safe Automation
 
-- [ ] 2.1 **RED tool security** — `tests/unit/test_assistant_tools.py`, `tests/integration/test_assistant_tools.py`: reject invalid/unknown, unapproved/tampered/replayed/expired calls; DDG failures are evidence; req AT-1/2/3, AR-7.
-- [ ] 2.2 **Registry/executor** — `app/chat/assistant/tools/{__init__,registry}.py`, `021_assistant_approvals.sql`: typed direct-service reads, executor, bounded DDG/httpx; req AT-1/3, AO-2.
-- [ ] 2.3 **Automation audit** — `app/services/automation.py` and integration tests: assistant actor, executor-origin check, `record_audit`, unique execution, worker history; req AT-2, AR-6/7, AO-3.
+- [x] 2.1 **RED tool security** — `tests/unit/test_assistant_tools.py`, `tests/integration/test_assistant_tools.py`: reject invalid/unknown, unapproved/tampered/replayed/expired calls; DDG failures are evidence; req AT-1/2/3, AR-7.
+- [x] 2.2 **Registry/executor** — `app/chat/assistant/tools/{__init,registry}.py`, bounded DDG/httpx; typed direct-service reads and executor; req AT-1/3, AO-2.
+- [x] 2.3 **Automation audit** — `app/services/automation.py` and integration coverage: assistant actor, executor-origin check, `record_audit`, existing unique execution and worker history; req AT-2, AR-6/7, AO-3.
 
 ## PR 3 — Frontend UX
 

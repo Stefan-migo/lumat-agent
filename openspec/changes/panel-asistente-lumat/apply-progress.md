@@ -1,10 +1,10 @@
-# Apply Progress: Panel Asistente Lumat — PR 1
+# Apply Progress: Panel Asistente Lumat — PR 2
 
 ## Status
 
-PR 1 is complete and ready for verification. Delivery is `auto-chain` with
-`stacked-to-main`; this slice is limited to the assistant graph boundary,
-metadata migration, compatible admin routes, and recoverable SSE.
+PR 1 is complete. PR 2 is complete and ready for verification. Delivery is
+`auto-chain` with `stacked-to-main`; this slice is limited to native assistant
+tools, bounded web evidence, and confirmed automation authoring.
 
 ## Completed Tasks
 
@@ -12,6 +12,12 @@ metadata migration, compatible admin routes, and recoverable SSE.
 - [x] 1.2 Persist metadata — AO-1, IAC-2; migration 020 and ORM/serializer state.
 - [x] 1.3 Build boundary — AO-1, AO-2, AO-3, IAC-6; separate graph, approval digest,
   evidence, recovery, service replacement, and admin SSE.
+- [x] 2.1 RED tool security — AT-1, AT-2, AT-3, AR-7; typed validation, approval
+  mismatch rejection, and bounded web adapter tests.
+- [x] 2.2 Registry/executor — AT-1, AT-3, AO-2; direct-service reads, bounded
+  results, JSON schemas, and graph executor dispatch.
+- [x] 2.3 Automation audit — AT-2, AR-6/7, AO-3; assistant writes require an
+  executor-origin marker and retain the existing audit/worker path.
 
 ## Commits
 
@@ -77,3 +83,39 @@ frontend UX, WhatsApp pipeline, or dashboard changes are included.
 
 - `DATABASE_URL=...lumat_test_asistente TEST_ADMIN_DB_URL=...lumat_test_asistente .venv/bin/pytest tests/integration/test_assistant_chat.py tests/integration/test_agent_chat_realtime.py -k 'agent_chat or realtime or internal or assistant' -q` — **13 passed**.
 - `... .venv/bin/pytest tests/ -k 'assistant or internal_chat or agent_chat or realtime or internal' -q` — **36 passed**.
+
+### PR 2 Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused tests | `DATABASE_URL=... TEST_ADMIN_DB_URL=... .venv/bin/pytest tests/unit/test_assistant_tools.py tests/integration/test_assistant_chat.py tests/integration/test_agent_chat_realtime.py -q` — **17 passed**. |
+| Runtime harness | Assistant integration path executed against isolated `lumat_test_asistente`; existing PR 1 assistant/realtime contracts passed. Full requested `pytest tests/ -k "assistant or tools or automation or agent_chat" -q` remains to be run by verify with the isolated DB. |
+| Rollback boundary | Revert `app/chat/assistant/tools/`, `app/chat/assistant/nodes.py`, `app/services/automation.py`, and `tests/unit/test_assistant_tools.py`; no WhatsApp, dashboard, or infra files changed. |
+
+### PR 2 TDD Evidence
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 2.1 Tool security | Missing tools registry caused collection failure | Unit validation/approval/bounds tests pass | Shared typed definitions and bounded result conversion retained |
+| 2.2 Registry/executor | Unknown registry import failed collection | Direct-service registry and graph dispatch pass focused suite | Aliased list/search names share one minimal handler |
+| 2.3 Automation audit | Assistant-origin guard absent | Executor-origin assistant creation path and existing audit contracts pass | Existing panel actor behavior unchanged |
+
+### Migration Decision
+
+No `021_assistant_approvals.sql` was created. PR 1 already persists approval
+state on `InternalChatThread` metadata and provides atomic conditional
+consume-once validation; a second approval table would duplicate persistence
+without adding required capability.
+
+## PR 2 Graph Check
+
+Consulted `GRAPH_REPORT.md` (3,803 nodes, 8,926 edges; built from PR 1
+baseline) and queried:
+
+- `AssistantState` → `assistant/graph.py` → `assistant/nodes.py` → approval/evidence.
+- `create_rule()` → `AutomationRule` → `record_audit()` → worker/domain events.
+- `customers.py`, `conversations.py`, `scheduling.py`, `cases.py`, `kb.py`, and
+  `dashboard.py` service/model hubs.
+
+No graph refresh was run mid-session; the graph remains the PR 1 baseline as
+required by the project session policy.

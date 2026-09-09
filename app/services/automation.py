@@ -69,7 +69,15 @@ def rule_snapshot(rule: AutomationRule) -> dict:
     }
 
 
-def create_rule(session: Session, data: dict, *, actor: str) -> AutomationRule:
+def create_rule(
+    session: Session,
+    data: dict,
+    *,
+    actor: str,
+    executor_origin: bool = False,
+) -> AutomationRule:
+    if actor == "assistant" and not executor_origin:
+        raise PermissionError("assistant rules must originate from the approved tool executor")
     values = validate_rule_input(data)
     rule = AutomationRule(**values, enabled=True, created_by=actor)
     session.add(rule)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.evidence import make_evidence
 from app.chat.assistant.state import AssistantState
+from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool
 from app.services.audit import record_audit
 from app.services import llm
 
@@ -32,6 +33,30 @@ def execute(state: AssistantState) -> AssistantState:
     plan_data = state["plan"]
     if plan_data["requires_approval"] and not validate_execution(plan_data, state.get("approval") or {}):
         raise PermissionError("approval is missing, expired, tampered, or already consumed")
+    tool_name = plan_data.get("tool")
+    if tool_name:
+        try:
+            result = execute_tool(
+                state.get("session"),
+                tool_name,
+                plan_data.get("arguments", {}),
+                approval=state.get("approval"),
+            )
+        except (ToolExecutionError, ToolValidationError) as exc:
+            detail = str(exc)
+            return {
+                "tool_result": {"tool": tool_name, "status": "error", "error": detail},
+                "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],
+                "error": detail,
+                "response": f"Tool execution failed: {detail}",
+                "status": "error",
+            }
+        return {
+            "tool_result": result,
+            "evidence": [make_evidence(tool=tool_name, status="completed", detail="Tool execution completed")],
+            "response": f"Tool {tool_name} completed.",
+            "status": "completed",
+        }
     content = state["content"].strip()
     response = f"I received your request: {content}"
     on_token = state.get("on_token")
@@ -70,6 +95,8 @@ def execute(state: AssistantState) -> AssistantState:
 
 
 def collect_evidence(state: AssistantState) -> AssistantState:
+    if state.get("evidence"):
+        return {"evidence": state["evidence"], "status": state.get("status", "completed")}
     return {
         "evidence": [make_evidence(tool=None, status="completed", detail="Assistant response generated")],
         "status": state.get("status", "completed"),
