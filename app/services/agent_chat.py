@@ -11,7 +11,7 @@ from app.chat.assistant.graph import run_assistant
 from app.chat.assistant.approval import validate_approval
 from app.chat.assistant.nodes import execute
 from app.chat.assistant.recovery import claim_execution, recover_events
-from app.models import InternalChatMessage, InternalChatThread, User
+from app.models import AssistantAttachment, InternalChatMessage, InternalChatThread, User
 from app.services.audit import record_audit
 from app.services.realtime import stage_event
 
@@ -37,7 +37,7 @@ def create_thread(session: Session, user: User) -> InternalChatThread:
     return thread
 
 
-def submit_message(session: Session, thread: InternalChatThread, user: User, content: str) -> InternalChatMessage:
+def submit_message(session: Session, thread: InternalChatThread, user: User, content: str, attachment_ids: list[int] | None = None) -> InternalChatMessage:
     run_id = uuid4().hex
     message = InternalChatMessage(
         thread_id=thread.id,
@@ -52,6 +52,7 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
         def publish_token(token: str) -> None:
             stage_event(session, type="token", conversation_id=thread.id, data={"token": token})
 
+        attachments = list(session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread.id, AssistantAttachment.id.in_(attachment_ids or []), AssistantAttachment.deleted_at.is_(None)))) if attachment_ids else []
         result = run_assistant(
             thread_id=thread.id,
             user_id=user.id,
@@ -60,6 +61,7 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             on_token=publish_token,
             session=session,
             actor=user.username,
+            attachments=attachments,
         )
         thread.active_run_id = run_id
         thread.current_plan = result.get("plan")
@@ -70,7 +72,7 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             "execution_status": "pending" if result.get("status") == "approval_pending" else "completed",
             "events": _events_for(result, thread.id, run_id),
         }
-        message.assistant_metadata = {"run_id": run_id, "approval": result.get("approval")}
+        message.assistant_metadata = {"run_id": run_id, "approval": result.get("approval"), "attachment_ids": [row.id for row in attachments]}
         if result.get("status") == "approval_pending":
             message.status = "approval_pending"
         else:

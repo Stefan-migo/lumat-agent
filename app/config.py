@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = None
     openrouter_api_key: str | None = None
     chat_model: str = "deepseek-chat"
+    assistant_chat_provider: str = "openrouter"
+    assistant_chat_model: str = "google/gemini-2.5-flash"
+    assistant_attachment_max_bytes: int = 5 * 1024 * 1024
+    assistant_attachment_max_count: int = 10
+    assistant_attachment_max_context_chars: int = 20_000
+    assistant_attachment_max_image_bytes: int = 5 * 1024 * 1024
+    assistant_attachment_expiry_days: int = 30
+    assistant_attachment_allowed_types: list[str] = ["pdf", "csv", "txt", "image"]
 
     # Local embeddings (fastembed, ONNX Runtime — no API key, no token
     # billing). Multilingual model, 384 dims (db/migrations/008_local_embeddings.sql).

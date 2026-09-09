@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { ApiError, approveChatPlan, createChatThread, getChatThread, listActiveConversations, listConversations, sendChatMessage, streamChatEvents } from "../../api";
-import type { AssistantApproval, AssistantCapabilities, AssistantEvidence, AssistantEvent, AssistantPlan, InternalChatMessage, InternalChatThread } from "../../types";
+import { useEffect, useState, type ChangeEvent } from "react";
+import { ApiError, approveChatPlan, createChatThread, getChatThread, listActiveConversations, listConversations, sendChatMessage, streamChatEvents, uploadAssistantAttachment } from "../../api";
+import type { AssistantApproval, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantEvent, AssistantPlan, InternalChatMessage, InternalChatResponse, InternalChatThread } from "../../types";
 import { Avatar } from "../primitives/Avatar";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -63,6 +63,8 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
   const [evidence, setEvidence] = useState<AssistantEvidence[]>([]);
   const [runId, setRunId] = useState<string | null>(null);
   const [lifecycle, setLifecycle] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<AssistantAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   const handleEvent = (event: AssistantEvent) => {
     if (event.type === "plan") setPlan(event.plan ?? null);
@@ -80,7 +82,7 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
     finally { setProcessing(false); }
   };
 
-  const loadThread = (result: { thread: InternalChatThread; messages: InternalChatMessage[] }) => {
+  const loadThread = (result: InternalChatResponse) => {
       const state = result.thread.assistant_state;
       setThread(result.thread);
       setMessages(result.messages);
@@ -88,11 +90,22 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
       setApproval(state?.approval ?? null);
       setEvidence((state?.events ?? []).flatMap((event) => event.evidence ?? []));
       setLifecycle(state?.stage ?? null);
-      setRunId(result.thread.active_run_id ?? null);
+       setRunId(result.thread.active_run_id ?? null);
+       setAttachments(result.attachments ?? []);
       if (result.thread.active_run_id && state?.recoverable && state.stage !== "approval_pending" && state.stage !== "completed") {
         setProcessing(true);
         void openStream(result.thread.id, result.thread.active_run_id);
       }
+  };
+
+  const attach = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !thread) return;
+    setUploading(true); setError(null);
+    try { const result = await uploadAssistantAttachment(thread.id, file); setAttachments((current) => [...current, result.attachment]); }
+    catch (reason: unknown) { setError(reason instanceof ApiError ? reason.detail : "No pudimos subir el archivo"); }
+    finally { setUploading(false); }
   };
 
   useEffect(() => {
@@ -131,7 +144,7 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
     setError(null);
     setPlan(null); setApproval(null); setEvidence([]); setStream(""); setLifecycle("planning");
     try {
-      const result = await sendChatMessage(thread.id, submitted);
+       const result = await sendChatMessage(thread.id, submitted, attachments.map((item) => item.id));
       setMessages((current) => [...current, result.message]);
       const run = result.message.assistant_metadata?.run_id;
       if (run) { setProcessing(true); void openStream(thread.id, run); }
@@ -188,8 +201,11 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
         </article>;
       }) : null}
     </div>
-    <div className="ai-agent-grammar__composer" aria-label="Enviar mensaje al chat interno">
-      <Textarea label="Mensaje" value={content} onChange={(event) => setContent(event.target.value)} disabled={composerDisabled} placeholder="Escribe tu mensaje al asistente..." />
+     <div className="ai-agent-grammar__composer" aria-label="Enviar mensaje al chat interno">
+       <Textarea label="Mensaje" value={content} onChange={(event) => setContent(event.target.value)} disabled={composerDisabled} placeholder="Escribe tu mensaje al asistente..." />
+       <label>Adjuntar archivo<input aria-label="Adjuntar archivo" type="file" accept="image/*,.pdf,.csv,.txt" onChange={(event) => void attach(event)} disabled={composerDisabled || uploading} /></label>
+       {uploading ? <p role="status">Subiendo archivo...</p> : null}
+       {attachments.length > 0 ? <ul aria-label="Archivos adjuntos">{attachments.map((item) => <li key={item.id}>{item.filename}</li>)}</ul> : null}
       <div className="ai-agent-grammar__composer-actions">
         <Button onClick={() => void send()} disabled={composerDisabled || !content.trim()}>Enviar</Button>
       </div>

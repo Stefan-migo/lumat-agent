@@ -49,9 +49,9 @@ Chain strategy: stacked-to-main
 
 ## PR 5 — Attachments
 
-- [ ] 5.1 **RED upload/context** — `tests/integration/test_assistant_attachments.py`: MIME/size/count/traversal, cross-thread, cleanup, extraction, vision-limit rejection; req AA-1/2/3.
-- [ ] 5.2 **Isolated uploads** — `022_assistant_attachments.sql`, `app/panel/api/routes/chat.py`, assistant storage/cleanup: private thread-scoped files; req AA-1/3.
-- [ ] 5.3 **Multimodal context** — `app/services/llm.py` and assistant context: `kb.extract_text()`, validate `google/gemini-2.5-flash`, limits, OpenRouter image parts; req AA-2.
+- [x] 5.1 **RED upload/context** — `tests/integration/test_assistant_attachments.py`: MIME/size/count/traversal, cross-thread, cleanup, extraction, vision-limit rejection; req AA-1/2/3.
+- [x] 5.2 **Isolated uploads** — `022_assistant_attachments.sql`, `app/panel/api/routes/chat.py`, assistant storage/cleanup: private thread-scoped files; req AA-1/3.
+- [x] 5.3 **Multimodal context** — `app/services/llm.py` and assistant context: `kb.extract_text()`, validate `google/gemini-2.5-flash`, limits, OpenRouter image parts; req AA-2.
 
 ## Graph Check
 

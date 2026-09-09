@@ -30,6 +30,7 @@ from app.models import (
     PanelNotification,
     InternalChatMessage,
     InternalChatThread,
+    AssistantAttachment,
     AutomationRule,
 )
 
@@ -337,6 +338,12 @@ def to_internal_chat_message_dict(message: InternalChatMessage) -> dict:
         "assistant_metadata": message.assistant_metadata or {},
         "created_at": _iso(message.created_at), "completed_at": _iso(message.completed_at),
     }
+
+
+def to_assistant_attachment_dict(attachment: AssistantAttachment) -> dict:
+    return {"id": attachment.id, "thread_id": attachment.thread_id, "filename": attachment.filename,
+            "kind": attachment.kind, "content_type": attachment.content_type, "size": attachment.size,
+            "created_at": _iso(attachment.created_at)}
 
 
 def to_doc_dict(doc: KbDocument) -> dict:

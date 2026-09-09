@@ -113,7 +113,8 @@ export interface AssistantEvent { type: AssistantEventType; thread_id: number; r
 export interface AssistantState { stage?: string; recoverable?: boolean; execution_status?: string; approval?: AssistantApproval | null; events?: AssistantEvent[]; }
 export interface InternalChatThread { id: number; user_id?: number; status: string; assistant_state?: AssistantState; current_plan?: AssistantPlan | null; active_run_id?: string | null; created_at?: string | null; updated_at?: string | null; }
 export interface InternalChatMessage { id: number; thread_id?: number; author: 'admin' | 'agent'; content: string; status: InternalChatStatus; error?: string | null; assistant_metadata?: { run_id?: string; approval?: AssistantApproval | null }; created_at?: string | null; completed_at?: string | null; }
-export interface InternalChatResponse { thread: InternalChatThread; messages: InternalChatMessage[]; }
+export interface InternalChatResponse { thread: InternalChatThread; messages: InternalChatMessage[]; attachments?: AssistantAttachment[]; }
+export interface AssistantAttachment { id: number; thread_id: number; filename: string; kind: string; content_type: string; size: number; created_at?: string | null; }
 export interface AssistantCapabilityTool { name: string; description: string; read_only: boolean; write: boolean; }
 export interface AssistantCapabilities { tools: AssistantCapabilityTool[]; personas: string[]; prompts: string[]; kb_available: boolean; memory_available: boolean; }
 
