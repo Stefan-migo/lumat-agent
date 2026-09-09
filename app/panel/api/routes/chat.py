@@ -1,6 +1,7 @@
 """Owner/admin internal agent chat JSON API (IAC-1/2/3)."""
 
 import json
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -8,12 +9,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.models import AssistantAttachment, User
+from app.config import get_settings
 from app.agent_registry import get_registry
 from app.chat.assistant.tools.registry import get_tool
 from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
 from app.services.agent_chat import approve_plan, create_thread, get_thread, message_dict, resume_thread, stream_events, submit_message, thread_dict
-from app.chat.assistant.attachments import MAX_ATTACHMENTS_PER_THREAD, MAX_FILE_SIZE, store_attachment
+from app.chat.assistant.attachments import cleanup_expired, store_attachment
 from app.panel.api.serializers import to_assistant_attachment_dict
 from app.services.audit import record_audit
 from sqlalchemy import select, func
@@ -23,7 +25,7 @@ router = APIRouter(tags=["panel-api-chat"])
 
 class ChatMessageBody(BaseModel):
     content: str = Field(min_length=1)
-    attachment_ids: list[int] = Field(default_factory=list, max_length=MAX_ATTACHMENTS_PER_THREAD)
+    attachment_ids: list[int] = Field(default_factory=list)
 
 
 class ApprovalBody(BaseModel):
@@ -77,6 +79,8 @@ def send_message(thread_id: int, body: ChatMessageBody, session: Session = Depen
     result = get_thread(session, thread_id, current.id)
     if result is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
+    if len(body.attachment_ids) > get_settings().assistant_attachment_max_count:
+        raise HTTPException(status_code=400, detail="attachment count limit reached")
     owned = list(session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread_id, AssistantAttachment.id.in_(body.attachment_ids), AssistantAttachment.deleted_at.is_(None)))) if body.attachment_ids else []
     if len(owned) != len(set(body.attachment_ids)):
         raise HTTPException(status_code=404, detail="attachment not found")
@@ -129,10 +133,11 @@ def upload_attachment(
     result = get_thread(session, thread_id, current.id)
     if result is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
+    cleanup_expired(session, datetime.now(timezone.utc) - timedelta(days=get_settings().assistant_attachment_expiry_days), {thread_id})
     count = session.scalar(select(func.count(AssistantAttachment.id)).where(AssistantAttachment.thread_id == thread_id, AssistantAttachment.deleted_at.is_(None))) or 0
-    if count >= MAX_ATTACHMENTS_PER_THREAD:
+    if count >= get_settings().assistant_attachment_max_count:
         raise HTTPException(status_code=400, detail="attachment count limit reached")
-    content = file.file.read(MAX_FILE_SIZE + 1)
+    content = file.file.read(get_settings().assistant_attachment_max_bytes + 1)
     try:
         kind, path, digest = store_attachment(thread_id, file.filename or "attachment", file.content_type, content)
     except ValueError as exc:

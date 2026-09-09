@@ -86,7 +86,10 @@ def execute(state: AssistantState) -> AssistantState:
     documents = prepare_attachment_context(attachments)
     content = state["content"].strip()
     if documents:
-        content += "\n\n<attachments>\n" + "\n".join(d["text"] for d in documents) + "\n</attachments>"
+        content += "\n\n<attachments>\n" + "\n".join(
+            f'[attachment filename="{d["filename"]}" id="{d["attachment_id"]}" type="{d["kind"]}"]\n{d["text"]}\n[/attachment]'
+            for d in documents
+        ) + "\n</attachments>"
     session = state.get("session")
     if attachments and session is not None:
         record_audit(session, actor=state.get("actor") or "assistant", action="internal_chat.attachments_used",
