@@ -314,6 +314,7 @@ def to_internal_chat_message_dict(message: InternalChatMessage) -> dict:
     return {
         "id": message.id, "thread_id": message.thread_id, "author": message.author,
         "content": message.content, "status": message.status, "error": message.error,
+        "assistant_metadata": message.assistant_metadata or {},
         "created_at": _iso(message.created_at), "completed_at": _iso(message.completed_at),
     }
 
