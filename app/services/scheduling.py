@@ -139,7 +139,6 @@ def list_for_customer(session: Session, customer_id: int) -> list[Appointment]:
 
 
 def list_for_technician(session: Session, technician_id: int) -> list[tuple[Appointment, Customer, Case]]:
-    """Return every appointment owned by one technician, chronologically."""
     statement = (
         select(Appointment, Customer, Case)
         .join(Customer, Customer.id == Appointment.customer_id)

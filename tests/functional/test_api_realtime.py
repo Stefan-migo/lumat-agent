@@ -90,7 +90,6 @@ def test_panel_websocket_rejects_unauthorized_role(client):
 
 
 def test_tecnico_websocket_is_denied(client, make_user):
-    """Technicians cannot access the operational realtime surface."""
     make_user("tech", "tech-pass", role="tecnico")
     _login(client, "tech", "tech-pass")
 

@@ -94,7 +94,6 @@ def test_me_with_admin_session_returns_admin_role(client, make_user):
 
 
 def test_me_with_tecnico_session_returns_tecnico_role(client, make_user):
-    """Valid tecnico session is accepted by the shared auth gate."""
     make_user("tech", "tech-pass", role="tecnico")
     login = client.post(
         "/panel/api/login",
@@ -166,7 +165,6 @@ def test_json_login_returns_operador_role(client, make_user):
 
 
 def test_tecnico_is_denied_admin_and_operational_json_surfaces(client, make_user):
-    """Technicians must not reach admin or operational panel data routes."""
     make_user("tech", "tech-pass", role="tecnico")
     client.post(
         "/panel/api/login",

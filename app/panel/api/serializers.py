@@ -186,7 +186,6 @@ def to_appointment_dict(appointment: Appointment) -> dict:
 def to_technician_appointment_dict(
     appointment: Appointment, *, customer: Customer, case: Case
 ) -> dict:
-    """Serialize only the technician's privacy-bounded agenda projection."""
     return {
         "id": appointment.id,
         "service": appointment.service,

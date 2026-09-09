@@ -12,11 +12,11 @@ Strict TDD: every GREEN follows RED. PRs stack as `feat/panel-dashboard-operativ
 
 ## Slice 2 — Technician (PR 2: `feat/panel-dashboard-operativo-slice2`, stacked on PR1)
 
-- [ ] **2.1 RED — role/auth.** Slice 2/PR2. Extend `tests/integration/test_migrations.py`, `tests/functional/test_api_auth.py` and denial tests for enum, login/me, restricted 403. Test: focused pytest. Depends: PR1.
-- [ ] **2.2 RED — agenda/privacy.** Slice 2/PR2. Add `tests/functional/test_api_technician.py` for owned past/today/future ordering, forgery, exact keys and forbidden values. Test: focused pytest. Depends: 2.1.
-- [ ] **2.3 GREEN — backend.** Slice 2/PR2. Create `db/migrations/019_tecnico_role.sql`; modify `app/models.py`, `app/panel/api/deps.py`, `app/services/scheduling.py`, `app/panel/api/{serializers.py,routes/technician.py,__init__.py}` with `require_tecnico`, ownership SQL and allow-list. Verify: `.venv/bin/python -m pytest tests/`. Depends: 2.1–2.2.
-- [ ] **2.4 RED — SPA.** Slice 2/PR2. Extend `web/src/{app.test.tsx,components/domain/AppShell.test.tsx}` for tecnico shell, agenda, logout, no nav/forbidden DOM. Test: focused Vitest. Depends: 2.3.
-- [ ] **2.5 GREEN — SPA.** Slice 2/PR2. Create `TechnicianShell.tsx`, `TechnicianAgenda.tsx`; modify `web/src/{types.ts,api.ts,app.tsx}`. Verify: Vitest + `npx tsc -b`. Depends: 2.4.
+- [x] **2.1 RED — role/auth.** Slice 2/PR2. Extend `tests/integration/test_migrations.py`, `tests/functional/test_api_auth.py` and denial tests for enum, login/me, restricted 403. Test: focused pytest. Depends: PR1.
+- [x] **2.2 RED — agenda/privacy.** Slice 2/PR2. Add `tests/functional/test_api_technician.py` for owned past/today/future ordering, forgery, exact keys and forbidden values. Test: focused pytest. Depends: 2.1.
+- [x] **2.3 GREEN — backend.** Slice 2/PR2. Create `db/migrations/019_tecnico_role.sql`; modify `app/models.py`, `app/panel/api/deps.py`, `app/services/scheduling.py`, `app/panel/api/{serializers.py,routes/technician.py,__init__.py}` with `require_tecnico`, ownership SQL and allow-list. Verify: `.venv/bin/python -m pytest tests/`. Depends: 2.1–2.2.
+- [x] **2.4 RED — SPA.** Slice 2/PR2. Extend `web/src/{app.test.tsx,components/domain/AppShell.test.tsx}` for tecnico shell, agenda, logout, no nav/forbidden DOM. Test: focused Vitest. Depends: 2.3.
+- [x] **2.5 GREEN — SPA.** Slice 2/PR2. Create `TechnicianShell.tsx`, `TechnicianAgenda.tsx`; modify `web/src/{types.ts,api.ts,app.tsx}`. Verify: Vitest + `npx tsc -b`. Depends: 2.4.
 - **Budget/DoD:** ~350/Medium; pytest + web suite + typecheck. Rollback: technician files; never edit `001_init.sql`.
 
 ## Slice 3 — Permission fixes (PR 3: `feat/panel-dashboard-operativo-slice3`, stacked on PR2)
