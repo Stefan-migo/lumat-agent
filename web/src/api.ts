@@ -67,7 +67,7 @@ export const disableKbDocument = (id: number) => postJson<KbMutationResponse>(`/
 export const restoreKbDocument = (id: number, version: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/restore`, { version });
 export const refreshKbDocuments = () => apiFetch<DocsResponse>('/panel/api/kb');
 
-import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse } from './types';
+import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -90,6 +90,26 @@ export const markAllNotificationsRead = () => postJson<{ ok: true; read: number 
 export const createChatThread = () => postJson<InternalChatResponse>('/panel/api/chat/threads', {});
 export const sendChatMessage = (id: number, content: string) => postJson<{ message: InternalChatMessage }> (`/panel/api/chat/threads/${id}/messages`, { content });
 export const getChatThread = (id: number) => apiFetch<InternalChatResponse>(`/panel/api/chat/threads/${id}`);
+export const approveChatPlan = (id: number, run_id: string, token: string, reject = false) => postJson<{ status: string; message: InternalChatMessage }>(`/panel/api/chat/threads/${id}/approval`, { run_id, token, reject });
+export async function streamChatEvents(id: number, runId: string, onEvent: (event: AssistantEvent) => void): Promise<void> {
+  const response = await fetch(`/panel/api/chat/threads/${id}/stream?run_id=${encodeURIComponent(runId)}`, { credentials: 'include' });
+  if (!response.ok || !response.body) throw new ApiError(response.status, 'No pudimos conectar con el stream del asistente');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const consume = (chunk: string) => {
+    buffer += chunk;
+    const frames = buffer.split('\n\n');
+    buffer = frames.pop() ?? '';
+    frames.forEach((frame) => frame.split('\n').filter((line) => line.startsWith('data: ')).forEach((line) => onEvent(JSON.parse(line.slice(6)) as AssistantEvent)));
+  };
+  while (true) {
+    const next = await reader.read();
+    if (next.done) break;
+    consume(decoder.decode(next.value, { stream: true }));
+  }
+  consume(decoder.decode());
+}
 export function listAppointments(from: string, to: string, timezone: string): Promise<AgendaResponse> {
   const params = new URLSearchParams({ from, to, timezone });
   return apiFetch<AgendaResponse>(`/panel/api/appointments?${params.toString()}`);

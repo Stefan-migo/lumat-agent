@@ -4,6 +4,7 @@ import { Textarea } from "../../components/primitives/Textarea";
 import { Button } from "../../components/primitives/Button";
 import { Avatar } from "../../components/primitives/Avatar";
 import { agentChatMessages, agentStatus, type AgentChatRole } from "./_shared/mockData/chat";
+import { PlanCard } from "../../components/pages/AgentChat";
 
 /** Friendly label + avatar initials per chat role (R-PRD-PG-12/D2). Distinct
  *  names so the per-message Avatar initials differ between admin and agent.
@@ -128,6 +129,16 @@ export function ChatWithAgentView({ status }: { status: "idle" | "processing" })
   );
 }
 
+const proposedPlan = { tool: "automation.create_rule", arguments: { name: "Avisar al administrador" }, status: "pending", requires_approval: true };
+
+export function AssistantLifecycleView({ state }: { state: "approval" | "evidence" | "streaming" }) {
+  return <PageFrame title="Asistente Lumat" meta="Estados del ciclo de ejecución del asistente.">
+    {state === "approval" ? <PlanCard plan={proposedPlan} approval={{ status: "pending", token: "story-token" }} onApprove={() => {}} onReject={() => {}} /> : null}
+    {state === "evidence" ? <><PlanCard plan={{ ...proposedPlan, status: "completed" }} /><section aria-label="Evidencia de herramientas"><strong>automation.create_rule</strong><p>Tool execution completed</p></section></> : null}
+    {state === "streaming" ? <><AgentStatusBar status="processing" /><p role="status">La respuesta del asistente se está transmitiendo…</p></> : null}
+  </PageFrame>;
+}
+
 const meta = {
   title: "pages/ChatWithAgent",
   parameters: {
@@ -155,3 +166,7 @@ export const Default: Story = {
 export const AgentThinking: Story = {
   render: () => <ChatWithAgentView status="processing" />,
 };
+
+export const ApprovalPending: Story = { render: () => <AssistantLifecycleView state="approval" /> };
+export const Evidence: Story = { render: () => <AssistantLifecycleView state="evidence" /> };
+export const Streaming: Story = { render: () => <AssistantLifecycleView state="streaming" /> };
