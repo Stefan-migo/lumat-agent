@@ -6,6 +6,36 @@ import type { AssistantApproval } from "../../types";
 describe("AgentChat", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("renders the read-only assistant capability view from the API", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const path = String(input);
+      if (path === "/panel/api/assistant/capabilities") return Promise.resolve(new Response(JSON.stringify({
+        tools: [
+          { name: "kb.retrieve", description: "Search the knowledge base", read_only: true, write: false },
+          { name: "automation.create_rule", description: "Create an automation", read_only: false, write: true },
+        ],
+        personas: ["personas/assistant.md"],
+        prompts: ["prompts/assistant_plan.md"],
+        kb_available: true,
+        memory_available: true,
+      }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 }));
+    });
+
+    render(<AgentChat capabilities={{
+      tools: [
+        { name: "kb.retrieve", description: "Search the knowledge base", read_only: true, write: false },
+        { name: "automation.create_rule", description: "Create an automation", read_only: false, write: true },
+      ], personas: ["personas/assistant.md"], prompts: ["prompts/assistant_plan.md"], kb_available: true, memory_available: true,
+    }} />);
+
+    expect(await screen.findByText("Capacidades del asistente")).toBeInTheDocument();
+    expect(screen.getByText("kb.retrieve")).toBeInTheDocument();
+    expect(screen.getByText("Solo lectura")).toBeInTheDocument();
+    expect(screen.getByText("automation.create_rule")).toBeInTheDocument();
+    expect(screen.getByText(/Memoria disponible/)).toBeInTheDocument();
+  });
+
   const sseResponse = (events: unknown[]) => {
     const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("");
     return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
