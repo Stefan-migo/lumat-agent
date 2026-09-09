@@ -117,26 +117,23 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
 
 
 def _events_for(result: dict, thread_id: int, run_id: str) -> list[dict]:
-    sequence = 0
-
-    def event(kind: str, **data) -> dict:
-        nonlocal sequence
-        payload = {"type": kind, "thread_id": thread_id, "run_id": run_id, "sequence": sequence, **data}
-        sequence += 1
-        return payload
-
-    events = [event("plan", plan=result.get("plan", {}))]
-    events.append(event("approval", approval=result.get("approval"), status=result.get("status")))
+    events = [
+        {"type": "plan", "thread_id": thread_id, "run_id": run_id, "sequence": 0, "plan": result.get("plan", {})},
+        {"type": "approval", "thread_id": thread_id, "run_id": run_id, "sequence": 1, "approval": result.get("approval"), "status": result.get("status")},
+    ]
     if result.get("status") != "approval_pending":
-        events.extend(
-            [
-                event("tool", status="completed"),
-                event("evidence", evidence=result.get("evidence", [])),
-                event("status", status=result.get("status", "completed")),
-                event("response", content=result.get("response", "")),
-            ]
-        )
+        events.extend(_execution_events(result, thread_id, run_id, len(events)))
     return events
+
+
+def _execution_events(result: dict, thread_id: int, run_id: str, sequence: int) -> list[dict]:
+    tool_result = result.get("tool_result") or {}
+    return [
+        {"type": "tool", "thread_id": thread_id, "run_id": run_id, "sequence": sequence, "tool": tool_result.get("tool"), "status": tool_result.get("status", result.get("status", "completed"))},
+        {"type": "evidence", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 1, "evidence": result.get("evidence", [])},
+        {"type": "status", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 2, "status": result.get("status", "completed")},
+        {"type": "response", "thread_id": thread_id, "run_id": run_id, "sequence": sequence + 3, "content": result.get("response", "")},
+    ]
 
 
 def stream_events(session: Session, thread: InternalChatThread, run_id: str | None = None) -> list[dict]:
@@ -202,6 +199,14 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
     )
     session.add(response_message)
     session.flush()
+    thread.assistant_state = {
+        **thread.assistant_state,
+        "events": [
+            *(thread.assistant_state.get("events") or []),
+            *_execution_events(result, thread.id, run_id, len(thread.assistant_state.get("events") or [])),
+        ],
+    }
+    session.flush()
     return message
 
 
@@ -238,6 +243,13 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
         thread_id=thread.id, author="agent", content=result["response"], status="processed",
         completed_at=datetime.now(timezone.utc), assistant_metadata={"run_id": run_id},
     ))
+    thread.assistant_state = {
+        **thread.assistant_state,
+        "events": [
+            *(thread.assistant_state.get("events") or []),
+            *_execution_events(result, thread.id, run_id, len(thread.assistant_state.get("events") or [])),
+        ],
+    }
     session.flush()
     return True
 

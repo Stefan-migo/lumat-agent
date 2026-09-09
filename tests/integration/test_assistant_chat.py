@@ -191,6 +191,30 @@ def test_approved_plan_route_records_execution_audit(client):
         assert session.query(AuditLog).filter_by(action="internal_chat.execution").count() == 1
 
 
+def test_approved_plan_stream_replays_complete_execution_sequence(client, monkeypatch):
+    _user("assistant-approval-stream", "admin")
+    _login(client, "assistant-approval-stream")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    monkeypatch.setattr(
+        "app.services.agent_chat.execute",
+        lambda state: {"status": "completed", "response": "Rule created.", "evidence": [{"tool": "automation.create_rule", "status": "completed", "detail": "created"}]},
+    )
+
+    pending = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"})
+    metadata = pending.json()["message"]["assistant_metadata"]
+    approved = client.post(
+        f"/panel/api/chat/threads/{thread_id}/approval",
+        json={"run_id": metadata["run_id"], "token": metadata["approval"]["token"]},
+    )
+    assert approved.status_code == 200
+
+    stream = client.get(f"/panel/api/chat/threads/{thread_id}/stream?run_id={metadata['run_id']}")
+    events = [json.loads(line.removeprefix("data: ")) for line in stream.text.splitlines() if line.startswith("data: ")]
+    assert [event["type"] for event in events] == ["plan", "approval", "tool", "evidence", "status", "response"]
+    assert all(event["thread_id"] == thread_id and event["run_id"] == metadata["run_id"] for event in events)
+    assert [event["sequence"] for event in events] == list(range(6))
+
+
 def test_recovery_resumes_pending_execution_once():
     from app.services.agent_chat import resume_thread
 
