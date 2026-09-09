@@ -33,7 +33,12 @@ function EvidenceList({ evidence }: { evidence: AssistantEvidence[] }) {
   </div>;
 }
 
-export function AgentChat() {
+export interface AgentChatProps { threadId?: number }
+
+export function AgentChat({ threadId }: AgentChatProps = {}) {
+  // The panel's stateful navigation has no router params; preserve a deep-link
+  // seam through `?thread_id=` while allowing AppShell to pass an explicit id.
+  const requestedThreadId = threadId ?? (Number(new URLSearchParams(globalThis.location.search).get("thread_id")) || undefined);
   const [thread, setThread] = useState<InternalChatThread | null>(null);
   const [messages, setMessages] = useState<InternalChatMessage[]>([]);
   const [content, setContent] = useState("");
@@ -50,29 +55,39 @@ export function AgentChat() {
 
   const handleEvent = (event: AssistantEvent) => {
     if (event.type === "plan") setPlan(event.plan ?? null);
-    if (event.type === "approval") { setApproval(event.approval ?? null); setLifecycle(event.status ?? null); setProcessing(event.status !== "approval_pending"); }
+    if (event.type === "approval") { setApproval(event.approval ?? null); setLifecycle(event.status ?? null); }
     if (event.type === "tool") setLifecycle(event.status ?? "executing");
     if (event.type === "evidence") setEvidence(event.evidence ?? []);
-    if (event.type === "status") { setLifecycle(event.status ?? null); setProcessing(event.status !== "completed" && event.status !== "error"); }
-    if (event.type === "response") { setStream(event.content ?? ""); setProcessing(false); }
-    if (event.type === "error") { setError(event.error ?? "El stream del asistente falló"); setProcessing(false); }
+    if (event.type === "status") setLifecycle(event.status ?? null);
+    if (event.type === "response") setStream(event.content ?? "");
+    if (event.type === "error") setError(event.error ?? "El stream del asistente falló");
   };
 
   const openStream = async (id: number, run: string) => {
     setRunId(run);
     try { await streamChatEvents(id, run, handleEvent); } catch (reason: unknown) { setError(reason instanceof ApiError ? reason.detail : "El stream del asistente falló"); }
+    finally { setProcessing(false); }
   };
 
-  useEffect(() => {
-    void createChatThread().then((result) => {
+  const loadThread = (result: { thread: InternalChatThread; messages: InternalChatMessage[] }) => {
+      const state = result.thread.assistant_state;
       setThread(result.thread);
       setMessages(result.messages);
       setPlan(result.thread.current_plan ?? null);
-      setApproval(result.thread.assistant_state?.approval ?? null);
-      setLifecycle(result.thread.assistant_state?.stage ?? null);
+      setApproval(state?.approval ?? null);
+      setEvidence((state?.events ?? []).flatMap((event) => event.evidence ?? []));
+      setLifecycle(state?.stage ?? null);
       setRunId(result.thread.active_run_id ?? null);
-    }).catch((reason: unknown) => setError(reason instanceof ApiError ? reason.detail : "No pudimos abrir el chat")).finally(() => setLoading(false));
-  }, []);
+      if (result.thread.active_run_id && state?.recoverable && state.stage !== "approval_pending" && state.stage !== "completed") {
+        setProcessing(true);
+        void openStream(result.thread.id, result.thread.active_run_id);
+      }
+  };
+
+  useEffect(() => {
+    const request = requestedThreadId ? getChatThread(requestedThreadId) : createChatThread();
+    void request.then(loadThread).catch((reason: unknown) => setError(reason instanceof ApiError ? reason.detail : "No pudimos abrir el chat")).finally(() => setLoading(false));
+  }, [requestedThreadId]);
 
   useEffect(() => {
     if (!thread) return;
@@ -109,6 +124,7 @@ export function AgentChat() {
       setMessages((current) => [...current, result.message]);
       const run = result.message.assistant_metadata?.run_id;
       if (run) { setProcessing(true); void openStream(thread.id, run); }
+      else setProcessing(false);
       if (result.message.status === "failed") setError("No se pudo procesar el mensaje");
       try {
         const current = await getChatThread(thread.id);
@@ -119,8 +135,6 @@ export function AgentChat() {
     } catch (reason: unknown) {
       setError(reason instanceof ApiError ? reason.detail : "No se pudo procesar el mensaje");
       setMessages((current) => [...current, { id: Date.now(), thread_id: thread.id, author: "admin", content: submitted, status: "failed", error: "temporary" }]);
-    } finally {
-      setProcessing(false);
     }
   };
 

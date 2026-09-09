@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AgentChat } from "./AgentChat";
+import type { AssistantApproval } from "../../types";
 
 describe("AgentChat", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -135,5 +136,47 @@ describe("AgentChat", () => {
       "/panel/api/chat/threads/4/approval",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ run_id: "run-2", token: "secret", reject: true }) }),
     );
+  });
+
+  it("recovers a persisted plan by thread id without creating a new thread", async () => {
+    const approval: AssistantApproval = {
+      token: "secret", token_sha256: "hash", tool: "automation.create_rule",
+      arguments: { name: "Notify" }, arguments_sha256: "args-hash", expires_at: "2030-01-01T00:00:00Z",
+      status: "pending", consumed_at: null,
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ thread: {
+      id: 4, status: "open", active_run_id: "run-3",
+      current_plan: { tool: "automation.create_rule", arguments: { name: "Notify" }, status: "pending" },
+      assistant_state: { stage: "approval_pending", recoverable: true, execution_status: "pending", approval, events: [] },
+    }, messages: [] }), { status: 200 }));
+
+    render(<AgentChat threadId={4} />);
+    expect(await screen.findByText("automation.create_rule")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/4", expect.anything());
+    expect(fetchMock).not.toHaveBeenCalledWith("/panel/api/chat/threads", expect.anything());
+    expect(screen.getByRole("button", { name: /aprobar/i })).toBeEnabled();
+  });
+
+  it("keeps processing until the SSE stream closes", async () => {
+    let closeStream: () => void = () => undefined;
+    const streamResponse = new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: "response", thread_id: 4, run_id: "run-4", sequence: 0, content: "Still streaming" })}\n\n`));
+        closeStream = () => controller.close();
+      },
+    }), { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: { id: 2, author: "admin", content: "Hello", status: "processing", assistant_metadata: { run_id: "run-4" } } }), { status: 201 }))
+      .mockResolvedValueOnce(streamResponse);
+
+    render(<AgentChat />);
+    await screen.findByText("Chat interno vacío");
+    fireEvent.change(screen.getByRole("textbox", { name: /mensaje/i }), { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+    expect(await screen.findByText("Still streaming")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /mensaje/i })).toBeDisabled();
+    closeStream();
+    await waitFor(() => expect(screen.getByRole("textbox", { name: /mensaje/i })).toBeEnabled());
   });
 });

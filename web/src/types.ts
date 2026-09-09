@@ -97,7 +97,16 @@ export interface NotificationsResponse { notifications: PanelNotification[]; }
 
 export type InternalChatStatus = 'processing' | 'processed' | 'failed' | 'approval_pending' | 'rejected';
 export interface AssistantPlan { tool?: string | null; arguments?: Record<string, unknown>; summary?: string; status?: string; requires_approval?: boolean; }
-export interface AssistantApproval { token?: string; status?: string; expires_at?: string; }
+export interface AssistantApproval {
+  token?: string;
+  token_sha256?: string;
+  tool?: string | null;
+  arguments?: Record<string, unknown>;
+  arguments_sha256?: string;
+  expires_at?: string;
+  status?: string;
+  consumed_at?: string | null;
+}
 export interface AssistantEvidence { tool?: string | null; status: string; detail?: string; result?: unknown; }
 export type AssistantEventType = 'plan' | 'approval' | 'tool' | 'evidence' | 'status' | 'response' | 'error';
 export interface AssistantEvent { type: AssistantEventType; thread_id: number; run_id: string; sequence: number; plan?: AssistantPlan; approval?: AssistantApproval | null; status?: string; tool?: string | null; evidence?: AssistantEvidence[]; content?: string; error?: string; }
