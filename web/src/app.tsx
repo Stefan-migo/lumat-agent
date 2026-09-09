@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiFetch, ApiError, postJson } from './api';
 import type { LoginResponse, User } from './types';
 import { AppShell } from './components/domain/AppShell';
+import { TechnicianShell } from './components/domain/TechnicianShell';
+import { TechnicianAgenda } from './components/pages/TechnicianAgenda';
 import { LoginAuth } from './components/pages/LoginAuth';
 
 /** Auth gate for the panel SPA (B6/T6.4; PDW-AUTH-1/2, D4).
@@ -63,6 +65,9 @@ export default function App() {
   }
 
   if (state.kind === 'authed') {
+    if (state.user.role === 'tecnico') {
+      return <TechnicianShell user={state.user} onLogout={logout}><TechnicianAgenda /></TechnicianShell>;
+    }
     return <AppShell user={state.user} onLogout={logout} />;
   }
 

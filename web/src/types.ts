@@ -5,7 +5,7 @@
  * Kept in the SPA so components never invent their own field names.
  */
 
-export type Role = 'admin' | 'operador';
+export type Role = 'admin' | 'operador' | 'tecnico';
 
 export interface User {
   id?: number;
@@ -339,6 +339,28 @@ export interface AgendaAppointment {
 
 export interface AgendaResponse {
   appointments: AgendaAppointment[];
+}
+
+export interface TechnicianCustomer {
+  name: string | null;
+  address: string | null;
+  comuna: string | null;
+  phone: string | null;
+}
+
+export interface TechnicianAppointment {
+  id: number;
+  service: string;
+  local_start: string;
+  starts_at: string;
+  ends_at: string;
+  timezone: string;
+  customer: TechnicianCustomer;
+  case_summary: string | null;
+}
+
+export interface TechnicianAgendaResponse {
+  appointments: TechnicianAppointment[];
 }
 
 export interface VisitHistoryEvent {

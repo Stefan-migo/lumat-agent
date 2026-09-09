@@ -67,7 +67,7 @@ export const disableKbDocument = (id: number) => postJson<KbMutationResponse>(`/
 export const restoreKbDocument = (id: number, version: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/restore`, { version });
 export const refreshKbDocuments = () => apiFetch<DocsResponse>('/panel/api/kb');
 
-import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday } from './types';
+import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -128,3 +128,5 @@ export const getDashboardTrend = (timezone: string) => {
   const params = new URLSearchParams({ start: start.toISOString(), end: end.toISOString(), timezone, metric: 'contacts' });
   return apiFetch<{ buckets: DashboardTrendBucket[] }>(`/panel/api/dashboard/trend?${params}`);
 };
+
+export const fetchTechnicianAgenda = () => apiFetch<TechnicianAgendaResponse>('/panel/api/technician/agenda');
