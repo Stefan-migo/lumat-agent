@@ -21,6 +21,8 @@ def issue_approval(plan: dict, *, expires_at: datetime | None = None) -> dict:
     return {
         "token": token,
         "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
+        "tool": plan.get("tool"),
+        "arguments": plan.get("arguments", {}),
         "arguments_sha256": arguments_digest(plan.get("tool"), plan.get("arguments", {})),
         "expires_at": expiry.isoformat(),
         "status": "pending",
@@ -39,6 +41,30 @@ def validate_approval(plan: dict, approval: dict, token: str) -> bool:
         approval.get("status") == "pending"
         and datetime.now(timezone.utc) < expires_at
         and secrets.compare_digest(approval.get("token_sha256", ""), expected)
+        and secrets.compare_digest(
+            approval.get("arguments_sha256", ""),
+            arguments_digest(plan.get("tool"), plan.get("arguments", {})),
+        )
+    )
+
+
+def consume_approval(approval: dict, token: str) -> bool:
+    """Consume an approval once after validating its token and exact payload."""
+    if not validate_approval(
+        {"tool": approval.get("tool"), "arguments": approval.get("arguments", {})},
+        approval,
+        token,
+    ):
+        return False
+    approval["status"] = "consumed"
+    approval["consumed_at"] = datetime.now(timezone.utc).isoformat()
+    return True
+
+
+def validate_execution(plan: dict, approval: dict) -> bool:
+    """Require a consumed approval matching the persisted plan exactly."""
+    return (
+        approval.get("status") == "consumed"
         and secrets.compare_digest(
             approval.get("arguments_sha256", ""),
             arguments_digest(plan.get("tool"), plan.get("arguments", {})),

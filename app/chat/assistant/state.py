@@ -19,3 +19,5 @@ class AssistantState(TypedDict, total=False):
     response: str | None
     error: str | None
     on_token: Callable[[str], None] | None
+    session: object
+    actor: str

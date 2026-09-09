@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from app.chat.assistant.approval import issue_approval
+from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.evidence import make_evidence
 from app.chat.assistant.state import AssistantState
+from app.services.audit import record_audit
 from app.services import llm
 
 
@@ -28,6 +29,9 @@ def approval_gate(state: AssistantState) -> AssistantState:
 
 
 def execute(state: AssistantState) -> AssistantState:
+    plan_data = state["plan"]
+    if plan_data["requires_approval"] and not validate_execution(plan_data, state.get("approval") or {}):
+        raise PermissionError("approval is missing, expired, tampered, or already consumed")
     content = state["content"].strip()
     response = f"I received your request: {content}"
     on_token = state.get("on_token")
@@ -48,6 +52,16 @@ def execute(state: AssistantState) -> AssistantState:
                 chunks.append(token)
                 on_token(token)
         response = "".join(chunks) or response
+    session = state.get("session")
+    if session is not None:
+        record_audit(
+            session,
+            actor=state.get("actor") or "assistant",
+            action="internal_chat.execution",
+            entity="internal_chat_thread",
+            entity_id=str(state["thread_id"]),
+            after={"run_id": state["run_id"], "tool": plan_data.get("tool"), "status": "completed"},
+        )
     return {
         "tool_result": {"status": "completed", "tool": None},
         "response": response,
