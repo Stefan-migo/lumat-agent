@@ -111,6 +111,7 @@ def test_stream_reconnect_returns_ordered_persisted_events(client):
     ]
     assert all(event["thread_id"] == thread_id for event in events)
     assert all(event["run_id"] == run_id for event in events)
+    assert [event["sequence"] for event in events] == list(range(len(events)))
 
 
 def test_failed_run_does_not_persist_partial_response(client, monkeypatch):
@@ -130,6 +131,10 @@ def test_failed_run_does_not_persist_partial_response(client, monkeypatch):
     assert response.json()["message"]["status"] == "failed"
     messages = client.get(f"/panel/api/chat/threads/{thread_id}").json()["messages"]
     assert not any(message["author"] == "agent" for message in messages)
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        assert thread.assistant_state["events"][0]["type"] == "error"
+        assert thread.assistant_state["events"][0]["sequence"] == 0
 
 
 def test_approval_rejects_expired_token():

@@ -9,16 +9,19 @@ from sqlalchemy.orm import Session
 from app.chat.assistant.graph import run_assistant
 from app.chat.assistant.recovery import recover_events
 from app.models import InternalChatMessage, InternalChatThread, User
-from app.panel.api.serializers import to_internal_chat_message_dict, to_internal_chat_thread_dict
 from app.services.audit import record_audit
 from app.services.realtime import stage_event
 
 
 def thread_dict(thread: InternalChatThread) -> dict:
+    from app.panel.api.serializers import to_internal_chat_thread_dict
+
     return to_internal_chat_thread_dict(thread)
 
 
 def message_dict(message: InternalChatMessage) -> dict:
+    from app.panel.api.serializers import to_internal_chat_message_dict
+
     return to_internal_chat_message_dict(message)
 
 
@@ -88,7 +91,13 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
         thread.assistant_state = {
             "stage": "failed",
             "recoverable": True,
-            "events": [{"type": "error", "thread_id": thread.id, "run_id": run_id, "error": str(exc)}],
+            "events": [{
+                "type": "error",
+                "thread_id": thread.id,
+                "run_id": run_id,
+                "sequence": 0,
+                "error": str(exc),
+            }],
         }
         thread.active_run_id = run_id
     record_audit(session, actor=user.username, action="internal_chat.message_sent",
@@ -99,8 +108,13 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
 
 
 def _events_for(result: dict, thread_id: int, run_id: str) -> list[dict]:
+    sequence = 0
+
     def event(kind: str, **data) -> dict:
-        return {"type": kind, "thread_id": thread_id, "run_id": run_id, **data}
+        nonlocal sequence
+        payload = {"type": kind, "thread_id": thread_id, "run_id": run_id, "sequence": sequence, **data}
+        sequence += 1
+        return payload
 
     events = [event("plan", plan=result.get("plan", {}))]
     events.append(event("approval", approval=result.get("approval"), status=result.get("status")))
