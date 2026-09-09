@@ -8,6 +8,7 @@ from app.chat.assistant.state import AssistantState
 from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool
 from app.services.audit import record_audit
 from app.services import llm
+from app.chat.assistant.attachments import build_multimodal_content, prepare_attachment_context
 
 
 def plan(state: AssistantState) -> AssistantState:
@@ -81,15 +82,26 @@ def execute(state: AssistantState) -> AssistantState:
             "response": f"Tool {tool_name} completed.",
             "status": "completed",
         }
+    attachments = state.get("attachments") or []
+    documents = prepare_attachment_context(attachments)
     content = state["content"].strip()
+    if documents:
+        content += "\n\n<attachments>\n" + "\n".join(d["text"] for d in documents) + "\n</attachments>"
+    session = state.get("session")
+    if attachments and session is not None:
+        record_audit(session, actor=state.get("actor") or "assistant", action="internal_chat.attachments_used",
+                     entity="internal_chat_thread", entity_id=str(state["thread_id"]),
+                     after={"run_id": state.get("run_id"), "attachment_ids": [getattr(row, "id", None) for row in attachments]})
     response = f"I received your request: {content}"
     on_token = state.get("on_token")
     if on_token is not None:
-        completion = llm.openai_client().chat.completions.create(
-            model=llm.CHAT_MODEL,
+        client = llm.openai_client(getattr(llm.get_settings(), "assistant_chat_provider", None)) if attachments else llm.openai_client()
+        model = getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL) if attachments else llm.CHAT_MODEL
+        completion = client.chat.completions.create(
+            model=model,
             messages=[
                 {"role": "system", "content": "You are Lumat's internal operations assistant."},
-                {"role": "user", "content": content},
+                {"role": "user", "content": build_multimodal_content(attachments, content) if attachments else content},
             ],
             temperature=0,
             stream=True,

@@ -21,3 +21,4 @@ class AssistantState(TypedDict, total=False):
     on_token: Callable[[str], None] | None
     session: object
     actor: str
+    attachments: list[object]
