@@ -25,9 +25,10 @@ from pathlib import Path
 
 import yaml
 
-# Slice-1 known-tools set (design D5): the only tool the research_triage
-# sub-graph uses. The set grows in later slices; unknown entries fail fast.
-KNOWN_TOOLS = ("kb.retrieve",)
+from app.chat.assistant.tools.registry import TOOL_REGISTRY
+
+# The assistant tool registry is the source of truth for declared capabilities.
+KNOWN_TOOLS = tuple(TOOL_REGISTRY)
 
 # All seven fields every sub-agent must declare (AO-1).
 SUBAGENT_REQUIRED_FIELDS = (
@@ -68,9 +69,21 @@ class Agent:
 
 
 @dataclass(frozen=True)
+class Assistant:
+    name: str
+    persona: str
+    prompts: dict[str, str]
+    tools_whitelist: tuple[str, ...]
+    kb_scope: tuple[str, ...] | None
+    memoria_scope: str | None
+    model: str
+
+
+@dataclass(frozen=True)
 class Registry:
     orchestrator: Agent
     sub_agents: dict[str, SubAgent]
+    assistant: Assistant
 
 
 def _coerce_str_list(value, *, what: str) -> tuple[str, ...]:
@@ -99,6 +112,45 @@ def _build_agent(root: dict, where: str) -> Agent:
         persona=root["persona"],
         skills=_coerce_str_list(root["skills"], what=f"{where}.skills"),
         tools_whitelist=_coerce_str_list(root["tools_whitelist"], what=f"{where}.tools_whitelist"),
+        kb_scope=_coerce_optional_str_list(root.get("kb_scope"), what=f"{where}.kb_scope"),
+        memoria_scope=root.get("memoria_scope"),
+        model=root["model"],
+    )
+
+
+def _runtime_path(agent_dir: Path, value, *, what: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise RegistryError(f"{what} must be a non-empty path")
+    if not (agent_dir / value).is_file():
+        raise RegistryError(f"{what} does not exist: {agent_dir / value}")
+    return value
+
+
+def _build_assistant(root: dict, agent_dir: Path) -> Assistant:
+    where = "assistant"
+    if not isinstance(root, dict):
+        raise RegistryError(f"{where} must be a mapping, got {type(root).__name__}")
+    required = ("name", "persona", "prompts", "tools_whitelist", "model")
+    missing = [field for field in required if field not in root]
+    if missing:
+        raise RegistryError(f"{where}: missing required field(s): {', '.join(sorted(missing))}")
+    persona = _runtime_path(agent_dir, root["persona"], what=f"{where}.persona")
+    prompts = root["prompts"]
+    if not isinstance(prompts, dict) or not prompts:
+        raise RegistryError(f"{where}.prompts must be a non-empty mapping")
+    resolved_prompts = {
+        str(name): _runtime_path(agent_dir, path, what=f"{where}.prompts.{name}")
+        for name, path in prompts.items()
+    }
+    tools = _coerce_str_list(root["tools_whitelist"], what=f"{where}.tools_whitelist")
+    for tool in tools:
+        if tool not in KNOWN_TOOLS:
+            raise RegistryError(f"{where}: unknown tool {tool!r}")
+    return Assistant(
+        name=root["name"],
+        persona=persona,
+        prompts=resolved_prompts,
+        tools_whitelist=tools,
         kb_scope=_coerce_optional_str_list(root.get("kb_scope"), what=f"{where}.kb_scope"),
         memoria_scope=root.get("memoria_scope"),
         model=root["model"],
@@ -172,11 +224,17 @@ def load_registry(path: str | Path | None = None) -> Registry:
         raise RegistryError("`sub_agents:` must not be empty")
 
     orchestrator = _build_agent(root_agent, "agent")
+    _runtime_path(path.parent, orchestrator.persona, what="agent.persona")
     sub_agents = {
         key: _build_subagent(str(key), decl)
         for key, decl in sub_agents_map.items()
     }
-    return Registry(orchestrator=orchestrator, sub_agents=sub_agents)
+    for key, sub_agent in sub_agents.items():
+        _runtime_path(path.parent, sub_agent.persona, what=f"sub_agents.{key}.persona")
+    if "assistant" not in raw:
+        raise RegistryError("registry must declare an `assistant:` configuration")
+    assistant = _build_assistant(raw["assistant"], path.parent)
+    return Registry(orchestrator=orchestrator, sub_agents=sub_agents, assistant=assistant)
 
 
 # Cached runtime getter (design line 43): ``load_registry`` reads + validates

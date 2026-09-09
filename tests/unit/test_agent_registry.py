@@ -12,6 +12,8 @@ full roster fail before the production reader + data land.
 
 from __future__ import annotations
 
+import pytest
+
 
 # The known-tools set for slice 1 (design D5): the only tool the research
 # triage sub-agent uses. The reader fails fast on any whitelist entry outside
@@ -263,3 +265,37 @@ def test_get_registry_caches_single_load(monkeypatch, repo_root):
     assert calls["n"] == 1, "the registry loader must run exactly once"
     assert first is second, "the cached getter must return the SAME object"
     assert first.sub_agents["research_triage"].name == "kb-research-triage"
+
+
+def test_valid_registry_resolves_assistant_runtime_configuration(repo_root):
+    reg = _load(repo_root)
+
+    assert reg.assistant.name == "assistant"
+    assert reg.assistant.persona == "personas/assistant.md"
+    assert reg.assistant.prompts == {
+        "plan": "prompts/assistant_plan.md",
+        "respond": "prompts/assistant_respond.md",
+        "classify": "prompts/assistant_classify.md",
+    }
+    assert len(reg.assistant.tools_whitelist) == 13
+    assert "automation.create_rule" in reg.assistant.tools_whitelist
+
+
+@pytest.mark.parametrize("field", ["persona", "prompt"])
+def test_missing_assistant_runtime_reference_rejected(repo_root, tmp_path, field):
+    import yaml
+
+    source = yaml.safe_load((repo_root / "agent" / "registry.yaml").read_text(encoding="utf-8"))
+    if field == "persona":
+        source["assistant"]["persona"] = "personas/missing.md"
+    else:
+        source["assistant"]["prompts"]["plan"] = "prompts/missing.md"
+    registry_path = tmp_path / "registry.yaml"
+    registry_path.write_text(yaml.safe_dump(source), encoding="utf-8")
+
+    from app.agent_registry import RegistryError
+
+    with pytest.raises(RegistryError, match="does not exist"):
+        from app.agent_registry import load_registry
+
+        load_registry(registry_path)
