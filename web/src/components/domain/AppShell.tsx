@@ -107,7 +107,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const clientId = route.clientId ?? null;
   const conversationId = route.conversationId ?? null;
 
-  const page = view === 'dashboard' ? <Dashboard />
+  const page = view === 'dashboard' ? <Dashboard role={user.role} onNavigate={navigate} />
       : view === 'advanced-dashboard' ? <AdvancedDashboard />
       : view === 'agenda' ? <AgendaPage />
       : view === 'automation-rules' ? route.automationRuleId !== undefined || creatingAutomationRule ? <AutomationRuleDetailPage ruleId={creatingAutomationRule ? null : route.automationRuleId} user={user} onCreated={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} onBack={() => { setCreatingAutomationRule(false); window.history.back(); }} /> : <AutomationRulesPage user={user} onOpenCreate={navigateToCreateAutomationRule} onOpenRule={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} />

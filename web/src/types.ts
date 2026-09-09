@@ -112,6 +112,17 @@ export interface Kpis {
   visit_requests: number;
   window_days: number;
   window_start: string;
+  new_customers?: number;
+  trend?: DashboardTrendBucket[];
+  today?: DashboardToday;
+}
+
+export interface DashboardToday {
+  tz: string;
+  local_date: string;
+  appointments_today: Array<{ id: number; service: string; customer_name: string | null; local_start: string; starts_at: string; ends_at: string }>;
+  unanswered_conversations: Array<{ id: number; customer_name: string | null; last_message_at: string | null; state: string }>;
+  urgent_cases: Array<{ id: number; customer_name: string | null; service: string | null; summary: string | null; emergency: boolean; escalated_at: string | null }>;
 }
 
 export interface DashboardPeriod { start: string; end: string; timezone: string; }
