@@ -138,6 +138,10 @@ body {
   --brand-aqua: #8bccd5;
   --brand-forest: #576f31;
   --brand-graphite: #656665;
+  --brand-bg: #dde2d6f5;
+  /* Elevated surface for cards/components sitting on --brand-bg: a lighter
+   * sage (mixed toward white) so tiles lift off the section background. */
+  --brand-bg-elevated: color-mix(in srgb, var(--brand-bg) 60%, var(--surface));
   --info: #14788f;
 
   /* Brand asset sizing — bounded so logo images stay aligned inside the

@@ -68,7 +68,7 @@ describe("Panel entry layout", () => {
     expect(sidebar.querySelector(".panel-shell__brand-mark")).toHaveAttribute("alt", "");
     expect(sidebar.querySelector(".panel-shell__brand")).toHaveAttribute("aria-label", "Lumat, panel operativo");
 
-    await user.click(screen.getByRole("button", { name: "Menú" }));
+    await user.click(screen.getByRole("button", { name: "Abrir menú de navegación" }));
     const drawer = screen.getByRole("dialog", { name: "Navegación" });
     expect(within(drawer).getByAltText("Lumat")).toHaveAttribute("src", "/panel/app/brand/lumat-logo.png");
   });
@@ -142,13 +142,13 @@ describe("Panel entry layout", () => {
       </PanelShell>,
     );
 
-    const menu = screen.getByRole("button", { name: "Menú" });
+    const menu = screen.getByRole("button", { name: "Abrir menú de navegación" });
     expect(menu).toHaveAttribute("aria-expanded", "false");
     expect(menu).toHaveAttribute("aria-controls", "panel-navigation-drawer");
 
     await user.click(menu);
     expect(menu).toHaveAttribute("aria-expanded", "true");
-    await waitFor(() => expect(screen.getByRole("button", { name: "Cerrar" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cerrar menú de navegación" })).toHaveFocus());
 
     await user.keyboard("{Escape}");
     expect(menu).toHaveAttribute("aria-expanded", "false");
@@ -167,21 +167,22 @@ describe("Panel entry layout", () => {
     fireEvent.click(within(drawer).getByRole("button", { name: "Clientes" }));
     expect(onNavigate).toHaveBeenCalledWith("clients");
 
-    const menu = screen.getByRole("button", { name: "Menú" });
+    const menu = screen.getByRole("button", { name: "Abrir menú de navegación" });
     fireEvent.click(menu);
     fireEvent.mouseDown(screen.getByTestId("panel-drawer-backdrop"));
     expect(menu).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("defines the five shell review tiers and tokenized breakpoint contract", () => {
+  it("defines the shell review tiers and tokenized desktop rail contract", () => {
     for (const width of [390, 640, 768, 1024, 1280]) expect(panelEntryStoryRaw).toContain(`width: ${width}`);
     expect(tokensRaw).toMatch(/--bp-sm:\s*640px/);
     expect(tokensRaw).toMatch(/--bp-md:\s*1024px/);
     expect(tokensRaw).toMatch(/--bp-lg:\s*1280px/);
     expect(primitivesRaw).toMatch(/@media\s*\(max-width:\s*39\.99rem\)/);
     expect(primitivesRaw).toMatch(/@media\s*\(min-width:\s*40rem\)/);
-    expect(primitivesRaw).toMatch(/@media\s*\(min-width:\s*64rem\)/);
-    expect(primitivesRaw).toMatch(/@media\s*\(min-width:\s*80rem\)/);
+    // One desktop rail tier from 1024px: the user controls expanded/collapsed,
+    // so the collapsed grid override lives inside the same media query.
+    expect(primitivesRaw).toMatch(/@media\s*\(min-width:\s*64rem\)[\s\S]*?\.panel-shell\.panel-shell--collapsed\s*\{[^}]*grid-template-columns:\s*var\(--shell-rail-compact\)/);
   });
 
   it("keeps shell controls at least 44px and preserves critical overflow", () => {
@@ -202,7 +203,7 @@ describe("Panel entry layout", () => {
   it("closes the drawer when the viewport reaches the desktop rail tier", async () => {
     const user = userEvent.setup();
     render(<PanelShell user={{ username: "ana", role: "admin" }}>{dashboard}</PanelShell>);
-    const menu = screen.getByRole("button", { name: "Menú" });
+    const menu = screen.getByRole("button", { name: "Abrir menú de navegación" });
     await user.click(menu);
     expect(screen.getByRole("dialog", { name: "Navegación" })).toBeVisible();
 

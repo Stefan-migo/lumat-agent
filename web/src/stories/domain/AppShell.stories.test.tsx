@@ -62,10 +62,10 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
     );
   });
 
-  it('renders the panel header with the approved Panel unificado label by default', () => {
+  it('renders the panel header with the approved Panel unificado breadcrumb by default', () => {
     render(<AppShell user={admin} />);
     const header = screen.getByLabelText(/encabezado de la vista/i);
-    expect(within(header).getByText('Panel unificado')).toBeInTheDocument();
+    expect(within(header).getByRole('navigation', { name: 'Ruta de navegación' })).toHaveTextContent('Panel unificado');
   });
 
   it('renders the panel header as text-only — no green fill, no lime rule', () => {
@@ -79,16 +79,13 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
     );
   });
 
-  it('uses dark text and semibold text-lg for the panel header title', () => {
-    // --corp-fg resolves --text; the header title stays dark after the port.
+  it('styles the panel header breadcrumb with the corporate foreground contract', () => {
+    // The breadcrumb replaces the duplicated page title in the desktop chrome.
     expect(primitivesRaw).toMatch(
-      /\.panel-shell__header-title\s*\{[^}]*color:\s*var\(--corp-fg\)/,
+      /\.panel-shell__breadcrumbs\s+ol\s*\{[^}]*font-size:\s*var\(--text-lg\)/,
     );
     expect(primitivesRaw).toMatch(
-      /\.panel-shell__header-title\s*\{[^}]*font-weight:\s*var\(--weight-semibold\)/,
-    );
-    expect(primitivesRaw).toMatch(
-      /\.panel-shell__header-title\s*\{[^}]*font-size:\s*var\(--text-lg\)/,
+      /\.panel-shell__breadcrumbs\s+li\[aria-current="page"\]\s*\{[^}]*color:\s*color-mix\(in srgb, var\(--surface\) 70%, transparent\)/,
     );
   });
 
@@ -169,17 +166,23 @@ describe('AppShell — tokenized base layout boundary (DS-SHELL-3)', () => {
 });
 
 describe('AppShell stories — agent grammar slots', () => {
-  it('exposes semantic rail and active-thread classes in the shared shell', () => {
+  it('keeps a semantic rail and does not reintroduce the removed active-thread block', () => {
     render(<AppShell user={operador} />);
     expect(document.querySelector('.panel-shell__rail')).toBeInTheDocument();
-    expect(document.querySelector('.panel-shell__active-threads')).toBeInTheDocument();
+    expect(document.querySelector('.panel-shell__active-threads')).not.toBeInTheDocument();
     expect(primitivesRaw).toMatch(/\.panel-shell__rail\s*\{/);
-    expect(primitivesRaw).toMatch(/\.panel-shell__active-threads\s*\{/);
+    expect(primitivesRaw).not.toMatch(/\.panel-shell__active-threads\s*\{/);
   });
 
   it('keeps compact rail labels accessible and does not add shell-owned fetch code', () => {
     render(<AppShell user={operador} />);
     expect(panelShellRaw).not.toMatch(/listConversations|fetch\s*\(/);
-    expect(primitivesRaw).toMatch(/\.panel-shell--collapsed[\s\S]*\.panel-shell__active-threads[\s\S]*display:\s*none/);
+    // Collapsed labels are removed from the DOM by the component, so icon-only
+    // buttons must keep an accessible name (aria-label/title) in the markup.
+    expect(panelShellRaw).toMatch(/aria-label=\{collapsed \? NAVIGATION\[view\]\.label : undefined\}/);
+    expect(panelShellRaw).toMatch(/title=\{collapsed \? NAVIGATION\[view\]\.label : undefined\}/);
+    // The desktop rail grid override that shrinks the collapsed sidebar is a
+    // single 64rem tier shared with the expanded rail (user-controlled).
+    expect(primitivesRaw).toMatch(/@media\s*\(min-width:\s*64rem\)[\s\S]*?\.panel-shell\.panel-shell--collapsed\s*\{/);
   });
 });

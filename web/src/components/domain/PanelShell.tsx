@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
-import type { ConversationState, User } from "../../types";
-import type { ConnectionStatus } from "../../realtime";
+import type { PanelNotification, User } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 
@@ -111,6 +110,14 @@ function BellIcon() {
   return icon(<><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>);
 }
 
+function MenuIcon() {
+  return icon(<><path d="M4 6h16M4 12h16M4 18h16" /></>);
+}
+
+function CloseIcon() {
+  return icon(<path d="M18 6 6 18M6 6l12 12" />);
+}
+
 interface NavigationItem {
   label: string;
   icon: () => ReactNode;
@@ -141,18 +148,13 @@ export interface PanelShellProps {
    *  stale-data indicator). Kept narrow on purpose — full banner copy still
    *  belongs in the page content, not the chrome. */
   statusBadge?: ReactNode;
-  activeThreads?: ActiveThreadsState;
   inspector?: ReactNode;
-  connectionStatus?: ConnectionStatus;
-  onActiveThread?: (id: number) => void;
   conversationTab?: ConversationTab;
   onConversationTabChange?: (tab: ConversationTab) => void;
   notificationState?: NotificationState;
+  notifications?: PanelNotification[];
+  onMarkAllNotificationsRead?: () => void | Promise<void>;
 }
-
-export type ActiveThreadsState =
-  | { status: "loading" | "empty" | "error" | "placeholder"; message?: string }
-  | { status: "ready"; threads: Array<{ id: number; label: string; status: ConversationState; active?: boolean }> };
 
 export type NotificationState = { status: "loading" } | { status: "ready"; unread: number } | { status: "error" };
 
@@ -249,13 +251,12 @@ export function PanelShell({
   user,
   statusBadge,
   onLogout,
-  activeThreads,
   inspector,
-  connectionStatus = "disconnected",
-  onActiveThread,
   conversationTab,
   onConversationTabChange,
   notificationState = { status: "loading" },
+  notifications = [],
+  onMarkAllNotificationsRead,
 }: PanelShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
@@ -263,7 +264,10 @@ export function PanelShell({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationsRef = useRef<HTMLDivElement>(null);
+  const bellRef = useRef<HTMLButtonElement>(null);
+  const notificationCloseRef = useRef<HTMLButtonElement>(null);
 
   const closeDrawer = () => {
     setDrawerOpen(false);
@@ -320,6 +324,41 @@ export function PanelShell({
     }
   };
 
+  const closeNotifications = () => {
+    setNotificationsOpen(false);
+    queueMicrotask(() => bellRef.current?.focus());
+  };
+
+  const keepFocusInNotifications = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeNotifications();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [...(notificationsRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])') ?? [])];
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    notificationCloseRef.current?.focus();
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!notificationsRef.current?.contains(event.target as Node)) closeNotifications();
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [notificationsOpen]);
+
   const handleNavigation = (view: PanelView) => {
     onNavigate?.(view);
     if (drawerOpen) closeDrawer();
@@ -333,7 +372,6 @@ export function PanelShell({
         <div className="panel-shell__sidebar-inner">
           <Brand compact={collapsed} />
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} collapsed={collapsed} />
-          {!collapsed ? <ActiveThreads state={activeThreads} connectionStatus={connectionStatus} onActiveThread={onActiveThread} /> : null}
           <UserContext user={user} compact={collapsed} onLogout={onLogout} />
         </div>
       </aside>
@@ -346,9 +384,11 @@ export function PanelShell({
           className="panel-shell__menu-button"
           aria-expanded={drawerOpen}
           aria-controls="panel-navigation-drawer"
+          aria-label="Abrir menú de navegación"
+          title="Abrir menú de navegación"
           onClick={() => setDrawerOpen(true)}
         >
-          Menú
+          <MenuIcon />
         </button>
       </header>
 
@@ -365,15 +405,14 @@ export function PanelShell({
           id="panel-navigation-drawer"
           className="panel-shell__drawer"
           role="dialog"
+          aria-label="Navegación"
           aria-modal="true"
-          aria-labelledby="panel-navigation-title"
           onKeyDown={keepFocusInDrawer}
         >
-          <Brand />
           <div className="panel-shell__drawer-heading">
-            <h2 id="panel-navigation-title" className="panel-shell__drawer-title">Navegación</h2>
-            <button ref={closeButtonRef} type="button" className="panel-shell__drawer-close" onClick={closeDrawer}>
-              Cerrar
+            <Brand mobile />
+            <button ref={closeButtonRef} type="button" className="panel-shell__drawer-close" aria-label="Cerrar menú de navegación" title="Cerrar menú de navegación" onClick={closeDrawer}>
+              <CloseIcon />
             </button>
           </div>
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} />
@@ -395,17 +434,30 @@ export function PanelShell({
             >
               <PanelToggleIcon collapsed={collapsed} />
             </button>
-            <h2 className="panel-shell__header-title">{NAVIGATION[currentView as keyof typeof NAVIGATION]?.label ?? "Panel"}</h2>
-            <div className="panel-shell__header-actions">
-              <button type="button" className="panel-shell__header-action" aria-label={notificationState.status === "loading" ? "Cargando notificaciones" : notificationState.status === "error" ? "Notificaciones no disponibles" : notificationState.unread > 0 ? `Notificaciones (${notificationState.unread} sin leer)` : "Notificaciones"} title="Notificaciones" onClick={() => handleNavigation("notifications")}>
-                <BellIcon />
-                {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
-              </button>
-              <div className="panel-shell__user-menu">
-                <button type="button" className="panel-shell__header-action" aria-label="Abrir menú de usuario" aria-expanded={userMenuOpen} onClick={() => setUserMenuOpen((open) => !open)}><Avatar name={user.username} /></button>
-                {userMenuOpen ? <div role="menu" aria-label="Menú de usuario"><span>{user.username}</span><span>{user.role === "admin" ? "Administrador" : "Operador"}</span>{onLogout ? <button type="button" role="menuitem" onClick={() => void onLogout()}>Cerrar sesión</button> : null}</div> : null}
-              </div>
-            </div>
+             <nav className="panel-shell__breadcrumbs" aria-label="Ruta de navegación">
+               <ol>
+                 {currentView === "dashboard" ? <li aria-current="page">Panel unificado</li> : <>
+                   <li><button type="button" onClick={() => handleNavigation("dashboard")}>Panel</button></li>
+                   <li aria-current="page">{NAVIGATION[currentView as keyof typeof NAVIGATION]?.label ?? (currentView === "notifications" ? "Notificaciones" : "Panel")}</li>
+                 </>}
+               </ol>
+             </nav>
+             <div className="panel-shell__header-actions">
+               <div ref={notificationsRef} className="panel-shell__notifications">
+               <button ref={bellRef} type="button" className="panel-shell__header-action" aria-expanded={notificationsOpen} aria-haspopup="dialog" aria-label={notificationState.status === "loading" ? "Cargando notificaciones" : notificationState.status === "error" ? "Notificaciones no disponibles" : notificationState.unread > 0 ? `Notificaciones (${notificationState.unread} sin leer)` : "Notificaciones"} title="Notificaciones" onClick={() => setNotificationsOpen((open) => !open)}>
+                 <BellIcon />
+                 {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
+               </button>
+               {notificationsOpen ? <section className="panel-shell__notifications-panel" role="dialog" aria-modal="true" aria-labelledby="panel-notifications-title" onKeyDown={keepFocusInNotifications}>
+                 <div className="panel-shell__notifications-heading"><h2 id="panel-notifications-title">Notificaciones</h2><button ref={notificationCloseRef} type="button" className="panel-shell__notifications-close" aria-label="Cerrar notificaciones" onClick={closeNotifications}><CloseIcon /></button></div>
+                 <ul className="panel-shell__notifications-list">
+                   {notifications.slice(0, 5).map((notification) => <li key={notification.id} className={notification.read_at === null ? "panel-shell__notification panel-shell__notification--unread" : "panel-shell__notification"}><span className="panel-shell__notification-dot" aria-hidden="true" /><strong>{notification.title}</strong><p>{notification.content}</p><small>{notification.source} · {notification.created_at ?? "Sin fecha"}</small></li>)}
+                   {notifications.length === 0 ? <li className="panel-shell__notification-empty">No hay notificaciones.</li> : null}
+                 </ul>
+                 <div className="panel-shell__notifications-footer"><button type="button" onClick={() => void onMarkAllNotificationsRead?.()}>Marcar todas como leídas</button><button type="button" onClick={() => { closeNotifications(); handleNavigation("notifications"); }}>Ver todas las notificaciones</button></div>
+               </section> : null}
+               </div>
+             </div>
           </header>
           {statusBadge ? (
             <div className="panel-shell__header-badge">
@@ -430,40 +482,14 @@ export function PanelShell({
         <div id="panel-main-content" className="panel-shell__content" tabIndex={-1}>
           {children}
         </div>
-      </div>
-      {inspector ? <aside className="panel-shell__inspector" aria-label="Inspector operacional">{inspector}</aside> : null}
+       </div>
+       <nav className={`panel-shell__footer-nav${user.role === "admin" ? " panel-shell__footer-nav--admin" : ""}`} aria-label="Navegación inferior">
+         {(["notifications", "dashboard", ...(user.role === "admin" ? ["chat"] : []), "conversations", "agenda"] as PanelView[]).map((view) => {
+           const item = view === "notifications" ? { label: "Notificaciones", Icon: BellIcon } : view === "dashboard" ? { label: "Panel", Icon: PanelIcon } : view === "chat" ? { label: "Agente Lumat", Icon: AssistantIcon } : view === "conversations" ? { label: "Conversaciones", Icon: ChatIcon } : { label: "Agenda", Icon: CalendarIcon };
+           return <button key={view} type="button" className={view === "chat" ? "panel-shell__footer-nav--primary" : undefined} aria-current={currentView === view ? "page" : undefined} aria-label={item.label} onClick={() => handleNavigation(view)}><item.Icon /><span>{item.label}</span></button>;
+         })}
+       </nav>
+       {inspector ? <aside className="panel-shell__inspector" aria-label="Inspector operacional">{inspector}</aside> : null}
     </div>
-  );
-}
-
-function ActiveThreads({ state, connectionStatus, onActiveThread }: { state?: ActiveThreadsState; connectionStatus: ConnectionStatus; onActiveThread?: (id: number) => void }) {
-  const current = state ?? { status: "placeholder" as const };
-  const message = current.status === "loading"
-    ? "Cargando conversaciones activas"
-    : current.status === "error"
-      ? current.message ?? "No se pudieron cargar las conversaciones activas"
-      : current.status === "empty"
-        ? current.message ?? "No hay conversaciones activas"
-        : current.status === "placeholder"
-          ? current.message ?? "No hay conversaciones activas"
-          : undefined;
-
-  return (
-    <section className="panel-shell__active-threads" aria-labelledby="panel-active-threads-title">
-      <h2 id="panel-active-threads-title" className="panel-shell__active-threads-title">Conversaciones activas</h2>
-      {connectionStatus !== "connected" ? <div className="panel-shell__active-threads-connection" role="status">Conexión en tiempo real: {connectionStatus === "reconnecting" ? "reconectando" : "desconectada"}. Los datos seguirán disponibles.</div> : null}
-      {current.status === "ready" ? (
-        <ul className="panel-shell__active-thread-list">
-          {current.threads.map((thread) => (
-            <li key={thread.id}>
-              <button type="button" className="panel-shell__active-thread" aria-current={thread.active ? "page" : undefined} onClick={() => onActiveThread?.(thread.id)}>
-                <span>{thread.label}</span>
-                <span className="panel-shell__active-thread-status">{thread.status === "human" ? "Atención humana" : thread.status === "bot" ? "Agente atendiendo" : "Cerrada"}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : <div className="panel-shell__active-threads-state" role={current.status === "error" ? "alert" : "status"} aria-label="Conversaciones activas">{message}</div>}
-    </section>
   );
 }

@@ -12,7 +12,7 @@ from app.panel.api.deps import require_user_json
 from app.panel.api.serializers import to_notification_dict, to_panel_notification_dict
 from app.panel.deps import get_db
 from app.services.audit import record_audit
-from app.services.notifications import list_panel_notifications, mark_notification_read
+from app.services.notifications import list_panel_notifications, mark_all_notifications_read, mark_notification_read
 
 router = APIRouter(tags=["panel-api-notifications"])
 
@@ -41,6 +41,12 @@ def read_notification(notification_id: int, session: Session = Depends(get_db), 
     except PermissionError:
         raise HTTPException(status_code=404, detail="notification not found")
     return {"notification": to_panel_notification_dict(row)}
+
+@router.post("/notifications/read-all")
+def read_all_notifications(session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+    count = mark_all_notifications_read(session, user_id=current.id)
+    session.commit()
+    return {"ok": True, "read": count}
 
 @router.post("/push-subscription")
 def save_push_subscription(body: PushSubscriptionBody, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:

@@ -8,10 +8,10 @@ const source = readFileSync(join(process.cwd(), "src/components/pages/LoginAuth.
 const primitives = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
 
 describe("LoginAuth (DS-UI-LOGIN)", () => {
-  it("renders the tokenized PageFrame with a desktop brand region and auth form", () => {
+  it("renders the centered full-viewport login page with brand lockup and auth form", () => {
     const { container } = render(<LoginAuth />);
 
-    expect(container.querySelector("main.page-frame")).toBeInTheDocument();
+    expect(container.querySelector("main.login-page")).toBeInTheDocument();
     expect(screen.getByText("Lumat")).toBeInTheDocument();
     expect(screen.getByText("Panel operativo")).toBeInTheDocument();
     expect(screen.getByRole("form")).toBeInTheDocument();
@@ -28,14 +28,17 @@ describe("LoginAuth (DS-UI-LOGIN)", () => {
     expect(screen.getByRole("alert")).not.toHaveTextContent(/no existe|no encontrado/i);
   });
 
-  it("does not retain the phantom auth card or inline auth chrome", () => {
-    expect(source).toContain("PageFrame");
+  it("has no top welcome heading or phantom auth chrome", () => {
+    expect(source).not.toContain("Bienvenido");
     expect(source).not.toContain("card--auth");
     expect(source).not.toContain("style=");
     expect(source).not.toContain("LOGIN_BRAND_STYLES");
+    expect(source).toContain("login-page");
   });
 
-  it("defines a desktop split and mobile stacked frame with design tokens", () => {
+  it("defines a centered full-viewport page and desktop split/mobile stacked frame with design tokens", () => {
+    expect(primitives).toMatch(/\.login-page[\s\S]*?min-height:\s*100dvh/);
+    expect(primitives).toMatch(/\.login-page[\s\S]*?var\(--/);
     expect(primitives).toMatch(/\.login-frame[\s\S]*?grid-template-columns:/);
     expect(primitives).toMatch(/\.login-frame[\s\S]*?var\(--/);
     expect(primitives).toMatch(/@media \(max-width: 40rem\)[\s\S]*?\.login-frame[\s\S]*?grid-template-columns:\s*1fr/);

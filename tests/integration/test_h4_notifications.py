@@ -47,6 +47,24 @@ def test_notification_center_isolated_read_state_and_filters():
             notifications.mark_notification_read(session, rows[0].id, user_id=other)
 
 
+def test_mark_all_notifications_read_is_scoped_to_user():
+    first, other = _user("bulk-first"), _user("bulk-other")
+    with SessionLocal() as session:
+        for user_id, key in ((first, "bulk:first:one"), (first, "bulk:first:two"), (other, "bulk:other")):
+            notifications.create_operation(
+                session, recipient="user", channel="email", content="Unread", source_entity="case",
+                source_id=key, idempotency_key=key, user_id=user_id,
+            )
+        session.commit()
+        count = notifications.mark_all_notifications_read(session, user_id=first)
+        session.commit()
+        first_rows = session.scalars(select(PanelNotification).where(PanelNotification.user_id == first)).all()
+        other_rows = session.scalars(select(PanelNotification).where(PanelNotification.user_id == other)).all()
+        assert count == 2
+        assert all(row.read_at is not None for row in first_rows)
+        assert all(row.read_at is None for row in other_rows)
+
+
 def test_event_fanout_creates_one_panel_notification_and_push_failure_is_audited(monkeypatch):
     user_id = _user("admin")
     with SessionLocal() as session:

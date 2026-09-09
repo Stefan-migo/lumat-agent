@@ -86,6 +86,7 @@ export const retryMessage = (id: number, messageId: number) => command<{ ok: tru
 export interface NotificationFilters { unread?: boolean; status?: string; source?: string; }
 export function listNotifications(filters: NotificationFilters = {}) { const params = new URLSearchParams(); if (filters.unread !== undefined) params.set('unread', String(filters.unread)); if (filters.status) params.set('status', filters.status); if (filters.source) params.set('source', filters.source); const query = params.toString(); return apiFetch<NotificationsResponse>(`/panel/api/notifications${query ? `?${query}` : ''}`); }
 export const markNotificationRead = (id: number) => postJson<{ notification: PanelNotification }>(`/panel/api/notifications/${id}/read`);
+export const markAllNotificationsRead = () => postJson<{ ok: true; read: number }>('/panel/api/notifications/read-all');
 export const createChatThread = () => postJson<InternalChatResponse>('/panel/api/chat/threads', {});
 export const sendChatMessage = (id: number, content: string) => postJson<{ message: InternalChatMessage }> (`/panel/api/chat/threads/${id}/messages`, { content });
 export const getChatThread = (id: number) => apiFetch<InternalChatResponse>(`/panel/api/chat/threads/${id}`);

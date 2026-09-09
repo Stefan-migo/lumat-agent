@@ -33,14 +33,14 @@ describe('AppShell (T6.4)', () => {
   it('renders admin sections for an admin, but hides them for an operador', async () => {
     const user = userEvent.setup();
     const { unmount } = render(<AppShell user={admin} />);
-    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     const adminDrawer = screen.getByRole('dialog', { name: 'Navegación' });
     expect(within(adminDrawer).getByRole('button', { name: /base de conocimientos/i })).toBeInTheDocument();
     expect(within(adminDrawer).getByRole('button', { name: /configuraci[oó]n/i })).toBeInTheDocument();
     unmount();
 
     render(<AppShell user={operador} />);
-    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     const operadorDrawer = screen.getByRole('dialog', { name: 'Navegación' });
     expect(
       within(operadorDrawer).queryByRole('button', { name: /base de conocimientos/i }),
@@ -52,7 +52,7 @@ describe('AppShell (T6.4)', () => {
   it('exposes exactly eight approved destinations and keeps legacy routes out of navigation', async () => {
     const user = userEvent.setup();
     render(<AppShell user={admin} />);
-    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
     expect(drawer.querySelectorAll('.panel-shell__navigation-button')).toHaveLength(8);
     for (const label of [
@@ -72,7 +72,7 @@ describe('AppShell (T6.4)', () => {
       new Response(JSON.stringify({ cases: [], users: [] }), { status: 200 }),
     );
     render(<AppShell user={operador} />);
-    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Conversaciones' }));
     const conversationsSegment = screen.getAllByRole('button', { name: /^Conversaciones$/ })
       .find((button) => button.hasAttribute('aria-pressed'))!;
@@ -91,7 +91,7 @@ describe('AppShell (T6.4)', () => {
     const { container } = render(<AppShell user={operador} />);
     expect(await screen.findByRole('heading', { name: 'Panel', level: 1 })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
     const panelBtn = within(drawer).getByRole('button', { name: 'Panel unificado' });
     expect(panelBtn).toHaveAttribute('aria-current', 'page');
@@ -135,7 +135,7 @@ describe('AppShell (T6.4)', () => {
     const user = userEvent.setup();
     const { container } = render(<AppShell user={admin} />);
     const drawer = async () => {
-      await user.click(screen.getByRole('button', { name: 'Menú' }));
+      await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
       return screen.getByRole('dialog', { name: 'Navegación' });
     };
 
@@ -162,7 +162,7 @@ describe('AppShell (T6.4)', () => {
     expect(await screen.findByRole('heading', { name: 'Agenda', level: 1 })).toBeInTheDocument();
     expect(sidebar(container).getByText('Agenda').closest('button')).toHaveAttribute('aria-current', 'page');
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Menú' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     expect(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Agenda' })).toBeInTheDocument();
     vi.restoreAllMocks();
   });
@@ -178,7 +178,7 @@ describe('AppShell (T6.4)', () => {
     const { container } = render(<AppShell user={operador} />);
     expect(await screen.findByText('Indicadores operacionales')).toBeInTheDocument();
     expect(sidebar(container).queryByText('Dashboard avanzado')).not.toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Menú' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     expect(within(screen.getByRole('dialog', { name: 'Navegación' })).queryByRole('button', { name: 'Dashboard avanzado' })).not.toBeInTheDocument();
     vi.restoreAllMocks();
   });
@@ -203,7 +203,7 @@ describe('AppShell (T6.4)', () => {
     const { container } = render(<AppShell user={operador} />);
     expect(await screen.findByRole('heading', { name: 'Reglas de automatización', level: 1 })).toBeInTheDocument();
     expect(sidebar(container).getByText('Automatizaciones').closest('button')).toHaveAttribute('aria-current', 'page');
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Menú' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
     expect(within(drawer).getByRole('button', { name: 'Automatizaciones' })).toBeInTheDocument();
     expect(within(drawer).queryByRole('button', { name: /crear|editar|habilitar|deshabilitar/i })).not.toBeInTheDocument();
@@ -240,12 +240,12 @@ describe('AppShell (T6.4)', () => {
     });
     const user = userEvent.setup();
     render(<AppShell user={admin} />);
-    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Clientes' }));
     await user.click(await screen.findByRole('link', { name: 'Cliente vivo' }));
     expect(await screen.findByText('Ficha: Cliente vivo')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Conversaciones' }));
     await user.click(await screen.findByRole('button', { name: 'Abrir conversación #9' }));
     expect(await screen.findByText('# 9')).toBeInTheDocument();
@@ -328,7 +328,7 @@ describe('AppShell — native History API routing', () => {
     expect(screen.getByRole('heading', { name: 'Clientes', level: 1 })).toBeInTheDocument();
     expect(sidebar(container).getByText('Clientes').closest('button')).toHaveAttribute('aria-current', 'page');
 
-    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Conversaciones' }));
     expect(window.location.pathname).toBe('/panel/app/conversations');
     expect(screen.getByRole('heading', { name: 'Conversaciones', level: 1 })).toBeInTheDocument();
@@ -340,7 +340,7 @@ describe('AppShell — native History API routing', () => {
     const removeSpy = vi.spyOn(window, 'removeEventListener');
     const { unmount } = render(<AppShell user={operador} />);
 
-    await user.click(screen.getByRole('button', { name: 'Menú' }));
+    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Clientes' }));
     window.history.pushState({}, '', '/panel/app/conversations');
     window.dispatchEvent(new PopStateEvent('popstate'));
@@ -360,7 +360,7 @@ describe('AppShell — native History API routing', () => {
 });
 
 describe('AppShell — agent shell grammar', () => {
-  it('exposes focused header notification and avatar actions', async () => {
+  it('opens the notification popover and navigates to the full center', async () => {
     const user = userEvent.setup();
     const logout = vi.fn();
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => String(input).includes('/notifications')
@@ -371,15 +371,13 @@ describe('AppShell — agent shell grammar', () => {
     const bell = await screen.findByRole('button', { name: 'Notificaciones (1 sin leer)' });
 
     await user.click(bell);
-    expect(bell).toHaveFocus();
+    const popover = screen.getByRole('dialog', { name: 'Notificaciones' });
+    expect(popover).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /abrir menú de usuario/i })).not.toBeInTheDocument();
+    await user.click(within(popover).getByRole('button', { name: 'Ver todas las notificaciones' }));
     expect(window.location.pathname).toBe('/panel/app/notifications');
     expect(await screen.findByRole('heading', { name: 'Notificaciones' })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /abrir menú de usuario/i }));
-    const menu = screen.getByRole('menu', { name: 'Menú de usuario' });
-    expect(within(menu).getByText('ana')).toBeInTheDocument();
-    await user.click(within(menu).getByRole('menuitem', { name: 'Cerrar sesión' }));
-    expect(logout).toHaveBeenCalledOnce();
+    expect(logout).not.toHaveBeenCalled();
   });
 
   it('shows a truthful notification loading and error state without polling', async () => {
@@ -397,34 +395,24 @@ describe('AppShell — agent shell grammar', () => {
     expect(requests.filter((path) => path.includes('/notifications'))).toHaveLength(1);
   });
 
-  it('renders a truthful active-thread region without making a conversation request', () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ conversations: [] }), { status: 200 }));
-    render(<AppShell user={operador} loadActiveThreads />);
-
-    expect(screen.getByRole('region', { name: 'Conversaciones activas' })).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Conversaciones activas' })).toHaveTextContent('Cargando');
-    expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations/active', expect.anything());
-    fetchMock.mockRestore();
+  it('renders the responsive footer navigation with an admin-only raised chat action', () => {
+    const { container } = render(<AppShell user={admin} />);
+    const footer = within(container.querySelector('.panel-shell__footer-nav') as HTMLElement);
+    expect(footer.getByRole('button', { name: 'Notificaciones' })).toBeInTheDocument();
+    expect(footer.getByRole('button', { name: 'Panel' })).toHaveAttribute('aria-current', 'page');
+    expect(footer.getByRole('button', { name: 'Agente Lumat' })).toHaveClass('panel-shell__footer-nav--primary');
+    expect(footer.getAllByRole('button')).toHaveLength(5);
   });
 
-  it('keeps supplied active threads structural and renders the optional inspector', () => {
+  it('renders the optional inspector without active-thread chrome', () => {
     render(
       <AppShell
         user={admin}
-        activeThreads={{ status: 'ready', threads: [{ id: 9, label: 'María González', status: 'human', active: true }] }}
         inspector={<div>Contexto del cliente</div>}
       />,
     );
 
-    expect(screen.getByRole('button', { name: /María González/ })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('complementary', { name: 'Inspector operacional' })).toHaveTextContent('Contexto del cliente');
-  });
-
-  it('renders explicit active-thread loading and failure semantics', () => {
-    const { rerender } = render(<AppShell user={operador} activeThreads={{ status: 'loading' }} />);
-    expect(screen.getByRole('status', { name: 'Conversaciones activas' })).toHaveTextContent('Cargando conversaciones activas');
-
-    rerender(<AppShell user={operador} activeThreads={{ status: 'error', message: 'No se pudo cargar el resumen' }} />);
-    expect(screen.getByRole('alert', { name: 'Conversaciones activas' })).toHaveTextContent('No se pudo cargar el resumen');
+    expect(screen.queryByRole('region', { name: 'Conversaciones activas' })).not.toBeInTheDocument();
   });
 });

@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { listActiveConversations, listNotifications } from '../../api';
-import { realtimeClient, type ConnectionStatus } from '../../realtime';
-import type { ActiveConversationsResponse, NotificationsResponse } from '../../types';
+import { listNotifications, markAllNotificationsRead } from '../../api';
+import type { NotificationsResponse, PanelNotification } from '../../types';
 import type { User } from '../../types';
-import type { ActiveThreadsState, ConversationTab, NotificationState, PanelView } from './PanelShell';
+import type { ConversationTab, NotificationState, PanelView } from './PanelShell';
 import { PanelShell } from './PanelShell';
 import { parsePanelPath, pathForRoute, pathForView, type PanelRoute } from './panelRoutes';
 import { Dashboard } from '../pages/Dashboard';
@@ -30,57 +29,37 @@ export type View = PanelView;
 export interface AppShellProps {
   user: User;
   onLogout?: () => void | Promise<void>;
-  activeThreads?: ActiveThreadsState;
-  loadActiveThreads?: boolean;
   inspector?: ReactNode;
 }
 
 /** Application shell: PanelShell frame and native History API navigation. */
-export function AppShell({ user, onLogout, activeThreads, loadActiveThreads = false, inspector }: AppShellProps) {
+export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const [route, setRoute] = useState<PanelRoute>(() => parsePanelPath(window.location.pathname));
   const [conversationTab, setConversationTab] = useState<ConversationTab>(() => parsePanelPath(window.location.pathname).view === 'cases' ? 'cases' : 'conversations');
   const [conversationRefresh, setConversationRefresh] = useState(0);
   const [creatingAutomationRule, setCreatingAutomationRule] = useState(false);
-  const [railState, setRailState] = useState<ActiveThreadsState>({ status: 'loading' });
-  const [connection, setConnection] = useState<ConnectionStatus>('disconnected');
   const [notificationState, setNotificationState] = useState<NotificationState>({ status: 'loading' });
+  const [notifications, setNotifications] = useState<PanelNotification[]>([]);
 
   useEffect(() => {
     let mounted = true;
     void listNotifications().then((response: NotificationsResponse) => {
-      if (mounted) setNotificationState({ status: 'ready', unread: response.notifications.filter((notification) => notification.read_at === null).length });
+       if (mounted) {
+         setNotifications(response.notifications);
+         setNotificationState({ status: 'ready', unread: response.notifications.filter((notification) => notification.read_at === null).length });
+       }
     }).catch(() => {
       if (mounted) setNotificationState({ status: 'error' });
     });
     return () => { mounted = false; };
   }, []);
 
-  useEffect(() => {
-    if (!loadActiveThreads || activeThreads !== undefined) return;
-    let mounted = true;
-    const load = async () => {
-      setRailState((state) => state.status === 'ready' ? state : { status: 'loading' });
-      try {
-        const response: ActiveConversationsResponse = await listActiveConversations();
-        if (mounted) setRailState(response.conversations.length === 0 ? { status: 'empty' } : {
-          status: 'ready',
-          threads: response.conversations.map((conversation) => ({
-            id: conversation.id,
-            label: conversation.customer_name ?? `Cliente #${conversation.id}`,
-            status: conversation.state as 'bot' | 'human' | 'closed',
-          })),
-        });
-      } catch {
-        if (mounted) setRailState({ status: 'error' });
-      }
-    };
-    const unsubscribe = realtimeClient.subscribe((event) => {
-      if (event.type === 'conversation' || event.type === 'message' || event.type === 'snapshot') void load();
-    });
-    const unsubscribeStatus = realtimeClient.subscribeStatus(setConnection);
-    void load();
-    return () => { mounted = false; unsubscribe(); unsubscribeStatus(); };
-  }, [activeThreads, loadActiveThreads]);
+  const markAllRead = async () => {
+    await markAllNotificationsRead();
+    const now = new Date().toISOString();
+    setNotifications((current) => current.map((notification) => ({ ...notification, read_at: notification.read_at ?? now })));
+    setNotificationState({ status: 'ready', unread: 0 });
+  };
 
   useEffect(() => {
     const parsed = parsePanelPath(window.location.pathname);
@@ -141,7 +120,7 @@ export function AppShell({ user, onLogout, activeThreads, loadActiveThreads = fa
     : <Settings />;
 
   return (
-    <PanelShell user={user} currentView={shellView} conversationTab={conversationTab} onConversationTabChange={setConversationTab} onNavigate={navigate} onLogout={onLogout} notificationState={notificationState} activeThreads={activeThreads ?? railState} connectionStatus={connection} onActiveThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} inspector={inspector}>
+    <PanelShell user={user} currentView={shellView} conversationTab={conversationTab} onConversationTabChange={setConversationTab} onNavigate={navigate} onLogout={onLogout} notificationState={notificationState} notifications={notifications} onMarkAllNotificationsRead={markAllRead} inspector={inspector}>
       {page}
     </PanelShell>
   );

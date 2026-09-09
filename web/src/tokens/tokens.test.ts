@@ -151,7 +151,7 @@ describe('design tokens — corp-* alias layer (CST-ALIAS-1..5 · DS-TKN-10..12)
   const unresolvedSlots = new Set(['--corp-value', '--corp-size', '--corp-w', '--corp-h']);
   const declaredAliased = aliasedSlots.filter((s) => !unresolvedSlots.has(s));
 
-  it('declares the 14 resolvable corp-* slots exactly once; size/w/h fall back unmatched (CST-ALIAS-3 · CST-ALIAS-4)', () => {
+  it('declares the 13 resolvable corp-* slots exactly once; size/w/h fall back unmatched (CST-ALIAS-3 · CST-ALIAS-4)', () => {
     for (const slot of declaredAliased) {
       expect(corpVars.has(slot), `missing slot ${slot}`).toBe(true);
     }

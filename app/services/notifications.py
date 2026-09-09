@@ -81,6 +81,15 @@ def mark_notification_read(session: Session, notification_id: int, *, user_id: i
     return row
 
 
+def mark_all_notifications_read(session: Session, *, user_id: int, now: datetime | None = None) -> int:
+    now = now or datetime.now(timezone.utc)
+    rows = session.scalars(select(PanelNotification).where(PanelNotification.user_id == user_id, PanelNotification.read_at.is_(None)).with_for_update()).all()
+    for row in rows:
+        row.read_at = now
+    session.flush()
+    return len(rows)
+
+
 def create_due_reminder(
     session: Session, *, customer_id: int, reminder_kind: str, due_at: datetime,
     recipient: str | None = None, content: str | None = None,

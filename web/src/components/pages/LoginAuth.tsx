@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '../primitives/Button';
 import { Input } from '../primitives/Input';
-import { PageFrame } from '../shared/PageFrame';
 
 export interface LoginAuthProps {
   error?: string | null;
@@ -25,16 +24,15 @@ export function LoginAuth({ error, username = '', isLoading = false, onSubmit }:
   };
 
   return (
-    <PageFrame title="Bienvenido">
-      <div className="login-frame">
-        <section className="login-frame__brand" aria-labelledby="login-brand-name">
+    <main className="login-page">
+      <section className="login-frame" aria-labelledby="login-form-title">
+        <div className="login-frame__brand" aria-hidden="true">
           <div className="login-brand">
-            <span className="login-brand__name" id="login-brand-name">Lumat</span>
+            <span className="login-brand__name">Lumat</span>
             <span className="login-brand__context">Panel operativo</span>
           </div>
-          <p className="login-frame__welcome">Gestioná tus conversaciones y operaciones desde un solo lugar.</p>
-        </section>
-        <section className="login-frame__form" aria-labelledby="login-form-title">
+        </div>
+        <div className="login-frame__form">
           <h2 id="login-form-title">Acceso al panel</h2>
           <form onSubmit={submit} aria-label="Formulario de acceso">
             {error ? <p className="login-frame__error" role="alert">{error}</p> : null}
@@ -57,8 +55,8 @@ export function LoginAuth({ error, username = '', isLoading = false, onSubmit }:
               {isLoading || submitting ? <p className="login-frame__status" role="status">Iniciando sesión…</p> : null}
             </div>
           </form>
-        </section>
-      </div>
-    </PageFrame>
+        </div>
+      </section>
+    </main>
   );
 }
