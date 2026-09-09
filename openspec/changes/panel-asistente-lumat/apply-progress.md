@@ -6,6 +6,9 @@ PR 1, PR 2, and PR 3 are complete and ready for verification. Delivery is
 `auto-chain` with `stacked-to-main`; PR 3 is limited to frontend assistant chat
 lifecycle UX. Attachments upload UI remains in PR 5.
 
+Validator remediation is complete: PR 3 now supports explicit thread recovery,
+stream-owned processing state, and the complete serialized approval contract.
+
 ## Completed Tasks
 
 - [x] 1.1 RED role/recovery/SSE — AO-1, AO-3, IAC-2, IAC-3, IAC-6.
@@ -163,6 +166,25 @@ mid-session. Consulted before the task and before each affected module:
 God nodes consulted: `InternalChatThread`, `agent_chat.py`, `stage_event()`,
 `models.py`; communities: Frontend API Client, Recovery Helpers, Agent Chat UI,
 Shared UI Components, Frontend Test & Storybook Deps.
+
+## PR 3 Validator Remediation
+
+| Gap | Fix | Test |
+|---|---|---|
+| Persisted thread recovery | `AgentChat` accepts `threadId` and reads `?thread_id=`; GET restores plan, approval, evidence, lifecycle, events, and active run, reconnecting recoverable streams | `recovers a persisted plan by thread id without creating a new thread` — passed |
+| Stream-owned processing | Removed request `finally` reset and response-event reset; `openStream` clears processing only after ReadableStream completion or error | `keeps processing until the SSE stream closes` — passed |
+| Approval contract | `AssistantApproval` mirrors backend token hash, tool, arguments, argument hash, expiry, status, and consumed timestamp fields | TypeScript compile-time fixture in `AgentChat.test.tsx` — passed |
+
+### Remediation Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused tests | `npm test -- --run src/components/pages/AgentChat.test.tsx` — **1 file passed, 10 tests passed**. |
+| Full frontend | `npm test` — **69 files passed, 492 tests passed**. |
+| Typecheck | `npx tsc --noEmit` — **passed**. |
+| Build | `npm run build` — **passed**. |
+| Backend regression | Isolated `tests/integration/test_assistant_chat.py -q` — **10 passed**. |
+| Rollback boundary | Revert the remediation commit affecting `AgentChat.tsx`, `AgentChat.test.tsx`, `types.ts`, and this progress artifact; prior PR 3 behavior and all backend/WhatsApp/dashboard boundaries remain intact. |
 
 ## Validator Remediation — PR 2
 
