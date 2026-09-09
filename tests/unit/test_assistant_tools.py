@@ -54,10 +54,10 @@ def test_write_requires_consumed_exact_approval(monkeypatch):
 
 
 def test_web_search_is_bounded_and_failures_are_empty():
-    html = "".join(
+    html = "<html><body>" + "".join(
         f'<a class="result__a" href="https://example.test/{n}">{"x" * 2000}</a>'
         for n in range(8)
-    )
+    ) + "</body></html>"
 
     class Client:
         def get(self, _url):
@@ -107,6 +107,22 @@ def test_websearch_failure_is_error_evidence(monkeypatch):
     assert result["status"] == "error"
     assert result["evidence"]["status"] == "error"
     assert result["evidence"]["reason"] == "timeout"
+
+
+def test_websearch_malformed_response_is_failure():
+    class Client:
+        def get(self, _url):
+            return type(
+                "Response",
+                (),
+                {
+                    "text": "<html><body><a class='result__a' href='javascript:alert(1)'>unsafe</a></body></html>",
+                    "raise_for_status": lambda self: None,
+                },
+            )()
+
+    with pytest.raises(SearchFailure, match="unsafe"):
+        DuckDuckGoSearch(Client()).search("unsafe")
 
 
 def test_approval_failure_records_error_evidence_before_raising(monkeypatch):

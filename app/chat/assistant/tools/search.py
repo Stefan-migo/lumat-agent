@@ -22,11 +22,20 @@ class _ResultParser(HTMLParser):
         self.results: list[dict[str, str]] = []
         self._current: dict[str, str] | None = None
         self._capture = False
+        self.candidate_count = 0
+        self.unsafe_count = 0
+        self.saw_html = False
+        self.saw_body = False
+        self.closed_html = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
+        self.saw_html = self.saw_html or tag == "html"
+        self.saw_body = self.saw_body or tag == "body"
         classes = (attributes.get("class") or "").split()
-        if tag == "a" and "result__a" in classes and len(self.results) < MAX_RESULTS:
+        if tag == "a" and "result__a" in classes:
+            self.candidate_count += 1
+        if tag == "a" and "result__a" in classes:
             self._current = {"title": "", "url": attributes.get("href") or ""}
             self._capture = True
 
@@ -38,10 +47,14 @@ class _ResultParser(HTMLParser):
         if tag == "a" and self._capture and self._current is not None:
             title = " ".join(self._current["title"].split())[:MAX_TEXT_LENGTH]
             url = self._current["url"][:MAX_TEXT_LENGTH]
-            if title and url.startswith(("http://", "https://")):
+            if title and url.startswith(("http://", "https://")) and len(self.results) < MAX_RESULTS:
                 self.results.append({"title": title, "url": url})
+            elif not (title and url.startswith(("http://", "https://"))):
+                self.unsafe_count += 1
             self._current = None
             self._capture = False
+        if tag == "html":
+            self.closed_html = True
 
 
 class DuckDuckGoSearch:
@@ -59,12 +72,19 @@ class DuckDuckGoSearch:
         try:
             response = request.get(f"https://html.duckduckgo.com/html/?q={quote_plus(query)}")
             response.raise_for_status()
+            if not isinstance(response.text, str):
+                raise SearchFailure("malformed search response")
             parser = _ResultParser()
             parser.feed(response.text[:100_000])
+            parser.close()
+            if not (parser.saw_html and parser.saw_body and parser.closed_html):
+                raise SearchFailure("malformed search response")
+            if parser.unsafe_count or (parser.candidate_count and not parser.results):
+                raise SearchFailure("unsafe result entry")
             return parser.results[: min(max(limit, 0), MAX_RESULTS)]
         except httpx.HTTPError as exc:
             raise SearchFailure("network request failed") from exc
-        except (ValueError, UnicodeError) as exc:
+        except (AttributeError, TypeError, ValueError, UnicodeError) as exc:
             raise SearchFailure("malformed search response") from exc
         finally:
             if owned:
