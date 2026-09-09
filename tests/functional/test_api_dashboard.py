@@ -15,9 +15,15 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+
+import pytest
 
 from app.db import SessionLocal  # noqa: E402
+from app.panel.api.routes.dashboard import require_dashboard_user  # noqa: E402
 from app.models import (  # noqa: E402
+    Appointment,
+    AppointmentStatus,
     Case,
     Conversation,
     ConversationState,
@@ -153,6 +159,7 @@ def test_kpis_returns_exact_seeded_values(client, make_user):
     # derived = 2 escalated cases in window; visit_requests = 1 (service 'visita')
     assert body["derived"] == 2
     assert body["visit_requests"] == 1
+    assert body["new_customers"] == 2
     # window metadata from the default kpi.window_days (7)
     assert body["window_days"] == 7
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", body["window_start"]), (
@@ -172,6 +179,7 @@ def test_kpis_empty_db_returns_zeros(client, make_user):
     assert body["contacts"] == 0
     assert body["derived"] == 0
     assert body["visit_requests"] == 0
+    assert body["new_customers"] == 0
     assert body["motivos"] == []
     assert body["window_days"] == 7
 
@@ -227,3 +235,78 @@ def test_kpis_respects_configured_window(client, make_user):
     assert body["derived"] == 0
     assert body["visit_requests"] == 0
     assert body["motivos"] == []
+
+
+def test_today_requires_json_auth_and_valid_timezone(client, make_user):
+    response = client.get("/panel/api/dashboard/today?timezone=America/Santiago", follow_redirects=False)
+    assert response.status_code == 401
+    assert response.json() == {"detail": "unauthorized"}
+
+    make_user("admin", "admin-pass", role="admin")
+    _login(client, "admin", "admin-pass")
+    response = client.get("/panel/api/dashboard/today?timezone=Not/AZone", follow_redirects=False)
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid timezone"
+
+    make_user("other", "other-pass", role="operador")
+    other = client.post("/panel/api/login", json={"username": "other", "password": "other-pass"})
+    assert other.status_code == 200
+
+
+def test_today_projection_uses_local_bounds_and_operational_predicates(client, make_user):
+    now = datetime.now(timezone.utc)
+    make_user("oper", "oper-pass", role="operador")
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56977770000", name="Hoy Cliente", created_at=now)
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.HUMAN)
+        session.add(conversation)
+        session.flush()
+        case = Case(conversation_id=conversation.id, customer_id=customer.id, service="calefont", summary="No enciende", emergency=True, created_at=now)
+        session.add_all([Message(conversation_id=conversation.id, direction=MessageDirection.INBOUND, msg_type=MessageType.TEXT, text="ayuda", created_at=now - timedelta(minutes=5)), case])
+        session.flush()
+        session.add(Appointment(service="visita", customer_id=customer.id, case_id=case.id, technician_id=1, local_start=datetime.now(), timezone="America/Santiago", starts_at=now + timedelta(hours=1), ends_at=now + timedelta(hours=2), duration_minutes=60))
+        session.commit()
+    _login(client)
+    response = client.get("/panel/api/dashboard/today?timezone=America/Santiago")
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {"tz", "local_date", "appointments_today", "unanswered_conversations", "urgent_cases"}
+    assert body["tz"] == "America/Santiago"
+    assert body["unanswered_conversations"][0]["customer_name"] == "Hoy Cliente"
+    assert body["urgent_cases"][0]["summary"] == "No enciende"
+    assert body["appointments_today"][0]["service"] == "visita"
+
+
+def test_today_excludes_cancelled_and_replied_rows_and_caps_each_projection(client, make_user):
+    now = datetime.now(timezone.utc)
+    make_user("oper", "oper-pass", role="operador")
+    with SessionLocal() as session:
+        for index in range(21):
+            customer = Customer(phone_e164=f"+5698888{index:04d}", name=f"Cliente {index}", created_at=now)
+            session.add(customer)
+            session.flush()
+            conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.BOT)
+            session.add(conversation)
+            session.flush()
+            session.add(Message(conversation_id=conversation.id, direction=MessageDirection.INBOUND, msg_type=MessageType.TEXT, text="hola", created_at=now - timedelta(minutes=index + 1)))
+            case = Case(conversation_id=conversation.id, customer_id=customer.id, service="urgente", emergency=True, created_at=now, escalated_at=now - timedelta(minutes=index))
+            session.add(case)
+            session.flush()
+            session.add(Appointment(service="visita", customer_id=customer.id, case_id=case.id, technician_id=1, local_start=datetime.now(), timezone="America/Santiago", starts_at=now + timedelta(minutes=index * 31 + 1), ends_at=now + timedelta(minutes=index * 31 + 31), duration_minutes=30, status=AppointmentStatus.CANCELLED if index == 0 else AppointmentStatus.BOOKED))
+        session.flush()
+        session.add(Message(conversation_id=1, direction=MessageDirection.OUTBOUND, msg_type=MessageType.TEXT, text="respondido", created_at=now))
+        session.commit()
+    _login(client)
+    body = client.get("/panel/api/dashboard/today?timezone=America/Santiago").json()
+    assert len(body["appointments_today"]) == 20
+    assert len(body["unanswered_conversations"]) == 20
+    assert len(body["urgent_cases"]) == 20
+    assert all(row["customer_name"] != "Cliente 0" for row in body["unanswered_conversations"])
+
+
+def test_today_rejects_non_dashboard_roles():
+    with pytest.raises(Exception) as error:
+        require_dashboard_user(SimpleNamespace(role=SimpleNamespace(value="tecnico")))
+    assert error.value.status_code == 403

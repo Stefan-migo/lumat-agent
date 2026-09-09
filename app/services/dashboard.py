@@ -2,21 +2,33 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import and_, exists, func, select
+from sqlalchemy.orm import aliased
 
 from app.models import (
     Appointment,
     AutomationExecution,
     Case,
+    Conversation,
+    ConversationState,
+    Customer,
     Message,
     MessageDirection,
     NotificationOperation,
+    AppointmentStatus,
 )
-from app.panel.api.serializers import to_appointment_dict, to_case_dict, to_message_dict
+from app.panel.api.serializers import (
+    to_appointment_dict,
+    to_case_dict,
+    to_message_dict,
+    to_today_appointment_dict,
+    to_today_case_dict,
+    to_today_conversation_dict,
+)
 
 MAX_PERIOD = timedelta(days=31)
 
@@ -44,13 +56,77 @@ def compute_kpis(session, window_days: int) -> dict:
             Case.service == "visita", Case.created_at >= start
         )
     )
+    new_customers = session.scalar(
+        select(func.count()).select_from(Customer).where(Customer.created_at >= start)
+    )
     return {
         "contacts": contacts or 0,
         "motivos": [(service, count) for service, count in motivos],
         "derived": derived or 0,
         "visit_requests": visits or 0,
+        "new_customers": new_customers or 0,
         "window_days": window_days,
         "window_start": start.date().isoformat(),
+    }
+
+
+def today_projection(session, timezone_name: str) -> dict:
+    """Return the bounded operational projection for the current local day."""
+    try:
+        zone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError as exc:
+        raise HTTPException(status_code=422, detail="invalid timezone") from exc
+
+    local_date = datetime.now(timezone.utc).astimezone(zone).date()
+    local_start = datetime.combine(local_date, time.min, tzinfo=zone)
+    local_end = datetime.combine(local_date + timedelta(days=1), time.min, tzinfo=zone)
+    start = local_start.astimezone(timezone.utc)
+    end = local_end.astimezone(timezone.utc)
+
+    appointments = session.execute(
+        select(Appointment, Customer.name)
+        .join(Customer, Customer.id == Appointment.customer_id)
+        .where(
+            Appointment.starts_at >= start,
+            Appointment.starts_at < end,
+            Appointment.status != AppointmentStatus.CANCELLED,
+        )
+        .order_by(Appointment.starts_at, Appointment.id)
+        .limit(20)
+    ).all()
+
+    inbound = aliased(Message)
+    later_inbound = aliased(Message)
+    later_outbound = aliased(Message)
+    unanswered = session.execute(
+        select(Conversation, Customer.name, inbound.created_at)
+        .join(Customer, Customer.id == Conversation.customer_id)
+        .join(inbound, and_(inbound.conversation_id == Conversation.id, inbound.direction == MessageDirection.INBOUND))
+        .where(
+            Conversation.state.in_([ConversationState.BOT, ConversationState.HUMAN]),
+            ~exists(select(later_inbound.id).where(later_inbound.conversation_id == Conversation.id, later_inbound.direction == MessageDirection.INBOUND, later_inbound.created_at > inbound.created_at)),
+            ~exists(select(later_outbound.id).where(later_outbound.conversation_id == Conversation.id, later_outbound.direction == MessageDirection.OUTBOUND, later_outbound.created_at > inbound.created_at)),
+        )
+        .order_by(inbound.created_at.desc(), Conversation.id)
+        .limit(20)
+    ).all()
+
+    urgent = session.execute(
+        select(Case, Customer.name)
+        .join(Customer, Customer.id == Case.customer_id)
+        .where(
+            Case.closed_at.is_(None),
+            (Case.escalated_at.is_not(None) | (Case.emergency.is_(True))),
+        )
+        .order_by(Case.escalated_at.is_(None), Case.escalated_at.desc(), Case.id)
+        .limit(20)
+    ).all()
+    return {
+        "tz": timezone_name,
+        "local_date": local_date.isoformat(),
+        "appointments_today": [to_today_appointment_dict(row, customer_name) for row, customer_name in appointments],
+        "unanswered_conversations": [to_today_conversation_dict(row, customer_name, last_message_at) for row, customer_name, last_message_at in unanswered],
+        "urgent_cases": [to_today_case_dict(row, customer_name) for row, customer_name in urgent],
     }
 
 
