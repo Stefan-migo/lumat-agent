@@ -95,9 +95,24 @@ export interface MemoriesResponse {
 export interface PanelNotification { id: number; user_id: number; operation_id: number; title: string; content: string; source: string; channel: string | null; status: string; read_at: string | null; created_at: string | null; }
 export interface NotificationsResponse { notifications: PanelNotification[]; }
 
-export type InternalChatStatus = 'processing' | 'processed' | 'failed';
-export interface InternalChatThread { id: number; user_id?: number; status: string; created_at?: string | null; updated_at?: string | null; }
-export interface InternalChatMessage { id: number; thread_id?: number; author: 'admin' | 'agent'; content: string; status: InternalChatStatus; error?: string | null; created_at?: string | null; completed_at?: string | null; }
+export type InternalChatStatus = 'processing' | 'processed' | 'failed' | 'approval_pending' | 'rejected';
+export interface AssistantPlan { tool?: string | null; arguments?: Record<string, unknown>; summary?: string; status?: string; requires_approval?: boolean; }
+export interface AssistantApproval {
+  token?: string;
+  token_sha256?: string;
+  tool?: string | null;
+  arguments?: Record<string, unknown>;
+  arguments_sha256?: string;
+  expires_at?: string;
+  status?: string;
+  consumed_at?: string | null;
+}
+export interface AssistantEvidence { tool?: string | null; status: string; detail?: string; result?: unknown; }
+export type AssistantEventType = 'plan' | 'approval' | 'tool' | 'evidence' | 'status' | 'response' | 'error';
+export interface AssistantEvent { type: AssistantEventType; thread_id: number; run_id: string; sequence: number; plan?: AssistantPlan; approval?: AssistantApproval | null; status?: string; tool?: string | null; evidence?: AssistantEvidence[]; content?: string; error?: string; }
+export interface AssistantState { stage?: string; recoverable?: boolean; execution_status?: string; approval?: AssistantApproval | null; events?: AssistantEvent[]; }
+export interface InternalChatThread { id: number; user_id?: number; status: string; assistant_state?: AssistantState; current_plan?: AssistantPlan | null; active_run_id?: string | null; created_at?: string | null; updated_at?: string | null; }
+export interface InternalChatMessage { id: number; thread_id?: number; author: 'admin' | 'agent'; content: string; status: InternalChatStatus; error?: string | null; assistant_metadata?: { run_id?: string; approval?: AssistantApproval | null }; created_at?: string | null; completed_at?: string | null; }
 export interface InternalChatResponse { thread: InternalChatThread; messages: InternalChatMessage[]; }
 
 export type RealtimeEnvelopeType = 'token' | 'message' | 'conversation' | 'activity' | 'snapshot';

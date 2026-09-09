@@ -39,8 +39,8 @@ Chain strategy: stacked-to-main
 
 ## PR 3 — Frontend UX
 
-- [ ] 3.1 **RED UI states** — `AgentChat.test.tsx`/`AgentChat.stories.tsx`: lifecycle, approve/reject, reconnect, attachments; req IAC-3/6.
-- [ ] 3.2 **Render lifecycle** — `web/src/components/pages/AgentChat.tsx`, `api.ts`, `types.ts`: cards, controls, SSE reducer, recovery; req IAC-2/3/6.
+- [x] 3.1 **RED UI states** — `AgentChat.test.tsx`/`AgentChat.stories.tsx`: lifecycle, approve/reject, reconnect, attachments; req IAC-3/6.
+- [x] 3.2 **Render lifecycle** — `web/src/components/pages/AgentChat.tsx`, `api.ts`, `types.ts`: cards, controls, SSE reducer, recovery; req IAC-2/3/6.
 
 ## PR 4 — Agent Configuration
 
