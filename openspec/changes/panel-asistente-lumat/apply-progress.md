@@ -272,3 +272,36 @@ was run mid-session.
 | Typecheck | `npx tsc --noEmit` — **passed**. |
 | Graph check | Consulted `agent_chat.py → approve_plan() → execute() → _execution_events() → recover_events() → stream_events()` and `InternalChatThread` persistence path. |
 | Rollback boundary | Revert commit `eeaa3f30`; removes the approval-event persistence fix and its integration test without touching frontend, WhatsApp, dashboard, or infra. |
+
+
+## PR 4 — Agent Configuration
+
+- [x] 4.1 RED registry tests — missing persona/prompt references fail deterministically; valid assistant configuration resolves with 13 tools.
+- [x] 4.2 Validated config/view — assistant persona and plan/respond/classify prompts added; missing WhatsApp roster personas restored; runtime references and tool allow-list validate at load; admin-only read-only capability endpoint and panel view added.
+
+## PR 4 TDD Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 4.1 | `tests/unit/test_agent_registry.py` | Unit | ✅ 10/10 baseline after import fix | ✅ Missing assistant config/reference tests failed | ✅ 13 passed | ✅ persona and prompt missing-reference cases | ✅ Shared runtime-path validation |
+| 4.2 | `tests/functional/test_api_assistant_capabilities.py`, `web/src/components/pages/AgentChat.test.tsx` | Integration/component | ✅ Existing assistant/frontend suites green | ✅ Endpoint/view assertions failed before implementation | ✅ Backend 4 passed; frontend 11 passed | ✅ unauthenticated/operator/admin + read/write and rendered states | ✅ Reused tool registry and panel primitives |
+
+## PR 4 Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result | `DATABASE_URL="postgresql+psycopg://app:app@localhost:5432/lumat_test_asistente" TEST_ADMIN_DB_URL="postgresql://lumat:lumat@localhost:5432/lumat_test_asistente" .venv/bin/pytest tests/ -k "assistant or agent_registry or capabilities" -q` — **38 passed**; `npm test -- --run src/components/pages/AgentChat.test.tsx` — **11 passed**. |
+| Runtime harness command/scenario and exact result | Isolated TestClient admin GET `/panel/api/assistant/capabilities` returned 13 real tools; unauthenticated/operator requests returned 401/403; POST mutation returned 405 — **4 passed**. |
+| Rollback boundary | Revert agent config files, `app/agent_registry.py`, assistant tool metadata, capability route, and frontend capability rendering/API/types; PR 1–3 assistant behavior, WhatsApp, dashboard, and infra remain intact. |
+
+## PR 4 Graph Check
+
+Graph baseline: `graphify-out/graph.json` (3,803 nodes, 8,926 edges, 236 communities); no refresh during apply. Consulted per task:
+
+- 4.1: `agent_registry.py` → `Registry`/`load_registry()` → `registry.yaml`; Agent Registry & Skills and Agent Registry communities; `get_settings()`/app factory startup path.
+- 4.2: `require_admin_json()` → `chat.py` assistant route; `AgentChat()` → `api.ts` → `types.ts`; `ToolDefinition`/`TOOL_REGISTRY` → assistant capabilities; Panel Shell & Icons and Agent Chat UI communities.
+- God nodes consulted: `User`, `record_audit()`, `session_scope()`; assistant graph nodes `AssistantState`, `build_assistant_graph()`.
+
+## PR 4 Scope Exclusions
+
+No attachment upload/context work, WhatsApp pipeline changes, dashboard changes, infrastructure changes, or assistant configuration editing routes.

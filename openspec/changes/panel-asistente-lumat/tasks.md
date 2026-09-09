@@ -44,8 +44,8 @@ Chain strategy: stacked-to-main
 
 ## PR 4 — Agent Configuration
 
-- [ ] 4.1 **RED registry tests** — `tests/unit/test_agent_registry.py`: malformed/missing refs fail; valid registry resolves one assistant; req AC-4/9.
-- [ ] 4.2 **Validated config/view** — `app/agent_registry.py`, `agent/registry.yaml`, `agent/personas/`, `agent/prompts/`, capability route/view/tests; req AC-4/9/10.
+- [x] 4.1 **RED registry tests** — `tests/unit/test_agent_registry.py`: malformed/missing refs fail; valid registry resolves one assistant; req AC-4/9.
+- [x] 4.2 **Validated config/view** — `app/agent_registry.py`, `agent/registry.yaml`, `agent/personas/`, `agent/prompts/`, capability route/view/tests; req AC-4/9/10.
 
 ## PR 5 — Attachments
 
