@@ -1,10 +1,10 @@
-# Apply Progress: Panel Asistente Lumat — PR 1
+# Apply Progress: Panel Asistente Lumat — PR 2
 
 ## Status
 
-PR 1 is complete and ready for verification. Delivery is `auto-chain` with
-`stacked-to-main`; this slice is limited to the assistant graph boundary,
-metadata migration, compatible admin routes, and recoverable SSE.
+PR 1 is complete. PR 2 is complete and ready for verification. Delivery is
+`auto-chain` with `stacked-to-main`; this slice is limited to native assistant
+tools, bounded web evidence, and confirmed automation authoring.
 
 ## Completed Tasks
 
@@ -12,6 +12,12 @@ metadata migration, compatible admin routes, and recoverable SSE.
 - [x] 1.2 Persist metadata — AO-1, IAC-2; migration 020 and ORM/serializer state.
 - [x] 1.3 Build boundary — AO-1, AO-2, AO-3, IAC-6; separate graph, approval digest,
   evidence, recovery, service replacement, and admin SSE.
+- [x] 2.1 RED tool security — AT-1, AT-2, AT-3, AR-7; typed validation, approval
+  mismatch rejection, and bounded web adapter tests.
+- [x] 2.2 Registry/executor — AT-1, AT-3, AO-2; direct-service reads, bounded
+  results, JSON schemas, and graph executor dispatch.
+- [x] 2.3 Automation audit — AT-2, AR-6/7, AO-3; assistant writes require an
+  executor-origin marker and retain the existing audit/worker path.
 
 ## Commits
 
@@ -77,3 +83,108 @@ frontend UX, WhatsApp pipeline, or dashboard changes are included.
 
 - `DATABASE_URL=...lumat_test_asistente TEST_ADMIN_DB_URL=...lumat_test_asistente .venv/bin/pytest tests/integration/test_assistant_chat.py tests/integration/test_agent_chat_realtime.py -k 'agent_chat or realtime or internal or assistant' -q` — **13 passed**.
 - `... .venv/bin/pytest tests/ -k 'assistant or internal_chat or agent_chat or realtime or internal' -q` — **36 passed**.
+
+### PR 2 Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused tests | `DATABASE_URL=... TEST_ADMIN_DB_URL=... .venv/bin/pytest tests/unit/test_assistant_tools.py tests/integration/test_assistant_chat.py tests/integration/test_agent_chat_realtime.py -q` — **17 passed**. |
+| Runtime harness | Assistant integration path executed against isolated `lumat_test_asistente`; existing PR 1 assistant/realtime contracts passed. Full requested `pytest tests/ -k "assistant or tools or automation or agent_chat" -q` remains to be run by verify with the isolated DB. |
+| Rollback boundary | Revert `app/chat/assistant/tools/`, `app/chat/assistant/nodes.py`, `app/services/automation.py`, and `tests/unit/test_assistant_tools.py`; no WhatsApp, dashboard, or infra files changed. |
+
+### PR 2 TDD Evidence
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 2.1 Tool security | Missing tools registry caused collection failure | Unit validation/approval/bounds tests pass | Shared typed definitions and bounded result conversion retained |
+| 2.2 Registry/executor | Unknown registry import failed collection | Direct-service registry and graph dispatch pass focused suite | Aliased list/search names share one minimal handler |
+| 2.3 Automation audit | Assistant-origin guard absent | Executor-origin assistant creation path and existing audit contracts pass | Existing panel actor behavior unchanged |
+
+### Migration Decision
+
+No `021_assistant_approvals.sql` was created. PR 1 already persists approval
+state on `InternalChatThread` metadata and provides atomic conditional
+consume-once validation; a second approval table would duplicate persistence
+without adding required capability.
+
+## PR 2 Graph Check
+
+Consulted `GRAPH_REPORT.md` (3,803 nodes, 8,926 edges; built from PR 1
+baseline) and queried:
+
+- `AssistantState` → `assistant/graph.py` → `assistant/nodes.py` → approval/evidence.
+- `create_rule()` → `AutomationRule` → `record_audit()` → worker/domain events.
+- `customers.py`, `conversations.py`, `scheduling.py`, `cases.py`, `kb.py`, and
+  `dashboard.py` service/model hubs.
+
+No graph refresh was run mid-session; the graph remains the PR 1 baseline as
+required by the project session policy.
+
+## Validator Remediation — PR 2
+
+- Conversations now use `app.services.conversations.list_conversations`; appointments
+  use `app.services.scheduling.list_for_range`. Registry handlers no longer query
+  those models directly.
+- Added bounded `memory.read` through `app.services.memory.list_for_entity`, with
+  scope/entity/topic validation and a maximum of 20 results.
+- `DuckDuckGoSearch` raises `SearchFailure` for network/malformed responses;
+  `execute_tool` converts it to explicit error evidence while valid no-hit results
+  remain completed with an empty result.
+- Approval rejection now appends error evidence and records
+  `internal_chat.execution_rejected` before raising. The persisted agent-chat
+  failure event includes that evidence.
+
+### Remediation TDD Evidence
+
+| Gap | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| Service-backed reads | Registry service-seam test failed because handlers used raw SQL | Conversation and appointment seam tests pass | Read query ownership remains in existing service modules |
+| Memory read | Import/registry test failed because no memory tool existed | Bounded `memory.read` test passes | Reused `list_for_entity`; no new memory abstraction |
+| Web failure evidence | `SearchFailure` import/test failed | Search failure returns explicit error evidence; valid empty remains distinct | Provider adapter keeps one replaceable interface |
+| Approval evidence | Approval test observed `PermissionError` without evidence | State, exception, audit, and persisted failure event carry error evidence | Existing consume-once approval validation unchanged |
+
+### Remediation Verification
+
+| Evidence | Result |
+|---|---|
+| Focused tests | `... .venv/bin/pytest tests/unit/test_assistant_tools.py tests/integration/test_assistant_chat.py tests/integration/test_agent_chat_realtime.py -q` — **21 passed**. |
+| Runtime harness | `... .venv/bin/pytest tests/ -k 'assistant or tools or automation or agent_chat' -q` — **33 passed**. |
+| Sanity import | Settings-backed import of `tool_schemas()` and `build_assistant_graph()` — **13 tools, CompiledStateGraph**. |
+| Rollback boundary | Revert service seam additions, registry/search/nodes/agent-chat remediation, tests, and this progress section; no infra, dashboard, or WhatsApp files involved. |
+
+## Verify Remediation — PR 2
+
+- Web search now validates the HTML document shape and every result candidate;
+  missing document structure or unsafe result URLs raise `SearchFailure` and
+  become error evidence through the registry. Valid no-hit HTML remains an
+  empty successful result.
+- Added an isolated-DB runtime test covering approval consumption, real
+  `automation.create_rule(... actor="assistant", executor_origin=True)`, rule
+  listing alongside a UI-created rule, audit actor/history, and worker event
+  evaluation.
+- H4 cleanup and test database fallbacks now derive the admin URL from
+  `DATABASE_URL` when `TEST_ADMIN_DB_URL` is absent. No cleanup path targets
+  the hardcoded default database.
+
+### Verify Remediation Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused tests | `... .venv/bin/pytest tests/integration/test_assistant_chat.py tests/unit/test_assistant_tools.py tests/integration/test_agent_chat_realtime.py tests/integration/test_h4_automations.py -q` — **27 passed**. |
+| Runtime harness | `... .venv/bin/pytest tests/ -k 'assistant or tools or automation or agent_chat' -q` — **35 passed**. |
+| Malformed search test | Unsafe DDG result HTML raises `SearchFailure`; registry failure evidence path remains covered. |
+| Runtime automation test | `tests/integration/test_assistant_tools.py::test_approved_assistant_rule_is_persisted_audited_and_worker_visible` — passed against isolated PostgreSQL. |
+| Database isolation | `tests/conftest.py`, `tests/integration/conftest.py`, and H4 cleanup derive `postgresql://` admin URL from configured `DATABASE_URL`; no hardcoded cleanup URL remains in the exercised paths. |
+
+## Verify Remediation Follow-up
+
+- H4 worker and notification cleanup fixtures were also switched to the same
+  derived `ADMIN_DB_URL`, preventing adjacent H4 suites from cleaning the
+  default database when the isolated admin URL is omitted.
+- Final requested verification: focused assistant/tools/realtime/H4 suite
+  **27 passed**; related assistant/tools/automation/agent-chat selection
+  **35 passed**; H4 worker/notification isolation suites **12 passed**.
+
+Graph checks consulted the assistant search/evidence path, automation approval
+and worker path, and the database migration/test cleanup path. No graph refresh
+was run mid-session.

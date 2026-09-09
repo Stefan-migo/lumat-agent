@@ -53,8 +53,11 @@ os.environ["DEEPSEEK_API_KEY"] = "sk-test"
 from app.config import get_settings  # noqa: E402
 from app.main import create_app  # noqa: E402
 
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
+_database_url = os.environ.get("DATABASE_URL")
+if not _database_url:
+    raise RuntimeError("DATABASE_URL must be set for integration tests")
+ADMIN_DB_URL = os.environ.get("TEST_ADMIN_DB_URL") or _database_url.replace(
+    "postgresql+psycopg://", "postgresql://", 1
 )
 
 

@@ -1,6 +1,7 @@
 """H4 Slice 3 RED tests: notification center read model and push fallback."""
 
 from datetime import datetime, timedelta, timezone
+import os
 
 import psycopg
 import pytest
@@ -12,9 +13,14 @@ from app.services.events import publish_event
 from app.services import notifications
 
 
+ADMIN_DB_URL = os.environ.get("TEST_ADMIN_DB_URL") or os.environ["DATABASE_URL"].replace(
+    "postgresql+psycopg://", "postgresql://", 1
+)
+
+
 @pytest.fixture(autouse=True)
 def clean_h4_notifications(migrated_db):
-    with psycopg.connect("postgresql://lumat:lumat@localhost:5432/lumat", autocommit=True) as conn:
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute("TRUNCATE push_subscriptions, panel_notifications, notification_attempts, notification_operations, audit_log, users RESTART IDENTITY CASCADE")
     yield
 

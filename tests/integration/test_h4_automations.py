@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 from datetime import date, time
 from uuid import uuid4
+import os
 
 import psycopg
 import pytest
@@ -15,9 +16,14 @@ from app.services.events import publish_event
 from app.services import cases, scheduling
 
 
+ADMIN_DB_URL = os.environ.get("TEST_ADMIN_DB_URL") or os.environ["DATABASE_URL"].replace(
+    "postgresql+psycopg://", "postgresql://", 1
+)
+
+
 @pytest.fixture(autouse=True)
 def clean_h4_db(migrated_db):
-    with psycopg.connect("postgresql://lumat:lumat@localhost:5432/lumat", autocommit=True) as conn:
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
             "TRUNCATE automation_executions, automation_rules, domain_events, "
             "notification_operations, audit_log RESTART IDENTITY CASCADE"
