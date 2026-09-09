@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.models import User
-from app.panel.api.deps import require_user_json
+from app.panel.api.deps import require_operator_json
 from app.panel.api.serializers import to_agenda_dict, to_appointment_dict
 from app.panel.deps import get_db
 from app.services import scheduling
@@ -31,7 +31,7 @@ class CancelBody(BaseModel):
 
 
 @router.get("/appointments")
-def list_appointments(from_date: date = Query(alias="from"), to_date: date = Query(alias="to"), timezone_name: str = Query(alias="timezone"), session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+def list_appointments(from_date: date = Query(alias="from"), to_date: date = Query(alias="to"), timezone_name: str = Query(alias="timezone"), session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
     try:
         rows = scheduling.list_for_range(session, from_date, to_date, timezone_name)
     except scheduling.InvalidTimezone as exc:
@@ -42,7 +42,7 @@ def list_appointments(from_date: date = Query(alias="from"), to_date: date = Que
 
 
 @router.get("/availability/{technician_id}")
-def technician_availability(technician_id: int, starts_at: datetime, ends_at: datetime, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+def technician_availability(technician_id: int, starts_at: datetime, ends_at: datetime, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
     try:
         available = scheduling.availability(session, technician_id, starts_at, ends_at)
     except ValueError as exc:
@@ -51,7 +51,7 @@ def technician_availability(technician_id: int, starts_at: datetime, ends_at: da
 
 
 @router.post("/appointments")
-def create_appointment(body: AppointmentBody, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+def create_appointment(body: AppointmentBody, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
     try:
         appointment = scheduling.book(session, service=body.service, customer_id=body.customer_id, case_id=body.case_id, technician_id=body.technician_id, local_date=body.local_date, local_time=body.local_time, timezone_name=body.timezone, duration_minutes=body.duration_minutes, actor=current.username)
     except scheduling.UnlinkedAppointment as exc:
@@ -67,7 +67,7 @@ def create_appointment(body: AppointmentBody, session: Session = Depends(get_db)
 
 
 @router.get("/appointments/{appointment_id}")
-def get_appointment(appointment_id: int, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+def get_appointment(appointment_id: int, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
     appointment = session.get(scheduling.Appointment, appointment_id)
     if appointment is None:
         raise HTTPException(status_code=404, detail="appointment not found")
@@ -75,7 +75,7 @@ def get_appointment(appointment_id: int, session: Session = Depends(get_db), cur
 
 
 @router.post("/appointments/{appointment_id}/cancel")
-def cancel_appointment(appointment_id: int, body: CancelBody, session: Session = Depends(get_db), current: User = Depends(require_user_json)) -> dict:
+def cancel_appointment(appointment_id: int, body: CancelBody, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
     appointment = session.get(scheduling.Appointment, appointment_id)
     if appointment is None:
         raise HTTPException(status_code=404, detail="appointment not found")

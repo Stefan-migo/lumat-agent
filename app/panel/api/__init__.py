@@ -23,6 +23,7 @@ from app.panel.api.routes import (
     chat,
     advanced_dashboard,
     automation_rules,
+    technician,
 )
 
 # Per-domain sub-routers are included as they land, batch by batch.
@@ -42,3 +43,4 @@ api_router.include_router(settings.router)
 api_router.include_router(chat.router)
 api_router.include_router(advanced_dashboard.router)
 api_router.include_router(automation_rules.router)
+api_router.include_router(technician.router)

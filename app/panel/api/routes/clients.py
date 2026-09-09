@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.models import CustomerState, Memory, MemoryStatus, MemoryType, User
-from app.panel.api.deps import require_user_json
+from app.panel.api.deps import require_operator_json
 from app.panel.api.serializers import to_customer_dict, to_memory_dict, to_note_dict
 from app.panel.deps import get_db
 from app.services import customers
@@ -85,7 +85,7 @@ def _ficha_memory_or_404(
 def clients_list(
     q: str | None = None,
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """Search/list customers (AP-3), wrapped and capped at 100."""
     found = customers.search_customers(session, q, limit=100)
@@ -96,7 +96,7 @@ def clients_list(
 def client_ficha(
     customer_id: int,
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """Full ficha: customer + history (CR-5) + notes (CR-4) + lifecycle.
 
@@ -125,7 +125,7 @@ def client_state_change(
     customer_id: int,
     body: StateBody,
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """CR-3 lifecycle transition, validated and audited with the actor."""
     customer = _customer_or_404(session, customer_id)
@@ -144,7 +144,7 @@ def client_add_note(
     customer_id: int,
     body: NoteBody,
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """CR-4 internal staff note; audited with the actor (SH-5)."""
     _customer_or_404(session, customer_id)
@@ -173,7 +173,7 @@ def client_add_note(
 def client_memories_list(
     customer_id: int,
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """All customer-scoped memories for this ficha, newest first (MEM-6).
 
@@ -190,7 +190,7 @@ def client_memory_upsert(
     customer_id: int,
     body: MemoryBody,
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """Create/update one customer memory on this ficha (MEM-6, audited).
 
@@ -245,7 +245,7 @@ def client_memory_delete(
     customer_id: int,
     memory_id: int,
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """Delete one customer-scoped memory from this ficha (MEM-6, audited)."""
     _customer_or_404(session, customer_id)
@@ -273,7 +273,7 @@ def client_memory_mark(
     memory_id: int,
     body: MarkBody,
     session: Session = Depends(get_db),
-    current: User = Depends(require_user_json),
+    current: User = Depends(require_operator_json),
 ) -> dict:
     """Toggle pin and/or status on a ficha memory (MEM-6, audited).
 
