@@ -5,7 +5,7 @@ verdict: pass
 blockers: 0
 critical_findings: 0
 requirements: 10/10
-scenarios: 19/19
+scenarios: 18/18
 test_command: DATABASE_URL="postgresql+psycopg://app:app@localhost:5432/lumat" TEST_ADMIN_DB_URL="postgresql://lumat:lumat@localhost:5432/lumat" .venv/bin/python -m pytest tests/functional/test_api_users.py -q; (cd web && npx vitest run src/components/pages/UserManagement.test.tsx src/components/domain/AppShell.test.tsx src/components/pages/PanelLinks.test.tsx src/components/domain/panelRoutes.test.ts src/stories/pages/PanelEntry.stories.test.tsx)
 test_exit_code: 0
 test_output_hash: sha256:700bc0322b00f8e8db3ce495047983b54ab27ab59ed1fedac05f3aeba47dae24
@@ -32,7 +32,7 @@ All four implementation tasks are checked complete. The in-scope backend and fro
 | Tasks complete | 4 |
 | Tasks incomplete | 0 |
 | Requirements verified | 10/10 |
-| Scenarios verified | 19/19 |
+| Scenarios verified | 18/18 |
 
 ### Build & Tests Execution
 | Area | Command | Result |
@@ -57,7 +57,7 @@ All four implementation tasks are checked complete. The in-scope backend and fro
 | USR-UI-4 Active Toggle and Password Reset | 2/2 | `UserManagement.test.tsx`: self-disabled controls, toggle, confirmation, reset | COMPLIANT |
 | USR-UI-5 User View State Matrix | 1/1 | `UserManagement.test.tsx`: loading, empty, error, denied | COMPLIANT |
 
-**Compliance summary**: 19/19 scenarios compliant.
+**Compliance summary**: 18/18 scenarios compliant.
 
 ### Correctness
 | Area | Status | Evidence |
@@ -82,7 +82,7 @@ All four implementation tasks are checked complete. The in-scope backend and fro
 | All tasks have tests | PASS | 4/4 tasks checked; A.1/A.2 and B.1/B.2 test files exist |
 | RED confirmed | PASS | Backend and frontend test files exist; apply evidence records RED before implementation |
 | GREEN confirmed | PASS | Focused backend 6/6 and frontend 59/59 pass now |
-| Triangulation adequate | PASS | API tests cover the nine API scenarios; UI tests cover the ten UI scenarios across page, shell, route, and story seams |
+| Triangulation adequate | PASS | API tests cover the nine API scenarios; UI tests cover the nine UI scenarios across page, shell, route, and story seams |
 | Safety net | PASS WITH WARNING | Apply evidence records the required focused RED/GREEN cycles; safety-net execution is historical apply evidence, not independently reproducible from the current tree |
 
 **TDD Compliance**: 6/6 checks passed or accepted; no blocking TDD defect.
