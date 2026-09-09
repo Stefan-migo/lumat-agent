@@ -47,6 +47,7 @@ describe('AppShell (T6.4)', () => {
     ).not.toBeInTheDocument();
     expect(within(operadorDrawer).queryByRole('button', { name: /configuraci[oó]n/i })).not.toBeInTheDocument();
     expect(within(operadorDrawer).queryByRole('button', { name: 'Asistente Lumat' })).not.toBeInTheDocument();
+    expect(within(operadorDrawer).queryByRole('button', { name: 'Automatizaciones' })).not.toBeInTheDocument();
   });
 
   it('exposes exactly eight approved destinations and keeps legacy routes out of navigation', async () => {
@@ -196,17 +197,16 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
-  it('deep-links to automation rules and exposes the read-only route to operadores', async () => {
+  it('deep-links to automation rules and renders a forbidden state for operadores', async () => {
     window.history.replaceState({}, '', '/panel/app/automation-rules');
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ rules: [] }), { status: 200 }));
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ detail: 'Forbidden' }), { status: 403 }));
 
     const { container } = render(<AppShell user={operador} />);
-    expect(await screen.findByRole('heading', { name: 'Reglas de automatización', level: 1 })).toBeInTheDocument();
-    expect(sidebar(container).getByText('Automatizaciones').closest('button')).toHaveAttribute('aria-current', 'page');
+    expect(await screen.findByText(/no tienes permiso|acceso denegado|forbidden/i)).toBeInTheDocument();
+    expect(sidebar(container).queryByText('Automatizaciones')).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
-    expect(within(drawer).getByRole('button', { name: 'Automatizaciones' })).toBeInTheDocument();
-    expect(within(drawer).queryByRole('button', { name: /crear|editar|habilitar|deshabilitar/i })).not.toBeInTheDocument();
+    expect(within(drawer).queryByRole('button', { name: 'Automatizaciones' })).not.toBeInTheDocument();
     vi.restoreAllMocks();
   });
 
@@ -216,7 +216,7 @@ describe('AppShell (T6.4)', () => {
       const body = { rules: [{ id: 12, name: 'Aviso', event_type: 'case.created', conditions: {}, channel: 'whatsapp', template_event: 'case.created', cooldown_seconds: 0, enabled: true, created_by: 'ana', created_at: null, updated_at: null }] };
       return new Response(JSON.stringify(body), { status: 200 });
     });
-    render(<AppShell user={operador} />);
+    render(<AppShell user={admin} />);
     expect(await screen.findByRole('heading', { name: 'Reglas de automatización', level: 1 })).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole('link', { name: 'Aviso' }));
     expect(window.location.pathname).toBe('/panel/app/automation-rules/12');

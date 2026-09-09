@@ -38,7 +38,7 @@ def _create_rule(client, make_user, username="automation-admin", password="admin
     return response.json()["rule"]
 
 
-def test_automation_api_requires_json_auth_and_operators_can_read(client, make_user):
+def test_automation_api_requires_json_auth_and_operator_reads_are_forbidden(client, make_user):
     anonymous = client.get("/panel/api/automation-rules", follow_redirects=False)
     assert anonymous.status_code == 401
     assert anonymous.headers["content-type"].startswith("application/json")
@@ -49,13 +49,17 @@ def test_automation_api_requires_json_auth_and_operators_can_read(client, make_u
     _login(client, make_user, "automation-operator", "operator-pass", "operador")
     listing = client.get("/panel/api/automation-rules")
     detail = client.get(f"/panel/api/automation-rules/{rule['id']}")
-    assert listing.status_code == detail.status_code == 200
-    assert listing.json()["rules"][0]["id"] == rule["id"]
-    assert detail.json()["rule"]["created_by"] == "automation-admin"
-
+    assert listing.status_code == detail.status_code == 403
+    assert "rules" not in listing.json()
+    assert "rule" not in detail.json()
     forbidden = client.patch(f"/panel/api/automation-rules/{rule['id']}", json={"name": "changed"})
     assert forbidden.status_code == 403
     assert client.post(f"/panel/api/automation-rules/{rule['id']}/disable").status_code == 403
+
+    client.post("/panel/api/logout")
+    _login(client, make_user, "automation-admin-reads", "admin-pass", "admin")
+    assert client.get("/panel/api/automation-rules").json()["rules"][0]["id"] == rule["id"]
+    assert client.get(f"/panel/api/automation-rules/{rule['id']}").json()["rule"]["created_by"] == "automation-admin"
 
 
 def test_automation_api_envelopes_404_and_no_hard_delete(client, make_user):

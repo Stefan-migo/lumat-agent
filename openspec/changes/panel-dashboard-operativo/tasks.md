@@ -21,8 +21,8 @@ Strict TDD: every GREEN follows RED. PRs stack as `feat/panel-dashboard-operativ
 
 ## Slice 3 — Permission fixes (PR 3: `feat/panel-dashboard-operativo-slice3`, stacked on PR2)
 
-- [ ] **3.1 RED — automation.** Slice 3/PR3. Update `tests/functional/test_api_automation_rules.py`, `AppShell.test.tsx`, `PanelEntry.stories.test.tsx`, `AppShell.stories.test.tsx` for both GET 403, admin access, hidden nav and safe deep links. Test: focused pytest/Vitest. Depends: PR2.
-- [ ] **3.2 GREEN — guards.** Slice 3/PR3. Modify `app/panel/api/routes/automation_rules.py` (both GETs `require_admin_json`) and `PanelShell.tsx` (`adminOnly: true`). Verify: full pytest + web suite + typecheck. Depends: 3.1.
+- [x] **3.1 RED — automation.** Slice 3/PR3. Update `tests/functional/test_api_automation_rules.py`, `AppShell.test.tsx`, `PanelEntry.stories.test.tsx`, `AppShell.stories.test.tsx` for both GET 403, admin access, hidden nav and safe deep links. Test: focused pytest/Vitest. Depends: PR2.
+- [x] **3.2 GREEN — guards.** Slice 3/PR3. Modify `app/panel/api/routes/automation_rules.py` (both GETs `require_admin_json`) and `PanelShell.tsx` (`adminOnly: true`). Verify: full pytest + web suite + typecheck. Depends: 3.1.
 - **Budget/DoD:** ~150/Low. Rollback: automation guards/navigation/tests.
 
 ## Review Workload Forecast
