@@ -29,7 +29,7 @@ describe('panel routes', () => {
     expect(pathForRoute({ view: 'cases' })).toBe('/panel/app/cases');
     expect(pathForRoute({ view: 'advanced-dashboard' })).toBe('/panel/app/advanced-dashboard');
     expect(parsePanelPath('/panel/app/advanced-dashboard')).toEqual({ view: 'advanced-dashboard' });
-    expect(parsePanelPath('/panel/app/cases')).toEqual({ view: 'cases' });
+    expect(parsePanelPath('/panel/app/cases')).toEqual({ view: 'conversations', conversationTab: 'cases' });
   });
 
   it('builds and parses positive client and conversation drill-down IDs', () => {
@@ -51,6 +51,11 @@ describe('panel routes', () => {
   it('falls back safely from malformed agenda paths', () => {
     expect(parsePanelPath('/panel/app/agenda/1')).toEqual({ view: 'dashboard' });
     expect(parsePanelPath('/panel/app/%E0%A4%A')).toEqual({ view: 'dashboard' });
+  });
+
+  it('resolves bookmarked cases to the unified conversations route', () => {
+    expect(pathForRoute({ view: 'conversations', conversationTab: 'cases' })).toBe('/panel/app/conversations');
+    expect(parsePanelPath('/panel/app/conversations')).toEqual({ view: 'conversations' });
   });
 
   it('builds and parses canonical automation rule list and detail routes', () => {

@@ -83,7 +83,7 @@ describe('AppShell (T6.4)', () => {
     expect(window.location.pathname).toBe('/panel/app/conversations');
     expect(window.location.search).toBe('');
     expect(casesSegment).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('heading', { name: 'Casos' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Conversaciones' })).toBeInTheDocument();
     fetchMock.mockRestore();
   });
 
@@ -184,16 +184,15 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders the cases compatibility path as the selected internal segment', async () => {
+  it('redirects the bookmarked cases path to the unified conversations section', async () => {
     window.history.replaceState({}, '', '/panel/app/cases');
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ cases: [], users: [] }), { status: 200 }));
-    const user = userEvent.setup();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0, offset: 0, limit: 20, counts: { all: 0, human: 0, emergency: 0, case: 0, closed: 0 } }), { status: 200 }));
     render(<AppShell user={operador} />);
 
-    expect(window.location.pathname).toBe('/panel/app/cases');
+    expect(window.location.pathname).toBe('/panel/app/conversations');
     expect(screen.getByRole('button', { name: /^Casos$/ })).toHaveAttribute('aria-pressed', 'true');
-    await user.click(screen.getByRole('button', { name: /^Conversaciones$/, pressed: false }));
-    expect(window.location.pathname).toBe('/panel/app/cases');
+    expect(screen.queryByText('No hay registros')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Casos' })).not.toBeInTheDocument();
     vi.restoreAllMocks();
   });
 
