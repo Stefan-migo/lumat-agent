@@ -8,7 +8,7 @@ import pytest
 from starlette.testclient import WebSocketDenialResponse
 
 from app.db import SessionLocal
-from app.models import Conversation, Customer, ConversationState
+from app.models import Case, Conversation, Customer, ConversationState
 from app.panel.api.deps import get_current_user_json
 from app.panel.api.routes.realtime import realtime_user
 from app.services.realtime import publisher
@@ -50,9 +50,34 @@ def test_panel_websocket_mount_sends_snapshot_before_live_events(client, make_us
         assert frame["type"] == "snapshot"
         assert frame["conversation_id"] is None
         assert frame["data"]["conversations"][0]["id"] == conversation_id
+        assert frame["data"]["items"] == frame["data"]["conversations"]
+        assert set(frame["data"]["counts"]) == {"all", "human", "emergency", "case", "closed"}
         assert publisher.subscriber_count == 1
 
     assert publisher.subscriber_count == 0
+
+
+def test_panel_websocket_snapshot_has_rest_equivalent_case_context(client, make_user):
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56999990001", name="Snapshot Client")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, summary="snapshot summary")
+        session.add(conversation)
+        session.flush()
+        case = Case(conversation_id=conversation.id, customer_id=customer.id, emergency=True, status="escalado")
+        session.add(case)
+        session.commit()
+        conversation_id = conversation.id
+    make_user("oper", "oper-pass", role="operador")
+    _login(client, "oper", "oper-pass")
+
+    with client.websocket_connect("/panel/ws") as websocket:
+        row = next(row for row in websocket.receive_json()["data"]["items"] if row["id"] == conversation_id)
+
+    assert row["case_id"] == case.id
+    assert row["emergency"] is True
+    assert row["case_status"] == "escalado"
 
 
 def test_admin_panel_websocket_also_receives_snapshot(client, make_user):
