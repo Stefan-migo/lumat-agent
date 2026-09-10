@@ -10,9 +10,13 @@ from app.models import InternalChatThread
 
 def recover_events(thread: InternalChatThread, run_id: str | None = None) -> list[dict]:
     events = (thread.assistant_state or {}).get("events", [])
-    if run_id is None:
-        return events
-    return [event for event in events if event.get("run_id") == run_id]
+    if run_id is not None:
+        events = [event for event in events if event.get("run_id") == run_id]
+    unique = {}
+    for event in events:
+        key = (event.get("run_id"), event.get("sequence"), event.get("type"))
+        unique.setdefault(key, event)
+    return sorted(unique.values(), key=lambda event: event.get("sequence", 0))
 
 
 def is_recoverable(thread: InternalChatThread) -> bool:

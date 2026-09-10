@@ -43,6 +43,48 @@ def flush_panel_session(session, thread_id: int, *, before_tokens: int, after_to
     )
 
 
+def compact_session(session, thread_id: int, messages: list, *, before_tokens: int) -> dict:
+    """Flush and retain the newest bounded history when the session threshold is met."""
+    retention = 2_000
+    retained = []
+    used = 0
+    for message in reversed(messages):
+        cost = estimate_tokens(str(message.content))
+        if used + cost > retention:
+            continue
+        retained.append(message)
+        used += cost
+    retained.reverse()
+    if before_tokens < 4_000:
+        return {
+            "window_tokens": 8_000,
+            "threshold_tokens": 4_000,
+            "before_tokens": before_tokens,
+            "after_tokens": used,
+            "flushed": False,
+            "rotated": False,
+            "retained_message_ids": [message.id for message in retained],
+        }
+    flush = flush_panel_session(
+        session, thread_id, before_tokens=before_tokens, after_tokens=retention
+    )
+    rotated_at = datetime.now(timezone.utc).isoformat()
+    return {
+        "window_tokens": 8_000,
+        "threshold_tokens": 4_000,
+        "before_tokens": before_tokens,
+        "after_tokens": used,
+        "flushed": bool(flush.get("flushed", True)),
+        "rotated": True,
+        "retained_message_ids": [message.id for message in retained],
+        "rotation": {
+            "thread_id": thread_id,
+            "retention_tokens": retention,
+            "rotated_at": rotated_at,
+        },
+    }
+
+
 def assemble_context(session, thread_id: int, *, messages=None, attachments=None, budget: int = INJECTION_TOKEN_BUDGET) -> dict:
     """Build bounded panel context in stable source order."""
     if messages is None:
@@ -150,6 +192,13 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
         attachments = list(session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread.id, AssistantAttachment.id.in_(attachment_ids or []), AssistantAttachment.deleted_at.is_(None)))) if attachment_ids else []
         context_attachments = prepare_attachment_context(attachments) if attachments else []
         context = assemble_context(session, thread.id, attachments=context_attachments)
+        compaction = compact_session(
+            session, thread.id, list(session.scalars(
+                select(InternalChatMessage)
+                .where(InternalChatMessage.thread_id == thread.id)
+                .order_by(InternalChatMessage.created_at, InternalChatMessage.id)
+            )), before_tokens=context["meta"]["estimated_tokens"]
+        )
         result = run_assistant(
             thread_id=thread.id,
             user_id=user.id,
@@ -170,6 +219,9 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             "execution_status": "pending" if result.get("status") == "approval_pending" else "completed",
             "events": _events_for(result, thread.id, run_id),
             "context_meta": context["meta"],
+            "planner": result.get("planner", {}),
+            "guardrails": result.get("guardrails", {}),
+            "compaction": compaction,
         }
         message.assistant_metadata = {"run_id": run_id, "approval": result.get("approval"), "attachment_ids": [row.id for row in attachments]}
         if result.get("status") == "approval_pending":

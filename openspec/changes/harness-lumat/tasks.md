@@ -39,8 +39,8 @@ Stacked-to-main is selected for independently mergeable slices. PR 1 targets mai
 
 ## Phase 3: Session, Compatibility, and Scope
 
-- [ ] 3.1 **RED first:** add `tests/integration/test_assistant_harness_session.py` threshold-flush, newest-2,000 retention, rotation-metadata, and recovery-no-duplicate tests for HL-3/AO-1; then update `app/services/agent_chat.py` and `app/chat/assistant/recovery.py` with DB-authoritative persistence and no checkpointer.
-- [ ] 3.2 **RED first:** add `tests/integration/test_assistant_harness_compatibility.py` admin-only SSE, exact-approval replay, streaming-failure recovery, compatible-serialization, and WhatsApp-isolation tests for IAC-6/IAC-2/AO-2/AO-3; then wire `app/panel/api/routes/chat.py`, `app/chat/assistant/graph.py`, and `app/services/agent_chat.py` while preserving shipped contracts.
+- [x] 3.1 **RED first:** add `tests/integration/test_assistant_harness_session.py` threshold-flush, newest-2,000 retention, rotation-metadata, and recovery-no-duplicate tests for HL-3/AO-1; then update `app/services/agent_chat.py` and `app/chat/assistant/recovery.py` with DB-authoritative persistence and no checkpointer.
+- [x] 3.2 **RED first:** add `tests/integration/test_assistant_harness_compatibility.py` admin-only SSE, exact-approval replay, streaming-failure recovery, compatible-serialization, and WhatsApp-isolation tests for IAC-6/IAC-2/AO-2/AO-3; then wire `app/panel/api/routes/chat.py`, `app/chat/assistant/graph.py`, and `app/services/agent_chat.py` while preserving shipped contracts.
 - [ ] 3.3 **RED first:** add `tests/unit/test_assistant_extensions.py` hook non-execution and terminology-consumer inventory checks for HL-3/AC-6; then expose metadata-only SDB/panel-sub-agent hooks and rename old SDB references in `agent/skills/sdb.md`, `agent/README.md`, `openspec/specs/agent-config/`, and every inventoried consumer. Do not implement internals.
 
 ## Phase 4: Verification
