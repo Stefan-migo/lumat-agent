@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { getAssistantCapabilities, listNotifications, markAllNotificationsRead } from '../../api';
 import type { AssistantCapabilities, NotificationsResponse, PanelNotification } from '../../types';
 import type { User } from '../../types';
-import type { ConversationTab, NotificationState, PanelView } from './PanelShell';
+import type { NotificationState, PanelView } from './PanelShell';
 import { PanelShell } from './PanelShell';
 import { parsePanelPath, pathForRoute, pathForView, type PanelRoute } from './panelRoutes';
 import { Dashboard } from '../pages/Dashboard';
@@ -35,7 +35,6 @@ export interface AppShellProps {
 /** Application shell: PanelShell frame and native History API navigation. */
 export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const [route, setRoute] = useState<PanelRoute>(() => parsePanelPath(window.location.pathname));
-  const [conversationTab, setConversationTab] = useState<ConversationTab>(() => parsePanelPath(window.location.pathname).conversationTab ?? 'conversations');
   const [conversationRefresh, setConversationRefresh] = useState(0);
   const [creatingAutomationRule, setCreatingAutomationRule] = useState(false);
   const [notificationState, setNotificationState] = useState<NotificationState>({ status: 'loading' });
@@ -80,7 +79,6 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
       const nextPath = pathForRoute(nextRoute);
       if (window.location.pathname !== nextPath) window.history.replaceState({}, '', nextPath);
       setRoute(nextRoute);
-       setConversationTab(nextRoute.conversationTab ?? 'conversations');
       setCreatingAutomationRule(false);
     };
     window.addEventListener('popstate', handlePopState);
@@ -91,14 +89,11 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
     const nextRoute = { view: nextView } satisfies PanelRoute;
     window.history.pushState({}, '', pathForView(nextView));
     setRoute(nextRoute);
-    setConversationTab(nextView === 'conversations' ? 'conversations' : conversationTab);
   };
 
   const navigateToRoute = (nextRoute: PanelRoute) => {
     window.history.pushState({}, '', pathForRoute(nextRoute));
     setRoute(nextRoute);
-    if (nextRoute.conversationTab) setConversationTab(nextRoute.conversationTab);
-    else if (nextRoute.view === 'conversations') setConversationTab('conversations');
     setCreatingAutomationRule(false);
   };
 
@@ -118,7 +113,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
       : view === 'agenda' ? <AgendaPage />
       : view === 'automation-rules' ? route.automationRuleId !== undefined || creatingAutomationRule ? <AutomationRuleDetailPage ruleId={creatingAutomationRule ? null : route.automationRuleId} user={user} onCreated={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} onBack={() => { setCreatingAutomationRule(false); window.history.back(); }} /> : <AutomationRulesPage user={user} onOpenCreate={navigateToCreateAutomationRule} onOpenRule={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
-       : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
+       : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList currentUserId={user.id} initialQueueTab={route.conversationTab === 'cases' ? 'case' : 'all'} refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
      : view === 'notifications' ? <NotificationCenter />
      : view === 'push' ? <PushSettings />
        : view === 'chat' ? <AgentChat capabilities={assistantCapabilities ?? undefined} />
@@ -127,7 +122,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
      : <Settings />;
 
   return (
-    <PanelShell user={user} currentView={shellView} conversationTab={conversationTab} onConversationTabChange={setConversationTab} onNavigate={navigate} onLogout={onLogout} notificationState={notificationState} notifications={notifications} onMarkAllNotificationsRead={markAllRead} inspector={inspector}>
+    <PanelShell user={user} currentView={shellView} onNavigate={navigate} onLogout={onLogout} notificationState={notificationState} notifications={notifications} onMarkAllNotificationsRead={markAllRead} inspector={inspector}>
       {page}
     </PanelShell>
   );

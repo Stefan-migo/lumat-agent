@@ -87,8 +87,6 @@ export const ConversationsSegment: Story = {
   args: {
     ...DesktopAdmin.args,
     currentView: "conversations",
-    conversationTab: "conversations",
-    onConversationTabChange: () => undefined,
   },
 };
 
@@ -97,7 +95,5 @@ export const CasesSegment: Story = {
   args: {
     ...DesktopAdmin.args,
     currentView: "conversations",
-    conversationTab: "cases",
-    onConversationTabChange: () => undefined,
   },
 };

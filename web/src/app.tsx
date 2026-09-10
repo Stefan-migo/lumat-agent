@@ -44,7 +44,7 @@ export default function App() {
     setState({ kind: 'anon' });
     try {
       const result = await postJson<LoginResponse>('/panel/api/login', { username, password });
-      setState({ kind: 'authed', user: { username, role: result.role } });
+      setState({ kind: 'authed', user: { id: result.id, username, role: result.role } });
     } catch (e) {
       const detail = e instanceof ApiError ? e.detail.toLowerCase() : '';
       setState({ kind: 'anon', error: detail.includes('locked') ? 'Cuenta bloqueada. Intenta más tarde.' : 'Credenciales inválidas' });

@@ -64,8 +64,8 @@ def test_me_without_session_has_no_cors_headers(client):
 
 
 def test_me_with_session_returns_username_role(client, make_user):
-    """Valid session -> 200 JSON with username and role (operador)."""
-    make_user("oper", "oper-pass", role="operador")
+    """Valid session -> 200 JSON with id, username and role (operador)."""
+    user_id = make_user("oper", "oper-pass", role="operador")
     client.post(
         "/panel/api/login",
         json={"username": "oper", "password": "oper-pass"},
@@ -75,12 +75,15 @@ def test_me_with_session_returns_username_role(client, make_user):
     resp = client.get("/panel/api/me", follow_redirects=False)
 
     assert resp.status_code == 200
-    assert resp.json() == {"username": "oper", "role": "operador"}
+    body = resp.json()
+    assert body["id"] == user_id
+    assert body["username"] == "oper"
+    assert body["role"] == "operador"
 
 
 def test_me_with_admin_session_returns_admin_role(client, make_user):
     """Valid admin session -> 200 JSON with the admin role (triangulation)."""
-    make_user("adm", "adm-pass", role="admin")
+    user_id = make_user("adm", "adm-pass", role="admin")
     client.post(
         "/panel/api/login",
         json={"username": "adm", "password": "adm-pass"},
@@ -90,23 +93,29 @@ def test_me_with_admin_session_returns_admin_role(client, make_user):
     resp = client.get("/panel/api/me", follow_redirects=False)
 
     assert resp.status_code == 200
-    assert resp.json() == {"username": "adm", "role": "admin"}
+    body = resp.json()
+    assert body["id"] == user_id
+    assert body["username"] == "adm"
+    assert body["role"] == "admin"
 
 
 def test_me_with_tecnico_session_returns_tecnico_role(client, make_user):
-    make_user("tech", "tech-pass", role="tecnico")
+    user_id = make_user("tech", "tech-pass", role="tecnico")
     login = client.post(
         "/panel/api/login",
         json={"username": "tech", "password": "tech-pass"},
         follow_redirects=False,
     )
     assert login.status_code == 200
-    assert login.json() == {"ok": True, "role": "tecnico"}
+    assert login.json() == {"ok": True, "id": user_id, "role": "tecnico"}
 
     resp = client.get("/panel/api/me", follow_redirects=False)
 
     assert resp.status_code == 200
-    assert resp.json() == {"username": "tech", "role": "tecnico"}
+    body = resp.json()
+    assert body["id"] == user_id
+    assert body["username"] == "tech"
+    assert body["role"] == "tecnico"
 
 
 def test_me_deactivated_user_returns_401(client, make_user):
@@ -134,8 +143,8 @@ def test_me_deactivated_user_returns_401(client, make_user):
 
 
 def test_json_login_sets_cookie_and_audits(client, make_user):
-    """Valid JSON credentials -> 200 {ok, role}, session cookie, audit."""
-    make_user("admin", "s3cret-admin", role="admin")
+    """Valid JSON credentials -> 200 {ok, id, role}, session cookie, audit."""
+    user_id = make_user("admin", "s3cret-admin", role="admin")
 
     resp = client.post(
         "/panel/api/login",
@@ -144,14 +153,14 @@ def test_json_login_sets_cookie_and_audits(client, make_user):
     )
 
     assert resp.status_code == 200, "JSON login must not redirect"
-    assert resp.json() == {"ok": True, "role": "admin"}
+    assert resp.json() == {"ok": True, "id": user_id, "role": "admin"}
     assert "session" in resp.cookies, "the existing session cookie must be set (PDW-AUTH-4)"
     assert ("auth.login", "admin") in _audit_actions(), "login must be audited (SH-5)"
 
 
 def test_json_login_returns_operador_role(client, make_user):
     """operador credentials -> same cookie, role=operador (triangulation)."""
-    make_user("oper", "oper-pass", role="operador")
+    user_id = make_user("oper", "oper-pass", role="operador")
 
     resp = client.post(
         "/panel/api/login",
@@ -160,7 +169,7 @@ def test_json_login_returns_operador_role(client, make_user):
     )
 
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True, "role": "operador"}
+    assert resp.json() == {"ok": True, "id": user_id, "role": "operador"}
     assert "session" in resp.cookies
 
 

@@ -12,7 +12,7 @@ it('shows the composer and disables it outside the customer window', async () =>
   render(<ConversationThread interactive conversationId={9} />);
   expect(await screen.findByText('Hola')).toBeInTheDocument();
   expect(screen.getByRole('textbox', { name: /respuesta/i })).toBeDisabled();
-  expect(screen.getByText(/24 horas/i)).toBeInTheDocument();
+  expect(screen.getAllByText(/24 horas/i).length).toBeGreaterThan(0);
 });
 
 it('permits replying when the API says the customer window is open', async () => {
@@ -103,7 +103,7 @@ it('shows delivery failure content beside the retry action', () => {
   expect(screen.getByRole('button', { name: /reintentar entrega #1/i })).toBeInTheDocument();
 });
 
-it('renders the conversation workspace context beside the thread', () => {
+  it('renders the conversation inspector beside the thread', () => {
   render(<ConversationThread data={{ ...thread, conversation: {
     ...thread.conversation,
     customer: { id: 4, name: 'María González', phone_e164: '+5694' },
@@ -116,7 +116,7 @@ it('renders the conversation workspace context beside the thread', () => {
     captured_data: { preferred_language: 'es', nested: { source: 'web' }, attempts: 2 },
   }}} state="ready" />);
 
-  expect(screen.getByRole('complementary', { name: /contexto de conversación/i })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: /inspector de conversación/i })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Caso' })).toBeInTheDocument();
   expect(screen.getByText('María González')).toBeInTheDocument();
   expect(screen.getByText('Urgencia')).toBeInTheDocument();
@@ -130,7 +130,7 @@ it('keeps the thread usable without optional case or captured data', () => {
   render(<ConversationThread data={{ ...thread, conversation: { ...thread.conversation, customer: { id: 4, name: 'María González', phone_e164: '+5694' }, case: null, case_id: null, captured_data: null } }} state="ready" />);
 
   expect(screen.getByText('Hola')).toBeInTheDocument();
-  expect(screen.getByRole('complementary', { name: /contexto de conversación/i })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: /inspector de conversación/i })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Caso' })).not.toBeInTheDocument();
   expect(screen.queryByText('Datos capturados')).not.toBeInTheDocument();
 });
