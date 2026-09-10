@@ -90,6 +90,8 @@ def to_message_dict(message: Message) -> dict:
 def to_conversation_dict(
     conversation: Conversation,
     *,
+    customer: Customer | None = None,
+    case: Case | None = None,
     latest_inbound_at=None,
     reply_window_open: bool = False,
     delivery_summary: dict[str, int] | None = None,
@@ -121,6 +123,14 @@ def to_conversation_dict(
         "last_message_at": _iso(conversation.last_message_at),
         "created_at": _iso(conversation.created_at),
         "closed_at": _iso(conversation.closed_at),
+        "customer": to_customer_dict(customer) if customer is not None else None,
+        "case": to_case_dict(case) if case is not None else None,
+        "case_id": case.id if case is not None else None,
+        "emergency": bool(case.emergency) if case is not None else False,
+        "acknowledged_at": _iso(case.acknowledged_at) if case is not None else None,
+        "case_status": case.status if case is not None else None,
+        "case_priority": case.priority if case is not None else None,
+        "captured_data": conversation.captured_data,
     }
 
 
