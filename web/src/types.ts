@@ -35,6 +35,7 @@ export interface AutomationRuleResponse { rule: Rule; }
 
 export interface LoginResponse {
   ok: true;
+  id: number;
   role: Role;
 }
 

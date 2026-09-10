@@ -1,7 +1,7 @@
 """Panel JSON API authentication routes (B1/T1.2; PDW-AUTH-1/2/4, D1, D4).
 
 POST /panel/api/login  -> JSON credentials, sets the same signed session cookie
-GET  /panel/api/me     -> current user {username, role} (401 JSON, no redirect)
+GET  /panel/api/me     -> current user {id, username, role} (401 JSON, no redirect)
 POST /panel/api/logout -> clears the session (audited)
 
 Mirrors the Jinja route (app/panel/routes/auth.py): same service calls
@@ -120,13 +120,13 @@ def login(
     request.session["user_id"] = user.id
     request.session["username"] = user.username
     request.session["role"] = user.role.value
-    return {"ok": True, "role": user.role.value}
+    return {"ok": True, "id": user.id, "role": user.role.value}
 
 
 @router.get("/me")
 def me(current: User = Depends(require_user_json)) -> dict:
     """Current user claims for the SPA route guard (PDW-AUTH-2)."""
-    return {"username": current.username, "role": current.role.value}
+    return {"id": current.id, "username": current.username, "role": current.role.value}
 
 
 @router.post("/logout")
