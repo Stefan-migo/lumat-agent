@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -280,10 +281,12 @@ def test_today_projection_uses_local_bounds_and_operational_predicates(client, m
 
 
 def test_today_excludes_cancelled_and_replied_rows_and_caps_each_projection(client, make_user):
-    # Anchored to 12:00 UTC (08:00 in America/Santiago): the 21 appointments
-    # span up to +10.35h, so a wall-clock "now" late in the day would push the
-    # tail across the local midnight and make the cap assertion time-dependent.
-    now = datetime(2026, 9, 9, 12, 0, tzinfo=timezone.utc)
+    # Anchored to 12:00 UTC of the CURRENT local day: the 21 appointments span
+    # up to +10.35h, so a wall-clock "now" late in the day would push the tail
+    # across the local midnight. Deriving the anchor from the local date keeps
+    # the cap assertion stable no matter which day the suite runs.
+    local_today = datetime.now(ZoneInfo("America/Santiago"))
+    now = datetime(local_today.year, local_today.month, local_today.day, 12, 0, tzinfo=timezone.utc)
     make_user("oper", "oper-pass", role="operador")
     with SessionLocal() as session:
         for index in range(21):

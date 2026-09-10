@@ -4,7 +4,7 @@ import type { PanelNotification, User } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 
-export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard";
+export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "users";
 export type ConversationTab = "conversations" | "cases";
 
 /** Shell icon wrapper: 20px, stroke-based, `currentColor`, aria-hidden.
@@ -133,6 +133,7 @@ const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" |
   kb: { label: "Base de Conocimientos", icon: BookIcon, adminOnly: true },
   'automation-rules': { label: "Automatizaciones", icon: AutomationIcon, adminOnly: true },
   settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
+  users: { label: "Usuarios", icon: UsersIcon, adminOnly: true },
 };
 
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
@@ -175,7 +176,7 @@ function Brand({ mobile = false, compact = false }: { mobile?: boolean; compact?
 }
 
 function UserContext({ user, compact = false, onLogout }: { user: User; compact?: boolean; onLogout?: () => void | Promise<void> }) {
-  const role = user.role === "admin" ? "Administrador" : "Operador";
+  const role = user.role === "admin" ? "Administrador" : user.role === "tecnico" ? "Técnico" : "Operador";
   return (
     <div
       className="panel-shell__user"

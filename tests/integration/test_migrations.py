@@ -24,8 +24,8 @@ import pytest
 
 from tests.integration.conftest import ADMIN_DB_URL, run_migrate  # noqa: E402
 
-APP_URL = os.environ.get(
-    "TEST_APP_DB_URL", "postgresql://app:app@localhost:5432/lumat"
+APP_URL = os.environ.get("TEST_APP_DB_URL") or ADMIN_DB_URL.replace(
+    "postgresql://lumat:lumat@", "postgresql://app:app@", 1
 )
 
 EXPECTED_TABLES = {
