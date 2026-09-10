@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -114,6 +114,22 @@ describe('conversation API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ ok: true, message: { id: 3 } }), { status: 200 }));
     await sendMessage(9, { text: 'Hola', request_id: 'req-1' });
     expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/conversations/9/messages', expect.objectContaining({ method: 'POST', body: JSON.stringify({ text: 'Hola', request_id: 'req-1' }) }));
+  });
+
+  it('requests the typed queue envelope with search and offset pagination', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0, offset: 20, limit: 20, counts: { all: 0, human: 0, emergency: 0, case: 0, closed: 0 } }), { status: 200 }));
+    await listConversations({ q: 'heater & pipe', limit: 20, offset: 20 });
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/conversations?q=heater+%26+pipe&limit=20&offset=20', expect.anything());
+  });
+
+  it('exposes queue quick actions as typed mutations', async () => {
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, conversation: {} }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, case: {} }), { status: 200 }));
+    await takeConversation(9, 2);
+    await acknowledgeCase(12);
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/panel/api/conversations/9/state', expect.objectContaining({ method: 'POST', body: expect.stringContaining('"state":"human"') }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/panel/api/cases/12/ack', expect.objectContaining({ method: 'POST' }));
   });
 
   it('keeps conflict and policy errors typed for callers', async () => {

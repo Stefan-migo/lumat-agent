@@ -177,10 +177,43 @@ export interface Conversation {
   last_message_at: string | null;
   created_at: string | null;
   closed_at: string | null;
+  customer?: CustomerSummary | null;
+  case?: CaseSummary | null;
+  case_id?: number | null;
+  emergency?: boolean;
+  acknowledged_at?: string | null;
+  case_status?: string | null;
+  case_priority?: string | null;
+  captured_data?: Record<string, unknown> | null;
+}
+
+export type CustomerSummary = Pick<Customer, 'id' | 'name' | 'phone_e164'>;
+export interface CaseSummary {
+  id: number;
+  service: string;
+  priority: string;
+  status: string;
+  emergency: boolean;
+  summary: string | null;
+  acknowledged_at: string | null;
+  closed_at: string | null;
+}
+
+export interface QueueCounts {
+  all: number;
+  human: number;
+  emergency: number;
+  case: number;
+  closed: number;
 }
 
 export interface ConversationsResponse {
-  conversations: Conversation[];
+  items?: Conversation[];
+  total?: number;
+  offset?: number;
+  limit?: number;
+  counts?: QueueCounts;
+  conversations?: Conversation[];
 }
 
 export interface ActiveConversation {
