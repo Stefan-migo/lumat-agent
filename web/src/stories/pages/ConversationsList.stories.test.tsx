@@ -7,16 +7,15 @@ import { conversations } from "./_shared/mockData/conversations";
 describe("ConversationsList", () => {
   it("renders API rows without an Asignado column", () => {
     render(<ConversationsList data={{ conversations }} />);
-    const table = screen.getByRole("table");
-    expect(within(table).getByText(`#${conversations[0].id}`)).toBeInTheDocument();
-    expect(within(table).getAllByText("Cliente #1").length).toBeGreaterThan(0);
-    expect(within(table).queryByRole("columnheader", { name: "Asignado" })).toBeNull();
+    const list = screen.getByRole("list");
+    expect(within(list).getAllByText("Cliente #1").length).toBeGreaterThan(0);
+    expect(within(list).getAllByText(conversations[0].wa_phone!).length).toBeGreaterThan(0);
   });
 
   it("loads rows from GET /panel/api/conversations", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ conversations }), { status: 200 }));
     render(<ConversationsList />);
-    expect(await screen.findByText(`#${conversations[0].id}`)).toBeInTheDocument();
+    expect((await screen.findAllByText(`Cliente #${conversations[0].customer_id}`)).length).toBeGreaterThan(0);
     expect(fetchMock).toHaveBeenCalledWith("/panel/api/conversations", expect.objectContaining({ credentials: "include" }));
     fetchMock.mockRestore();
   });
@@ -24,7 +23,7 @@ describe("ConversationsList", () => {
   it("opens a thread from an activated row", () => {
     const onOpenThread = vi.fn();
     render(<ConversationsList data={{ conversations }} onOpenThread={onOpenThread} />);
-    fireEvent.click(screen.getByRole("button", { name: `Abrir conversación #${conversations[0].id}` }));
+    fireEvent.click(screen.getByTestId(`conversation-row-${conversations[0].id}`));
     expect(onOpenThread).toHaveBeenCalledWith(conversations[0].id);
   });
 

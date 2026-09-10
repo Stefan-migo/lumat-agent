@@ -68,23 +68,13 @@ describe('AppShell (T6.4)', () => {
     }
   });
 
-  it('keeps the Conversations/Cases segment internal to the destination', async () => {
-    const user = userEvent.setup();
+  it('keeps the Cases deep link as the initial queue tab', async () => {
+    window.history.replaceState({}, '', '/panel/app/cases');
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ cases: [], users: [] }), { status: 200 }),
     );
     render(<AppShell user={operador} />);
-    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
-    await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Conversaciones' }));
-    const conversationsSegment = screen.getAllByRole('button', { name: /^Conversaciones$/ })
-      .find((button) => button.hasAttribute('aria-pressed'))!;
-    const casesSegment = screen.getByRole('button', { name: /^Casos$/ });
-    expect(conversationsSegment).toHaveAttribute('aria-pressed', 'true');
-    await user.click(casesSegment);
-    expect(window.location.pathname).toBe('/panel/app/conversations');
-    expect(window.location.search).toBe('');
-    expect(casesSegment).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('heading', { name: 'Conversaciones' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /casos/i })).toHaveAttribute('aria-selected', 'true');
     fetchMock.mockRestore();
   });
 
@@ -127,7 +117,7 @@ describe('AppShell (T6.4)', () => {
       const bodies: Record<string, unknown> = {
         '/panel/api/clients': { clients: [{ id: 7, name: 'Cliente vivo', phone_e164: '+56911111111', state: 'activo', consent_status: true, created_at: '2026-08-25' }] },
         '/panel/api/cases': { cases: [], users: [] },
-        '/panel/api/conversations': { conversations: [{ id: 9, customer_id: 7, wa_phone: '+56911111111', state: 'active', summary: 'Conversación viva', last_message_at: '2026-08-25', created_at: '2026-08-25' }] },
+        '/panel/api/conversations': { conversations: [{ id: 9, customer_id: 7, wa_phone: '+56911111111', state: 'active', summary: 'Conversación viva', last_message_at: '2026-08-25', created_at: '2026-08-25', case_id: 4 }] },
         '/panel/api/kb': { docs: [] },
         '/panel/api/settings': { scope_rules: {}, keywords: [], tone: 'Claro', conversation_limit: 1, daily_limit: 2, meta_cost: 3, snapshot: null },
       };
@@ -144,7 +134,7 @@ describe('AppShell (T6.4)', () => {
     await user.click(within(await drawer()).getByRole('button', { name: 'Clientes' }));
     expect(await screen.findByText('Cliente vivo')).toBeInTheDocument();
     await user.click(within(await drawer()).getByRole('button', { name: 'Conversaciones' }));
-    await user.click(screen.getByRole('button', { name: /^Casos$/ }));
+    await user.click(screen.getByRole('tab', { name: /casos/i }));
     expect(await screen.findByText('Conversación viva')).toBeInTheDocument();
     await user.click(within(await drawer()).getByRole('button', { name: 'Conversaciones' }));
     expect(await screen.findByText('Conversación viva')).toBeInTheDocument();
@@ -191,7 +181,7 @@ describe('AppShell (T6.4)', () => {
     render(<AppShell user={operador} />);
 
     expect(window.location.pathname).toBe('/panel/app/conversations');
-    expect(screen.getByRole('button', { name: /^Casos$/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('tab', { name: /casos/i })).toHaveAttribute('aria-selected', 'true');
     expect(await screen.findByText('No hay conversaciones')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Casos' })).not.toBeInTheDocument();
     vi.restoreAllMocks();
@@ -248,7 +238,7 @@ describe('AppShell (T6.4)', () => {
     await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Conversaciones' }));
     await user.click(await screen.findByRole('button', { name: 'Abrir conversación #9' }));
-    expect(await screen.findByText('# 9')).toBeInTheDocument();
+    expect(await screen.findByText(/#9/)).toBeInTheDocument();
     fetchMock.mockRestore();
   });
 });

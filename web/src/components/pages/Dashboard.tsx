@@ -11,13 +11,6 @@ import { StatCard } from "../shared/StatCard";
 const STYLES = `
 .dashboard { display:grid; gap:var(--space-5); }
 
-/* ---- Header polish (lime brand bar + subtitle pill) ---- */
-.dashboard-header { position:relative; padding-left:var(--space-4); }
-.dashboard-header::before { content:""; position:absolute; left:0; top:var(--space-1); bottom:var(--space-1); width:var(--space-1); border-radius:999px; background:var(--brand-lime); }
-.dashboard-header .page-header h1 { margin:0; color:var(--corp-text); font-size:var(--text-2xl); letter-spacing:-0.02em; }
-.dashboard-meta { display:inline-flex; align-items:center; gap:var(--space-2); padding:var(--space-1) var(--space-3); border:1px solid var(--primary-200); border-radius:999px; background:var(--primary-100); color:var(--primary-800); font-weight:var(--weight-medium); }
-.dashboard-meta svg { color:var(--primary-700); }
-
 /* ---- Section scaffolding ---- */
 .dashboard__section { display:grid; gap:var(--space-3); }
 .dashboard__section-head { display:flex; align-items:center; gap:var(--space-2); }

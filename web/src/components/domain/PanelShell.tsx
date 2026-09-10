@@ -5,7 +5,6 @@ import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 
 export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "users";
-export type ConversationTab = "conversations" | "cases";
 
 /** Shell icon wrapper: 20px, stroke-based, `currentColor`, aria-hidden.
  *  Inline SVGs on purpose — no icon library (ponytail: no new deps). */
@@ -150,8 +149,6 @@ export interface PanelShellProps {
    *  belongs in the page content, not the chrome. */
   statusBadge?: ReactNode;
   inspector?: ReactNode;
-  conversationTab?: ConversationTab;
-  onConversationTabChange?: (tab: ConversationTab) => void;
   notificationState?: NotificationState;
   notifications?: PanelNotification[];
   onMarkAllNotificationsRead?: () => void | Promise<void>;
@@ -253,8 +250,6 @@ export function PanelShell({
   statusBadge,
   onLogout,
   inspector,
-  conversationTab,
-  onConversationTabChange,
   notificationState = { status: "loading" },
   notifications = [],
   onMarkAllNotificationsRead,
@@ -466,20 +461,6 @@ export function PanelShell({
             </div>
           ) : null}
         </div>
-        {currentView === "conversations" && conversationTab && onConversationTabChange ? (
-          <div role="group" aria-label="Sección de conversaciones" className="panel-shell__conversation-tabs">
-            {(["conversations", "cases"] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                aria-pressed={conversationTab === tab}
-                onClick={() => onConversationTabChange(tab)}
-              >
-                {tab === "conversations" ? "Conversaciones" : "Casos"}
-              </button>
-            ))}
-          </div>
-        ) : null}
         <div id="panel-main-content" className="panel-shell__content" tabIndex={-1}>
           {children}
         </div>

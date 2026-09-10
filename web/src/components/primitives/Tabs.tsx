@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 /** Tab definition for the Tabs primitive (catalog `tabs`, corporate). */
 export interface TabItem {
   id: string;
-  label: string;
+  label: ReactNode;
 }
 
 export interface TabsProps {

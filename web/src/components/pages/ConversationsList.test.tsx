@@ -26,15 +26,16 @@ describe('production conversations list', () => {
     expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
   });
 
-  it('keeps a data table and marks the selected conversation after opening it', async () => {
+  it('renders row cards and marks the selected conversation after opening it', async () => {
     const onOpenThread = vi.fn();
     const user = userEvent.setup();
     render(<ConversationsList data={queue([row(4, 'human', 7), row(5, 'bot', null)])} onOpenThread={onOpenThread} />);
 
-    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByRole('list')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
     expect(screen.getByText('Atención humana')).toBeInTheDocument();
     expect(screen.getByText('Agente atendiendo')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /abrir conversación #4/i }));
+    await user.click(screen.getByTestId('conversation-row-4'));
 
     expect(onOpenThread).toHaveBeenCalledWith(4);
     expect(screen.getByTestId('conversation-row-4')).toHaveAttribute('aria-current', 'page');
@@ -57,12 +58,12 @@ describe('production conversations list', () => {
     render(<ConversationsList data={queue(items, { all: 4, human: 1, emergency: 1, case: 2, closed: 1 })} />);
     expect(screen.getByRole('tab', { name: /todas.*4/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /emergencias.*1/i })).toBeInTheDocument();
-    expect(screen.getAllByRole('row')[1]).toHaveTextContent('#4');
-    expect(screen.getAllByRole('row')[2]).toHaveTextContent('#3');
-    expect(screen.getAllByRole('row')[4]).toHaveTextContent('#2');
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('Cliente 4');
+    expect(screen.getAllByRole('listitem')[1]).toHaveTextContent('Cliente 3');
+    expect(screen.getAllByRole('listitem')[3]).toHaveTextContent('Cliente 2');
     await userEvent.setup().click(screen.getByRole('tab', { name: /cerradas/i }));
-    expect(screen.getAllByRole('row')).toHaveLength(2);
-    expect(screen.getByText('#2')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.getByText('Cliente 2')).toBeInTheDocument();
   });
 
   it('requests search and page changes and renders empty state as a DOM row', async () => {
