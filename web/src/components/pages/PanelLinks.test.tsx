@@ -51,4 +51,14 @@ describe("panel production links", () => {
     vi.restoreAllMocks();
     window.history.replaceState({}, "", "/panel/app/");
   });
+
+  it("renders permission denial for an operador deep link to users", async () => {
+    window.history.replaceState({}, "", "/panel/app/users");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ detail: "forbidden" }), { status: 403 }));
+    render(<AppShell user={{ username: "vero", role: "operador" }} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permiso para ver este panel");
+    expect(screen.queryByRole("button", { name: "Usuarios" })).not.toBeInTheDocument();
+    vi.restoreAllMocks();
+    window.history.replaceState({}, "", "/panel/app/");
+  });
 });

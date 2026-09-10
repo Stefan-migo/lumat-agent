@@ -17,15 +17,18 @@ describe('panel routes', () => {
       agenda: '/panel/app/agenda',
       kb: '/panel/app/kb',
       'automation-rules': '/panel/app/automation-rules',
-      settings: '/panel/app/settings',
+       settings: '/panel/app/settings',
+       users: '/panel/app/users',
     });
     expect(Object.keys(PANEL_ROUTES)).toEqual([
-      'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings',
+       'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings', 'users',
     ]);
 
     expect(pathForView('clients')).toBe('/panel/app/clients');
     expect(pathForView('dashboard')).toBe(PANEL_BASE_PATH);
-    expect(parsePanelPath('/panel/app/agenda')).toEqual({ view: 'agenda' });
+     expect(parsePanelPath('/panel/app/agenda')).toEqual({ view: 'agenda' });
+     expect(pathForView('users')).toBe('/panel/app/users');
+     expect(parsePanelPath('/panel/app/users')).toEqual({ view: 'users' });
     expect(pathForRoute({ view: 'cases' })).toBe('/panel/app/cases');
     expect(pathForRoute({ view: 'advanced-dashboard' })).toBe('/panel/app/advanced-dashboard');
     expect(parsePanelPath('/panel/app/advanced-dashboard')).toEqual({ view: 'advanced-dashboard' });
