@@ -26,7 +26,7 @@ describe('panel routes', () => {
     expect(pathForView('clients')).toBe('/panel/app/clients');
     expect(pathForView('dashboard')).toBe(PANEL_BASE_PATH);
     expect(parsePanelPath('/panel/app/agenda')).toEqual({ view: 'agenda' });
-    expect(pathForRoute({ view: 'cases' })).toBe('/panel/app/cases');
+    expect(pathForRoute({ view: 'cases' })).toBe('/panel/app/conversations');
     expect(pathForRoute({ view: 'advanced-dashboard' })).toBe('/panel/app/advanced-dashboard');
     expect(parsePanelPath('/panel/app/advanced-dashboard')).toEqual({ view: 'advanced-dashboard' });
     expect(parsePanelPath('/panel/app/cases')).toEqual({ view: 'conversations', conversationTab: 'cases' });

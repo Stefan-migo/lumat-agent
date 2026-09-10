@@ -144,7 +144,7 @@ describe('AppShell (T6.4)', () => {
     expect(await screen.findByText('Cliente vivo')).toBeInTheDocument();
     await user.click(within(await drawer()).getByRole('button', { name: 'Conversaciones' }));
     await user.click(screen.getByRole('button', { name: /^Casos$/ }));
-    expect(await screen.findByText('No hay registros')).toBeInTheDocument();
+    expect(await screen.findByText('Conversación viva')).toBeInTheDocument();
     await user.click(within(await drawer()).getByRole('button', { name: 'Conversaciones' }));
     expect(await screen.findByText('Conversación viva')).toBeInTheDocument();
     await user.click(within(await drawer()).getByRole('button', { name: 'Base de Conocimientos' }));
@@ -191,7 +191,7 @@ describe('AppShell (T6.4)', () => {
 
     expect(window.location.pathname).toBe('/panel/app/conversations');
     expect(screen.getByRole('button', { name: /^Casos$/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.queryByText('No hay registros')).toBeInTheDocument();
+    expect(await screen.findByText('No hay conversaciones')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Casos' })).not.toBeInTheDocument();
     vi.restoreAllMocks();
   });
