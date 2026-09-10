@@ -13,6 +13,11 @@ from app.services import llm
 from app.chat.assistant.attachments import build_multimodal_content, prepare_attachment_context
 
 
+def extension_hook_metadata() -> dict[str, str]:
+    """Describe deferred extensions without loading or executing their internals."""
+    return {"sdb": "deferred", "panel_subagents": "not_implemented"}
+
+
 def load_panel_context(session, thread_id: int) -> dict:
     """Tukulpan seam: expose only panel-scoped and pinned context."""
     return {"pinned": [], "panel": []}
@@ -59,7 +64,7 @@ def plan(state: AssistantState) -> AssistantState:
                 "status": "planned",
             }
             if planner.kind == "complex":
-                result["extension_hooks"] = {"sdb": "deferred", "panel_subagents": "not_implemented"}
+                result["extension_hooks"] = extension_hook_metadata()
             return result
         except (TypeError, ValidationError):
             fallback = bounded_fallback("invalid planner output")

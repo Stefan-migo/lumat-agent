@@ -19,7 +19,7 @@ agent/
 │   ├── classify.md              # <user_input>{{user_input}}</user_input>
 │   └── summary.md               # summary context slots
 ├── skills/              # reference-only pointers (AC-6) — NEVER loaded
-│   ├── sdb.md                   # deterministic gates remain the authoritative SDB
+│   ├── sdb.md                   # deterministic gates / guardrails reference
 │   ├── emergency.md             # → app/services/emergency.py
 │   ├── handoff.md               # → app/chat/nodes/handoff*.py
 │   └── capture.md               # → app/chat/nodes/capture.py
@@ -30,7 +30,8 @@ agent/
 - **Personas are static**: they must never contain `{{}}` placeholders (AC-5).
   The strict renderer only fills slots in `prompts/`.
 - **Skills are documentation**: no skill file is ever loaded into a prompt
-  (AC-6). The deterministic gate nodes are the authoritative SDB.
+  (AC-6). The deterministic gate nodes are the Lumat
+  `Gates deterministas / Guardrails` surface.
 
 ## Multi-agent registry (H2, slice-1)
 

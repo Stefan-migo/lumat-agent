@@ -1,0 +1,53 @@
+"""Metadata-only assistant extension hooks and terminology migration contracts."""
+
+from pathlib import Path
+
+from app.chat.assistant.nodes import extension_hook_metadata
+from app.chat.assistant.nodes import plan
+
+
+SDB_TERMINOLOGY_CONSUMERS = (
+    Path("agent/skills/sdb.md"),
+    Path("agent/README.md"),
+    Path("openspec/specs/agent-config/spec.md"),
+)
+
+
+def test_extension_hooks_expose_status_metadata_without_executable_hooks():
+    metadata = extension_hook_metadata()
+
+    assert metadata == {
+        "sdb": "deferred",
+        "panel_subagents": "not_implemented",
+    }
+    assert all(not callable(value) for value in metadata.values())
+
+    state = plan(
+        {
+            "content": "complex request",
+            "planner_output": {
+                "kind": "complex",
+                "arguments": {"steps": ["research"]},
+                "summary": "A future extension is required.",
+                "requires_approval": False,
+            },
+        }
+    )
+    assert state["extension_hooks"] == metadata
+
+
+def test_all_inventoried_lumat_sdb_consumers_use_guardrails_terminology(repo_root):
+    old_terms = ("SDB", "Deterministic Behavior Database")
+
+    for relative_path in SDB_TERMINOLOGY_CONSUMERS:
+        content = (repo_root / relative_path).read_text(encoding="utf-8")
+        assert not any(term in content for term in old_terms), relative_path
+        assert "Gates deterministas / Guardrails" in content, relative_path
+
+
+def test_spec_driven_behavior_scope_remains_outside_terminology_migration(repo_root):
+    spec = (repo_root / "openspec/changes/harness-lumat/specs/harness-lumat/spec.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "SDB subgraph" in spec

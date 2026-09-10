@@ -78,7 +78,7 @@ The system MUST render `{{name}}` placeholders via a strict renderer that raises
 
 ### Requirement: AC-6 — Skills as Reference Files
 
-The system MUST ship `agent/skills/*.md` as declarative references only and MUST NOT load any skill file into an LLM prompt. The deterministic gates remain the authoritative SDB.
+The system MUST ship `agent/skills/*.md` as declarative references only and MUST NOT load any skill file into an LLM prompt. Lumat's deterministic gates are the `Gates deterministas / Guardrails` surface.
 
 #### Scenario: Skill never loaded
 - GIVEN a conversation runs end-to-end
