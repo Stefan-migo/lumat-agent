@@ -19,9 +19,9 @@ Chain strategy: pending
 
 ## Slice A — Backend read model and snapshot (PR 1)
 
-- [ ] A.1 RED — Add precedence, nullable context, `q`, pagination, counts, detail parity, ack authority, and snapshot-parity tests in `tests/functional/test_api_conversations.py`, `test_api_cases.py`, and `test_api_realtime.py`. Verify: focused pytest. Commit: `test(panel): define unified conversation read contracts`.
-- [ ] A.2 GREEN — Implement ranked case join, shared serialization, search/envelope/counts, deterministic ordering, and detail parity in `app/panel/api/serializers.py` and `app/panel/api/routes/conversations.py`; keep `routes/cases.py` mutations unchanged. Verify: focused pytest. Commit: `feat(panel): expose case-aware paginated conversations`.
-- [ ] A.3 GREEN — Make `app/panel/api/routes/realtime.py` reuse the REST-equivalent queue rows, counts, and case precedence; verify snapshot tests and full `uv run pytest tests/functional/`. Commit: `feat(panel): align realtime snapshots with queue contract`.
+- [x] A.1 RED — Add precedence, nullable context, `q`, pagination, counts, detail parity, ack authority, and snapshot-parity tests in `tests/functional/test_api_conversations.py`, `test_api_cases.py`, and `test_api_realtime.py`. Verify: focused pytest. Commit: `test(panel): define unified conversation read contracts`.
+- [x] A.2 GREEN — Implement ranked case join, shared serialization, search/envelope/counts, deterministic ordering, and detail parity in `app/panel/api/serializers.py` and `app/panel/api/routes/conversations.py`; keep `routes/cases.py` mutations unchanged. Verify: focused pytest. Commit: `feat(panel): expose case-aware paginated conversations`.
+- [x] A.3 GREEN — Make `app/panel/api/routes/realtime.py` reuse the REST-equivalent queue rows, counts, and case precedence; verify snapshot tests and full `uv run pytest tests/functional/`. Commit: `feat(panel): align realtime snapshots with queue contract`.
 
 ## Slice B — Unified queue UI (PR 2)
 
