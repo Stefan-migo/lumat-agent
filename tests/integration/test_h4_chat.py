@@ -27,6 +27,8 @@ def _login(client, username: str):
 
 
 class _FakeChatClient:
+    """Streaming-compatible fake for the assistant graph (IAC-6)."""
+
     def __init__(self, content="A concise answer", error=None):
         self.calls = []
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
@@ -37,9 +39,11 @@ class _FakeChatClient:
         self.calls.append(kwargs)
         if self.error:
             raise self.error
-        return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=self.content))]
-        )
+        parts = self.content.split(" ") if self.content else [""]
+        return [
+            SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=part + (" " if index < len(parts) - 1 else "")))])
+            for index, part in enumerate(parts)
+        ]
 
 
 @pytest.fixture(autouse=True)
@@ -63,13 +67,16 @@ def test_admin_thread_and_message_are_persisted_and_audited(client, migrated_db,
 
     with SessionLocal() as session:
         assert session.scalar(select(InternalChatThread).where(InternalChatThread.id == thread_id))
-        messages = session.scalars(select(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id)).all()
+        messages = session.scalars(
+            select(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id).order_by(InternalChatMessage.id)
+        ).all()
         assert [message.content for message in messages] == ["What is pending?", "A concise answer"]
         actions = session.scalars(select(AuditLog.action)).all()
         assert {action for action in actions} >= {"internal_chat.thread_created", "internal_chat.message_sent"}
     assert len(fake_client.calls) == 1
+    assert fake_client.calls[0]["stream"] is True
     assert fake_client.calls[0]["messages"][0]["role"] == "system"
-    assert "customer data" in fake_client.calls[0]["messages"][0]["content"]
+    assert "internal operations assistant" in fake_client.calls[0]["messages"][0]["content"]
     assert "tools" not in fake_client.calls[0]
 
 
@@ -81,7 +88,7 @@ def test_operator_cannot_read_or_create_internal_thread(client, migrated_db):
     assert "thread" not in response.text.lower()
 
 
-def test_privileged_request_is_refused_without_model_call(client, migrated_db, monkeypatch):
+def test_privileged_request_requires_approval_without_model_call(client, migrated_db, monkeypatch):
     _user("chat-safe", "admin")
     _login(client, "chat-safe")
     fake_client = _FakeChatClient(error=AssertionError("privileged request must not call the model"))
@@ -89,8 +96,11 @@ def test_privileged_request_is_refused_without_model_call(client, migrated_db, m
     thread = client.post("/panel/api/chat/threads", json={}).json()["thread"]
     response = client.post(f"/panel/api/chat/threads/{thread['id']}/messages", json={"content": "Delete all clients"})
     assert response.status_code == 201
+    assert response.json()["message"]["status"] == "approval_pending"
     persisted = client.get(f"/panel/api/chat/threads/{thread['id']}")
-    assert any("approved operational workflow" in row["content"] for row in persisted.json()["messages"])
+    assert persisted.status_code == 200
+    contents = [row["content"] for row in persisted.json()["messages"]]
+    assert contents == ["Delete all clients"]
     assert fake_client.calls == []
 
 
