@@ -19,6 +19,7 @@ unless explicitly allowed).
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from typing import Callable
 
@@ -42,7 +43,9 @@ from app.chat.state import get_or_create_conversation  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
 from app.services.settings import get_setting, set_setting  # noqa: E402
 
-ADMIN_DB_URL = "postgresql://lumat:lumat@localhost:5432/lumat"
+ADMIN_DB_URL = os.environ.get(
+    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
+)
 
 
 @pytest.fixture(autouse=True)

@@ -13,6 +13,9 @@ export interface User {
   role: Role;
 }
 
+export interface AdminUser { id: number; username: string; role: Role; active: boolean; }
+export interface AdminUsersResponse { users: AdminUser[]; }
+
 export interface Rule {
   id: number;
   name: string;

@@ -26,7 +26,13 @@ from app.services.settings import SETTINGS_DEFAULTS
 from app.services.users import verify_password
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SEED_ADMIN_DB_URL = "postgresql+psycopg://lumat:lumat@localhost:5432/lumat"
+_seed_admin_db_url = os.environ.get(
+    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
+)
+SEED_ADMIN_DB_URL = os.environ.get(
+    "TEST_SEED_DB_URL",
+    _seed_admin_db_url.replace("postgresql://", "postgresql+psycopg://", 1),
+)
 
 
 def _run_seed(**env_override) -> subprocess.CompletedProcess:

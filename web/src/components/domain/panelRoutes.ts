@@ -19,6 +19,7 @@ export const PANEL_ROUTES = {
   kb: '/panel/app/kb',
   'automation-rules': '/panel/app/automation-rules',
   settings: '/panel/app/settings',
+  users: '/panel/app/users',
 } as const satisfies Readonly<Partial<Record<PanelView, string>>>;
 
 const COMPATIBILITY_ROUTES: Readonly<Partial<Record<PanelView, string>>> = {

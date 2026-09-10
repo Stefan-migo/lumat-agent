@@ -20,6 +20,8 @@ Scenarios mapped from tasks.md T4.1.1/T4.1.2 + specs settings-scope-limits:
 Runs against the migrated pgvector test DB (conftest DATABASE_URL).
 """
 
+import os
+
 import psycopg
 import pytest
 from sqlalchemy import func, select
@@ -28,7 +30,9 @@ from app.db import SessionLocal  # noqa: E402
 from app.models import AuditLog, Settings  # noqa: E402
 from app.services import settings  # noqa: E402
 
-ADMIN_DB_URL = "postgresql://lumat:lumat@localhost:5432/lumat"
+ADMIN_DB_URL = os.environ.get(
+    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
+)
 
 
 @pytest.fixture(autouse=True)
