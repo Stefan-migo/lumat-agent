@@ -25,8 +25,8 @@ Chain strategy: pending
 
 ## Slice B — Unified queue UI (PR 2)
 
-- [ ] B.1 RED — Extend `web/src/api.test.ts` and `web/src/components/pages/ConversationsList.test.tsx` for typed envelope requests, tabs/counts/order, search/page parameters, empty/error DOM rows, and Tomar/Reconocer refresh. Verify: focused Vitest. Commit: `test(panel): define unified queue interactions`.
-- [ ] B.2 GREEN — Update `web/src/types.ts`, `web/src/api.ts`, and `web/src/components/pages/ConversationsList.tsx` for queue tabs, priority display, search, limit/offset pagination, direct rows, and actions. Verify: focused Vitest plus `cd web && npx tsc -b`. Commit: `feat(panel): build unified conversation queue`.
+- [x] B.1 RED — Extend `web/src/api.test.ts` and `web/src/components/pages/ConversationsList.test.tsx` for typed envelope requests, tabs/counts/order, search/page parameters, empty/error DOM rows, and Tomar/Reconocer refresh. Verify: focused Vitest. Commit: `test(panel): define unified queue interactions`.
+- [x] B.2 GREEN — Update `web/src/types.ts`, `web/src/api.ts`, and `web/src/components/pages/ConversationsList.tsx` for queue tabs, priority display, search, limit/offset pagination, direct rows, and actions. Verify: focused Vitest plus `cd web && npx tsc -b`. Commit: `feat(panel): build unified conversation queue`.
 
 ## Slice C — Workspace, realtime refresh, and routing (PR 3)
 
