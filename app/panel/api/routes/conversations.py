@@ -14,12 +14,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, case as sql_case, func, or_, select
+from sqlalchemy.orm import Session, aliased
 
-from app.models import Conversation, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, User
+from app.models import Case, Conversation, ConversationState, Customer, DeliveryStatus, Message, MessageDirection, User
 from app.panel.api.deps import require_operator_json
 from app.panel.api.serializers import to_active_conversation_dict, to_conversation_dict, to_message_dict
 from app.panel.deps import get_db
@@ -80,31 +80,147 @@ def _conversation_payload(session: Session, conversation: Conversation) -> dict:
         delivery_summary[status.value] += 1
     return to_conversation_dict(
         conversation,
+        customer=session.get(Customer, conversation.customer_id),
+        case=_selected_case(session, conversation.id),
         latest_inbound_at=latest_inbound_at,
         reply_window_open=open_window,
         delivery_summary=delivery_summary,
     )
 
 
+_CLOSED_CASE_STATUSES = ("closed", "cerrado", "finalizado", "cancelado")
+
+
+def _ranked_case_ids():
+    priority = sql_case(
+        (and_(Case.emergency.is_(True), Case.acknowledged_at.is_(None)), 0),
+        (
+            and_(
+                Case.closed_at.is_(None),
+                Case.acknowledged_at.is_(None),
+                Case.status.not_in(_CLOSED_CASE_STATUSES),
+            ),
+            1,
+        ),
+        else_=2,
+    )
+    return select(
+        Case.id.label("case_id"),
+        Case.conversation_id.label("conversation_id"),
+        func.row_number().over(
+            partition_by=Case.conversation_id,
+            order_by=(priority, Case.created_at.desc(), Case.id.desc()),
+        ).label("case_rank"),
+    ).subquery("ranked_cases")
+
+
+def _selected_case(session: Session, conversation_id: int) -> Case | None:
+    ranked = _ranked_case_ids()
+    return session.scalar(
+        select(Case)
+        .join(ranked, ranked.c.case_id == Case.id)
+        .where(ranked.c.case_rank == 1, Case.conversation_id == conversation_id)
+    )
+
+
+def _queue_base(
+    session: Session,
+    *,
+    q: str | None,
+    state: ConversationState | None,
+    responsible_id: int | None,
+):
+    ranked = _ranked_case_ids()
+    selected_case = aliased(Case)
+    query = (
+        select(
+            Conversation,
+            Customer,
+            selected_case,
+            selected_case.id.label("selected_case_id"),
+            selected_case.emergency.label("selected_case_emergency"),
+            selected_case.acknowledged_at.label("selected_case_acknowledged_at"),
+        )
+        .join(Customer, Customer.id == Conversation.customer_id)
+        .outerjoin(
+            ranked,
+            and_(ranked.c.case_rank == 1, ranked.c.conversation_id == Conversation.id),
+        )
+        .outerjoin(selected_case, selected_case.id == ranked.c.case_id)
+    )
+    # The ranked subquery is joined through the case primary key so each
+    # conversation contributes at most one row, without per-row case queries.
+    filters = []
+    if state is not None:
+        filters.append(Conversation.state == state)
+    if responsible_id is not None:
+        filters.append(Conversation.responsible_id == responsible_id)
+    if q:
+        term = f"%{q}%"
+        filters.append(or_(Customer.name.ilike(term), Customer.phone_e164.ilike(term), Conversation.summary.ilike(term)))
+    return query.where(*filters)
+
+
+def _queue_counts(session: Session, base) -> dict[str, int]:
+    filtered = base.subquery()
+    row = session.execute(
+        select(
+            func.count().label("all"),
+            func.count().filter(filtered.c.state == ConversationState.HUMAN).label("human"),
+            func.count().filter(filtered.c.selected_case_emergency.is_(True), filtered.c.selected_case_acknowledged_at.is_(None)).label("emergency"),
+            func.count().filter(filtered.c.selected_case_id.is_not(None)).label("case"),
+            func.count().filter(filtered.c.state == ConversationState.CLOSED).label("closed"),
+        ).select_from(filtered)
+    ).one()
+    return {key: int(getattr(row, key)) for key in ("all", "human", "emergency", "case", "closed")}
+
+
+def _queue_response(
+    session: Session,
+    *,
+    q: str | None = None,
+    state: ConversationState | None = None,
+    responsible_id: int | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    limit = min(max(limit, 1), 100)
+    base = _queue_base(session, q=q, state=state, responsible_id=responsible_id)
+    filtered = base.subquery()
+    total = session.scalar(select(func.count()).select_from(filtered)) or 0
+    rows = session.execute(
+        base.order_by(Conversation.last_message_at.desc().nulls_last(), Conversation.id.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    items = [
+        to_conversation_dict(conversation, customer=customer, case=case)
+        for conversation, customer, case, _, _, _ in rows
+    ]
+    return {
+        "items": items,
+        "conversations": items,
+        "total": int(total),
+        "offset": offset,
+        "limit": limit,
+        "counts": _queue_counts(session, base),
+    }
+
+
 @router.get("/conversations")
 def conversations_list(
     state: ConversationState | None = None,
     responsible_id: int | None = None,
+    q: str | None = None,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     session: Session = Depends(get_db),
     current: User = Depends(require_operator_json),
 ) -> dict:
     """List conversation metadata, most recently active first."""
-    query = select(Conversation)
-    if state is not None:
-        query = query.where(Conversation.state == state)
-    if responsible_id is not None:
-        query = query.where(Conversation.responsible_id == responsible_id)
-    rows = session.scalars(query.order_by(
-            Conversation.last_message_at.desc().nulls_last(),
-            Conversation.id.desc(),
-        )
-    ).all()
-    return {"conversations": [_conversation_payload(session, row) for row in rows]}
+    return _queue_response(
+        session, q=q, state=state, responsible_id=responsible_id, limit=limit, offset=offset
+    )
 
 
 @router.get("/conversations/active")

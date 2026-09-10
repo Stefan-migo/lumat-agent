@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Conversation, ConversationEvent, User
+from app.models import ConversationEvent, User
 from app.panel.api.deps import get_current_user_json
-from app.panel.api.routes.conversations import _conversation_payload
+from app.panel.api.routes.conversations import _queue_response
 from app.panel.deps import get_db
 from app.services.realtime import ACTIVITY_EVENTS, publisher
 
@@ -23,18 +23,14 @@ def realtime_user(current: User = Depends(get_current_user_json)) -> User:
 
 
 def _snapshot(session: Session) -> dict:
-    conversations = session.scalars(
-        select(Conversation).order_by(
-            Conversation.last_message_at.desc().nulls_last(), Conversation.id.desc()
-        )
-    ).all()
+    queue = _queue_response(session, limit=100)
     events = session.scalars(
         select(ConversationEvent)
         .where(ConversationEvent.event.in_(ACTIVITY_EVENTS))
         .order_by(ConversationEvent.created_at, ConversationEvent.id)
     ).all()
     return {
-        "conversations": [_conversation_payload(session, row) for row in conversations],
+        **queue,
         "activity": [
             {
                 "id": event.id,

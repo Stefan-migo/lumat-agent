@@ -24,6 +24,7 @@ from app.models import (  # noqa: E402
     Conversation,
     ConversationState,
     Customer,
+    Case,
     DeliveryStatus,
     Message,
     MessageDirection,
@@ -219,8 +220,12 @@ def test_conversations_list_returns_serialized_rows_in_activity_order(client, ma
 
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {"conversations"}
-    assert [row["id"] for row in body["conversations"]] == expected_ids
+    assert set(body) == {"items", "total", "offset", "limit", "counts", "conversations"}
+    assert body["total"] == 4
+    assert body["offset"] == 0
+    assert body["limit"] >= 4
+    assert [row["id"] for row in body["items"]] == expected_ids
+    assert body["conversations"] == body["items"]
     assert all(
         set(row)
         == {
@@ -237,16 +242,84 @@ def test_conversations_list_returns_serialized_rows_in_activity_order(client, ma
             "closed_at",
             "responsible_id",
             "version",
+            "customer",
+            "case",
+            "case_id",
+            "emergency",
+            "acknowledged_at",
+            "case_status",
+            "case_priority",
+            "captured_data",
         }
-        for row in body["conversations"]
+        for row in body["items"]
     )
-    assert body["conversations"][-1]["last_message_at"] is None
-    assert all("latest_inbound_at" in row and "reply_window_open" in row for row in body["conversations"])
-    assert all(row["latest_inbound_at"] is None and row["reply_window_open"] is False for row in body["conversations"])
+    assert body["items"][-1]["last_message_at"] is None
+    assert all("latest_inbound_at" in row and "reply_window_open" in row for row in body["items"])
+    assert all(row["latest_inbound_at"] is None and row["reply_window_open"] is False for row in body["items"])
     assert all(
         row["delivery_summary"] == {status.value: 0 for status in DeliveryStatus}
-        for row in body["conversations"]
+        for row in body["items"]
     )
+
+
+def test_conversations_list_searches_paginates_and_selects_ranked_case(client, make_user):
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56977770000", name="Searchable Client")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(
+            customer_id=customer.id,
+            wa_phone=customer.phone_e164,
+            summary="needs emergency visit",
+            last_message_at=datetime(2026, 8, 24, 12, tzinfo=timezone.utc),
+        )
+        session.add(conversation)
+        session.flush()
+        session.add_all([
+            Case(conversation_id=conversation.id, customer_id=customer.id, status="pendiente", priority="low", created_at=datetime(2026, 8, 24, 10, tzinfo=timezone.utc)),
+            Case(conversation_id=conversation.id, customer_id=customer.id, status="escalado", priority="high", emergency=True, created_at=datetime(2026, 8, 24, 11, tzinfo=timezone.utc)),
+        ])
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.get("/panel/api/conversations?q=Searchable&limit=1&offset=0")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    row = body["items"][0]
+    assert row["customer"]["name"] == "Searchable Client"
+    assert row["case"]["priority"] == "high"
+    assert row["case_id"] == row["case"]["id"]
+    assert row["emergency"] is True
+    assert row["case_status"] == "escalado"
+
+
+def test_conversation_detail_uses_same_selected_case_and_captured_data(client, make_user):
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56966660000", name="Detail Client")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164, captured_data={"size": "large"})
+        session.add(conversation)
+        session.flush()
+        selected = Case(conversation_id=conversation.id, customer_id=customer.id, status="pendiente", emergency=True, acknowledged_at=None)
+        session.add(selected)
+        session.commit()
+        conversation_id = conversation.id
+        selected_id = selected.id
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.get(f"/panel/api/conversations/{conversation_id}")
+
+    assert response.status_code == 200
+    row = response.json()["conversation"]
+    assert row["case_id"] == selected_id
+    assert row["case"]["id"] == selected_id
+    assert row["captured_data"] == {"size": "large"}
 
 
 def test_conversation_returns_metadata_and_messages_chronological(client, make_user):
