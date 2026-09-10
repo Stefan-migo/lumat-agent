@@ -34,6 +34,20 @@ function MessageBubble({ message, customerId, customerName }: { message: Message
     {outbound ? <Avatar name={author} /> : null}
   </div>;
 }
+
+function displayCapturedValue(value: unknown) {
+  return typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "—");
+}
+
+function ConversationContext({ conversation }: { conversation: NonNullable<ThreadData["conversation"]> }) {
+  const customer = conversation.customer;
+  const caseData = conversation.case;
+  return <aside className="conversation-workspace__context" aria-label="Contexto de conversación">
+    {caseData ? <section aria-labelledby="conversation-case-heading"><h2 id="conversation-case-heading">Caso</h2><p>{caseData.service}</p><p>Estado: {conversation.case_status ?? caseData.status}</p><p>Prioridad: {conversation.case_priority ?? caseData.priority}</p><p>{conversation.emergency ? "Emergencia" : "Sin emergencia"}</p><p>{conversation.acknowledged_at ? "Reconocido" : "Pendiente de reconocimiento"}</p>{caseData.summary ? <p>{caseData.summary}</p> : null}</section> : null}
+    {customer ? <section aria-labelledby="conversation-customer-heading"><h2 id="conversation-customer-heading">Cliente</h2><p>{customer.name ?? "Sin nombre"}</p><p>{customer.phone_e164 ?? conversation.wa_phone ?? "Sin teléfono"}</p></section> : null}
+    {conversation.captured_data && Object.keys(conversation.captured_data).length > 0 ? <details open><summary>Datos capturados</summary><dl>{Object.entries(conversation.captured_data).map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{displayCapturedValue(value)}</dd></div>)}</dl></details> : null}
+  </aside>;
+}
 export function ConversationThread({ conversationId, data: controlledData, state: controlledState, customerName, refreshKey = 0, onMutate, onBack, interactive = false }: ConversationThreadProps) {
   const [text, setText] = useState("");
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -74,13 +88,14 @@ export function ConversationThread({ conversationId, data: controlledData, state
   return <PageFrame title={conversation ? `# ${conversation.id}` : "Conversación"} meta={conversation ? `${conversation.created_at?.slice(0, 10) ?? "—"}${customerName ? ` · ${customerName(conversation.customer_id)}` : ""}${conversation.summary ? ` · ${conversation.summary}` : ""}` : undefined} state={state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando conversación" /> : state === "error" ? <><StateMessage tone="danger" role="alert" title={loadTitle} /><Button variant="secondary" onClick={refresh}>Reintentar</Button></> : null}>
       {interactive && onBack && <Button variant="secondary" onClick={onBack}>Volver a conversaciones</Button>}
        {connection !== "connected" && <p role="status">Conexión en tiempo real: {connection === "reconnecting" ? "reconectando" : "desconectada"}. La historia persistida permanece disponible.</p>}
-       {state === "loading" ? null : !data || messages.length === 0 ? <EmptyState title="No hay registros" description="Esta conversación no tiene mensajes para mostrar." /> : <div className="ai-agent-grammar__thread-area" aria-label="Mensajes de la conversación">
+       {state === "loading" ? null : !data || messages.length === 0 ? <EmptyState title="No hay registros" description="Esta conversación no tiene mensajes para mostrar." /> : <div className="conversation-workspace">
+        <div className="ai-agent-grammar__thread-area" aria-label="Mensajes de la conversación">
         {conversation ? <div className="ai-agent-grammar__header"><h2 className="ai-agent-grammar__title">Conversación · {customerName?.(conversation.customer_id) ?? `Cliente #${conversation.customer_id}`}</h2><div role="status" aria-label={conversationLabel(conversation.state)}><StatusBadge status={conversation.state as "bot" | "human" | "closed"} /></div></div> : null}
          <div className="ai-agent-grammar__bubbles">{messages.map((message) => <MessageBubble key={message.id} message={message} customerId={conversation?.customer_id ?? 0} customerName={customerName} />)}</div>
          {liveActivity.length > 0 && <div aria-label="Actividad persistida"><h3>Actividad</h3>{liveActivity.map((activity, index) => <p role="status" key={`${activity.event}-${index}`}>{activity.event}{activity.cause ? `: ${activity.cause}` : ""}{activity.actor ? ` · ${activity.actor}` : ""}</p>)}</div>}
         <NoReplyNote />
         {conversation?.state === "human" ? <div className="ai-agent-grammar__handoff" aria-label="Traspaso a atención humana">La conversación está en atención humana.</div> : null}
         {interactive && <>{messages.filter((m) => m.delivery_status === "failed").map((m) => <Button key={m.id} variant="secondary" disabled={busy} onClick={() => void mutate(() => retryMessage(m.conversation_id, m.id))}>Reintentar entrega #{m.id}</Button>)}{stateControls}{conversation?.state === "human" ? <form className="ai-agent-grammar__composer" aria-label="Responder a la conversación" onSubmit={(e) => { e.preventDefault(); if (conversationId && text.trim()) void mutate(() => sendMessage(conversationId, { text: text.trim() })); }}><span className="ai-agent-grammar__composer-hint">{windowOpen ? "Respuesta disponible · Ventana de 24 h abierta" : "Respuesta deshabilitada"}</span><Textarea label="Respuesta" value={text} disabled={!windowOpen || busy} onChange={(e) => setText(e.target.value)} /><Button type="submit" disabled={!windowOpen || busy || !text.trim()}>Enviar respuesta</Button>{!windowOpen && <p role="status" aria-label="Fuera de la ventana de 24 horas">La ventana de 24 horas está cerrada.</p>}</form> : <p role="status">Toma la conversación para responder.</p>}{mutationError && <p role="alert">La entrega falló: {mutationError}</p>}</>}
-      </div>}
+       </div>{conversation ? <ConversationContext conversation={conversation} /> : null}</div>}
     </PageFrame>;
 }

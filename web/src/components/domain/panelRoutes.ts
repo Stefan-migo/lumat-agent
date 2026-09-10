@@ -2,6 +2,7 @@ import type { PanelView } from './PanelShell';
 
 export type PanelRoute = {
   view: PanelView;
+  conversationTab?: 'conversations' | 'cases';
   clientId?: number;
   conversationId?: number;
   automationRuleId?: number;
@@ -33,6 +34,7 @@ const panelViews = new Set<PanelView>([
 ]);
 
 export function pathForView(view: PanelView): string {
+  if (view === 'cases') return PANEL_ROUTES.conversations;
   return PANEL_ROUTES[view as keyof typeof PANEL_ROUTES] ?? COMPATIBILITY_ROUTES[view] ?? PANEL_BASE_PATH;
 }
 
@@ -76,7 +78,7 @@ export function parsePanelPath(pathname: string): PanelRoute {
 
   const view = segments[2] as PanelView;
   if (!panelViews.has(view)) return fallback();
-  if (segments.length === 3) return { view };
+  if (segments.length === 3) return view === 'cases' ? { view: 'conversations', conversationTab: 'cases' } : { view };
   if (segments.length !== 4) return fallback();
 
   const id = positiveId(segments[3]);
