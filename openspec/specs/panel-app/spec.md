@@ -97,21 +97,21 @@ The kb and settings views MUST handle an `ApiError` with status 403 by rendering
 - WHEN the page fetch returns 403
 - THEN a permission-denied state renders, not a fatal error
 
-### Requirement: PNL-APP-7 — Production conversations
+### Requirement: PNL-APP-7 — Unified Production Conversations
 
-`ConversationsListView` MUST consume the filtered production list, show state/assignee/window and refresh after commands; each row MUST open a thread that loads current messages and outbound delivery states. (Previously: unfiltered read-only list and thread.)
+`ConversationsListView` MUST consume the unified queue contract, show case context, tab counts, priority ordering, search, limit/offset pagination, and applicable `Tomar`/`Reconocer` actions. Selecting a row MUST open a workspace whose thread retains current messages, delivery states, and existing conversation mutations. (Previously: the view showed a filtered production list and thread without unified case context, queue tabs, search, pagination, or queue actions.)
 
-#### Scenario: List and thread
+#### Scenario: Queue and workspace
 
-- GIVEN the conversations endpoint returns serialized conversations
-- WHEN the view loads
-- THEN production fields and chronological current messages render
+- GIVEN the conversations endpoint returns serialized conversations with optional case context
+- WHEN the view loads and a row is selected
+- THEN the queue fields render and the workspace loads chronological messages plus the selected case context
 
-#### Scenario: Refresh after command
+#### Scenario: Command refresh
 
-- GIVEN a conversation row
-- WHEN the command completes
-- THEN list and thread refresh, while loading/error states remain actionable
+- GIVEN a queue row or open thread
+- WHEN a take, acknowledge, state, or message command completes
+- THEN authoritative queue and thread data refresh while actionable loading/error states remain visible
 
 ### Requirement: PNL-APP-9 — Composer and permissions
 
@@ -158,14 +158,14 @@ DashboardOverview MUST render the authenticated HOY projection, role-appropriate
 - WHEN navigation is keyboard traversed
 - THEN labels/tooltips remain available and admin-only entries remain absent.
 
-### Requirement: PNL-APP-21 — Conversations and Cases Segment
+### Requirement: PNL-APP-21 — Unified Cases Compatibility Route
 
-The Conversations destination MUST provide a `Conversaciones|Casos` segment. Cases MUST retain its existing page semantics and API ownership; `/panel/app/cases` MUST remain an alias.
+The Conversations destination MUST be the unified operational section; `/panel/app/cases` MUST soft-redirect or resolve to it with the `Casos` tab active. `CasesList` MUST no longer be the rendered owner of that route, while existing case mutation semantics remain available from the unified workspace. (Previously: a `Conversaciones|Casos` segment rendered `CasesList` as a separate surface and the alias preserved that ownership.)
 
-#### Scenario: Segment switches surface
-- GIVEN an authenticated user on Conversations
-- WHEN they select Casos
-- THEN CasesList renders in the shared destination and the selected segment is exposed accessibly.
+#### Scenario: Bookmarked cases route
+- GIVEN an authenticated user opens `/panel/app/cases`
+- WHEN the SPA parses the path
+- THEN the unified conversations view renders with `Casos` selected and no standalone `CasesList` page is mounted
 
 ### Requirement: PNL-APP-22 — Settings Push Composition
 
@@ -204,24 +204,24 @@ The skeleton MUST preserve existing page-body, API, data-model, and PWA contract
 - WHEN the rail renders
 - THEN the matching visible state and `status`/`alert` semantics appear without shell-owned retry/fetch behavior
 
-### Requirement: PNL-APP-12 — Conditional Conversation and Dense-Page Surfaces
+### Requirement: PNL-APP-12 — Conversation Workspace Context
 
-Conversation routes MUST render `ConversationThread` and `ConversationsList` with directional bubbles/avatars, approved owner-status labels, handoff and reply-window presentation, retry/error affordances, and an optional inspector slot only when context exists. Dashboard, `ClientesList`, `ClientFicha` history, `CasesList`, `AgendaPage`, `AutomationRulesPage`, `Settings`, and `KbList` MUST retain their `DataTable`, KPI, `Badge`, filter, and `StateMessage` control-room primitives.
+Conversation routes MUST render the thread as the main workspace area and a RIGHT context panel containing a case block, customer block, and collapsible `captured_data` key/value block when data exists. The panel MUST show explicit emergency, acknowledgement, status, and priority state, preserve direction/owner/handoff/reply-window/retry semantics, and MUST NOT reserve an inspector for non-conversation pages. (Previously: conversation routes had only an optional inspector slot and no required case/customer/captured-data workspace.)
 
-#### Scenario: Conversation detail states
-- GIVEN `/panel/app/conversations/:id` renders a loaded thread
-- WHEN messages, handoff, delivery failure, or a closed reply window are present
-- THEN the DOM exposes direction, owner/status, handoff, retry, and disabled-reason semantics around the existing mutation behavior
+#### Scenario: Loaded workspace
+- GIVEN a selected conversation with case, customer, and captured data
+- WHEN its route renders
+- THEN the thread is primary, the context panel is on the right, and all three context blocks are accessible
 
-#### Scenario: Inspector is conditional
-- GIVEN a non-conversation dense page or a conversation without inspector context
-- WHEN the page renders
-- THEN no empty inspector column is reserved and dense control-room primitives remain present
+#### Scenario: Missing optional context
+- GIVEN a conversation without a case or captured data
+- WHEN the workspace renders
+- THEN the customer/thread remain usable, absent blocks show no fabricated data, and no empty inspector is reserved elsewhere
 
 #### Scenario: List chrome alignment
 - GIVEN `ConversationsList` renders loading, empty, error, or rows
 - WHEN its page chrome is inspected
-- THEN its table/state behavior remains intact while header, filters, and selected-row treatment use the agent-app grammar
+- THEN queue tabs, search, pagination, and selected-row treatment use the agent-app grammar while state behavior remains actionable
 
 ### Requirement: PNL-APP-13 — Realtime Conversation Surfaces
 
