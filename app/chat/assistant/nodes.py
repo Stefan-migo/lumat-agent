@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.evidence import make_evidence
-from app.chat.assistant.state import AssistantState
+from app.chat.assistant.state import AssistantState, PlannerOutput
 from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool
 from app.services.audit import record_audit
 from app.services import llm
@@ -26,8 +28,48 @@ def flush_panel_session(session, thread_id: int, *, before_tokens: int, after_to
     }
 
 
+def bounded_fallback(reason: str) -> PlannerOutput:
+    """Return a safe, short response plan for malformed planner output."""
+    return PlannerOutput(
+        kind="respond",
+        arguments={},
+        summary="I could not safely plan that request. Please try again.",
+        requires_approval=False,
+    )
+
+
+def parse_planner_output(raw: object) -> PlannerOutput:
+    """Validate planner data and convert invalid data to a bounded response."""
+    try:
+        return PlannerOutput.model_validate(raw)
+    except (TypeError, ValidationError):
+        return bounded_fallback("invalid planner output")
+
+
 def plan(state: AssistantState) -> AssistantState:
     content = state["content"].strip()
+    raw = state.get("planner_output")
+    if raw is not None:
+        try:
+            planner = PlannerOutput.model_validate(raw)
+            planner_data = {**planner.model_dump(), "valid": True}
+            result: AssistantState = {
+                "planner": planner_data,
+                "plan": planner.model_dump(),
+                "status": "planned",
+            }
+            if planner.kind == "complex":
+                result["extension_hooks"] = {"sdb": "deferred", "panel_subagents": "not_implemented"}
+            return result
+        except (TypeError, ValidationError):
+            fallback = bounded_fallback("invalid planner output")
+            return {
+                "planner": {**fallback.model_dump(), "valid": False},
+                "plan": fallback.model_dump(),
+                "status": "planned",
+                "response": fallback.summary,
+                "error": "Invalid planner output.",
+            }
     requires_approval = any(word in content.casefold() for word in ("create", "delete", "change", "send"))
     proposed = {
         "tool": None,
@@ -67,14 +109,26 @@ def execute(state: AssistantState) -> AssistantState:
     tool_name = plan_data.get("tool")
     if tool_name:
         try:
+            from app.services.prompts import load_assistant_config
+
+            config = load_assistant_config()
             result = execute_tool(
                 state.get("session"),
                 tool_name,
                 plan_data.get("arguments", {}),
                 approval=state.get("approval"),
+                whitelist=set(config.tools_whitelist),
+                cost_allowed=state.get("guardrails", {}).get("cost_allowed", True),
             )
         except (ToolExecutionError, ToolValidationError) as exc:
             detail = str(exc)
+            if state.get("session") is not None:
+                record_audit(
+                    state["session"], actor=state.get("actor") or "assistant",
+                    action="internal_chat.execution", entity="internal_chat_thread",
+                    entity_id=str(state.get("thread_id")),
+                    after={"run_id": state.get("run_id"), "tool": tool_name, "status": "error"},
+                )
             return {
                 "tool_result": {"tool": tool_name, "status": "error", "error": detail},
                 "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],
@@ -91,6 +145,13 @@ def execute(state: AssistantState) -> AssistantState:
                 "response": f"Tool execution failed: {detail}",
                 "status": "error",
             }
+        if state.get("session") is not None:
+            record_audit(
+                state["session"], actor=state.get("actor") or "assistant",
+                action="internal_chat.execution", entity="internal_chat_thread",
+                entity_id=str(state.get("thread_id")),
+                after={"run_id": state.get("run_id"), "tool": tool_name, "status": "completed"},
+            )
         return {
             "tool_result": result,
             "evidence": [make_evidence(tool=tool_name, status="completed", detail="Tool execution completed")],

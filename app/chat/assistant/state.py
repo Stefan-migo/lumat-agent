@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from math import ceil
-from typing import TypedDict
+from typing import Literal, TypedDict
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 INJECTION_TOKEN_BUDGET = 4_000
 SESSION_WINDOW_TOKENS = 8_000
@@ -23,6 +25,26 @@ ASSISTANT_STATE_KEYS = {
 def estimate_tokens(text: str) -> int:
     """Estimate tokens deterministically from UTF-8 bytes, rounded upward."""
     return ceil(len(text.encode("utf-8")) / 4)
+
+
+class PlannerOutput(BaseModel):
+    """The only planner shape accepted at the assistant trust boundary."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["tool", "respond", "complex"]
+    tool: str | None = None
+    arguments: dict = Field(default_factory=dict)
+    summary: str = Field(min_length=1, max_length=200)
+    requires_approval: bool = False
+
+    @model_validator(mode="after")
+    def require_tool_for_tool_kind(self) -> "PlannerOutput":
+        if self.kind == "tool" and not self.tool:
+            raise ValueError("tool is required when kind is tool")
+        if self.kind != "tool" and self.tool is not None:
+            raise ValueError("tool is only allowed when kind is tool")
+        return self
 
 
 class AssistantState(TypedDict, total=False):
@@ -44,6 +66,7 @@ class AssistantState(TypedDict, total=False):
     context: dict
     context_meta: dict
     planner: dict
+    planner_output: dict
     guardrails: dict
     compaction: dict
     extension_hooks: dict

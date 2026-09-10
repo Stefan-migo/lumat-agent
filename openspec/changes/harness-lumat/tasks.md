@@ -34,8 +34,8 @@ Stacked-to-main is selected for independently mergeable slices. PR 1 targets mai
 
 ## Phase 2: Planning and Guardrails
 
-- [ ] 2.1 **RED first:** add `tests/unit/test_assistant_planner.py` strict-schema, extra-field, tool-requirement, complex-hook, and bounded-fallback tests for HL-2/AO-1; then implement planner models/fallback in `app/chat/assistant/state.py` and `app/chat/assistant/nodes.py`.
-- [ ] 2.2 **RED first:** add `tests/integration/test_assistant_harness_guardrails.py` whitelist-rejection, typed-argument, cost, exact-approval, and audit/evidence-order tests for HL-2/AO-2/AO-3/AT-1; then enforce schema→whitelist→args→cost→approval→handler→audit→evidence in `app/chat/assistant/tools/registry.py`, `app/chat/assistant/nodes.py`, and existing audit/cost seams.
+- [x] 2.1 **RED first:** add `tests/unit/test_assistant_planner.py` strict-schema, extra-field, tool-requirement, complex-hook, and bounded-fallback tests for HL-2/AO-1; then implement planner models/fallback in `app/chat/assistant/state.py` and `app/chat/assistant/nodes.py`.
+- [x] 2.2 **RED first:** add `tests/integration/test_assistant_harness_guardrails.py` whitelist-rejection, typed-argument, cost, exact-approval, and audit/evidence-order tests for HL-2/AO-2/AO-3/AT-1; then enforce schema→whitelist→args→cost→approval→handler→audit→evidence in `app/chat/assistant/tools/registry.py`, `app/chat/assistant/nodes.py`, and existing audit/cost seams.
 
 ## Phase 3: Session, Compatibility, and Scope
 
