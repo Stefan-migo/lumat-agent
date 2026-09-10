@@ -20,11 +20,13 @@ Part 2 (graph): full-graph strong hit fires the notification automatically.
 """
 
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from email import message_from_string
 from typing import Callable
 
 import httpx
+
 import psycopg
 import pytest
 from sqlalchemy import select
@@ -53,7 +55,9 @@ from app.services.settings import (  # noqa: E402
 )
 from app.webhook import ingest  # noqa: E402
 
-ADMIN_DB_URL = "postgresql://lumat:lumat@localhost:5432/lumat"
+ADMIN_DB_URL = os.environ.get(
+    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
+)
 
 
 @pytest.fixture(autouse=True)
