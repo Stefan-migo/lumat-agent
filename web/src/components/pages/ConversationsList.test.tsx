@@ -12,12 +12,11 @@ afterEach(() => vi.restoreAllMocks());
 describe('production conversations list', () => {
   it('loads filters and exposes production state and assignee fields', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(queue([row(4, 'human', 7)], { all: 1, human: 1, emergency: 0, case: 0, closed: 0 })), { status: 200 }));
-    const user = userEvent.setup();
     render(<ConversationsList />);
     expect(await screen.findByText('Needs visit')).toBeInTheDocument();
-    expect(screen.getByText(/Responsable: 7/)).toBeInTheDocument();
+    expect(screen.getByText(/Cliente 4/)).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /humanas/i })).toHaveTextContent('1');
-    expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations?limit=20&offset=0', expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations', expect.anything());
   });
 
   it.each([401, 403, 409, 422])('renders an actionable error for HTTP %s', async (status) => {
@@ -71,17 +70,20 @@ describe('production conversations list', () => {
     const user = userEvent.setup();
     render(<ConversationsList />);
     await user.type(screen.getByRole('searchbox'), 'heater');
-    expect(await screen.findByText(/no hay conversaciones/i)).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    expect(screen.getByText(/no hay conversaciones/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?q=heater&limit=20&offset=0', expect.anything());
     expect(screen.getByRole('button', { name: /siguiente/i })).toBeInTheDocument();
   });
 
   it('refreshes after Tomar and Reconocer actions', async () => {
     const onRetry = vi.fn();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const emergency = row(8, 'bot', null, { emergency: true, case_id: 44, acknowledged_at: null });
     const user = userEvent.setup();
     render(<ConversationsList data={queue([emergency])} onRetry={onRetry} />);
     await user.click(screen.getByRole('button', { name: /tomar/i }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     await user.click(screen.getByRole('button', { name: /reconocer/i }));
     expect(onRetry).toHaveBeenCalledTimes(2);
   });

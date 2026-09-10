@@ -68,16 +68,21 @@ export const restoreKbDocument = (id: number, version: number) => postJson<KbMut
 export const refreshKbDocuments = () => apiFetch<DocsResponse>('/panel/api/kb');
 
 import type { ActiveConversationsResponse, AdvancedDashboardData, AgendaResponse, AssistantAttachment, AssistantCapabilities, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse } from './types';
-export interface ConversationFilters { state?: ConversationState; responsible_id?: number; }
+export interface ConversationFilters { state?: ConversationState; responsible_id?: number; q?: string; limit?: number; offset?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
 export function listConversations(filters: ConversationFilters = {}) {
   const params = new URLSearchParams();
   if (filters.state) params.set('state', filters.state);
   if (filters.responsible_id !== undefined) params.set('responsible_id', String(filters.responsible_id));
+  if (filters.q) params.set('q', filters.q);
+  if (filters.limit !== undefined) params.set('limit', String(filters.limit));
+  if (filters.offset !== undefined) params.set('offset', String(filters.offset));
   const query = params.toString();
   return apiFetch<ConversationsResponse>(`/panel/api/conversations${query ? `?${query}` : ''}`);
 }
+export const takeConversation = (id: number, expected_version: number) => changeConversationState(id, 'human', expected_version);
+export const acknowledgeCase = (id: number) => postJson<{ ok: true; case: unknown }>(`/panel/api/cases/${id}/ack`);
 export const listActiveConversations = () => apiFetch<ActiveConversationsResponse>('/panel/api/conversations/active');
 export const getConversation = (id: number) => apiFetch<ConversationThread>(`/panel/api/conversations/${id}`);
 export const changeConversationState = (id: number, state: ConversationState, expected_version: number) => command<{ ok: true; conversation: Conversation }>(`/panel/api/conversations/${id}/state`, { state, expected_version, request_id: requestId() });
