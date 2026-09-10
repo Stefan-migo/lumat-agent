@@ -2,11 +2,11 @@
 
 ## Review Workload Forecast
 
-Estimated changed lines: A ~320, B ~360, C ~340; total ~1,020. Each slice stays below 400; chained PRs are required. Delivery strategy: auto-chain. Chain strategy: pending user selection.
+Estimated changed lines: A ~320, B ~360, C ~340; total ~1,020. Each slice stays below 400; chained PRs are required. Delivery strategy: auto-chain. Chain strategy: stacked-to-main.
 
 Decision needed before apply: Yes
 Chained PRs recommended: Yes
-Chain strategy: pending
+Chain strategy: stacked-to-main
 400-line budget risk: High
 
 ### Slice work units
@@ -30,9 +30,9 @@ Chain strategy: pending
 
 ## Slice C — Workspace, realtime refresh, and routing (PR 3)
 
-- [ ] C.1 RED — Add workspace, captured-data, bounded-refresh, bookmarked-route, malformed-route, and no-`CasesList` tests in `ConversationThread.test.tsx`, `realtime.test.ts`, `panelRoutes.test.ts`, and `AppShell.test.tsx`. Verify: focused Vitest. Commit: `test(panel): define workspace and route compatibility`.
-- [ ] C.2 GREEN — Update `ConversationThread.tsx`, `web/src/realtime.ts`, `panelRoutes.ts`, and `AppShell.tsx` for right-side context, flexible data, coalesced snapshot refresh, `/cases`→`Casos`, and safe fallback; retire `CasesList.tsx` only after tests pass. Verify: focused Vitest plus `npx tsc -b`. Commit: `feat(panel): unify workspace and cases routing`.
-- [ ] C.3 VERIFY — Run `uv run pytest tests/`, `cd web && npm test`, and `cd web && npx tsc -b`; confirm each PR remains under 400 authored changed lines and rollback boundaries remain independent. Commit: `test(panel): verify conversations redesign slices`.
+- [x] C.1 RED — Add workspace, captured-data, bounded-refresh, bookmarked-route, malformed-route, and no-`CasesList` tests in `ConversationThread.test.tsx`, `realtime.test.ts`, `panelRoutes.test.ts`, and `AppShell.test.tsx`. Verify: focused Vitest. Commit: `test(panel): define workspace and route compatibility`.
+- [x] C.2 GREEN — Update `ConversationThread.tsx`, `web/src/realtime.ts`, `panelRoutes.ts`, and `AppShell.tsx` for right-side context, flexible data, coalesced snapshot refresh, `/cases`→`Casos`, and safe fallback; retire `CasesList.tsx` only after tests pass. Verify: focused Vitest plus `npx tsc -b`. Commit: `feat(panel): unify workspace and cases routing`.
+- [x] C.3 VERIFY — Run `uv run pytest tests/`, `cd web && npm test`, and `cd web && npx tsc -b`; confirm each PR remains under 400 authored changed lines and rollback boundaries remain independent. Commit: `test(panel): verify conversations redesign slices`.
 
 ## Graph task mapping
 

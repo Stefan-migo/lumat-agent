@@ -5,6 +5,7 @@ import {
   reduceRealtimeState,
   type FakeWebSocket,
   type RealtimeEnvelope,
+  coalesceSnapshotRefresh,
 } from "./realtime";
 
 class Socket implements FakeWebSocket {
@@ -80,5 +81,19 @@ describe("RealtimeClient", () => {
     expect(Socket.instances).toHaveLength(1);
     Socket.instances[0].sendEnvelope({ type: "token", conversation_id: 1, data: { token: "ignored" } });
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("coalesces a burst of snapshot refresh requests into one callback", () => {
+    vi.useFakeTimers();
+    const refresh = vi.fn();
+    const schedule = coalesceSnapshotRefresh(refresh, 100);
+
+    schedule();
+    schedule();
+    schedule();
+    vi.advanceTimersByTime(99);
+    expect(refresh).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });

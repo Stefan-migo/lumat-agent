@@ -21,6 +21,16 @@ export interface RealtimeState {
 }
 export const initialRealtimeState: RealtimeState = { conversations: [], threads: {}, activity: {}, tokens: {}, chats: {}, status: 'disconnected' };
 
+export function coalesceSnapshotRefresh(refresh: () => void, delay = 100) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const schedule = (() => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => { timer = null; refresh(); }, delay);
+  }) as (() => void) & { cancel: () => void };
+  schedule.cancel = () => { if (timer) clearTimeout(timer); timer = null; };
+  return schedule;
+}
+
 export function reduceRealtimeState(state: RealtimeState, envelope: RealtimeEnvelope): RealtimeState {
   const id = envelope.conversation_id;
   if (envelope.type === 'snapshot') {

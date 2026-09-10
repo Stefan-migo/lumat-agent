@@ -10,7 +10,7 @@ import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
-import { realtimeClient, type ConnectionStatus } from "../../realtime";
+import { coalesceSnapshotRefresh, realtimeClient, type ConnectionStatus } from "../../realtime";
 
 export type ConversationsListState = AsyncDataState | "fatal-error";
 export interface ConversationsListProps { data?: ConversationsResponse | null; state?: ConversationsListState; onRetry?: () => void; onOpenThread?: (id: number) => void; customerName?: (id: number) => string; refreshKey?: number; }
@@ -45,11 +45,12 @@ export function ConversationsList({ data: controlledData, state: controlledState
 
   useEffect(() => {
     if (controlledData !== undefined) return;
-    const unsubscribe = realtimeClient.subscribe((event) => { if (["conversation", "message", "snapshot"].includes(event.type)) retry(); });
+    const snapshotRefresh = coalesceSnapshotRefresh(retry);
+    const unsubscribe = realtimeClient.subscribe((event) => { if (["conversation", "message"].includes(event.type)) retry(); if (event.type === "snapshot") snapshotRefresh(); });
     const unsubscribeStatus = realtimeClient.subscribeStatus(setConnection);
     const unregisterRecovery = realtimeClient.registerRecovery(async () => { await Promise.all([listConversations({ q: query, limit: 20, offset }), listActiveConversations()]); retry(); });
     realtimeClient.connect();
-    return () => { unsubscribe(); unsubscribeStatus(); unregisterRecovery(); };
+    return () => { unsubscribe(); unsubscribeStatus(); unregisterRecovery(); snapshotRefresh.cancel(); };
   }, [controlledData, offset, query, retry]);
 
   const runAction = async (id: number, action: () => Promise<unknown>) => { setBusyId(id); try { await action(); retry(); } finally { setBusyId(undefined); } };

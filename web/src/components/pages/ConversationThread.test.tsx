@@ -102,3 +102,35 @@ it('shows delivery failure content beside the retry action', () => {
   expect(screen.getByText(/canal no disponible/i)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /reintentar entrega #1/i })).toBeInTheDocument();
 });
+
+it('renders the conversation workspace context beside the thread', () => {
+  render(<ConversationThread data={{ ...thread, conversation: {
+    ...thread.conversation,
+    customer: { id: 4, name: 'María González', phone_e164: '+5694' },
+    case: { id: 22, service: 'Urgencia', priority: 'high', status: 'open', emergency: true, summary: 'Needs help', acknowledged_at: null, closed_at: null },
+    case_id: 22,
+    emergency: true,
+    acknowledged_at: null,
+    case_status: 'open',
+    case_priority: 'high',
+    captured_data: { preferred_language: 'es', nested: { source: 'web' }, attempts: 2 },
+  }}} state="ready" />);
+
+  expect(screen.getByRole('complementary', { name: /contexto de conversación/i })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Caso' })).toBeInTheDocument();
+  expect(screen.getByText('María González')).toBeInTheDocument();
+  expect(screen.getByText('Urgencia')).toBeInTheDocument();
+  expect(screen.getByText('preferred_language')).toBeInTheDocument();
+  expect(screen.getByText('es')).toBeInTheDocument();
+  expect(screen.getByText('nested')).toBeInTheDocument();
+  expect(screen.getByText('2')).toBeInTheDocument();
+});
+
+it('keeps the thread usable without optional case or captured data', () => {
+  render(<ConversationThread data={{ ...thread, conversation: { ...thread.conversation, customer: { id: 4, name: 'María González', phone_e164: '+5694' }, case: null, case_id: null, captured_data: null } }} state="ready" />);
+
+  expect(screen.getByText('Hola')).toBeInTheDocument();
+  expect(screen.getByRole('complementary', { name: /contexto de conversación/i })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Caso' })).not.toBeInTheDocument();
+  expect(screen.queryByText('Datos capturados')).not.toBeInTheDocument();
+});

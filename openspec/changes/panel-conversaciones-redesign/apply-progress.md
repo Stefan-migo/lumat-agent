@@ -95,3 +95,55 @@ Applied YAGNI → stdlib → native → one-line → minimum. Reused existing lo
 - `listConversations()` omits default query parameters for the legacy no-argument call, while queue search/page requests explicitly send `limit` and `offset`; this preserves existing consumers and still satisfies queue navigation requests.
 - `Conversation` queue fields remain optional and `conversations` remains an optional compatibility alias so existing stories and thread consumers compile during Slice C migration.
 - React test output includes existing `act(...)` warnings during debounced search; assertions and all tests pass.
+
+---
+
+# Slice C — Workspace, realtime refresh, and routing
+
+## Status
+
+- **Slice:** C — workspace, realtime refresh, and routing
+- **Mode:** Strict TDD
+- **Delivery:** auto-chain, stacked-to-main; Slice C boundary is the conversation workspace, bounded realtime refresh, unified cases routing, and compatibility tests
+- **Apply state:** implementation complete; web verification green; full backend suite attempted with pre-existing test-environment failures beyond the documented dashboard date failure
+- **Tasks completed:** C.1, C.2, C.3 (Slice A A.1–A.3 and Slice B B.1–B.2 retained above)
+
+## TDD Cycle Evidence
+
+| Task | Test file | RED | GREEN | REFACTOR |
+|---|---|---|---|---|
+| C.1 | `ConversationThread.test.tsx`, `realtime.test.ts`, `panelRoutes.test.ts`, `AppShell.test.tsx` | New workspace, coalescing, `/cases`, and no-standalone-page assertions failed against the Slice B implementation | Focused suite passed 44 tests after implementation | Kept local state and the existing route/parser seam; no state library or cache layer |
+| C.2 | Same focused web files plus `ConversationsList.tsx` realtime integration | C.1 failures drove context rendering, snapshot coalescing, route canonicalization, and unified cases rendering | Focused suite passed 44 tests; typecheck passed | Reused `setTimeout`, local state, existing queue API, and the existing shell tab grammar |
+| C.3 | Full web and backend suites | Full-suite verification exposed stale standalone-case coverage and the pre-existing backend environment/date issues | Full web suite passed 489 tests; backend focused Slice A contract suite passed 41 tests | Removed stale standalone CasesList story coverage while preserving the unmounted legacy module for the sub-400-line Slice C boundary |
+
+## Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result | `cd web && npm test -- --run src/components/pages/ConversationThread.test.tsx src/realtime.test.ts src/components/domain/panelRoutes.test.ts src/components/domain/AppShell.test.tsx` — **4 files, 44 tests passed**; `cd web && npx tsc -b` — **passed**. |
+| Runtime harness command/scenario and exact result | `cd web && npm test` — **68 files, 489 tests passed**; exercises workspace rendering, `/cases` canonicalization, unified queue route, and snapshot refresh behavior. |
+| Rollback boundary | Revert Slice C commits `4ac99406`, `92685a8c`, `32b5f09e`, and the verification cleanup commit; Slice A backend and Slice B queue implementation remain independently intact. |
+
+## Full Backend Verification
+
+The mandatory command was attempted exactly as required:
+
+`TEST_ADMIN_DB_URL="postgresql://lumat:lumat@localhost:5432/lumat_conversaciones" DATABASE_URL="postgresql+psycopg://app:app@localhost:5432/lumat_conversaciones" uv run pytest tests/ -q -p no:cacheprovider`
+
+It did not produce a clean full-suite result. The documented pre-existing failure remains `tests/functional/test_api_dashboard.py::test_today_excludes_cancelled_and_replied_rows_and_caps_each_projection` because it is anchored to 2026-09-09 while runtime date is 2026-09-10. Additionally, many integration tests use module-local hardcoded `postgresql://.../lumat` cleanup URLs instead of the mandatory dedicated URL, so their cleanup runs against the shared database while the application uses `lumat_conversaciones`; this caused cascading dirty-database failures and duplicate-key/row-count errors. No backend files were changed. The dedicated Slice A contract suite remains green at **41 passed**.
+
+## Graph Check
+
+- `graphify-out/graph.json` exists and is non-empty; `GRAPH_REPORT.md` was read.
+- Consulted nodes: `ConversationThread()`, `ConversationThread.tsx`, `ConversationThread.test.tsx`, `RealtimeClient`, `realtime.ts`, `realtime.test.ts`, `AppShell.tsx`, `panelRoutes.ts`, `panelRoutes.test.ts`, `CasesList.tsx`, `ConversationsList.tsx`.
+- Consulted edges: `ConversationThread.tsx --imports_from--> realtime.ts`; `AppShell.tsx --imports_from--> panelRoutes.ts`; `AppShell.tsx --imports_from--> ConversationThread.tsx/ConversationsList.tsx`; `panelRoutes.ts --compatibility route--> CasesList.tsx` (legacy route ownership removed in implementation).
+
+## Pre-apply Ponytail Check
+
+Applied YAGNI → stdlib → native → one-line → minimum. Used local React state, a bounded native `setTimeout` coalescer, the existing API client, route parser, shell tab grammar, and existing DOM primitives. No new dependency, state library, cache abstraction, or fixed `captured_data` schema was introduced. Intentional simplification ceiling: snapshot refreshes coalesce within a 100 ms window; authoritative REST remains the source of truth.
+
+## Deviations and Risks
+
+- `ConversationsList.tsx` was also modified because it owns queue subscription and must consume the bounded snapshot coalescer; this is within Slice C behavior even though the initial file list emphasized the workspace/routing files.
+- `CasesList.tsx` is no longer mounted by `AppShell`; its legacy source remains in the worktree to keep Slice C under the 400 authored-line review budget, while its standalone Storybook coverage was retired.
+- Full backend verification is blocked by stale module-local test database URLs and the documented date-anchored dashboard test; no backend production code was touched.
