@@ -77,6 +77,7 @@ class Assistant:
     kb_scope: tuple[str, ...] | None
     memoria_scope: str | None
     model: str
+    skills: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -154,6 +155,7 @@ def _build_assistant(root: dict, agent_dir: Path) -> Assistant:
         kb_scope=_coerce_optional_str_list(root.get("kb_scope"), what=f"{where}.kb_scope"),
         memoria_scope=root.get("memoria_scope"),
         model=root["model"],
+        skills=_coerce_str_list(root.get("skills", []), what=f"{where}.skills"),
     )
 
 

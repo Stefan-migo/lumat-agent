@@ -11,6 +11,21 @@ from app.services import llm
 from app.chat.assistant.attachments import build_multimodal_content, prepare_attachment_context
 
 
+def load_panel_context(session, thread_id: int) -> dict:
+    """Tukulpan seam: expose only panel-scoped and pinned context."""
+    return {"pinned": [], "panel": []}
+
+
+def flush_panel_session(session, thread_id: int, *, before_tokens: int, after_tokens: int) -> dict:
+    """Tukulpan seam for future memory flushing; it never executes hooks."""
+    return {
+        "thread_id": thread_id,
+        "before_tokens": before_tokens,
+        "after_tokens": after_tokens,
+        "flushed": False,
+    }
+
+
 def plan(state: AssistantState) -> AssistantState:
     content = state["content"].strip()
     requires_approval = any(word in content.casefold() for word in ("create", "delete", "change", "send"))
