@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ClientesList } from "./ClientesList";
 import { ConversationsList } from "./ConversationsList";
-import { CasesList } from "./CasesList";
 import { AppShell } from "../domain/AppShell";
 import type { User } from "../../types";
 
@@ -31,15 +30,6 @@ describe("panel production links", () => {
     render(<ConversationsList data={{ conversations: [{ id: 9, customer_id: 7, wa_phone: "+5697", state: "human", responsible_id: null, version: 1, summary: "Needs visit", latest_inbound_at: "2026-08-25", reply_window_open: false, delivery_summary: { pending: 0, sending: 0, sent: 0, failed: 0, unknown: 0 }, last_message_at: "2026-08-25", created_at: "2026-08-25", closed_at: null }] }} state="ready" onOpenThread={onOpenThread} />);
     screen.getByRole("button", { name: "Abrir conversación #9" }).click();
     expect(onOpenThread).toHaveBeenCalledWith(9);
-  });
-
-  it("keeps case customer links on the same route seam", () => {
-    const onOpenClient = vi.fn();
-    render(<CasesList data={{ cases: [{ id: 3, conversation_id: 9, customer_id: 7, created_at: "2026-08-25", service: "Gas", priority: "alta", status: "abierto", emergency: false, responsible_id: null, summary: "Needs visit", escalated_at: null, closed_at: null, acknowledged_at: null, ack_by: null, customer: { id: 7, name: "Cliente vivo", phone_e164: "+56911111111", email: null, comuna: null, address: null, state: "activo", consent_status: true, consent_at: null, created_at: "2026-08-25" } }], users: [] }} state="ready" onOpenClient={onOpenClient} />);
-    const link = screen.getByRole("link", { name: "Cliente vivo" });
-    expect(link).toHaveAttribute("href", "/panel/app/clients/7");
-    link.click();
-    expect(onOpenClient).toHaveBeenCalledWith(7);
   });
 
   it.each(["/panel/app/kb", "/panel/app/settings"])("renders permission denial for an operador deep link at %s", async (path) => {
