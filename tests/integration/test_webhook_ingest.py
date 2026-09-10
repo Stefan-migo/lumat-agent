@@ -20,10 +20,12 @@ Runs against the migrated pgvector test DB (conftest DATABASE_URL).
 import hashlib
 import hmac
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
+
 import psycopg
 import pytest
 import respx
@@ -105,7 +107,9 @@ def _message_rows() -> list[Message]:
         return list(session.scalars(select(Message).order_by(Message.id)))
 
 
-ADMIN_DB_URL = "postgresql://lumat:lumat@localhost:5432/lumat"
+ADMIN_DB_URL = os.environ.get(
+    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
+)
 
 
 @pytest.fixture(autouse=True)

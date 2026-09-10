@@ -1,10 +1,11 @@
 """NT-1/NT-2 integration tests for durable notification delivery."""
 
+import os
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
 import psycopg
 import pytest
+from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.models import AuditLog, Customer, NotificationAttempt, NotificationOperation
@@ -12,9 +13,14 @@ from app.services import notifications
 from app.services.customers import get_or_create_customer
 
 
+ADMIN_DB_URL = os.environ.get(
+    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
+)
+
+
 @pytest.fixture(autouse=True)
 def clean_notifications_db(migrated_db):
-    with psycopg.connect("postgresql://lumat:lumat@localhost:5432/lumat", autocommit=True) as conn:
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
             "TRUNCATE notification_attempts, notification_operations, audit_log, "
             "cases, messages, conversations, customers RESTART IDENTITY CASCADE"

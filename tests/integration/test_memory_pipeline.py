@@ -15,6 +15,8 @@ deterministic fake (mounted by mock_openai_chat) so the suite never downloads
 the model. Runs against the migrated pgvector test DB.
 """
 
+import os
+
 import psycopg
 import pytest
 from sqlalchemy import select
@@ -35,7 +37,9 @@ from app.services import kb as kb_service  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
 from app.services import memory as memory_service  # noqa: E402
 
-ADMIN_DB_URL = "postgresql://lumat:lumat@localhost:5432/lumat"
+ADMIN_DB_URL = os.environ.get(
+    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
+)
 
 
 @pytest.fixture(autouse=True)

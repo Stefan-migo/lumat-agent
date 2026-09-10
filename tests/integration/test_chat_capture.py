@@ -14,6 +14,8 @@ Scenarios mapped 1:1 from openspec/specs/conversation-manager/spec.md:
 Runs the full graph per turn (multi-turn flows). OpenAI mocked via respx.
 """
 
+import os
+
 import psycopg
 import pytest
 from sqlalchemy import select
@@ -35,7 +37,9 @@ from app.models import (  # noqa: E402
 from app.services import kb as kb_service  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
 
-ADMIN_DB_URL = "postgresql://lumat:lumat@localhost:5432/lumat"
+ADMIN_DB_URL = os.environ.get(
+    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
+)
 
 
 @pytest.fixture(autouse=True)
