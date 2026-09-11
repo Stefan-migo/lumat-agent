@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.evidence import make_evidence
-from app.chat.assistant.state import AssistantState, PlannerOutput
+from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens
 from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
 from app.services import llm
@@ -22,19 +22,13 @@ def load_panel_context(session, thread_id: int) -> dict:
     """Read the Tukulpan panel scope, with pinned memories first and bounded."""
     if session is None or not hasattr(session, "execute"):
         return {"pinned": [], "panel": []}
-    from app.services.memory import list_for_entity
+    from app.services.tukulpan import list_for_entity
 
     rows = list_for_entity(session, scope="panel", entity_id=f"thread:{thread_id}")
     result = {"pinned": [], "panel": []}
-    used = 0
     for row in rows:
         content = str(row.contenido)
-        cost = max(1, len(content.encode("utf-8")) + 3) // 4
-        if used + cost > 4_000:
-            continue
         result["pinned" if row.pin else "panel"].append({"id": str(row.id), "content": content})
-        used += cost
-    result["pinned"].sort(key=lambda item: item["id"])
     return result
 
 
@@ -174,11 +168,12 @@ def plan_llm(state: AssistantState) -> AssistantState:
 
 def assemble_context_node(state: AssistantState) -> AssistantState:
     if state.get("session") is None:
-        return {"context": state.get("context", {"items": [], "meta": {}}), "context_meta": state.get("context", {}).get("meta", {})}
+        meta = state.get("context", {}).get("meta", {})
+        return {"context": state.get("context", {"items": [], "meta": {}}), "context_meta": meta, "projection_evidence": meta}
     from app.services.agent_chat import assemble_context
 
     context = assemble_context(state["session"], state["thread_id"], attachments=state.get("attachments", []))
-    return {"context": context, "context_meta": context["meta"]}
+    return {"context": context, "context_meta": context["meta"], "projection_evidence": context["meta"]}
 
 
 def guardrails(state: AssistantState) -> AssistantState:
@@ -349,8 +344,13 @@ def execute(state: AssistantState) -> AssistantState:
 
 def collect_evidence(state: AssistantState) -> AssistantState:
     if state.get("evidence"):
-        return {"evidence": state["evidence"], "status": state.get("status", "completed")}
+        evidence = [*state["evidence"]]
+    else:
+        evidence = [make_evidence(tool=None, status="completed", detail="Assistant response generated")]
+    context_meta = state.get("context_meta") or state.get("context", {}).get("meta", {})
+    if context_meta:
+        evidence[-1] = {**evidence[-1], "context_meta": context_meta}
     return {
-        "evidence": [make_evidence(tool=None, status="completed", detail="Assistant response generated")],
+        "evidence": evidence,
         "status": state.get("status", "completed"),
     }

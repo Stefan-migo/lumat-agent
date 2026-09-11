@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 
 from app.chat.assistant import nodes
+from app.chat.assistant.graph import run_assistant
 from app.services.agent_chat import assemble_context
 
 
@@ -64,3 +65,64 @@ def test_tukulpan_seam_is_panel_and_pinned_only(monkeypatch):
     assert seen["args"] == ("session", 9)
     assert result["meta"]["tukulpan_ids"] == ["pin", "panel"]
     assert "secret" not in str(result)
+
+
+def test_panel_projection_uses_canonical_scope_and_preserves_newest_rows(monkeypatch):
+    seen = {}
+
+    def fake_list(session, *, scope, entity_id):
+        seen.update(scope=scope, entity_id=entity_id)
+        return [
+            SimpleNamespace(id=3, contenido="new", pin=False),
+            SimpleNamespace(id=2, contenido="pinned", pin=True),
+            SimpleNamespace(id=1, contenido="old", pin=False),
+        ]
+
+    monkeypatch.setattr("app.services.tukulpan.list_for_entity", fake_list)
+
+    result = nodes.load_panel_context(SimpleNamespace(execute=lambda *args: None), 12)
+
+    assert seen == {"scope": "panel", "entity_id": "thread:12"}
+    assert [row["id"] for row in result["pinned"] + result["panel"]] == ["2", "3", "1"]
+
+
+def test_assembly_does_not_search_and_reports_fixed_budget_metadata(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.tukulpan.hybrid_search",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("implicit search")),
+    )
+    monkeypatch.setattr(nodes, "load_panel_context", lambda session, thread_id: {
+        "pinned": [{"id": "pin-1", "content": "pinned"}],
+        "panel": [{"id": "panel-1", "content": "x" * 20_000}],
+    })
+
+    result = assemble_context(None, 7, messages=[], attachments=[])
+
+    assert result["meta"]["estimated_tokens"] <= 4_000
+    assert result["meta"]["truncated"] is True
+    assert result["meta"]["tukulpan_ids"] == ["pin-1"]
+
+
+def test_assistant_graph_carries_projection_metadata_into_evidence():
+    context = {
+        "items": [{"source": "tukulpan", "id": "memory-1", "content": "fact"}],
+        "meta": {
+            "tukulpan_ids": ["memory-1"],
+            "message_ids": [],
+            "attachment_ids": [],
+            "estimated_tokens": 1,
+            "truncated": False,
+        },
+    }
+
+    result = run_assistant(
+        thread_id=7,
+        user_id=1,
+        content="hello",
+        run_id="run-1",
+        session=None,
+        context=context,
+    )
+
+    assert result["context_meta"] == context["meta"]
+    assert result["evidence"][-1]["context_meta"] == context["meta"]

@@ -17,9 +17,9 @@ Auto-chain uses stacked-to-main. Estimate: ~470 production lines across the six 
 
 ## Work Unit 2: Deterministic Projection (PR 2)
 
-- [ ] 2.1 RED — Extend `tests/integration/test_assistant_harness_context.py` with panel/entity scope, pinned-first, fixed-budget, source-ID, truncation, and “no hybrid search” failures (HL-1, MEM-3 scenarios).
-- [ ] 2.2 GREEN — Update `app/services/agent_chat.py` and `app/chat/assistant/nodes.py` to load `panel/thread:{id}` through Tukulpan, partition pinned rows first, and emit deterministic metadata (HL-1, MEM-3).
-- [ ] 2.3 GREEN — Update `app/chat/assistant/state.py` and `app/chat/assistant/graph.py` to carry `context_meta` and projection evidence through the assistant graph (HL-1).
+- [x] 2.1 RED — Extend `tests/integration/test_assistant_harness_context.py` with panel/entity scope, pinned-first, fixed-budget, source-ID, truncation, and “no hybrid search” failures (HL-1, MEM-3 scenarios).
+- [x] 2.2 GREEN — Update `app/services/agent_chat.py` and `app/chat/assistant/nodes.py` to load `panel/thread:{id}` through Tukulpan, partition pinned rows first, and emit deterministic metadata (HL-1, MEM-3).
+- [x] 2.3 GREEN — Update `app/chat/assistant/state.py` and `app/chat/assistant/graph.py` to carry `context_meta` and projection evidence through the assistant graph (HL-1).
 
 ## Work Unit 3: Meaningful Write Lifecycle (PR 3)
 
