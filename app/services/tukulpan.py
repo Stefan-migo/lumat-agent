@@ -19,6 +19,7 @@ agreed constant (design "fines de detalle fino").
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -70,6 +71,7 @@ __all__ = [
     "persist_memory_session",
     "record_decision",
     "record_milestone",
+    "write_recap",
     "set_mark",
     "upsert",
 ]
@@ -205,6 +207,46 @@ def record_decision(
         titulo=title,
         contenido=content,
     )
+
+
+def write_recap(
+    session: Session,
+    *,
+    thread_id: int,
+    source_message_ids: list[int],
+    recap: str,
+    source_tokens: int,
+    truncated: bool,
+) -> dict[str, Any]:
+    """Persist one bounded, retry-safe panel recap without owning the transaction."""
+    source_message_ids = [int(message_id) for message_id in source_message_ids]
+    key = f"assistant-recap:{thread_id}:{source_message_ids[-1]}" if source_message_ids else f"assistant-recap:{thread_id}:empty"
+    bounded_recap = recap[:8_000]
+    payload = {
+        "schema_version": 1,
+        "thread_id": thread_id,
+        "source_message_ids": source_message_ids,
+        "source_tokens": min(max(0, int(source_tokens)), 2_000),
+        "truncated": bool(truncated or len(recap) > len(bounded_recap)),
+        "recap": bounded_recap,
+    }
+    try:
+        # A savepoint contains both embedding and flush failures, keeping the
+        # caller's outer transaction usable for the turn.
+        with session.begin_nested():
+            row = upsert(
+                session,
+                scope="panel",
+                entity_id=f"thread:{thread_id}",
+                topic_key=key,
+                tipo=MemoryType.SUMMARY,
+                titulo="Assistant session recap",
+                contenido=json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            )
+        return {"written": True, "id": row.id, "topic_key": key}
+    except Exception as exc:
+        logger.warning("panel recap degraded for thread %s: %s", thread_id, exc)
+        return {"written": False, "degraded_reason": str(exc), "topic_key": key}
 
 
 def get_by_key(
