@@ -1,1 +1,0 @@
-¿Qué problema específico los llevó a pedir la cotización?
