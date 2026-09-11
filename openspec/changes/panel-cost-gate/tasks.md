@@ -36,8 +36,8 @@ Decision needed before apply: No
 
 ## Phase 4: Non-Regression (PR 4)
 
-- [ ] 4.1 **RED:** Add failing non-regression tests in `tests/integration/test_assistant_harness_guardrails.py`, `test_assistant_harness_session.py`, `tests/unit/test_assistant_planner.py`, and `tests/integration/test_assistant_chat.py` for denied/expired approval, WhatsApp unchanged, normal flow, alerts, and persisted blocked/recovery states (IAC-2/IAC-3/SS-3).
-- [ ] 4.2 **GREEN:** Make the regression suite pass without changing approval lifecycle or WhatsApp behavior; run `uv run pytest tests/` (IAC-2/IAC-3/SS-3).
+- [x] 4.1 **RED:** Add failing non-regression tests in `tests/integration/test_assistant_harness_guardrails.py`, `test_assistant_harness_session.py`, `tests/unit/test_assistant_planner.py`, and `tests/integration/test_assistant_chat.py` for denied/expired approval, WhatsApp unchanged, normal flow, alerts, and persisted blocked/recovery states (IAC-2/IAC-3/SS-3).
+- [x] 4.2 **GREEN:** Make the regression suite pass without changing approval lifecycle or WhatsApp behavior; run `uv run pytest tests/` (IAC-2/IAC-3/SS-3).
 
 ## Graph task mapping
 

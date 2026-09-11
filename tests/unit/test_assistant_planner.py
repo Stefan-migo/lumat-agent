@@ -85,3 +85,19 @@ def test_invalid_planner_output_becomes_bounded_response_fallback():
     assert state["planner"]["valid"] is False
     assert state["planner"]["kind"] == "respond"
     assert state["error"] == "Invalid planner output."
+
+
+def test_normal_planner_flow_remains_unmodified():
+    state = plan({
+        "content": "What is the current status?",
+        "planner_output": {
+            "kind": "respond",
+            "arguments": {},
+            "summary": "The system is operational.",
+            "requires_approval": False,
+        },
+    })
+
+    assert state["status"] == "planned"
+    assert state["plan"]["summary"] == "The system is operational."
+    assert state["plan"]["requires_approval"] is False
