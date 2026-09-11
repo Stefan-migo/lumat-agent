@@ -3,7 +3,10 @@
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from app.chat.assistant.state import AssistantState
+from app.chat.assistant.tools.registry import ToolValidationError, execute_tool
 from app.services.agent_chat import _events_for, stream_events
 from app.db import SessionLocal
 from app.models import User
@@ -122,3 +125,37 @@ def test_panel_turn_does_not_receive_whatsapp_state(client, monkeypatch):
     assert response.status_code == 201
     assert "conversation_id" not in seen
     assert "whatsapp" not in seen
+
+
+def test_memory_read_rejects_cross_scope_entity_shapes(monkeypatch):
+    seen = {}
+
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.memory.list_for_entity",
+        lambda session, **kwargs: seen.update(kwargs) or [],
+    )
+
+    with pytest.raises(ToolValidationError):
+        execute_tool(
+            SimpleNamespace(), "memory.read",
+            {"scope": "panel", "entity_id": "customer:42"},
+        )
+
+    result = execute_tool(
+        SimpleNamespace(), "memory.read", {"scope": "customer", "entity_id": "42"}
+    )
+    assert result["status"] == "completed"
+    assert seen == {"scope": "customer", "entity_id": "42"}
+
+
+def test_failed_compaction_is_not_reported_as_successful_completion():
+    from app.chat.assistant.nodes import collect_evidence
+
+    result = collect_evidence({
+        "status": "completed",
+        "evidence": [],
+        "compaction": {"failed": True, "write": {"degraded_reason": "db unavailable"}},
+    })
+
+    assert result["status"] == "degraded"
+    assert result["evidence"][-1]["status"] == "degraded"

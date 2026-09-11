@@ -401,6 +401,30 @@ def test_mem3_role_isolation(fake_embedder, migrated_db):
         assert any(r["topic_key"] == "k42" for r in results)
 
 
+def test_mem3_panel_and_whatsapp_entities_are_isolated(fake_embedder, migrated_db):
+    """Panel thread and WhatsApp customer scopes never cross-read (MEM-3)."""
+    with SessionLocal() as session:
+        memory.upsert(
+            session, scope="panel", entity_id="thread:42", topic_key="panel-note",
+            tipo=MemoryType.PATTERN, titulo="Panel", contenido="shared technical detail",
+        )
+        memory.upsert(
+            session, scope="customer", entity_id="customer:42", topic_key="wa-note",
+            tipo=MemoryType.PATTERN, titulo="WhatsApp", contenido="shared technical detail",
+        )
+        session.commit()
+
+        panel = memory.hybrid_search(
+            session, "shared technical detail", scope="panel", entity_id="thread:42"
+        )
+        whatsapp = memory.hybrid_search(
+            session, "shared technical detail", scope="customer", entity_id="customer:42"
+        )
+
+        assert [row["topic_key"] for row in panel] == ["panel-note"]
+        assert [row["topic_key"] for row in whatsapp] == ["wa-note"]
+
+
 def test_mem3_empty_result_no_fallback(fake_embedder, migrated_db):
     """No memory above threshold -> empty set, no out-of-scope fallback.
 

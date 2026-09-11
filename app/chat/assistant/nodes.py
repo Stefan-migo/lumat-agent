@@ -354,5 +354,5 @@ def collect_evidence(state: AssistantState) -> AssistantState:
         })
     return {
         "evidence": evidence,
-        "status": state.get("status", "completed"),
+        "status": "degraded" if compaction.get("failed") else state.get("status", "completed"),
     }

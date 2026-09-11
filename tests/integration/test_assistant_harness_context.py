@@ -103,6 +103,23 @@ def test_assembly_does_not_search_and_reports_fixed_budget_metadata(monkeypatch)
     assert result["meta"]["tukulpan_ids"] == ["pin-1"]
 
 
+def test_panel_loader_never_falls_back_to_hybrid_search(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.tukulpan.hybrid_search",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("implicit search")),
+    )
+    monkeypatch.setattr(
+        "app.services.tukulpan.list_for_entity",
+        lambda session, *, scope, entity_id: [
+            SimpleNamespace(id=7, contenido="panel fact", pin=False)
+        ],
+    )
+
+    result = nodes.load_panel_context(SimpleNamespace(execute=lambda *args: None), 42)
+
+    assert result == {"pinned": [], "panel": [{"id": "7", "content": "panel fact"}]}
+
+
 def test_assistant_graph_carries_projection_metadata_into_evidence():
     context = {
         "items": [{"source": "tukulpan", "id": "memory-1", "content": "fact"}],

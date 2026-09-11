@@ -29,9 +29,9 @@ Auto-chain uses stacked-to-main. Estimate: ~470 production lines across the six 
 
 ## Work Unit 4: Isolation and Evidence Hardening (PR 4)
 
-- [ ] 4.1 RED — Add scope/entity isolation, WhatsApp compatibility, threshold-empty-search, explicit `memory.read`, and failed-compaction integration cases in `tests/spec/test_memory_spec.py`, `tests/integration/test_assistant_harness_context.py`, and `tests/integration/test_assistant_harness_compatibility.py` (MEM-3, HL-1, HL-3).
-- [ ] 4.2 GREEN — Move/preserve `hybrid_search()` in `app/services/tukulpan.py`, wire validated scoped reads in `app/chat/assistant/tools/registry.py`, and verify panel/WhatsApp boundaries (MEM-3).
-- [ ] 4.3 GREEN — Finalize canonical seam imports/results in `app/chat/assistant/nodes.py`, `app/services/agent_chat.py`, and `app/chat/assistant/graph.py`; run `uv run pytest tests/` and verify deferred boundaries (MEM-7, HL-3).
+- [x] 4.1 RED — Add scope/entity isolation, WhatsApp compatibility, threshold-empty-search, explicit `memory.read`, and failed-compaction integration cases in `tests/spec/test_memory_spec.py`, `tests/integration/test_assistant_harness_context.py`, and `tests/integration/test_assistant_harness_compatibility.py` (MEM-3, HL-1, HL-3).
+- [x] 4.2 GREEN — Move/preserve `hybrid_search()` in `app/services/tukulpan.py`, wire validated scoped reads in `app/chat/assistant/tools/registry.py`, and verify panel/WhatsApp boundaries (MEM-3).
+- [x] 4.3 GREEN — Finalize canonical seam imports/results in `app/chat/assistant/nodes.py`, `app/services/agent_chat.py`, and `app/chat/assistant/graph.py`; run `uv run pytest tests/` and verify deferred boundaries (MEM-7, HL-3).
 
 ## Work-Unit Verification
 
