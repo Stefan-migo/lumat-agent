@@ -39,7 +39,7 @@ def test_authorized_json_login_resets_failed_counter(client, make_user):
     )
 
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True, "role": "admin"}
+    assert resp.json() == {"ok": True, "id": user_id, "role": "admin"}
     refreshed = _user_row("admin")
     assert refreshed.failed_logins == 0
     assert refreshed.locked_until is None
@@ -60,7 +60,7 @@ def test_lock_expiry_allows_json_login_again(client, make_user):
     )
 
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True, "role": "admin"}
+    assert resp.json() == {"ok": True, "id": user_id, "role": "admin"}
 
 
 @pytest.mark.spec("AP-1")
@@ -83,7 +83,7 @@ def test_inactive_user_cannot_json_login(client, make_user):
 
 @pytest.mark.spec("AP-2")
 def test_json_session_role_and_tampered_cookie_are_enforced(client, make_user):
-    make_user("oper", "oper-pass", role="operador")
+    user_id = make_user("oper", "oper-pass", role="operador")
     resp = client.post(
         "/panel/api/login",
         json={"username": "oper", "password": "oper-pass"},
@@ -91,7 +91,7 @@ def test_json_session_role_and_tampered_cookie_are_enforced(client, make_user):
     )
     assert resp.status_code == 200
     assert client.get("/panel/api/me").json() == {
-        "username": "oper", "role": "operador"
+        "id": user_id, "username": "oper", "role": "operador"
     }
 
     client.cookies.set("session", "tampered")

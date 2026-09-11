@@ -194,13 +194,25 @@ def tool_schemas() -> dict[str, dict]:
     return {name: definition.schema() for name, definition in TOOL_REGISTRY.items()}
 
 
-def execute_tool(session, name: str, arguments: dict, *, approval: dict | None = None) -> dict:
+def execute_tool(
+    session,
+    name: str,
+    arguments: dict,
+    *,
+    approval: dict | None = None,
+    whitelist: set[str] | frozenset[str] | None = None,
+    cost_allowed: bool = True,
+) -> dict:
     definition = get_tool(name)
+    if whitelist is not None and name not in whitelist:
+        raise ToolValidationError(f"tool is not whitelisted: {name}")
     try:
         parsed = definition.args_model.model_validate(arguments)
     except Exception as exc:
         raise ToolValidationError(f"invalid arguments for {name}") from exc
     payload = {"tool": name, "arguments": parsed.model_dump()}
+    if not cost_allowed:
+        raise ToolValidationError("assistant cost limit blocks tool execution")
     if not definition.read_only and not approval:
         raise ToolValidationError("write tool requires consumed exact approval")
     if not definition.read_only and not validate_execution(payload, approval or {}):

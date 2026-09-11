@@ -8,12 +8,13 @@ Provide an admin-only, durable operations assistant with visible planning, exact
 
 ### Requirement: AO-1 — Durable Assistant Graph
 
-The system MUST run a separate LangGraph `AssistantState` for panel requests, with planner, approval, execution, and evidence stages. It MUST persist state and plan metadata using `InternalChatThread` without coupling to WhatsApp state.
+The system MUST run a separate LangGraph `AssistantState` for panel requests, with context assembly, structured planning, approval, execution, and evidence stages. It MUST persist assembled-turn state and plan metadata using `InternalChatThread`, recover from DB state without duplicate execution, and MUST NOT couple to WhatsApp state.
+(Previously: the graph had planner, approval, execution, and evidence stages but no durable history-aware context assembly.)
 
-#### Scenario: Plan is persisted
+#### Scenario: Contextual plan is persisted
 - GIVEN an authorized administrator submits an assistant request
 - WHEN planning completes
-- THEN the structured plan and thread state are persisted and exposed to the panel
+- THEN bounded context, structured plan, and thread state are persisted and exposed
 
 #### Scenario: Recovery after interruption
 - GIVEN a persisted plan or execution is interrupted

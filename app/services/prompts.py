@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -82,6 +83,17 @@ FALLBACKS = {
     ),
 }
 
+
+@dataclass(frozen=True)
+class AssistantRuntimeConfig:
+    """Validated, read-only assistant prompt configuration."""
+
+    name: str
+    persona: str
+    prompts: dict[str, str]
+    tools_whitelist: tuple[str, ...]
+    skills: tuple[str, ...]
+
 _SLOT_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
 
@@ -113,3 +125,17 @@ def render(key: str, **vars) -> str:
     if not slots:
         return content
     return _SLOT_RE.sub(lambda m: str(vars[m.group(1)]), content)
+
+
+def load_assistant_config(registry_path: str | Path | None = None) -> AssistantRuntimeConfig:
+    """Validate and load assistant references without loading skill files."""
+    from app.agent_registry import load_registry
+
+    assistant = load_registry(registry_path).assistant
+    return AssistantRuntimeConfig(
+        name=assistant.name,
+        persona=load(assistant.persona),
+        prompts={name: load(path) for name, path in assistant.prompts.items()},
+        tools_whitelist=assistant.tools_whitelist,
+        skills=assistant.skills,
+    )

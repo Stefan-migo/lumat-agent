@@ -10,6 +10,9 @@ from sqlalchemy.orm import Session
 from app.chat.assistant.graph import run_assistant
 from app.chat.assistant.approval import validate_approval
 from app.chat.assistant.nodes import execute
+from app.chat.assistant import nodes as assistant_nodes
+from app.chat.assistant.attachments import prepare_attachment_context
+from app.chat.assistant.state import INJECTION_TOKEN_BUDGET, estimate_tokens
 from app.chat.assistant.recovery import claim_execution, recover_events
 from app.models import AssistantAttachment, InternalChatMessage, InternalChatThread, User
 from app.services.audit import record_audit
@@ -26,6 +29,140 @@ def message_dict(message: InternalChatMessage) -> dict:
     from app.panel.api.serializers import to_internal_chat_message_dict
 
     return to_internal_chat_message_dict(message)
+
+
+def load_panel_context(session, thread_id: int) -> dict:
+    """Delegate the read-only Tukulpan panel context seam."""
+    return assistant_nodes.load_panel_context(session, thread_id)
+
+
+def flush_panel_session(session, thread_id: int, *, before_tokens: int, after_tokens: int) -> dict:
+    """Delegate the metadata-only Tukulpan flush seam."""
+    return assistant_nodes.flush_panel_session(
+        session, thread_id, before_tokens=before_tokens, after_tokens=after_tokens
+    )
+
+
+def compact_session(session, thread_id: int, messages: list, *, before_tokens: int) -> dict:
+    """Flush and retain the newest bounded history when the session threshold is met."""
+    retention = 2_000
+    retained = []
+    used = 0
+    for message in reversed(messages):
+        cost = estimate_tokens(str(message.content))
+        if used + cost > retention:
+            continue
+        retained.append(message)
+        used += cost
+    retained.reverse()
+    if before_tokens < 4_000:
+        return {
+            "window_tokens": 8_000,
+            "threshold_tokens": 4_000,
+            "before_tokens": before_tokens,
+            "after_tokens": used,
+            "flushed": False,
+            "rotated": False,
+            "retained_message_ids": [message.id for message in retained],
+        }
+    flush = flush_panel_session(
+        session, thread_id, before_tokens=before_tokens, after_tokens=retention
+    )
+    rotated_at = datetime.now(timezone.utc).isoformat()
+    return {
+        "window_tokens": 8_000,
+        "threshold_tokens": 4_000,
+        "before_tokens": before_tokens,
+        "after_tokens": used,
+        "flushed": bool(flush.get("flushed", True)),
+        "rotated": True,
+        "retained_message_ids": [message.id for message in retained],
+        "rotation": {
+            "thread_id": thread_id,
+            "retention_tokens": retention,
+            "rotated_at": rotated_at,
+        },
+    }
+
+
+def assemble_context(session, thread_id: int, *, messages=None, attachments=None, budget: int = INJECTION_TOKEN_BUDGET) -> dict:
+    """Build bounded panel context in stable source order."""
+    if messages is None:
+        messages = list(session.scalars(
+            select(InternalChatMessage)
+            .where(InternalChatMessage.thread_id == thread_id)
+            .order_by(InternalChatMessage.created_at, InternalChatMessage.id)
+        ))
+    attachments = attachments or []
+    tukulpan = load_panel_context(session, thread_id)
+    items: list[dict] = []
+    message_ids: list[int] = []
+    attachment_ids: list[int] = []
+    tukulpan_ids: list[str] = []
+    used = 0
+    truncated = False
+
+    for source in (tukulpan.get("pinned", []), tukulpan.get("panel", [])):
+        for entry in source:
+            content = str(entry.get("content", ""))
+            cost = estimate_tokens(content)
+            if used + cost > budget:
+                truncated = True
+                continue
+            items.append({"source": "tukulpan", "content": content, "id": entry.get("id")})
+            tukulpan_ids.append(str(entry.get("id")))
+            used += cost
+
+    messages = sorted(
+        messages,
+        key=lambda row: (
+            getattr(row, "created_at", None).timestamp()
+            if hasattr(getattr(row, "created_at", None), "timestamp")
+            else 0,
+            row.id,
+        ),
+    )
+    retained_messages: list[dict] = []
+    retained_ids: list[int] = []
+    for message in reversed(messages):
+        content = str(message.content)
+        cost = estimate_tokens(content)
+        if used + cost > budget:
+            truncated = True
+            continue
+        retained_messages.append({"source": "history", "author": message.author, "content": content, "id": message.id})
+        retained_ids.append(message.id)
+        used += cost
+
+    items.extend(reversed(retained_messages))
+    message_ids.extend(reversed(retained_ids))
+
+    for attachment in attachments:
+        content = str(attachment.get("content", "") if isinstance(attachment, dict) else getattr(attachment, "content", ""))
+        remaining = max(0, (budget - used) * 4)
+        if not remaining:
+            truncated = True
+            continue
+        encoded = content.encode("utf-8")
+        if len(encoded) > remaining:
+            content = encoded[:remaining].decode("utf-8", errors="ignore")
+            truncated = True
+        if content:
+            attachment_id = attachment.get("id") if isinstance(attachment, dict) else getattr(attachment, "id", None)
+            items.append({"source": "attachment", "content": content, "id": attachment_id})
+            attachment_ids.append(attachment_id)
+            used += estimate_tokens(content)
+
+    return {
+        "items": items,
+        "meta": {
+            "message_ids": message_ids,
+            "attachment_ids": attachment_ids,
+            "tukulpan_ids": tukulpan_ids,
+            "estimated_tokens": used,
+            "truncated": truncated,
+        },
+    }
 
 
 def create_thread(session: Session, user: User) -> InternalChatThread:
@@ -53,6 +190,15 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             stage_event(session, type="token", conversation_id=thread.id, data={"token": token})
 
         attachments = list(session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread.id, AssistantAttachment.id.in_(attachment_ids or []), AssistantAttachment.deleted_at.is_(None)))) if attachment_ids else []
+        context_attachments = prepare_attachment_context(attachments) if attachments else []
+        context = assemble_context(session, thread.id, attachments=context_attachments)
+        compaction = compact_session(
+            session, thread.id, list(session.scalars(
+                select(InternalChatMessage)
+                .where(InternalChatMessage.thread_id == thread.id)
+                .order_by(InternalChatMessage.created_at, InternalChatMessage.id)
+            )), before_tokens=context["meta"]["estimated_tokens"]
+        )
         result = run_assistant(
             thread_id=thread.id,
             user_id=user.id,
@@ -62,6 +208,7 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             session=session,
             actor=user.username,
             attachments=attachments,
+            context=context,
         )
         thread.active_run_id = run_id
         thread.current_plan = result.get("plan")
@@ -71,6 +218,10 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             "approval": result.get("approval"),
             "execution_status": "pending" if result.get("status") == "approval_pending" else "completed",
             "events": _events_for(result, thread.id, run_id),
+            "context_meta": context["meta"],
+            "planner": result.get("planner", {}),
+            "guardrails": result.get("guardrails", {}),
+            "compaction": compaction,
         }
         message.assistant_metadata = {"run_id": run_id, "approval": result.get("approval"), "attachment_ids": [row.id for row in attachments]}
         if result.get("status") == "approval_pending":

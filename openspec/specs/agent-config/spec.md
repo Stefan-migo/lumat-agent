@@ -78,10 +78,11 @@ The system MUST render `{{name}}` placeholders via a strict renderer that raises
 
 ### Requirement: AC-6 — Skills as Reference Files
 
-The system MUST ship `agent/skills/*.md` as declarative references only and MUST NOT load any skill file into an LLM prompt. The deterministic gates remain the authoritative SDB.
+The system MUST ship `agent/skills/*.md` as declarative, non-executable references and MUST NOT load skill content into an LLM prompt. Runtime assistant behavior MUST use validated persona, prompt, and registry configuration read-only. The configuration terminology MUST call Lumat’s former deterministic-gate surface “Gates deterministas / Guardrails”; the implementation MUST inventory all repository consumers before changing references.
 
 #### Scenario: Skill never loaded
 - GIVEN a conversation runs end-to-end
+- WHEN runtime prompts are assembled
 - THEN no `agent/skills/` content appears in any LLM prompt
 
 ### Requirement: AC-7 — DB-Migration Triggers Documented
@@ -108,15 +109,16 @@ Deterministic gates and canned replies stay in code; the registry remains data-o
 
 ### Requirement: AC-9 — Assistant Runtime Configuration
 
-The system MUST provide existence-validated assistant registry, personas, prompts, and declared tool capabilities under `agent/`. Startup MUST fail clearly for missing referenced runtime files, while reference-only skills remain non-executable.
+The system MUST provide existence-validated assistant registry, personas, prompts, and declared tool capabilities under `agent/` for read-only runtime consumption. Startup MUST fail clearly for missing references, while reference-only skills remain non-executable.
+(Previously: configuration was validated and exposed to consumers, but the panel harness did not consume its assistant persona and prompt set.)
 
 #### Scenario: Complete configuration loads
 - GIVEN registry entries reference existing personas, prompts, and declared tools
-- WHEN configuration loads
-- THEN the assistant capability set is available to runtime consumers
+- WHEN configuration loads for a panel turn
+- THEN the validated read-only assistant configuration is available to the harness
 
 #### Scenario: Missing runtime reference
-- GIVEN a registry entry references a missing required file or tool
+- GIVEN a required persona or prompt reference is missing
 - WHEN configuration loads
 - THEN validation reports the missing reference and prevents an invalid assistant from starting
 
