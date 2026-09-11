@@ -73,11 +73,11 @@ def test_admin_thread_and_message_are_persisted_and_audited(client, migrated_db,
         assert [message.content for message in messages] == ["What is pending?", "A concise answer"]
         actions = session.scalars(select(AuditLog.action)).all()
         assert {action for action in actions} >= {"internal_chat.thread_created", "internal_chat.message_sent"}
-    assert len(fake_client.calls) == 1
-    assert fake_client.calls[0]["stream"] is True
-    assert fake_client.calls[0]["messages"][0]["role"] == "system"
-    assert "internal operations assistant" in fake_client.calls[0]["messages"][0]["content"]
-    assert "tools" not in fake_client.calls[0]
+    assert len(fake_client.calls) == 2
+    assert fake_client.calls[1]["stream"] is True
+    assert fake_client.calls[1]["messages"][0]["role"] == "system"
+    assert "Lumat internal executive operator" in fake_client.calls[1]["messages"][0]["content"]
+    assert "tools" not in fake_client.calls[1]
 
 
 def test_operator_cannot_read_or_create_internal_thread(client, migrated_db):
@@ -101,7 +101,7 @@ def test_privileged_request_requires_approval_without_model_call(client, migrate
     assert persisted.status_code == 200
     contents = [row["content"] for row in persisted.json()["messages"]]
     assert contents == ["Delete all clients"]
-    assert fake_client.calls == []
+    assert len(fake_client.calls) == 1
 
 
 def test_model_failure_marks_message_failed_and_recoverable(client, migrated_db, monkeypatch):

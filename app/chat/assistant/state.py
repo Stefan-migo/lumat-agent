@@ -70,3 +70,4 @@ class AssistantState(TypedDict, total=False):
     guardrails: dict
     compaction: dict
     extension_hooks: dict
+    legacy_compat: bool

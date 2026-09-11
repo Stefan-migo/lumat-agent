@@ -70,7 +70,7 @@ def test_internal_chat_publishes_ordered_tokens_and_keeps_post_response(client, 
     assert published[-1].type == "message"
     assert published[-1].conversation_id == thread_id
     assert published[-1].data["content"] == "A streamed answer"
-    assert fake_client.calls[0]["stream"] is True
+    assert fake_client.calls[1]["stream"] is True
 
     with SessionLocal() as session:
         messages = session.query(InternalChatMessage).filter_by(thread_id=thread_id).all()
