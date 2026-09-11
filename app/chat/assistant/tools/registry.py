@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
@@ -67,6 +67,17 @@ class MemoryArgs(BaseModel):
     entity_id: str = Field(min_length=1, max_length=100)
     topic: str | None = Field(default=None, max_length=255)
     limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
+
+    @model_validator(mode="after")
+    def validate_scope_entity(self) -> "MemoryArgs":
+        if self.scope == "panel" and not self.entity_id.startswith("thread:"):
+            raise ValueError("panel memory reads require a thread:{id} entity")
+        if self.scope == "customer" and (
+            not self.entity_id.startswith("customer:")
+            and not self.entity_id.isdigit()
+        ):
+            raise ValueError("customer memory reads require customer:{id} or a legacy numeric id")
+        return self
 
 
 class WebSearchArgs(BaseModel):

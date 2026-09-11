@@ -21,9 +21,14 @@ Migration `009_memory.sql` MUST create `memories`, `memory_relations`, and `memo
 - WHEN both upserts run
 - THEN two rows exist (no collision, first untouched)
 
-### Requirement: MEM-2 — Memory Service CRUD
+### Requirement: MEM-2 — Tukulpan Boundary and Memory Service CRUD
 
-`app/services/memory.py` MUST expose upsert-by-`(proyecto, scope, entity_id, topic_key)`, get-by-key, list-for-entity, delete, and mark (pin/status). Embeddings MUST reuse `kb.embed_texts()` (local fastembed `paraphrase-multilingual-MiniLM-L12-v2`, 384d). Only `proyecto='default'` MUST be writable.
+The canonical Tukulpan façade MUST expose upsert, get, list, delete, and mark, reuse `kb.embed_texts()` for embeddings, and preserve persisted table, enum, and identifier contracts. `app.services.memory` MUST remain a forwarding-only alias; writes MUST target `proyecto='default'` only.
+
+#### Scenario: Canonical and legacy imports
+- GIVEN either service import
+- WHEN CRUD is invoked
+- THEN behavior matches and persisted identifiers remain unchanged
 
 #### Scenario: Upsert writes memory
 - GIVEN a scoped entity and a new `topic_key`
@@ -35,9 +40,14 @@ Migration `009_memory.sql` MUST create `memories`, `memory_relations`, and `memo
 - WHEN upsert is invoked
 - THEN the system rejects it and persists nothing
 
-### Requirement: MEM-3 — Hybrid Search
+### Requirement: MEM-3 — Explicit, Scoped Hybrid Search
 
-The system MUST search memories by hybrid query (pgvector cosine plus FTS via pg_trgm on content), fused and entity-scoped. Search MUST filter by `proyecto` and, for roles without cross-project rights, by `scope`/`entity_id`. Results MUST rank above the configured similarity threshold; lower ones MUST be excluded.
+The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. `assemble_context()` and `load_panel_context()` MUST NOT invoke it; panel reads MUST use `scope='panel'`, `entity_id='thread:{id}'`, and WhatsApp reads MUST retain customer scope.
+
+#### Scenario: Explicit search only
+- GIVEN a panel turn enters `assemble_context()`
+- WHEN context is assembled without a `memory.read` tool call
+- THEN no hybrid search runs and only the deterministic panel projection is used
 
 #### Scenario: Threshold recall
 - GIVEN memories where one is semantically close to the query
@@ -91,6 +101,25 @@ Authorized users MUST manage memories at `GET/POST /panel/api/clients/{id}/memor
 - GIVEN a user without the required role
 - WHEN they call the memories API
 - THEN the request is rejected
+
+### Requirement: MEM-7 — Milestone, Decision, and Recap Lifecycle
+
+The system MUST search before responding and save only meaningful milestones, explicit Cortex-session decisions, or a bounded pre-rotation recap; it MUST NOT write every message. Recaps MUST be idempotent, retain source/truncation evidence, and surface failures as degraded evidence.
+
+#### Scenario: Milestone and recap writes
+- GIVEN a panel turn reaches a milestone or `compact_session()` reaches rotation
+- WHEN the write seam runs
+- THEN one durable milestone/decision or bounded recap is stored, without a metadata-only synthetic row
+
+#### Scenario: Idempotent retry and failure
+- GIVEN the same recap is retried, or its persistence fails
+- WHEN the write is attempted
+- THEN retrying does not duplicate it, and failure is surfaced to the turn/rotation evidence
+
+#### Scenario: Deferred boundaries
+- GIVEN panel memory is exercised
+- WHEN the runtime is inspected
+- THEN no SDB subgraph, Cortex-session mode, archived-artifact rename, second event bus, or implicit search is introduced
 
 ## Boundary
 
