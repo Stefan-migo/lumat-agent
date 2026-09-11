@@ -78,8 +78,7 @@ The system MUST render `{{name}}` placeholders via a strict renderer that raises
 
 ### Requirement: AC-6 — Skills as Reference Files
 
-The system MUST ship `agent/skills/*.md` as declarative, non-executable references and MUST NOT load skill content into an LLM prompt. Runtime assistant behavior MUST use validated persona, prompt, and registry configuration read-only. The configuration terminology MUST call Lumat’s former “SDB (Deterministic Behavior Database)” surface “Gates deterministas / Guardrails”; the implementation MUST inventory all repository consumers before changing references.
-(Previously: skills were reference-only and deterministic gates were described as the authoritative SDB.)
+The system MUST ship `agent/skills/*.md` as declarative, non-executable references and MUST NOT load skill content into an LLM prompt. Runtime assistant behavior MUST use validated persona, prompt, and registry configuration read-only. The configuration terminology MUST call Lumat’s former deterministic-gate surface “Gates deterministas / Guardrails”; the implementation MUST inventory all repository consumers before changing references.
 
 #### Scenario: Skill never loaded
 - GIVEN a conversation runs end-to-end

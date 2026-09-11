@@ -46,7 +46,9 @@ def test_all_inventoried_lumat_sdb_consumers_use_guardrails_terminology(repo_roo
 
 
 def test_spec_driven_behavior_scope_remains_outside_terminology_migration(repo_root):
-    spec = (repo_root / "openspec/changes/harness-lumat/specs/harness-lumat/spec.md").read_text(
+    spec = (
+        repo_root / "openspec/changes/archive/2026-09-10-harness-lumat/specs/harness-lumat/spec.md"
+    ).read_text(
         encoding="utf-8"
     )
 
