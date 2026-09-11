@@ -24,14 +24,14 @@ The system MUST restrict internal agent chat to the owner/admin authorization bo
 
 ### Requirement: IAC-2 — Context Boundary
 
-The agent MUST use the separate `AssistantState` graph for panel requests, with only declared typed tools and admin authorization. It MUST persist plan, approval, execution, and evidence metadata in the existing thread boundary and MUST NOT couple to WhatsApp state.
-(Previously: internal chat used only the existing conversation graph/model and had no tools or privileged data access.)
+The agent MUST use the separate `AssistantState` graph for panel requests, with only declared typed tools and admin authorization. It MUST assemble history-aware turns from the durable thread while persisting plan, approval, execution, and evidence metadata in the existing thread boundary, and MUST NOT couple to WhatsApp state.
+(Previously: the graph used declared typed tools but did not consume durable thread history for planning or response context.)
 
-#### Scenario: Assistant response
+#### Scenario: History-aware assistant response
 
 - GIVEN an authorized administrator submits a panel request
 - WHEN the assistant processes it
-- THEN the response and assistant metadata are persisted in the same thread with evidence
+- THEN the response uses the bounded thread context and all assistant metadata is persisted in that thread with evidence
 
 #### Scenario: Operator denied
 
@@ -94,8 +94,8 @@ The `AgentChat` presentation MUST remain inside the existing owner/admin authori
 
 ### Requirement: IAC-6 — Compatible Token Streaming
 
-The assistant MUST stream ordered plan, approval, tool, evidence, response, and error events over its dedicated SSE endpoint. Existing thread endpoints MUST remain compatible, while the assistant graph replaces `run_internal_conversation` as the chat backend.
-(Previously: token events were published on `/panel/ws` while synchronous POST remained authoritative and tool-free.)
+The assistant MUST stream ordered plan, approval, tool, evidence, response, and error events over its dedicated admin-only SSE endpoint. Existing thread endpoints and serialized fields MUST remain compatible, while DB-authoritative history-aware turns replace the prior stateless backend.
+(Previously: the assistant graph replaced the old chat backend but processed only the current request context.)
 
 #### Scenario: SSE and thread persistence coexist
 - GIVEN an authorized administrator submits a message
