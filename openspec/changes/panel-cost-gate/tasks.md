@@ -18,10 +18,10 @@ Decision needed before apply: No
 
 ## Phase 1: Migration and Cost Service (PR 1)
 
-- [ ] 1.1 **RED:** In `tests/integration/test_migrations.py`, assert migration 023, nullable `internal_chat_messages.cost_llm`, and app-role grants (SS-3 schema contract); map graph `migration 023` → `InternalChatMessage`.
-- [ ] 1.2 **GREEN:** Create `db/migrations/023_panel_cost_llm.sql` and map `InternalChatMessage.cost_llm` in `app/models.py`; preserve idempotent migration behavior and grants (IAC-2/SS-3).
-- [ ] 1.3 **RED:** In `tests/integration/test_cost_guardrails.py`, add failing tests for internal-thread, combined UTC-day, explicit/unknown pricing diagnostics, and WhatsApp byte-identical totals (SS-3 scenarios); graph `costs.py` → `test_cost_guardrails.py`.
-- [ ] 1.4 **GREEN:** Generalize `app/services/costs.py` for internal rows, thread/day aggregation, configurable rates, and zero-cost diagnostics while preserving `Message` behavior and alert dedupe (SS-3 scenarios); graph `costs.py` → `daily_spend()`/`maybe_alert_owner()`.
+- [x] 1.1 **RED:** In `tests/integration/test_migrations.py`, assert migration 023, nullable `internal_chat_messages.cost_llm`, and app-role grants (SS-3 schema contract); map graph `migration 023` → `InternalChatMessage`.
+- [x] 1.2 **GREEN:** Create `db/migrations/023_panel_cost_llm.sql` and map `InternalChatMessage.cost_llm` in `app/models.py`; preserve idempotent migration behavior and grants (IAC-2/SS-3).
+- [x] 1.3 **RED:** In `tests/integration/test_cost_guardrails.py`, add failing tests for internal-thread, combined UTC-day, explicit/unknown pricing diagnostics, and WhatsApp byte-identical totals (SS-3 scenarios); graph `costs.py` → `test_cost_guardrails.py`.
+- [x] 1.4 **GREEN:** Generalize `app/services/costs.py` for internal rows, thread/day aggregation, configurable rates, and zero-cost diagnostics while preserving `Message` behavior and alert dedupe (SS-3 scenarios); graph `costs.py` → `daily_spend()`/`maybe_alert_owner()`.
 
 ## Phase 2: Gate and Modes (PR 2)
 

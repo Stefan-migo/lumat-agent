@@ -127,6 +127,25 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("019_tecnico_role",),
         ("020_assistant_metadata",),
         ("022_assistant_attachments",),
+        ("023_panel_cost_llm",),
+    ]
+
+
+def test_internal_chat_cost_column_and_app_grants(migrated_db, admin_conn):
+    """SS-3: internal cost is nullable and writable by the app role."""
+    column = admin_conn.execute(
+        "SELECT data_type, numeric_precision, numeric_scale, is_nullable "
+        "FROM information_schema.columns WHERE table_name = 'internal_chat_messages' "
+        "AND column_name = 'cost_llm'"
+    ).fetchone()
+    assert column == ("numeric", 12, 6, "YES")
+    grants = admin_conn.execute(
+        "SELECT privilege_type FROM information_schema.role_table_grants "
+        "WHERE grantee = 'app' AND table_name = 'internal_chat_messages' "
+        "ORDER BY privilege_type"
+    ).fetchall()
+    assert [privilege for (privilege,) in grants] == [
+        "DELETE", "INSERT", "SELECT", "UPDATE"
     ]
 
 

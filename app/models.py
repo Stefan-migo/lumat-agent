@@ -723,6 +723,7 @@ class InternalChatMessage(Base):
     status: Mapped[str] = mapped_column(String(30), default="processing", server_default="processing")
     error: Mapped[str | None] = mapped_column(Text)
     assistant_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    cost_llm: Mapped[float | None] = mapped_column(Numeric(12, 6))
     created_at: Mapped[datetime] = _ts()
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
