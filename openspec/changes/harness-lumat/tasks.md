@@ -45,4 +45,4 @@ Stacked-to-main is selected for independently mergeable slices. PR 1 targets mai
 
 ## Phase 4: Verification
 
-- [ ] 4.1 Verify HL-1/HL-2/HL-3, IAC-2/IAC-6, AO-1/AO-2/AO-3, AT-1, and AC-6/AC-9 with focused cycles, then `TEST_ADMIN_DB_URL=... uv run pytest tests/`; all threat rows are N/A and require no RED tests.
+- [x] 4.1 Verify HL-1/HL-2/HL-3, IAC-2/IAC-6, AO-1/AO-2/AO-3, AT-1, and AC-6/AC-9 with focused cycles, then `TEST_ADMIN_DB_URL=... uv run pytest tests/`; all threat rows are N/A and require no RED tests.
