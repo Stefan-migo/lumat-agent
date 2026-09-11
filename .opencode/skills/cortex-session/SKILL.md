@@ -4,7 +4,7 @@ description: "Trigger: discuss, analicemos, brainstorm, planeemos, cotización, 
 license: MIT
 metadata:
   author: Stefan-migo
-  version: "1.0"
+  version: "2.0"
 source: github.com/Stefan-migo/cortex
 ---
 
@@ -14,6 +14,25 @@ Load when entering **planning mode** — discussing architecture, analyzing requ
 
 Do NOT load during SDD apply/verify/archive or quick Q&A.
 
+## Session Lifecycle
+
+Planning sessions live under `.cortex-sessions/` in three states:
+
+```
+open/            session in progress
+ready-for-sdd/   closed WITH an SDD handoff; an inbox of pending handoffs
+archived/        closed without a handoff, or already consumed by SDD
+```
+
+Transition map:
+
+```
+open ──close + handoff──> ready-for-sdd ──SDD change created──> archived
+  └────close without handoff────────────────────────────────────> archived
+```
+
+The **directory IS the state**. There is no manifest and no status field — a session's location tells you everything.
+
 ## Session Protocol
 
 ### 1. Init (`session-init`)
@@ -21,8 +40,9 @@ Do NOT load during SDD apply/verify/archive or quick Q&A.
 When planning mode starts:
 
 a. **Detect topic**: what are we discussing? Name the session.
-b. **Create session file**: `.cortex-sessions/YYYY-MM-DD-<slug>/session.md`
-c. **Initialize session.md**:
+b. **Check for resume**: look in `.cortex-sessions/open/` and Engram for an existing session on the same topic before creating a new one.
+c. **Create the session directory**: `.cortex-sessions/open/YYYY-MM-DD-<slug>/` and write `session.md` inside it.
+d. **Initialize session.md**:
 
 ```markdown
 # Session: {topic}
@@ -48,7 +68,7 @@ Goal: {what we need to achieve or produce}
 - [ ] {who does what}
 ```
 
-d. **Save to Engram**: `mem_save(type: session, topic_key: "cortex-session/{slug}", title: "Session: {topic}")`
+e. **Save to Engram**: `mem_save(type: manual, topic_key: "cortex-session/{slug}", title: "Session: {topic}")`
 
 ### 2. Active Discussion (`discuss`)
 
@@ -58,7 +78,7 @@ Proactively capture these moments WITHOUT asking permission:
 |--------|----------------|---------|
 | "hacemos X", "mejor Y", "decidido", "let's go with" | Decision with rationale | session.md + `mem_save(type: decision, topic_key: "cortex-session/{slug}")` |
 | Comparing options, weighing pros/cons | Tradeoff table entry | session.md |
-| "esto podría ser un problema", "riesgo de" | Risk with mitigation | session.md + `mem_save(type: risk, topic_key: "cortex-session/{slug}")` |
+| "esto podría ser un problema", "riesgo de" | Risk with mitigation | session.md + `mem_save(type: discovery, topic_key: "cortex-session/{slug}")` |
 | "costaría X", "toma Y tiempo" | Estimate or number | session.md |
 | "no sabemos aún", "habría que investigar" | Open question | session.md |
 
@@ -71,31 +91,28 @@ Proactively capture these moments WITHOUT asking permission:
 **Alternatives**: other options considered
 ```
 
-**Frequency**: batch-save to Engram every 3-5 captures or at natural breaks. Update session.md immediately.
+**Decision hygiene (MANDATORY)**: when a decision is reversed, do NOT leave the old row as if it were still current. Rewrite the row so the current choice is the Decision, the rejected option moves to Alternatives, and the reversal is noted. A stale decision left in the ledger makes the record lie about the state.
+
+**Frequency**: batch-save to Engram every 3-5 captures or at natural breaks. Update session.md immediately, and read it back after writing to confirm the content landed as intended.
 
 ### 3. Close (`session-close`)
 
 When the session wraps up:
 
 a. **Consolidate**: read session.md, compile all sections
-b. **Generate report**: `.cortex-sessions/YYYY-MM-DD-<slug>/report.md` with:
+b. **Generate report**: `.cortex-sessions/open/YYYY-MM-DD-<slug>/report.md` with:
    - Executive summary
    - All decisions (flattened)
    - Risks and tradeoffs
    - **SDD readiness**: what's ready for sdd-new or sdd-propose
    - Next steps
-c. **Engram final**: `mem_save(type: architecture, topic_key: "cortex-session/{slug}", title: "{topic} — session report")` with full report content
-d. **Session summary**: `mem_session_summary` with comprehensive summary
-e. **Present** concise summary to user
-
-## Artifacts
-
-```
-.cortex-sessions/
-  YYYY-MM-DD-<topic-slug>/
-    session.md      — updated live during discussion
-    report.md       — generated at close (SDD-ready)
-```
+c. **Ask the handoff question (MANDATORY, explicit)**: ask the user *"Does this session close with an SDD handoff?"* Do NOT auto-detect from the report — a heuristic over free text misroutes sessions and destroys trust in the layout.
+d. **Move the session** — the directory IS the state:
+   - **Yes** → `mv .cortex-sessions/open/<slug> .cortex-sessions/ready-for-sdd/<slug>`
+   - **No**  → `mv .cortex-sessions/open/<slug> .cortex-sessions/archived/<slug>`
+e. **Engram final**: `mem_save(type: architecture, topic_key: "cortex-session/{slug}", title: "{topic} — session report")` with full report content
+f. **Session summary**: `mem_session_summary` with comprehensive summary
+g. **Present** concise summary to user
 
 ## SDD Handoff
 
@@ -104,6 +121,40 @@ The `report.md` generated by `session-close` is the natural input for SDD. Use i
 - `sdd-propose` (proposal grounded in session analysis)
 - `sdd-spec` (requirements derived from session decisions)
 
+**Consume the inbox (MANDATORY)**: when an SDD change is CREATED from a session's report (`sdd-new` / `sdd-propose`), move that session to archived — its handoff has been picked up:
+
+```
+mv .cortex-sessions/ready-for-sdd/<slug> .cortex-sessions/archived/<slug>
+```
+
+`ready-for-sdd/` is an inbox, not a tracker: it must empty as changes are created. List it with `ls .cortex-sessions/ready-for-sdd/`.
+
+## Migration (one-time, legacy flat sessions)
+
+Older sessions live flat at `.cortex-sessions/<slug>/`. Migrate them once with this rule:
+
+| Has | Destination |
+|-----|-------------|
+| `session.md` + `report.md` | `archived/` |
+| only `session.md` | `open/` |
+| neither (deliverables only) | `archived/` |
+
+Do NOT touch directories already inside `open/`, `ready-for-sdd/`, or `archived/` — the migration is idempotent. `scripts/cortex-sync.sh` runs it automatically for every project on the list.
+
+## Artifacts
+
+```
+.cortex-sessions/
+  open/
+    YYYY-MM-DD-<topic-slug>/
+      session.md      — updated live during discussion
+      report.md       — generated at close (SDD-ready)
+  ready-for-sdd/
+    YYYY-MM-DD-<topic-slug>/   — closed with a pending SDD handoff
+  archived/
+    YYYY-MM-DD-<topic-slug>/   — closed, no handoff, or consumed by SDD
+```
+
 ## Rules
 
 1. **Save proactively**: don't wait for permission. If a decision was made, capture it.
@@ -111,4 +162,6 @@ The `report.md` generated by `session-close` is the natural input for SDD. Use i
 3. **Close before coding**: end the session before switching to SDD apply.
 4. **Engram is source of truth**: session.md is a courtesy artifact; Engram is the persistent record.
 5. **No over-capture**: skip trivial clarifications, focus on decisions with weight.
-6. **Resume support**: before init, check Engram for existing session on same topic.
+6. **Resume support**: before init, check `.cortex-sessions/open/` and Engram for an existing session on the same topic.
+7. **The directory is the state**: never leave a closed session in `open/`.
+8. **Decision hygiene**: a reversed decision is superseded, never left as current.
