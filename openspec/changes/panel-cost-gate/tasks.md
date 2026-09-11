@@ -25,9 +25,9 @@ Decision needed before apply: No
 
 ## Phase 2: Gate and Modes (PR 2)
 
-- [ ] 2.1 **RED:** Add tests in `tests/integration/test_assistant_chat.py` and `tests/integration/test_assistant_harness_guardrails.py` for gate-after-context, conservative directive, blocked canned reply, no LLM, and operator access (IAC-2; threat `test_blocked_bypasses_llm`); graph `state.py` → `graph.py` → `nodes.py`.
-- [ ] 2.2 **GREEN:** Add cost state/directive fields in `app/chat/assistant/state.py`, wire `panel_cost_gate` in `app/chat/assistant/graph.py`, and implement gate/conservative/blocked nodes in `app/chat/assistant/nodes.py` (IAC-2/IAC-3).
-- [ ] 2.3 **GREEN:** Add `cost.llm_rates` defaults and documented source/effective date in `app/services/settings.py`; ensure `cost.conversation_limit` remains one internal-thread scope and daily scope is global (SS-3 scenarios).
+- [x] 2.1 **RED:** Add tests in `tests/integration/test_assistant_chat.py` and `tests/integration/test_assistant_harness_guardrails.py` for gate-after-context, conservative directive, blocked canned reply, no LLM, and operator access (IAC-2; threat `test_blocked_bypasses_llm`); graph `state.py` → `graph.py` → `nodes.py`.
+- [x] 2.2 **GREEN:** Add cost state/directive fields in `app/chat/assistant/state.py`, wire `panel_cost_gate` in `app/chat/assistant/graph.py`, and implement gate/conservative/blocked nodes in `app/chat/assistant/nodes.py` (IAC-2/IAC-3).
+- [x] 2.3 **GREEN:** Add `cost.llm_rates` defaults and documented source/effective date in `app/services/settings.py`; ensure `cost.conversation_limit` remains one internal-thread scope and daily scope is global (SS-3 scenarios).
 
 ## Phase 3: Accounting, Failure, Recovery (PR 3)
 

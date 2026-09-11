@@ -72,3 +72,5 @@ class AssistantState(TypedDict, total=False):
     compaction: dict
     extension_hooks: dict
     legacy_compat: bool
+    cost_mode: Literal["normal", "conservative", "blocked"]
+    cost_directive: str

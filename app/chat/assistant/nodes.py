@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pydantic import ValidationError
 
 from app.chat.assistant.approval import validate_execution
@@ -10,6 +11,14 @@ from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tok
 from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
 from app.services import llm
+from app.services.costs import (
+    combined_cost_mode,
+    daily_cost_state,
+    daily_spend,
+    internal_thread_cost_state,
+    internal_thread_spend,
+    maybe_alert_owner,
+)
 from app.chat.assistant.attachments import build_multimodal_content, prepare_attachment_context
 
 
@@ -124,6 +133,46 @@ def _assistant_client():
         return llm.openai_client()
 
 
+COST_DIRECTIVE = "Answer concisely; use the minimum necessary context and avoid optional tool calls."
+COST_BLOCKED_REPLY = (
+    "The assistant is temporarily unavailable because the configured usage limit was reached. "
+    "Please review cost settings."
+)
+
+
+def panel_cost_gate(state: AssistantState) -> AssistantState:
+    """Choose the worst internal-thread/UTC-day mode before any paid LLM call."""
+    session = state.get("session")
+    if session is None:
+        return {"cost_mode": "normal", "cost_directive": ""}
+
+    thread_percent, thread_mode = internal_thread_cost_state(session, state["thread_id"])
+    day_percent, day_mode = daily_cost_state(session)
+    today = datetime.now(timezone.utc).date().isoformat()
+    maybe_alert_owner(
+        session, scope="conversation", entity_id=str(state["thread_id"]),
+        percent=thread_percent,
+        spend=internal_thread_spend(session, state["thread_id"]),
+    )
+    maybe_alert_owner(
+        session, scope="daily", entity_id=today, percent=day_percent,
+        spend=daily_spend(session),
+    )
+    mode = combined_cost_mode(thread_mode, day_mode)
+    return {
+        "cost_mode": mode,
+        "cost_directive": COST_DIRECTIVE if mode == "conservative" else "",
+        "response": COST_BLOCKED_REPLY if mode == "blocked" else None,
+        "status": "completed" if mode == "blocked" else state.get("status"),
+        "guardrails": {
+            "cost_allowed": mode != "blocked",
+            "cost_mode": mode,
+            "thread_percent": thread_percent,
+            "daily_percent": day_percent,
+        },
+    }
+
+
 def plan_llm(state: AssistantState) -> AssistantState:
     """Ask the configured provider for a strict plan on every production turn."""
     from app.services.prompts import load_assistant_config
@@ -132,6 +181,8 @@ def plan_llm(state: AssistantState) -> AssistantState:
     user_prompt = config.prompts["plan"]
     for key, value in {"user_input": state["content"], "available_tools": ", ".join(config.tools_whitelist), "context": _context_text(state)}.items():
         user_prompt = user_prompt.replace("{{" + key + "}}", str(value))
+    if state.get("cost_directive"):
+        user_prompt += "\n\n" + state["cost_directive"]
     completion = None
     try:
         completion = _assistant_client().chat.completions.create(
@@ -296,6 +347,8 @@ def execute(state: AssistantState) -> AssistantState:
         prompt = config.prompts["respond"]
         for key, value in {"user_input": state["content"], "tool_evidence": str(state.get("tool_result") or ""), "context": _context_text(state)}.items():
             prompt = prompt.replace("{{" + key + "}}", str(value))
+        if state.get("cost_directive"):
+            prompt += "\n\n" + state["cost_directive"]
         client = _assistant_client()
         model = getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL)
         completion = client.chat.completions.create(
