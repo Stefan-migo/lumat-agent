@@ -226,6 +226,7 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             user_id=user.id,
             content=message.content,
             run_id=run_id,
+            request_message_id=message.id,
             on_token=publish_token,
             session=session,
             actor=user.username,
@@ -248,7 +249,12 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             "cost_directive": result.get("cost_directive", ""),
             "compaction": compaction,
         }
-        message.assistant_metadata = {"run_id": run_id, "approval": result.get("approval"), "attachment_ids": [row.id for row in attachments], "cost_mode": result.get("cost_mode", "normal")}
+        message.assistant_metadata = {
+            **(message.assistant_metadata or {}),
+            "run_id": run_id, "approval": result.get("approval"),
+            "attachment_ids": [row.id for row in attachments],
+            "cost_mode": result.get("cost_mode", "normal"),
+        }
         if result.get("status") == "approval_pending":
             message.status = "approval_pending"
         else:
@@ -274,6 +280,7 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
         message.status = "failed"
         message.error = "The agent could not process this message. Retry it."
         message.completed_at = datetime.now(timezone.utc)
+        message.assistant_metadata = {**(message.assistant_metadata or {}), "run_id": run_id}
         thread.assistant_state = {
             "stage": "failed",
             "recoverable": True,
@@ -367,6 +374,7 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
         "approval": thread.assistant_state["approval"],
         "session": session,
         "actor": user.username,
+        "request_message_id": message.id,
     })
     message.status = "processed"
     message.completed_at = datetime.now(timezone.utc)
@@ -413,6 +421,7 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
         "approval": thread.assistant_state.get("approval"),
         "session": session,
         "actor": user.username,
+        "request_message_id": message.id,
     })
     message.status = "processed"
     message.completed_at = datetime.now(timezone.utc)

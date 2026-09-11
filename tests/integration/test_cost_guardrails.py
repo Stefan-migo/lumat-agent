@@ -20,6 +20,7 @@ unless explicitly allowed).
 from __future__ import annotations
 
 import os
+import threading
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Callable
@@ -190,6 +191,61 @@ def test_unknown_model_records_zero_and_diagnostic():
         session.commit()
         assert float(target.cost_llm) == 0
         assert target.assistant_metadata["cost_diagnostics"][0]["type"] == "unknown_model"
+
+
+def test_internal_cost_retry_uses_locked_call_key_without_double_charge():
+    thread_id, _ = _seed_internal_costs([0])
+    with SessionLocal() as session:
+        target = session.scalars(
+            select(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id)
+        ).one()
+        costs.record_llm_cost(session, target=target, call_key="run:planner", model="gpt-4o-mini",
+                              prompt_tokens=10, completion_tokens=20)
+        costs.record_llm_cost(session, target=target, call_key="run:planner", model="gpt-4o-mini",
+                              prompt_tokens=10, completion_tokens=20)
+        session.commit()
+        assert target.assistant_metadata["cost_calls"].keys() == {"run:planner"}
+        assert float(target.cost_llm) == pytest.approx(0.000014)
+
+
+def test_internal_cost_call_key_is_idempotent_under_concurrent_retry():
+    thread_id, _ = _seed_internal_costs([0])
+    barrier = threading.Barrier(2)
+    results = []
+
+    def retry():
+        with SessionLocal() as session:
+            target = session.scalars(select(InternalChatMessage).where(
+                InternalChatMessage.thread_id == thread_id)).one()
+            barrier.wait()
+            results.append(costs.record_llm_cost(
+                session, target=target, call_key="run:response", model="gpt-4o-mini",
+                prompt_tokens=1_000_000, completion_tokens=0))
+            session.commit()
+
+    workers = [threading.Thread(target=retry) for _ in range(2)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    assert float(sum(results)) == pytest.approx(0.15)
+    with SessionLocal() as session:
+        target = session.scalars(select(InternalChatMessage).where(
+            InternalChatMessage.thread_id == thread_id)).one()
+        assert float(target.cost_llm) == pytest.approx(0.15)
+
+
+def test_missing_usage_is_zero_but_diagnostic_is_persisted():
+    thread_id, _ = _seed_internal_costs([0])
+    with SessionLocal() as session:
+        target = session.scalars(
+            select(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id)
+        ).one()
+        assert costs.record_llm_cost(session, target=target, call_key="run:response",
+                                     model="gpt-4o-mini", prompt_tokens=None,
+                                     completion_tokens=None) == 0
+        session.commit()
+        assert target.assistant_metadata["cost_diagnostics"][0]["type"] == "usage_unavailable"
 
 
 # ---------------------------------------------------------------------------

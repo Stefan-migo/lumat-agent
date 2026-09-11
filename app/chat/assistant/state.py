@@ -48,6 +48,7 @@ class PlannerOutput(BaseModel):
 
 
 class AssistantState(TypedDict, total=False):
+    request_message_id: int
     thread_id: int
     run_id: str
     user_id: int

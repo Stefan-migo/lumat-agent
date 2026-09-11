@@ -73,6 +73,7 @@ def record_llm_cost(
             select(InternalChatMessage)
             .where(InternalChatMessage.id == target.id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         calls = dict(target.assistant_metadata or {}).get("cost_calls", {})
         if call_key in calls:
@@ -113,6 +114,7 @@ def record_llm_cost(
             if diagnostic is not None:
                 metadata.setdefault("cost_diagnostics", []).append(diagnostic)
             target.assistant_metadata = metadata
+        session.flush()
     return cost
 
 

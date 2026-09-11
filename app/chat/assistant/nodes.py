@@ -18,8 +18,10 @@ from app.services.costs import (
     internal_thread_cost_state,
     internal_thread_spend,
     maybe_alert_owner,
+    record_llm_cost,
 )
 from app.chat.assistant.attachments import build_multimodal_content, prepare_attachment_context
+from app.models import InternalChatMessage
 
 
 def extension_hook_metadata() -> dict[str, str]:
@@ -133,6 +135,23 @@ def _assistant_client():
         return llm.openai_client()
 
 
+def _record_usage(state: AssistantState, call_key: str, completion) -> None:
+    session = state.get("session")
+    request_id = state.get("request_message_id")
+    if session is None or request_id is None:
+        return
+    usage = getattr(completion, "usage", None)
+    record_llm_cost(
+        session,
+        message_id=request_id,
+        target=session.get(InternalChatMessage, request_id),
+        call_key=f"{state['run_id']}:{call_key}",
+        model=getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL),
+        prompt_tokens=getattr(usage, "prompt_tokens", None),
+        completion_tokens=getattr(usage, "completion_tokens", None),
+    )
+
+
 COST_DIRECTIVE = "Answer concisely; use the minimum necessary context and avoid optional tool calls."
 COST_BLOCKED_REPLY = (
     "The assistant is temporarily unavailable because the configured usage limit was reached. "
@@ -191,6 +210,7 @@ def plan_llm(state: AssistantState) -> AssistantState:
             temperature=0,
             response_format={"type": "json_object"},
         )
+        _record_usage(state, "planner", completion)
         raw_text = _completion_text(completion)
         if not raw_text:
             raise ValueError("provider returned no structured planner message")
@@ -359,10 +379,12 @@ def execute(state: AssistantState) -> AssistantState:
             ],
             temperature=0,
             stream=True,
+            stream_options={"include_usage": True},
         )
         chunks: list[str] = []
         for chunk in completion:
-            token = chunk.choices[0].delta.content or ""
+            _record_usage(state, "response", chunk)
+            token = (chunk.choices[0].delta.content or "") if chunk.choices else ""
             if token:
                 chunks.append(token)
                 on_token(token)

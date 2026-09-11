@@ -45,12 +45,13 @@ def build_assistant_graph():
     return builder.compile()
 
 
-def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, on_token=None, session=None, actor=None, attachments=None, context=None, compaction=None) -> AssistantState:
+def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, session=None, actor=None, attachments=None, context=None, compaction=None) -> AssistantState:
     state: AssistantState = {
         "thread_id": thread_id,
         "user_id": user_id,
         "content": content,
         "run_id": run_id,
+        "request_message_id": request_message_id,
         "evidence": [],
         "on_token": on_token,
         "session": session,
