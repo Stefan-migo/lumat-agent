@@ -188,6 +188,10 @@ def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatc
     _user("assistant-usage", "admin")
     _login(client, "assistant-usage")
     thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    monkeypatch.setattr(
+        "app.services.llm.get_settings",
+        lambda: SimpleNamespace(assistant_chat_model="gpt-4o-mini"),
+    )
     planner = SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
             "kind": "respond", "arguments": {}, "summary": "planned", "requires_approval": False,
@@ -212,6 +216,13 @@ def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatc
     metadata = result.json()["message"]["assistant_metadata"]
     assert set(metadata["cost_calls"]) == {metadata["run_id"] + ":planner", metadata["run_id"] + ":response"}
     assert metadata["cost_calls"][metadata["run_id"] + ":planner"]["prompt_tokens"] == 10
+    response_call = metadata["cost_calls"][metadata["run_id"] + ":response"]
+    assert response_call["prompt_tokens"] == 20
+    assert response_call["completion_tokens"] == 7
+    assert response_call["cost"] == pytest.approx(0.0000072)
+    with SessionLocal() as session:
+        request = session.get(InternalChatMessage, result.json()["message"]["id"])
+        assert float(request.cost_llm) == pytest.approx(0.000012)
 
 
 def test_stream_disconnect_keeps_known_usage_and_failed_request(client, monkeypatch):

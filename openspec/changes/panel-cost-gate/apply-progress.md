@@ -73,3 +73,25 @@ Edges consulted: `state.py` → `graph.py` → `nodes.py`; `assemble_context()` 
 ## Completion
 
 All 11 tasks (1.1–4.2) are complete. No production files were changed in PR 4.
+
+## Focused Remediation
+
+- Status: complete; remediation of verify CRITICAL-1.
+- Scope: only terminal stream usage claims the response call key; usage-less streams persist one `usage_unavailable` diagnostic after iteration.
+- RED: extended `test_planner_and_terminal_stream_usage_are_persisted_once` with a known priced model, terminal token assertions, terminal response cost, and persisted request cost; pre-fix failure recorded `prompt_tokens == 0` for the response call because the first usage-less chunk claimed the key.
+- GREEN: `app/chat/assistant/nodes.py` records response usage only when `chunk.usage` is present and records one missing-usage diagnostic after a stream with no usage-bearing chunk.
+- Strict TDD evidence: RED → GREEN; missing-usage regression also passed.
+
+### Remediation Work Unit Evidence
+
+| Evidence | Exact result |
+|---|---|
+| Focused test command | `DATABASE_URL='postgresql+psycopg://app:app@localhost:5434/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5434/lumat' uv run pytest tests/integration/test_assistant_chat.py::test_planner_and_terminal_stream_usage_are_persisted_once tests/integration/test_cost_guardrails.py::test_missing_usage_is_zero_but_diagnostic_is_persisted -vv` — **2 passed** in 1.95s. |
+| Runtime harness | Same PostgreSQL-backed integration tests exercised terminal stream usage persistence and the no-usage diagnostic fallback. |
+| Rollback boundary | Revert only `app/chat/assistant/nodes.py` and the added assertions in `tests/integration/test_assistant_chat.py`; leave all gate, approval, WhatsApp, and migration behavior unchanged. |
+
+### Remediation Graph Check
+
+Nodes consulted: `execute()`, `_record_usage()`, `record_llm_cost()`, `test_planner_and_terminal_stream_usage_are_persisted_once()`, `test_missing_usage_is_zero_but_diagnostic_is_persisted`.
+
+Edges consulted: `execute()` → `_record_usage()` → `record_llm_cost()`; test stream chunks → request `cost_calls`/`cost_llm` persistence.

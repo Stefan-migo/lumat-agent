@@ -382,12 +382,17 @@ def execute(state: AssistantState) -> AssistantState:
             stream_options={"include_usage": True},
         )
         chunks: list[str] = []
+        usage_seen = False
         for chunk in completion:
-            _record_usage(state, "response", chunk)
+            if getattr(chunk, "usage", None) is not None:
+                _record_usage(state, "response", chunk)
+                usage_seen = True
             token = (chunk.choices[0].delta.content or "") if chunk.choices else ""
             if token:
                 chunks.append(token)
                 on_token(token)
+        if not usage_seen:
+            _record_usage(state, "response", None)
         response = "".join(chunks) or response
     session = state.get("session")
     if session is not None:
