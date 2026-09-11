@@ -86,6 +86,21 @@ def test_panel_projection_uses_canonical_scope_and_preserves_newest_rows(monkeyp
     assert [row["id"] for row in result["pinned"] + result["panel"]] == ["2", "3", "1"]
 
 
+def test_panel_projection_uses_configured_memory_scope(monkeypatch):
+    seen = {}
+
+    def fake_list(session, *, scope, entity_id):
+        seen["scope"] = scope
+        return []
+
+    monkeypatch.setattr("app.services.prompts.load_assistant_config", lambda: SimpleNamespace(memoria_scope="configured"))
+    monkeypatch.setattr("app.services.tukulpan.list_for_entity", fake_list)
+
+    nodes.load_panel_context(SimpleNamespace(execute=lambda *args: None), 12)
+
+    assert seen["scope"] == "configured"
+
+
 def test_assembly_does_not_search_and_reports_fixed_budget_metadata(monkeypatch):
     monkeypatch.setattr(
         "app.services.tukulpan.hybrid_search",

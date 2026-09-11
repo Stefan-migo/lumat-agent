@@ -15,6 +15,7 @@ def test_complete_assistant_configuration_loads_without_skills(repo_root):
     assert "<available_tools>" in config.prompts["plan"]
     assert config.skills == ()
     assert "skills" not in config.prompts["plan"]
+    assert config.memoria_scope == "panel"
 
 
 def test_missing_assistant_reference_fails_before_runtime_use(tmp_path, repo_root):

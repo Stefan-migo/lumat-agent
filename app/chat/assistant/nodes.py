@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import ValidationError
 
-from app.chat.assistant.approval import issue_approval, validate_execution
+from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.evidence import make_evidence
 from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens
 from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool, get_tool
@@ -22,9 +22,11 @@ def load_panel_context(session, thread_id: int) -> dict:
     """Read the Tukulpan panel scope, with pinned memories first and bounded."""
     if session is None or not hasattr(session, "execute"):
         return {"pinned": [], "panel": []}
+    from app.services.prompts import load_assistant_config
     from app.services.tukulpan import list_for_entity
 
-    rows = list_for_entity(session, scope="panel", entity_id=f"thread:{thread_id}")
+    scope = load_assistant_config().memoria_scope or "panel"
+    rows = list_for_entity(session, scope=scope, entity_id=f"thread:{thread_id}")
     result = {"pinned": [], "panel": []}
     for row in rows:
         content = str(row.contenido)
@@ -199,13 +201,6 @@ def guardrails(state: AssistantState) -> AssistantState:
         decisions["decision"] = "approval_pending"
         return {"approval": issue_approval(plan_data), "guardrails": decisions, "status": "approval_pending"}
     return {"guardrails": decisions, "status": "executing"}
-
-
-def approval_gate(state: AssistantState) -> AssistantState:
-    plan_data = state["plan"]
-    if plan_data["requires_approval"] and not state.get("approval"):
-        return {"approval": issue_approval(plan_data), "status": "approval_pending"}
-    return {"status": "approved" if plan_data["requires_approval"] else "executing"}
 
 
 def execute(state: AssistantState) -> AssistantState:

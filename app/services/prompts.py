@@ -93,6 +93,7 @@ class AssistantRuntimeConfig:
     prompts: dict[str, str]
     tools_whitelist: tuple[str, ...]
     skills: tuple[str, ...]
+    memoria_scope: str | None
 
 _SLOT_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
@@ -138,4 +139,5 @@ def load_assistant_config(registry_path: str | Path | None = None) -> AssistantR
         prompts={name: load(path) for name, path in assistant.prompts.items()},
         tools_whitelist=assistant.tools_whitelist,
         skills=assistant.skills,
+        memoria_scope=assistant.memoria_scope,
     )
