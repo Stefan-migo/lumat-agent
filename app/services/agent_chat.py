@@ -12,7 +12,7 @@ from app.chat.assistant.approval import validate_approval
 from app.chat.assistant.nodes import execute
 from app.chat.assistant import nodes as assistant_nodes
 from app.chat.assistant.attachments import prepare_attachment_context
-from app.chat.assistant.state import INJECTION_TOKEN_BUDGET, estimate_tokens
+from app.chat.assistant.state import COMPACTION_RETENTION_TOKENS, COMPACTION_THRESHOLD_TOKENS, INJECTION_TOKEN_BUDGET, estimate_tokens
 from app.chat.assistant.recovery import claim_execution, recover_events
 from app.models import AssistantAttachment, InternalChatMessage, InternalChatThread, User
 from app.services.audit import record_audit
@@ -36,16 +36,18 @@ def load_panel_context(session, thread_id: int) -> dict:
     return assistant_nodes.load_panel_context(session, thread_id)
 
 
-def flush_panel_session(session, thread_id: int, *, before_tokens: int, after_tokens: int) -> dict:
-    """Delegate the metadata-only Tukulpan flush seam."""
+def flush_panel_session(session, thread_id: int, *, source_message_ids: list[int], recap: str,
+                        source_tokens: int, truncated: bool) -> dict:
+    """Delegate the meaningful Tukulpan recap seam."""
     return assistant_nodes.flush_panel_session(
-        session, thread_id, before_tokens=before_tokens, after_tokens=after_tokens
+        session, thread_id, source_message_ids=source_message_ids, recap=recap,
+        source_tokens=source_tokens, truncated=truncated,
     )
 
 
 def compact_session(session, thread_id: int, messages: list, *, before_tokens: int) -> dict:
     """Flush and retain the newest bounded history when the session threshold is met."""
-    retention = 2_000
+    retention = COMPACTION_RETENTION_TOKENS
     retained = []
     used = 0
     for message in reversed(messages):
@@ -55,26 +57,39 @@ def compact_session(session, thread_id: int, messages: list, *, before_tokens: i
         retained.append(message)
         used += cost
     retained.reverse()
-    if before_tokens < 4_000:
+    truncated = len(retained) != len(messages)
+    if before_tokens < COMPACTION_THRESHOLD_TOKENS:
         return {
             "window_tokens": 8_000,
-            "threshold_tokens": 4_000,
+            "threshold_tokens": COMPACTION_THRESHOLD_TOKENS,
             "before_tokens": before_tokens,
             "after_tokens": used,
             "flushed": False,
+            "failed": False,
             "rotated": False,
             "retained_message_ids": [message.id for message in retained],
         }
-    flush = flush_panel_session(
-        session, thread_id, before_tokens=before_tokens, after_tokens=retention
+    recap = "\n".join(f"{getattr(message, 'author', 'message')}: {message.content}" for message in retained)
+    write = flush_panel_session(
+        session, thread_id, source_message_ids=[message.id for message in retained],
+        recap=recap, source_tokens=used, truncated=truncated,
     )
+    written = bool(write.get("written"))
+    if not written:
+        return {
+            "window_tokens": 8_000, "threshold_tokens": COMPACTION_THRESHOLD_TOKENS,
+            "before_tokens": before_tokens, "after_tokens": used,
+            "flushed": False, "rotated": False, "failed": True,
+            "retained_message_ids": [message.id for message in retained], "write": write,
+        }
     rotated_at = datetime.now(timezone.utc).isoformat()
     return {
         "window_tokens": 8_000,
-        "threshold_tokens": 4_000,
+        "threshold_tokens": COMPACTION_THRESHOLD_TOKENS,
         "before_tokens": before_tokens,
         "after_tokens": used,
-        "flushed": bool(flush.get("flushed", True)),
+        "flushed": True,
+        "failed": False,
         "rotated": True,
         "retained_message_ids": [message.id for message in retained],
         "rotation": {
@@ -82,6 +97,7 @@ def compact_session(session, thread_id: int, messages: list, *, before_tokens: i
             "retention_tokens": retention,
             "rotated_at": rotated_at,
         },
+        "write": write,
     }
 
 
@@ -215,6 +231,7 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             actor=user.username,
             attachments=attachments,
             context=context,
+            compaction=compaction,
         )
         thread.active_run_id = run_id
         thread.current_plan = result.get("plan")

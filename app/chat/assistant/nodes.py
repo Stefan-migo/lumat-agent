@@ -32,29 +32,23 @@ def load_panel_context(session, thread_id: int) -> dict:
     return result
 
 
-def flush_panel_session(session, thread_id: int, *, before_tokens: int, after_tokens: int) -> dict:
-    """Persist a compacted panel recap through the memory service primitives."""
-    flushed = False
-    if session is not None and hasattr(session, "add"):
-        from app.models import MemoryType
-        from app.services.memory import upsert
+def flush_panel_session(session, thread_id: int, *, source_message_ids: list[int], recap: str,
+                        source_tokens: int, truncated: bool) -> dict:
+    """Persist meaningful pre-rotation content through the canonical write seam."""
+    if session is None or not hasattr(session, "add"):
+        return {"written": False, "degraded_reason": "session persistence unavailable"}
+    if not source_message_ids:
+        return {"written": False, "degraded_reason": "no source messages for recap"}
+    from app.services.tukulpan import write_recap
 
-        upsert(
-            session,
-            scope="panel",
-            entity_id=f"thread:{thread_id}",
-            topic_key="assistant-compaction",
-            tipo=MemoryType.SESSION,
-            titulo="Assistant session compaction",
-            contenido=f"Thread {thread_id} compacted from {before_tokens} to {after_tokens} tokens.",
-        )
-        flushed = True
-    return {
-        "thread_id": thread_id,
-        "before_tokens": before_tokens,
-        "after_tokens": after_tokens,
-        "flushed": flushed,
-    }
+    return write_recap(
+        session,
+        thread_id=thread_id,
+        source_message_ids=source_message_ids,
+        recap=recap,
+        source_tokens=source_tokens,
+        truncated=truncated,
+    )
 
 
 def bounded_fallback(reason: str) -> PlannerOutput:
@@ -350,6 +344,14 @@ def collect_evidence(state: AssistantState) -> AssistantState:
     context_meta = state.get("context_meta") or state.get("context", {}).get("meta", {})
     if context_meta:
         evidence[-1] = {**evidence[-1], "context_meta": context_meta}
+    compaction = state.get("compaction") or {}
+    if compaction.get("failed"):
+        evidence.append({
+            "tool": None,
+            "status": "degraded",
+            "detail": compaction.get("write", {}).get("degraded_reason", "compaction write failed"),
+            "compaction": compaction,
+        })
     return {
         "evidence": evidence,
         "status": state.get("status", "completed"),

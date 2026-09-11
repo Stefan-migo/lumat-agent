@@ -23,9 +23,9 @@ Auto-chain uses stacked-to-main. Estimate: ~470 production lines across the six 
 
 ## Work Unit 3: Meaningful Write Lifecycle (PR 3)
 
-- [ ] 3.1 RED — Add milestone/decision, bounded recap schema/key, retry-idempotency, and failure-evidence tests in `tests/integration/test_assistant_harness_session.py` and `tests/spec/test_memory_spec.py` (MEM-7, HL-3 scenarios).
-- [ ] 3.2 GREEN — Implement recap upsert and degraded-result handling in `app/services/tukulpan.py`, replacing the synthetic flush seam in `app/chat/assistant/nodes.py` and `app/services/agent_chat.py` (MEM-7, HL-3).
-- [ ] 3.3 GREEN — Preserve compaction evidence and failed-write status through `app/chat/assistant/state.py` and `app/chat/assistant/graph.py`; keep rotation DB-authoritative (HL-3).
+- [x] 3.1 RED — Add milestone/decision, bounded recap schema/key, retry-idempotency, and failure-evidence tests in `tests/integration/test_assistant_harness_session.py` and `tests/spec/test_memory_spec.py` (MEM-7, HL-3 scenarios).
+- [x] 3.2 GREEN — Implement recap upsert and degraded-result handling in `app/services/tukulpan.py`, replacing the synthetic flush seam in `app/chat/assistant/nodes.py` and `app/services/agent_chat.py` (MEM-7, HL-3).
+- [x] 3.3 GREEN — Preserve compaction evidence and failed-write status through `app/chat/assistant/state.py` and `app/chat/assistant/graph.py`; keep rotation DB-authoritative (HL-3).
 
 ## Work Unit 4: Isolation and Evidence Hardening (PR 4)
 

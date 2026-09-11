@@ -38,7 +38,7 @@ def build_assistant_graph():
     return builder.compile()
 
 
-def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, on_token=None, session=None, actor=None, attachments=None, context=None) -> AssistantState:
+def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, on_token=None, session=None, actor=None, attachments=None, context=None, compaction=None) -> AssistantState:
     state: AssistantState = {
         "thread_id": thread_id,
         "user_id": user_id,
@@ -52,5 +52,6 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, on
         "context": context or {"items": [], "meta": {}},
         "context_meta": (context or {}).get("meta", {}),
         "projection_evidence": (context or {}).get("meta", {}),
+        "compaction": compaction or {},
     }
     return build_assistant_graph().invoke(state)

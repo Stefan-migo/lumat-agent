@@ -271,6 +271,56 @@ def test_mem2_non_default_project_rejected(fake_embedder, migrated_db):
         assert n == 0
 
 
+def test_mem7_milestone_and_decision_use_meaningful_types(fake_embedder, migrated_db):
+    with SessionLocal() as session:
+        milestone = tukulpan.record_milestone(
+            session, thread_id=7, topic_key="milestone:1", title="Milestone", content="Reached review"
+        )
+        decision = tukulpan.record_decision(
+            session, thread_id=7, topic_key="decision:1", title="Decision", content="Keep DB authoritative"
+        )
+        session.commit()
+
+        assert milestone.tipo is MemoryType.SUMMARY
+        assert decision.tipo is MemoryType.DECISION
+        assert {milestone.entity_id, decision.entity_id} == {"thread:7"}
+
+
+def test_mem7_recap_has_bounded_schema_and_idempotent_key(fake_embedder, migrated_db):
+    with SessionLocal() as session:
+        first = tukulpan.write_recap(
+            session, thread_id=7, source_message_ids=[4, 5], recap="A bounded recap",
+            source_tokens=1_999, truncated=True,
+        )
+        session.commit()
+        second = tukulpan.write_recap(
+            session, thread_id=7, source_message_ids=[4, 5], recap="A bounded recap",
+            source_tokens=1_999, truncated=True,
+        )
+        session.commit()
+
+        row = tukulpan.get_by_key(
+            session, scope="panel", entity_id="thread:7", topic_key="assistant-recap:7:5"
+        )
+        payload = __import__("json").loads(row.contenido)
+        assert set(payload) == {"schema_version", "thread_id", "source_message_ids", "source_tokens", "truncated", "recap"}
+        assert payload["source_message_ids"] == [4, 5]
+        assert first["written"] is True and second["id"] == first["id"]
+        assert session.query(Memory).filter_by(topic_key="assistant-recap:7:5").count() == 1
+
+
+def test_mem7_recap_failure_returns_degraded_evidence_and_keeps_session_usable(monkeypatch, migrated_db):
+    monkeypatch.setattr(tukulpan, "_embed", lambda texts: (_ for _ in ()).throw(RuntimeError("embed offline")))
+    with SessionLocal() as session:
+        result = tukulpan.write_recap(
+            session, thread_id=7, source_message_ids=[5], recap="Retry me",
+            source_tokens=2, truncated=False,
+        )
+        assert result["written"] is False
+        assert "embed offline" in result["degraded_reason"]
+        session.execute(__import__("sqlalchemy").text("SELECT 1"))
+
+
 # ---------------------------------------------------------------------------
 # MEM-3 — Hybrid Search
 # ---------------------------------------------------------------------------

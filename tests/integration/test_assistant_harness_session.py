@@ -3,15 +3,16 @@
 from types import SimpleNamespace
 
 from app.chat.assistant.recovery import recover_events
+from app.chat.assistant.nodes import collect_evidence
 from app.services.agent_chat import compact_session
 
 
-def test_compaction_flushes_at_threshold_and_retains_newest_2000_tokens(monkeypatch):
+def test_compaction_writes_bounded_recap_before_rotation(monkeypatch):
     flushed = {}
 
-    def flush(session, thread_id, *, before_tokens, after_tokens):
-        flushed.update(before_tokens=before_tokens, after_tokens=after_tokens)
-        return {"thread_id": thread_id, "flushed": True, "before_tokens": before_tokens}
+    def flush(session, thread_id, *, source_message_ids, recap, source_tokens, truncated):
+        flushed.update(source_message_ids=source_message_ids, recap=recap, source_tokens=source_tokens, truncated=truncated)
+        return {"thread_id": thread_id, "written": True, "id": 12}
 
     monkeypatch.setattr("app.services.agent_chat.flush_panel_session", flush)
     messages = [
@@ -21,8 +22,11 @@ def test_compaction_flushes_at_threshold_and_retains_newest_2000_tokens(monkeypa
 
     result = compact_session("db", 7, messages, before_tokens=4_000)
 
-    assert result["flushed"] is True
-    assert flushed == {"before_tokens": 4_000, "after_tokens": 2_000}
+    assert result["write"]["written"] is True
+    assert flushed["source_message_ids"] == [2]
+    assert "new" in flushed["recap"]
+    assert flushed["source_tokens"] <= 2_000
+    assert flushed["truncated"] is True
     assert result["retained_message_ids"] == [2]
     assert result["after_tokens"] <= 2_000
 
@@ -57,7 +61,11 @@ def test_recovery_replays_each_persisted_event_once():
     ]
 
 
-def test_compaction_records_rotation_metadata():
+def test_compaction_records_rotation_metadata(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.agent_chat.flush_panel_session",
+        lambda *args, **kwargs: {"thread_id": 11, "written": True, "id": 14},
+    )
     result = compact_session(
         "db", 11, [SimpleNamespace(id=4, content="z" * 9000)], before_tokens=4_000
     )
@@ -66,3 +74,26 @@ def test_compaction_records_rotation_metadata():
     assert result["rotation"]["thread_id"] == 11
     assert result["rotation"]["retention_tokens"] == 2_000
     assert result["rotation"]["rotated_at"]
+
+
+def test_compaction_write_failure_is_degraded_evidence_and_rotation_is_not_successful(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.agent_chat.flush_panel_session",
+        lambda *args, **kwargs: {"thread_id": 11, "written": False, "degraded_reason": "db unavailable"},
+    )
+    result = compact_session("db", 11, [SimpleNamespace(id=4, content="z" * 9000)], before_tokens=4_000)
+
+    assert result["write"]["written"] is False
+    assert result["write"]["degraded_reason"] == "db unavailable"
+    assert result["rotated"] is False
+    assert result["failed"] is True
+
+
+def test_graph_preserves_failed_compaction_as_degraded_evidence():
+    state = collect_evidence({
+        "evidence": [],
+        "compaction": {"failed": True, "write": {"degraded_reason": "db unavailable"}},
+    })
+
+    assert state["evidence"][-1]["status"] == "degraded"
+    assert state["evidence"][-1]["compaction"]["failed"] is True
