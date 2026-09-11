@@ -65,6 +65,7 @@ class AssistantState(TypedDict, total=False):
     attachments: list[object]
     context: dict
     context_meta: dict
+    projection_evidence: dict
     planner: dict
     planner_output: dict
     guardrails: dict

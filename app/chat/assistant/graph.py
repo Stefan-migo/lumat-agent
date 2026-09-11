@@ -50,5 +50,7 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, on
         "actor": actor,
         "attachments": attachments or [],
         "context": context or {"items": [], "meta": {}},
+        "context_meta": (context or {}).get("meta", {}),
+        "projection_evidence": (context or {}).get("meta", {}),
     }
     return build_assistant_graph().invoke(state)

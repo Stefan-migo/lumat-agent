@@ -86,7 +86,11 @@ def compact_session(session, thread_id: int, messages: list, *, before_tokens: i
 
 
 def assemble_context(session, thread_id: int, *, messages=None, attachments=None, budget: int = INJECTION_TOKEN_BUDGET) -> dict:
-    """Build bounded panel context in stable source order."""
+    """Build bounded panel context in stable source order.
+
+    The default is the fixed 4,000-token harness budget; callers may pass a
+    smaller ceiling for focused tests and bounded adapters.
+    """
     if messages is None:
         messages = list(session.scalars(
             select(InternalChatMessage)
@@ -156,6 +160,8 @@ def assemble_context(session, thread_id: int, *, messages=None, attachments=None
     return {
         "items": items,
         "meta": {
+            "scope": "panel",
+            "entity_id": f"thread:{thread_id}",
             "message_ids": message_ids,
             "attachment_ids": attachment_ids,
             "tukulpan_ids": tukulpan_ids,
