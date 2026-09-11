@@ -93,6 +93,7 @@ class AssistantRuntimeConfig:
     prompts: dict[str, str]
     tools_whitelist: tuple[str, ...]
     skills: tuple[str, ...]
+    memoria_scope: str | None
 
 _SLOT_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
@@ -127,6 +128,7 @@ def render(key: str, **vars) -> str:
     return _SLOT_RE.sub(lambda m: str(vars[m.group(1)]), content)
 
 
+@lru_cache(maxsize=8)
 def load_assistant_config(registry_path: str | Path | None = None) -> AssistantRuntimeConfig:
     """Validate and load assistant references without loading skill files."""
     from app.agent_registry import load_registry
@@ -138,4 +140,5 @@ def load_assistant_config(registry_path: str | Path | None = None) -> AssistantR
         prompts={name: load(path) for name, path in assistant.prompts.items()},
         tools_whitelist=assistant.tools_whitelist,
         skills=assistant.skills,
+        memoria_scope=assistant.memoria_scope,
     )
