@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
-from app.services import automation, cases, customers, kb, memory, scheduling
+from app.services import automation, cases, customers, kb, scheduling, tukulpan as memory
 
 MAX_ITEMS = 20
 

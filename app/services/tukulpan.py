@@ -53,6 +53,27 @@ FTS_BOOST = 0.3             # fused = vector + 0.3 * fts (vector dominates)
 DEFAULT_TOP_K = 5
 WRITABLE_PROYECTO = "default"
 
+__all__ = [
+    "DEFAULT_TOP_K",
+    "EMBED_BACKOFF_SECONDS",
+    "EMBED_RETRIES",
+    "FTS_BOOST",
+    "MEM_MIN_SIM",
+    "REL_MIN_SIM",
+    "WRITABLE_PROYECTO",
+    "close_conversation",
+    "delete",
+    "get_by_key",
+    "hybrid_search",
+    "list_for_entity",
+    "load_customer_context",
+    "persist_memory_session",
+    "record_decision",
+    "record_milestone",
+    "set_mark",
+    "upsert",
+]
+
 # Embedder resilience (R4-001): bounded retry with short backoff on transient
 # model-init or network failures, then a clear logged failure.
 EMBED_RETRIES = 2
@@ -144,6 +165,46 @@ def upsert(
         row.pin = pin
     session.flush()
     return row
+
+
+def record_milestone(
+    session: Session,
+    *,
+    thread_id: int,
+    topic_key: str,
+    title: str,
+    content: str,
+) -> Memory:
+    """Stage a panel milestone under the canonical memory contract."""
+    return upsert(
+        session,
+        scope="panel",
+        entity_id=f"thread:{thread_id}",
+        topic_key=topic_key,
+        tipo=MemoryType.SUMMARY,
+        titulo=title,
+        contenido=content,
+    )
+
+
+def record_decision(
+    session: Session,
+    *,
+    thread_id: int,
+    topic_key: str,
+    title: str,
+    content: str,
+) -> Memory:
+    """Stage an explicit panel decision under the canonical memory contract."""
+    return upsert(
+        session,
+        scope="panel",
+        entity_id=f"thread:{thread_id}",
+        topic_key=topic_key,
+        tipo=MemoryType.DECISION,
+        titulo=title,
+        contenido=content,
+    )
 
 
 def get_by_key(

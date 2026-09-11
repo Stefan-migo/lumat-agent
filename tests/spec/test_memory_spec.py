@@ -13,7 +13,7 @@ from sqlalchemy import inspect
 
 from app.db import SessionLocal
 from app.models import Memory, MemoryType
-from app.services import memory  # noqa: F401  (service under test)
+from app.services import memory, tukulpan  # noqa: F401  (services under test)
 
 pytestmark = pytest.mark.spec("MEM-1 MEM-2 MEM-3")
 
@@ -99,6 +99,52 @@ def test_mem1_orm_models_reflect_schema(migrated_db):
 # ---------------------------------------------------------------------------
 # MEM-2 — Memory Service CRUD
 # ---------------------------------------------------------------------------
+
+
+def test_mem2_canonical_and_legacy_services_are_identical():
+    """The legacy module forwards the canonical Tukulpan service objects."""
+    assert memory.upsert is tukulpan.upsert
+    assert memory.get_by_key is tukulpan.get_by_key
+    assert memory.list_for_entity is tukulpan.list_for_entity
+    assert memory.delete is tukulpan.delete
+    assert memory.set_mark is tukulpan.set_mark
+
+
+def test_mem2_canonical_upsert_and_project_guard(fake_embedder, migrated_db):
+    """Canonical CRUD writes default rows and rejects other projects."""
+    with SessionLocal() as session:
+        row = tukulpan.upsert(
+            session,
+            scope="panel",
+            entity_id="thread:7",
+            topic_key="milestone",
+            tipo=MemoryType.SUMMARY,
+            titulo="Milestone",
+            contenido="The panel turn reached a milestone.",
+        )
+        session.commit()
+
+        assert row.proyecto == "default"
+        assert tukulpan.get_by_key(
+            session,
+            scope="panel",
+            entity_id="thread:7",
+            topic_key="milestone",
+        ).id == row.id
+
+        with pytest.raises(ValueError, match="default"):
+            tukulpan.upsert(
+                session,
+                proyecto="other",
+                scope="panel",
+                entity_id="thread:7",
+                topic_key="blocked",
+                tipo=MemoryType.DECISION,
+                titulo="Blocked",
+                contenido="Must not persist.",
+            )
+        session.rollback()
+        assert session.query(Memory).filter_by(topic_key="blocked").count() == 0
 
 
 def test_mem2_upsert_writes_memory(fake_embedder, migrated_db):

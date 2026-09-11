@@ -11,9 +11,9 @@ Auto-chain uses stacked-to-main. Estimate: ~470 production lines across the six 
 
 ## Work Unit 1: Canonical Boundary (PR 1)
 
-- [ ] 1.1 RED — Add alias-identity and CRUD/project-guard tests in `tests/spec/test_memory_spec.py` for MEM-2 canonical/legacy imports, upsert, and non-default rejection.
-- [ ] 1.2 GREEN — Create `app/services/tukulpan.py` with the existing CRUD/embed/project-guard implementation and explicit `record_milestone()`/`record_decision()` contracts (MEM-2 scenarios).
-- [ ] 1.3 GREEN — Replace `app/services/memory.py` implementation with forwarding-only exports and update `app/chat/assistant/tools/registry.py` imports/read seam; preserve customer callers and identifiers (MEM-2, MEM-3).
+- [x] 1.1 RED — Add alias-identity and CRUD/project-guard tests in `tests/spec/test_memory_spec.py` for MEM-2 canonical/legacy imports, upsert, and non-default rejection.
+- [x] 1.2 GREEN — Create `app/services/tukulpan.py` with the existing CRUD/embed/project-guard implementation and explicit `record_milestone()`/`record_decision()` contracts (MEM-2 scenarios).
+- [x] 1.3 GREEN — Replace `app/services/memory.py` implementation with forwarding-only exports and update `app/chat/assistant/tools/registry.py` imports/read seam; preserve customer callers and identifiers (MEM-2, MEM-3).
 
 ## Work Unit 2: Deterministic Projection (PR 2)
 
