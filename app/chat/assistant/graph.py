@@ -12,7 +12,35 @@ from app.chat.assistant.nodes import (
     panel_cost_gate,
     plan_llm,
 )
-from app.chat.assistant.state import AssistantState
+from app.chat.assistant.state import AssistantState, normalize_sdb_trigger
+
+
+def sdb_trigger_gate(state: AssistantState) -> AssistantState:
+    """Select SDB only from validated planner or authenticated admin signals."""
+    planner = state.get("planner") or state.get("plan") or {}
+    signal = {
+        "classification": planner.get("classification", "normal"),
+        "sdb_requested": state.get("sdb_requested"),
+        "actor_role": state.get("actor_role") or state.get("actor"),
+    }
+    normalized = normalize_sdb_trigger(signal)
+    if normalized["route"] == "sdb":
+        return {
+            "sdb_route": "sdb",
+            "sdb_trigger": normalized["trigger"],
+            "sdb_phase": normalized["phase"],
+            "sdb_rejection": None,
+            "status": "sdb_clarify",
+        }
+    return {
+        "sdb_route": "normal",
+        "sdb_trigger": None,
+        "sdb_rejection": normalized.get("reason"),
+    }
+
+
+def _after_sdb_trigger_gate(state: AssistantState) -> str:
+    return "evidence" if state.get("sdb_route") == "sdb" else "guardrails"
 
 
 def _after_guardrails(state: AssistantState) -> str:
@@ -30,6 +58,7 @@ def build_assistant_graph():
     builder.add_node("assemble_context", assemble_context_node)
     builder.add_node("panel_cost_gate", panel_cost_gate)
     builder.add_node("plan_llm", plan_llm)
+    builder.add_node("sdb_trigger_gate", sdb_trigger_gate)
     builder.add_node("guardrails", guardrails)
     builder.add_node("execute_tool", execute)
     builder.add_node("respond_stream", execute)
@@ -37,7 +66,11 @@ def build_assistant_graph():
     builder.add_edge(START, "assemble_context")
     builder.add_edge("assemble_context", "panel_cost_gate")
     builder.add_conditional_edges("panel_cost_gate", _after_cost_gate, {"plan_llm": "plan_llm", "evidence": "evidence"})
-    builder.add_edge("plan_llm", "guardrails")
+    builder.add_edge("plan_llm", "sdb_trigger_gate")
+    builder.add_conditional_edges(
+        "sdb_trigger_gate", _after_sdb_trigger_gate,
+        {"guardrails": "guardrails", "evidence": "evidence"},
+    )
     builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "respond_stream": "respond_stream", END: END})
     builder.add_edge("execute_tool", "evidence")
     builder.add_edge("respond_stream", "evidence")

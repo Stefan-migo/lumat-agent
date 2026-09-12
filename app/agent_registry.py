@@ -78,6 +78,7 @@ class Assistant:
     memoria_scope: str | None
     model: str
     skills: tuple[str, ...]
+    sdb_classification: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -147,6 +148,14 @@ def _build_assistant(root: dict, agent_dir: Path) -> Assistant:
     for tool in tools:
         if tool not in KNOWN_TOOLS:
             raise RegistryError(f"{where}: unknown tool {tool!r}")
+    declaration = root.get("sdb_classification")
+    if not isinstance(declaration, dict) or declaration.get("field") != "classification":
+        raise RegistryError("assistant.sdb_classification must declare field 'classification'")
+    classification = _coerce_str_list(
+        declaration.get("allowed"), what="assistant.sdb_classification.allowed"
+    )
+    if classification != ("normal", "sdb"):
+        raise RegistryError("assistant.sdb_classification.allowed must be ['normal', 'sdb']")
     return Assistant(
         name=root["name"],
         persona=persona,
@@ -156,6 +165,7 @@ def _build_assistant(root: dict, agent_dir: Path) -> Assistant:
         memoria_scope=root.get("memoria_scope"),
         model=root["model"],
         skills=_coerce_str_list(root.get("skills", []), what=f"{where}.skills"),
+        sdb_classification=classification,
     )
 
 

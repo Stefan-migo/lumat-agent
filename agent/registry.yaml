@@ -78,3 +78,6 @@ assistant:
   kb_scope: null
   memoria_scope: panel
   model: deepseek-chat
+  sdb_classification:
+    field: classification
+    allowed: [normal, sdb]

@@ -94,6 +94,7 @@ class AssistantRuntimeConfig:
     tools_whitelist: tuple[str, ...]
     skills: tuple[str, ...]
     memoria_scope: str | None
+    sdb_classification: tuple[str, ...]
 
 _SLOT_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
@@ -141,4 +142,5 @@ def load_assistant_config(registry_path: str | Path | None = None) -> AssistantR
         tools_whitelist=assistant.tools_whitelist,
         skills=assistant.skills,
         memoria_scope=assistant.memoria_scope,
+        sdb_classification=assistant.sdb_classification,
     )
