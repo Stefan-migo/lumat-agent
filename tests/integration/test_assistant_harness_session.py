@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from app.chat.assistant.recovery import recover_events
 from app.chat.assistant.nodes import collect_evidence
 from app.services.agent_chat import compact_session
+from app.services.agent_chat import stream_events
 
 
 def test_compaction_writes_bounded_recap_before_rotation(monkeypatch):
@@ -97,3 +98,8 @@ def test_graph_preserves_failed_compaction_as_degraded_evidence():
 
     assert state["evidence"][-1]["status"] == "degraded"
     assert state["evidence"][-1]["compaction"]["failed"] is True
+
+
+def test_reconnect_uses_persisted_events_as_authority():
+    thread = SimpleNamespace(assistant_state={"events": [{"run_id": "r", "sequence": 0, "type": "status"}]})
+    assert stream_events(None, thread, "r") == thread.assistant_state["events"]

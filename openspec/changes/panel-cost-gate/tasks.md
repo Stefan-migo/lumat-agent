@@ -31,8 +31,8 @@ Decision needed before apply: No
 
 ## Phase 3: Accounting, Failure, Recovery (PR 3)
 
-- [ ] 3.1 **RED:** Add tests for planner/terminal usage, `SELECT FOR UPDATE` call-key idempotency, missing usage, disconnect, blocked persistence, and retry/reconnect authority in `tests/integration/test_cost_guardrails.py`, `test_assistant_chat.py`, and `test_assistant_harness_session.py` (SS-3/IAC-3).
-- [ ] 3.2 **GREEN:** Pass request ID and persist diagnostics in `app/services/agent_chat.py`; implement atomic `record_llm_cost` accumulation and recovery-safe call keys across `app/chat/assistant/nodes.py` and `agent_chat.py` (SS-3/IAC-3); graph `agent_chat.py` → `stream_events()`/recovery.
+- [x] 3.1 **RED:** Add tests for planner/terminal usage, `SELECT FOR UPDATE` call-key idempotency, missing usage, disconnect, blocked persistence, and retry/reconnect authority in `tests/integration/test_cost_guardrails.py`, `test_assistant_chat.py`, and `test_assistant_harness_session.py` (SS-3/IAC-3).
+- [x] 3.2 **GREEN:** Pass request ID and persist diagnostics in `app/services/agent_chat.py`; implement atomic `record_llm_cost` accumulation and recovery-safe call keys across `app/chat/assistant/nodes.py` and `agent_chat.py` (SS-3/IAC-3); graph `agent_chat.py` → `stream_events()`/recovery.
 
 ## Phase 4: Non-Regression (PR 4)
 

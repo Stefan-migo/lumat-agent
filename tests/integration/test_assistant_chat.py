@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.chat.assistant.approval import (
@@ -181,6 +182,65 @@ def test_failed_run_does_not_persist_partial_response(client, monkeypatch):
         thread = session.get(InternalChatThread, thread_id)
         assert thread.assistant_state["events"][0]["type"] == "error"
         assert thread.assistant_state["events"][0]["sequence"] == 0
+
+
+def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatch):
+    _user("assistant-usage", "admin")
+    _login(client, "assistant-usage")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    planner = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+            "kind": "respond", "arguments": {}, "summary": "planned", "requires_approval": False,
+        })))]
+        , usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5)
+    )
+    response_chunks = [
+        SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="answer"))], usage=None),
+        SimpleNamespace(choices=[], usage=SimpleNamespace(prompt_tokens=20, completion_tokens=7)),
+    ]
+
+    class Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kwargs):
+                    return planner if not kwargs.get("stream") else iter(response_chunks)
+
+    monkeypatch.setattr("app.services.llm.openai_client", lambda: Client())
+    result = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "hello"})
+    assert result.status_code == 201
+    metadata = result.json()["message"]["assistant_metadata"]
+    assert set(metadata["cost_calls"]) == {metadata["run_id"] + ":planner", metadata["run_id"] + ":response"}
+    assert metadata["cost_calls"][metadata["run_id"] + ":planner"]["prompt_tokens"] == 10
+
+
+def test_stream_disconnect_keeps_known_usage_and_failed_request(client, monkeypatch):
+    _user("assistant-disconnect", "admin")
+    _login(client, "assistant-disconnect")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    planner = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+            "kind": "respond", "arguments": {}, "summary": "planned", "requires_approval": False,
+        })))]
+        , usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5)
+    )
+
+    def disconnecting(**kwargs):
+        if not kwargs.get("stream"):
+            return planner
+        yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="partial"))], usage=None)
+        yield SimpleNamespace(choices=[], usage=SimpleNamespace(prompt_tokens=20, completion_tokens=7))
+        raise ConnectionError("stream disconnected")
+
+    client_stub = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=disconnecting)))
+    monkeypatch.setattr("app.services.llm.openai_client", lambda: client_stub)
+    result = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "hello"})
+    assert result.json()["message"]["status"] == "failed"
+    with SessionLocal() as session:
+        message = session.scalar(select(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id,
+                                                                    InternalChatMessage.author == "admin"))
+        assert set(message.assistant_metadata["cost_calls"]) == {message.assistant_metadata["run_id"] + ":planner",
+                                                                    message.assistant_metadata["run_id"] + ":response"}
 
 
 def test_approval_rejects_expired_token():
