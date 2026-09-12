@@ -13,12 +13,29 @@ def arguments_digest(tool: str | None, arguments: dict) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+def canonical_sdb_payload(payload: dict) -> dict:
+    """Select the phase/spec/tasks fields that an SDB approval covers."""
+    return {
+        "phase": payload.get("phase"),
+        "spec": payload.get("spec") or {},
+        "tasks": payload.get("tasks") or [],
+    }
+
+
+def canonical_sdb_digest(payload: dict) -> str:
+    """Return a fixed-size digest for the complete canonical SDB payload."""
+    encoded = json.dumps(
+        canonical_sdb_payload(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return hashlib.sha256(encoded.encode()).hexdigest()
+
+
 def issue_approval(plan: dict, *, expires_at: datetime | None = None) -> dict:
     token = secrets.token_urlsafe(24)
     expiry = expires_at or (datetime.now(timezone.utc) + timedelta(minutes=15))
     if expiry.tzinfo is None:
         expiry = expiry.replace(tzinfo=timezone.utc)
-    return {
+    approval = {
         "token": token,
         "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
         "tool": plan.get("tool"),
@@ -27,6 +44,11 @@ def issue_approval(plan: dict, *, expires_at: datetime | None = None) -> dict:
         "expires_at": expiry.isoformat(),
         "status": "pending",
     }
+    sdb = plan.get("sdb")
+    if isinstance(sdb, dict):
+        approval["sdb_sha256"] = canonical_sdb_digest(sdb)
+        approval["spec_sha256"] = sdb.get("spec", {}).get("sha256", "")
+    return approval
 
 
 def validate_approval(plan: dict, approval: dict, token: str) -> bool:
@@ -37,7 +59,7 @@ def validate_approval(plan: dict, approval: dict, token: str) -> bool:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
     except (TypeError, ValueError):
         return False
-    return (
+    valid = (
         approval.get("status") == "pending"
         and datetime.now(timezone.utc) < expires_at
         and secrets.compare_digest(approval.get("token_sha256", ""), expected)
@@ -46,6 +68,15 @@ def validate_approval(plan: dict, approval: dict, token: str) -> bool:
             arguments_digest(plan.get("tool"), plan.get("arguments", {})),
         )
     )
+    sdb = plan.get("sdb")
+    if isinstance(sdb, dict):
+        valid = valid and secrets.compare_digest(
+            approval.get("sdb_sha256", ""), canonical_sdb_digest(sdb)
+        )
+        valid = valid and secrets.compare_digest(
+            str(approval.get("spec_sha256", "")), str(sdb.get("spec", {}).get("sha256", ""))
+        )
+    return valid
 
 
 def consume_approval(approval: dict, token: str) -> bool:
@@ -63,10 +94,19 @@ def consume_approval(approval: dict, token: str) -> bool:
 
 def validate_execution(plan: dict, approval: dict) -> bool:
     """Require a consumed approval matching the persisted plan exactly."""
-    return (
+    valid = (
         approval.get("status") == "consumed"
         and secrets.compare_digest(
             approval.get("arguments_sha256", ""),
             arguments_digest(plan.get("tool"), plan.get("arguments", {})),
         )
     )
+    sdb = plan.get("sdb")
+    if isinstance(sdb, dict):
+        valid = valid and secrets.compare_digest(
+            approval.get("sdb_sha256", ""), canonical_sdb_digest(sdb)
+        )
+        valid = valid and secrets.compare_digest(
+            str(approval.get("spec_sha256", "")), str(sdb.get("spec", {}).get("sha256", ""))
+        )
+    return valid

@@ -23,19 +23,32 @@ def is_recoverable(thread: InternalChatThread) -> bool:
     return bool((thread.assistant_state or {}).get("recoverable"))
 
 
-def claim_execution(session: Session, thread: InternalChatThread) -> bool:
+def claim_execution(
+    session: Session, thread: InternalChatThread, *, active_run_id: str | None = None
+) -> bool:
     """Claim a persisted pending execution exactly once for recovery."""
     claimed = session.execute(
         text("""
             UPDATE internal_chat_threads
             SET assistant_state = jsonb_set(assistant_state, '{execution_status}', '"running"'::jsonb)
             WHERE id = :thread_id
+              AND (CAST(:active_run_id AS VARCHAR) IS NULL OR active_run_id = :active_run_id)
               AND assistant_state #>> '{execution_status}' = 'pending'
             RETURNING id
         """),
-        {"thread_id": thread.id},
+        {"thread_id": thread.id, "active_run_id": active_run_id or thread.active_run_id},
     ).scalar_one_or_none()
     if claimed is None:
         return False
     session.refresh(thread)
     return True
+
+
+def resumable_sdb_tasks(tasks: list[dict], checkpoints: list[dict]) -> list[dict]:
+    """Return only tasks without a successful persisted checkpoint."""
+    completed = {
+        checkpoint.get("task_id")
+        for checkpoint in checkpoints
+        if checkpoint.get("status") == "completed" and checkpoint.get("task_id")
+    }
+    return [task for task in tasks if task.get("id") not in completed]

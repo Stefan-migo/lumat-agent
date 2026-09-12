@@ -8,12 +8,12 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.chat.assistant.graph import run_assistant
-from app.chat.assistant.approval import validate_approval
+from app.chat.assistant.approval import canonical_sdb_digest, issue_approval, validate_approval
 from app.chat.assistant.nodes import execute
 from app.chat.assistant import nodes as assistant_nodes
 from app.chat.assistant.attachments import prepare_attachment_context
 from app.chat.assistant.state import COMPACTION_RETENTION_TOKENS, COMPACTION_THRESHOLD_TOKENS, INJECTION_TOKEN_BUDGET, estimate_tokens
-from app.chat.assistant.recovery import claim_execution, recover_events
+from app.chat.assistant.recovery import claim_execution, recover_events, resumable_sdb_tasks
 from app.models import AssistantAttachment, InternalChatMessage, InternalChatThread, User
 from app.services.audit import record_audit
 from app.services.realtime import stage_event
@@ -22,6 +22,34 @@ from app.services import tukulpan
 
 SDB_EVENT_LIMIT = 4 * 1024
 SDB_EVENT_HISTORY_LIMIT = 64
+
+
+def _sdb_plan(spec: dict, tasks: list[dict]) -> dict:
+    return {"phase": "EXECUTE", "spec": spec, "tasks": tasks}
+
+
+def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str) -> dict:
+    """Report the approved task plan without fabricating execution results.
+
+    The native per-task executor is not implemented, so tasks stay
+    not-implemented and never write a completed checkpoint. Resume therefore
+    cannot skip work that never produced a result.
+    """
+    sdb = (thread.assistant_state or {}).get("sdb") or {}
+    plan = thread.current_plan or {}
+    pending = resumable_sdb_tasks(plan.get("sdb", {}).get("tasks", []), sdb.get("checkpoints", []))
+    results = []
+    for offset, task in enumerate(pending, start=len(sdb.get("checkpoints", [])) + 1):
+        result = {"task_id": task["id"], "status": "not-implemented"}
+        checkpoint = {"sequence": offset, "task_id": task["id"], "status": "not-implemented"}
+        persist_sdb_state(
+            session, thread, run_id=run_id, phase="EXECUTE",
+            checkpoint=checkpoint,
+            events=[{"type": "task-not-implemented", "run_id": run_id, "sequence": offset, "task_id": task["id"]}],
+            results=[result],
+        )
+        results.append(result)
+    return {"results": results, "status": "not-implemented"}
 
 
 def thread_dict(thread: InternalChatThread) -> dict:
@@ -76,6 +104,8 @@ def persist_sdb_state(
         for event in ordered_events
     ]
     sdb.update({"run_id": run_id, "phase": phase, "checkpoints": checkpoints})
+    if spec is not None:
+        sdb["spec_ref"] = {"sha256": spec.get("sha256"), "canonical_sha256": canonical_sdb_digest({"spec": spec, "tasks": [], "phase": phase})}
     thread.assistant_state = {**state, "sdb": sdb, "events": bounded_events}
     if spec is not None:
         tukulpan.persist_sdb_artifact(
@@ -286,6 +316,11 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
         )
         thread.active_run_id = run_id
         thread.current_plan = result.get("plan")
+        if result.get("sdb_phase"):
+            thread.current_plan = _sdb_plan(result["sdb_spec"], result.get("sdb_tasks", []))
+            thread.current_plan["sdb"] = dict(thread.current_plan)
+            thread.current_plan.update({"tool": None, "arguments": {}, "requires_approval": True})
+            result["approval"] = issue_approval(thread.current_plan)
         thread.assistant_state = {
             "stage": result.get("status", "completed"),
             "recoverable": True,
@@ -427,7 +462,12 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
     session.flush()
     if not claim_execution(session, thread):
         return None
-    result = execute({
+    if plan.get("sdb"):
+        result = _run_sdb_tasks(session, thread, run_id)
+        result["response"] = "SDB execution is not implemented; no task was executed."
+        result["evidence"] = [{"route": "sdb", "phase": "DELIVER", "status": "degraded"}]
+    else:
+        result = execute({
         "thread_id": thread.id,
         "run_id": run_id,
         "content": message.content,
@@ -436,7 +476,7 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
         "session": session,
         "actor": user.username,
         "request_message_id": message.id,
-    })
+        })
     message.status = "processed"
     message.completed_at = datetime.now(timezone.utc)
     thread.assistant_state = {**thread.assistant_state, "stage": "completed", "execution_status": "completed"}
@@ -460,7 +500,7 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
 def resume_thread(session: Session, thread: InternalChatThread, user: User) -> bool:
     """Resume a persisted execution after interruption, with an atomic claim."""
     state = thread.assistant_state or {}
-    if state.get("stage") != "executing" or not claim_execution(session, thread):
+    if state.get("stage") != "executing" or not claim_execution(session, thread, active_run_id=thread.active_run_id):
         return False
     run_id = thread.active_run_id
     if not run_id:
@@ -474,7 +514,12 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
     )
     if message is None:
         return False
-    result = execute({
+    if (thread.current_plan or {}).get("sdb"):
+        result = _run_sdb_tasks(session, thread, run_id)
+        result["response"] = "SDB execution is not implemented; no task was executed."
+        result["evidence"] = [{"route": "sdb", "phase": "DELIVER", "status": "degraded"}]
+    else:
+        result = execute({
         "thread_id": thread.id,
         "run_id": run_id,
         "content": message.content,
@@ -483,7 +528,7 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
         "session": session,
         "actor": user.username,
         "request_message_id": message.id,
-    })
+        })
     message.status = "processed"
     message.completed_at = datetime.now(timezone.utc)
     thread.assistant_state = {**thread.assistant_state, "stage": "completed", "execution_status": "completed"}
