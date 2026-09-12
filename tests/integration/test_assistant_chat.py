@@ -14,7 +14,7 @@ from app.chat.assistant.approval import (
     validate_approval,
     validate_execution,
 )
-from app.models import InternalChatMessage, InternalChatThread, User
+from app.models import InternalChatMessage, InternalChatThread, Message, User
 from app.services.users import hash_password
 @pytest.fixture(autouse=True)
 def assistant_client(monkeypatch):
@@ -188,6 +188,10 @@ def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatc
     _user("assistant-usage", "admin")
     _login(client, "assistant-usage")
     thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    monkeypatch.setattr(
+        "app.services.llm.get_settings",
+        lambda: SimpleNamespace(assistant_chat_model="gpt-4o-mini"),
+    )
     planner = SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
             "kind": "respond", "arguments": {}, "summary": "planned", "requires_approval": False,
@@ -212,6 +216,13 @@ def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatc
     metadata = result.json()["message"]["assistant_metadata"]
     assert set(metadata["cost_calls"]) == {metadata["run_id"] + ":planner", metadata["run_id"] + ":response"}
     assert metadata["cost_calls"][metadata["run_id"] + ":planner"]["prompt_tokens"] == 10
+    response_call = metadata["cost_calls"][metadata["run_id"] + ":response"]
+    assert response_call["prompt_tokens"] == 20
+    assert response_call["completion_tokens"] == 7
+    assert response_call["cost"] == pytest.approx(0.0000072)
+    with SessionLocal() as session:
+        request = session.get(InternalChatMessage, result.json()["message"]["id"])
+        assert float(request.cost_llm) == pytest.approx(0.000012)
 
 
 def test_stream_disconnect_keeps_known_usage_and_failed_request(client, monkeypatch):
@@ -340,3 +351,49 @@ def test_recovery_resumes_pending_execution_once():
         assert resume_thread(session, thread, user) is True
         session.commit()
         assert resume_thread(session, thread, user) is False
+
+
+def test_rejected_approval_only_leaves_planner_cost_and_preserves_whatsapp_totals(client):
+    _user("assistant-denied-cost", "admin")
+    _login(client, "assistant-denied-cost")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    pending = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"})
+    assert pending.status_code == 201
+    metadata = pending.json()["message"]["assistant_metadata"]
+
+    rejected = client.post(
+        f"/panel/api/chat/threads/{thread_id}/approval",
+        json={"run_id": metadata["run_id"], "token": metadata["approval"]["token"], "reject": True},
+    )
+
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+    with SessionLocal() as session:
+        request = session.scalar(select(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id, InternalChatMessage.author == "admin"))
+        assert list((request.assistant_metadata or {}).get("cost_calls", {})) == [metadata["run_id"] + ":planner"]
+        assert session.query(Message).count() == 0
+
+
+def test_expired_approval_cannot_add_execution_cost(client):
+    _user("assistant-expired-cost", "admin")
+    _login(client, "assistant-expired-cost")
+    thread_id = client.post(f"/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    pending = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"})
+    metadata = pending.json()["message"]["assistant_metadata"]
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        thread.assistant_state = {
+            **thread.assistant_state,
+            "approval": {
+                **thread.assistant_state["approval"],
+                "expires_at": (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
+            },
+        }
+        session.commit()
+
+    response = client.post(f"/panel/api/chat/threads/{thread_id}/approval", json={"run_id": metadata["run_id"], "token": metadata["approval"]["token"]})
+
+    assert response.status_code == 409
+    with SessionLocal() as session:
+        request = session.scalar(select(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id, InternalChatMessage.author == "admin"))
+        assert list((request.assistant_metadata or {}).get("cost_calls", {})) == [metadata["run_id"] + ":planner"]

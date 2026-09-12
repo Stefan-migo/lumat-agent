@@ -181,3 +181,29 @@ def test_conservative_directive_is_added_to_planner_user_prompt(monkeypatch):
     })
 
     assert "Answer concisely" in calls[0]["messages"][-1]["content"]
+
+
+def test_denied_approval_keeps_completed_planner_cost_but_never_executes(monkeypatch):
+    calls = []
+    monkeypatch.setattr("app.chat.assistant.nodes.record_llm_cost", lambda *args, **kwargs: calls.append(kwargs))
+    plan = {"kind": "tool", "tool": "automation.create_rule", "arguments": _rule_args(), "requires_approval": True}
+    approval = issue_approval(plan)
+
+    with pytest.raises(PermissionError):
+        execute({"thread_id": 7, "run_id": "run-denied", "plan": plan, "approval": {**approval, "status": "rejected"}, "session": SimpleNamespace(add=lambda entry: None), "evidence": []})
+
+    assert calls == []
+
+
+def test_alerts_are_emitted_for_each_scope(monkeypatch):
+    alerts = []
+    monkeypatch.setattr("app.chat.assistant.nodes.internal_thread_cost_state", lambda *args: (80.0, "conservative"))
+    monkeypatch.setattr("app.chat.assistant.nodes.daily_cost_state", lambda *args: (80.0, "conservative"))
+    monkeypatch.setattr("app.chat.assistant.nodes.internal_thread_spend", lambda *args: 1.0)
+    monkeypatch.setattr("app.chat.assistant.nodes.daily_spend", lambda *args: 2.0)
+    monkeypatch.setattr("app.chat.assistant.nodes.maybe_alert_owner", lambda *args, **kwargs: alerts.append(kwargs))
+
+    result = panel_cost_gate({"thread_id": 7, "session": SimpleNamespace()})
+
+    assert result["cost_mode"] == "conservative"
+    assert {alert["scope"] for alert in alerts} == {"conversation", "daily"}

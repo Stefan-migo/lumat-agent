@@ -24,14 +24,32 @@ The system MUST restrict internal agent chat to the owner/admin authorization bo
 
 ### Requirement: IAC-2 — Context Boundary
 
-The agent MUST use the separate `AssistantState` graph for panel requests, with only declared typed tools and admin authorization. It MUST assemble history-aware turns from the durable thread while persisting plan, approval, execution, and evidence metadata in the existing thread boundary, and MUST NOT couple to WhatsApp state.
-(Previously: the graph used declared typed tools but did not consume durable thread history for planning or response context.)
+The agent MUST use the separate `AssistantState` graph for panel requests, with only declared typed tools and admin authorization. It MUST assemble history-aware turns from the durable thread, persist plan, approval, execution, evidence, and cost diagnostics in the existing thread boundary, and MUST NOT couple to WhatsApp state. A deterministic cost gate MUST run after `assemble_context` and before `plan_llm`, using the configured internal-thread and global UTC-day limits. It MUST allow `normal`, apply a concise directive while allowing LLM use in `conservative`, and return a deterministic persisted internal reply in `blocked` without any LLM call or operator lockout.
+(Previously: the panel graph assembled durable context but had no panel cost measurement or pre-planner cost gate.)
 
 #### Scenario: History-aware assistant response
 
 - GIVEN an authorized administrator submits a panel request
 - WHEN the assistant processes it
-- THEN the response uses the bounded thread context and all assistant metadata is persisted in that thread with evidence
+- THEN the response uses bounded thread context and assistant metadata, usage, and measured cost are persisted on the request message
+
+#### Scenario: Conservative mode
+
+- GIVEN a thread or UTC-day spend reaches its configured conservative threshold
+- WHEN an authorized administrator submits a request
+- THEN the assistant uses a concise directive, may call the LLM, and persists the selected mode and resulting usage diagnostics
+
+#### Scenario: Blocked mode
+
+- GIVEN a thread or UTC-day spend reaches its configured blocking limit
+- WHEN an authorized administrator submits a request
+- THEN a deterministic canned reply is persisted as an internal response, no LLM node is called, and panel access remains available
+
+#### Scenario: Unknown pricing or usage
+
+- GIVEN a completed planner or streamed response call has unknown model pricing or absent usage
+- WHEN its usage is recorded
+- THEN `cost_llm` records zero for that call and a diagnostic identifies the missing pricing or usage without fabricating tokens or cost
 
 #### Scenario: Operator denied
 
@@ -41,7 +59,7 @@ The agent MUST use the separate `AssistantState` graph for panel requests, with 
 
 ### Requirement: IAC-3 — Panel States
 
-The panel MUST render loading, empty, planning, approval-pending, streaming, success, and error states without losing persisted messages or recoverable assistant metadata.
+The panel MUST render loading, empty, planning, approval-pending, streaming, success, blocked, and error states without losing persisted messages or recoverable assistant metadata. A blocked result MUST be represented as a completed internal assistant reply and MUST NOT be represented as operator lockout or customer-facing escalation.
 
 #### Scenario: Approval recovery
 - GIVEN a persisted plan awaits approval
@@ -53,6 +71,12 @@ The panel MUST render loading, empty, planning, approval-pending, streaming, suc
 - GIVEN a message request is processing
 - WHEN the response fails
 - THEN the error is actionable and the submitted message remains recoverable
+
+#### Scenario: Blocked recovery
+
+- GIVEN a cost gate returns blocked
+- WHEN the administrator reloads the thread
+- THEN the canned assistant reply and completed/degraded state remain persisted and visible
 
 #### Scenario: Stream failure
 - GIVEN an SSE stream fails after a run starts

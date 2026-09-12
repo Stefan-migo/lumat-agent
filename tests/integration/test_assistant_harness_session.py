@@ -103,3 +103,17 @@ def test_graph_preserves_failed_compaction_as_degraded_evidence():
 def test_reconnect_uses_persisted_events_as_authority():
     thread = SimpleNamespace(assistant_state={"events": [{"run_id": "r", "sequence": 0, "type": "status"}]})
     assert stream_events(None, thread, "r") == thread.assistant_state["events"]
+
+
+def test_blocked_state_is_persisted_as_completed_and_recoverable():
+    state = {
+        "stage": "completed",
+        "recoverable": True,
+        "cost_mode": "blocked",
+        "events": [{"type": "response", "content": "limit reached"}],
+    }
+    thread = SimpleNamespace(assistant_state=state)
+
+    assert thread.assistant_state["stage"] == "completed"
+    assert thread.assistant_state["recoverable"] is True
+    assert thread.assistant_state["cost_mode"] == "blocked"
