@@ -90,6 +90,11 @@ class AssistantState(TypedDict, total=False):
     sdb_phase: Literal["CLARIFY", "SPEC", "PLAN", "APPROVE", "EXECUTE", "VERIFY", "DELIVER"]
     sdb_route: Literal["normal", "sdb"]
     sdb_rejection: str | None
+    sdb_scope: dict
+    sdb_spec: dict
+    sdb_tasks: list[dict]
+    sdb_result: dict
+    verification: dict
 
 
 def normalize_sdb_trigger(signal: object) -> dict[str, str | None]:

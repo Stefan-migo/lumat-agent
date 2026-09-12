@@ -22,8 +22,8 @@ All units keep tests with code. Integration command: `DATABASE_URL='postgresql+p
 
 ## Phase 2: Native Execution
 
-- [ ] WU-2 RED: add `tests/spec/test_sdb_phases.py` for ordered phases, scope freeze, `scope-not-found` vs `not-exist`, one output contract, and bounded output (SDB-1/2/3).
-- [ ] WU-2 GREEN: implement phase nodes and routing in `app/chat/assistant/nodes.py` and `graph.py`; freeze SPEC before PLAN and return terminal evidence.
+- [x] WU-2 RED: add `tests/spec/test_sdb_phases.py` for ordered phases, scope freeze, `scope-not-found` vs `not-exist`, one output contract, and bounded output (SDB-1/2/3).
+- [x] WU-2 GREEN: implement phase nodes and routing in `app/chat/assistant/nodes.py` and `graph.py`; freeze SPEC before PLAN and return terminal evidence.
 
 ## Phase 3: Persistence and Recovery
 

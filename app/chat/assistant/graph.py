@@ -11,6 +11,13 @@ from app.chat.assistant.nodes import (
     guardrails,
     panel_cost_gate,
     plan_llm,
+    sdb_approve,
+    sdb_clarify,
+    sdb_deliver,
+    sdb_execute,
+    sdb_plan,
+    sdb_spec,
+    sdb_verify,
 )
 from app.chat.assistant.state import AssistantState, normalize_sdb_trigger
 
@@ -40,7 +47,7 @@ def sdb_trigger_gate(state: AssistantState) -> AssistantState:
 
 
 def _after_sdb_trigger_gate(state: AssistantState) -> str:
-    return "evidence" if state.get("sdb_route") == "sdb" else "guardrails"
+    return "sdb_clarify" if state.get("sdb_route") == "sdb" else "guardrails"
 
 
 def _after_guardrails(state: AssistantState) -> str:
@@ -53,12 +60,23 @@ def _after_cost_gate(state: AssistantState) -> str:
     return "evidence" if state.get("cost_mode") == "blocked" else "plan_llm"
 
 
+def _after_sdb_approve(state: AssistantState) -> str:
+    return "sdb_execute" if (state.get("approval") or {}).get("status") == "approved" else END
+
+
 def build_assistant_graph():
     builder = StateGraph(AssistantState)
     builder.add_node("assemble_context", assemble_context_node)
     builder.add_node("panel_cost_gate", panel_cost_gate)
     builder.add_node("plan_llm", plan_llm)
     builder.add_node("sdb_trigger_gate", sdb_trigger_gate)
+    builder.add_node("sdb_clarify", sdb_clarify)
+    builder.add_node("sdb_spec", sdb_spec)
+    builder.add_node("sdb_plan", sdb_plan)
+    builder.add_node("sdb_approve", sdb_approve)
+    builder.add_node("sdb_execute", sdb_execute)
+    builder.add_node("sdb_verify", sdb_verify)
+    builder.add_node("sdb_deliver", sdb_deliver)
     builder.add_node("guardrails", guardrails)
     builder.add_node("execute_tool", execute)
     builder.add_node("respond_stream", execute)
@@ -69,8 +87,15 @@ def build_assistant_graph():
     builder.add_edge("plan_llm", "sdb_trigger_gate")
     builder.add_conditional_edges(
         "sdb_trigger_gate", _after_sdb_trigger_gate,
-        {"guardrails": "guardrails", "evidence": "evidence"},
+        {"guardrails": "guardrails", "sdb_clarify": "sdb_clarify"},
     )
+    builder.add_edge("sdb_clarify", "sdb_spec")
+    builder.add_edge("sdb_spec", "sdb_plan")
+    builder.add_edge("sdb_plan", "sdb_approve")
+    builder.add_conditional_edges("sdb_approve", _after_sdb_approve, {"sdb_execute": "sdb_execute", END: END})
+    builder.add_edge("sdb_execute", "sdb_verify")
+    builder.add_edge("sdb_verify", "sdb_deliver")
+    builder.add_edge("sdb_deliver", "evidence")
     builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "respond_stream": "respond_stream", END: END})
     builder.add_edge("execute_tool", "evidence")
     builder.add_edge("respond_stream", "evidence")
