@@ -8,43 +8,57 @@ Provide an admin-only, durable operations assistant with visible planning, exact
 
 ### Requirement: AO-1 — Durable Assistant Graph
 
-The system MUST run a separate LangGraph `AssistantState` for panel requests, with context assembly, structured planning, approval, execution, and evidence stages. It MUST persist assembled-turn state and plan metadata using `InternalChatThread`, recover from DB state without duplicate execution, and MUST NOT couple to WhatsApp state.
-(Previously: the graph had planner, approval, execution, and evidence stages but no durable history-aware context assembly.)
+The system MUST run the separate durable panel `AssistantState` graph for normal requests and native SDB requests. It MUST persist bounded context, normalized trigger, phase, SPEC reference, checkpoints, plan, and evidence in the existing thread boundary, recover from DB state without duplicate execution, and MUST NOT couple to WhatsApp state.
+(Previously: the graph persisted normal planner, approval, execution, and evidence state but had no SDB phase state.)
 
 #### Scenario: Contextual plan is persisted
+
 - GIVEN an authorized administrator submits an assistant request
 - WHEN planning completes
 - THEN bounded context, structured plan, and thread state are persisted and exposed
 
+#### Scenario: SDB phase state is persisted
+
+- GIVEN a valid SDB trigger enters the native branch
+- WHEN a phase or task completes
+- THEN the current phase, bounded SPEC reference, checkpoint, and evidence are durable
+
 #### Scenario: Recovery after interruption
-- GIVEN a persisted plan or execution is interrupted
+
+- GIVEN a persisted plan or SDB checkpoint is interrupted
 - WHEN the administrator reloads the thread
-- THEN the assistant resumes or reports the durable recoverable state without duplicating execution
+- THEN the assistant resumes from durable state without duplicating completed work
 
 ### Requirement: AO-2 — Exact-Argument Approval
 
-Every write MUST require server-validated approval bound to the exact tool name and serialized arguments. The server MUST reject replayed, altered, expired, or client-only approvals.
+Every write, including SDB execution, MUST require server-validated approval bound to the exact canonical tool or phase/task plan and serialized arguments. The server MUST reject replayed, altered, expired, or client-only approvals.
+(Previously: approval was bound only to a tool name and serialized arguments.)
 
-#### Scenario: Approved write executes once
-- GIVEN a pending write plan with exact arguments
+#### Scenario: Approved SDB execution
+
+- GIVEN a pending SDB plan with an exact canonical phase/task payload
 - WHEN an administrator approves that plan
-- THEN only those arguments execute once and the approval is durably consumed
+- THEN only that payload executes once and approval is durably consumed
 
 #### Scenario: Tampering is rejected
-- GIVEN an approval whose tool or arguments differ from the persisted plan
+
+- GIVEN an approval whose plan, SPEC digest, or arguments differ from persisted state
 - WHEN execution is requested
 - THEN the server rejects it and performs no write
 
 ### Requirement: AO-3 — Admin SSE and Audit
 
-The system MUST expose admin-only SSE for ordered plan, approval, tool, evidence, status, and error events. Every tool execution MUST record `record_audit`; streams MUST NOT hold an unbounded transaction.
+The system MUST expose admin-only ordered events for SDB phases, checkpoints, approval, task execution, verification, evidence, delivery, and errors. Every execution MUST record `record_audit`; streams MUST NOT hold an unbounded transaction.
+(Previously: events covered plan, approval, tool, evidence, status, and error but not SDB phases or checkpoints.)
 
-#### Scenario: Evidence streams
-- GIVEN an authorized assistant run
-- WHEN tool execution produces a result
-- THEN ordered SSE events identify the run and return evidence, while the execution audit is persisted
+#### Scenario: SDB evidence streams
+
+- GIVEN an authorized SDB run
+- WHEN a task produces output
+- THEN ordered events identify the run/task and evidence, while execution audit is persisted
 
 #### Scenario: Unauthorized stream
-- GIVEN an authenticated operador requests the assistant stream
+
+- GIVEN an authenticated operador requests an SDB stream
 - WHEN authorization is checked
-- THEN access is rejected and no thread, plan, tool, or evidence data is sent
+- THEN access is rejected and no SDB data is sent

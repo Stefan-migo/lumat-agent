@@ -24,64 +24,43 @@ The system MUST restrict internal agent chat to the owner/admin authorization bo
 
 ### Requirement: IAC-2 — Context Boundary
 
-The agent MUST use the separate `AssistantState` graph for panel requests, with only declared typed tools and admin authorization. It MUST assemble history-aware turns from the durable thread, persist plan, approval, execution, evidence, and cost diagnostics in the existing thread boundary, and MUST NOT couple to WhatsApp state. A deterministic cost gate MUST run after `assemble_context` and before `plan_llm`, using the configured internal-thread and global UTC-day limits. It MUST allow `normal`, apply a concise directive while allowing LLM use in `conservative`, and return a deterministic persisted internal reply in `blocked` without any LLM call or operator lockout.
-(Previously: the panel graph assembled durable context but had no panel cost measurement or pre-planner cost gate.)
+The agent MUST use the separate `AssistantState` graph for panel requests, with only declared typed tools and admin authorization. It MUST assemble history-aware turns from the durable thread, persist normal or SDB plan state, approval, execution, evidence, cost diagnostics, phase, and checkpoints in the existing thread boundary, and MUST NOT couple to WhatsApp state. The deterministic cost gate MUST retain its current behavior before planning.
+(Previously: the boundary persisted normal assistant state but did not include SDB phase and checkpoint state.)
 
 #### Scenario: History-aware assistant response
 
 - GIVEN an authorized administrator submits a panel request
 - WHEN the assistant processes it
-- THEN the response uses bounded thread context and assistant metadata, usage, and measured cost are persisted on the request message
+- THEN bounded thread context and assistant metadata, usage, and cost are persisted
 
-#### Scenario: Conservative mode
+#### Scenario: Durable SDB context
 
-- GIVEN a thread or UTC-day spend reaches its configured conservative threshold
-- WHEN an authorized administrator submits a request
-- THEN the assistant uses a concise directive, may call the LLM, and persists the selected mode and resulting usage diagnostics
+- GIVEN an authorized administrator starts a valid SDB run
+- WHEN a phase transition occurs
+- THEN phase, frozen scope reference, current task, and checkpoint sequence persist in the thread
 
 #### Scenario: Blocked mode
 
-- GIVEN a thread or UTC-day spend reaches its configured blocking limit
-- WHEN an authorized administrator submits a request
-- THEN a deterministic canned reply is persisted as an internal response, no LLM node is called, and panel access remains available
-
-#### Scenario: Unknown pricing or usage
-
-- GIVEN a completed planner or streamed response call has unknown model pricing or absent usage
-- WHEN its usage is recorded
-- THEN `cost_llm` records zero for that call and a diagnostic identifies the missing pricing or usage without fabricating tokens or cost
-
-#### Scenario: Operator denied
-
-- GIVEN an authenticated operador requests assistant data or a tool
-- WHEN authorization is evaluated
-- THEN no thread, tool, or evidence data is exposed
+- GIVEN a thread or UTC-day spend reaches its blocking limit
+- WHEN an administrator submits a request
+- THEN a deterministic reply is persisted, no LLM node is called, and panel access remains available
 
 ### Requirement: IAC-3 — Panel States
 
-The panel MUST render loading, empty, planning, approval-pending, streaming, success, blocked, and error states without losing persisted messages or recoverable assistant metadata. A blocked result MUST be represented as a completed internal assistant reply and MUST NOT be represented as operator lockout or customer-facing escalation.
+The panel MUST render normal and SDB loading, planning, approval-pending, phase, checkpoint, verification, delivery, blocked, success, and error states without losing persisted messages or recoverable assistant metadata. A blocked result MUST remain a completed internal reply.
+(Previously: panel states covered ordinary assistant lifecycle states only.)
 
-#### Scenario: Approval recovery
-- GIVEN a persisted plan awaits approval
+#### Scenario: SDB recovery
+
+- GIVEN a persisted SDB run is paused at approval or a checkpoint
 - WHEN the administrator reloads the thread
-- THEN the approval state and exact proposed action remain visible
-
-#### Scenario: Processing recovery
-
-- GIVEN a message request is processing
-- WHEN the response fails
-- THEN the error is actionable and the submitted message remains recoverable
-
-#### Scenario: Blocked recovery
-
-- GIVEN a cost gate returns blocked
-- WHEN the administrator reloads the thread
-- THEN the canned assistant reply and completed/degraded state remain persisted and visible
+- THEN the phase, approval state, and next recoverable action remain visible
 
 #### Scenario: Stream failure
-- GIVEN an SSE stream fails after a run starts
+
+- GIVEN an SSE stream fails after an SDB phase starts
 - WHEN the panel reconnects or reloads
-- THEN persisted state is authoritative and no partial response is treated as complete
+- THEN persisted state is authoritative and no partial phase is treated as complete
 
 ### Requirement: IAC-4 — Conversation Surface Presentation
 

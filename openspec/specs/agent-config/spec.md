@@ -103,24 +103,22 @@ Extraction MUST keep `CANNOT_ANSWER_REPLY` importable from `app.chat.nodes.respo
 - WHEN extraction is applied
 - THEN both imports resolve with unchanged values
 
-## Boundary
-
-Deterministic gates and canned replies stay in code; the registry remains data-only (enforcement at the orchestrator dispatch boundary per AO-2/AO-6/AO-7, defined in the `agent-orchestration` capability). Web/ out of scope.
-
 ### Requirement: AC-9 — Assistant Runtime Configuration
 
-The system MUST provide existence-validated assistant registry, personas, prompts, and declared tool capabilities under `agent/` for read-only runtime consumption. Startup MUST fail clearly for missing references, while reference-only skills remain non-executable.
-(Previously: configuration was validated and exposed to consumers, but the panel harness did not consume its assistant persona and prompt set.)
+The system MUST provide existence-validated assistant registry, personas, prompts, declared tool capabilities, and structured SDB classification under `agent/` for read-only runtime consumption. Startup MUST fail clearly for missing or invalid references; reference-only skills remain non-executable.
+(Previously: runtime configuration validated prompts, personas, and tools but did not declare structured SDB classification.)
 
 #### Scenario: Complete configuration loads
-- GIVEN registry entries reference existing personas, prompts, and declared tools
+
+- GIVEN registry entries reference existing runtime files and a valid SDB declaration
 - WHEN configuration loads for a panel turn
 - THEN the validated read-only assistant configuration is available to the harness
 
-#### Scenario: Missing runtime reference
-- GIVEN a required persona or prompt reference is missing
+#### Scenario: Missing or invalid runtime reference
+
+- GIVEN a required prompt, persona, tool declaration, or SDB classification is invalid
 - WHEN configuration loads
-- THEN validation reports the missing reference and prevents an invalid assistant from starting
+- THEN validation reports the defect and prevents an invalid assistant from starting
 
 ### Requirement: AC-10 — Read-Only Capability View
 
@@ -135,3 +133,31 @@ The panel API MUST expose an authenticated, read-only view of active assistant t
 - GIVEN an authenticated operador requests the capability view
 - WHEN authorization is checked
 - THEN the API returns an authorization error and no configuration data
+
+### Requirement: AC-11 — Structured SDB Classification Declaration
+
+The assistant configuration MUST declare the structured planner fields and allowed values required to distinguish an SDB request from ordinary `tool`, `respond`, or non-SDB complex work. The declaration MUST be read-only, schema-validated at startup, and MUST NOT infer SDB from arbitrary tool text.
+
+#### Scenario: Valid classification declaration
+
+- GIVEN the registry and planner contract declare the SDB classification shape
+- WHEN configuration loads
+- THEN the harness can validate and normalize an SDB trigger
+
+#### Scenario: Malformed declaration
+
+- GIVEN the SDB classification declaration is malformed or incomplete
+- WHEN startup validation runs
+- THEN configuration fails deterministically and no ambiguous SDB route is enabled
+
+#### Scenario: Ordinary complex request
+
+- GIVEN a planner returns a valid non-SDB complex result
+- WHEN the harness evaluates it
+- THEN it remains on ordinary safe routing
+
+## MODIFIED Requirements
+
+## Boundary
+
+Deterministic gates and canned replies stay in code; the registry remains data-only (enforcement at the orchestrator dispatch boundary per AO-2/AO-6/AO-7, defined in the `agent-orchestration` capability). Web/ out of scope.
