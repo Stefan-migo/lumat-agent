@@ -95,9 +95,18 @@ def persist_sdb_state(
     sdb = dict(state.get("sdb") or {})
     checkpoints = [*sdb.get("checkpoints", []), checkpoint]
     existing_events = list(state.get("events") or [])
-    ordered_events = sorted(
-        [*existing_events, *events], key=lambda event: event.get("sequence", 0)
-    )[-SDB_EVENT_HISTORY_LIMIT:]
+    ordered_events = []
+    seen_events = set()
+    for event in [*existing_events, *events]:
+        identity = json.dumps(event, sort_keys=True, ensure_ascii=False)
+        if identity in seen_events:
+            continue
+        seen_events.add(identity)
+        event = dict(event)
+        if ordered_events and event.get("sequence", 0) <= ordered_events[-1].get("sequence", 0):
+            event["sequence"] = ordered_events[-1]["sequence"] + 1
+        ordered_events.append(event)
+    ordered_events = ordered_events[-SDB_EVENT_HISTORY_LIMIT:]
     bounded_events = [
         event if len(json.dumps(event, ensure_ascii=False).encode()) <= SDB_EVENT_LIMIT
         else {"type": event.get("type", "sdb"), "sequence": event.get("sequence", 0), "truncated": True}
@@ -276,7 +285,15 @@ def create_thread(session: Session, user: User) -> InternalChatThread:
     return thread
 
 
-def submit_message(session: Session, thread: InternalChatThread, user: User, content: str, attachment_ids: list[int] | None = None) -> InternalChatMessage:
+def submit_message(
+    session: Session,
+    thread: InternalChatThread,
+    user: User,
+    content: str,
+    attachment_ids: list[int] | None = None,
+    *,
+    sdb_requested: bool | None = None,
+) -> InternalChatMessage:
     run_id = uuid4().hex
     message = InternalChatMessage(
         thread_id=thread.id,
@@ -310,6 +327,8 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             on_token=publish_token,
             session=session,
             actor=user.username,
+            actor_role=user.role.value,
+            sdb_requested=sdb_requested,
             attachments=attachments,
             context=context,
             compaction=compaction,
@@ -398,6 +417,17 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
 
 
 def _events_for(result: dict, thread_id: int, run_id: str) -> list[dict]:
+    if result.get("sdb_phase"):
+        phases = ["CLARIFY", "SPEC", "PLAN", "APPROVE"]
+        return [
+            {"type": "phase", "thread_id": thread_id, "run_id": run_id,
+             "sequence": sequence, "phase": phase}
+            for sequence, phase in enumerate(phases)
+        ] + [{
+            "type": "approval", "thread_id": thread_id, "run_id": run_id,
+            "sequence": len(phases), "approval": result.get("approval"),
+            "status": result.get("status"),
+        }]
     events = [
         {"type": "plan", "thread_id": thread_id, "run_id": run_id, "sequence": 0, "plan": result.get("plan", {})},
         {"type": "approval", "thread_id": thread_id, "run_id": run_id, "sequence": 1, "approval": result.get("approval"), "status": result.get("status")},

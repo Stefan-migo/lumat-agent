@@ -1,11 +1,11 @@
 # Apply Progress: Native SDB Seven-Phase Subgraph
 
 ## Work Unit
-- Unit: WU-4 (PR4 of 5, stacked-to-main)
-- Scope: Exact approval, atomic claims, and checkpoint resume only
-- Status: Complete; WU-5 remains pending
+- Unit: WU-5 (PR5 of 5, stacked-to-main)
+- Scope: Admin trigger, approval/resume, serialized SDB state, ordered SSE events, and API acceptance coverage
+- Status: Complete; all five work units are complete
 - Mode: Strict TDD
-- Delivery: auto-chain; current slice is the autonomous persistence boundary
+- Delivery: auto-chain; final stacked-to-main slice
 
 ## Completed Tasks
 - [x] WU-1 RED — trigger scenarios and threat-matrix tests
@@ -16,6 +16,8 @@
 - [x] WU-3 GREEN — one bounded Tukulpan SDB seam plus agent-chat JSONB/event persistence
 - [x] WU-4 RED — mutated SPEC/task-plan rejection, exact payload/expiry checks, atomic claim, checkpoint resume, and bounded digest tests
 - [x] WU-4 GREEN — canonical SDB approval digest, SPEC binding, active-run claim, approved execution wiring, and checkpoint-based task resume
+- [x] WU-5 RED — authenticated admin entry, operator stream rejection, ordered phase/evidence events, and SSE reconnect tests
+- [x] WU-5 GREEN — explicit admin trigger propagation, serialized SDB state, and deduplicated ordered SSE event replay
 
 ## TDD Cycle Evidence
 | Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
@@ -27,6 +29,8 @@
 | WU-3 RED | `tests/integration/test_sdb_persistence.py` | Integration | Existing assistant/memory suites not changed | 4 failed on missing seams | 4 passed | 6 passed incl. explicit propagation and per-task rows | One seam; bounded JSON and capped event history |
 | WU-4 RED | `tests/spec/test_sdb_recovery.py` | Unit | 28 related tests passed | Collection failed on missing `canonical_sdb_digest` | 5 passed | 5 scenarios plus failed-checkpoint triangulation | Stable canonical serializer and minimal recovery helpers |
 | WU-4 GREEN | `tests/spec/test_sdb_recovery.py` | Unit | 28 related tests passed | Existing RED retained | 5 passed | Stable ordering, expiry, failed checkpoint, and large-payload cases | Reused SHA-256/TTL approval and JSONB claim seam |
+| WU-5 RED | `tests/integration/test_sdb_api.py` | Integration | N/A (new) | Written; 3 failures before API trigger/event wiring | N/A | Admin, operator, event ordering, and reconnect cases | N/A |
+| WU-5 GREEN | `tests/integration/test_sdb_api.py` | Integration | Related suite post-GREEN: 43 passed | Existing RED retained | 4 passed | 4 API scenarios, including operator and reconnect paths | Event deduplication and monotonic sequence normalization; focused suite remained green |
 
 ## Work Unit Evidence
 - Focused: `DATABASE_URL='postgresql+psycopg://app:app@localhost:5435/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5435/lumat' uv run pytest tests/integration/test_sdb_persistence.py -q` — 6 passed.
@@ -39,12 +43,18 @@
 - Build/sanity: `uv run python -m compileall app` — passed; `git diff --check` — passed.
 - Runtime harness: focused unit harness uses an atomic fake session; real runtime boundary remains WU-5 API approval/SSE coverage. Related PostgreSQL persistence suite passed 23 tests.
 - Rollback boundary: revert `tests/spec/test_sdb_recovery.py`, `app/chat/assistant/approval.py`, `app/chat/assistant/recovery.py`, and the WU-4 sections of `app/services/agent_chat.py`; leave WU-1/WU-2/WU-3 behavior intact.
+- Focused: `DATABASE_URL='postgresql+psycopg://app:app@localhost:5435/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5435/lumat' uv run pytest tests/integration/test_sdb_api.py -q` — 4 passed.
+- Related: same environment, `uv run pytest tests/integration/test_assistant_chat.py tests/integration/test_agent_chat_realtime.py tests/spec/test_sdb_trigger.py tests/spec/test_sdb_phases.py tests/spec/test_sdb_recovery.py -q` — 43 passed.
+- Full PostgreSQL suite: same environment, `uv run pytest tests/` — timed out at 300 seconds after 68% progress; no failures were reported before timeout.
+- Build/sanity: `uv run python -m compileall app` — passed; `git diff --check` — passed.
+- Runtime harness: authenticated panel `TestClient` exercised admin trigger, approval, serialized thread state, ordered SSE replay, and operator rejection; 4 focused tests passed.
+- Rollback boundary: revert `tests/integration/test_sdb_api.py`, `app/panel/api/routes/chat.py`, `app/chat/assistant/graph.py`, and the WU-5 event-sequencing changes in `app/services/agent_chat.py`; leave WU-1–WU-4 behavior intact.
 
 ## Graph Check
-- Graph stale but usable at graph commit `636ed328`; semantic refresh was not requested and structural queries completed.
-- Nodes consulted: `approval.py`, `arguments_digest()`, `issue_approval()`, `validate_approval()`, `validate_execution()`, `recovery.py`, `claim_execution()`, `recover_events()`, `agent_chat.py`, `approve_plan()`, `resume_thread()`, `persist_sdb_state()`, `sdb_plan()`, `InternalChatThread`, and `test_sdb_state_writes_one_checkpoint_row_per_task_sequence()`.
-- Edges consulted: exact directed paths `approval.py -> recovery.py` and `agent_chat.py -> nodes.py` returned no directed path (graph warnings reported ambiguous matches); scoped queries connected `approve_plan()`/`resume_thread()` to `claim_execution()` and `persist_sdb_state()` to Tukulpan/JSONB persistence. The required initial paths were executed and recorded as no-directed-path results.
+- Graph checked from `graphify-out/GRAPH_REPORT.md` at commit `636ed328` before edits; post-edit `graphify --update` completed at session close and refreshed `graph.json` to 4704 nodes/9778 edges. Graphify reported non-blocking attribution warnings for excluded test/source files.
+- Nodes consulted: `chat.py`, `ChatMessageBody`, `submit_message()`, `run_assistant()`, `sdb_trigger_gate()`, `approve_plan()`, `resume_thread()`, `persist_sdb_state()`, `recover_events()`, `InternalChatThread`, `test_assistant_chat.py`, and `test_sdb_recovery.py`.
+- Edges consulted: `chat.py --imports--> approve_plan()`; scoped query connected `sdb_trigger_gate()` to `SDBTrigger`, `submit_message()` to `run_assistant()`, and `stream_events()` to `recover_events()`.
 
 ## Deviations and Issues
-- No design deviation. No migration, project registry, non-default project behavior, or API/SSE work was added; WU-4 intentionally wires approval at the existing agent-chat boundary and leaves API work to WU-5.
-- Full suite exceeded the 300-second execution limit at 59%; focused and related suites passed.
+- No design deviation. No migration, project registry, non-default project behavior, executor, runtime, or event bus was added.
+- Full suite exceeded the 300-second execution limit at 68%; focused and related suites passed.
