@@ -27,8 +27,8 @@ All units keep tests with code. Integration command: `DATABASE_URL='postgresql+p
 
 ## Phase 3: Persistence and Recovery
 
-- [ ] WU-3 RED: add `tests/integration/test_sdb_persistence.py` for PATTERN/SESSION/DISCOVERY rows, default/explicit `proyecto`, rejection before write, checkpoints, and bounded payloads (MEM-8/MEM-2, SDB-3).
-- [ ] WU-3 GREEN: add parameterized artifact/checkpoint seams in `app/services/tukulpan.py`; persist phase/state/events in `app/services/agent_chat.py` without migrations.
+- [x] WU-3 RED: add `tests/integration/test_sdb_persistence.py` for PATTERN/SESSION/DISCOVERY rows, default/explicit `proyecto`, rejection before write, checkpoints, and bounded payloads (MEM-8/MEM-2, SDB-3).
+- [x] WU-3 GREEN: add parameterized artifact/checkpoint seams in `app/services/tukulpan.py`; persist phase/state/events in `app/services/agent_chat.py` without migrations.
 - [ ] WU-4 RED: add `tests/spec/test_sdb_recovery.py` for mutated SPEC approval rejection, atomic active-run claims, and resume without repeating completed tasks (AO-2/3, SDB-4).
 - [ ] WU-4 GREEN: extend `app/chat/assistant/approval.py`, `app/chat/assistant/recovery.py`, and `agent_chat.py` with canonical SDB digests, phase-aware claims, and checkpoint resume.
 

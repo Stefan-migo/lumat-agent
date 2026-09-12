@@ -17,6 +17,11 @@ from app.chat.assistant.recovery import claim_execution, recover_events
 from app.models import AssistantAttachment, InternalChatMessage, InternalChatThread, User
 from app.services.audit import record_audit
 from app.services.realtime import stage_event
+from app.services import tukulpan
+
+
+SDB_EVENT_LIMIT = 4 * 1024
+SDB_EVENT_HISTORY_LIMIT = 64
 
 
 def thread_dict(thread: InternalChatThread) -> dict:
@@ -43,6 +48,51 @@ def flush_panel_session(session, thread_id: int, *, source_message_ids: list[int
         session, thread_id, source_message_ids=source_message_ids, recap=recap,
         source_tokens=source_tokens, truncated=truncated,
     )
+
+
+def persist_sdb_state(
+    session: Session,
+    thread: InternalChatThread,
+    *,
+    run_id: str,
+    phase: str,
+    checkpoint: dict,
+    events: list[dict],
+    spec: dict | None = None,
+    results: list[dict] | None = None,
+    proyecto: str = "default",
+) -> None:
+    """Persist bounded SDB state in JSONB and the canonical Tukulpan seam."""
+    state = dict(thread.assistant_state or {})
+    sdb = dict(state.get("sdb") or {})
+    checkpoints = [*sdb.get("checkpoints", []), checkpoint]
+    existing_events = list(state.get("events") or [])
+    ordered_events = sorted(
+        [*existing_events, *events], key=lambda event: event.get("sequence", 0)
+    )[-SDB_EVENT_HISTORY_LIMIT:]
+    bounded_events = [
+        event if len(json.dumps(event, ensure_ascii=False).encode()) <= SDB_EVENT_LIMIT
+        else {"type": event.get("type", "sdb"), "sequence": event.get("sequence", 0), "truncated": True}
+        for event in ordered_events
+    ]
+    sdb.update({"run_id": run_id, "phase": phase, "checkpoints": checkpoints})
+    thread.assistant_state = {**state, "sdb": sdb, "events": bounded_events}
+    if spec is not None:
+        tukulpan.persist_sdb_artifact(
+            session, thread_id=thread.id, run_id=run_id, kind="spec", payload=spec, proyecto=proyecto
+        )
+    sequence = checkpoint.get("sequence")
+    tukulpan.persist_sdb_artifact(
+        session, thread_id=thread.id, run_id=run_id, kind="state", sequence=sequence,
+        payload=checkpoint, proyecto=proyecto
+    )
+    for result in results or []:
+        task_id = result.get("task_id")
+        if task_id:
+            tukulpan.persist_sdb_artifact(
+                session, thread_id=thread.id, run_id=run_id, kind="result",
+                task_id=task_id, payload=result, proyecto=proyecto
+            )
 
 
 def compact_session(session, thread_id: int, messages: list, *, before_tokens: int) -> dict:
@@ -249,6 +299,17 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             "cost_directive": result.get("cost_directive", ""),
             "compaction": compaction,
         }
+        if result.get("sdb_phase"):
+            persist_sdb_state(
+                session,
+                thread,
+                run_id=run_id,
+                phase=result["sdb_phase"],
+                checkpoint={"sequence": 0, "phase": result["sdb_phase"]},
+                events=_events_for(result, thread.id, run_id),
+                spec=result.get("sdb_spec"),
+                results=(result.get("sdb_result") or {}).get("results", []),
+            )
         message.assistant_metadata = {
             **(message.assistant_metadata or {}),
             "run_id": run_id, "approval": result.get("approval"),

@@ -71,6 +71,7 @@ __all__ = [
     "persist_memory_session",
     "record_decision",
     "record_milestone",
+    "persist_sdb_artifact",
     "write_recap",
     "set_mark",
     "upsert",
@@ -80,6 +81,8 @@ __all__ = [
 # model-init or network failures, then a clear logged failure.
 EMBED_RETRIES = 2
 EMBED_BACKOFF_SECONDS = (0.1, 0.3)
+SDB_SPEC_LIMIT = 8 * 1024
+SDB_CHECKPOINT_LIMIT = 4 * 1024
 
 
 def _guard_writable_project(proyecto: str) -> None:
@@ -176,6 +179,7 @@ def record_milestone(
     topic_key: str,
     title: str,
     content: str,
+    proyecto: str = WRITABLE_PROYECTO,
 ) -> Memory:
     """Stage a panel milestone under the canonical memory contract."""
     return upsert(
@@ -186,6 +190,7 @@ def record_milestone(
         tipo=MemoryType.SUMMARY,
         titulo=title,
         contenido=content,
+        proyecto=proyecto,
     )
 
 
@@ -196,6 +201,7 @@ def record_decision(
     topic_key: str,
     title: str,
     content: str,
+    proyecto: str = WRITABLE_PROYECTO,
 ) -> Memory:
     """Stage an explicit panel decision under the canonical memory contract."""
     return upsert(
@@ -206,6 +212,56 @@ def record_decision(
         tipo=MemoryType.DECISION,
         titulo=title,
         contenido=content,
+        proyecto=proyecto,
+    )
+
+
+def _bounded_json(payload: Any, limit: int) -> str:
+    """Serialize an artifact without allowing the memory row to exceed its bound."""
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    if len(encoded.encode("utf-8")) <= limit:
+        return encoded
+    marker = json.dumps({"truncated": True, "preview": ""}, separators=(",", ":"))
+    available = max(0, limit - len(marker.encode("utf-8")) + 2)
+    preview = encoded.encode("utf-8")[:available].decode("utf-8", errors="ignore")
+    while len(json.dumps({"truncated": True, "preview": preview}, separators=(",", ":")).encode("utf-8")) > limit:
+        preview = preview[:-1]
+    return json.dumps({"truncated": True, "preview": preview}, separators=(",", ":"))
+
+
+def persist_sdb_artifact(
+    session: Session,
+    *,
+    thread_id: int,
+    run_id: str,
+    kind: str,
+    payload: Any,
+    sequence: int | None = None,
+    task_id: str | None = None,
+    proyecto: str = WRITABLE_PROYECTO,
+) -> Memory:
+    """Persist one bounded typed SDB artifact through the canonical memory seam."""
+    _guard_writable_project(proyecto)
+    if kind == "spec":
+        tipo, topic_key, limit = MemoryType.PATTERN, f"sdb:{run_id}:spec", SDB_SPEC_LIMIT
+        title = "SDB specification"
+    elif kind == "state" and sequence is not None:
+        tipo, topic_key, limit = MemoryType.SESSION, f"sdb:{run_id}:state:{sequence}", SDB_CHECKPOINT_LIMIT
+        title = "SDB checkpoint"
+    elif kind == "result" and task_id:
+        tipo, topic_key, limit = MemoryType.DISCOVERY, f"sdb:{run_id}:result:{task_id}", SDB_CHECKPOINT_LIMIT
+        title = "SDB result"
+    else:
+        raise ValueError("SDB artifact requires kind spec, state+sequence, or result+task_id")
+    return upsert(
+        session,
+        scope="panel",
+        entity_id=f"thread:{thread_id}",
+        topic_key=topic_key,
+        tipo=tipo,
+        titulo=title,
+        contenido=_bounded_json(payload, limit),
+        proyecto=proyecto,
     )
 
 
