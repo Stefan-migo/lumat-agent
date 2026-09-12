@@ -45,3 +45,26 @@ Supplied graph consulted (not rebuilt):
 ## Deviations and Issues
 
 None from the WU-1 design. WU-2 through WU-5 remain intentionally unimplemented.
+
+## Bounded Correction
+
+- Scope: Corrected only the three WU-1 gate findings; WU-2 through WU-5 remain untouched.
+- Approval boundary: Removed the public `allow_ambiguous` parameter. `create` now returns approval-bound candidates and does not add a project when either normalized-purpose deduplication or semantic deduplication finds a candidate.
+- Semantic policy: `create` shares `find`'s cosine `>=0.85`, top-three candidate policy through `_semantic_candidates`.
+- Test stability: Rewrote the `Memory` unique-constraint assertion to match its explicit column set; added coverage for semantic create deduplication, persistence prevention, and absence of the bypass parameter.
+
+### Correction Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command, run 1 | `DATABASE_URL='postgresql+psycopg://app:app@localhost:5436/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5436/lumat' uv run pytest tests/integration/test_db.py tests/spec/test_projects_spec.py -q` → **15 passed**, 1 warning, exit 0 |
+| Focused test command, run 2 | Same command immediately repeated → **15 passed**, 1 warning, exit 0 |
+| Correction commit | `9cc6c8be77e8bfea7b9d4ff3cc85e4b8eb22263e` (`fix(projects): enforce approval on ambiguous create (Slice 1/5)`) |
+| Runtime harness | Dedicated PostgreSQL `:5436` via `migrated_db`; both focused runs passed. No separate service runtime boundary exists in WU-1. |
+| Rollback boundary | Revert correction commit `9cc6c8be77e8bfea7b9d4ff3cc85e4b8eb22263e`; only `app/services/projects.py` and `tests/spec/test_projects_spec.py` are changed by the correction. |
+
+### Correction Graph Check
+
+- Nodes consulted: `projects.py`, `create()`, `find()`, `_semantic_candidates`, `ProjectCandidate`, `Project`, `services/kb.py`, `embed_texts()`, `test_projects_spec.py`, `test_create_deduplicates_normalized_purpose_as_ambiguous()`.
+- Edges/context: `create()` and `find()` call `embed_texts()`; both use `Project.purpose_embedding`; `test_projects_spec.py` imports and exercises `projects.py`; `projects.py` shares the `Project` model and KB embedding boundary.
+- Graph rebuilt for `/home/stefan/repos/lumat-agent-projects` from `ab7c28e9`; report updated before implementation.
