@@ -48,7 +48,10 @@ def find(session: Session, query: str) -> ProjectResult:
         return ProjectResult(project=exact, candidates=[])
 
     embeddings, _ = kb.embed_texts([query])
-    vector = embeddings[0]
+    return _semantic_candidates(session, embeddings[0])
+
+
+def _semantic_candidates(session: Session, vector: list[float]) -> ProjectResult:
     similarity = (1 - models.Project.purpose_embedding.cosine_distance(vector)).label("similarity")
     rows = session.execute(
         select(models.Project, similarity)
@@ -65,14 +68,8 @@ def create(
     slug: str,
     name: str,
     purpose: str,
-    *,
-    allow_ambiguous: bool = False,
 ) -> models.Project | ProjectResult:
-    """Create a project unless purpose similarity makes reuse ambiguous.
-
-    ``allow_ambiguous`` is intentionally not an approval system; WU-4 owns that
-    boundary. The default therefore returns candidates without persisting.
-    """
+    """Create a project only when no exact or semantic purpose candidate exists."""
     normalized_purpose = normalize(purpose)
     duplicate = session.scalar(
         select(models.Project).where(
@@ -80,7 +77,7 @@ def create(
             == normalized_purpose
         )
     )
-    if duplicate is not None and not allow_ambiguous:
+    if duplicate is not None:
         return ProjectResult(
             project=None,
             candidates=[ProjectCandidate(duplicate.slug, duplicate.name, 1.0)],
@@ -88,6 +85,10 @@ def create(
         )
 
     embedding, _ = kb.embed_texts([purpose])
+    semantic_result = _semantic_candidates(session, embedding[0])
+    if semantic_result.requires_approval:
+        return semantic_result
+
     project = models.Project(
         slug=normalize_slug(slug),
         name=name.strip(),

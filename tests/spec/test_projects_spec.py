@@ -1,5 +1,7 @@
 """OpenSpec contract tests for the WU-1 project registry foundation."""
 
+import inspect
+
 import pytest
 from sqlalchemy import inspect, select
 from sqlalchemy.exc import IntegrityError
@@ -50,7 +52,12 @@ def test_project_registry_migration_and_models(migrated_db, admin_conn):
             inspect(session.bind).get_table_names()
         )
         assert Memory.__table__.constraints
-        unique = next(c for c in Memory.__table__.constraints if c.name is None)
+        unique = next(
+            c
+            for c in Memory.__table__.constraints
+            if {column.name for column in c.columns}
+            == {"proyecto", "scope", "entity_id", "topic_key"}
+        )
         assert {column.name for column in unique.columns} == {
             "proyecto", "scope", "entity_id", "topic_key"
         }
@@ -106,8 +113,34 @@ def test_create_deduplicates_normalized_purpose_as_ambiguous(migrated_db, monkey
             lambda _: ([[1.0] + [0.0] * 383], 0),
         )
         result = projects.create(
-            session, "new-project", "New Project", "shared purpose", allow_ambiguous=False
+            session, "new-project", "New Project", "shared purpose"
         )
         assert result.project is None
         assert result.requires_approval is True
         assert result.candidates[0].slug == "existing"
+
+
+def test_create_deduplicates_semantically_similar_purpose_as_ambiguous(
+    migrated_db, monkeypatch
+):
+    with SessionLocal() as session:
+        monkeypatch.setattr(
+            projects.kb,
+            "embed_texts",
+            lambda _: ([[1.0] + [0.0] * 383], 0),
+        )
+        projects.create(session, "existing", "Existing", "Coordinate field operations")
+        session.commit()
+
+        result = projects.create(
+            session, "new-project", "New Project", "Organize field operations"
+        )
+
+        assert result.project is None
+        assert result.requires_approval is True
+        assert [candidate.slug for candidate in result.candidates] == ["existing"]
+        assert session.scalar(select(Project).where(Project.slug == "new-project")) is None
+
+
+def test_create_has_no_ambiguity_bypass_parameter():
+    assert "allow_ambiguous" not in inspect.signature(projects.create).parameters
