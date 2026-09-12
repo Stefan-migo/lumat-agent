@@ -34,7 +34,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import AuditLog, Message
+from app.models import AuditLog, InternalChatMessage, Message
 from app.services.audit import record_audit
 from app.services.notify import send_email
 from app.services.settings import get_setting
@@ -56,21 +56,63 @@ THRESHOLD_BLOCK = 100.0
 
 def record_llm_cost(
     session: Session,
-    message_id: int,
-    model: str,
-    prompt_tokens: int,
-    completion_tokens: int,
+    message_id: int | None = None,
+    model: str | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    *,
+    target: InternalChatMessage | None = None,
+    call_key: str | None = None,
 ) -> Decimal:
-    """Accumulate the token cost of one LLM call on the message (D6)."""
-    in_rate, out_rate = LLM_RATES.get(model, (Decimal("0"), Decimal("0")))
+    """Accumulate one call on a WhatsApp or internal request row."""
+    internal = target is not None
+    if target is None:
+        target = session.get(Message, message_id)
+    elif call_key is not None:
+        target = session.scalar(
+            select(InternalChatMessage)
+            .where(InternalChatMessage.id == target.id)
+            .with_for_update()
+        )
+        calls = dict(target.assistant_metadata or {}).get("cost_calls", {})
+        if call_key in calls:
+            return Decimal("0")
+
+    rates = get_setting(session, "cost.llm_rates", default=LLM_RATES)
+    configured = rates.get(model) if isinstance(rates, dict) else None
+    if configured is None:
+        configured = LLM_RATES.get(model)
+    if isinstance(configured, dict):
+        in_rate = Decimal(str(configured.get("input_per_1m", configured.get("input", 0))))
+        out_rate = Decimal(str(configured.get("output_per_1m", configured.get("output", 0))))
+    else:
+        in_rate, out_rate = configured or (Decimal("0"), Decimal("0"))
+        in_rate, out_rate = Decimal(str(in_rate)), Decimal(str(out_rate))
+    diagnostic = None
+    if configured is None:
+        diagnostic = {"type": "unknown_model", "model": model}
+    elif prompt_tokens is None or completion_tokens is None:
+        diagnostic = {"type": "usage_unavailable", "model": model}
+    prompt_tokens = prompt_tokens or 0
+    completion_tokens = completion_tokens or 0
     cost = (
         Decimal(prompt_tokens) / Decimal(1_000_000) * in_rate
         + Decimal(completion_tokens) / Decimal(1_000_000) * out_rate
     )
-    message = session.get(Message, message_id)
-    if message is not None:
-        previous = Decimal(message.cost_llm or 0)
-        message.cost_llm = float(previous + cost)
+    if target is not None:
+        previous = Decimal(target.cost_llm or 0)
+        target.cost_llm = float(previous + cost)
+        if internal and call_key is not None:
+            metadata = dict(target.assistant_metadata or {})
+            calls = dict(metadata.get("cost_calls", {}))
+            calls[call_key] = {
+                "model": model, "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens, "cost": float(cost),
+            }
+            metadata["cost_calls"] = calls
+            if diagnostic is not None:
+                metadata.setdefault("cost_diagnostics", []).append(diagnostic)
+            target.assistant_metadata = metadata
     return cost
 
 
@@ -91,6 +133,16 @@ def conversation_spend(session: Session, conversation_id: int) -> float:
     return _sum_columns(session, Message.conversation_id == conversation_id)
 
 
+def internal_thread_spend(session: Session, thread_id: int) -> float:
+    """Total measured assistant spend for one internal thread."""
+    value = session.scalar(
+        select(func.sum(InternalChatMessage.cost_llm)).where(
+            InternalChatMessage.thread_id == thread_id
+        )
+    )
+    return float(value or 0)
+
+
 def daily_spend(session: Session, day: date | None = None) -> float:
     """Total spend (LLM + Meta) of a calendar day, UTC (D6, SS-3 basis).
 
@@ -100,7 +152,14 @@ def daily_spend(session: Session, day: date | None = None) -> float:
     day = day or datetime.now(timezone.utc).date()
     start = datetime.combine(day, time.min, tzinfo=timezone.utc)
     end = datetime.combine(day, time.max, tzinfo=timezone.utc)
-    return _sum_columns(session, Message.created_at >= start, Message.created_at <= end)
+    whatsapp = _sum_columns(session, Message.created_at >= start, Message.created_at <= end)
+    internal = session.scalar(
+        select(func.sum(InternalChatMessage.cost_llm)).where(
+            InternalChatMessage.created_at >= start,
+            InternalChatMessage.created_at <= end,
+        )
+    )
+    return whatsapp + float(internal or 0)
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +216,16 @@ def conversation_cost_state(
     """
     percent = _percent(
         conversation_spend(session, conversation_id), _limit(session, "conversation")
+    )
+    return percent, _mode_for(percent)
+
+
+def internal_thread_cost_state(
+    session: Session, thread_id: int
+) -> tuple[float, str]:
+    """SS-3: (percent, mode) for one internal assistant thread."""
+    percent = _percent(
+        internal_thread_spend(session, thread_id), _limit(session, "conversation")
     )
     return percent, _mode_for(percent)
 

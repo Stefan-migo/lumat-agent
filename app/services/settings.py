@@ -85,6 +85,15 @@ DEFAULT_OWNER_WHATSAPP: str = "+56912345678"
 DEFAULT_SMTP_HOST: str = "localhost"
 DEFAULT_SMTP_FROM: str = "notificaciones@lumat.cl"
 
+# SS-3: USD per million tokens. Sources/effective date are retained in the
+# default so a pricing change is auditable without a second configuration table.
+DEFAULT_LLM_RATES = {
+    "gpt-4o-mini": {"input_per_1m": 0.15, "output_per_1m": 0.60},
+    "deepseek-chat": {"input_per_1m": 0.27, "output_per_1m": 1.10},
+    "_source": "OpenAI and DeepSeek public API pricing; verify at activation",
+    "_effective_date": "2026-09-11",
+}
+
 # Built-in defaults for known keys. A missing row falls back to these instead
 # of None, so unconfigured keys still behave (SS-1..5 "works out of the box").
 # Message content defaults (`messages.greeting`, `messages.cannot_answer`, ...)
@@ -98,6 +107,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     # T4.5 consumes them via costs.conversation_cost_state/daily_cost_state.
     "cost.conversation_limit": 1.50,
     "cost.daily_limit": 5.00,
+    "cost.llm_rates": DEFAULT_LLM_RATES,
     # SS-1: category -> "bot_resolve" | "always_escalate". Empty = all resolve.
     "scope_rules": {},
     # SS-2: emergency keyword list consumed by T4.2's regex compiler.

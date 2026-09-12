@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Callable
 
 import psycopg
@@ -32,10 +33,13 @@ from app.models import (  # noqa: E402
     AuditLog,
     Case,
     Conversation,
+    InternalChatMessage,
+    InternalChatThread,
     Message,
     MessageDirection,
     MessageStatus,
     MessageType,
+    User,
 )
 from app.services import costs, send  # noqa: E402
 from app.chat.nodes.handoff import HANDOFF_REPLY  # noqa: E402
@@ -53,8 +57,9 @@ def clean_db(migrated_db):
     """Reset chat + settings tables before every test (shared test DB)."""
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
-            "TRUNCATE notification_attempts, notification_operations, settings, audit_log, conversation_events, cases, messages, "
-            "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
+            "TRUNCATE notification_attempts, notification_operations, settings, audit_log, "
+            "conversation_events, cases, messages, conversations, customer_notes, customers, "
+            "internal_chat_messages, internal_chat_threads, users RESTART IDENTITY CASCADE"
         )
     yield
 
@@ -116,6 +121,75 @@ def _audit_actions() -> list[str]:
                 select(AuditLog.action).where(AuditLog.action.like("cost.alert.%"))
             )
         )
+
+
+def _seed_internal_costs(costs_list: list[float], created_at=None) -> tuple[int, int]:
+    with SessionLocal() as session:
+        user = session.execute(select(User)).scalar_one_or_none()
+        if user is None:
+            from app.models import UserRole
+            user = User(username="cost-test", password_hash="test", role=UserRole.ADMIN)
+            session.add(user)
+            session.flush()
+        thread = InternalChatThread(user_id=user.id)
+        session.add(thread)
+        session.flush()
+        for cost in costs_list:
+            session.add(InternalChatMessage(
+                thread_id=thread.id, author="assistant", content="reply",
+                status="processed", cost_llm=cost, created_at=created_at,
+            ))
+        session.commit()
+        return thread.id, user.id
+
+
+def test_internal_thread_spend_is_scoped_to_one_thread():
+    thread_id, _ = _seed_internal_costs([1.20])
+    with SessionLocal() as session:
+        assert costs.internal_thread_spend(session, thread_id) == pytest.approx(1.20)
+        assert costs.internal_thread_cost_state(session, thread_id)[1] == "conservative"
+
+
+def test_daily_spend_combines_whatsapp_and_internal_once():
+    _seed_conv_costs([0.10])
+    _seed_internal_costs([0.20])
+    with SessionLocal() as session:
+        assert costs.daily_spend(session) == pytest.approx(0.30)
+
+
+def test_internal_cost_uses_configured_rate_and_call_key_once():
+    thread_id, _ = _seed_internal_costs([0])
+    with SessionLocal() as session:
+        target = session.scalars(
+            select(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id)
+        ).one()
+        first = costs.record_llm_cost(
+            session, target=target, call_key="planner-1", model="gpt-4o-mini",
+            prompt_tokens=1_000_000, completion_tokens=0,
+        )
+        second = costs.record_llm_cost(
+            session, target=target, call_key="planner-1", model="gpt-4o-mini",
+            prompt_tokens=1_000_000, completion_tokens=0,
+        )
+        session.commit()
+        assert first == pytest.approx(Decimal("0.15"))
+        assert second == 0
+        assert float(target.cost_llm) == pytest.approx(0.15)
+
+
+def test_unknown_model_records_zero_and_diagnostic():
+    thread_id, _ = _seed_internal_costs([0])
+    with SessionLocal() as session:
+        target = session.scalars(
+            select(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id)
+        ).one()
+        assert costs.record_llm_cost(
+            session, target=target, call_key="response-1", model="unknown-model",
+            prompt_tokens=100, completion_tokens=100,
+        ) == 0
+        session.commit()
+        assert float(target.cost_llm) == 0
+        assert target.assistant_metadata["cost_diagnostics"][0]["type"] == "unknown_model"
 
 
 # ---------------------------------------------------------------------------
