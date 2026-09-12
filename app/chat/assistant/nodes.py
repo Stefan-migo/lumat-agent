@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from hashlib import sha256
 from pydantic import ValidationError
 
 from app.chat.assistant.approval import validate_execution
@@ -157,6 +158,84 @@ COST_BLOCKED_REPLY = (
     "The assistant is temporarily unavailable because the configured usage limit was reached. "
     "Please review cost settings."
 )
+
+SDB_SPEC_LIMIT = 8_192
+SDB_RESULT_LIMIT = 4_096
+SDB_TEXT_LIMIT = 500
+
+
+def sdb_clarify(state: AssistantState) -> AssistantState:
+    """Accept one bounded scope for the native run."""
+    content = state.get("content", "").strip()[:SDB_TEXT_LIMIT]
+    return {
+        "sdb_phase": "CLARIFY",
+        "sdb_scope": {"entities": ["service history"], "request": content},
+        "status": "sdb_clarified",
+    }
+
+
+def sdb_spec(state: AssistantState) -> AssistantState:
+    """Freeze the clarified scope before any task planning."""
+    scope = state.get("sdb_scope") or {"entities": [], "request": ""}
+    spec = {"scope": scope, "scope_frozen": True}
+    encoded = str(spec).encode("utf-8")[:SDB_SPEC_LIMIT]
+    spec["sha256"] = sha256(encoded).hexdigest()
+    return {"sdb_phase": "SPEC", "sdb_spec": spec, "status": "sdb_specified"}
+
+
+def sdb_plan(state: AssistantState) -> AssistantState:
+    """Create bounded tasks, each with exactly one verifiable output."""
+    spec = state["sdb_spec"]
+    scope = spec["scope"]
+    task = {
+        "id": "task-1",
+        "scope": scope,
+        "summary": "Review the requested service history",
+        "verifiable_output": "A bounded service-history summary",
+    }
+    return {"sdb_phase": "PLAN", "sdb_tasks": [task], "status": "sdb_planned"}
+
+
+def sdb_approve(state: AssistantState) -> AssistantState:
+    """Pause until a future approval flow supplies an explicit decision."""
+    return {"sdb_phase": "APPROVE", "approval": {"status": "pending"}, "status": "approval_pending"}
+
+
+def sdb_execute(state: AssistantState) -> AssistantState:
+    """Expose the deferred retrieval boundary without claiming work was done."""
+    results = [
+        {"task_id": task["id"], "status": "not-implemented"}
+        for task in state.get("sdb_tasks", [])
+    ]
+    result = {"results": results}
+    return {"sdb_phase": "EXECUTE", "sdb_result": result, "status": "sdb_executed"}
+
+
+def sdb_verify(state: AssistantState) -> AssistantState:
+    """Reject verification until real task results exist."""
+    tasks = state.get("sdb_tasks", [])
+    results = state.get("sdb_result", {}).get("results", [])
+    verified = len(tasks) == len(results) and all(item.get("status") == "completed" for item in results)
+    verification = {"status": "passed" if verified else "failed", "task_ids": [task["id"] for task in tasks], "artifact_refs": []}
+    return {"sdb_phase": "VERIFY", "verification": verification, "status": "sdb_verified" if verified else "error"}
+
+
+def sdb_deliver(state: AssistantState) -> AssistantState:
+    """Return honest terminal evidence without expanding the frozen scope."""
+    verification = state.get("verification", {})
+    status = "completed" if verification.get("status") == "passed" else "degraded"
+    evidence = [{"route": "sdb", "phase": "DELIVER", "status": status,
+                 "task_ids": verification.get("task_ids", []),
+                 **({} if status == "completed" else {"reason": "verification did not pass on real work"})}]
+    return {"sdb_phase": "DELIVER", "evidence": evidence, "status": status}
+
+
+def resolve_sdb_item(spec: dict, requested: str) -> dict:
+    """Resolve only entities in the frozen scope, with distinct absence errors."""
+    entities = spec.get("scope", {}).get("entities", [])
+    if requested not in entities:
+        return {"status": "error", "error": "scope-not-found"}
+    return {"status": "error", "error": "not-exist"}
 
 
 def panel_cost_gate(state: AssistantState) -> AssistantState:
