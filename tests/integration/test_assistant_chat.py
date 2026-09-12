@@ -119,6 +119,47 @@ def test_stream_reconnect_returns_ordered_persisted_events(client):
     assert [event["sequence"] for event in events] == list(range(len(events)))
 
 
+def test_blocked_cost_gate_persists_canned_reply_without_llm(client, monkeypatch):
+    _user("assistant-cost-block", "admin")
+    _login(client, "assistant-cost-block")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        session.add(InternalChatMessage(
+            thread_id=thread_id, author="agent", content="previous", status="processed",
+            cost_llm=1.50,
+        ))
+        session.commit()
+
+    calls = []
+    monkeypatch.setattr(
+        "app.services.llm.openai_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: calls.append(kwargs),
+        ))),
+    )
+    response = client.post(
+        f"/panel/api/chat/threads/{thread_id}/messages",
+        json={"content": "Summarize operations"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["message"]["status"] == "processed"
+    messages = client.get(f"/panel/api/chat/threads/{thread_id}").json()["messages"]
+    assert messages[-1]["author"] == "agent"
+    assert messages[-1]["content"] == (
+        "The assistant is temporarily unavailable because the configured usage "
+        "limit was reached. Please review cost settings."
+    )
+    assert calls == []
+
+
+def test_operator_can_still_read_panel_when_cost_gate_blocks(client):
+    _user("assistant-cost-operator", "operador")
+    _login(client, "assistant-cost-operator")
+    assert client.get("/panel/api/me").status_code == 200
+
+
 def test_failed_run_does_not_persist_partial_response(client, monkeypatch):
     _user("assistant-failure", "admin")
     _login(client, "assistant-failure")

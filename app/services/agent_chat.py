@@ -244,9 +244,11 @@ def submit_message(session: Session, thread: InternalChatThread, user: User, con
             "context_meta": context["meta"],
             "planner": result.get("planner", {}),
             "guardrails": result.get("guardrails", {}),
+            "cost_mode": result.get("cost_mode", "normal"),
+            "cost_directive": result.get("cost_directive", ""),
             "compaction": compaction,
         }
-        message.assistant_metadata = {"run_id": run_id, "approval": result.get("approval"), "attachment_ids": [row.id for row in attachments]}
+        message.assistant_metadata = {"run_id": run_id, "approval": result.get("approval"), "attachment_ids": [row.id for row in attachments], "cost_mode": result.get("cost_mode", "normal")}
         if result.get("status") == "approval_pending":
             message.status = "approval_pending"
         else:

@@ -9,6 +9,7 @@ from app.chat.assistant.nodes import (
     collect_evidence,
     execute,
     guardrails,
+    panel_cost_gate,
     plan_llm,
 )
 from app.chat.assistant.state import AssistantState
@@ -20,16 +21,22 @@ def _after_guardrails(state: AssistantState) -> str:
     return "execute_tool" if state.get("plan", {}).get("kind") == "tool" else "respond_stream"
 
 
+def _after_cost_gate(state: AssistantState) -> str:
+    return "evidence" if state.get("cost_mode") == "blocked" else "plan_llm"
+
+
 def build_assistant_graph():
     builder = StateGraph(AssistantState)
     builder.add_node("assemble_context", assemble_context_node)
+    builder.add_node("panel_cost_gate", panel_cost_gate)
     builder.add_node("plan_llm", plan_llm)
     builder.add_node("guardrails", guardrails)
     builder.add_node("execute_tool", execute)
     builder.add_node("respond_stream", execute)
     builder.add_node("evidence", collect_evidence)
     builder.add_edge(START, "assemble_context")
-    builder.add_edge("assemble_context", "plan_llm")
+    builder.add_edge("assemble_context", "panel_cost_gate")
+    builder.add_conditional_edges("panel_cost_gate", _after_cost_gate, {"plan_llm": "plan_llm", "evidence": "evidence"})
     builder.add_edge("plan_llm", "guardrails")
     builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "respond_stream": "respond_stream", END: END})
     builder.add_edge("execute_tool", "evidence")
