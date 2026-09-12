@@ -2,11 +2,11 @@
 
 ## Phase 1: Registry Foundation (WU-1)
 
-- [ ] 1.1 RED: Add migration/model tests for `projects`, `project_aliases`, `project_audit`, default seed, unique normalized slugs, and `vector(384)`.
-- [ ] 1.2 GREEN: Create `db/migrations/024_projects.sql` and `Project`, alias, and audit mappings in `app/models.py`; preserve `Memory.proyecto` constraints.
-- [ ] 1.3 RED: Add service contract tests for exact lookup, bounded candidates, and normalized purpose deduplication.
-- [ ] 1.4 GREEN: Create `app/services/projects.py` typed `list/find/create` skeleton using `kb.embed_texts()`; use cosine threshold `>=0.85`, top three candidates, and approval for ambiguity.
-- [ ] 1.5 REFACTOR: Keep registry persistence and embedding policy minimal; run `uv run pytest tests/integration/test_db.py tests/spec/test_projects_spec.py`.
+- [x] 1.1 RED: Add migration/model tests for `projects`, `project_aliases`, `project_audit`, default seed, unique normalized slugs, and `vector(384)`.
+- [x] 1.2 GREEN: Create `db/migrations/024_projects.sql` and `Project`, alias, and audit mappings in `app/models.py`; preserve `Memory.proyecto` constraints.
+- [x] 1.3 RED: Add service contract tests for exact lookup, bounded candidates, and normalized purpose deduplication.
+- [x] 1.4 GREEN: Create `app/services/projects.py` typed `list/find/create` skeleton using `kb.embed_texts()`; use cosine threshold `>=0.85`, top three candidates, and approval for ambiguity.
+- [x] 1.5 REFACTOR: Keep registry persistence and embedding policy minimal; run `uv run pytest tests/integration/test_db.py tests/spec/test_projects_spec.py`.
 
 ## Phase 2: Lifecycle and Memory Valves (WU-2)
 
