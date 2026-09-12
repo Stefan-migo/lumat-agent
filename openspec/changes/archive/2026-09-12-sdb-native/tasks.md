@@ -34,8 +34,8 @@ All units keep tests with code. Integration command: `DATABASE_URL='postgresql+p
 
 ## Phase 4: API Verification
 
-- [ ] WU-5 RED: add `tests/integration/test_sdb_api.py` for authenticated admin entry, operator stream rejection, ordered phase/evidence events, and SSE reconnect recovery (IAC-2/3, AO-1/3).
-- [ ] WU-5 GREEN: wire explicit trigger, approval/resume, and serialized SDB state in `app/panel/api/routes/chat.py`; verify with the full PostgreSQL command above.
+- [x] WU-5 RED: add `tests/integration/test_sdb_api.py` for authenticated admin entry, operator stream rejection, ordered phase/evidence events, and SSE reconnect recovery (IAC-2/3, AO-1/3).
+- [x] WU-5 GREEN: wire explicit trigger, approval/resume, and serialized SDB state in `app/panel/api/routes/chat.py`; verify with the full PostgreSQL command above.
 
 ## Ponytail Review
 

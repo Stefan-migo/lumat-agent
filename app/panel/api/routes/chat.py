@@ -26,6 +26,7 @@ router = APIRouter(tags=["panel-api-chat"])
 class ChatMessageBody(BaseModel):
     content: str = Field(min_length=1)
     attachment_ids: list[int] = Field(default_factory=list)
+    sdb_requested: bool | None = None
 
 
 class ApprovalBody(BaseModel):
@@ -84,7 +85,10 @@ def send_message(thread_id: int, body: ChatMessageBody, session: Session = Depen
     owned = list(session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread_id, AssistantAttachment.id.in_(body.attachment_ids), AssistantAttachment.deleted_at.is_(None)))) if body.attachment_ids else []
     if len(owned) != len(set(body.attachment_ids)):
         raise HTTPException(status_code=404, detail="attachment not found")
-    message = submit_message(session, result[0], current, body.content, [row.id for row in owned])
+    message = submit_message(
+        session, result[0], current, body.content, [row.id for row in owned],
+        sdb_requested=body.sdb_requested,
+    )
     return {"message": message_dict(message)}
 
 
