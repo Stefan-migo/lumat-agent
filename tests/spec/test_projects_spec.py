@@ -1,6 +1,6 @@
 """OpenSpec contract tests for the WU-1 project registry foundation."""
 
-import inspect
+import inspect as stdlib_inspect
 
 import pytest
 from sqlalchemy import inspect, select
@@ -143,4 +143,4 @@ def test_create_deduplicates_semantically_similar_purpose_as_ambiguous(
 
 
 def test_create_has_no_ambiguity_bypass_parameter():
-    assert "allow_ambiguous" not in inspect.signature(projects.create).parameters
+    assert "allow_ambiguous" not in stdlib_inspect.signature(projects.create).parameters
