@@ -56,10 +56,10 @@ describe('AppShell (T6.4)', () => {
     render(<AppShell user={admin} />);
     await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
-      expect(drawer.querySelectorAll('.panel-shell__navigation-button')).toHaveLength(10);
+       expect(drawer.querySelectorAll('.panel-shell__navigation-button')).toHaveLength(11);
     for (const label of [
       'Panel unificado', 'Asistente Lumat', 'Conversaciones', 'Clientes',
-       'Agenda', 'Base de Conocimientos', 'Automatizaciones', 'Configuración', 'Usuarios', 'Proyectos',
+       'Agenda', 'Base de Conocimientos', 'Automatizaciones', 'Configuración', 'Usuarios', 'Proyectos', 'Sesiones de planning',
     ]) {
       expect(within(drawer).getByRole('button', { name: label })).toBeInTheDocument();
     }

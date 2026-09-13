@@ -22,6 +22,7 @@ import { AutomationRuleDetailPage } from '../pages/AutomationRuleDetailPage';
 import { AdvancedDashboard } from '../pages/AdvancedDashboard';
 import { UserManagement } from '../pages/UserManagement';
 import { ProjectsPage } from '../pages/ProjectsPage';
+import { PlanningSessions } from '../pages/PlanningSessions';
 
 /** Top-level SPA views. Client ficha and conversation thread are drill-downs
  * rendered from list views, not top-level nav, so they do not appear here. */
@@ -120,7 +121,8 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
        : view === 'chat' ? <AgentChat capabilities={assistantCapabilities ?? undefined} />
        : view === 'kb' ? <KbList />
       : view === 'users' ? <UserManagement currentUser={user} />
-      : view === 'projects' ? <ProjectsPage projectSlug={route.projectSlug} onOpenProject={(slug) => navigateToRoute({ view: 'projects', projectSlug: slug })} />
+       : view === 'projects' ? <ProjectsPage projectSlug={route.projectSlug} onOpenProject={(slug) => navigateToRoute({ view: 'projects', projectSlug: slug })} />
+       : view === 'planning-sessions' ? <PlanningSessions sessionSlug={route.planningSessionSlug} onOpenSession={(slug) => navigateToRoute({ view: 'planning-sessions', planningSessionSlug: slug })} onOpenThread={(id) => { window.history.pushState({}, '', `${pathForView('chat')}?thread_id=${id}`); setRoute({ view: 'chat' }); }} />
       : <Settings />;
 
   return (
