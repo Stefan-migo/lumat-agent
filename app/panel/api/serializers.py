@@ -361,6 +361,18 @@ def to_internal_chat_message_dict(message: InternalChatMessage) -> dict:
     }
 
 
+def to_cortex_session_dict(thread: InternalChatThread) -> dict:
+    """Expose the persisted Cortex lifecycle without leaking ORM state."""
+    cortex = (thread.assistant_state or {}).get("cortex_session") or {}
+    return {**cortex, "thread_id": thread.id}
+
+
+def to_cortex_report_dict(memory: Memory | None) -> dict | None:
+    if memory is None:
+        return None
+    return to_memory_dict(memory)
+
+
 def to_assistant_attachment_dict(attachment: AssistantAttachment) -> dict:
     return {"id": attachment.id, "thread_id": attachment.thread_id, "filename": attachment.filename,
             "kind": attachment.kind, "content_type": attachment.content_type, "size": attachment.size,
