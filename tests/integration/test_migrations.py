@@ -58,6 +58,9 @@ EXPECTED_TABLES = {
     "internal_chat_threads",
     "internal_chat_messages",
     "assistant_attachments",  # 022_assistant_attachments.sql (assistant file attachments)
+    "projects",  # 024_projects.sql (agent-owned project registry)
+    "project_aliases",
+    "project_audit",
     "schema_migrations",
 }
 
@@ -128,6 +131,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("020_assistant_metadata",),
         ("022_assistant_attachments",),
         ("023_panel_cost_llm",),
+        ("024_projects",),
     ]
 
 
