@@ -2,10 +2,10 @@
 
 ## Slice
 - Delivery: auto-chain, stacked-to-main
-- Work unit: PR 3 — authenticated Cortex API and approval boundary
-- Scope: Phase 3 tasks T3.1–T3.2 only
+- Work unit: PR 4 — SPA planning surface and chat controls
+- Scope: Phase 4 tasks T4.1–T4.3 only; cumulative through T4
 - Mode: Strict TDD
-- Review boundary: 117 production additions plus 100 test additions, below the 400-line slice budget
+- Review boundary: 180 authored additions plus 29 deletions across three reviewable commits, below the 400-line slice budget
 
 ## Completed Tasks
 - [x] T1.1 — Added validated `CortexSession` state, recursive assistant-state merge, fail-closed validation, gate helper, and exact literal command parser.
@@ -15,6 +15,9 @@
 - [x] T2.3 — Reused exact SDB approval digest/claim flow for the report-derived SPEC and retained the `not-implemented` task executor/checkpoint stub.
 - [x] T3.1 — Added authenticated open/close/list/detail/reopen endpoints with the specified 400/401/403/404/409 matrix and JSON serializers.
 - [x] T3.2 — Created report-derived SPEC approval messages and routed valid, expired, consumed, and changed-token cases through the existing approval endpoint.
+- [x] T4.1 — Added typed planning lifecycle API helpers, admin navigation/routes, and list/detail/error/reopen SPA surface.
+- [x] T4.2 — Added persistent Cortex indicator, open/close controls, exact `/planning` command handling, inert free-text behavior, and truthful approved-plan handoff display.
+- [x] T4.3 — Completed frontend test/build gates and database-backed Cortex/API runtime verification.
 
 ## TDD Cycle Evidence
 | Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
@@ -26,6 +29,9 @@
 | T2.3 | `tests/spec/test_sdb_recovery.py`, `tests/unit/test_cortex_session_loop.py` | Unit/spec | ✅ Existing recovery/approval tests | ✅ Missing approved-plan helper | ✅ 40 focused spec/unit tests | ✅ Digest mutation, expiry, checkpoint resume, truthful stub | ✅ Reused existing approval/recovery seams |
 | T3.1 | `tests/functional/test_api_cortex_sessions.py` | Integration/TestClient | ✅ Existing chat/API suites | ✅ Routes returned 404 before implementation | ✅ 5 tests | ✅ Auth, lifecycle, unknown resources, conflicts | ✅ Thin route helpers and serializers |
 | T3.2 | `tests/functional/test_api_cortex_sessions.py` | Integration/TestClient | ✅ Existing approval tests | ✅ Approval path absent from report lifecycle | ✅ 5 tests | ✅ Valid, expired, consumed, changed token | ✅ Reused `approve_plan` and exact digest validation |
+| T4.1 | `web/src/api.test.ts`, `web/src/components/domain/panelRoutes.test.ts`, `web/src/components/pages/PlanningSessions.test.tsx` | Unit/component | ✅ 32 prior focused tests | ✅ Missing planning API/routes/page | ✅ 36 focused tests | ✅ list/detail, denied, navigation, lifecycle endpoints | ✅ Reused existing UI primitives |
+| T4.2 | `web/src/components/pages/AgentChat.test.tsx` | Component | ✅ 13 prior tests | ✅ Missing Cortex indicator/control/command behavior | ✅ 14 tests in file; 523 full frontend tests | ✅ active/closed, command/free text, handoff | ✅ Minimal local state and existing API helpers |
+| T4.3 | Full frontend/backend gates | Integration/build | ✅ Prior cumulative suites | ✅ N/A (verification task) | ✅ frontend/build and 36 targeted DB tests | ✅ backend lifecycle + SPA build | ✅ No unrelated backend changes |
 
 ## Work Unit Evidence
 | Evidence | Result |
@@ -36,6 +42,13 @@
 | PR 3 focused test command and exact result | `DATABASE_URL='postgresql+psycopg://app:app@localhost:5437/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5437/lumat' uv run pytest tests/functional/test_api_cortex_sessions.py` — 5 passed |
 | PR 3 runtime harness command and exact result | Same environment with `uv run pytest tests/integration/test_assistant_chat.py tests/integration/test_sdb_api.py tests/functional/test_api_cortex_sessions.py` — 26 passed; TestClient auth, lifecycle, report approval, and existing SDB approval paths exercised |
 | PR 3 rollback boundary | Revert PR 3 commit; remove planning routes/serializers and `tests/functional/test_api_cortex_sessions.py` without touching the Phase 1–2 assistant loop or the future SPA |
+
+## Final Slice Evidence
+- PR 4 focused frontend: `cd web && npm test -- --run src/api.test.ts src/components/domain/panelRoutes.test.ts src/components/pages/PlanningSessions.test.tsx src/components/pages/AgentChat.test.tsx` — 4 files, 36 tests passed.
+- PR 4 runtime harness: database-backed targeted command over Cortex lifecycle, assistant chat, SDB API, and persistence — 36 passed in 35.02s.
+- Frontend full gate: `cd web && npm test` — 72 files, 523 tests passed. `cd web && npm run build` — exit 0.
+- Required full backend command was attempted at 120s and 360s and timed out; the known unrelated capability-count failure remains outside this slice. Targeted database-backed verification passed.
+- Rollback boundary: revert `62d0f513`, `8fb67ff4`, and `d0a27e42` to remove only the SPA planning API/types, navigation, browse page, and chat controls/tests.
 
 ## Verification Notes
 - Graphify was consulted in degraded read-only mode. The worktree has no usable `graphify-out/graph.json`; refresh was explicitly blocked at stale graph `c4d13da7`.
@@ -48,4 +61,4 @@
 
 ## Remaining Tasks
 - [x] T3.1–T3.2 — Authenticated API and approval endpoints (PR 3)
-- [ ] T4.1–T4.3 — SPA integration and final verification (PR 4)
+- [x] T4.1–T4.3 — SPA integration and final verification (PR 4)
