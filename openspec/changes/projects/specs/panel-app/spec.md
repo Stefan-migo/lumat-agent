@@ -4,8 +4,8 @@
 
 ### Requirement: PNL-APP-1 — D7 URL Routing Without a Router (Slice 1)
 
-The SPA MUST use the typed native History API route table, MUST NOT add a router dependency, and MUST expose exactly nine navigation destinations: Panel unificado, Asistente Lumat, Conversaciones, Clientes, Agenda, Base de Conocimientos, Automatizaciones, Configuración, and Proyectos. Notifications, push, and advanced-dashboard MUST NOT be visible navigation items. `/panel/app/cases` and `/panel/app/advanced-dashboard` MUST still resolve as compatibility routes.
-(Previously: the navigation contract exposed exactly eight approved destinations and had no Proyectos destination.)
+The SPA MUST use the typed native History API route table, MUST NOT add a router dependency, and MUST expose exactly ten navigation destinations: Panel unificado, Asistente Lumat, Conversaciones, Clientes, Agenda, Base de Conocimientos, Automatizaciones, Configuración, Usuarios, and Proyectos. Notifications, push, and advanced-dashboard MUST NOT be visible navigation items. `/panel/app/cases` and `/panel/app/advanced-dashboard` MUST still resolve as compatibility routes.
+(Previously: the navigation contract exposed nine destinations (including Usuarios) and had no Proyectos destination.)
 
 #### Scenario: Projects navigation
 - GIVEN an authenticated user at `/panel/app/`
