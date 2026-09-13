@@ -103,7 +103,11 @@ def build_assistant_graph():
     return builder.compile()
 
 
-def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, session=None, actor=None, actor_role=None, sdb_requested=None, attachments=None, context=None, compaction=None) -> AssistantState:
+def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, session=None, actor=None, actor_role=None, sdb_requested=None, attachments=None, context=None, compaction=None, project_authorization=None) -> AssistantState:
+    if project_authorization is not None:
+        from app.services.projects import _ProjectAuthorization
+        if not isinstance(project_authorization, _ProjectAuthorization):
+            raise ValueError("SDB project selection requires an authorized project capability")
     state: AssistantState = {
         "thread_id": thread_id,
         "user_id": user_id,
@@ -116,6 +120,7 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
         "actor": actor,
         "actor_role": actor_role,
         "sdb_requested": sdb_requested,
+        "project_authorization": project_authorization,
         "attachments": attachments or [],
         "context": context or {"items": [], "meta": {}},
         "context_meta": (context or {}).get("meta", {}),

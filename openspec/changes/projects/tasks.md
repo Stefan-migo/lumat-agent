@@ -18,9 +18,9 @@
 
 ## Phase 3: SDB Authorization and Propagation (WU-3)
 
-- [ ] 3.1 RED: Test user/arbitrary project injection rejection and project-aware SPEC/STATE/RESULT persistence, recovery, entity identity, and unchanged seven phases.
-- [ ] 3.2 GREEN: Propagate validated project state through `app/chat/assistant/state.py`, `app/services/agent_chat.py`, `app/chat/graph.py`, and `app/chat/assistant/nodes.py`; preserve run keys and panel scope.
-- [ ] 3.3 REFACTOR: Run `uv run pytest tests/integration/test_chat_state.py tests/integration/test_agent_chat.py tests/spec/test_sdb_native_spec.py`.
+- [x] 3.1 RED: Test user/arbitrary project injection rejection and project-aware SPEC/STATE/RESULT persistence, recovery, entity identity, and unchanged seven phases.
+- [x] 3.2 GREEN: Propagate validated project state through `app/chat/assistant/state.py`, `app/services/agent_chat.py`, `app/chat/graph.py`, and `app/chat/assistant/nodes.py`; preserve run keys and panel scope.
+- [x] 3.3 REFACTOR: Run `uv run pytest tests/integration/test_chat_state.py tests/integration/test_agent_chat.py tests/spec/test_sdb_native_spec.py`.
 
 ## Phase 4: Typed Tools and Approval (WU-4)
 

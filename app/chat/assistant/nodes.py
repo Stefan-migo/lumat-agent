@@ -25,6 +25,18 @@ from app.chat.assistant.attachments import build_multimodal_content, prepare_att
 from app.models import InternalChatMessage
 
 
+def _project_slug(state: AssistantState) -> str:
+    """Read the namespace only from the service-issued project capability."""
+    authorization = state.get("project_authorization")
+    if authorization is None:
+        return "default"
+    from app.services.projects import _ProjectAuthorization
+
+    if not isinstance(authorization, _ProjectAuthorization):
+        raise ValueError("SDB project selection requires an authorized project capability")
+    return authorization.slug
+
+
 def extension_hook_metadata() -> dict[str, str]:
     """Describe deferred extensions without loading or executing their internals."""
     return {"sdb": "deferred", "panel_subagents": "not_implemented"}
@@ -167,9 +179,10 @@ SDB_TEXT_LIMIT = 500
 def sdb_clarify(state: AssistantState) -> AssistantState:
     """Accept one bounded scope for the native run."""
     content = state.get("content", "").strip()[:SDB_TEXT_LIMIT]
+    scope = {"entities": ["service history"], "request": content, "proyecto": _project_slug(state)}
     return {
         "sdb_phase": "CLARIFY",
-        "sdb_scope": {"entities": ["service history"], "request": content},
+        "sdb_scope": scope,
         "status": "sdb_clarified",
     }
 

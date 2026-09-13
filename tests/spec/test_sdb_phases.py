@@ -13,6 +13,7 @@ from app.chat.assistant.nodes import (
     sdb_verify,
     resolve_sdb_item,
 )
+from app.services.projects import _ProjectAuthorization
 
 
 def _clarified_state():
@@ -113,3 +114,17 @@ def test_graph_exposes_native_phase_nodes_and_routes():
         "sdb_clarify", "sdb_spec", "sdb_plan", "sdb_approve",
         "sdb_execute", "sdb_verify", "sdb_deliver",
     ))
+
+
+def test_authorized_project_is_frozen_in_sdb_scope_without_changing_phases():
+    authorization = _ProjectAuthorization(slug="field-ops")
+    state = {"content": "Research the service history and summarize the findings.", "project_authorization": authorization}
+    state.update(sdb_clarify(state))
+    state.update(sdb_spec(state))
+    state.update(sdb_plan(state))
+
+    assert state["sdb_scope"]["proyecto"] == "field-ops"
+    assert state["sdb_spec"]["scope"]["proyecto"] == "field-ops"
+    assert [state.update(node(state)) or state["sdb_phase"] for node in (sdb_execute, sdb_verify, sdb_deliver)] == [
+        "EXECUTE", "VERIFY", "DELIVER"
+    ]
