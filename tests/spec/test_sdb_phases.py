@@ -99,6 +99,36 @@ def test_every_task_declares_one_verifiable_output():
     assert all(isinstance(SDBTask.model_validate(task), SDBTask) for task in state["sdb_tasks"])
 
 
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("unknown.tool", {}),
+        ("automation.create_rule", {"name": "unsafe"}),
+        ("conversations.search", {"query": 42, "limit": 10}),
+    ],
+)
+def test_invalid_sdb_task_is_rejected_before_approval_and_execution(monkeypatch, tool, arguments):
+    executed = False
+
+    def fail_if_called(*args, **kwargs):
+        nonlocal executed
+        executed = True
+
+    monkeypatch.setattr("app.chat.assistant.tools.registry.execute_tool", fail_if_called)
+    task = {
+        "id": "task-invalid",
+        "scope": {"entities": ["service history"], "request": "service history"},
+        "summary": "Read history",
+        "verifiable_output": "rows",
+        "tool": tool,
+        "arguments": arguments,
+    }
+
+    with pytest.raises(ValueError):
+        SDBTask.model_validate(task)
+    assert executed is False
+
+
 def test_sdb_artifacts_and_evidence_are_bounded():
     state = _run(sdb_spec, sdb_plan, sdb_execute, sdb_verify, sdb_deliver)
 

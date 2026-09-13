@@ -99,6 +99,8 @@ def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, au
                 raise ToolValidationError("SDB tasks must use read-only tools")
             from app.chat.assistant.state import SDBTask
             typed = SDBTask.model_validate({**task, "arguments": arguments})
+            if not cost_allowed:
+                raise ToolValidationError("assistant cost limit blocks tool execution")
             if typed.scope.get("proyecto", "default") != "default" and authorization is None:
                 raise ToolValidationError("SDB project capability is unavailable")
             tool_result = execute_tool(
