@@ -13,34 +13,35 @@ from app.chat.assistant.recovery import claim_execution, resumable_sdb_tasks
 
 
 def _sdb_plan(spec=None, tasks=None):
+    request = (spec or {"scope": {"entities": ["service history"]}, "sha256": "spec-1"})["scope"].get("request", "service history")
     return {
         "phase": "EXECUTE",
         "spec": spec or {"scope": {"entities": ["service history"]}, "sha256": "spec-1"},
-        "tasks": tasks or [{"id": "task-1", "verifiable_output": "summary"}],
+        "tasks": tasks or [{"id": "task-1", "scope": {"entities": ["service history"], "request": request}, "summary": "Read history", "verifiable_output": "summary", "tool": "conversations.search", "arguments": {"query": request, "limit": 10}}],
     }
 
 
 def test_mutated_spec_after_approval_is_rejected_without_execution():
     plan = _sdb_plan()
-    approval = issue_approval({"sdb": plan, "tool": None, "arguments": {}})
+    approval = issue_approval({"sdb": plan, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]})
     mutated = _sdb_plan(spec={"scope": {"entities": ["billing"]}, "sha256": "spec-2"})
 
-    assert validate_approval({"sdb": mutated, "tool": None, "arguments": {}}, approval, approval["token"]) is False
-    assert validate_execution({"sdb": mutated, "tool": None, "arguments": {}}, {**approval, "status": "consumed"}) is False
+    assert validate_approval({"sdb": mutated, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]}, approval, approval["token"]) is False
+    assert validate_execution({"sdb": mutated, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]}, {**approval, "status": "consumed"}) is False
 
 
 def test_approval_binds_exact_canonical_phase_and_task_payload_and_expiry():
     plan = _sdb_plan()
-    approval = issue_approval({"sdb": plan, "tool": None, "arguments": {}})
+    approval = issue_approval({"sdb": plan, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]})
     altered = _sdb_plan(tasks=[{"id": "task-2", "verifiable_output": "summary"}])
 
     assert canonical_sdb_digest(plan) == approval["sdb_sha256"]
-    assert validate_approval({"sdb": altered, "tool": None, "arguments": {}}, approval, approval["token"]) is False
+    assert validate_approval({"sdb": altered, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]}, approval, approval["token"]) is False
     expired = issue_approval(
-        {"sdb": plan, "tool": None, "arguments": {}},
+        {"sdb": plan, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]},
         expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
     )
-    assert validate_approval({"sdb": plan, "tool": None, "arguments": {}}, expired, expired["token"]) is False
+    assert validate_approval({"sdb": plan, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]}, expired, expired["token"]) is False
 
 
 class _AtomicClaimSession:

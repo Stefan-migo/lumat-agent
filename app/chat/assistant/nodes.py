@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.evidence import make_evidence
-from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens, validate_cortex_session
+from app.chat.assistant.state import AssistantState, PlannerOutput, SDBTask, estimate_tokens, validate_cortex_session
 from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
 from app.services import llm
@@ -266,13 +266,15 @@ def sdb_plan(state: AssistantState) -> AssistantState:
     """Create bounded tasks, each with exactly one verifiable output."""
     spec = state["sdb_spec"]
     scope = spec["scope"]
-    task = {
-        "id": "task-1",
-        "scope": scope,
-        "summary": "Review the requested service history",
-        "verifiable_output": "A bounded service-history summary",
-    }
-    return {"sdb_phase": "PLAN", "sdb_tasks": [task], "status": "sdb_planned"}
+    task = SDBTask(
+        id="task-1",
+        scope=scope,
+        summary="Review the requested service history",
+        verifiable_output="A bounded service-history summary",
+        tool="conversations.search",
+        arguments={"query": scope["request"], "limit": 10},
+    )
+    return {"sdb_phase": "PLAN", "sdb_tasks": [task.model_dump()], "status": "sdb_planned"}
 
 
 def sdb_approve(state: AssistantState) -> AssistantState:

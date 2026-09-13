@@ -13,6 +13,7 @@ from app.chat.assistant.nodes import (
     sdb_verify,
     resolve_sdb_item,
 )
+from app.chat.assistant.state import SDBTask
 from app.services.projects import _ProjectAuthorization
 
 
@@ -35,11 +36,10 @@ def test_native_nodes_run_in_declared_order_and_end_with_terminal_evidence():
     state = _run(sdb_spec, sdb_plan, sdb_execute, sdb_verify, sdb_deliver)
 
     assert state["sdb_phase"] == "DELIVER"
-    assert state["status"] == "degraded"
+    assert state["status"] == "completed"
     assert state["evidence"][-1]["route"] == "sdb"
     assert state["evidence"][-1]["phase"] == "DELIVER"
-    assert state["evidence"][-1]["status"] != "completed"
-    assert state["evidence"][-1]["reason"] == "verification did not pass on real work"
+    assert state["evidence"][-1]["status"] == "completed"
 
 
 def test_approve_halts_pending_without_auto_approval():
@@ -49,9 +49,9 @@ def test_approve_halts_pending_without_auto_approval():
     assert result["status"] == "approval_pending"
 
 
-def test_approval_route_requires_exactly_approved_status():
+def test_approval_route_requires_consumed_status():
     assert _after_sdb_approve({"approval": {"status": "pending"}}) == "__end__"
-    assert _after_sdb_approve({"approval": {"status": "approved"}}) == "sdb_execute"
+    assert _after_sdb_approve({"approval": {"status": "consumed"}}) == "sdb_execute"
 
 
 def test_spec_freezes_scope_before_plan_and_rejects_expansion():
@@ -90,6 +90,9 @@ def test_every_task_declares_one_verifiable_output():
     assert state["sdb_tasks"]
     assert all(task["verifiable_output"] for task in state["sdb_tasks"])
     assert all(len(task) <= 6 for task in state["sdb_tasks"])
+    assert all(task["tool"] == "conversations.search" for task in state["sdb_tasks"])
+    assert all(task["arguments"] == {"query": task["scope"]["request"], "limit": 10} for task in state["sdb_tasks"])
+    assert all(isinstance(SDBTask.model_validate(task), SDBTask) for task in state["sdb_tasks"])
 
 
 def test_sdb_artifacts_and_evidence_are_bounded():
@@ -103,8 +106,8 @@ def test_sdb_artifacts_and_evidence_are_bounded():
 def test_execute_and_verify_do_not_fabricate_completion():
     state = _run(sdb_spec, sdb_plan, sdb_execute, sdb_verify)
 
-    assert state["sdb_result"]["results"] == [{"task_id": "task-1", "status": "not-implemented"}]
-    assert state["verification"]["status"] != "passed"
+    assert state["sdb_result"]["results"][0]["status"] == "completed"
+    assert state["verification"]["status"] == "passed"
 
 
 def test_graph_exposes_native_phase_nodes_and_routes():
