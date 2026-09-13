@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.db import SessionLocal
-from app.models import InternalChatThread, Memory, MemoryType, Project, User
+from app.models import InternalChatThread, Memory, MemoryStatus, MemoryType, Project, User
 from app.services import agent_chat, projects, tukulpan
 
 
@@ -176,7 +176,49 @@ def test_sdb_state_persists_phase_checkpoints_and_ordered_events():
         assert state["sdb"]["checkpoints"] == [
             {"sequence": 1, "task_id": "task-1", "status": "completed"}
         ]
-        assert [event["sequence"] for event in state["events"]] == [0, 1]
+    assert [event["sequence"] for event in state["events"]] == [0, 1]
+
+
+def test_sdb_state_preserves_unrelated_nested_assistant_state():
+    thread_id = _thread_id()
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        thread.assistant_state = {
+            "planner": {"model": "configured"},
+            "cortex_session": {"slug": "budget-review", "turn_index": 2},
+        }
+        agent_chat.persist_sdb_state(
+            session, thread, run_id="run-merge", phase="SPEC",
+            checkpoint={"sequence": 1, "phase": "SPEC"}, events=[],
+        )
+        session.commit()
+
+    with SessionLocal() as session:
+        state = session.get(InternalChatThread, thread_id).assistant_state
+        assert state["planner"] == {"model": "configured"}
+        assert state["cortex_session"] == {"slug": "budget-review", "turn_index": 2}
+        assert state["sdb"]["phase"] == "SPEC"
+
+
+def test_closed_cortex_report_is_archived_and_reloadable():
+    from app.chat.assistant.approval import validate_approval
+
+    thread_id = _thread_id()
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        thread.assistant_state = {"cortex_session": {
+            "slug": "budget-review", "topic": "Budget review", "status": "active",
+        }}
+        result = agent_chat.close_cortex_session(session, thread, report="Approved budget findings")
+        session.commit()
+        assert result["report_key"] == "cortex-session/budget-review:report"
+        assert validate_approval(thread.current_plan, thread.assistant_state["approval"], thread.assistant_state["approval"]["token"])
+
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        report = session.scalar(select(Memory).where(Memory.topic_key == result["report_key"]))
+        assert thread.assistant_state["cortex_session"]["status"] == "closed"
+        assert report.status == MemoryStatus.ARCHIVED
 
 
 def test_sdb_state_writes_one_checkpoint_row_per_task_sequence():

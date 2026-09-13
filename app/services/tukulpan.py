@@ -63,6 +63,7 @@ __all__ = [
     "REL_MIN_SIM",
     "WRITABLE_PROYECTO",
     "close_conversation",
+    "archive_report",
     "delete",
     "get_by_key",
     "hybrid_search",
@@ -224,6 +225,31 @@ def record_decision(
         proyecto=proyecto,
         authorization=authorization,
     )
+
+
+def archive_report(
+    session: Session,
+    *,
+    thread_id: int,
+    topic_key: str,
+    title: str,
+    content: str,
+    proyecto: str = WRITABLE_PROYECTO,
+    authorization: projects._ProjectAuthorization | None = None,
+) -> Memory:
+    """Write a report, then mark that same memory archived as a closed report."""
+    row = upsert(
+        session,
+        scope="panel",
+        entity_id=f"thread:{thread_id}",
+        topic_key=topic_key,
+        tipo=MemoryType.SUMMARY,
+        titulo=title,
+        contenido=content,
+        proyecto=proyecto,
+        authorization=authorization,
+    )
+    return set_mark(session, row.id, status=MemoryStatus.ARCHIVED)
 
 
 def _bounded_json(payload: Any, limit: int) -> str:
