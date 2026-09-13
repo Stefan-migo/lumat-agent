@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.chat.assistant.graph import run_assistant
 from app.chat.assistant.approval import canonical_sdb_digest, issue_approval, validate_approval
-from app.chat.assistant.nodes import execute
+from app.chat.assistant.nodes import execute, sdb_deliver, sdb_verify
 from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.chat.assistant import nodes as assistant_nodes
 from app.chat.assistant.attachments import prepare_attachment_context
@@ -127,6 +127,18 @@ def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, au
         if status != "completed":
             break
     return {"results": results, "status": "completed" if results and all(item.get("status") == "completed" for item in results) and len(results) == len(frozen_tasks) else "failed"}
+
+
+def _sdb_delivery(thread: InternalChatThread, result: dict) -> dict:
+    tasks = (thread.current_plan or {}).get("sdb", {}).get("tasks", [])
+    projection = sdb_verify({"sdb_tasks": tasks, "sdb_result": result})
+    delivery = sdb_deliver({**projection, "sdb_result": result})
+    return {
+        "response": "SDB read completed with bounded evidence." if delivery["status"] == "completed" else "SDB read failed; the run remains recoverable.",
+        "evidence": delivery["evidence"],
+        "verification": projection["verification"],
+        "status": delivery["status"],
+    }
 
 
 def thread_dict(thread: InternalChatThread) -> dict:
@@ -429,7 +441,8 @@ def submit_message(
         if result.get("sdb_phase"):
             thread.current_plan = _sdb_plan(result["sdb_spec"], result.get("sdb_tasks", []))
             thread.current_plan["sdb"] = dict(thread.current_plan)
-            thread.current_plan.update({"tool": None, "arguments": {}, "requires_approval": True})
+            first_task = thread.current_plan["tasks"][0] if thread.current_plan["tasks"] else {}
+            thread.current_plan.update({"tool": first_task.get("tool"), "arguments": first_task.get("arguments", {}), "requires_approval": True})
             result["approval"] = issue_approval(thread.current_plan)
         thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
             "stage": result.get("status", "completed"),
@@ -455,7 +468,7 @@ def submit_message(
                 events=_events_for(result, thread.id, run_id),
                 spec=result.get("sdb_spec"),
                 results=(result.get("sdb_result") or {}).get("results", []),
-                authorization=result.get("project_authorization"),
+                authorization=project_authorization,
             )
         message.assistant_metadata = {
             **(message.assistant_metadata or {}),
@@ -587,8 +600,7 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
         return None
     if plan.get("sdb"):
         result = _run_sdb_tasks(session, thread, run_id, _thread_project_authorization(session, thread))
-        result["response"] = "SDB execution is not implemented; no task was executed."
-        result["evidence"] = [{"route": "sdb", "phase": "DELIVER", "status": "degraded"}]
+        result.update(_sdb_delivery(thread, result))
     else:
         result = execute({
         "thread_id": thread.id,
@@ -600,9 +612,9 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
         "actor": user.username,
         "request_message_id": message.id,
         })
-    message.status = "processed"
+    message.status = "processed" if result.get("status") == "completed" else "failed"
     message.completed_at = datetime.now(timezone.utc)
-    thread.assistant_state = {**thread.assistant_state, "stage": "completed", "execution_status": "completed"}
+    thread.assistant_state = {**thread.assistant_state, "stage": result.get("status"), "execution_status": result.get("status"), "verification": result.get("verification")}
     response_message = InternalChatMessage(
         thread_id=thread.id, author="agent", content=result["response"], status="processed",
         completed_at=datetime.now(timezone.utc), assistant_metadata={"run_id": run_id},
@@ -639,8 +651,7 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
         return False
     if (thread.current_plan or {}).get("sdb"):
         result = _run_sdb_tasks(session, thread, run_id, _thread_project_authorization(session, thread))
-        result["response"] = "SDB execution is not implemented; no task was executed."
-        result["evidence"] = [{"route": "sdb", "phase": "DELIVER", "status": "degraded"}]
+        result.update(_sdb_delivery(thread, result))
     else:
         result = execute({
         "thread_id": thread.id,
@@ -652,9 +663,9 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
         "actor": user.username,
         "request_message_id": message.id,
         })
-    message.status = "processed"
+    message.status = "processed" if result.get("status") == "completed" else "failed"
     message.completed_at = datetime.now(timezone.utc)
-    thread.assistant_state = {**thread.assistant_state, "stage": "completed", "execution_status": "completed"}
+    thread.assistant_state = {**thread.assistant_state, "stage": result.get("status"), "execution_status": result.get("status"), "verification": result.get("verification")}
     session.add(InternalChatMessage(
         thread_id=thread.id, author="agent", content=result["response"], status="processed",
         completed_at=datetime.now(timezone.utc), assistant_metadata={"run_id": run_id},

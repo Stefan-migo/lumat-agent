@@ -33,7 +33,11 @@ def _run(*nodes):
 
 
 def test_native_nodes_run_in_declared_order_and_end_with_terminal_evidence():
-    state = _run(sdb_spec, sdb_plan, sdb_execute, sdb_verify, sdb_deliver)
+    state = _run(sdb_spec, sdb_plan)
+    state["sdb_result"] = {"results": [{"task_id": "task-1", "status": "completed", "result": {"rows": ["bounded"]}}]}
+    state.update(sdb_execute(state))
+    state.update(sdb_verify(state))
+    state.update(sdb_deliver(state))
 
     assert state["sdb_phase"] == "DELIVER"
     assert state["status"] == "completed"
@@ -106,8 +110,8 @@ def test_sdb_artifacts_and_evidence_are_bounded():
 def test_execute_and_verify_do_not_fabricate_completion():
     state = _run(sdb_spec, sdb_plan, sdb_execute, sdb_verify)
 
-    assert state["sdb_result"]["results"][0]["status"] == "completed"
-    assert state["verification"]["status"] == "passed"
+    assert state["sdb_result"]["results"] == []
+    assert state["verification"]["status"] == "failed"
 
 
 def test_graph_exposes_native_phase_nodes_and_routes():

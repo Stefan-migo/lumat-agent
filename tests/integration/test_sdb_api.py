@@ -16,7 +16,7 @@ def assistant_graph(monkeypatch):
             "status": "approval_pending",
             "sdb_phase": "APPROVE",
             "sdb_spec": {"scope": {"entities": ["service history"]}, "scope_frozen": True, "sha256": "spec-digest"},
-            "sdb_tasks": [{"id": "task-1", "verifiable_output": "A bounded service-history summary"}],
+            "sdb_tasks": [{"id": "task-1", "scope": {"entities": ["service history"], "request": "Review service history"}, "summary": "Read service history", "tool": "conversations.search", "arguments": {"query": "Review service history", "limit": 10}, "verifiable_output": "A bounded service-history summary"}],
             "planner": {"classification": "normal", "valid": True},
         }
 
