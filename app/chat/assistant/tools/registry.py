@@ -199,12 +199,12 @@ def _project_list(session, args: ProjectListArgs):
     return projects.list(session)[: args.limit]
 
 
-def _project_find(session, args: ProjectFindArgs):
-    return projects.find(session, args.query)
+def _project_find(session, args: ProjectFindArgs, *, _approval=None):
+    return projects.find(session, args.query, _approval=_approval)
 
 
-def _project_create(session, args: ProjectCreateArgs):
-    return projects.create(session, args.slug, args.name, args.purpose)
+def _project_create(session, args: ProjectCreateArgs, *, _approval=None):
+    return projects.create(session, args.slug, args.name, args.purpose, _approval=_approval)
 
 
 def _project_rename(session, args: ProjectRenameArgs):
@@ -286,14 +286,33 @@ def execute_tool(
     except Exception as exc:
         raise ToolValidationError(f"invalid arguments for {name}") from exc
     payload = {"tool": name, "arguments": parsed.model_dump()}
+    project_approval = None
+    if name.startswith("project.") and approval:
+        project_payload = approval.get("project_payload")
+        if isinstance(project_payload, dict):
+            payload["project_payload"] = project_payload
+        if not validate_execution(payload, approval):
+            raise ToolValidationError("approval does not match exact tool arguments")
+        decision = project_payload.get("decision") if isinstance(project_payload, dict) else None
+        if name in {"project.find", "project.create"} and not isinstance(decision, dict):
+            raise ToolValidationError("project approval is missing an explicit decision")
+        if name in {"project.find", "project.create"}:
+            project_approval = projects._ApprovedProjectDecision(
+                operation=name.removeprefix("project."), decision=decision
+            )
     if not cost_allowed:
         raise ToolValidationError("assistant cost limit blocks tool execution")
     if not definition.read_only and not approval:
         raise ToolValidationError("write tool requires consumed exact approval")
-    if not definition.read_only and not validate_execution(payload, approval or {}):
+    if not definition.read_only and not project_approval and not validate_execution(payload, approval or {}):
         raise ToolValidationError("approval does not match exact tool arguments")
     try:
-        result = _plain(definition.handler(session, parsed))
+        if name == "project.find":
+            result = _plain(definition.handler(session, parsed, _approval=project_approval))
+        elif name == "project.create":
+            result = _plain(definition.handler(session, parsed, _approval=project_approval))
+        else:
+            result = _plain(definition.handler(session, parsed))
     except SearchFailure as exc:
         return {
             "tool": name,

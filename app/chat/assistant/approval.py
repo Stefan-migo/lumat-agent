@@ -107,8 +107,11 @@ def validate_approval(plan: dict, approval: dict, token: str) -> bool:
 
 def consume_approval(approval: dict, token: str) -> bool:
     """Consume an approval once after validating its token and exact payload."""
+    plan = {"tool": approval.get("tool"), "arguments": approval.get("arguments", {})}
+    if isinstance(approval.get("project_payload"), dict):
+        plan["project_payload"] = approval["project_payload"]
     if not validate_approval(
-        {"tool": approval.get("tool"), "arguments": approval.get("arguments", {})},
+        plan,
         approval,
         token,
     ):

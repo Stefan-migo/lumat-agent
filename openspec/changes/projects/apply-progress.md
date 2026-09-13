@@ -206,3 +206,44 @@ None from the WU-1 design. WU-2 through WU-5 remain intentionally unimplemented.
 - `tests/unit/test_assistant_tools.py` exists and was included as requested.
 - `tests/integration/test_assistant_tools.py` contains the existing automation runtime harness; project tool runtime contracts are covered at the unit service seam in this slice. WU-5 panel API/UI was not implemented.
 - The pre-existing terminology failure in `tests/unit/test_assistant_extensions.py` was not fixed.
+
+## Bounded Correction — WU-4 Approved Semantic Selection
+
+### Status
+
+- Scope: WU-4 gate finding only; WU-5 panel API/UI remains intentionally unimplemented.
+- Delivery: `auto-chain`, `stacked-to-main`; correction commit follows the existing WU-4 slice.
+- Mode: Strict TDD.
+- State: ready for verification.
+
+### Completed Tasks
+
+- [x] Preserve project approval decisions in the consumed-approval validation path.
+- [x] Select a bounded approved candidate for `project.find` after exact, consumed, non-expired approval.
+- [x] Reuse an approved candidate or create a distinct project for approved `project.create`.
+- [x] Preserve approval-pending behavior and reject absent, expired, replayed, or changed-payload approvals.
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| Approved semantic selection | `tests/unit/test_assistant_tools.py` | Unit | ✅ 31/31 | ✅ Four new behavior tests failed before implementation | ✅ 35/35 | ✅ find, create-reuse, create-distinct, invalid/replay/expiry paths | ✅ Clean |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result, run 1 | `DATABASE_URL='postgresql+psycopg://app:app@localhost:5436/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5436/lumat' uv run pytest tests/unit/test_assistant_tools.py tests/integration/test_assistant_tools.py tests/integration/test_assistant_chat.py -p no:warnings` → **35 passed in 16.56s**, exit 0 |
+| Focused test command and exact result, run 2 | Same command repeated after bookkeeping/inspection → **35 passed in 16.75s**, exit 0 |
+| Runtime harness command/scenario and exact result | The focused integration suite exercised the real assistant approval/runtime boundary against dedicated PostgreSQL `:5436`; **35 passed** in run 1. |
+| Rollback boundary | Revert the correction commit; only `app/chat/assistant/approval.py`, `app/chat/assistant/tools/registry.py`, `app/services/projects.py`, `tests/unit/test_assistant_tools.py`, and this progress section are removed. |
+
+### Correction Graph Check
+
+- Nodes consulted: `approval.py`, `issue_approval()`, `consume_approval()`, `validate_execution()`, `registry.py`, `execute_tool()`, `projects.py`, `find()`, `create()`, `ProjectCandidate`, `test_assistant_tools.py`, and `test_assistant_chat.py`.
+- Edges/context: `approval.py` ↔ `registry.py` carries exact project payload digests; `execute_tool()` → project handlers; project handlers → `find()`/`create()`; services → `Project` and embedding candidates; tests → approval and runtime boundaries.
+- Queries/paths: `graphify query "approved project selection decision canonical digest service find create"`; `graphify path "app/chat/assistant/approval.py" "app/chat/assistant/tools/registry.py" --undirected`; `graphify path "app/chat/assistant/tools/registry.py" "app/services/projects.py" --undirected` (the latter resolved through the registry/agent graph with no direct directed edge).
+
+### Deviations and Issues
+
+- None from the bounded correction scope. The approved decision is private service capability data created only after `execute_tool()` validates the consumed exact approval.
