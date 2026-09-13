@@ -68,6 +68,46 @@ def cortex_session_gate(state: AssistantState) -> AssistantState:
     return {"cortex_route": "cortex", "cortex_rejection": None}
 
 
+def classify_cortex_turn(content: str) -> str:
+    """Classify the bounded Cortex loop without inferring lifecycle changes."""
+    text = content.strip()
+    if text == "/planning close":
+        return "close"
+    lowered = text.casefold()
+    if "?" in text or lowered.startswith(("what ", "why ", "how ")):
+        return "question"
+    if lowered.startswith(("research ", "investigate ", "look up ")):
+        return "research"
+    if lowered.startswith(("decide ", "we will ", "let's use ", "use ")):
+        return "decision"
+    return "continue"
+
+
+def cortex_session_turn(state: AssistantState) -> AssistantState:
+    """Advance an active Cortex session; questions/research need no decision."""
+    current = dict(state["cortex_session"])
+    turn_class = (state.get("planner") or {}).get("cortex_class") or classify_cortex_turn(state.get("content", ""))
+    index = current.get("turn_index", 0) + 1
+    current.update({"turn_index": index, "last_class": turn_class})
+    result: AssistantState = {
+        "cortex_session": current,
+        "response": "Cortex session closed." if turn_class == "close" else state.get("content", ""),
+        "status": "completed",
+    }
+    if turn_class == "close":
+        current.update({"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat()})
+    elif turn_class == "decision":
+        key = f"cortex-session/{current['slug']}:decision:{index}"
+        current["decision_keys"] = [*current.get("decision_keys", []), key]
+        session = state.get("session")
+        if session is not None and hasattr(session, "add"):
+            from app.services.tukulpan import record_decision
+            record_decision(session, thread_id=state["thread_id"], topic_key=key,
+                            title=current["topic"], content=state.get("content", ""))
+    result["cortex_session"] = current
+    return result
+
+
 def load_panel_context(session, thread_id: int) -> dict:
     """Read the Tukulpan panel scope, with pinned memories first and bounded."""
     if session is None or not hasattr(session, "execute"):

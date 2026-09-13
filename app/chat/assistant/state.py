@@ -35,6 +35,7 @@ class PlannerOutput(BaseModel):
 
     kind: Literal["tool", "respond", "complex"]
     classification: Literal["normal", "sdb"] = "normal"
+    cortex_class: Literal["question", "research", "decision", "continue", "close"] | None = None
     tool: str | None = None
     arguments: dict = Field(default_factory=dict)
     summary: str = Field(min_length=1, max_length=200)

@@ -12,7 +12,7 @@ from app.chat.assistant.approval import canonical_sdb_digest, issue_approval, va
 from app.chat.assistant.nodes import execute
 from app.chat.assistant import nodes as assistant_nodes
 from app.chat.assistant.attachments import prepare_attachment_context
-from app.chat.assistant.state import COMPACTION_RETENTION_TOKENS, COMPACTION_THRESHOLD_TOKENS, INJECTION_TOKEN_BUDGET, estimate_tokens
+from app.chat.assistant.state import COMPACTION_RETENTION_TOKENS, COMPACTION_THRESHOLD_TOKENS, INJECTION_TOKEN_BUDGET, estimate_tokens, merge_assistant_state
 from app.chat.assistant.recovery import claim_execution, recover_events, resumable_sdb_tasks
 from app.models import AssistantAttachment, InternalChatMessage, InternalChatThread, User
 from app.services.audit import record_audit
@@ -27,6 +27,42 @@ SDB_EVENT_HISTORY_LIMIT = 64
 
 def _sdb_plan(spec: dict, tasks: list[dict]) -> dict:
     return {"phase": "EXECUTE", "spec": spec, "tasks": tasks}
+
+
+def cortex_approved_plan(spec: dict, tasks: list[dict]) -> dict:
+    """Represent the closed report as an approved-plan-only SDB handoff."""
+    return {
+        "status": "approved-plan",
+        "execution": "not-implemented",
+        "sdb": _sdb_plan(spec, tasks),
+        "tool": None,
+        "arguments": {},
+        "requires_approval": True,
+    }
+
+
+def close_cortex_session(session, thread: InternalChatThread, *, report: str) -> dict:
+    """Persist and archive a Cortex report before exposing its SDB handoff."""
+    cortex = dict((thread.assistant_state or {}).get("cortex_session") or {})
+    slug = cortex["slug"]
+    report_key = f"cortex-session/{slug}:report"
+    tukulpan.archive_report(
+        session, thread_id=thread.id, topic_key=report_key,
+        title=cortex.get("topic", slug), content=report,
+    )
+    spec = {"scope": {"request": cortex.get("topic", ""), "report": report}, "report_key": report_key}
+    plan = cortex_approved_plan(spec, [{"id": "cortex-report", "summary": "Approved Cortex report"}])
+    run_id = uuid4().hex
+    thread.assistant_state = merge_assistant_state(
+        thread.assistant_state or {},
+        {"stage": "approval_pending", "recoverable": True, "execution_status": "pending",
+         "cortex_session": {"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat(),
+                             "report_key": report_key, "handoff": {"status": "pending", "sdb_phase": "SPEC"}},
+         "approval": issue_approval(plan)},
+    )
+    thread.current_plan = plan
+    thread.active_run_id = run_id
+    return {"report_key": report_key, "report": report, "plan": plan, "run_id": run_id}
 
 
 def _thread_project_authorization(session: Session, thread: InternalChatThread):
@@ -347,6 +383,7 @@ def submit_message(
             context=context,
             compaction=compaction,
             project_authorization=project_authorization,
+            cortex_session=(thread.assistant_state or {}).get("cortex_session"),
         )
         thread.active_run_id = run_id
         thread.current_plan = result.get("plan")
@@ -355,7 +392,7 @@ def submit_message(
             thread.current_plan["sdb"] = dict(thread.current_plan)
             thread.current_plan.update({"tool": None, "arguments": {}, "requires_approval": True})
             result["approval"] = issue_approval(thread.current_plan)
-        thread.assistant_state = {
+        thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
             "stage": result.get("status", "completed"),
             "recoverable": True,
             "approval": result.get("approval"),
@@ -367,7 +404,8 @@ def submit_message(
             "cost_mode": result.get("cost_mode", "normal"),
             "cost_directive": result.get("cost_directive", ""),
             "compaction": compaction,
-        }
+            **({"cortex_session": result["cortex_session"]} if result.get("cortex_session") else {}),
+        })
         if result.get("sdb_phase"):
             persist_sdb_state(
                 session,

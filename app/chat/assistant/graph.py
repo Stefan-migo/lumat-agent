@@ -7,6 +7,8 @@ from langgraph.graph import END, START, StateGraph
 from app.chat.assistant.nodes import (
     assemble_context_node,
     collect_evidence,
+    cortex_session_gate,
+    cortex_session_turn,
     execute,
     guardrails,
     panel_cost_gate,
@@ -50,6 +52,10 @@ def _after_sdb_trigger_gate(state: AssistantState) -> str:
     return "sdb_clarify" if state.get("sdb_route") == "sdb" else "guardrails"
 
 
+def _after_cortex_gate(state: AssistantState) -> str:
+    return "cortex_turn" if state.get("cortex_route") == "cortex" else "sdb_trigger_gate"
+
+
 def _after_guardrails(state: AssistantState) -> str:
     if state.get("status") == "approval_pending":
         return END
@@ -69,6 +75,8 @@ def build_assistant_graph():
     builder.add_node("assemble_context", assemble_context_node)
     builder.add_node("panel_cost_gate", panel_cost_gate)
     builder.add_node("plan_llm", plan_llm)
+    builder.add_node("cortex_session_gate", cortex_session_gate)
+    builder.add_node("cortex_turn", cortex_session_turn)
     builder.add_node("sdb_trigger_gate", sdb_trigger_gate)
     builder.add_node("sdb_clarify", sdb_clarify)
     builder.add_node("sdb_spec", sdb_spec)
@@ -84,7 +92,12 @@ def build_assistant_graph():
     builder.add_edge(START, "assemble_context")
     builder.add_edge("assemble_context", "panel_cost_gate")
     builder.add_conditional_edges("panel_cost_gate", _after_cost_gate, {"plan_llm": "plan_llm", "evidence": "evidence"})
-    builder.add_edge("plan_llm", "sdb_trigger_gate")
+    builder.add_edge("plan_llm", "cortex_session_gate")
+    builder.add_conditional_edges(
+        "cortex_session_gate", _after_cortex_gate,
+        {"cortex_turn": "cortex_turn", "sdb_trigger_gate": "sdb_trigger_gate"},
+    )
+    builder.add_edge("cortex_turn", "evidence")
     builder.add_conditional_edges(
         "sdb_trigger_gate", _after_sdb_trigger_gate,
         {"guardrails": "guardrails", "sdb_clarify": "sdb_clarify"},
@@ -103,7 +116,7 @@ def build_assistant_graph():
     return builder.compile()
 
 
-def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, session=None, actor=None, actor_role=None, sdb_requested=None, attachments=None, context=None, compaction=None, project_authorization=None) -> AssistantState:
+def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, session=None, actor=None, actor_role=None, sdb_requested=None, attachments=None, context=None, compaction=None, project_authorization=None, cortex_session=None) -> AssistantState:
     if project_authorization is not None:
         from app.services.projects import _ProjectAuthorization
         if not isinstance(project_authorization, _ProjectAuthorization):
@@ -126,5 +139,6 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
         "context_meta": (context or {}).get("meta", {}),
         "projection_evidence": (context or {}).get("meta", {}),
         "compaction": compaction or {},
+        "cortex_session": cortex_session,
     }
     return build_assistant_graph().invoke(state)
