@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.evidence import make_evidence
-from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens, validate_cortex_session
+from app.chat.assistant.state import AssistantState, PlannerOutput, SDBTask, estimate_tokens, validate_cortex_session
 from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
 from app.services import llm
@@ -266,13 +266,15 @@ def sdb_plan(state: AssistantState) -> AssistantState:
     """Create bounded tasks, each with exactly one verifiable output."""
     spec = state["sdb_spec"]
     scope = spec["scope"]
-    task = {
-        "id": "task-1",
-        "scope": scope,
-        "summary": "Review the requested service history",
-        "verifiable_output": "A bounded service-history summary",
-    }
-    return {"sdb_phase": "PLAN", "sdb_tasks": [task], "status": "sdb_planned"}
+    task = SDBTask(
+        id="task-1",
+        scope=scope,
+        summary="Review the requested service history",
+        verifiable_output="A bounded service-history summary",
+        tool="conversations.search",
+        arguments={"query": scope["request"], "limit": 10},
+    )
+    return {"sdb_phase": "PLAN", "sdb_tasks": [task.model_dump()], "status": "sdb_planned"}
 
 
 def sdb_approve(state: AssistantState) -> AssistantState:
@@ -281,12 +283,8 @@ def sdb_approve(state: AssistantState) -> AssistantState:
 
 
 def sdb_execute(state: AssistantState) -> AssistantState:
-    """Expose the deferred retrieval boundary without claiming work was done."""
-    results = [
-        {"task_id": task["id"], "status": "not-implemented"}
-        for task in state.get("sdb_tasks", [])
-    ]
-    result = {"results": results}
+    """Project canonical durable results without executing a second runner."""
+    result = state.get("sdb_result") or {"results": []}
     return {"sdb_phase": "EXECUTE", "sdb_result": result, "status": "sdb_executed"}
 
 
@@ -294,18 +292,20 @@ def sdb_verify(state: AssistantState) -> AssistantState:
     """Reject verification until real task results exist."""
     tasks = state.get("sdb_tasks", [])
     results = state.get("sdb_result", {}).get("results", [])
-    verified = len(tasks) == len(results) and all(item.get("status") == "completed" for item in results)
-    verification = {"status": "passed" if verified else "failed", "task_ids": [task["id"] for task in tasks], "artifact_refs": []}
+    task_ids = [task["id"] for task in tasks]
+    result_ids = [item.get("task_id") for item in results]
+    verified = task_ids == result_ids and all(item.get("status") == "completed" for item in results)
+    verification = {"status": "passed" if verified else "failed", "task_ids": task_ids, "artifact_refs": []}
     return {"sdb_phase": "VERIFY", "verification": verification, "status": "sdb_verified" if verified else "error"}
 
 
 def sdb_deliver(state: AssistantState) -> AssistantState:
     """Return honest terminal evidence without expanding the frozen scope."""
     verification = state.get("verification", {})
-    status = "completed" if verification.get("status") == "passed" else "degraded"
+    status = "completed" if verification.get("status") == "passed" else "failed"
     evidence = [{"route": "sdb", "phase": "DELIVER", "status": status,
                  "task_ids": verification.get("task_ids", []),
-                 **({} if status == "completed" else {"reason": "verification did not pass on real work"})}]
+                  **({} if status == "completed" else {"reason": "verification did not pass on real work"})}]
     return {"sdb_phase": "DELIVER", "evidence": evidence, "status": status}
 
 

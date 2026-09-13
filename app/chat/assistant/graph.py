@@ -67,7 +67,7 @@ def _after_cost_gate(state: AssistantState) -> str:
 
 
 def _after_sdb_approve(state: AssistantState) -> str:
-    return "sdb_execute" if (state.get("approval") or {}).get("status") == "approved" else END
+    return "sdb_execute" if (state.get("approval") or {}).get("status") == "consumed" else END
 
 
 def build_assistant_graph():

@@ -16,7 +16,7 @@ def assistant_graph(monkeypatch):
             "status": "approval_pending",
             "sdb_phase": "APPROVE",
             "sdb_spec": {"scope": {"entities": ["service history"]}, "scope_frozen": True, "sha256": "spec-digest"},
-            "sdb_tasks": [{"id": "task-1", "verifiable_output": "A bounded service-history summary"}],
+            "sdb_tasks": [{"id": "task-1", "scope": {"entities": ["service history"], "request": "Review service history"}, "summary": "Read service history", "tool": "conversations.search", "arguments": {"query": "Review service history", "limit": 10}, "verifiable_output": "A bounded service-history summary"}],
             "planner": {"classification": "normal", "valid": True},
         }
 
@@ -111,3 +111,31 @@ def test_sdb_stream_reconnect_replays_same_persisted_events(client, migrated_db,
     assert _events(first) == _events(second)
     reloaded = client.get(f"/panel/api/chat/threads/{thread_id}").json()["thread"]
     assert reloaded["assistant_state"]["sdb"]["run_id"] == run_id
+
+
+def test_failed_sdb_task_stream_is_error_and_never_completed(client, migrated_db, mock_openai_chat, monkeypatch):
+    from app.chat.assistant.tools.registry import ToolExecutionError
+
+    _user("sdb-api-failed", "admin")
+    _login(client, "sdb-api-failed")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    pending = client.post(
+        f"/panel/api/chat/threads/{thread_id}/messages",
+        json={"content": "Review service history", "sdb_requested": True},
+    ).json()["message"]
+    metadata = pending["assistant_metadata"]
+    monkeypatch.setattr(
+        "app.services.agent_chat.execute_tool",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ToolExecutionError("read failed")),
+    )
+
+    approval = client.post(
+        f"/panel/api/chat/threads/{thread_id}/approval",
+        json={"run_id": metadata["run_id"], "token": metadata["approval"]["token"]},
+    )
+    assert approval.status_code == 200, approval.text
+    events = _events(client.get(f"/panel/api/chat/threads/{thread_id}/stream?run_id={metadata['run_id']}"))
+    task_events = [event for event in events if event.get("type") == "task"]
+    assert task_events and task_events[-1]["status"] == "failed"
+    assert not any(event.get("type") == "task" and event.get("status") == "completed" for event in events)
+    assert any(event.get("type") == "status" and event.get("status") == "failed" for event in events)

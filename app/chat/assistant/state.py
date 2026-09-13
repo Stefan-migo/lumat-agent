@@ -87,6 +87,29 @@ class CortexSession(BaseModel):
     handoff: CortexHandoff
 
 
+class SDBTask(BaseModel):
+    """One validated, read-only task in a frozen SDB plan."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=100)
+    scope: dict
+    summary: str = Field(min_length=1, max_length=200)
+    verifiable_output: str = Field(min_length=1, max_length=200)
+    tool: str = Field(min_length=1, max_length=100)
+    arguments: dict
+
+    @model_validator(mode="after")
+    def validate_read_tool(self) -> "SDBTask":
+        from app.chat.assistant.tools.registry import get_tool
+
+        definition = get_tool(self.tool)
+        if not definition.read_only:
+            raise ValueError("SDB tasks must use read-only tools")
+        self.arguments = definition.args_model.model_validate(self.arguments).model_dump()
+        return self
+
+
 def validate_cortex_session(state: object) -> bool:
     """Return whether a state contains a complete, valid Cortex session."""
     if not isinstance(state, dict) or "cortex_session" not in state:
@@ -145,7 +168,7 @@ class AssistantState(TypedDict, total=False):
     sdb_scope: dict
     project_authorization: object
     sdb_spec: dict
-    sdb_tasks: list[dict]
+    sdb_tasks: list[SDBTask]
     sdb_result: dict
     verification: dict
 

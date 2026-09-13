@@ -13,34 +13,35 @@ from app.chat.assistant.recovery import claim_execution, resumable_sdb_tasks
 
 
 def _sdb_plan(spec=None, tasks=None):
+    request = (spec or {"scope": {"entities": ["service history"]}, "sha256": "spec-1"})["scope"].get("request", "service history")
     return {
         "phase": "EXECUTE",
         "spec": spec or {"scope": {"entities": ["service history"]}, "sha256": "spec-1"},
-        "tasks": tasks or [{"id": "task-1", "verifiable_output": "summary"}],
+        "tasks": tasks or [{"id": "task-1", "scope": {"entities": ["service history"], "request": request}, "summary": "Read history", "verifiable_output": "summary", "tool": "conversations.search", "arguments": {"query": request, "limit": 10}}],
     }
 
 
 def test_mutated_spec_after_approval_is_rejected_without_execution():
     plan = _sdb_plan()
-    approval = issue_approval({"sdb": plan, "tool": None, "arguments": {}})
+    approval = issue_approval({"sdb": plan, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]})
     mutated = _sdb_plan(spec={"scope": {"entities": ["billing"]}, "sha256": "spec-2"})
 
-    assert validate_approval({"sdb": mutated, "tool": None, "arguments": {}}, approval, approval["token"]) is False
-    assert validate_execution({"sdb": mutated, "tool": None, "arguments": {}}, {**approval, "status": "consumed"}) is False
+    assert validate_approval({"sdb": mutated, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]}, approval, approval["token"]) is False
+    assert validate_execution({"sdb": mutated, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]}, {**approval, "status": "consumed"}) is False
 
 
 def test_approval_binds_exact_canonical_phase_and_task_payload_and_expiry():
     plan = _sdb_plan()
-    approval = issue_approval({"sdb": plan, "tool": None, "arguments": {}})
+    approval = issue_approval({"sdb": plan, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]})
     altered = _sdb_plan(tasks=[{"id": "task-2", "verifiable_output": "summary"}])
 
     assert canonical_sdb_digest(plan) == approval["sdb_sha256"]
-    assert validate_approval({"sdb": altered, "tool": None, "arguments": {}}, approval, approval["token"]) is False
+    assert validate_approval({"sdb": altered, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]}, approval, approval["token"]) is False
     expired = issue_approval(
-        {"sdb": plan, "tool": None, "arguments": {}},
+        {"sdb": plan, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]},
         expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
     )
-    assert validate_approval({"sdb": plan, "tool": None, "arguments": {}}, expired, expired["token"]) is False
+    assert validate_approval({"sdb": plan, "tool": "conversations.search", "arguments": plan["tasks"][0]["arguments"]}, expired, expired["token"]) is False
 
 
 class _AtomicClaimSession:
@@ -87,17 +88,156 @@ def test_sdb_task_runner_never_fabricates_completed_results(monkeypatch):
 
     captured = []
     monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: captured.append(kwargs))
+    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: {"status": "completed", "result": {"rows": []}})
     thread = SimpleNamespace(
         id=1,
-        current_plan={"sdb": {"tasks": [{"id": "task-1", "verifiable_output": "summary"}]}},
+        current_plan={"sdb": {"tasks": [{"id": "task-1", "scope": {}, "summary": "read", "verifiable_output": "summary", "tool": "conversations.search", "arguments": {"query": "x", "limit": 10}}]}},
         assistant_state={"sdb": {"checkpoints": []}},
     )
 
     result = agent_chat._run_sdb_tasks(object(), thread, "run-1")
 
-    assert result["status"] == "not-implemented"
-    assert [item["status"] for item in result["results"]] == ["not-implemented"]
-    assert all(entry["checkpoint"]["status"] != "completed" for entry in captured)
+    assert result["status"] == "completed"
+    assert [item["status"] for item in result["results"]] == ["completed"]
+    assert captured[0]["checkpoint"]["status"] == "completed"
+
+
+def test_sdb_task_runner_stops_after_first_failure(monkeypatch):
+    from app.services import agent_chat
+
+    captured = []
+    monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: captured.append(kwargs))
+    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: {"status": "error", "error": "read failed"})
+    tasks = [{"id": f"task-{n}", "scope": {}, "summary": "read", "verifiable_output": "rows", "tool": "conversations.search", "arguments": {"query": "x", "limit": 10}} for n in (1, 2)]
+    thread = SimpleNamespace(id=1, current_plan={"sdb": {"tasks": tasks}}, assistant_state={"sdb": {"checkpoints": []}})
+
+    result = agent_chat._run_sdb_tasks(object(), thread, "run-1")
+
+    assert result["status"] == "failed"
+    assert [item["task_id"] for item in result["results"]] == ["task-1"]
+    assert captured[0]["checkpoint"]["status"] == "failed"
+    assert captured[0]["events"][0]["status"] == "failed"
+    assert captured[0]["results"] == result["results"]
+
+
+def test_sdb_failed_task_records_audit_and_never_streams_completed(monkeypatch):
+    from app.services import agent_chat
+
+    audits = []
+    events = []
+    monkeypatch.setattr(agent_chat, "record_audit", lambda *args, **kwargs: audits.append(kwargs))
+    monkeypatch.setattr(
+        agent_chat, "persist_sdb_state",
+        lambda *args, **kwargs: events.extend(kwargs["events"]),
+    )
+    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: {"status": "error", "error": "read failed"})
+    thread = SimpleNamespace(
+        id=1,
+        current_plan={"sdb": {"tasks": _sdb_plan()["tasks"]}},
+        assistant_state={"sdb": {"checkpoints": []}},
+    )
+
+    result = agent_chat._run_sdb_tasks(SimpleNamespace(add=lambda entry: None), thread, "run-failed")
+
+    assert result["status"] == "failed"
+    assert result["results"][0]["status"] == "failed"
+    assert events[0]["status"] == "failed"
+    assert all(event["status"] != "completed" for event in events)
+    assert audits[0]["action"] == "internal_chat.sdb_execution"
+
+
+def test_sdb_timeout_and_exception_are_bounded_failed_attempts(monkeypatch):
+    from app.chat.assistant.tools.registry import ToolExecutionError
+    from app.services import agent_chat
+
+    for failure in (TimeoutError("read timed out"), ToolExecutionError("read failed")):
+        audits = []
+        captured = []
+        monkeypatch.setattr(agent_chat, "record_audit", lambda *args, **kwargs: audits.append(kwargs))
+        monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: captured.append(kwargs))
+        monkeypatch.setattr(
+            agent_chat, "execute_tool",
+            lambda *args, failure=failure, **kwargs: (_ for _ in ()).throw(failure),
+        )
+        thread = SimpleNamespace(
+            id=1,
+            current_plan={"sdb": {"tasks": _sdb_plan()["tasks"]}},
+            assistant_state={"sdb": {"checkpoints": []}},
+        )
+
+        result = agent_chat._run_sdb_tasks(SimpleNamespace(add=lambda entry: None), thread, "run-failure")
+
+        assert result["status"] == "failed"
+        assert result["results"][0]["status"] == "failed"
+        assert result["results"][0]["error"] in {"read timed out", "read failed"}
+        assert len(audits) == len(captured) == 1
+
+
+def test_sdb_gate_order_rejects_cost_before_project_capability(monkeypatch):
+    from app.services import agent_chat
+
+    calls = []
+    monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: calls.append("dispatch"))
+    task = _sdb_plan()["tasks"][0] | {"scope": {"proyecto": "field-ops"}}
+    thread = SimpleNamespace(
+        id=1,
+        current_plan={"sdb": {"tasks": [task]}},
+        assistant_state={"sdb": {"checkpoints": []}, "guardrails": {"cost_allowed": False}},
+    )
+
+    result = agent_chat._run_sdb_tasks(SimpleNamespace(add=lambda entry: None), thread, "run-blocked")
+
+    assert result["status"] == "failed"
+    assert result["results"][0]["error"] == "assistant cost limit blocks tool execution"
+    assert calls == []
+
+
+def test_sdb_missing_project_capability_fails_closed_without_tool(monkeypatch):
+    from app.services import agent_chat
+
+    captured = []
+    monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: captured.append(kwargs))
+    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("executed")))
+    task = _sdb_plan()["tasks"][0] | {"scope": {"proyecto": "field-ops"}}
+    thread = SimpleNamespace(
+        id=1,
+        current_plan={"sdb": {"tasks": [task]}},
+        assistant_state={"sdb": {"checkpoints": []}},
+    )
+
+    result = agent_chat._run_sdb_tasks(SimpleNamespace(add=lambda entry: None), thread, "run-capability")
+
+    assert result["status"] == "failed"
+    assert result["results"][0]["error"] == "SDB project capability is unavailable"
+    assert captured[0]["checkpoint"]["status"] == "failed"
+    assert captured[0]["results"][0]["status"] == "failed"
+
+
+def test_sdb_write_task_is_rejected_with_no_side_effect(monkeypatch):
+    from app.services import agent_chat
+
+    captured = []
+    monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: captured.append(kwargs))
+    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("executed")))
+    task = _sdb_plan()["tasks"][0] | {
+        "tool": "automation.create_rule",
+        "arguments": {
+            "name": "unsafe", "event_type": "message.received", "channel": "panel",
+            "template_event": "unsafe", "cooldown_seconds": 0,
+        },
+    }
+    thread = SimpleNamespace(
+        id=1,
+        current_plan={"sdb": {"tasks": [task]}},
+        assistant_state={"sdb": {"checkpoints": []}},
+    )
+
+    result = agent_chat._run_sdb_tasks(SimpleNamespace(add=lambda entry: None), thread, "run-write")
+
+    assert result["status"] == "failed"
+    assert result["results"][0]["error"] == "SDB tasks must use read-only tools"
+    assert captured[0]["checkpoint"]["status"] == "failed"
 
 
 def test_sdb_task_runner_forwards_authorized_project_to_checkpoint(monkeypatch):
@@ -108,7 +248,7 @@ def test_sdb_task_runner_forwards_authorized_project_to_checkpoint(monkeypatch):
     authorization = SimpleNamespace(slug="field-ops")
     thread = SimpleNamespace(
         id=1,
-        current_plan={"sdb": {"tasks": [{"id": "task-1", "verifiable_output": "summary"}]}},
+        current_plan={"sdb": {"tasks": [{"id": "task-1", "scope": {}, "summary": "read", "verifiable_output": "summary", "tool": "conversations.search", "arguments": {"query": "x", "limit": 10}}]}},
         assistant_state={"sdb": {"checkpoints": []}},
     )
 

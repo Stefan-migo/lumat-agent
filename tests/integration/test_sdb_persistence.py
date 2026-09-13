@@ -166,6 +166,7 @@ def test_sdb_state_persists_phase_checkpoints_and_ordered_events():
             phase="EXECUTE",
             checkpoint={"sequence": 1, "task_id": "task-1", "status": "completed"},
             events=[{"type": "phase", "sequence": 0}, {"type": "checkpoint", "sequence": 1}],
+            results=[{"task_id": "task-1", "status": "completed", "result": {"rows": ["one"]}}],
         )
         session.commit()
 
@@ -176,6 +177,7 @@ def test_sdb_state_persists_phase_checkpoints_and_ordered_events():
         assert state["sdb"]["checkpoints"] == [
             {"sequence": 1, "task_id": "task-1", "status": "completed"}
         ]
+        assert state["sdb"]["results"][0]["task_id"] == "task-1"
     assert [event["sequence"] for event in state["events"]] == [0, 1]
 
 
