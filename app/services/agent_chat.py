@@ -450,7 +450,7 @@ def submit_message(
         message.error = "The agent could not process this message. Retry it."
         message.completed_at = datetime.now(timezone.utc)
         message.assistant_metadata = {**(message.assistant_metadata or {}), "run_id": run_id}
-        thread.assistant_state = {
+        thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
             "stage": "failed",
             "recoverable": True,
             "events": [{
@@ -461,7 +461,7 @@ def submit_message(
                 "error": str(exc),
                 "evidence": getattr(exc, "evidence", []),
             }],
-        }
+        })
         thread.active_run_id = run_id
     record_audit(session, actor=user.username, action="internal_chat.message_sent",
                  entity="internal_chat_message", entity_id=str(message.id),

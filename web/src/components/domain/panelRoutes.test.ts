@@ -22,7 +22,7 @@ describe('panel routes', () => {
         projects: '/panel/app/projects',
     });
     expect(Object.keys(PANEL_ROUTES)).toEqual([
-       'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings', 'users', 'projects',
+       'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings', 'users', 'projects', 'planning-sessions',
     ]);
 
     expect(pathForView('clients')).toBe('/panel/app/clients');
@@ -68,6 +68,12 @@ describe('panel routes', () => {
     expect(pathForRoute({ view: 'automation-rules', automationRuleId: 12 })).toBe('/panel/app/automation-rules/12');
     expect(parsePanelPath('/panel/app/automation-rules')).toEqual({ view: 'automation-rules' });
     expect(parsePanelPath('/panel/app/automation-rules/12')).toEqual({ view: 'automation-rules', automationRuleId: 12 });
+  });
+
+  it('builds and parses planning session routes', () => {
+    expect(parsePanelPath('/panel/app/planning-sessions')).toEqual({ view: 'planning-sessions' });
+    expect(parsePanelPath('/panel/app/planning-sessions/budget-review-8')).toEqual({ view: 'planning-sessions', planningSessionSlug: 'budget-review-8' });
+    expect(pathForRoute({ view: 'planning-sessions', planningSessionSlug: 'budget-review-8' })).toBe('/panel/app/planning-sessions/budget-review-8');
   });
 
   it('falls back to dashboard for malformed automation rule IDs', () => {

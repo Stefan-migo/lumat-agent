@@ -105,7 +105,7 @@ Extraction MUST keep `CANNOT_ANSWER_REPLY` importable from `app.chat.nodes.respo
 
 ### Requirement: AC-9 — Assistant Runtime Configuration
 
-The system MUST provide existence-validated assistant registry, personas, prompts, declared tool capabilities, and structured Gates deterministas / Guardrails classification under `agent/` for read-only runtime consumption. Startup MUST fail clearly for missing or invalid references; reference-only skills remain non-executable.
+The system MUST provide existence-validated assistant registry, personas, prompts, declared tool capabilities, structured Gates deterministas / Guardrails classification, and a Cortex-session runtime declaration under `agent/` for read-only consumption. The Cortex declaration MUST define the allowed turn classes and lifecycle command forms. Startup MUST fail clearly for missing or invalid references; reference-only skills remain non-executable.
 (Previously: runtime configuration validated prompts, personas, and tools but did not declare structured guardrails classification.)
 
 #### Scenario: Complete configuration loads
@@ -155,6 +155,24 @@ The assistant configuration MUST declare the structured planner fields and allow
 - GIVEN a planner returns a valid non-guardrails complex result
 - WHEN the harness evaluates it
 - THEN it remains on ordinary safe routing
+
+## ADDED Requirements
+
+### Requirement: AC-12 — Cortex classification declaration
+
+The assistant configuration MUST declare `question`, `research`, `decision`, `continue`, and `close` as the permitted Cortex classifications and MUST NOT infer lifecycle from arbitrary text.
+
+#### Scenario: Valid classification
+
+- GIVEN a planner returns one declared Cortex class
+- WHEN the harness validates it
+- THEN the class is accepted for routing
+
+#### Scenario: Unknown classification
+
+- GIVEN a planner returns an undeclared class or free-text lifecycle intent
+- WHEN validation runs
+- THEN the Cortex route is rejected fail-closed
 
 ## MODIFIED Requirements
 

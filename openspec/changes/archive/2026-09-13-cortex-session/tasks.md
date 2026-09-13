@@ -44,8 +44,8 @@ Test command: `DATABASE_URL='postgresql+psycopg://app:app@localhost:5437/lumat' 
 
 ## Phase 4: SPA integration and verification
 
-- [ ] T4.1 RED: frontend tests for API/types, navigation, list/detail/error/reopen; GREEN: update `web/src/api.ts`, `types.ts`, `web/src/components/domain/PanelShell.tsx`, and create `web/src/components/pages/PlanningSessions.tsx`.
-- [ ] T4.2 RED: test indicator, controls, exact commands, inert free text, stream failure/recovery; GREEN: update `web/src/components/pages/AgentChat.tsx` and related `web/src/**`.
-- [ ] T4.3 Run the provided database-backed command and `cd web && npm run build`; verify CS-1–CS-5, AC-9/12, PNL-APP-28/29, IAC-2/3/7, HL-2/3/5, and SDB-1/4. Threat matrix: all rows are explicitly N/A, so no threat RED tests are added.
+- [x] T4.1 RED: frontend tests for API/types, navigation, list/detail/error/reopen; GREEN: update `web/src/api.ts`, `types.ts`, `web/src/components/domain/PanelShell.tsx`, and create `web/src/components/pages/PlanningSessions.tsx`.
+- [x] T4.2 RED: test indicator, controls, exact commands, inert free text, stream failure/recovery; GREEN: update `web/src/components/pages/AgentChat.tsx` and related `web/src/**`.
+- [x] T4.3 Run the provided database-backed command and `cd web && npm run build`; verify CS-1–CS-5, AC-9/12, PNL-APP-28/29, IAC-2/3/7, HL-2/3/5, and SDB-1/4. Threat matrix: all rows are explicitly N/A, so no threat RED tests are added.
 
 Ponytail review: merged lifecycle/report/handoff checks; deleted new service, bus, planner, executor, route, migration, and threat-test tasks (YAGNI/N/A). Reuse existing seams. Graph consulted: `NAVIGATION`→`PanelShell`→`AgentChat`, `submit_message`→assistant graph, `record_decision`↔`list_for_entity`, `chat.py`→approval; graph stale/degraded at `c4d13da7`.

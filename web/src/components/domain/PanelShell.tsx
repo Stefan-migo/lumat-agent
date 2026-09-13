@@ -4,7 +4,7 @@ import type { PanelNotification, User } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 
-export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "users" | "projects";
+export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "users" | "projects" | "planning-sessions";
 
 /** Shell icon wrapper: 20px, stroke-based, `currentColor`, aria-hidden.
  *  Inline SVGs on purpose — no icon library (ponytail: no new deps). */
@@ -134,6 +134,7 @@ const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" |
   settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
   users: { label: "Usuarios", icon: UsersIcon, adminOnly: true },
   projects: { label: "Proyectos", icon: UsersIcon },
+  "planning-sessions": { label: "Sesiones de planning", icon: AssistantIcon, adminOnly: true },
 };
 
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;

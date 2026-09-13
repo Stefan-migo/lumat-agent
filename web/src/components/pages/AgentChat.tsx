@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from "react";
-import { ApiError, approveChatPlan, createChatThread, getChatThread, listActiveConversations, listConversations, sendChatMessage, streamChatEvents, uploadAssistantAttachment } from "../../api";
-import type { AssistantApproval, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantEvent, AssistantPlan, InternalChatMessage, InternalChatResponse, InternalChatThread } from "../../types";
+import { ApiError, approveChatPlan, closePlanningSession, createChatThread, getChatThread, listActiveConversations, listConversations, openPlanningSession, sendChatMessage, streamChatEvents, uploadAssistantAttachment } from "../../api";
+import type { AssistantApproval, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantEvent, AssistantPlan, InternalChatMessage, InternalChatResponse, InternalChatThread, PlanningSession, CortexArtifact, CortexHandoff } from "../../types";
 import { Avatar } from "../primitives/Avatar";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -35,6 +35,12 @@ function EvidenceList({ evidence }: { evidence: AssistantEvidence[] }) {
 
 export interface AgentChatProps { threadId?: number }
 
+function planningCommand(value: string): { action: "open" | "close"; topic?: string } | null {
+  const match = value.match(/^\/planning(?:\s+(.+))?$/);
+  if (!match?.[1]) return match ? { action: "close" } : null;
+  return match[1].trim().toLowerCase() === "close" ? { action: "close" } : { action: "open", topic: match[1].trim() };
+}
+
 export function AssistantCapabilitiesView({ capabilities }: { capabilities: AssistantCapabilities }) {
   return <Card title="Capacidades del asistente">
     <h3>Herramientas</h3>
@@ -65,6 +71,9 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
   const [lifecycle, setLifecycle] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<AssistantAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [cortex, setCortex] = useState<PlanningSession | null>(null);
+  const [handoff, setHandoff] = useState<CortexHandoff | null>(null);
+  const [report, setReport] = useState<CortexArtifact | null>(null);
 
   const handleEvent = (event: AssistantEvent) => {
     if (event.type === "plan") setPlan(event.plan ?? null);
@@ -92,6 +101,7 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
       setLifecycle(state?.stage ?? null);
        setRunId(result.thread.active_run_id ?? null);
        setAttachments(result.attachments ?? []);
+       setCortex(state?.cortex_session ?? null);
       if (result.thread.active_run_id && state?.recoverable && state.stage !== "approval_pending" && state.stage !== "completed") {
         setProcessing(true);
         void openStream(result.thread.id, result.thread.active_run_id);
@@ -140,6 +150,21 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
     if (!thread || !content.trim() || processing) return;
     const submitted = content.trim();
     setContent("");
+    const command = planningCommand(submitted);
+    if (command) {
+      setError(null);
+      try {
+        if (command.action === "open") {
+          const result = await openPlanningSession(command.topic!, thread.id);
+          setCortex(result.session);
+        } else if (cortex?.slug) {
+          const result = await closePlanningSession(cortex.slug);
+          setCortex(result.session); setHandoff(result.handoff); setReport(result.report);
+        }
+      } catch (reason: unknown) { setError(reason instanceof ApiError ? reason.detail : "Could not update planning session"); }
+      setProcessing(false);
+      return;
+    }
     setProcessing(true);
     setError(null);
     setPlan(null); setApproval(null); setEvidence([]); setStream(""); setLifecycle("planning");
@@ -162,6 +187,21 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
     }
   };
 
+  const closeSession = async () => {
+    if (!cortex?.slug) return;
+    setError(null);
+    try { const result = await closePlanningSession(cortex.slug); setCortex(result.session); setHandoff(result.handoff); setReport(result.report); }
+    catch (reason: unknown) { setError(reason instanceof ApiError ? reason.detail : "Could not close planning session"); }
+  };
+
+  const openSession = async () => {
+    if (!thread) return;
+    const topic = globalThis.prompt("Planning topic");
+    if (!topic?.trim()) return;
+    try { const result = await openPlanningSession(topic.trim(), thread.id); setCortex(result.session); setError(null); }
+    catch (reason: unknown) { setError(reason instanceof ApiError ? reason.detail : "Could not open planning session"); }
+  };
+
   const approvalAction = async (reject: boolean) => {
     if (!thread || !runId || !approval?.token) return;
     setProcessing(true); setError(null);
@@ -178,7 +218,9 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
   const state = loading ? <StateMessage tone="info" role="status" spinner title="Cargando chat" /> : error ? <StateMessage tone="danger" role="alert" title={error} /> : null;
   const canRenderThread = !loading && thread !== null;
   const composerDisabled = loading || processing || thread === null;
-  return <PageFrame title="Asistente Lumat" meta="Chat interno con el agente virtual." state={state}>
+   return <PageFrame title="Asistente Lumat" meta="Chat interno con el agente virtual." actions={<div><Button variant="secondary" onClick={() => void openSession()} disabled={composerDisabled || cortex?.status === "active"}>Open planning session</Button>{cortex?.status === "active" ? <Button onClick={() => void closeSession()}>Close session</Button> : null}</div>} state={state}>
+      {cortex?.status === "active" ? <p role="status">Cortex planning active: {cortex.topic}</p> : cortex?.status === "closed" ? <p role="status">Cortex planning closed: {cortex.topic}</p> : null}
+      {handoff?.status === "pending" ? <section role="status"><strong>Approved plan pending</strong><p>{report?.contenido ?? "The closing report is ready for approval."}</p></section> : null}
      {capabilities ? <AssistantCapabilitiesView capabilities={capabilities} /> : null}
      <div className="ai-agent-grammar__thread-area" aria-label="Mensajes del chat interno" aria-live="polite">
        {connection !== "connected" && <p role="status">Conexión en tiempo real: {connection === "reconnecting" ? "reconectando" : "desconectada"}.</p>}
