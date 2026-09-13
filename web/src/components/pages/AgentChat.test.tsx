@@ -220,4 +220,32 @@ describe("AgentChat", () => {
     closeStream();
     await waitFor(() => expect(screen.getByRole("textbox", { name: /mensaje/i })).toBeEnabled());
   });
+
+  it("shows the active Cortex indicator and closes through the planning endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open", assistant_state: { cortex_session: { slug: "budget-4", topic: "Budget", status: "active", handoff: { status: "none", sdb_phase: null } } } }, messages: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ session: {}, report: { contenido: "Report" }, handoff: { status: "pending", sdb_phase: "SPEC" } }), { status: 200 }));
+    render(<AgentChat threadId={4} />);
+    expect(await screen.findByText(/Cortex planning active/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /close session/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith("/panel/api/planning/sessions/budget-4/close", expect.objectContaining({ method: "POST" })));
+    expect(screen.getByText(/approved plan/i)).toBeInTheDocument();
+  });
+
+  it("treats exact planning commands as lifecycle controls and free text as chat", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ session: { slug: "budget-4" }, thread_id: 4 }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: { id: 2, author: "admin", content: "planning words", status: "processed" } }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 }));
+    render(<AgentChat threadId={4} />);
+    await screen.findByText("Chat interno vacío");
+    const composer = screen.getByRole("textbox", { name: /mensaje/i });
+    fireEvent.change(composer, { target: { value: "/planning budget" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenNthCalledWith(2, "/panel/api/planning/sessions", expect.objectContaining({ body: JSON.stringify({ topic: "budget", thread_id: 4 }) })));
+    fireEvent.change(composer, { target: { value: "please discuss planning" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenNthCalledWith(3, "/panel/api/chat/threads/4/messages", expect.anything()));
+  });
 });
