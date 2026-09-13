@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from math import ceil
+from copy import deepcopy
 from typing import Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -58,6 +59,55 @@ class SDBTrigger(BaseModel):
     actor_role: str | None = None
 
 
+class CortexHandoff(BaseModel):
+    """The persisted handoff sub-state for a Cortex session."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["none", "pending", "approved"]
+    sdb_phase: Literal["SPEC", "APPROVE"] | None
+
+
+class CortexSession(BaseModel):
+    """Validated thread-scoped Cortex state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str = Field(min_length=1)
+    topic: str = Field(min_length=1)
+    status: Literal["active", "closed"]
+    opened_at: str = Field(min_length=1)
+    closed_at: str | None
+    turn_index: int = Field(ge=0)
+    next_decision: str | None
+    last_class: Literal["question", "research", "decision", "continue", "close"] | None
+    decision_keys: list[str]
+    report_key: str | None
+    handoff: CortexHandoff
+
+
+def validate_cortex_session(state: object) -> bool:
+    """Return whether a state contains a complete, valid Cortex session."""
+    if not isinstance(state, dict) or "cortex_session" not in state:
+        return False
+    try:
+        CortexSession.model_validate(state["cortex_session"])
+    except (TypeError, ValidationError):
+        return False
+    return True
+
+
+def merge_assistant_state(current: dict, update: dict) -> dict:
+    """Recursively merge nested state without replacing sibling mappings."""
+    result = deepcopy(current)
+    for key, value in update.items():
+        if isinstance(result.get(key), dict) and isinstance(value, dict):
+            result[key] = merge_assistant_state(result[key], value)
+        else:
+            result[key] = deepcopy(value)
+    return result
+
+
 class AssistantState(TypedDict, total=False):
     request_message_id: int
     thread_id: int
@@ -83,6 +133,7 @@ class AssistantState(TypedDict, total=False):
     guardrails: dict
     compaction: dict
     extension_hooks: dict
+    cortex_session: dict
     legacy_compat: bool
     cost_mode: Literal["normal", "conservative", "blocked"]
     cost_directive: str
