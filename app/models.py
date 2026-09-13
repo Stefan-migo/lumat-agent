@@ -148,9 +148,54 @@ class ObservationType(str, enum.Enum):
     OPORTUNIDAD = "oportunidad"
 
 
+class ProjectStatus(str, enum.Enum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
 # ---------------------------------------------------------------------------
 # Tables
 # ---------------------------------------------------------------------------
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(100), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(500), nullable=False)
+    status: Mapped[ProjectStatus] = mapped_column(
+        String(20),
+        default=ProjectStatus.ACTIVE,
+        server_default="active",
+        nullable=False,
+    )
+    purpose_embedding: Mapped[list[float]] = mapped_column(Vector(EMBED_DIMS), nullable=False)
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ProjectAlias(Base):
+    __tablename__ = "project_aliases"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("projects.id"), nullable=False)
+    alias: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    created_at: Mapped[datetime] = _ts()
+
+
+class ProjectAudit(Base):
+    __tablename__ = "project_audit"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    project_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("projects.id"))
+    actor: Mapped[str] = mapped_column(String(100), nullable=False)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
+    before: Mapped[dict | None] = mapped_column(JSONB)
+    after: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = _ts()
 
 class Customer(Base):
     __tablename__ = "customers"
