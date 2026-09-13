@@ -67,7 +67,7 @@ export const disableKbDocument = (id: number) => postJson<KbMutationResponse>(`/
 export const restoreKbDocument = (id: number, version: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/restore`, { version });
 export const refreshKbDocuments = () => apiFetch<DocsResponse>('/panel/api/kb');
 
-import type { ActiveConversationsResponse, AdminUser, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AssistantAttachment, AssistantCapabilities, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse, ProjectsResponse, ProjectDetailResponse } from './types';
+import type { ActiveConversationsResponse, AdminUser, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AssistantAttachment, AssistantCapabilities, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse, ProjectsResponse, ProjectDetailResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; q?: string; limit?: number; offset?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -163,3 +163,8 @@ export const toggleUserActive = (id: number) => postJson<{ user: AdminUser }>(`/
 export const resetUserPassword = (id: number, password: string) => postJson<{ user: AdminUser }>(`/panel/api/users/${id}/reset-password`, { password });
 export const listProjects = () => apiFetch<ProjectsResponse>('/panel/api/projects');
 export const getProject = (slug: string) => apiFetch<ProjectDetailResponse>(`/panel/api/projects/${encodeURIComponent(slug)}`);
+export const listPlanningSessions = () => apiFetch<PlanningSessionsResponse>('/panel/api/planning/sessions');
+export const getPlanningSession = (slug: string) => apiFetch<PlanningSessionDetailResponse>(`/panel/api/planning/sessions/${encodeURIComponent(slug)}`);
+export const openPlanningSession = (topic: string, threadId?: number) => postJson<PlanningSessionOpenResponse>('/panel/api/planning/sessions', { topic, ...(threadId === undefined ? {} : { thread_id: threadId }) });
+export const closePlanningSession = (slug: string) => postJson<PlanningSessionCloseResponse>(`/panel/api/planning/sessions/${encodeURIComponent(slug)}/close`);
+export const reopenPlanningSession = (slug: string) => postJson<PlanningSessionOpenResponse>(`/panel/api/planning/sessions/${encodeURIComponent(slug)}/reopen`);
