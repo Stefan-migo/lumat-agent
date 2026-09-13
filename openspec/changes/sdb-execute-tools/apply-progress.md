@@ -105,4 +105,4 @@ Graph source commit: `daa86f71` (fresh at session start).
 
 ### Remediation Commit
 
-- Pending local commit: `test(sdb): cover rejected and failed execution paths`
+- `643d6120 test(sdb): cover rejected and failed execution paths`
