@@ -39,8 +39,8 @@ Test command: `DATABASE_URL='postgresql+psycopg://app:app@localhost:5437/lumat' 
 
 ## Phase 3: Authenticated API
 
-- [ ] T3.1 RED: TestClient auth and 400/401/403/404/409 matrix; GREEN: open/close/list/detail/reopen in `app/panel/api/routes/chat.py` and `app/panel/api/serializers.py`.
-- [ ] T3.2 RED: test approval with valid, expired, consumed, and changed tokens; GREEN: route report-derived SPEC through existing approval.
+- [x] T3.1 RED: TestClient auth and 400/401/403/404/409 matrix; GREEN: open/close/list/detail/reopen in `app/panel/api/routes/chat.py` and `app/panel/api/serializers.py`.
+- [x] T3.2 RED: test approval with valid, expired, consumed, and changed tokens; GREEN: route report-derived SPEC through existing approval.
 
 ## Phase 4: SPA integration and verification
 

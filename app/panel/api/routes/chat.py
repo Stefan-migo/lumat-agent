@@ -8,17 +8,18 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.models import AssistantAttachment, User
+from app.models import AssistantAttachment, InternalChatMessage, InternalChatThread, Memory, User
 from app.config import get_settings
 from app.agent_registry import get_registry
 from app.chat.assistant.tools.registry import get_tool
 from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
-from app.services.agent_chat import approve_plan, create_thread, get_thread, message_dict, resume_thread, stream_events, submit_message, thread_dict
+from app.services.agent_chat import approve_plan, close_cortex_session, create_thread, get_thread, message_dict, resume_thread, stream_events, submit_message, thread_dict
 from app.chat.assistant.attachments import cleanup_expired, store_attachment
-from app.panel.api.serializers import to_assistant_attachment_dict
+from app.panel.api.serializers import to_assistant_attachment_dict, to_cortex_report_dict, to_cortex_session_dict
 from app.services.audit import record_audit
-from sqlalchemy import select, func
+from sqlalchemy import func, select
+from app.services import tukulpan
 
 router = APIRouter(tags=["panel-api-chat"])
 
@@ -35,9 +36,109 @@ class ApprovalBody(BaseModel):
     reject: bool = False
 
 
+class PlanningSessionBody(BaseModel):
+    topic: str
+    thread_id: int | None = None
+
+
+def _planning_thread(session: Session, slug: str, user_id: int) -> InternalChatThread | None:
+    threads = session.scalars(select(InternalChatThread).where(InternalChatThread.user_id == user_id)).all()
+    return next((thread for thread in threads if ((thread.assistant_state or {}).get("cortex_session") or {}).get("slug") == slug), None)
+
+
+def _planning_report(session: Session, thread: InternalChatThread) -> Memory | None:
+    cortex = (thread.assistant_state or {}).get("cortex_session") or {}
+    return tukulpan.get_by_key(session, scope="panel", entity_id=f"thread:{thread.id}", topic_key=cortex.get("report_key", "")) if cortex.get("report_key") else None
+
+
 @router.post("/chat/threads", status_code=201)
 def new_thread(session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
     return {"thread": thread_dict(create_thread(session, current)), "messages": []}
+
+
+@router.post("/planning/sessions", status_code=201)
+def open_planning_session(
+    body: PlanningSessionBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    topic = body.topic.strip()
+    if not topic:
+        raise HTTPException(status_code=400, detail="topic must not be blank")
+    thread = session.get(InternalChatThread, body.thread_id) if body.thread_id is not None else None
+    if body.thread_id is not None and (thread is None or thread.user_id != current.id):
+        raise HTTPException(status_code=404, detail="chat thread not found")
+    if thread is None:
+        thread = create_thread(session, current)
+    cortex = (thread.assistant_state or {}).get("cortex_session") or {}
+    if cortex.get("status") == "active":
+        raise HTTPException(status_code=409, detail="planning session is already active")
+    slug = f"{topic.lower().replace(' ', '-')}-{thread.id}"
+    thread.assistant_state = {
+        **(thread.assistant_state or {}),
+        "cortex_session": {
+            "slug": slug, "topic": topic, "status": "active",
+            "opened_at": datetime.now(timezone.utc).isoformat(), "closed_at": None,
+            "turn_index": 0, "next_decision": None, "last_class": None,
+            "decision_keys": [], "report_key": None,
+            "handoff": {"status": "none", "sdb_phase": None},
+        },
+    }
+    session.flush()
+    return {"session": to_cortex_session_dict(thread), "thread_id": thread.id}
+
+
+@router.get("/planning/sessions")
+def list_planning_sessions(session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
+    threads = session.scalars(select(InternalChatThread).where(InternalChatThread.user_id == current.id).order_by(InternalChatThread.updated_at.desc())).all()
+    return {"sessions": [to_cortex_session_dict(thread) for thread in threads if (thread.assistant_state or {}).get("cortex_session")]}
+
+
+@router.get("/planning/sessions/{slug}")
+def planning_session_detail(slug: str, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
+    thread = _planning_thread(session, slug, current.id)
+    if thread is None:
+        raise HTTPException(status_code=404, detail="planning session not found")
+    memories = tukulpan.list_for_entity(session, scope="panel", entity_id=f"thread:{thread.id}")
+    decisions = [row for row in memories if ":decision:" in row.topic_key]
+    return {"session": to_cortex_session_dict(thread), "thread": thread_dict(thread),
+            "decisions": [to_cortex_report_dict(row) for row in decisions],
+            "report": to_cortex_report_dict(_planning_report(session, thread))}
+
+
+@router.post("/planning/sessions/{slug}/close")
+def close_planning_session(slug: str, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
+    thread = _planning_thread(session, slug, current.id)
+    if thread is None:
+        raise HTTPException(status_code=404, detail="planning session not found")
+    cortex = (thread.assistant_state or {}).get("cortex_session") or {}
+    if cortex.get("status") != "active":
+        raise HTTPException(status_code=409, detail="planning session is not active")
+    decisions = tukulpan.list_for_entity(session, scope="panel", entity_id=f"thread:{thread.id}")
+    report = json.dumps({"topic": cortex.get("topic", ""), "decisions": [row.contenido for row in decisions if ":decision:" in row.topic_key]}, ensure_ascii=False)
+    result = close_cortex_session(session, thread, report=report)
+    approval = (thread.assistant_state or {}).get("approval") or {}
+    session.add(InternalChatMessage(thread_id=thread.id, author="admin", content=report,
+                                    status="approval_pending", assistant_metadata={"run_id": result["run_id"], "approval": approval}))
+    session.flush()
+    return {"session": to_cortex_session_dict(thread), "report": to_cortex_report_dict(_planning_report(session, thread)),
+            "handoff": {"status": "pending", "sdb_phase": "SPEC", "run_id": result["run_id"], "approval": approval}}
+
+
+@router.post("/planning/sessions/{slug}/reopen")
+def reopen_planning_session(slug: str, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
+    thread = _planning_thread(session, slug, current.id)
+    if thread is None:
+        raise HTTPException(status_code=404, detail="planning session not found")
+    cortex = (thread.assistant_state or {}).get("cortex_session") or {}
+    if cortex.get("status") == "active":
+        raise HTTPException(status_code=409, detail="planning session is already active")
+    thread.assistant_state = {**(thread.assistant_state or {}), "cortex_session": {
+        **cortex, "status": "active", "closed_at": None,
+        "handoff": {"status": "none", "sdb_phase": None},
+    }}
+    session.flush()
+    return {"session": to_cortex_session_dict(thread), "thread_id": thread.id}
 
 
 @router.get("/chat/threads/{thread_id}")
