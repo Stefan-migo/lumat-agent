@@ -8,7 +8,7 @@ Define the bounded native SDB execution mode inside the panel assistant.
 
 ### Requirement: SDB-1 — Seven-Phase Execution and Fail-Closed Triggers
 
-The system MUST execute SDB work in `CLARIFY → SPEC → PLAN → APPROVE → EXECUTE → VERIFY → DELIVER`. Entry MUST require either a valid structured planner classification or an authenticated admin request. Malformed or conflicting trigger signals MUST fail closed without entering SDB.
+The system MUST execute SDB work in `CLARIFY → SPEC → PLAN → APPROVE → EXECUTE → VERIFY → DELIVER`. Entry MUST require either a valid structured planner classification, an authenticated admin request, or an approved closed Cortex session supplied as SPEC. Malformed or conflicting trigger signals MUST fail closed without entering SDB.
 
 #### Scenario: Classified SDB request
 
@@ -21,6 +21,12 @@ The system MUST execute SDB work in `CLARIFY → SPEC → PLAN → APPROVE → E
 - GIVEN an authenticated admin requests SDB and the planner returns a valid non-SDB result
 - WHEN the trigger gate evaluates the turn
 - THEN the explicit request selects SDB and the non-SDB result is not executed
+
+#### Scenario: Closed Cortex SPEC
+
+- GIVEN a closed Cortex report and administrator approval
+- WHEN the handoff enters SDB
+- THEN the report is consumed as the SPEC and the run proceeds through APPROVE
 
 #### Scenario: Conflicting trigger signals
 
@@ -62,7 +68,7 @@ The system MUST persist bounded SPEC, STATE, and RESULT artifacts using typed me
 
 ### Requirement: SDB-4 — Approval, Verification, and Durable Recovery
 
-The system MUST reuse the existing exact-plan approval and atomic execution claim. APPROVE MUST cover the canonical phase/task plan, and VERIFY MUST compare persisted outputs with the persisted SPEC before DELIVER. Resume MUST continue from the last successful checkpoint without repeating completed tasks.
+The system MUST reuse the existing exact-plan approval and atomic execution claim. APPROVE MUST cover the canonical phase/task plan derived from either a native SPEC or an approved Cortex report, and VERIFY MUST compare persisted outputs with that SPEC before DELIVER. Resume MUST continue from the last successful checkpoint without repeating completed tasks. A Cortex handoff MUST deliver only an approved plan where execution is unavailable.
 
 #### Scenario: Changed SPEC after approval
 
@@ -75,6 +81,12 @@ The system MUST reuse the existing exact-plan approval and atomic execution clai
 - GIVEN a run stops after a persisted task checkpoint
 - WHEN the thread is resumed
 - THEN only incomplete work continues and completed tasks are not repeated
+
+#### Scenario: Stub execution remains truthful
+
+- GIVEN an approved Cortex-derived plan
+- WHEN the run reaches its available delivery boundary
+- THEN the result is labeled an approved plan and does not claim execution
 
 ### Requirement: SDB-5 — Project propagation through the existing seam
 

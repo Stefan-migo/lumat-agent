@@ -24,7 +24,7 @@ The system MUST restrict internal agent chat to the owner/admin authorization bo
 
 ### Requirement: IAC-2 — Context Boundary
 
-The agent MUST use the separate `AssistantState` graph for panel requests, with only declared typed tools and admin authorization. It MUST assemble history-aware turns from the durable thread, persist normal or SDB plan state, approval, execution, evidence, cost diagnostics, phase, and checkpoints in the existing thread boundary, and MUST NOT couple to WhatsApp state. The deterministic cost gate MUST retain its current behavior before planning.
+The agent MUST use the separate `AssistantState` graph for panel requests, with only declared typed tools and admin authorization. It MUST assemble history-aware turns from the durable thread and persist normal, Cortex, or SDB state, approvals, execution, evidence, cost diagnostics, phase, and checkpoints in the existing thread boundary. Cortex state MUST be explicitly merged under `assistant_state["cortex_session"]` without clobbering other keys, and MUST NOT couple to WhatsApp state. The deterministic cost gate MUST retain its current behavior before planning.
 (Previously: the boundary persisted normal assistant state but did not include SDB phase and checkpoint state.)
 
 #### Scenario: History-aware assistant response
@@ -39,6 +39,12 @@ The agent MUST use the separate `AssistantState` graph for panel requests, with 
 - WHEN a phase transition occurs
 - THEN phase, frozen scope reference, current task, and checkpoint sequence persist in the thread
 
+#### Scenario: Durable Cortex context
+
+- GIVEN an authorized administrator turns an active Cortex thread
+- WHEN session state changes
+- THEN the nested Cortex state persists while unrelated assistant-state keys remain
+
 #### Scenario: Blocked mode
 
 - GIVEN a thread or UTC-day spend reaches its blocking limit
@@ -47,7 +53,7 @@ The agent MUST use the separate `AssistantState` graph for panel requests, with 
 
 ### Requirement: IAC-3 — Panel States
 
-The panel MUST render normal and SDB loading, planning, approval-pending, phase, checkpoint, verification, delivery, blocked, success, and error states without losing persisted messages or recoverable assistant metadata. A blocked result MUST remain a completed internal reply.
+The panel MUST render normal, Cortex active/closed, SDB approval-pending, phase, checkpoint, verification, delivery, blocked, success, and error states without losing persisted messages or recoverable assistant metadata. A blocked result MUST remain a completed internal reply.
 (Previously: panel states covered ordinary assistant lifecycle states only.)
 
 #### Scenario: SDB recovery
@@ -56,9 +62,15 @@ The panel MUST render normal and SDB loading, planning, approval-pending, phase,
 - WHEN the administrator reloads the thread
 - THEN the phase, approval state, and next recoverable action remain visible
 
+#### Scenario: Cortex recovery
+
+- GIVEN a persisted active or closed Cortex session
+- WHEN the administrator reloads the thread
+- THEN the indicator, status, report, and next recoverable action remain visible
+
 #### Scenario: Stream failure
 
-- GIVEN an SSE stream fails after an SDB phase starts
+- GIVEN an SSE stream fails during a Cortex turn
 - WHEN the panel reconnects or reloads
 - THEN persisted state is authoritative and no partial phase is treated as complete
 
@@ -114,6 +126,16 @@ The assistant MUST stream ordered plan, approval, tool, evidence, response, and 
 - GIVEN an existing client uses thread creation, retrieval, or message endpoints
 - WHEN it calls them after the assistant rollout
 - THEN authorization and persistence contracts remain compatible
+
+### Requirement: IAC-7 — Literal planning controls
+
+The chat surface MUST send planning lifecycle changes only from its planning button or exact `/planning` commands; ordinary message text MUST NOT change thread mode.
+
+#### Scenario: Close control
+
+- GIVEN an active Cortex thread
+- WHEN the administrator clicks Close session
+- THEN the same literal lifecycle operation runs as `/planning close`
 
 #### Scenario: Operator remains denied
 - GIVEN an authenticated operador requests assistant chat or its SSE stream
