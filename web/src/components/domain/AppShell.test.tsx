@@ -51,15 +51,15 @@ describe('AppShell (T6.4)', () => {
     expect(within(operadorDrawer).queryByRole('button', { name: 'Automatizaciones' })).not.toBeInTheDocument();
   });
 
-   it('exposes exactly nine approved destinations and keeps legacy routes out of navigation', async () => {
+   it('exposes approved destinations and keeps legacy routes out of navigation', async () => {
     const user = userEvent.setup();
     render(<AppShell user={admin} />);
     await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
-     expect(drawer.querySelectorAll('.panel-shell__navigation-button')).toHaveLength(9);
+      expect(drawer.querySelectorAll('.panel-shell__navigation-button')).toHaveLength(10);
     for (const label of [
       'Panel unificado', 'Asistente Lumat', 'Conversaciones', 'Clientes',
-       'Agenda', 'Base de Conocimientos', 'Automatizaciones', 'Configuración', 'Usuarios',
+       'Agenda', 'Base de Conocimientos', 'Automatizaciones', 'Configuración', 'Usuarios', 'Proyectos',
     ]) {
       expect(within(drawer).getByRole('button', { name: label })).toBeInTheDocument();
     }

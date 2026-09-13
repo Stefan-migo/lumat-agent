@@ -57,7 +57,7 @@ describe("PWA shell", () => {
     expect(worker).toContain('url.pathname.startsWith("/panel/api/")');
   });
 
-  it("preserves the eight page destinations and compatibility page contracts", () => {
+  it("preserves the nine page destinations and compatibility page contracts", () => {
     const destinations = [
       ["/panel/app/", "dashboard"],
       ["/panel/app/chat", "chat"],
@@ -67,6 +67,7 @@ describe("PWA shell", () => {
       ["/panel/app/kb", "kb"],
       ["/panel/app/automation-rules", "automation-rules"],
       ["/panel/app/settings", "settings"],
+      ["/panel/app/projects", "projects"],
     ] as const;
 
     for (const [pathname, view] of destinations) {

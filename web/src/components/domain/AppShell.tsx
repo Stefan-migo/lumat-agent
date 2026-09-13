@@ -21,6 +21,7 @@ import { AutomationRulesPage } from '../pages/AutomationRulesPage';
 import { AutomationRuleDetailPage } from '../pages/AutomationRuleDetailPage';
 import { AdvancedDashboard } from '../pages/AdvancedDashboard';
 import { UserManagement } from '../pages/UserManagement';
+import { ProjectsPage } from '../pages/ProjectsPage';
 
 /** Top-level SPA views. Client ficha and conversation thread are drill-downs
  * rendered from list views, not top-level nav, so they do not appear here. */
@@ -118,8 +119,9 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
      : view === 'push' ? <PushSettings />
        : view === 'chat' ? <AgentChat capabilities={assistantCapabilities ?? undefined} />
        : view === 'kb' ? <KbList />
-     : view === 'users' ? <UserManagement currentUser={user} />
-     : <Settings />;
+      : view === 'users' ? <UserManagement currentUser={user} />
+      : view === 'projects' ? <ProjectsPage projectSlug={route.projectSlug} onOpenProject={(slug) => navigateToRoute({ view: 'projects', projectSlug: slug })} />
+      : <Settings />;
 
   return (
     <PanelShell user={user} currentView={shellView} onNavigate={navigate} onLogout={onLogout} notificationState={notificationState} notifications={notifications} onMarkAllNotificationsRead={markAllRead} inspector={inspector}>

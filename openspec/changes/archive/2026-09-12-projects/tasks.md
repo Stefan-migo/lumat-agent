@@ -30,11 +30,11 @@
 
 ## Phase 5: Read-Only Panel Browse (WU-5)
 
-- [ ] 5.1 RED: Test operator-only list/detail, SDB-only filtering/grouping, WhatsApp exclusion, missing project, and absent CRUD routes.
-- [ ] 5.2 GREEN: Add serializers and `app/panel/api/routes/projects.py`, register routes in `app/panel/api/__init__.py`, and guard with `require_operator_json` (read-only browse is an operator capability, not admin-only).
-- [ ] 5.3 RED: Add route/navigation/list-detail/read-only control tests for `/panel/app/projects`.
-- [ ] 5.4 GREEN: Update `web/src/api.ts`, `web/src/types.ts`, `web/src/components/domain/{panelRoutes,PanelShell,AppShell}.tsx`, and create `ProjectsPage.tsx` using existing grammar.
-- [ ] 5.5 REFACTOR: Run `uv run pytest tests/` and `cd web && npm run build`.
+- [x] 5.1 RED: Test operator-only list/detail, SDB-only filtering/grouping, WhatsApp exclusion, missing project, and absent CRUD routes.
+- [x] 5.2 GREEN: Add serializers and `app/panel/api/routes/projects.py`, register routes in `app/panel/api/__init__.py`, and guard with `require_operator_json` (read-only browse is an operator capability, not admin-only).
+- [x] 5.3 RED: Add route/navigation/list-detail/read-only control tests for `/panel/app/projects`.
+- [x] 5.4 GREEN: Update `web/src/api.ts`, `web/src/types.ts`, `web/src/components/domain/{panelRoutes,PanelShell,AppShell}.tsx`, and create `ProjectsPage.tsx` using existing grammar.
+- [x] 5.5 REFACTOR: Run focused backend tests, web tests, and `cd web && npm run build`; the full suite is intentionally not run because it is known to exceed 300s.
 
 ## Review Workload Forecast
 

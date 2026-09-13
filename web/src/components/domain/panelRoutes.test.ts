@@ -18,10 +18,11 @@ describe('panel routes', () => {
       kb: '/panel/app/kb',
       'automation-rules': '/panel/app/automation-rules',
        settings: '/panel/app/settings',
-       users: '/panel/app/users',
+        users: '/panel/app/users',
+        projects: '/panel/app/projects',
     });
     expect(Object.keys(PANEL_ROUTES)).toEqual([
-       'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings', 'users',
+       'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings', 'users', 'projects',
     ]);
 
     expect(pathForView('clients')).toBe('/panel/app/clients');
@@ -29,6 +30,7 @@ describe('panel routes', () => {
     expect(parsePanelPath('/panel/app/agenda')).toEqual({ view: 'agenda' });
     expect(pathForView('users')).toBe('/panel/app/users');
     expect(parsePanelPath('/panel/app/users')).toEqual({ view: 'users' });
+    expect(parsePanelPath('/panel/app/projects')).toEqual({ view: 'projects' });
     expect(pathForRoute({ view: 'cases' })).toBe('/panel/app/conversations');
     expect(pathForRoute({ view: 'advanced-dashboard' })).toBe('/panel/app/advanced-dashboard');
     expect(parsePanelPath('/panel/app/advanced-dashboard')).toEqual({ view: 'advanced-dashboard' });

@@ -6,6 +6,7 @@ export type PanelRoute = {
   clientId?: number;
   conversationId?: number;
   automationRuleId?: number;
+  projectSlug?: string;
 };
 
 export const PANEL_BASE_PATH = '/panel/app/';
@@ -20,6 +21,7 @@ export const PANEL_ROUTES = {
   'automation-rules': '/panel/app/automation-rules',
   settings: '/panel/app/settings',
   users: '/panel/app/users',
+  projects: '/panel/app/projects',
 } as const satisfies Readonly<Partial<Record<PanelView, string>>>;
 
 const COMPATIBILITY_ROUTES: Readonly<Partial<Record<PanelView, string>>> = {
@@ -50,6 +52,7 @@ export function pathForRoute(route: PanelRoute): string {
   if (route.view === 'automation-rules' && route.automationRuleId !== undefined && Number.isSafeInteger(route.automationRuleId) && route.automationRuleId > 0) {
     return `${base}/${route.automationRuleId}`;
   }
+  if (route.view === 'projects' && route.projectSlug) return `${base}/${encodeURIComponent(route.projectSlug)}`;
   return base;
 }
 
@@ -83,6 +86,7 @@ export function parsePanelPath(pathname: string): PanelRoute {
   if (segments.length !== 4) return fallback();
 
   const id = positiveId(segments[3]);
+  if (view === 'projects') return { view, projectSlug: segments[3] };
   if (id === null || !['clients', 'conversations', 'automation-rules'].includes(view)) return fallback();
   if (view === 'automation-rules') return { view, automationRuleId: id };
   return view === 'clients' ? { view, clientId: id } : { view, conversationId: id };
