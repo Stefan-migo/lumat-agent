@@ -86,6 +86,45 @@ def test_two_cortex_decisions_survive_thread_reload(monkeypatch):
         assert thread.assistant_state["cortex_session"]["turn_index"] == 2
 
 
+def test_cortex_failure_preserves_active_session_after_thread_reload(monkeypatch):
+    user_id, thread_id = _thread_with_active_cortex()
+
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        thread.assistant_state = {
+            **thread.assistant_state,
+            "cortex_session": {
+                **thread.assistant_state["cortex_session"],
+                "slug": "failure-recovery",
+                "decision_keys": ["cortex-session/failure-recovery:decision:1"],
+            },
+        }
+        session.commit()
+
+    def fail_run(**kwargs):
+        raise RuntimeError("stream interrupted")
+
+    monkeypatch.setattr(agent_chat, "run_assistant", fail_run)
+
+    with SessionLocal() as session:
+        user = session.get(User, user_id)
+        thread = session.get(InternalChatThread, thread_id)
+        message = agent_chat.submit_message(session, thread, user, "Continue planning")
+        assert message.status == "failed"
+        session.commit()
+
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        state = thread.assistant_state
+        assert state["cortex_session"]["status"] == "active"
+        assert state["stage"] == "failed"
+        assert state["recoverable"] is True
+        assert state["cortex_session"]["slug"] == "failure-recovery"
+        assert state["cortex_session"]["decision_keys"] == [
+            "cortex-session/failure-recovery:decision:1"
+        ]
+
+
 def test_missing_cortex_flag_reaches_gate_and_routes_normal():
     result = cortex_session_gate({"content": "continue planning"})
 

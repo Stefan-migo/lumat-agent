@@ -62,3 +62,51 @@
 ## Remaining Tasks
 - [x] T3.1–T3.2 — Authenticated API and approval endpoints (PR 3)
 - [x] T4.1–T4.3 — SPA integration and final verification (PR 4)
+
+## Remediation Continuation — IAC-3 Failure Recovery
+- Delivery: auto-chain, stacked-to-main; bounded production-fix slice
+- Work unit: preserve active Cortex state on assistant stream/turn failure
+- Production change: `app/services/agent_chat.py:453` now recursively merges the failed state instead of replacing `assistant_state`.
+- Test change: `tests/integration/test_cortex_session_runtime.py` adds a PostgreSQL-backed failure/reload recovery test.
+
+### TDD Cycle Evidence
+| Scenario | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| IAC-3 | `tests/integration/test_cortex_session_runtime.py::test_cortex_failure_preserves_active_session_after_thread_reload` | PostgreSQL integration | ✅ 2 passed | ✅ Failed with `KeyError: 'cortex_session'` after reload against unfixed handler | ✅ Passed after merge fix | ✅ Preserved active status, slug, and decision keys | ✅ Minimal helper reuse; no production refactor |
+
+### Work Unit Evidence
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result | `DATABASE_URL='postgresql+psycopg://app:app@localhost:5437/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5437/lumat' uv run pytest tests/integration/test_cortex_session_runtime.py tests/integration/test_sdb_persistence.py tests/unit/test_cortex_session_loop.py tests/unit/test_cortex_session_foundation.py` — **28 passed** |
+| Runtime harness command/scenario and exact result | Same PostgreSQL-backed command exercised a raising `run_assistant`, failed message persistence, fresh `SessionLocal()` reload, and active Cortex recovery — **28 passed** |
+| Rollback boundary | Revert the single remediation commit; removes only the IAC-3 test and the exception-path merge change in `app/services/agent_chat.py`, leaving prior Cortex slices intact |
+
+### Remediation Result
+- ✅ IAC-3 certified: failed turns retain `assistant_state["cortex_session"]` with `status == "active"`, while persisting `stage == "failed"` and `recoverable == True`; slug and decision keys survive reload.
+- No other production defects were observed during this bounded remediation.
+
+## Remediation Slice — Runtime Coverage
+- Delivery: auto-chain, stacked-to-main; remediation test-only slice
+- Work unit: runtime certification for CS-3 and HL-5
+- Production code changed: none
+- Graphify: degraded read-only; no graph artifact in this worktree. Consulted the stale base-map areas `submit_message → assistant graph`, `record_decision ↔ list_for_entity`, and `cortex_session_gate`; no rebuild performed.
+
+### TDD Cycle Evidence
+| Scenario | Test File | Layer | RED | GREEN | REFACTOR |
+|---|---|---|---|---|---|
+| CS-3 | `tests/integration/test_cortex_session_runtime.py::test_two_cortex_decisions_survive_thread_reload` | PostgreSQL integration | ✅ Written first; missing DB artifacts before coverage | ✅ Passed | ✅ Minimal DB setup and reload assertions |
+| HL-5 | `tests/integration/test_cortex_session_runtime.py::test_missing_cortex_flag_reaches_gate_and_routes_normal` | Runtime gate | ✅ Written first; missing-flag path was not covered | ✅ Passed | ✅ Direct production gate invocation |
+| IAC-3 | Temporary runtime test (not committed) | PostgreSQL integration | ✅ Written and executed | ❌ Failed: production exception handler drops `cortex_session` from persisted state | ➖ Blocked; production change forbidden |
+
+### Work Unit Evidence
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result | `DATABASE_URL='postgresql+psycopg://app:app@localhost:5437/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5437/lumat' uv run pytest tests/integration/test_cortex_session_runtime.py tests/integration/test_sdb_persistence.py tests/integration/test_assistant_harness_compatibility.py tests/unit/test_cortex_session_loop.py tests/unit/test_cortex_session_foundation.py` — **36 passed** |
+| Runtime harness command/scenario and exact result | Same focused command exercised PostgreSQL thread reload, Tukulpan decision rows, persisted assistant state, and the direct gate. The Cortex stream-failure recovery test failed with `KeyError: 'cortex_session'` after reload because `submit_message()` replaces state with only `stage/recoverable/events` in its exception path. |
+| Rollback boundary | Revert commit `212c8ebd`; removes only `tests/integration/test_cortex_session_runtime.py`. No production behavior is touched. |
+
+### Remediation Result
+- ✅ CS-3 certified: two uniquely keyed decision memories and merged `cortex_session` state survive a fresh DB session reload.
+- ✅ HL-5 certified: missing `cortex_session` reaches the runtime gate and routes normal with `invalid-session`.
+- ❌ IAC-3 remains blocked by a real production defect: a failed Cortex turn persists `stage: failed` but discards the prior `cortex_session`, so the session is not recoverable/consistent after reload. Production fix is outside this test-only scope.
+- Items 4–9 were not attempted after the IAC-3 production defect was confirmed; no additional production changes were made.
