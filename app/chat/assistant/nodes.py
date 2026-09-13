@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from hashlib import sha256
+import re
 from pydantic import ValidationError
 
 from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.evidence import make_evidence
-from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens
+from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens, validate_cortex_session
 from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
 from app.services import llm
@@ -40,6 +41,31 @@ def _project_slug(state: AssistantState) -> str:
 def extension_hook_metadata() -> dict[str, str]:
     """Describe deferred extensions without loading or executing their internals."""
     return {"sdb": "deferred", "panel_subagents": "not_implemented"}
+
+
+_PLANNING_COMMAND = re.compile(r"^/planning(?: ([^\s].*?))?$")
+
+
+def parse_planning_command(content: str) -> dict[str, str | None] | None:
+    """Parse only the exact planning command forms; ordinary text is inert."""
+    if not isinstance(content, str):
+        return None
+    match = _PLANNING_COMMAND.fullmatch(content)
+    if not match or not match.group(1):
+        return None
+    topic = match.group(1)
+    if topic == "close":
+        return {"action": "close", "topic": None}
+    return {"action": "open", "topic": topic}
+
+
+def cortex_session_gate(state: AssistantState) -> AssistantState:
+    """Route only a valid active thread flag; missing state fails closed."""
+    if not validate_cortex_session(state):
+        return {"cortex_route": "normal", "cortex_rejection": "invalid-session"}
+    if state["cortex_session"]["status"] != "active":
+        return {"cortex_route": "normal", "cortex_rejection": "inactive-session"}
+    return {"cortex_route": "cortex", "cortex_rejection": None}
 
 
 def load_panel_context(session, thread_id: int) -> dict:
