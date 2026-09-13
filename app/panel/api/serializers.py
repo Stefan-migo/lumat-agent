@@ -32,6 +32,7 @@ from app.models import (
     InternalChatThread,
     AssistantAttachment,
     AutomationRule,
+    Project,
 )
 
 
@@ -397,6 +398,34 @@ def to_memory_dict(memory: Memory) -> dict:
         "contenido": memory.contenido,
         "topic_key": memory.topic_key,
         "pin": memory.pin,
+        "status": memory.status.value,
+        "created_at": _iso(memory.created_at),
+        "updated_at": _iso(memory.updated_at),
+    }
+
+
+def to_project_dict(project: Project) -> dict:
+    """Project registry row -> read-only panel shape."""
+    return {
+        "id": project.id,
+        "slug": project.slug,
+        "name": project.name,
+        "purpose": project.purpose,
+        "status": project.status.value if hasattr(project.status, "value") else str(project.status),
+        "created_at": _iso(project.created_at),
+        "updated_at": _iso(project.updated_at),
+    }
+
+
+def to_project_artifact_dict(memory: Memory) -> dict:
+    """SDB memory row -> compact browse summary, without WhatsApp data."""
+    return {
+        "id": memory.id,
+        "entity_id": memory.entity_id,
+        "topic_key": memory.topic_key,
+        "tipo": memory.tipo.value,
+        "titulo": memory.titulo,
+        "contenido": memory.contenido,
         "status": memory.status.value,
         "created_at": _iso(memory.created_at),
         "updated_at": _iso(memory.updated_at),

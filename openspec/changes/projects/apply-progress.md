@@ -247,3 +247,53 @@ None from the WU-1 design. WU-2 through WU-5 remain intentionally unimplemented.
 ### Deviations and Issues
 
 - None from the bounded correction scope. The approved decision is private service capability data created only after `execute_tool()` validates the consumed exact approval.
+
+## WU-5 Read-Only Panel Browse
+
+### Status
+
+- Work unit: WU-5 (Read-Only Panel Browse), stacked PR slice 5/5
+- Delivery: `auto-chain`, `stacked-to-main`
+- Mode: Strict TDD
+- State: ready for verification
+- Scope: WU-5 only; no project mutation route or WhatsApp conversation data was added.
+
+### Completed Tasks
+
+- [x] 5.1 Backend RED contract tests for operator authorization, SDB-only grouping/filtering, missing projects, WhatsApp exclusion, and absent CRUD routes
+- [x] 5.2 Read-only project API, serializers, registration, and operator guard
+- [x] 5.3 Web RED route/navigation/list-detail/read-only control tests
+- [x] 5.4 Project API types, native routes, navigation, and read-only ProjectsPage
+- [x] 5.5 Focused backend/web refactor and verification
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 5.1 | `tests/functional/test_api_projects.py` | Integration | N/A (new) | ✅ Missing routes: 404 failures | ✅ 3/3 project tests | ✅ unauthenticated, operador/tecnico, missing, CRUD, SDB/non-SDB cases | ✅ Clean |
+| 5.2 | `tests/functional/test_api_projects.py` | Integration | ✅ 3/3 | ✅ Route/serializer imports and endpoint assertions failed | ✅ 3/3 project tests | ✅ list/detail, grouped entities, typed `sdb:` filter, role boundary | ✅ Status serialization handles ORM string/enum values |
+| 5.3 | `web/src/components/pages/ProjectsPage.test.tsx` | Unit | N/A (new) | ✅ Missing `ProjectsPage` import | ✅ 2/2 project tests | ✅ route parsing and read-only rendered controls | ✅ Clean |
+| 5.4 | `web/src/components/domain/{AppShell,panelRoutes}.test.tsx`, `web/src/pwa.test.ts` | Unit | ✅ Existing route/shell tests | ✅ Existing 8/9-destination expectations failed after addition | ✅ Updated suite passes | ✅ list/detail route and 9th operator destination; compatibility routes preserved | ✅ Clean |
+| 5.5 | Focused backend and full web runner | Integration/unit | ✅ Prior WU-5 green | ✅ Prior RED evidence | ✅ All final commands pass | ✅ repeated backend + 71-file web run | ✅ Clean |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused backend command and exact result | `DATABASE_URL='postgresql+psycopg://app:app@localhost:5436/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5436/lumat' uv run pytest tests/functional/test_api_projects.py tests/spec/test_projects_spec.py -q -p no:warnings` → **17 passed**, exit 0 |
+| Web test command and exact result | `cd web && npm test -- --run` → **71 test files, 515 tests passed**, exit 0; existing React `act(...)` and jsdom navigation warnings remain non-failing |
+| Web build command and exact result | `cd web && npm run build` → TypeScript build and Vite production build succeeded, **76 modules transformed**, exit 0 |
+| Runtime harness command/scenario and exact result | Backend functional tests exercised real FastAPI routes, signed session auth, dedicated PostgreSQL `:5436`, and SDB memory filtering; **3 project API tests passed**. Web Vitest exercised route parsing and rendered read-only project UI. |
+| Full repository test note | Not run: `uv run pytest tests/` is known to exceed 300 seconds; focused project/spec coverage was used as required. |
+| Rollback boundary | Revert this WU-5 commit to remove `app/panel/api/routes/projects.py`, project serializers/API/types/routes/UI/tests, and navigation bookkeeping; WU-1–WU-4 registry, lifecycle, assistant, and SDB propagation behavior remains intact. |
+
+### Graph Check
+
+- Supplied graph consulted (not rebuilt): `GRAPH_REPORT.md`; nodes `projects.py`, `tukulpan.py`, `Project`, `Memory`, `api/deps.py`, `serializers.py`, `routes/conversations.py`, `api/__init__.py`, `PanelShell.tsx`, `AppShell.tsx`, `panelRoutes.ts`, `ConversationThread.tsx`, `types.ts`, `test_projects_spec.py`, and `useAsyncData()`.
+- Edges/context: project service → `Project`/`Memory`; API routes → `require_operator_json`, serializers, and database session; `PanelShell` ↔ `AppShell` ↔ `panelRoutes`; `ProjectsPage` follows `ConversationThread`'s `PageFrame`/`ai-agent-grammar__thread-area` pattern.
+- Queries/paths: `graphify query "projects panel API serializers routes and web projects page navigation"`; `graphify query "panel project API route authorization serializers SDB memory filtering"`; `graphify path "routes/conversations.py" "api/deps.py" --undirected`; `graphify path "PanelShell.tsx" "ConversationThread.tsx" --undirected`; `graphify path "panelRoutes.ts" "AppShell.tsx" --undirected`. Supplied graph was not rebuilt.
+
+### Deviations and Issues
+
+- The existing admin shell test counted nine buttons including the admin-only `Usuarios` destination; it was updated to account for the new `Proyectos` item (10 admin buttons, 9 operator-visible destinations).
+- The full repository pytest command was intentionally not run because it is known to exceed 300 seconds. No unrelated test failures were introduced by the final WU-5 focused or web runs.
