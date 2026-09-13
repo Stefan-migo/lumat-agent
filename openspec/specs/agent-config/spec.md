@@ -105,18 +105,18 @@ Extraction MUST keep `CANNOT_ANSWER_REPLY` importable from `app.chat.nodes.respo
 
 ### Requirement: AC-9 — Assistant Runtime Configuration
 
-The system MUST provide existence-validated assistant registry, personas, prompts, declared tool capabilities, and structured SDB classification under `agent/` for read-only runtime consumption. Startup MUST fail clearly for missing or invalid references; reference-only skills remain non-executable.
-(Previously: runtime configuration validated prompts, personas, and tools but did not declare structured SDB classification.)
+The system MUST provide existence-validated assistant registry, personas, prompts, declared tool capabilities, and structured Gates deterministas / Guardrails classification under `agent/` for read-only runtime consumption. Startup MUST fail clearly for missing or invalid references; reference-only skills remain non-executable.
+(Previously: runtime configuration validated prompts, personas, and tools but did not declare structured guardrails classification.)
 
 #### Scenario: Complete configuration loads
 
-- GIVEN registry entries reference existing runtime files and a valid SDB declaration
+- GIVEN registry entries reference existing runtime files and a valid guardrails declaration
 - WHEN configuration loads for a panel turn
 - THEN the validated read-only assistant configuration is available to the harness
 
 #### Scenario: Missing or invalid runtime reference
 
-- GIVEN a required prompt, persona, tool declaration, or SDB classification is invalid
+- GIVEN a required prompt, persona, tool declaration, or guardrails classification is invalid
 - WHEN configuration loads
 - THEN validation reports the defect and prevents an invalid assistant from starting
 
@@ -134,25 +134,25 @@ The panel API MUST expose an authenticated, read-only view of active assistant t
 - WHEN authorization is checked
 - THEN the API returns an authorization error and no configuration data
 
-### Requirement: AC-11 — Structured SDB Classification Declaration
+### Requirement: AC-11 — Structured Guardrails Classification Declaration
 
-The assistant configuration MUST declare the structured planner fields and allowed values required to distinguish an SDB request from ordinary `tool`, `respond`, or non-SDB complex work. The declaration MUST be read-only, schema-validated at startup, and MUST NOT infer SDB from arbitrary tool text.
+The assistant configuration MUST declare the structured planner fields and allowed values required to distinguish a guardrails request from ordinary `tool`, `respond`, or other complex work. The declaration MUST be read-only, schema-validated at startup, and MUST NOT infer guardrails from arbitrary tool text.
 
 #### Scenario: Valid classification declaration
 
-- GIVEN the registry and planner contract declare the SDB classification shape
+- GIVEN the registry and planner contract declare the guardrails classification shape
 - WHEN configuration loads
-- THEN the harness can validate and normalize an SDB trigger
+- THEN the harness can validate and normalize a guardrails trigger
 
 #### Scenario: Malformed declaration
 
-- GIVEN the SDB classification declaration is malformed or incomplete
+- GIVEN the guardrails classification declaration is malformed or incomplete
 - WHEN startup validation runs
-- THEN configuration fails deterministically and no ambiguous SDB route is enabled
+- THEN configuration fails deterministically and no ambiguous guardrails route is enabled
 
 #### Scenario: Ordinary complex request
 
-- GIVEN a planner returns a valid non-SDB complex result
+- GIVEN a planner returns a valid non-guardrails complex result
 - WHEN the harness evaluates it
 - THEN it remains on ordinary safe routing
 
