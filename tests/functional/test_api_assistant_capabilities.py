@@ -33,7 +33,7 @@ def test_admin_capabilities_reflect_real_tools_and_runtime_config(client, make_u
 
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload["tools"]) == 13
+    assert len(payload["tools"]) == 19
     assert {tool["name"] for tool in payload["tools"]} >= {
         "kb.retrieve", "memory.read", "automation.create_rule"
     }
