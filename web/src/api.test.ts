@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -137,5 +137,29 @@ describe('conversation API contracts', () => {
     await expect(sendMessage(9, { text: 'Hola', request_id: 'req-2' })).rejects.toMatchObject({ status: 409, detail: 'stale' });
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ detail: 'window closed' }), { status: 422 }));
     await expect(sendMessage(9, { text: 'Hola', request_id: 'req-3' })).rejects.toMatchObject({ status: 422, detail: 'window closed' });
+  });
+});
+
+describe('planning session API contracts', () => {
+  beforeEach(() => { globalThis.fetch = vi.fn(); });
+  afterEach(() => { vi.restoreAllMocks(); });
+  it('uses the authenticated planning lifecycle endpoints', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ sessions: [] }), { status: 200 }));
+    await listPlanningSessions();
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/planning/sessions', expect.anything());
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, thread_id: 8 }), { status: 201 }));
+    await openPlanningSession('Budget review');
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/planning/sessions', expect.objectContaining({ method: 'POST', body: JSON.stringify({ topic: 'Budget review' }) }));
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, thread: {}, decisions: [], report: null }), { status: 200 }));
+    await getPlanningSession('budget-review-8');
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/planning/sessions/budget-review-8', expect.anything());
+  });
+  it('supports close and reopen lifecycle calls', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, report: {}, handoff: {} }), { status: 200 }));
+    await closePlanningSession('budget-review-8');
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/planning/sessions/budget-review-8/close', expect.objectContaining({ method: 'POST' }));
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, thread_id: 8 }), { status: 200 }));
+    await reopenPlanningSession('budget-review-8');
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/planning/sessions/budget-review-8/reopen', expect.objectContaining({ method: 'POST' }));
   });
 });
