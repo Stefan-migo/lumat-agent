@@ -33,9 +33,9 @@ Test command: `DATABASE_URL='postgresql+psycopg://app:app@localhost:5437/lumat' 
 
 ## Phase 2: Assistant loop and durable handoff
 
-- [ ] T2.1 RED: test preflight ordering, question/research valve, five classes, and inactive routing; GREEN: wire `app/chat/assistant/{graph,nodes}.py`.
-- [ ] T2.2 RED: test nested preservation, keyed decisions, `upsert` then `set_mark(..., MemoryStatus.ARCHIVED)`, reload; GREEN: update `app/services/{agent_chat,tukulpan}.py`.
-- [ ] T2.3 RED: test digest rejection, checkpoint resume, and approved-plan-only stub; GREEN: reuse approval in `app/services/agent_chat.py`, adding no executor/table/migration.
+- [x] T2.1 RED: test preflight ordering, question/research valve, five classes, and inactive routing; GREEN: wire `app/chat/assistant/{graph,nodes}.py`.
+- [x] T2.2 RED: test nested preservation, keyed decisions, `upsert` then `set_mark(..., MemoryStatus.ARCHIVED)`, reload; GREEN: update `app/services/{agent_chat,tukulpan}.py`.
+- [x] T2.3 RED: test digest rejection, checkpoint resume, and approved-plan-only stub; GREEN: reuse approval in `app/services/agent_chat.py`, adding no executor/table/migration.
 
 ## Phase 3: Authenticated API
 
