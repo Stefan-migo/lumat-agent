@@ -75,6 +75,12 @@ assistant:
     - dashboard.summary
     - web.search
     - automation.create_rule
+    - project.list
+    - project.find
+    - project.create
+    - project.rename
+    - project.archive
+    - project.merge
   kb_scope: null
   memoria_scope: panel
   model: deepseek-chat

@@ -22,6 +22,14 @@ class _ProjectAuthorization:
 
 
 @dataclass(frozen=True)
+class _ApprovedProjectDecision:
+    """Approval decision issued only by the assistant execution boundary."""
+
+    operation: str
+    decision: dict[str, Any]
+
+
+@dataclass(frozen=True)
 class ProjectCandidate:
     slug: str
     name: str
@@ -48,7 +56,12 @@ def list(session: Session) -> list[models.Project]:
     return session.scalars(select(models.Project).order_by(models.Project.slug)).all()
 
 
-def find(session: Session, query: str) -> ProjectResult:
+def find(
+    session: Session,
+    query: str,
+    *,
+    _approval: _ApprovedProjectDecision | None = None,
+) -> ProjectResult:
     """Resolve an exact slug or return at most three approval-bound candidates."""
     slug = normalize_slug(query)
     exact = session.scalar(select(models.Project).where(func.lower(models.Project.slug) == slug))
@@ -56,7 +69,14 @@ def find(session: Session, query: str) -> ProjectResult:
         return ProjectResult(project=exact, candidates=[])
 
     embeddings, _ = kb.embed_texts([query])
-    return _semantic_candidates(session, embeddings[0])
+    result = _semantic_candidates(session, embeddings[0])
+    if _approval is not None and _approval.operation == "find":
+        selected_slug = _approval.decision.get("selected_slug")
+        if selected_slug and any(candidate.slug == selected_slug for candidate in result.candidates):
+            project = session.scalar(select(models.Project).where(models.Project.slug == selected_slug))
+            if project is not None:
+                return ProjectResult(project=project, candidates=result.candidates)
+    return result
 
 
 def _semantic_candidates(session: Session, vector: list[float]) -> ProjectResult:
@@ -76,6 +96,8 @@ def create(
     slug: str,
     name: str,
     purpose: str,
+    *,
+    _approval: _ApprovedProjectDecision | None = None,
 ) -> models.Project | ProjectResult:
     """Create a project only when no exact or semantic purpose candidate exists."""
     normalized_purpose = normalize(purpose)
@@ -86,16 +108,35 @@ def create(
         )
     )
     if duplicate is not None:
-        return ProjectResult(
+        result = ProjectResult(
             project=None,
             candidates=[ProjectCandidate(duplicate.slug, duplicate.name, 1.0)],
             requires_approval=True,
         )
+        if _approval is not None and _approval.operation == "create":
+            selected_slug = _approval.decision.get("selected_slug")
+            if selected_slug == duplicate.slug:
+                return duplicate
+            if _approval.decision.get("create_distinct") is not True:
+                return result
+        elif _approval is None:
+            return result
+        else:
+            return result
 
     embedding, _ = kb.embed_texts([purpose])
     semantic_result = _semantic_candidates(session, embedding[0])
     if semantic_result.requires_approval:
-        return semantic_result
+        if _approval is None or _approval.operation != "create":
+            return semantic_result
+        selected_slug = _approval.decision.get("selected_slug")
+        if selected_slug:
+            if not any(candidate.slug == selected_slug for candidate in semantic_result.candidates):
+                return semantic_result
+            project = session.scalar(select(models.Project).where(models.Project.slug == selected_slug))
+            return project or semantic_result
+        if _approval.decision.get("create_distinct") is not True:
+            return semantic_result
 
     project = models.Project(
         slug=normalize_slug(slug),

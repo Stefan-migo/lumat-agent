@@ -424,6 +424,15 @@ def execute(state: AssistantState) -> AssistantState:
                 "response": f"Tool execution failed: {detail}",
                 "status": "error",
             }
+        if result.get("status") == "approval_pending":
+            return {
+                "tool_result": result,
+                "approval": result.get("approval"),
+                "guardrails": {**state.get("guardrails", {}), "approval_required": True,
+                                "decision": "approval_pending"},
+                "response": "This project selection requires approval before execution.",
+                "status": "approval_pending",
+            }
         if state.get("session") is not None:
             record_audit(
                 state["session"], actor=state.get("actor") or "assistant",
