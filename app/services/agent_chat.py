@@ -52,7 +52,12 @@ def close_cortex_session(session, thread: InternalChatThread, *, report: str) ->
         title=cortex.get("topic", slug), content=report,
     )
     spec = {"scope": {"request": cortex.get("topic", ""), "report": report}, "report_key": report_key}
-    plan = cortex_approved_plan(spec, [{"id": "cortex-report", "summary": "Approved Cortex report"}])
+    plan = cortex_approved_plan(spec, [{
+        "id": "cortex-report", "scope": {"entities": ["service history"], "request": cortex.get("topic", "")},
+        "summary": "Read service history for the approved report",
+        "verifiable_output": "A bounded service-history result",
+        "tool": "conversations.search", "arguments": {"query": cortex.get("topic", ""), "limit": 10},
+    }])
     run_id = uuid4().hex
     thread.assistant_state = merge_assistant_state(
         thread.assistant_state or {},
