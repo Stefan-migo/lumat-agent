@@ -10,11 +10,11 @@
 
 ## Phase 2: Lifecycle and Memory Valves (WU-2)
 
-- [ ] 2.1 RED: Test rename migration failure, active-run rejection, alias/audit creation, merge conflict atomicity, active-run rejection, and default merge protection.
-- [ ] 2.2 GREEN: Implement `rename/archive/merge` in `app/services/projects.py` with deterministic locks, byte-equivalent conflict validation, aliases, audits, and one transaction.
-- [ ] 2.3 RED: Test authorized non-default Tukulpan writes and unauthorized writes rejected before persistence.
-- [ ] 2.4 GREEN: Extend `app/services/tukulpan.py` authorization to the project capability while keeping `app/services/memory.py` forwarding-only and default-compatible.
-- [ ] 2.5 REFACTOR: Run `uv run pytest tests/spec/test_projects_spec.py tests/spec/test_memory_spec.py tests/integration/test_tukulpan.py`.
+- [x] 2.1 RED: Test rename migration failure, active-run rejection, alias/audit creation, merge conflict atomicity, active-run rejection, and default merge protection.
+- [x] 2.2 GREEN: Implement `rename/archive/merge` in `app/services/projects.py` with deterministic locks, byte-equivalent conflict validation, aliases, audits, and one transaction.
+- [x] 2.3 RED: Test authorized non-default Tukulpan writes and unauthorized writes rejected before persistence.
+- [x] 2.4 GREEN: Extend `app/services/tukulpan.py` authorization to the project capability while keeping `app/services/memory.py` forwarding-only and default-compatible.
+- [x] 2.5 REFACTOR: Run `uv run pytest tests/spec/test_projects_spec.py tests/spec/test_memory_spec.py tests/integration/test_db.py` (no Tukulpan-specific test file exists).
 
 ## Phase 3: SDB Authorization and Propagation (WU-3)
 

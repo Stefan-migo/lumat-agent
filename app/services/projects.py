@@ -2,8 +2,9 @@
 
 from dataclasses import dataclass
 import re
+from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app import models
@@ -11,6 +12,13 @@ from app.services import kb
 
 SIMILARITY_THRESHOLD = 0.85
 MAX_CANDIDATES = 3
+
+
+@dataclass(frozen=True)
+class _ProjectAuthorization:
+    """Opaque capability issued by this service for one active namespace."""
+
+    slug: str
 
 
 @dataclass(frozen=True)
@@ -97,3 +105,144 @@ def create(
     )
     session.add(project)
     return project
+
+
+def agent_context(session: Session, proyecto: str) -> _ProjectAuthorization:
+    """Issue the canonical service capability for an active project namespace."""
+    slug = normalize_slug(proyecto)
+    project = session.scalar(select(models.Project).where(models.Project.slug == slug))
+    if project is None or _status_value(project.status) != "active":
+        raise ValueError(f"project {proyecto!r} is not an active project")
+    return _ProjectAuthorization(slug=project.slug)
+
+
+def _project_id(project: models.Project | str) -> str:
+    return project.slug if isinstance(project, models.Project) else normalize_slug(project)
+
+
+def _status_value(status: models.ProjectStatus | str) -> str:
+    return status.value if isinstance(status, models.ProjectStatus) else str(status)
+
+
+def _lock_projects(session: Session, *projects: models.Project | str) -> dict[str, models.Project]:
+    slugs = {_project_id(project) for project in projects}
+    rows = session.scalars(
+        select(models.Project)
+        .where(models.Project.slug.in_(slugs))
+        .order_by(models.Project.id)
+        .with_for_update()
+    ).all()
+    locked = {row.slug: row for row in rows}
+    if len(locked) != len(slugs):
+        missing = sorted(slugs - locked.keys())[0]
+        raise ValueError(f"project {missing!r} not found")
+    return locked
+
+
+def _has_active_run(session: Session, slug: str) -> bool:
+    for thread in session.scalars(select(models.InternalChatThread)):
+        state = thread.assistant_state or {}
+        sdb = state.get("sdb") or {}
+        namespace = sdb.get("proyecto") or sdb.get("project") or state.get("proyecto")
+        if namespace == slug and (thread.active_run_id or state.get("recoverable")):
+            return True
+    return False
+
+
+def _validate_namespace(session: Session, project: models.Project) -> None:
+    """Validate that the namespace has no duplicate composite keys before mutation."""
+    rows = session.execute(
+        select(
+            models.Memory.scope,
+            models.Memory.entity_id,
+            models.Memory.topic_key,
+            func.count(models.Memory.id),
+        )
+        .where(models.Memory.proyecto == project.slug)
+        .group_by(models.Memory.scope, models.Memory.entity_id, models.Memory.topic_key)
+        .having(func.count(models.Memory.id) > 1)
+    ).all()
+    if rows:
+        raise ValueError(f"namespace migration failed for {project.slug!r}")
+
+
+def _audit(session: Session, project_id: int, action: str, actor: str, before: Any, after: Any) -> None:
+    session.add(models.ProjectAudit(
+        project_id=project_id, actor=actor, action=action, before=before, after=after
+    ))
+
+
+def rename(session: Session, project: models.Project | str, name: str, *, actor: str = "agent") -> models.Project:
+    locked = _lock_projects(session, project)
+    row = locked[_project_id(project)]
+    if _has_active_run(session, row.slug):
+        raise ValueError("cannot rename project with an active SDB run")
+    _validate_namespace(session, row)
+    old = {"slug": row.slug, "name": row.name, "status": _status_value(row.status)}
+    new_name = name.strip()
+    if not new_name:
+        raise ValueError("project name cannot be empty")
+    alias = normalize(new_name)
+    if session.scalar(select(models.Project).where(func.lower(models.Project.slug) == alias)) or session.scalar(select(models.ProjectAlias).where(models.ProjectAlias.alias == alias)):
+        raise ValueError(f"project alias {alias!r} already exists")
+    row.name = new_name
+    session.add(models.ProjectAlias(project_id=row.id, alias=alias))
+    _audit(session, row.id, "rename", actor, old, {"slug": row.slug, "name": new_name, "status": _status_value(row.status)})
+    session.flush()
+    return row
+
+
+def archive(session: Session, project: models.Project | str, *, actor: str = "agent") -> models.Project:
+    locked = _lock_projects(session, project)
+    row = locked[_project_id(project)]
+    if row.slug == "default":
+        raise ValueError("default project cannot be archived")
+    if _has_active_run(session, row.slug):
+        raise ValueError("cannot archive project with an active SDB run")
+    old = {"slug": row.slug, "name": row.name, "status": _status_value(row.status)}
+    row.status = models.ProjectStatus.ARCHIVED
+    _audit(session, row.id, "archive", actor, old, {**old, "status": "archived"})
+    session.flush()
+    return row
+
+
+def _memory_equivalent(left: models.Memory, right: models.Memory) -> bool:
+    return all(getattr(left, field) == getattr(right, field) for field in (
+        "scope", "entity_id", "topic_key", "tipo", "titulo", "contenido",
+        "embedding", "pin", "review_after", "status",
+    ))
+
+
+def merge(session: Session, source: models.Project | str, target: models.Project | str, *, actor: str = "agent") -> models.Project:
+    locked = _lock_projects(session, source, target)
+    source_row, target_row = locked[_project_id(source)], locked[_project_id(target)]
+    if source_row.id == target_row.id:
+        raise ValueError("cannot merge a project into itself")
+    if source_row.slug == "default":
+        raise ValueError("default project cannot be merged away")
+    if _has_active_run(session, source_row.slug) or _has_active_run(session, target_row.slug):
+        raise ValueError("cannot merge projects with an active SDB run")
+
+    source_memories = session.scalars(select(models.Memory).where(models.Memory.proyecto == source_row.slug)).all()
+    target_by_key = {(m.scope, m.entity_id, m.topic_key): m for m in session.scalars(select(models.Memory).where(models.Memory.proyecto == target_row.slug)).all()}
+    for memory in source_memories:
+        existing = target_by_key.get((memory.scope, memory.entity_id, memory.topic_key))
+        if existing is not None and not _memory_equivalent(memory, existing):
+            raise ValueError("merge conflict: byte-different memory composite key")
+
+    for memory in source_memories:
+        existing = target_by_key.get((memory.scope, memory.entity_id, memory.topic_key))
+        if existing is None:
+            memory.proyecto = target_row.slug
+        else:
+            session.execute(update(models.MemoryObservation).where(models.MemoryObservation.memory_id == memory.id).values(memory_id=existing.id))
+            session.execute(update(models.MemoryRelation).where(models.MemoryRelation.id_a == memory.id).values(id_a=existing.id))
+            session.execute(update(models.MemoryRelation).where(models.MemoryRelation.id_b == memory.id).values(id_b=existing.id))
+            session.delete(memory)
+    target_row_alias = models.ProjectAlias(project_id=target_row.id, alias=source_row.slug)
+    session.add(target_row_alias)
+    before = {"source": source_row.slug, "target": target_row.slug, "source_status": _status_value(source_row.status)}
+    source_row.status = models.ProjectStatus.ARCHIVED
+    _audit(session, target_row.id, "merge", actor, before, {"target": target_row.slug, "source": source_row.slug, "source_status": "archived"})
+    session.flush()
+    return target_row
