@@ -68,3 +68,50 @@ None from the WU-1 design. WU-2 through WU-5 remain intentionally unimplemented.
 - Nodes consulted: `projects.py`, `create()`, `find()`, `_semantic_candidates`, `ProjectCandidate`, `Project`, `services/kb.py`, `embed_texts()`, `test_projects_spec.py`, `test_create_deduplicates_normalized_purpose_as_ambiguous()`.
 - Edges/context: `create()` and `find()` call `embed_texts()`; both use `Project.purpose_embedding`; `test_projects_spec.py` imports and exercises `projects.py`; `projects.py` shares the `Project` model and KB embedding boundary.
 - Graph rebuilt for `/home/stefan/repos/lumat-agent-projects` from `ab7c28e9`; report updated before implementation.
+
+## WU-2 Lifecycle and Memory Valves
+
+### Status
+
+- Work unit: WU-2 (Lifecycle and Memory Valves), stacked PR slice 2/5
+- Delivery: `auto-chain`, `stacked-to-main`
+- Mode: Strict TDD
+- State: ready for verification
+
+### Completed Tasks
+
+- [x] 2.1 Lifecycle RED tests
+- [x] 2.2 Atomic `rename`, `archive`, and `merge` lifecycle service
+- [x] 2.3 Tukulpan authorization RED tests
+- [x] 2.4 Agent-owned project capability authorization
+- [x] 2.5 Focused refactor and stability verification
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 2.1 | `tests/spec/test_projects_spec.py` | Integration | ✅ WU-1 focused suite | ✅ Missing lifecycle APIs | ✅ Lifecycle tests pass | ✅ rename, active runs, merge conflict, merge success, default guard | ✅ Clean |
+| 2.2 | `tests/spec/test_projects_spec.py` | Integration | ✅ 13 WU-1 tests | ✅ API absence | ✅ 39 focused tests | ✅ stable locks, alias/audit, conflict/no-conflict paths | ✅ Clean |
+| 2.3 | `tests/spec/test_projects_spec.py`, `tests/spec/test_memory_spec.py` | Integration | ✅ Existing memory suite | ✅ Unauthorized capability path | ✅ Authorized and unauthorized writes pass | ✅ default, authorized project, mismatched capability | ✅ Clean |
+| 2.4 | `app/services/tukulpan.py` | Integration | ✅ Existing default CRUD | ✅ Non-default rejected by old guard | ✅ Capability reaches persistence | ✅ forwarding alias and SDB seam preserved | ✅ Clean |
+| 2.5 | `tests/spec/test_projects_spec.py`, `tests/spec/test_memory_spec.py`, `tests/integration/test_db.py` | Integration | ✅ 39/39 | ✅ Prior RED evidence | ✅ 39/39 | ✅ Two identical runs | ✅ Clean |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result | `DATABASE_URL='postgresql+psycopg://app:app@localhost:5436/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5436/lumat' uv run pytest tests/spec/test_projects_spec.py tests/spec/test_memory_spec.py tests/integration/test_db.py -q -p no:warnings` → **39 passed**, exit 0; repeated immediately with the same result: **39 passed**, exit 0. |
+| Runtime harness command/scenario and exact result | Same focused command exercised `migrated_db` against dedicated PostgreSQL `:5436`; lifecycle transactions, memory capability writes, and rollback/conflict scenarios passed. |
+| Rollback boundary | Revert `app/services/projects.py`, `app/services/tukulpan.py`, `tests/spec/test_projects_spec.py`, and this WU-2 bookkeeping; WU-1 registry schema/models and `app/services/memory.py` forwarding alias remain intact. |
+
+### Graph Check
+
+- Supplied graph consulted (not rebuilt): nodes `projects.py`, `tukulpan.py`, `models.py`, `Project`, `Memory`, `InternalChatThread`, `test_projects_spec.py`, `test_memory_spec.py`, `services/kb.py`, and `embed_texts()`.
+- Edges/context: `projects.py` imports `models.py`; `Project` owns lifecycle registry rows; `tukulpan.py` owns the canonical memory write seam; `Memory` stores project namespaces; `InternalChatThread` supplies active-run state; `projects.py` uses `kb.embed_texts()` only through the existing WU-1 create path.
+- Queries: `graphify query "projects.py lifecycle rename archive merge and project authorization"`; `graphify query "Project lifecycle service rename archive merge locks aliases audits active SDB runs"`; paths `projects.py → models.py` and `tukulpan.py → memory.py` (the latter had no directed path).
+
+### Deviations and Issues
+
+- The planned `tests/integration/test_tukulpan.py` does not exist; existing spec and SDB persistence coverage were used instead.
+- Full `uv run pytest tests/ -q -p no:warnings` has three unrelated failures: migration expectations omit migration 024/projects tables, and an existing terminology inventory assertion fails in `openspec/specs/agent-config/spec.md`. The WU-2 focused suite is green and stable.
+- WU-3 through WU-5 remain intentionally unimplemented.

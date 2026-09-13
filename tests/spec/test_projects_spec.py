@@ -7,7 +7,7 @@ from sqlalchemy import inspect, select
 from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal
-from app.models import Memory, Project, ProjectAlias, ProjectAudit
+from app.models import InternalChatThread, Memory, MemoryType, Project, ProjectAlias, ProjectAudit, User
 from app.services import projects
 
 pytestmark = pytest.mark.spec("PROJECTS-WU1")
@@ -144,3 +144,100 @@ def test_create_deduplicates_semantically_similar_purpose_as_ambiguous(
 
 def test_create_has_no_ambiguity_bypass_parameter():
     assert "allow_ambiguous" not in stdlib_inspect.signature(projects.create).parameters
+
+
+def _project(session, slug: str) -> Project:
+    row = projects.create(session, slug, slug.title(), f"Purpose for {slug}")
+    session.flush()
+    return row
+
+
+def test_rename_records_name_alias_and_audit_without_changing_slug(migrated_db):
+    with SessionLocal() as session:
+        project = _project(session, "field-ops")
+        session.commit()
+        project = session.get(Project, project.id)
+        renamed = projects.rename(session, project, "Field Operations", actor="agent")
+        session.commit()
+
+        assert renamed.slug == "field-ops"
+        alias = session.query(ProjectAlias).filter_by(project_id=project.id).one()
+        assert alias.alias == "field operations"
+        audit = session.query(ProjectAudit).filter_by(project_id=project.id).one()
+        assert audit.action == "rename"
+        assert audit.after["name"] == "Field Operations"
+
+
+def test_rename_validation_failure_leaves_registry_and_artifacts_unchanged(migrated_db, monkeypatch):
+    with SessionLocal() as session:
+        project = _project(session, "field-ops")
+        project_id = project.id
+        session.commit()
+        project = session.get(Project, project_id)
+        monkeypatch.setattr(projects, "_validate_namespace", lambda *args: (_ for _ in ()).throw(ValueError("migration failed")))
+        with pytest.raises(ValueError, match="migration failed"):
+            projects.rename(session, project, "Broken", actor="agent")
+        session.rollback()
+        assert session.get(Project, project_id).name == "Field-Ops"
+        assert session.query(ProjectAlias).count() == 0
+
+
+def test_rename_and_merge_reject_active_runs_before_changes(migrated_db):
+    with SessionLocal() as session:
+        user = User(username="lifecycle", password_hash="test")
+        session.add(user)
+        session.flush()
+        source = _project(session, "source")
+        target = _project(session, "target")
+        thread = InternalChatThread(user_id=user.id, active_run_id="run-1", assistant_state={"sdb": {"proyecto": "source"}})
+        session.add(thread)
+        session.flush()
+        with pytest.raises(ValueError, match="active SDB run"):
+            projects.rename(session, source, "Source Renamed", actor="agent")
+        with pytest.raises(ValueError, match="active SDB run"):
+            projects.merge(session, source, target, actor="agent")
+        assert session.get(Project, source.id).name == "Source"
+        assert session.get(Project, target.id).status.value == "active"
+
+
+def test_merge_is_atomic_on_byte_different_composite_key(migrated_db, fake_embedder):
+    with SessionLocal() as session:
+        source, target = _project(session, "source"), _project(session, "target")
+        for project, content in ((source, "source bytes"), (target, "target bytes")):
+            from app.services import tukulpan
+            tukulpan.upsert(session, proyecto=project.slug, scope="panel", entity_id="thread:1", topic_key="same", tipo=MemoryType.DECISION, titulo="same", contenido=content, authorization=projects.agent_context(session, project.slug))
+        with pytest.raises(ValueError, match="conflict"):
+            projects.merge(session, source, target, actor="agent")
+        assert session.query(Memory).filter_by(proyecto="source").count() == 1
+        assert session.get(Project, source.id).status.value == "active"
+
+
+def test_merge_preserves_target_and_records_source_alias(migrated_db, fake_embedder):
+    with SessionLocal() as session:
+        source, target = _project(session, "source"), _project(session, "target")
+        from app.services import tukulpan
+        tukulpan.upsert(session, proyecto="source", scope="panel", entity_id="thread:1", topic_key="one", tipo=MemoryType.DECISION, titulo="one", contenido="one", authorization=projects.agent_context(session, "source"))
+        projects.merge(session, source, target, actor="agent")
+        session.commit()
+        assert session.get(Project, target.id).status.value == "active"
+        assert session.get(Project, source.id).status.value == "archived"
+        assert session.query(ProjectAlias).filter_by(project_id=target.id, alias="source").count() == 1
+        assert session.query(Memory).filter_by(proyecto="target", topic_key="one").count() == 1
+
+
+def test_default_project_cannot_be_merged_away(migrated_db):
+    with SessionLocal() as session:
+        default = session.scalar(select(Project).where(Project.slug == "default"))
+        other = _project(session, "other")
+        with pytest.raises(ValueError, match="default"):
+            projects.merge(session, default, other, actor="agent")
+
+
+def test_archive_records_lifecycle_audit(migrated_db):
+    with SessionLocal() as session:
+        project = _project(session, "retired")
+        projects.archive(session, project, actor="agent")
+        session.commit()
+        assert session.get(Project, project.id).status.value == "archived"
+        audit = session.query(ProjectAudit).filter_by(project_id=project.id).one()
+        assert audit.action == "archive"

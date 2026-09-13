@@ -41,7 +41,7 @@ from app.models import (
     MessageDirection,
     ObservationType,
 )
-from app.services import kb
+from app.services import kb, projects
 
 logger = logging.getLogger(__name__)
 
@@ -85,11 +85,16 @@ SDB_SPEC_LIMIT = 8 * 1024
 SDB_CHECKPOINT_LIMIT = 4 * 1024
 
 
-def _guard_writable_project(proyecto: str) -> None:
-    """Reject writes targeting a non-default project (MEM-2)."""
-    if proyecto != WRITABLE_PROYECTO:
+def _guard_writable_project(
+    proyecto: str, authorization: projects._ProjectAuthorization | None = None
+) -> None:
+    """Require the project service capability for every non-default write."""
+    if proyecto == WRITABLE_PROYECTO:
+        return
+    if not isinstance(authorization, projects._ProjectAuthorization) or authorization.slug != proyecto:
         raise ValueError(
-            f"memory writes are restricted to proyecto='default', got {proyecto!r}"
+            f"unauthorized memory write for proyecto={proyecto!r}; "
+            "legacy default guard is proyecto='default'"
         )
 
 
@@ -125,6 +130,7 @@ def upsert(
     contenido: str,
     proyecto: str = WRITABLE_PROYECTO,
     pin: bool = False,
+    authorization: projects._ProjectAuthorization | None = None,
 ) -> Memory:
     """Create-or-update one memory by (proyecto, scope, entity_id, topic_key).
 
@@ -133,7 +139,7 @@ def upsert(
     key the existing row is reused and its content/embedding refreshed —
     uniqueness enforced by `UNIQUE(proyecto, scope, entity_id, topic_key)`.
     """
-    _guard_writable_project(proyecto)
+    _guard_writable_project(proyecto, authorization)
 
     embeddings = _embed([contenido])
     if not embeddings:
@@ -180,6 +186,7 @@ def record_milestone(
     title: str,
     content: str,
     proyecto: str = WRITABLE_PROYECTO,
+    authorization: projects._ProjectAuthorization | None = None,
 ) -> Memory:
     """Stage a panel milestone under the canonical memory contract."""
     return upsert(
@@ -191,6 +198,7 @@ def record_milestone(
         titulo=title,
         contenido=content,
         proyecto=proyecto,
+        authorization=authorization,
     )
 
 
@@ -202,6 +210,7 @@ def record_decision(
     title: str,
     content: str,
     proyecto: str = WRITABLE_PROYECTO,
+    authorization: projects._ProjectAuthorization | None = None,
 ) -> Memory:
     """Stage an explicit panel decision under the canonical memory contract."""
     return upsert(
@@ -213,6 +222,7 @@ def record_decision(
         titulo=title,
         contenido=content,
         proyecto=proyecto,
+        authorization=authorization,
     )
 
 
@@ -239,9 +249,10 @@ def persist_sdb_artifact(
     sequence: int | None = None,
     task_id: str | None = None,
     proyecto: str = WRITABLE_PROYECTO,
+    authorization: projects._ProjectAuthorization | None = None,
 ) -> Memory:
     """Persist one bounded typed SDB artifact through the canonical memory seam."""
-    _guard_writable_project(proyecto)
+    _guard_writable_project(proyecto, authorization)
     if kind == "spec":
         tipo, topic_key, limit = MemoryType.PATTERN, f"sdb:{run_id}:spec", SDB_SPEC_LIMIT
         title = "SDB specification"
@@ -262,6 +273,7 @@ def persist_sdb_artifact(
         titulo=title,
         contenido=_bounded_json(payload, limit),
         proyecto=proyecto,
+        authorization=authorization,
     )
 
 
