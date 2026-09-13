@@ -36,7 +36,7 @@
 - Threat matrix cases are N/A per design; no threat RED tests were added.
 - `uv run pytest tests/unit` passed: 117 tests.
 - No executor, table, migration, bus, or new dependency was added. SDB delivery remains explicitly `not-implemented`.
-- Full required suite was not rerun in this slice; Slice 1 established the known unrelated capability-count failure at `tests/functional/test_api_assistant_capabilities.py::test_admin_capabilities_reflect_real_tools_and_runtime_config` (expected 13, registry exposes 19).
+- Full required command `DATABASE_URL='postgresql+psycopg://app:app@localhost:5437/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5437/lumat' uv run pytest tests/` timed out at 300 seconds after reaching 45% and showed the known unrelated capability-count failure. Fail-fast replay confirmed `tests/functional/test_api_assistant_capabilities.py::test_admin_capabilities_reflect_real_tools_and_runtime_config`: expected 13, registry exposes 19. This slice did not modify that test or registry behavior.
 
 ## Remaining Tasks
 - [ ] T3.1–T3.2 — Authenticated API and approval endpoints (PR 3)
