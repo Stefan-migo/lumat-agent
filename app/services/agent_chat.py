@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.chat.assistant.graph import run_assistant
 from app.chat.assistant.approval import canonical_sdb_digest, issue_approval, validate_approval
 from app.chat.assistant.nodes import execute
+from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.chat.assistant import nodes as assistant_nodes
 from app.chat.assistant.attachments import prepare_attachment_context
 from app.chat.assistant.state import COMPACTION_RETENTION_TOKENS, COMPACTION_THRESHOLD_TOKENS, INJECTION_TOKEN_BUDGET, estimate_tokens, merge_assistant_state
@@ -71,28 +72,61 @@ def _thread_project_authorization(session: Session, thread: InternalChatThread):
 
 
 def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, authorization=None) -> dict:
-    """Report the approved task plan without fabricating execution results.
-
-    The native per-task executor is not implemented, so tasks stay
-    not-implemented and never write a completed checkpoint. Resume therefore
-    cannot skip work that never produced a result.
-    """
+    """Execute the frozen read plan once, stopping at the first failure."""
     sdb = (thread.assistant_state or {}).get("sdb") or {}
     plan = thread.current_plan or {}
-    pending = resumable_sdb_tasks(plan.get("sdb", {}).get("tasks", []), sdb.get("checkpoints", []))
-    results = []
+    frozen_tasks = plan.get("sdb", {}).get("tasks", [])
+    persisted_results = {item.get("task_id"): item for item in sdb.get("results", []) if item.get("task_id")}
+    pending = resumable_sdb_tasks(frozen_tasks, sdb.get("checkpoints", []))
+    results = list(persisted_results.values())
+    from app.services.prompts import load_assistant_config
+    whitelist = set(load_assistant_config().tools_whitelist)
+    cost_allowed = (thread.assistant_state or {}).get("guardrails", {}).get("cost_allowed", True)
     for offset, task in enumerate(pending, start=len(sdb.get("checkpoints", [])) + 1):
-        result = {"task_id": task["id"], "status": "not-implemented"}
-        checkpoint = {"sequence": offset, "task_id": task["id"], "status": "not-implemented"}
+        result = {"task_id": task.get("id"), "status": "failed", "error": "SDB task rejected"}
+        try:
+            tool_name = task.get("tool")
+            if tool_name not in whitelist:
+                raise ToolValidationError(f"tool is not whitelisted: {tool_name}")
+            definition = get_tool(tool_name)
+            arguments = definition.args_model.model_validate(task.get("arguments", {})).model_dump()
+            if not definition.read_only:
+                raise ToolValidationError("SDB tasks must use read-only tools")
+            from app.chat.assistant.state import SDBTask
+            typed = SDBTask.model_validate({**task, "arguments": arguments})
+            if typed.scope.get("proyecto", "default") != "default" and authorization is None:
+                raise ToolValidationError("SDB project capability is unavailable")
+            tool_result = execute_tool(
+                session, typed.tool, typed.arguments,
+                whitelist=whitelist, cost_allowed=cost_allowed,
+            )
+            result = {"task_id": typed.id, **tool_result}
+            if result.get("status") != "completed":
+                result["status"] = "failed"
+        except (ToolValidationError, ToolExecutionError, TimeoutError, ValueError) as exc:
+            result["error"] = str(exc)
+        except Exception as exc:
+            result["error"] = "SDB task failed"
+        status = result["status"]
+        if hasattr(session, "add"):
+            record_audit(
+                session, actor="assistant", action="internal_chat.sdb_execution",
+                entity="internal_chat_thread", entity_id=str(thread.id),
+                after={"run_id": run_id, "task_id": result["task_id"], "status": status,
+                       "error": result.get("error")},
+            )
+        checkpoint = {"sequence": offset, "task_id": result["task_id"], "status": status, "error": result.get("error")}
         persist_sdb_state(
             session, thread, run_id=run_id, phase="EXECUTE",
             checkpoint=checkpoint,
-            events=[{"type": "task-not-implemented", "run_id": run_id, "sequence": offset, "task_id": task["id"]}],
+            events=[{"type": "task", "run_id": run_id, "sequence": offset, "task_id": result["task_id"], "status": status}],
             results=[result],
             authorization=authorization,
         )
         results.append(result)
-    return {"results": results, "status": "not-implemented"}
+        if status != "completed":
+            break
+    return {"results": results, "status": "completed" if results and all(item.get("status") == "completed" for item in results) and len(results) == len(frozen_tasks) else "failed"}
 
 
 def thread_dict(thread: InternalChatThread) -> dict:
@@ -142,6 +176,10 @@ def persist_sdb_state(
     state = dict(thread.assistant_state or {})
     sdb = dict(state.get("sdb") or {})
     checkpoints = [*sdb.get("checkpoints", []), checkpoint]
+    result_by_task = {item.get("task_id"): item for item in sdb.get("results", []) if item.get("task_id")}
+    for result in results or []:
+        if result.get("task_id"):
+            result_by_task[result["task_id"]] = result
     existing_events = list(state.get("events") or [])
     ordered_events = []
     seen_events = set()
@@ -160,7 +198,8 @@ def persist_sdb_state(
         else {"type": event.get("type", "sdb"), "sequence": event.get("sequence", 0), "truncated": True}
         for event in ordered_events
     ]
-    sdb.update({"run_id": run_id, "phase": phase, "checkpoints": checkpoints, "proyecto": proyecto})
+    sdb.update({"run_id": run_id, "phase": phase, "checkpoints": checkpoints,
+                "results": list(result_by_task.values()), "proyecto": proyecto})
     if spec is not None:
         sdb["spec_ref"] = {"sha256": spec.get("sha256"), "canonical_sha256": canonical_sdb_digest({"spec": spec, "tasks": [], "phase": phase})}
     thread.assistant_state = {**state, "sdb": sdb, "events": bounded_events}

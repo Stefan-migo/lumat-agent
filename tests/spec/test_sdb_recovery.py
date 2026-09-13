@@ -88,17 +88,34 @@ def test_sdb_task_runner_never_fabricates_completed_results(monkeypatch):
 
     captured = []
     monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: captured.append(kwargs))
+    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: {"status": "completed", "result": {"rows": []}})
     thread = SimpleNamespace(
         id=1,
-        current_plan={"sdb": {"tasks": [{"id": "task-1", "verifiable_output": "summary"}]}},
+        current_plan={"sdb": {"tasks": [{"id": "task-1", "scope": {}, "summary": "read", "verifiable_output": "summary", "tool": "conversations.search", "arguments": {"query": "x", "limit": 10}}]}},
         assistant_state={"sdb": {"checkpoints": []}},
     )
 
     result = agent_chat._run_sdb_tasks(object(), thread, "run-1")
 
-    assert result["status"] == "not-implemented"
-    assert [item["status"] for item in result["results"]] == ["not-implemented"]
-    assert all(entry["checkpoint"]["status"] != "completed" for entry in captured)
+    assert result["status"] == "completed"
+    assert [item["status"] for item in result["results"]] == ["completed"]
+    assert captured[0]["checkpoint"]["status"] == "completed"
+
+
+def test_sdb_task_runner_stops_after_first_failure(monkeypatch):
+    from app.services import agent_chat
+
+    captured = []
+    monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: captured.append(kwargs))
+    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: {"status": "error", "error": "read failed"})
+    tasks = [{"id": f"task-{n}", "scope": {}, "summary": "read", "verifiable_output": "rows", "tool": "conversations.search", "arguments": {"query": "x", "limit": 10}} for n in (1, 2)]
+    thread = SimpleNamespace(id=1, current_plan={"sdb": {"tasks": tasks}}, assistant_state={"sdb": {"checkpoints": []}})
+
+    result = agent_chat._run_sdb_tasks(object(), thread, "run-1")
+
+    assert result["status"] == "failed"
+    assert [item["task_id"] for item in result["results"]] == ["task-1"]
+    assert captured[0]["checkpoint"]["status"] == "failed"
 
 
 def test_sdb_task_runner_forwards_authorized_project_to_checkpoint(monkeypatch):
@@ -109,7 +126,7 @@ def test_sdb_task_runner_forwards_authorized_project_to_checkpoint(monkeypatch):
     authorization = SimpleNamespace(slug="field-ops")
     thread = SimpleNamespace(
         id=1,
-        current_plan={"sdb": {"tasks": [{"id": "task-1", "verifiable_output": "summary"}]}},
+        current_plan={"sdb": {"tasks": [{"id": "task-1", "scope": {}, "summary": "read", "verifiable_output": "summary", "tool": "conversations.search", "arguments": {"query": "x", "limit": 10}}]}},
         assistant_state={"sdb": {"checkpoints": []}},
     )
 
