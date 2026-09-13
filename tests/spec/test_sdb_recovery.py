@@ -98,3 +98,20 @@ def test_sdb_task_runner_never_fabricates_completed_results(monkeypatch):
     assert result["status"] == "not-implemented"
     assert [item["status"] for item in result["results"]] == ["not-implemented"]
     assert all(entry["checkpoint"]["status"] != "completed" for entry in captured)
+
+
+def test_sdb_task_runner_forwards_authorized_project_to_checkpoint(monkeypatch):
+    from app.services import agent_chat
+
+    captured = []
+    monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: captured.append(kwargs))
+    authorization = SimpleNamespace(slug="field-ops")
+    thread = SimpleNamespace(
+        id=1,
+        current_plan={"sdb": {"tasks": [{"id": "task-1", "verifiable_output": "summary"}]}},
+        assistant_state={"sdb": {"checkpoints": []}},
+    )
+
+    agent_chat._run_sdb_tasks(object(), thread, "run-1", authorization)
+
+    assert captured[0]["authorization"] is authorization

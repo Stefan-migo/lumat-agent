@@ -7,8 +7,8 @@ import pytest
 from sqlalchemy import func, select
 
 from app.db import SessionLocal
-from app.models import InternalChatThread, Memory, MemoryType, User
-from app.services import agent_chat, tukulpan
+from app.models import InternalChatThread, Memory, MemoryType, Project, User
+from app.services import agent_chat, projects, tukulpan
 
 
 ADMIN_DB_URL = os.environ.get(
@@ -206,3 +206,57 @@ def test_sdb_state_writes_one_checkpoint_row_per_task_sequence():
     assert {row.topic_key for row in rows} == {
         "sdb:run-5:state:1", "sdb:run-5:state:2"
     }
+
+
+def test_authorized_project_reaches_every_sdb_artifact_key():
+    thread_id = _thread_id()
+    with SessionLocal() as session:
+        project = session.scalar(select(Project).where(Project.slug == "sdb-namespace"))
+        if project is None:
+            project = Project(
+                slug="sdb-namespace",
+                name="SDB Namespace",
+                purpose="A deterministic SDB namespace",
+                purpose_embedding=[0.0] * 384,
+            )
+            session.add(project)
+            session.commit()
+        authorization = projects.agent_context(session, project.slug)
+        thread = session.get(InternalChatThread, thread_id)
+        agent_chat.persist_sdb_state(
+            session,
+            thread,
+            run_id="run-project",
+            phase="SPEC",
+            checkpoint={"sequence": 1, "phase": "SPEC"},
+            events=[],
+            spec={"scope": {"proyecto": project.slug}},
+            results=[{"task_id": "task-1", "status": "completed"}],
+            authorization=authorization,
+        )
+        session.commit()
+
+    with SessionLocal() as session:
+        rows = list(session.scalars(select(Memory).where(Memory.proyecto == "sdb-namespace")))
+    assert {(row.scope, row.entity_id, row.topic_key, row.tipo) for row in rows} == {
+        ("panel", f"thread:{thread_id}", "sdb:run-project:spec", MemoryType.PATTERN),
+        ("panel", f"thread:{thread_id}", "sdb:run-project:state:1", MemoryType.SESSION),
+        ("panel", f"thread:{thread_id}", "sdb:run-project:result:task-1", MemoryType.DISCOVERY),
+    }
+
+
+def test_sdb_persistence_rejects_caller_project_injection():
+    thread_id = _thread_id()
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        with pytest.raises(TypeError):
+            agent_chat.persist_sdb_state(
+                session,
+                thread,
+                run_id="run-injected",
+                phase="SPEC",
+                checkpoint={"sequence": 1},
+                events=[],
+                proyecto="field-ops",
+            )
+        assert session.scalar(select(func.count()).select_from(Memory)) == 0

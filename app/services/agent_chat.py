@@ -18,6 +18,7 @@ from app.models import AssistantAttachment, InternalChatMessage, InternalChatThr
 from app.services.audit import record_audit
 from app.services.realtime import stage_event
 from app.services import tukulpan
+from app.services import projects
 
 
 SDB_EVENT_LIMIT = 4 * 1024
@@ -28,7 +29,12 @@ def _sdb_plan(spec: dict, tasks: list[dict]) -> dict:
     return {"phase": "EXECUTE", "spec": spec, "tasks": tasks}
 
 
-def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str) -> dict:
+def _thread_project_authorization(session: Session, thread: InternalChatThread):
+    proyecto = ((thread.assistant_state or {}).get("sdb") or {}).get("proyecto", "default")
+    return None if proyecto == "default" else projects.agent_context(session, proyecto)
+
+
+def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, authorization=None) -> dict:
     """Report the approved task plan without fabricating execution results.
 
     The native per-task executor is not implemented, so tasks stay
@@ -47,6 +53,7 @@ def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str) ->
             checkpoint=checkpoint,
             events=[{"type": "task-not-implemented", "run_id": run_id, "sequence": offset, "task_id": task["id"]}],
             results=[result],
+            authorization=authorization,
         )
         results.append(result)
     return {"results": results, "status": "not-implemented"}
@@ -88,9 +95,14 @@ def persist_sdb_state(
     events: list[dict],
     spec: dict | None = None,
     results: list[dict] | None = None,
-    proyecto: str = "default",
+    authorization: projects._ProjectAuthorization | None = None,
 ) -> None:
     """Persist bounded SDB state in JSONB and the canonical Tukulpan seam."""
+    if authorization is not None and not isinstance(authorization, projects._ProjectAuthorization):
+        raise ValueError("SDB persistence requires an authorized project capability")
+    if authorization is not None and projects.agent_context(session, authorization.slug) != authorization:
+        raise ValueError("SDB persistence requires an active authorized project capability")
+    proyecto = authorization.slug if authorization is not None else "default"
     state = dict(thread.assistant_state or {})
     sdb = dict(state.get("sdb") or {})
     checkpoints = [*sdb.get("checkpoints", []), checkpoint]
@@ -112,25 +124,26 @@ def persist_sdb_state(
         else {"type": event.get("type", "sdb"), "sequence": event.get("sequence", 0), "truncated": True}
         for event in ordered_events
     ]
-    sdb.update({"run_id": run_id, "phase": phase, "checkpoints": checkpoints})
+    sdb.update({"run_id": run_id, "phase": phase, "checkpoints": checkpoints, "proyecto": proyecto})
     if spec is not None:
         sdb["spec_ref"] = {"sha256": spec.get("sha256"), "canonical_sha256": canonical_sdb_digest({"spec": spec, "tasks": [], "phase": phase})}
     thread.assistant_state = {**state, "sdb": sdb, "events": bounded_events}
     if spec is not None:
         tukulpan.persist_sdb_artifact(
-            session, thread_id=thread.id, run_id=run_id, kind="spec", payload=spec, proyecto=proyecto
+            session, thread_id=thread.id, run_id=run_id, kind="spec", payload=spec,
+            proyecto=proyecto, authorization=authorization,
         )
     sequence = checkpoint.get("sequence")
     tukulpan.persist_sdb_artifact(
         session, thread_id=thread.id, run_id=run_id, kind="state", sequence=sequence,
-        payload=checkpoint, proyecto=proyecto
+        payload=checkpoint, proyecto=proyecto, authorization=authorization,
     )
     for result in results or []:
         task_id = result.get("task_id")
         if task_id:
             tukulpan.persist_sdb_artifact(
                 session, thread_id=thread.id, run_id=run_id, kind="result",
-                task_id=task_id, payload=result, proyecto=proyecto
+                task_id=task_id, payload=result, proyecto=proyecto, authorization=authorization,
             )
 
 
@@ -293,6 +306,7 @@ def submit_message(
     attachment_ids: list[int] | None = None,
     *,
     sdb_requested: bool | None = None,
+    project_authorization: projects._ProjectAuthorization | None = None,
 ) -> InternalChatMessage:
     run_id = uuid4().hex
     message = InternalChatMessage(
@@ -332,6 +346,7 @@ def submit_message(
             attachments=attachments,
             context=context,
             compaction=compaction,
+            project_authorization=project_authorization,
         )
         thread.active_run_id = run_id
         thread.current_plan = result.get("plan")
@@ -363,6 +378,7 @@ def submit_message(
                 events=_events_for(result, thread.id, run_id),
                 spec=result.get("sdb_spec"),
                 results=(result.get("sdb_result") or {}).get("results", []),
+                authorization=result.get("project_authorization"),
             )
         message.assistant_metadata = {
             **(message.assistant_metadata or {}),
@@ -493,7 +509,7 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
     if not claim_execution(session, thread):
         return None
     if plan.get("sdb"):
-        result = _run_sdb_tasks(session, thread, run_id)
+        result = _run_sdb_tasks(session, thread, run_id, _thread_project_authorization(session, thread))
         result["response"] = "SDB execution is not implemented; no task was executed."
         result["evidence"] = [{"route": "sdb", "phase": "DELIVER", "status": "degraded"}]
     else:
@@ -545,7 +561,7 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
     if message is None:
         return False
     if (thread.current_plan or {}).get("sdb"):
-        result = _run_sdb_tasks(session, thread, run_id)
+        result = _run_sdb_tasks(session, thread, run_id, _thread_project_authorization(session, thread))
         result["response"] = "SDB execution is not implemented; no task was executed."
         result["evidence"] = [{"route": "sdb", "phase": "DELIVER", "status": "degraded"}]
     else:

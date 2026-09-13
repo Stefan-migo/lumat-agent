@@ -115,3 +115,48 @@ None from the WU-1 design. WU-2 through WU-5 remain intentionally unimplemented.
 - The planned `tests/integration/test_tukulpan.py` does not exist; existing spec and SDB persistence coverage were used instead.
 - Full `uv run pytest tests/ -q -p no:warnings` has three unrelated failures: migration expectations omit migration 024/projects tables, and an existing terminology inventory assertion fails in `openspec/specs/agent-config/spec.md`. The WU-2 focused suite is green and stable.
 - WU-3 through WU-5 remain intentionally unimplemented.
+
+## WU-3 SDB Authorization and Propagation
+
+### Status
+
+- Work unit: WU-3 (SDB Authorization and Propagation), stacked PR slice 3/5
+- Delivery: `auto-chain`, `stacked-to-main`
+- Mode: Strict TDD
+- State: ready for verification
+- Scope: WU-3 only; WU-4 and WU-5 remain intentionally unimplemented.
+
+### Completed Tasks
+
+- [x] 3.1 Injection rejection, project-aware artifact, recovery, identity, and phase RED tests
+- [x] 3.2 Authorized project propagation through assistant state and SDB persistence/recovery
+- [x] 3.3 Focused refactor and stable verification
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 3.1 | `tests/integration/test_sdb_persistence.py`, `tests/spec/test_sdb_phases.py`, `tests/spec/test_sdb_recovery.py` | Integration/spec | ✅ 46/46 baseline | ✅ Injection and project propagation tests failed before implementation | ✅ 59/59 focused suite | ✅ Default, authorized namespace, recovery forwarding, and seven-phase paths | ✅ Clean |
+| 3.2 | `app/chat/assistant/state.py`, `app/chat/assistant/nodes.py`, `app/chat/assistant/graph.py`, `app/services/agent_chat.py` | Integration/spec | ✅ Existing SDB suite | ✅ Missing authorization seam and scope project failed | ✅ Authorized SPEC/STATE/RESULT persistence passes | ✅ Capability validation, default compatibility, and recovery re-authorization | ✅ Clean |
+| 3.3 | Actual equivalents listed below | Integration/spec | ✅ 59/59 | ✅ Prior RED evidence | ✅ 59/59, repeated | ✅ Same deterministic result on both runs | ✅ Clean |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result, run 1 | `DATABASE_URL='postgresql+psycopg://app:app@localhost:5436/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5436/lumat' uv run pytest tests/integration/test_chat_state.py tests/integration/test_assistant_chat.py tests/integration/test_sdb_persistence.py tests/spec/test_sdb_phases.py tests/spec/test_sdb_recovery.py tests/spec/test_sdb_trigger.py -p no:warnings` → **59 passed in 27.72s**, exit 0 |
+| Focused test command and exact result, run 2 | Same command immediately repeated → **59 passed**, exit 0 |
+| Runtime harness command/scenario and exact result | The focused integration suite exercised the real LangGraph/SDB persistence and recovery seams against dedicated PostgreSQL `:5436`; **59 passed**. |
+| Rollback boundary | Revert `app/chat/assistant/state.py`, `app/chat/assistant/nodes.py`, `app/chat/assistant/graph.py`, `app/services/agent_chat.py`, the three WU-3 test updates, and WU-3 bookkeeping; WU-1/WU-2 registry, lifecycle, and Tukulpan capability changes remain intact. |
+
+### Graph Check
+
+- Supplied graph consulted (not rebuilt): nodes `assistant/state.py` (`AssistantState`), `assistant/graph.py` (`run_assistant`, `build_assistant_graph`), `assistant/nodes.py` (`sdb_clarify`, `sdb_spec`, `sdb_plan`, `sdb_execute`, `sdb_verify`, `sdb_deliver`), `services/agent_chat.py` (`persist_sdb_state`, `_run_sdb_tasks`, `resume_thread`), `services/tukulpan.py` (`persist_sdb_artifact`), `services/projects.py` (`agent_context`), `recovery.py`, `test_sdb_persistence.py`, `test_sdb_phases.py`, and `test_sdb_recovery.py`.
+- Edges/context: `run_assistant` → assistant graph state; SDB phase nodes → unchanged seven-node graph; `persist_sdb_state` → Tukulpan typed artifact seam; Tukulpan → project authorization capability; `resume_thread`/`_run_sdb_tasks` → checkpoint recovery; persistence tests → panel scope, thread identity, and `sdb:{run_id}:{kind}` keys.
+- Queries/paths: `graphify query "assistant state sdb_scope proyecto validated project"`; `graphify query "agent_chat persist_sdb_state recover_sdb state graph nodes phases"`; `graphify query "project propagation selected authorized project run_assistant persist_sdb_state"`; paths `assistant/state.py → services/agent_chat.py` (no directed path found), `chat/assistant/nodes.py → chat/assistant/recovery.py` (ambiguous same-node resolution), and `persist_sdb_state() → agent_chat.py`.
+
+### Deviations and Issues
+
+- The task-listed `tests/integration/test_agent_chat.py` and `tests/spec/test_sdb_native_spec.py` do not exist. Closest real equivalents were used: `tests/integration/test_assistant_chat.py`, `tests/integration/test_sdb_persistence.py`, `tests/spec/test_sdb_phases.py`, `tests/spec/test_sdb_recovery.py`, and `tests/spec/test_sdb_trigger.py`.
+- No seven phases were added or reordered. `proyecto` is derived only from the service-issued `_ProjectAuthorization`; arbitrary `proyecto` injection into `persist_sdb_state` is rejected by the API boundary.
+- The known pre-existing `tests/unit/test_assistant_extensions.py::test_all_inventoried_lumat_sdb_consumers_use_guardrails_terminology` failure was not run or changed in this slice.

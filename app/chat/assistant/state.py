@@ -91,6 +91,7 @@ class AssistantState(TypedDict, total=False):
     sdb_route: Literal["normal", "sdb"]
     sdb_rejection: str | None
     sdb_scope: dict
+    project_authorization: object
     sdb_spec: dict
     sdb_tasks: list[dict]
     sdb_result: dict
