@@ -30,6 +30,25 @@ def canonical_sdb_digest(payload: dict) -> str:
     return hashlib.sha256(encoded.encode()).hexdigest()
 
 
+def canonical_project_payload(payload: dict) -> dict:
+    """Select the exact project operation covered by an approval."""
+    explicit = payload.get("project_payload")
+    if isinstance(explicit, dict):
+        return explicit
+    tool = payload.get("tool") or ""
+    return {
+        "operation": tool.removeprefix("project.") if tool.startswith("project.") else tool,
+        "arguments": payload.get("arguments") or {},
+    }
+
+
+def canonical_project_digest(payload: dict) -> str:
+    encoded = json.dumps(
+        canonical_project_payload(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return hashlib.sha256(encoded.encode()).hexdigest()
+
+
 def issue_approval(plan: dict, *, expires_at: datetime | None = None) -> dict:
     token = secrets.token_urlsafe(24)
     expiry = expires_at or (datetime.now(timezone.utc) + timedelta(minutes=15))
@@ -48,6 +67,9 @@ def issue_approval(plan: dict, *, expires_at: datetime | None = None) -> dict:
     if isinstance(sdb, dict):
         approval["sdb_sha256"] = canonical_sdb_digest(sdb)
         approval["spec_sha256"] = sdb.get("spec", {}).get("sha256", "")
+    if str(plan.get("tool", "")).startswith("project."):
+        approval["project_payload"] = canonical_project_payload(plan)
+        approval["project_sha256"] = canonical_project_digest(plan)
     return approval
 
 
@@ -76,6 +98,10 @@ def validate_approval(plan: dict, approval: dict, token: str) -> bool:
         valid = valid and secrets.compare_digest(
             str(approval.get("spec_sha256", "")), str(sdb.get("spec", {}).get("sha256", ""))
         )
+    if str(plan.get("tool", "")).startswith("project."):
+        valid = valid and secrets.compare_digest(
+            approval.get("project_sha256", ""), canonical_project_digest(plan)
+        )
     return valid
 
 
@@ -96,6 +122,7 @@ def validate_execution(plan: dict, approval: dict) -> bool:
     """Require a consumed approval matching the persisted plan exactly."""
     valid = (
         approval.get("status") == "consumed"
+        and _approval_is_unexpired(approval)
         and secrets.compare_digest(
             approval.get("arguments_sha256", ""),
             arguments_digest(plan.get("tool"), plan.get("arguments", {})),
@@ -109,4 +136,18 @@ def validate_execution(plan: dict, approval: dict) -> bool:
         valid = valid and secrets.compare_digest(
             str(approval.get("spec_sha256", "")), str(sdb.get("spec", {}).get("sha256", ""))
         )
+    if str(plan.get("tool", "")).startswith("project."):
+        valid = valid and secrets.compare_digest(
+            approval.get("project_sha256", ""), canonical_project_digest(plan)
+        )
     return valid
+
+
+def _approval_is_unexpired(approval: dict) -> bool:
+    try:
+        expires_at = datetime.fromisoformat(approval.get("expires_at", ""))
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return False
+    return datetime.now(timezone.utc) < expires_at

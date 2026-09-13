@@ -160,3 +160,49 @@ None from the WU-1 design. WU-2 through WU-5 remain intentionally unimplemented.
 - The task-listed `tests/integration/test_agent_chat.py` and `tests/spec/test_sdb_native_spec.py` do not exist. Closest real equivalents were used: `tests/integration/test_assistant_chat.py`, `tests/integration/test_sdb_persistence.py`, `tests/spec/test_sdb_phases.py`, `tests/spec/test_sdb_recovery.py`, and `tests/spec/test_sdb_trigger.py`.
 - No seven phases were added or reordered. `proyecto` is derived only from the service-issued `_ProjectAuthorization`; arbitrary `proyecto` injection into `persist_sdb_state` is rejected by the API boundary.
 - The known pre-existing `tests/unit/test_assistant_extensions.py::test_all_inventoried_lumat_sdb_consumers_use_guardrails_terminology` failure was not run or changed in this slice.
+
+## WU-4 Typed Tools and Approval
+
+### Status
+
+- Work unit: WU-4 (Typed Tools and Approval), stacked PR slice 4/5
+- Delivery: `auto-chain`, `stacked-to-main`
+- Mode: Strict TDD
+- State: ready for verification
+- Scope: WU-4 only; WU-5 panel API/UI remains intentionally unimplemented.
+
+### Completed Tasks
+
+- [x] 4.1 Typed schema, classification, whitelist, ambiguity, approval digest/TTL, replay, and changed-payload RED tests
+- [x] 4.2 Typed project tools, registry allow-list, and canonical project approval payloads
+- [x] 4.3 Focused assistant tool/chat refactor and repeated verification
+
+### TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 4.1 | `tests/unit/test_assistant_tools.py` | Unit | ✅ 13/13 | ✅ Missing project tools and approval payload behavior | ✅ 5 new contract tests pass | ✅ exact read, invalid bounds, whitelist, ambiguity, mutation/replay/change cases | ✅ Clean |
+| 4.2 | `app/chat/assistant/tools/registry.py`, `app/chat/assistant/approval.py`, `agent/registry.yaml` | Unit/integration | ✅ 13/13 | ✅ Registry/approval contracts failed before implementation | ✅ Typed handlers and digest contract pass | ✅ six tools, read/write classes, registry load, exact approval | ✅ Clean |
+| 4.3 | `tests/integration/test_assistant_tools.py`, `tests/integration/test_assistant_chat.py`, `tests/unit/test_assistant_tools.py`, `tests/unit/test_agent_registry.py`, `tests/spec/test_sdb_recovery.py` | Integration/spec/unit | ✅ Existing assistant suite | ✅ Prior RED evidence | ✅ 31/31 focused tests pass | ✅ repeated suite and registry/SDB compatibility suite | ✅ Clean |
+
+### Work Unit Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result, run 1 | `DATABASE_URL='postgresql+psycopg://app:app@localhost:5436/lumat' TEST_ADMIN_DB_URL='postgresql://lumat:lumat@localhost:5436/lumat' uv run pytest tests/integration/test_assistant_tools.py tests/integration/test_assistant_chat.py tests/unit/test_assistant_tools.py -q -p no:warnings` → **31 passed**, exit 0 |
+| Focused test command and exact result, run 2 | Same command immediately repeated → **31 passed**, exit 0 |
+| Additional compatibility command | Same database environment with `uv run pytest tests/unit/test_agent_registry.py tests/unit/test_assistant_config.py tests/spec/test_sdb_recovery.py -q -p no:warnings` → **22 passed**, exit 0 |
+| Runtime harness command/scenario and exact result | Focused integration tests exercised the real assistant approval endpoint, execution path, persisted thread state, and dedicated PostgreSQL `:5436`; **31 passed** on both runs. |
+| Rollback boundary | Revert `app/chat/assistant/tools/registry.py`, `app/chat/assistant/approval.py`, `app/chat/assistant/nodes.py`, `agent/registry.yaml`, WU-4 tests, and WU-4 bookkeeping; WU-1–WU-3 registry, lifecycle, Tukulpan, and SDB propagation changes remain intact. |
+
+### Graph Check
+
+- Supplied graph consulted (not rebuilt): nodes `registry.py`, `ToolDefinition`, `execute_tool()`, `approval.py`, `issue_approval()`, `validate_approval()`, `validate_execution()`, `consume_approval()`, `agent_registry.py`, `projects.py`, `find()`, `create()`, `rename()`, `archive()`, `merge()`, `nodes.py`, `execute()`, `test_assistant_tools.py`, and `test_assistant_chat.py`.
+- Edges/context: `execute_tool()` → `ToolDefinition`/typed argument models and project service handlers; `nodes.execute()` → whitelist and approval validation immediately before execution; `issue_approval()`/`validate_execution()` → exact SHA-256 tool/project payload and expiry; `agent_registry.py` → `agent/registry.yaml` allow-list; project handlers → `app/services/projects.py` lifecycle boundary.
+- Queries/paths: `graphify query "typed assistant project tools registry approval service execution"`; `graphify path "app/chat/assistant/tools/registry.py" "app/chat/assistant/approval.py"` (no directed path); `graphify path "app/chat/assistant/approval.py" "app/services/projects.py"` (ambiguous/no directed path). `GRAPH_REPORT.md` was read; supplied graph was not rebuilt.
+
+### Deviations and Issues
+
+- `tests/unit/test_assistant_tools.py` exists and was included as requested.
+- `tests/integration/test_assistant_tools.py` contains the existing automation runtime harness; project tool runtime contracts are covered at the unit service seam in this slice. WU-5 panel API/UI was not implemented.
+- The pre-existing terminology failure in `tests/unit/test_assistant_extensions.py` was not fixed.

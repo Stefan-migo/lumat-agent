@@ -9,6 +9,8 @@ from app.chat.assistant.tools.registry import (
     get_tool,
     tool_schemas,
 )
+from app.chat.assistant.approval import consume_approval, issue_approval, validate_execution
+from app.services.projects import ProjectCandidate, ProjectResult
 from app.chat.assistant.tools.search import DuckDuckGoSearch, SearchFailure
 
 
@@ -18,6 +20,78 @@ def test_registry_exposes_typed_bounded_tools():
     assert schemas["customers.search"]["type"] == "object"
     assert get_tool("customers.search").read_only is True
     assert get_tool("automation.create_rule").read_only is False
+
+
+def test_project_tools_are_typed_bounded_and_classified():
+    expected = {
+        "project.list": True,
+        "project.find": True,
+        "project.create": False,
+        "project.rename": False,
+        "project.archive": False,
+        "project.merge": False,
+    }
+    for name, read_only in expected.items():
+        assert name in tool_schemas()
+        assert get_tool(name).read_only is read_only
+        assert get_tool(name).schema()["type"] == "object"
+
+    with pytest.raises(ToolValidationError):
+        execute_tool(SimpleNamespace(), "project.find", {"query": "x" * 201})
+    with pytest.raises(ToolValidationError):
+        execute_tool(SimpleNamespace(), "project.merge", {"source": "a", "target": "b", "extra": "no"})
+
+
+def test_project_whitelist_is_checked_at_execution_boundary(monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.projects.list",
+        lambda *args, **kwargs: called.append(True),
+    )
+
+    with pytest.raises(ToolValidationError, match="not whitelisted"):
+        execute_tool(SimpleNamespace(), "project.list", {}, whitelist={"customers.list"})
+    assert called == []
+
+
+def test_ambiguous_project_find_requires_approval_without_selecting_namespace(monkeypatch):
+    candidate = ProjectCandidate("gas", "Gas", 0.91)
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.projects.find",
+        lambda *args, **kwargs: ProjectResult(None, [candidate], requires_approval=True),
+    )
+
+    result = execute_tool(SimpleNamespace(), "project.find", {"query": "gas service"})
+
+    assert result["status"] == "approval_pending"
+    assert result["result"]["project"] is None
+    assert result["result"]["candidates"][0]["slug"] == "gas"
+    assert result["approval"]["project_payload"]["operation"] == "find"
+
+
+def test_project_mutation_requires_consumed_exact_non_expired_approval(monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.projects.rename",
+        lambda *args, **kwargs: called.append(True),
+    )
+    arguments = {"project": "gas", "name": "Gas Service"}
+    plan = {"tool": "project.rename", "arguments": arguments}
+    approval = issue_approval(plan)
+
+    with pytest.raises(ToolValidationError):
+        execute_tool(SimpleNamespace(), "project.rename", arguments, approval=approval)
+    assert called == []
+
+    assert consume_approval(approval, approval["token"]) is True
+    assert validate_execution(plan, approval) is True
+    execute_tool(SimpleNamespace(), "project.rename", arguments, approval=approval)
+    assert called == [True]
+
+    changed = {"project": "gas", "name": "Changed"}
+    with pytest.raises(ToolValidationError):
+        execute_tool(SimpleNamespace(), "project.rename", changed, approval=approval)
+    assert called == [True]
 
 
 def test_unknown_and_invalid_tools_are_rejected_before_execution():

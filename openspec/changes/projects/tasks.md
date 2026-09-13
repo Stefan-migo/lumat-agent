@@ -24,9 +24,9 @@
 
 ## Phase 4: Typed Tools and Approval (WU-4)
 
-- [ ] 4.1 RED: Test typed schemas/classification, whitelist enforcement, ambiguity no-selection, SHA-256/15-minute expiry, SDB `APPROVE`, replay, and changed-payload rejection.
-- [ ] 4.2 GREEN: Add project tools to `app/chat/assistant/tools/registry.py`, allow-list them in `agent/registry.yaml`, and include canonical project payloads in `app/chat/assistant/approval.py`.
-- [ ] 4.3 REFACTOR: Run `uv run pytest tests/integration/test_assistant_tools.py tests/integration/test_assistant_chat.py`.
+- [x] 4.1 RED: Test typed schemas/classification, whitelist enforcement, ambiguity no-selection, SHA-256/15-minute expiry, SDB `APPROVE`, replay, and changed-payload rejection.
+- [x] 4.2 GREEN: Add project tools to `app/chat/assistant/tools/registry.py`, allow-list them in `agent/registry.yaml`, and include canonical project payloads in `app/chat/assistant/approval.py`.
+- [x] 4.3 REFACTOR: Run `uv run pytest tests/integration/test_assistant_tools.py tests/integration/test_assistant_chat.py`.
 
 ## Phase 5: Read-Only Panel Browse (WU-5)
 

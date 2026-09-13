@@ -12,10 +12,10 @@ from enum import Enum
 from typing import Any, Callable
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.chat.assistant.approval import validate_execution
+from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
-from app.services import automation, cases, customers, kb, scheduling, tukulpan as memory
+from app.services import automation, cases, customers, kb, projects, scheduling, tukulpan as memory
 
 MAX_ITEMS = 20
 
@@ -96,6 +96,40 @@ class RuleArgs(BaseModel):
     cooldown_seconds: int = Field(ge=0, le=2_592_000)
 
 
+class ProjectListArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    limit: int = Field(default=MAX_ITEMS, ge=1, le=MAX_ITEMS)
+
+
+class ProjectFindArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field(min_length=1, max_length=200)
+
+
+class ProjectCreateArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    slug: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=200)
+    purpose: str = Field(min_length=1, max_length=500)
+
+
+class ProjectRenameArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=200)
+
+
+class ProjectArchiveArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project: str = Field(min_length=1, max_length=100)
+
+
+class ProjectMergeArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source: str = Field(min_length=1, max_length=100)
+    target: str = Field(min_length=1, max_length=100)
+
+
 def _plain(value: Any) -> Any:
     if isinstance(value, Enum):
         return value.value
@@ -161,6 +195,30 @@ def _web_search(_session, args: WebSearchArgs):
     return websearch.search(args.query, limit=args.limit)
 
 
+def _project_list(session, args: ProjectListArgs):
+    return projects.list(session)[: args.limit]
+
+
+def _project_find(session, args: ProjectFindArgs):
+    return projects.find(session, args.query)
+
+
+def _project_create(session, args: ProjectCreateArgs):
+    return projects.create(session, args.slug, args.name, args.purpose)
+
+
+def _project_rename(session, args: ProjectRenameArgs):
+    return projects.rename(session, args.project, args.name)
+
+
+def _project_archive(session, args: ProjectArchiveArgs):
+    return projects.archive(session, args.project)
+
+
+def _project_merge(session, args: ProjectMergeArgs):
+    return projects.merge(session, args.source, args.target)
+
+
 @dataclass(frozen=True)
 class ToolDefinition:
     name: str
@@ -191,6 +249,12 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis, "Read the operational dashboard summary."),
     "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter."),
     "automation.create_rule": ToolDefinition("automation.create_rule", RuleArgs, False, _create_rule, "Create an automation after approval."),
+    "project.list": ToolDefinition("project.list", ProjectListArgs, True, _project_list, "List project namespaces."),
+    "project.find": ToolDefinition("project.find", ProjectFindArgs, True, _project_find, "Find a project namespace."),
+    "project.create": ToolDefinition("project.create", ProjectCreateArgs, False, _project_create, "Create a project namespace after approval."),
+    "project.rename": ToolDefinition("project.rename", ProjectRenameArgs, False, _project_rename, "Rename a project after approval."),
+    "project.archive": ToolDefinition("project.archive", ProjectArchiveArgs, False, _project_archive, "Archive a project after approval."),
+    "project.merge": ToolDefinition("project.merge", ProjectMergeArgs, False, _project_merge, "Merge projects after approval."),
 }
 
 
@@ -242,4 +306,13 @@ def execute_tool(
         raise
     except Exception as exc:
         raise ToolExecutionError(f"{name} failed") from exc
+    if isinstance(result, dict) and result.get("requires_approval"):
+        plan = {"tool": name, "arguments": parsed.model_dump()}
+        return {
+            "tool": name,
+            "status": "approval_pending",
+            "read_only": definition.read_only,
+            "result": result,
+            "approval": issue_approval(plan),
+        }
     return {"tool": name, "status": "completed", "read_only": definition.read_only, "result": result}
