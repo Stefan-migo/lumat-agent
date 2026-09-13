@@ -79,6 +79,8 @@ class Assistant:
     model: str
     skills: tuple[str, ...]
     sdb_classification: tuple[str, ...]
+    cortex_classes: tuple[str, ...]
+    planning_commands: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -156,6 +158,20 @@ def _build_assistant(root: dict, agent_dir: Path) -> Assistant:
     )
     if classification != ("normal", "sdb"):
         raise RegistryError("assistant.sdb_classification.allowed must be ['normal', 'sdb']")
+    cortex = root.get("cortex_session")
+    if not isinstance(cortex, dict):
+        raise RegistryError("assistant.cortex_session must be a mapping")
+    cortex_classes = _coerce_str_list(cortex.get("classes"), what="assistant.cortex_session.classes")
+    if cortex_classes != ("question", "research", "decision", "continue", "close"):
+        raise RegistryError(
+            "assistant.cortex_session.classes must be "
+            "['question', 'research', 'decision', 'continue', 'close']"
+        )
+    planning_commands = _coerce_str_list(cortex.get("commands"), what="assistant.cortex_session.commands")
+    if planning_commands != ("/planning <topic>", "/planning close"):
+        raise RegistryError(
+            "assistant.cortex_session.commands must be ['/planning <topic>', '/planning close']"
+        )
     return Assistant(
         name=root["name"],
         persona=persona,
@@ -166,6 +182,8 @@ def _build_assistant(root: dict, agent_dir: Path) -> Assistant:
         model=root["model"],
         skills=_coerce_str_list(root.get("skills", []), what=f"{where}.skills"),
         sdb_classification=classification,
+        cortex_classes=cortex_classes,
+        planning_commands=planning_commands,
     )
 
 
