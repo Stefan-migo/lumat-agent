@@ -17,6 +17,7 @@ const primitivesRaw = readFileSync(
   "utf8",
 );
 const tokensRaw = readFileSync(join(process.cwd(), "src", "tokens", "tokens.css"), "utf8");
+const previewRaw = readFileSync(join(process.cwd(), ".storybook", "preview.ts"), "utf8");
 const panelEntryStoryRaw = readFileSync(join(process.cwd(), "src", "stories", "pages", "PanelEntry.stories.tsx"), "utf8");
 
 describe("Panel entry layout", () => {
@@ -185,6 +186,18 @@ describe("Panel entry layout", () => {
     // One desktop rail tier from 1024px: the user controls expanded/collapsed,
     // so the collapsed grid override lives inside the same media query.
     expect(primitivesRaw).toMatch(/@media\s*\(min-width:\s*64rem\)[\s\S]*?\.panel-shell\.panel-shell--collapsed\s*\{[^}]*grid-template-columns:\s*var\(--shell-rail-compact\)/);
+  });
+
+  it("keeps Storybook viewport presets aligned to token breakpoints", () => {
+    const tokenWidth = (name: string) => tokensRaw.match(new RegExp(`${name}:\\s*(\\d+px)`))?.[1];
+    const presetWidth = (name: string) =>
+      previewRaw.match(new RegExp(`['"]${name}['"]:\\s*\\{[^}]*width:\\s*['"](\\d+px)['"]`))?.[1];
+
+    expect(presetWidth("bp-sm")).toBe(tokenWidth("--bp-sm"));
+    expect(presetWidth("bp-md")).toBe(tokenWidth("--bp-md"));
+    expect(presetWidth("bp-lg")).toBe(tokenWidth("--bp-lg"));
+    expect(presetWidth("mobile-compact")).toBe("390px");
+    expect(presetWidth("tablet-compact")).toBe("768px");
   });
 
   it("keeps shell controls at least 44px and preserves critical overflow", () => {
