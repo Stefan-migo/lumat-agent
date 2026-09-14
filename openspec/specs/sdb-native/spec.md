@@ -68,25 +68,19 @@ The system MUST persist bounded SPEC, STATE, and RESULT artifacts using typed me
 
 ### Requirement: SDB-4 — Approval, Verification, and Durable Recovery
 
-The system MUST reuse exact-plan approval and the atomic execution claim. APPROVE MUST cover the canonical phase/task plan, and VERIFY MUST compare all persisted and newly produced outputs with that SPEC before DELIVER. Resume MUST continue from the last successful checkpoint without repeating completed tasks. An executable SDB plan MUST produce real read evidence or truthful failure.
+The system MUST reuse exact-plan approval and atomic execution claim. APPROVE MUST cover the canonical phase/task plan, VERIFY MUST compare all results with SPEC, and recovery MUST reuse the frozen plan without repeating completed tasks. Unknown commit outcomes MUST fail closed and require recovery; exactly-once is not claimed beyond the database boundary. (Seams: `app/services/agent_chat.py:567-639`, `app/chat/assistant/recovery.py:26-54`; integration tests inject persistence and unknown outcomes.)
 
-#### Scenario: Changed SPEC after approval
+#### Scenario: Persistence failure
 
-- GIVEN the SPEC or canonical task plan changes after approval
-- WHEN execution or verification is requested
-- THEN approval is rejected and delivery does not occur
+- GIVEN a mutation is flushed and checkpoint or artifact persistence fails
+- WHEN the caller transaction is rolled back
+- THEN no committed mutation remains without its checkpoint
 
-#### Scenario: Resume after interruption
+#### Scenario: Unknown commit outcome
 
-- GIVEN a run stops after a persisted task checkpoint
-- WHEN the thread is resumed
-- THEN only incomplete work continues and completed tasks are not repeated
-
-#### Scenario: Stub execution remains truthful
-
-- GIVEN an approved Cortex-derived plan
-- WHEN the run reaches its available delivery boundary
-- THEN the result is labeled an approved plan and does not claim execution
+- GIVEN commit completion cannot be determined
+- WHEN execution reports the outcome
+- THEN it fails closed and requires recovery rather than blindly retrying
 
 ### Requirement: SDB-5 — Project propagation through the existing seam
 
@@ -107,58 +101,64 @@ The SDB runtime MUST propagate the selected authorized project through the exist
 - WHEN it resumes
 - THEN the existing seven-phase flow and checkpoint recovery behavior are unchanged
 
-### Requirement: SDB-6 — Typed Read Tasks
+### Requirement: SDB-6 — Typed Bounded Write Tasks
 
-Each frozen SDB task MUST declare one concrete registry `tool` string and validated `arguments` dictionary. The plan MUST use `conversations.search` with the frozen request as `query` and `limit` 10 for the first read task. Unknown tools, malformed arguments, and tools not classified read-only MUST be rejected before approval.
+SDB MUST allow write tasks only after whitelist membership, Pydantic validation, and write classification. One approval MUST freeze every ordered `{task_id, tool, validated arguments}` binding in the canonical SDB digest, covering identity, tool, arguments, and order. Gate order MUST be whitelist → validation → classification → cost gate → project capability. (Seams: `app/services/agent_chat.py:90-106`, `app/chat/assistant/state.py:90-110`; unit tests cover schemas/gates.)
 
-#### Scenario: Valid typed plan
-- GIVEN a bounded frozen request
-- WHEN PLAN is created
-- THEN its task contains the concrete read tool and validated arguments
+#### Scenario: Valid frozen write plan
+- GIVEN a plan uses an allow-listed `automation.create_rule` or project lifecycle tool with valid typed arguments
+- WHEN approval is prepared
+- THEN every binding is frozen in order and approval covers the canonical digest
 
-#### Scenario: Invalid task rejected
-- GIVEN a task names an unknown tool or invalid arguments
-- WHEN approval is requested
-- THEN the plan is rejected before approval and no tool executes
+#### Scenario: Tampered or reordered plan
+- GIVEN a consumed approval and a changed task ID, tool, arguments, or order
+- WHEN execution validates the plan
+- THEN execution is rejected before any handler runs
 
-### Requirement: SDB-7 — Real Read Execution and Recovery
+#### Scenario: Gate denial
 
-SDB EXECUTE MUST invoke the existing assistant tool boundary with its whitelist and cost decision, persist a bounded task result and checkpoint, and aggregate persisted results with newly executed results after resume.
+- GIVEN a write is not allow-listed, malformed, classified read-only, cost-blocked, or missing project capability
+- WHEN EXECUTE evaluates it
+- THEN no write handler runs and rejection evidence is recorded
 
-#### Scenario: Successful read
-- GIVEN an approved typed read task and permitted cost decision
+### Requirement: SDB-7 — Write Execution and Recovery
+
+SDB EXECUTE MUST pass each write through `execute_tool` with consumed exact approval, audit every attempt, persist checkpoint/result/event state, and stop on first failure. A blocked cost gate MUST block all writes. Recovery MUST reuse the frozen plan and execute only incomplete tasks. (Seams: `app/services/agent_chat.py:79-136`, `app/chat/assistant/tools/registry.py:272-308`, `app/chat/assistant/recovery.py:47-54`; unit/integration tests cover ordering and rollback.)
+
+#### Scenario: Ordered mutations
+- GIVEN an approved frozen plan and permitted cost/capability gates
 - WHEN EXECUTE runs
-- THEN `execute_tool` returns bounded evidence and the task result is `completed`
+- THEN writes execute in order through `execute_tool`, with audit, checkpoint, result, and event for each task
 
-#### Scenario: Failed or blocked read
-- GIVEN a read times out, raises, or is denied by a gate
-- WHEN EXECUTE records the task
-- THEN it records bounded error evidence and audit as `failed`, never `completed`
+#### Scenario: First failure
+- GIVEN one task fails or raises
+- WHEN its attempt is persisted
+- THEN it is failed and no subsequent task executes
 
-#### Scenario: Resume aggregation
-- GIVEN completed checkpoints exist before a resume
-- WHEN remaining tasks execute and VERIFY starts
-- THEN VERIFY receives every frozen task result, including persisted and new results
+#### Scenario: Recovery
+- GIVEN completed checkpoints and an interrupted run
+- WHEN recovery resumes
+- THEN only incomplete tasks execute and prior results remain in verification input
 
-### Requirement: SDB-9 — Canonical Durable Execution Route
+### Requirement: SDB-9 — Canonical Execution Route
 
-The durable `_run_sdb_tasks` route MUST be authoritative for SDB execution. Graph nodes MAY remain compatibility logic, but graph approval routing MUST reconcile to canonical `consumed` approval state and MUST NOT create a second execution runner.
+The durable `_run_sdb_tasks` route MUST be the only SDB runner. Graph routing MAY project compatibility state, but approval MUST remain `consumed` and dispatch through that route. Delivery MUST report verified mutation outcomes or truthful failure, never `not-implemented`. (Seams: `app/services/agent_chat.py:79-80,567-639`, `app/chat/assistant/graph.py:69-115`; integration tests prove one runner and truthful outcomes.)
 
 #### Scenario: Consumed approval routing
-- GIVEN an approval is atomically consumed
-- WHEN SDB execution is requested through the graph or durable API
-- THEN the canonical route is used and the persisted status remains `consumed`
+- GIVEN approval is atomically consumed
+- WHEN execution starts through API or graph
+- THEN `_run_sdb_tasks` is used and approval remains `consumed`
 
-### Requirement: SDB-10 — Authorized Project Read Boundary
+### Requirement: SDB-10 — Project Write Boundary
 
-The SDB runtime MUST preserve the selected project through the existing panel-scoped, run-specific artifact seam. A non-default project MUST have its active capability before a read executes; otherwise no tool or mutation may run.
+SDB MUST fail closed when a non-default project lacks capability, and MUST preserve that capability for mutation and artifact persistence. (Seams: `app/services/agent_chat.py:74-76,177-241`, `app/services/tukulpan.py:268-303`; integration tests cover authorized and missing capability.)
 
-#### Scenario: Project-aware read
-- GIVEN an SDB run selects an authorized project
-- WHEN a result or evidence artifact is persisted
-- THEN panel scope, entity identity, project, and run-specific key are preserved
+#### Scenario: Authorized project mutation
+- GIVEN an active capability for the selected project
+- WHEN a project write executes and persists its result
+- THEN the service and SDB artifacts use that authorized project
 
-#### Scenario: Missing project capability
-- GIVEN execution targets a non-default project without active authorization
+#### Scenario: Missing capability
+- GIVEN a non-default project without an active capability
 - WHEN EXECUTE is requested
-- THEN no tool or mutation runs and bounded rejection evidence is recorded
+- THEN no mutation or artifact write commits

@@ -304,7 +304,11 @@ def execute_tool(
         payload["sdb"] = approval["sdb_payload"]
     project_approval = None
     if name.startswith("project.") and approval:
-        project_payload = approval.get("project_payload")
+        project_payload = (
+            task_binding.get("project_payload")
+            if isinstance(task_binding, dict) and isinstance(task_binding.get("project_payload"), dict)
+            else approval.get("project_payload")
+        )
         if isinstance(project_payload, dict):
             payload["project_payload"] = project_payload
         if not validate_execution(payload, approval):

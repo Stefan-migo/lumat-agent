@@ -87,10 +87,10 @@ def test_report_closure_archives_upserted_report(monkeypatch):
     assert calls[1] == ("set_mark", {"status": MemoryStatus.ARCHIVED})
 
 
-def test_approved_cortex_plan_is_truthful_stub():
+def test_approved_cortex_plan_is_truthful_pending_handoff():
     from app.services.agent_chat import cortex_approved_plan
 
     result = cortex_approved_plan({"scope": {"request": "review budget"}}, [{"id": "task-1"}])
 
     assert result["status"] == "approved-plan"
-    assert result["execution"] == "not-implemented"
+    assert result["execution"] == "pending-approval"

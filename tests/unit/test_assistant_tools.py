@@ -240,6 +240,95 @@ def test_write_requires_consumed_exact_approval(monkeypatch):
     assert called == []
 
 
+def _sdb_approved_project(tool, arguments, decision=None):
+    task = {
+        "id": tool,
+        "tool": tool,
+        "arguments": arguments,
+        "scope": {"proyecto": "default"},
+    }
+    if decision is not None:
+        task["decision"] = decision
+    approval = issue_approval({
+        "sdb": {"phase": "EXECUTE", "spec": {"sha256": "spec"}, "tasks": [task]},
+    })
+    assert consume_approval(approval, approval["token"]) is True
+    return approval, approval["sdb_bindings"][0], task
+
+
+def test_sdb_project_create_uses_frozen_decision_and_real_execute_path(monkeypatch):
+    called = []
+    created = SimpleNamespace(slug="gas-new")
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.projects.create",
+        lambda *args, **kwargs: called.append(kwargs.get("_approval")) or created,
+    )
+    arguments = {"slug": "gas-new", "name": "Gas New", "purpose": "gas service"}
+    approval, binding, task = _sdb_approved_project("project.create", arguments, {"create_distinct": True})
+
+    result = execute_tool(
+        SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=binding
+    )
+
+    assert result["status"] == "completed"
+    assert result["result"]["slug"] == "gas-new"
+    assert called
+    assert binding["project_payload"]["decision"] == {"create_distinct": True}
+
+
+@pytest.mark.parametrize("decision", [None, {"unexpected": True}, {"create_distinct": False}])
+def test_sdb_project_create_rejects_missing_or_invalid_decision_without_mutation(monkeypatch, decision):
+    called = []
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.projects.create",
+        lambda *args, **kwargs: called.append(True),
+    )
+    arguments = {"slug": "gas-new", "name": "Gas New", "purpose": "gas service"}
+    approval, binding, task = _sdb_approved_project("project.create", arguments, decision)
+
+    with pytest.raises(ToolValidationError, match="decision"):
+        execute_tool(SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=binding)
+    assert called == []
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("project.rename", {"project": "gas", "name": "Gas Service"}),
+        ("project.archive", {"project": "gas"}),
+        ("project.merge", {"source": "gas-old", "target": "gas"}),
+    ],
+)
+def test_sdb_project_mutations_use_real_execute_path(monkeypatch, tool, arguments):
+    called = []
+    monkeypatch.setattr(
+        f"app.chat.assistant.tools.registry.projects.{tool.removeprefix('project.')}",
+        lambda *args, **kwargs: called.append(True) or SimpleNamespace(slug="gas"),
+    )
+    approval, binding, task = _sdb_approved_project(tool, arguments)
+
+    result = execute_tool(SimpleNamespace(), tool, arguments, approval=approval, task_binding=binding)
+
+    assert result["status"] == "completed"
+    assert called == [True]
+
+
+@pytest.mark.parametrize("field,value", [("tool", "project.archive"), ("arguments", {"project": "other"}), ("project_payload", {"operation": "create"})])
+def test_sdb_project_binding_tampering_is_rejected_before_mutation(monkeypatch, field, value):
+    called = []
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.projects.rename",
+        lambda *args, **kwargs: called.append(True),
+    )
+    arguments = {"project": "gas", "name": "Gas Service"}
+    approval, binding, task = _sdb_approved_project("project.rename", arguments)
+    tampered = {**binding, field: value}
+
+    with pytest.raises(ToolValidationError):
+        execute_tool(SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=tampered)
+    assert called == []
+
+
 def test_sdb_accepts_only_registered_typed_write_tasks():
     base = {"scope": {}, "summary": "write", "verifiable_output": "result"}
     for tool, arguments in (

@@ -39,9 +39,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Verification, Endpoint, and Delivery (WU3)
 
-- [ ] 3.1 **RED→GREEN** (`nodes.py`, tests): compare SPEC with persisted+new results by order, exact id/order/tool/status/mutation evidence; DELIVER passes only after comparison and commit (SDB-4, IAC-8; D: VERIFY).
-- [ ] 3.2 **RED→GREEN** (`agent_chat.py`, `deps.py`, `routes/chat.py`, tests/integration): truthful wording; uncertain commit returns 5xx/recovery, leaves pending/recoverable, never retries/succeeds; statuses: 201 create/send, 200 read/stream/approval, 409 invalid, 500 uncertain (AO-4, IAC-8).
-- [ ] 3.3 **RED→GREEN** (`graph.py`, tests): prove graph only projects `consumed` state and `_run_sdb_tasks` is the sole runner; prove ordered SSE/admin authorization and successful, failed, rollback, and recovery conversation outcomes without `not-implemented` (SDB-9, IAC-2/8, AO-3).
+- [x] 3.1 **RED→GREEN** (`nodes.py`, tests): compare SPEC with persisted+new results by order, exact id/order/tool/status/mutation evidence; DELIVER passes only after comparison and commit (SDB-4, IAC-8; D: VERIFY).
+- [x] 3.2 **RED→GREEN** (`agent_chat.py`, `deps.py`, `routes/chat.py`, tests/integration): truthful wording; uncertain commit returns 5xx/recovery, leaves pending/recoverable, never retries/succeeds; statuses: 201 create/send, 200 read/stream/approval, 409 invalid, 500 uncertain (AO-4, IAC-8).
+- [x] 3.3 **RED→GREEN** (`graph.py`, tests): prove graph only projects `consumed` state and `_run_sdb_tasks` is the sole runner; prove ordered SSE/admin authorization and successful, failed, rollback, and recovery conversation outcomes without `not-implemented` (SDB-9, IAC-2/8, AO-3).
 
 ## Scope Checks
 

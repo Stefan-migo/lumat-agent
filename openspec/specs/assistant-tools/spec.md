@@ -82,30 +82,30 @@ Semantic project ambiguity MUST produce bounded candidates and an approval reque
 - WHEN SDB `APPROVE` is consumed
 - THEN the typed service executes once; absent, expired, or changed approval performs no mutation
 
-### Requirement: AT-6 — SDB Read Dispatch
+### Requirement: AT-6 — SDB Approved Write Dispatch
 
-SDB MUST dispatch only a validated, allow-listed, read-only registry tool through `execute_tool`, passing the existing assistant whitelist and cost decision. The SDB contract MUST be read-only; write tools remain unavailable from SDB in this change.
+SDB MUST dispatch validated allow-listed read or write registry tools through `execute_tool`. Every write MUST receive the exact consumed approval for the frozen task binding; dispatch MUST never bypass `execute_tool` or domain services. Existing AT-1–AT-5 and AT-7 whitelist, typed validation, project decision, and failure boundaries remain unchanged. (Seams: `app/chat/assistant/tools/registry.py:272-308`, `app/services/agent_chat.py:93-109`; unit tests MUST cover approval forwarding and bypass prevention.)
 
-#### Scenario: SDB read dispatch
-- GIVEN a frozen `conversations.search` task with valid arguments
-- WHEN SDB executes it
-- THEN the existing typed domain boundary returns bounded read evidence and performs no mutation
+#### Scenario: Approved write dispatch
+- GIVEN a validated frozen write task and its consumed exact approval
+- WHEN SDB dispatches it
+- THEN `execute_tool` validates the whitelist, arguments, approval, cost, and project decision before the domain handler runs
 
-#### Scenario: Gate denial
-- GIVEN a task is not allow-listed, has invalid arguments, or lacks cost permission
-- WHEN SDB attempts dispatch
-- THEN execution is rejected before the domain handler and rejection evidence is auditable
+#### Scenario: Missing or altered approval
+- GIVEN a write task with absent, expired, replayed, or changed approval
+- WHEN dispatch is requested
+- THEN no domain mutation occurs
 
-#### Scenario: Deferred writes
-- GIVEN an SDB plan names `automation.create_rule` or a project lifecycle write
-- WHEN the plan is validated
-- THEN SDB rejects it as unavailable and creates no side effect
+#### Scenario: Gate ordering
+- GIVEN a malformed, disallowed, or cost-blocked write
+- WHEN dispatch evaluates it
+- THEN rejection occurs before the handler and remains auditable
 
-### Requirement: AT-7 — Read Failure Truthfulness
+### Requirement: AT-7 — Write Failure Truthfulness
 
-The SDB boundary MUST preserve bounded failure results from timeout or handler exception and MUST NOT reinterpret them as successful tool evidence.
+The assistant boundary MUST preserve bounded failure results from write validation, service errors, or transaction failures and MUST NOT reinterpret them as successful evidence. (Seam: `app/chat/assistant/tools/registry.py:316-327`; unit and integration tests MUST assert failed status and no false completion.)
 
-#### Scenario: Tool exception
-- GIVEN a typed read handler raises during SDB execution
-- WHEN the result is persisted
-- THEN it is a bounded failure with error evidence and no successful completion status
+#### Scenario: Mutation handler failure
+- GIVEN a typed write handler raises
+- WHEN SDB records the outcome
+- THEN it returns bounded failure evidence and no successful completion
