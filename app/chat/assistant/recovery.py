@@ -23,7 +23,11 @@ def recover_events(thread: InternalChatThread, run_id: str | None = None) -> lis
     return sorted(
         unique.values(),
         key=lambda event: (
-            event.get("sequence", 0), event.get("order", 0), event.get("type", ""),
+            event.get("sequence", 0),
+            # A rejected task emits order=None; coerce it so a mixed stream sorts
+            # instead of raising TypeError. None ranks before any integer order.
+            event.get("order") if isinstance(event.get("order"), int) else -1,
+            event.get("type", ""),
             event.get("task_id", ""),
         ),
     )

@@ -368,6 +368,21 @@ def test_recover_events_dedupes_by_task_tool_and_sorts_deterministically():
     ]
 
 
+def test_recover_events_tolerates_null_order_mixed_with_integer_order():
+    # A rejected task emits order=None; a recovered stream can mix it with an
+    # integer order at the same sequence. Sorting must not raise TypeError.
+    thread = SimpleNamespace(assistant_state={"events": [
+        {"run_id": "run", "sequence": 2, "order": 0, "type": "task", "task_id": "ok", "tool": "x"},
+        {"run_id": "run", "sequence": 2, "order": None, "type": "task", "task_id": "rejected", "tool": "x"},
+    ]})
+
+    events = recover_events(thread, "run")
+
+    assert [(event["sequence"], event["order"], event["task_id"]) for event in events] == [
+        (2, None, "rejected"), (2, 0, "ok")
+    ]
+
+
 def test_create_capability_is_used_for_following_mutation_and_persistence(monkeypatch):
     from app.services import agent_chat
 
