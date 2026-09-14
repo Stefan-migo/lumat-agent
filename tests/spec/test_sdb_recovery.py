@@ -4,7 +4,10 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from app.chat.assistant.approval import (
+    arguments_digest,
     canonical_sdb_digest,
+    canonical_sdb_payload,
+    consume_approval,
     issue_approval,
     validate_approval,
     validate_execution,
@@ -81,6 +84,51 @@ def test_canonical_sdb_digest_is_stable_and_bounded():
 
     assert canonical_sdb_digest(first) == canonical_sdb_digest(second)
     assert len(canonical_sdb_digest({"payload": "x" * 100_000})) == 64
+
+
+def test_approval_freezes_every_ordered_binding_and_its_argument_hash():
+    plan = _sdb_plan(tasks=[
+        _sdb_plan()["tasks"][0],
+        {**_sdb_plan()["tasks"][0], "id": "task-2", "arguments": {"query": "other", "limit": 10}},
+    ])
+    approval = issue_approval({"sdb": plan})
+
+    assert approval["sdb_bindings"] == [
+        {
+            "order": 0,
+            "task_id": "task-1",
+            "tool": "conversations.search",
+            "arguments": {"query": "service history", "limit": 10},
+            "arguments_sha256": arguments_digest(
+                "conversations.search", {"query": "service history", "limit": 10}, order=0, task_id="task-1"
+            ),
+        },
+        {
+            "order": 1,
+            "task_id": "task-2",
+            "tool": "conversations.search",
+            "arguments": {"query": "other", "limit": 10},
+            "arguments_sha256": arguments_digest(
+                "conversations.search", {"query": "other", "limit": 10}, order=1, task_id="task-2"
+            ),
+        },
+    ]
+    assert canonical_sdb_payload(plan)["sdb_bindings"] == approval["sdb_bindings"]
+    assert approval["sdb_sha256"] == canonical_sdb_digest({**plan, "sdb_bindings": approval["sdb_bindings"]})
+
+
+def test_execution_rejects_binding_substitution_reorder_and_tamper():
+    tasks = [_sdb_plan()["tasks"][0], {**_sdb_plan()["tasks"][0], "id": "task-2"}]
+    sdb = _sdb_plan(tasks=tasks)
+    approval = issue_approval({"sdb": sdb})
+    assert consume_approval(approval, approval["token"]) is True
+
+    for changed in (
+        {**sdb, "tasks": list(reversed(tasks))},
+        {**sdb, "tasks": [{**tasks[0], "id": "substituted"}, tasks[1]]},
+        {**sdb, "tasks": [{**tasks[0], "arguments": {"query": "tampered", "limit": 10}}, tasks[1]]},
+    ):
+        assert validate_execution({"sdb": changed}, approval) is False
 
 
 def test_sdb_task_runner_never_fabricates_completed_results(monkeypatch):

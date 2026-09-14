@@ -18,6 +18,13 @@ from app.chat.assistant.tools.search import SearchFailure
 from app.services import automation, cases, customers, kb, projects, scheduling, tukulpan as memory
 
 MAX_ITEMS = 20
+SDB_WRITE_ALLOWLIST = frozenset({
+    "automation.create_rule",
+    "project.create",
+    "project.rename",
+    "project.archive",
+    "project.merge",
+})
 
 
 class ToolValidationError(ValueError):
@@ -281,6 +288,10 @@ def execute_tool(
     definition = get_tool(name)
     if whitelist is not None and name not in whitelist:
         raise ToolValidationError(f"tool is not whitelisted: {name}")
+    if definition.write and name not in SDB_WRITE_ALLOWLIST:
+        raise ToolValidationError("write-not-registered")
+    if not cost_allowed:
+        raise ToolValidationError("assistant cost limit blocks tool execution")
     try:
         parsed = definition.args_model.model_validate(arguments)
     except Exception as exc:
@@ -294,14 +305,23 @@ def execute_tool(
         if not validate_execution(payload, approval):
             raise ToolValidationError("approval does not match exact tool arguments")
         decision = project_payload.get("decision") if isinstance(project_payload, dict) else None
+        if name == "project.create" and (
+            not isinstance(project_payload, dict)
+            or set(project_payload) != {"operation", "arguments", "decision"}
+            or project_payload.get("operation") != "create"
+            or project_payload.get("arguments") != parsed.model_dump()
+            or not isinstance(decision, dict)
+            or set(decision) not in ({"selected_slug"}, {"create_distinct"})
+            or ("selected_slug" in decision and not isinstance(decision["selected_slug"], str))
+            or ("create_distinct" in decision and decision["create_distinct"] is not True)
+        ):
+            raise ToolValidationError("project create approval is missing an explicit decision")
         if name in {"project.find", "project.create"} and not isinstance(decision, dict):
             raise ToolValidationError("project approval is missing an explicit decision")
         if name in {"project.find", "project.create"}:
             project_approval = projects._ApprovedProjectDecision(
                 operation=name.removeprefix("project."), decision=decision
             )
-    if not cost_allowed:
-        raise ToolValidationError("assistant cost limit blocks tool execution")
     if not definition.read_only and not approval:
         raise ToolValidationError("write tool requires consumed exact approval")
     if not definition.read_only and not project_approval and not validate_execution(payload, approval or {}):
@@ -324,7 +344,13 @@ def execute_tool(
     except ToolValidationError:
         raise
     except Exception as exc:
-        raise ToolExecutionError(f"{name} failed") from exc
+        return {
+            "tool": name,
+            "status": "error",
+            "read_only": definition.read_only,
+            "error": str(exc),
+            "evidence": {"tool": name, "status": "error", "reason": str(exc)},
+        }
     if isinstance(result, dict) and result.get("requires_approval"):
         plan = {"tool": name, "arguments": parsed.model_dump()}
         return {

@@ -26,9 +26,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 1: Approval and Typed Boundary (WU1)
 
-- [ ] 1.1 **RED→GREEN** (`tests/spec/test_sdb_recovery.py`, `tests/unit/test_assistant_tools.py`): prove payload/digest validation binds ordered `{task_id,tool,arguments}` hashes, decision/SPEC, expiry, consumption, substitution, reorder, replay, tamper (SDB-6/4, AO-2; D: Data Flow).
-- [ ] 1.2 **RED→GREEN** (`state.py`, `registry.py`): implement whitelist → Pydantic → write classification; pin RuleArgs ranges and Create `{slug,name,purpose}`, Rename `{project,name}`, Archive `{project}`, Merge `{source,target}`; reject malformed writes (SDB-6; AT-6/7; D: boundary).
-- [ ] 1.3 **RED→GREEN** (`registry.py`, `tests/unit/test_assistant_tools.py`): require consumed approval, forward to `execute_tool`, gate cost first, require create `{operation:"create",arguments:{slug,name,purpose},decision:{selected_slug|create_distinct:true}}`, preserve failure (AT-6/7, AT-5).
+- [x] 1.1 **RED→GREEN** (`tests/spec/test_sdb_recovery.py`, `tests/unit/test_assistant_tools.py`): prove payload/digest validation binds ordered `{task_id,tool,arguments}` hashes, decision/SPEC, expiry, consumption, substitution, reorder, replay, tamper (SDB-6/4, AO-2; D: Data Flow).
+- [x] 1.2 **RED→GREEN** (`state.py`, `registry.py`): implement whitelist → Pydantic → write classification; pin RuleArgs ranges and Create `{slug,name,purpose}`, Rename `{project,name}`, Archive `{project}`, Merge `{source,target}`; reject malformed writes (SDB-6; AT-6/7; D: boundary).
+- [x] 1.3 **RED→GREEN** (`registry.py`, `tests/unit/test_assistant_tools.py`): require consumed approval, forward to `execute_tool`, gate cost first, require create `{operation:"create",arguments:{slug,name,purpose},decision:{selected_slug|create_distinct:true}}`, preserve failure (AT-6/7, AT-5).
 
 ## Phase 2: Durable Execution and Recovery (WU2)
 

@@ -88,7 +88,7 @@ class CortexSession(BaseModel):
 
 
 class SDBTask(BaseModel):
-    """One validated, read-only task in a frozen SDB plan."""
+    """One validated task in a frozen SDB plan."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -103,9 +103,16 @@ class SDBTask(BaseModel):
     def validate_read_tool(self) -> "SDBTask":
         from app.chat.assistant.tools.registry import get_tool
 
-        definition = get_tool(self.tool)
-        if not definition.read_only:
-            raise ValueError("SDB tasks must use read-only tools")
+        from app.chat.assistant.tools.registry import SDB_WRITE_ALLOWLIST
+
+        try:
+            definition = get_tool(self.tool)
+        except ValueError:
+            if self.tool.startswith(("automation.", "project.")):
+                raise ValueError("write-not-registered")
+            raise
+        if self.tool not in SDB_WRITE_ALLOWLIST and not definition.read_only:
+            raise ValueError("write-not-registered")
         self.arguments = definition.args_model.model_validate(self.arguments).model_dump()
         return self
 
