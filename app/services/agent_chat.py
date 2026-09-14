@@ -34,7 +34,7 @@ def cortex_approved_plan(spec: dict, tasks: list[dict]) -> dict:
     """Represent the closed report as an approved-plan-only SDB handoff."""
     return {
         "status": "approved-plan",
-        "execution": "not-implemented",
+        "execution": "pending-approval",
         "sdb": _sdb_plan(spec, tasks),
         "tool": None,
         "arguments": {},
@@ -206,10 +206,18 @@ def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, au
 
 def _sdb_delivery(thread: InternalChatThread, result: dict) -> dict:
     tasks = (thread.current_plan or {}).get("sdb", {}).get("tasks", [])
-    projection = sdb_verify({"sdb_tasks": tasks, "sdb_result": result})
+    persisted = ((thread.assistant_state or {}).get("sdb") or {}).get("results", [])
+    projection = sdb_verify({
+        "sdb_tasks": tasks, "sdb_persisted_results": persisted, "sdb_result": result,
+    })
     delivery = sdb_deliver({**projection, "sdb_result": result})
+    mutation = any(not item.get("read_only", True) for item in projection["verification"].get("results", []))
+    if delivery["status"] == "completed":
+        response = "SDB mutation completed with verified durable evidence." if mutation else "SDB read completed with verified durable evidence."
+    else:
+        response = "SDB mutation failed; the run remains recoverable." if mutation else "SDB read failed; the run remains recoverable."
     return {
-        "response": "SDB read completed with bounded evidence." if delivery["status"] == "completed" else "SDB read failed; the run remains recoverable.",
+        "response": response,
         "evidence": delivery["evidence"],
         "verification": projection["verification"],
         "status": delivery["status"],

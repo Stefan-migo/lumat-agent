@@ -13,7 +13,7 @@ LOGIN_PATH = "/panel/login"
 
 
 def get_db() -> Generator[Session, None, None]:
-    """Request-scoped session: commit on success, rollback on error."""
+    """Request-scoped session with fail-closed commit uncertainty."""
     session = SessionLocal()
     try:
         yield session
@@ -21,8 +21,13 @@ def get_db() -> Generator[Session, None, None]:
         from app.services.realtime import dispatch_staged_events
 
         dispatch_staged_events(session)
-    except Exception:
+    except Exception as exc:
         session.rollback()
+        if not isinstance(exc, HTTPException):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="request commit outcome is uncertain; recovery is required",
+            ) from exc
         raise
     finally:
         session.close()

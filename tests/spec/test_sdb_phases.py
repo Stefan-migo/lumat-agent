@@ -1,6 +1,7 @@
 """OpenSpec scenarios for native SDB execution phases."""
 
 import pytest
+from fastapi import HTTPException
 
 from app.chat.assistant.graph import _after_sdb_approve, build_assistant_graph
 from app.chat.assistant.nodes import (
@@ -34,7 +35,10 @@ def _run(*nodes):
 
 def test_native_nodes_run_in_declared_order_and_end_with_terminal_evidence():
     state = _run(sdb_spec, sdb_plan)
-    state["sdb_result"] = {"results": [{"task_id": "task-1", "status": "completed", "result": {"rows": ["bounded"]}}]}
+    state["sdb_result"] = {"results": [{
+        "task_id": "task-1", "order": 0, "tool": "conversations.search", "status": "completed",
+        "result": {"rows": ["bounded"]}, "evidence": {"rows": 1},
+    }]}
     state.update(sdb_execute(state))
     state.update(sdb_verify(state))
     state.update(sdb_deliver(state))
@@ -165,3 +169,75 @@ def test_authorized_project_is_frozen_in_sdb_scope_without_changing_phases():
     assert [state.update(node(state)) or state["sdb_phase"] for node in (sdb_execute, sdb_verify, sdb_deliver)] == [
         "EXECUTE", "VERIFY", "DELIVER"
     ]
+
+
+def test_verify_requires_ordered_tool_and_mutation_evidence():
+    state = _run(sdb_spec, sdb_plan)
+    state["sdb_result"] = {"results": [{
+        "task_id": "task-1", "order": 0, "tool": "conversations.search",
+        "status": "completed", "result": {"rows": ["bounded"]},
+        "evidence": {"tool": "conversations.search", "rows": 1},
+    }]}
+
+    verified = sdb_verify(state)
+
+    assert verified["verification"]["status"] == "passed"
+    assert verified["verification"]["results"][0]["evidence"] == {
+        "tool": "conversations.search", "rows": 1
+    }
+
+
+def test_verify_rejects_matching_ids_when_mutation_evidence_is_missing():
+    state = _run(sdb_spec, sdb_plan)
+    state["sdb_result"] = {"results": [{
+        "task_id": "task-1", "order": 0, "tool": "conversations.search",
+        "status": "completed", "result": None, "evidence": {},
+    }]}
+
+    verified = sdb_verify(state)
+
+    assert verified["verification"]["status"] == "failed"
+    assert verified["verification"]["mismatches"][0]["field"] == "mutation_evidence"
+
+
+def test_deliver_rejects_uncommitted_verified_results():
+    state = {
+        "verification": {"status": "passed", "task_ids": ["task-1"]},
+        "sdb_result": {"durable_commit": False},
+    }
+
+    delivered = sdb_deliver(state)
+
+    assert delivered["status"] == "failed"
+    assert delivered["evidence"][0]["reason"] == "durable commit not confirmed"
+
+
+def test_db_commit_uncertainty_is_bounded_without_retry(monkeypatch):
+    from app.panel import deps
+
+    class Session:
+        commits = 0
+        rollbacks = 0
+
+        def commit(self):
+            self.commits += 1
+            raise ConnectionError("database connection lost")
+
+        def rollback(self):
+            self.rollbacks += 1
+
+        def close(self):
+            pass
+
+    session = Session()
+    monkeypatch.setattr(deps, "SessionLocal", lambda: session)
+    database = deps.get_db()
+    next(database)
+
+    with pytest.raises(HTTPException) as caught:
+        next(database)
+
+    assert caught.value.status_code == 500
+    assert "recovery" in caught.value.detail
+    assert session.commits == 1
+    assert session.rollbacks == 1
