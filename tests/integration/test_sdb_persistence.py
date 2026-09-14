@@ -7,7 +7,8 @@ import pytest
 from sqlalchemy import func, select
 
 from app.db import SessionLocal
-from app.models import InternalChatThread, Memory, MemoryStatus, MemoryType, Project, User
+from app.models import AutomationRule, InternalChatThread, Memory, MemoryStatus, MemoryType, Project, User
+from app.chat.assistant.approval import issue_approval
 from app.services import agent_chat, projects, tukulpan
 
 
@@ -303,4 +304,41 @@ def test_sdb_persistence_rejects_caller_project_injection():
                 events=[],
                 proyecto="field-ops",
             )
+        assert session.scalar(select(func.count()).select_from(Memory)) == 0
+
+
+def test_sdb_mutation_and_evidence_rollback_together_on_persistence_failure(monkeypatch):
+    thread_id = _thread_id()
+    task = {
+        "id": "rule-1", "scope": {"proyecto": "default"}, "summary": "create rule",
+        "verifiable_output": "rule", "tool": "automation.create_rule",
+        "arguments": {
+            "name": "SDB rule", "event_type": "message.received", "conditions": {},
+            "channel": "panel", "template_event": "sdb.rule", "cooldown_seconds": 0,
+        },
+    }
+    plan = {"phase": "EXECUTE", "spec": {"sha256": "spec"}, "tasks": [task]}
+    approval = issue_approval({"sdb": plan})
+    approval["status"] = "consumed"
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        thread.current_plan = {"sdb": plan}
+        thread.assistant_state = {"sdb": {"checkpoints": []}, "approval": approval}
+        session.flush()
+
+        def mutate_then_report(*args, **kwargs):
+            session.add(AutomationRule(
+                name="SDB rule", event_type="message.received", conditions={}, channel="panel",
+                template_event="sdb.rule", cooldown_seconds=0, created_by="assistant",
+            ))
+            return {"status": "completed", "result": {"name": "SDB rule"}, "evidence": {}}
+
+        monkeypatch.setattr(agent_chat, "execute_tool", mutate_then_report)
+        monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("artifact failed")))
+        with pytest.raises(RuntimeError, match="artifact failed"):
+            agent_chat._run_sdb_tasks(session, thread, "run-rollback")
+        session.rollback()
+
+    with SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(AutomationRule)) == 0
         assert session.scalar(select(func.count()).select_from(Memory)) == 0

@@ -32,10 +32,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Durable Execution and Recovery (WU2)
 
-- [ ] 2.1 **RED→GREEN** (`agent_chat.py`, tests): forward binding in `_run_sdb_tasks`; ordered writes, audit, first-failure stop; pin result `{task_id,order,tool,status,read_only,result,error,evidence}`, checkpoint `{run_id,sequence,order,task_id,tool,status,error,result_ref}`, audit/event (SDB-7, AO-3/4; D: runner).
-- [ ] 2.2 **RED→GREEN** (`agent_chat.py`, `projects.py`, tests/integration): propagate create capability to mutation/artifacts; enforce scope mismatch; retain `_has_active_run` rejection as failed evidence (SDB-10; AT-5; D: capability).
-- [ ] 2.3 **RED→GREEN** (`recovery.py`, tests): add `revalidate_sdb_resume(...)`; `recover_events` key `(run_id,sequence,type,task_id,tool)`, sort `(sequence,order,type,task_id)`; resume incomplete only, fail closed on mismatch (SDB-7/4, AO-4; D: recovery).
-- [ ] 2.4 **RED→GREEN** (`agent_chat.py`, `tukulpan.py`, tests): flush mutation, audit, checkpoint/result, thread, artifact in one transaction; inject persistence failure and prove rollback/no orphan (AO-4; D: transaction).
+- [x] 2.1 **RED→GREEN** (`agent_chat.py`, tests): forward binding in `_run_sdb_tasks`; ordered writes, audit, first-failure stop; pin result `{task_id,order,tool,status,read_only,result,error,evidence}`, checkpoint `{run_id,sequence,order,task_id,tool,status,error,result_ref}`, audit/event (SDB-7, AO-3/4; D: runner).
+- [x] 2.2 **RED→GREEN** (`agent_chat.py`, `projects.py`, tests/integration): propagate create capability to mutation/artifacts; enforce scope mismatch; retain `_has_active_run` rejection as failed evidence (SDB-10; AT-5; D: capability).
+- [x] 2.3 **RED→GREEN** (`recovery.py`, tests): add `revalidate_sdb_resume(...)`; `recover_events` key `(run_id,sequence,type,task_id,tool)`, sort `(sequence,order,type,task_id)`; resume incomplete only, fail closed on mismatch (SDB-7/4, AO-4; D: recovery).
+- [x] 2.4 **RED→GREEN** (`agent_chat.py`, `tukulpan.py`, tests): flush mutation, audit, checkpoint/result, thread, artifact in one transaction; inject persistence failure and prove rollback/no orphan (AO-4; D: transaction).
 
 ## Phase 3: Verification, Endpoint, and Delivery (WU3)
 

@@ -12,7 +12,12 @@ from app.chat.assistant.approval import (
     validate_approval,
     validate_execution,
 )
-from app.chat.assistant.recovery import claim_execution, resumable_sdb_tasks
+from app.chat.assistant.recovery import (
+    claim_execution,
+    recover_events,
+    revalidate_sdb_resume,
+    resumable_sdb_tasks,
+)
 
 
 def _sdb_plan(spec=None, tasks=None):
@@ -303,3 +308,108 @@ def test_sdb_task_runner_forwards_authorized_project_to_checkpoint(monkeypatch):
     agent_chat._run_sdb_tasks(object(), thread, "run-1", authorization)
 
     assert captured[0]["authorization"] is authorization
+
+
+def test_sdb_task_runner_forwards_consumed_binding_and_emits_ordered_contracts(monkeypatch):
+    from app.services import agent_chat
+
+    plan = _sdb_plan(tasks=[
+        _sdb_plan()["tasks"][0],
+        {**_sdb_plan()["tasks"][0], "id": "task-2", "arguments": {"query": "other", "limit": 10}},
+    ])
+    approval = issue_approval({"sdb": plan})
+    approval["status"] = "consumed"
+    calls = []
+    captured = []
+    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: calls.append(kwargs) or {
+        "tool": args[1], "status": "completed", "read_only": True, "result": {"rows": []}, "evidence": {"rows": []}
+    })
+    monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: captured.append(kwargs))
+    thread = SimpleNamespace(
+        id=1, current_plan={"sdb": plan},
+        assistant_state={"sdb": {"checkpoints": []}, "approval": approval},
+    )
+
+    result = agent_chat._run_sdb_tasks(object(), thread, "run-ordered")
+
+    assert result["status"] == "completed"
+    assert [call["task_binding"]["order"] for call in calls] == [0, 1]
+    assert [item["order"] for item in result["results"]] == [0, 1]
+    assert all(set(item) >= {"task_id", "order", "tool", "status", "read_only", "result", "error", "evidence"} for item in result["results"])
+    assert [item["checkpoint"]["order"] for item in captured] == [0, 1]
+    assert all(event["type"] == "task" and event["order"] in (0, 1) for item in captured for event in item["events"])
+
+
+def test_recovery_revalidates_whole_plan_and_selected_binding():
+    plan = _sdb_plan()
+    approval = issue_approval({"sdb": plan})
+    approval["status"] = "consumed"
+    thread = SimpleNamespace(current_plan={"sdb": plan}, assistant_state={"approval": approval})
+
+    full_plan = {"sdb": plan}
+    thread.current_plan = full_plan
+    assert revalidate_sdb_resume(thread, full_plan, approval, plan["tasks"][0], 0) is True
+    assert revalidate_sdb_resume(thread, full_plan, approval, {**plan["tasks"][0], "id": "tampered"}, 0) is False
+    assert revalidate_sdb_resume(thread, {"sdb": {**plan, "tasks": []}}, approval, plan["tasks"][0], 0) is False
+
+
+def test_recover_events_dedupes_by_task_tool_and_sorts_deterministically():
+    thread = SimpleNamespace(assistant_state={"events": [
+        {"run_id": "run", "sequence": 2, "order": 1, "type": "audit", "task_id": "b", "tool": "x"},
+        {"run_id": "run", "sequence": 1, "order": 0, "type": "result", "task_id": "a", "tool": "x"},
+        {"run_id": "run", "sequence": 2, "order": 1, "type": "audit", "task_id": "b", "tool": "x", "duplicate": True},
+        {"run_id": "run", "sequence": 2, "order": 0, "type": "result", "task_id": "a", "tool": "x"},
+    ]})
+
+    events = recover_events(thread, "run")
+
+    assert [(event["sequence"], event["order"], event["type"]) for event in events] == [
+        (1, 0, "result"), (2, 0, "result"), (2, 1, "audit")
+    ]
+
+
+def test_create_capability_is_used_for_following_mutation_and_persistence(monkeypatch):
+    from app.services import agent_chat
+
+    tasks = [
+        {"id": "create", "scope": {"proyecto": "default"}, "summary": "create", "verifiable_output": "project", "tool": "project.create", "arguments": {"slug": "field-ops", "name": "Field Ops", "purpose": "Field operations"}},
+        {"id": "rename", "scope": {"proyecto": "field-ops"}, "summary": "rename", "verifiable_output": "project", "tool": "project.rename", "arguments": {"project": "field-ops", "name": "Field Operations"}},
+    ]
+    plan = {"phase": "EXECUTE", "spec": {"sha256": "spec"}, "tasks": tasks}
+    approval = issue_approval({"sdb": plan})
+    approval["status"] = "consumed"
+    calls, persisted = [], []
+    capability = SimpleNamespace(slug="field-ops")
+    monkeypatch.setattr(agent_chat, "projects", SimpleNamespace(
+        agent_context=lambda session, slug: capability,
+    ))
+    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: calls.append(kwargs) or {
+        "status": "completed", "result": {"slug": "field-ops"}, "evidence": {},
+    })
+    monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: persisted.append(kwargs))
+    thread = SimpleNamespace(id=1, current_plan={"sdb": plan}, assistant_state={"sdb": {"checkpoints": []}, "approval": approval})
+
+    result = agent_chat._run_sdb_tasks(object(), thread, "run-capability")
+
+    assert result["status"] == "completed"
+    assert persisted[-1]["authorization"] is capability
+    assert calls[-1]["task_binding"]["task_id"] == "rename"
+
+
+def test_project_scope_mismatch_is_failed_evidence_without_dispatch(monkeypatch):
+    from app.services import agent_chat
+
+    task = {"id": "rename", "scope": {"proyecto": "other"}, "summary": "rename", "verifiable_output": "project", "tool": "project.rename", "arguments": {"project": "field-ops", "name": "Renamed"}}
+    plan = {"phase": "EXECUTE", "spec": {"sha256": "spec"}, "tasks": [task]}
+    approval = issue_approval({"sdb": plan})
+    approval["status"] = "consumed"
+    dispatched = []
+    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: dispatched.append(kwargs))
+    monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: None)
+    thread = SimpleNamespace(id=1, current_plan={"sdb": plan}, assistant_state={"sdb": {"checkpoints": []}, "approval": approval})
+
+    result = agent_chat._run_sdb_tasks(object(), thread, "run-mismatch", SimpleNamespace(slug="field-ops"))
+
+    assert result["status"] == "failed"
+    assert result["results"][0]["error"] == "project-capability-scope-mismatch"
+    assert dispatched == []

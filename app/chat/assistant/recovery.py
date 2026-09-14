@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.chat.assistant.approval import arguments_digest, canonical_sdb_digest, canonical_sdb_payload
 from app.models import InternalChatThread
 
 
@@ -14,9 +15,52 @@ def recover_events(thread: InternalChatThread, run_id: str | None = None) -> lis
         events = [event for event in events if event.get("run_id") == run_id]
     unique = {}
     for event in events:
-        key = (event.get("run_id"), event.get("sequence"), event.get("type"))
+        key = (
+            event.get("run_id"), event.get("sequence"), event.get("type"),
+            event.get("task_id"), event.get("tool"),
+        )
         unique.setdefault(key, event)
-    return sorted(unique.values(), key=lambda event: event.get("sequence", 0))
+    return sorted(
+        unique.values(),
+        key=lambda event: (
+            event.get("sequence", 0), event.get("order", 0), event.get("type", ""),
+            event.get("task_id", ""),
+        ),
+    )
+
+
+def revalidate_sdb_resume(
+    thread: InternalChatThread,
+    plan: dict,
+    approval: dict,
+    task: dict,
+    order: int,
+) -> bool:
+    """Fail closed unless a resumed task still belongs to the frozen plan."""
+    sdb = plan.get("sdb") if isinstance(plan, dict) else None
+    if not isinstance(sdb, dict) or not isinstance(approval, dict) or not isinstance(task, dict):
+        return False
+    if (thread.current_plan or {}).get("sdb") != sdb:
+        return False
+    if approval.get("status") != "consumed":
+        return False
+    expected_plan = canonical_sdb_payload(sdb)
+    bindings = approval.get("sdb_bindings")
+    if bindings != expected_plan["sdb_bindings"]:
+        return False
+    if approval.get("sdb_sha256") != canonical_sdb_digest(sdb):
+        return False
+    selected = next((binding for binding in bindings if binding.get("order") == order), None)
+    if selected is None:
+        return False
+    return (
+        selected.get("task_id") == task.get("id")
+        and selected.get("tool") == task.get("tool")
+        and selected.get("arguments") == task.get("arguments")
+        and selected.get("arguments_sha256") == arguments_digest(
+            task.get("tool"), task.get("arguments") or {}, order=order, task_id=task.get("id")
+        )
+    )
 
 
 def is_recoverable(thread: InternalChatThread) -> bool:
