@@ -308,7 +308,9 @@ def sdb_verify(state: AssistantState) -> AssistantState:
         for field, expected_value in expected.items():
             if actual[field] != expected_value:
                 mismatches.append({"field": field, "order": order, "expected": expected_value, "actual": actual[field]})
-        if not item.get("result") and not item.get("evidence"):
+        from app.chat.assistant.tools.registry import get_tool
+
+        if not get_tool(task.get("tool")).read_only and not item.get("result") and not item.get("evidence"):
             mismatches.append({"field": "mutation_evidence", "order": order, "expected": "bounded evidence", "actual": None})
         ordered.append(item)
     extra = sorted(set(by_task) - {task.get("id") for task in tasks})

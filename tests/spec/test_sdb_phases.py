@@ -2,6 +2,7 @@
 
 import pytest
 from fastapi import HTTPException
+from fastapi.exceptions import RequestValidationError
 
 from app.chat.assistant.graph import _after_sdb_approve, build_assistant_graph
 from app.chat.assistant.nodes import (
@@ -189,8 +190,9 @@ def test_verify_requires_ordered_tool_and_mutation_evidence():
 
 def test_verify_rejects_matching_ids_when_mutation_evidence_is_missing():
     state = _run(sdb_spec, sdb_plan)
+    state["sdb_tasks"][0]["tool"] = "project.rename"
     state["sdb_result"] = {"results": [{
-        "task_id": "task-1", "order": 0, "tool": "conversations.search",
+        "task_id": "task-1", "order": 0, "tool": "project.rename",
         "status": "completed", "result": None, "evidence": {},
     }]}
 
@@ -198,6 +200,19 @@ def test_verify_rejects_matching_ids_when_mutation_evidence_is_missing():
 
     assert verified["verification"]["status"] == "failed"
     assert verified["verification"]["mismatches"][0]["field"] == "mutation_evidence"
+
+
+def test_verify_accepts_completed_empty_read_result():
+    state = _run(sdb_spec, sdb_plan)
+    state["sdb_result"] = {"results": [{
+        "task_id": "task-1", "order": 0, "tool": "conversations.search",
+        "status": "completed", "read_only": True, "result": [], "evidence": {},
+    }]}
+
+    verified = sdb_verify(state)
+
+    assert verified["verification"]["status"] == "passed"
+    assert verified["verification"]["results"][0]["result"] == []
 
 
 def test_deliver_rejects_uncommitted_verified_results():
@@ -241,3 +256,30 @@ def test_db_commit_uncertainty_is_bounded_without_retry(monkeypatch):
     assert "recovery" in caught.value.detail
     assert session.commits == 1
     assert session.rollbacks == 1
+
+
+def test_db_preserves_request_validation_errors(monkeypatch):
+    from app.panel import deps
+
+    class Session:
+        rollbacks = 0
+        closes = 0
+
+        def rollback(self):
+            self.rollbacks += 1
+
+        def close(self):
+            self.closes += 1
+
+    session = Session()
+    monkeypatch.setattr(deps, "SessionLocal", lambda: session)
+    database = deps.get_db()
+    next(database)
+    validation_error = RequestValidationError([{"loc": ("body",), "msg": "invalid", "type": "value_error"}])
+
+    with pytest.raises(RequestValidationError) as caught:
+        database.throw(validation_error)
+
+    assert caught.value is validation_error
+    assert session.rollbacks == 1
+    assert session.closes == 1

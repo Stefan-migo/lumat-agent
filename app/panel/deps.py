@@ -16,19 +16,26 @@ def get_db() -> Generator[Session, None, None]:
     """Request-scoped session with fail-closed commit uncertainty."""
     session = SessionLocal()
     try:
-        yield session
-        session.commit()
-        from app.services.realtime import dispatch_staged_events
-
-        dispatch_staged_events(session)
-    except Exception as exc:
-        session.rollback()
-        if not isinstance(exc, HTTPException):
+        try:
+            yield session
+        except Exception:
+            session.rollback()
+            raise
+        try:
+            session.commit()
+        except Exception as exc:
+            session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="request commit outcome is uncertain; recovery is required",
             ) from exc
-        raise
+        try:
+            from app.services.realtime import dispatch_staged_events
+
+            dispatch_staged_events(session)
+        except Exception:
+            session.rollback()
+            raise
     finally:
         session.close()
 
