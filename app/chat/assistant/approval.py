@@ -17,19 +17,34 @@ def arguments_digest(tool: str | None, arguments: dict, *, order: int | None = N
 
 
 def _sdb_bindings(payload: dict) -> list[dict]:
-    return [
-        {
+    bindings = []
+    for order, task in enumerate(payload.get("tasks") or []):
+        if not isinstance(task, dict):
+            continue
+        tool = task.get("tool")
+        arguments = task.get("arguments") or {}
+        binding = {
             "order": order,
             "task_id": task.get("id"),
-            "tool": task.get("tool"),
-            "arguments": task.get("arguments") or {},
+            "tool": tool,
+            "arguments": arguments,
             "arguments_sha256": arguments_digest(
-                task.get("tool"), task.get("arguments") or {}, order=order, task_id=task.get("id")
+                tool, arguments, order=order, task_id=task.get("id")
             ),
         }
-        for order, task in enumerate(payload.get("tasks") or [])
-        if isinstance(task, dict)
-    ]
+        if isinstance(tool, str) and tool.startswith("project."):
+            project_payload = canonical_project_payload({
+                "tool": tool,
+                "arguments": arguments,
+                "project_payload": task.get("project_payload") or (
+                    {"operation": tool.removeprefix("project."), "arguments": arguments, "decision": task["decision"]}
+                    if "decision" in task else None
+                ),
+            })
+            binding["project_payload"] = project_payload
+            binding["project_sha256"] = canonical_project_digest({"project_payload": project_payload})
+        bindings.append(binding)
+    return bindings
 
 
 def canonical_sdb_payload(payload: dict) -> dict:
@@ -132,7 +147,7 @@ def validate_approval(plan: dict, approval: dict, token: str) -> bool:
         valid = valid and secrets.compare_digest(
             approval.get("arguments_sha256", ""), arguments_digest(tool, arguments)
         )
-    if str(plan.get("tool", "")).startswith("project."):
+    if str(plan.get("tool", "")).startswith("project.") and not isinstance(sdb, dict):
         valid = valid and secrets.compare_digest(
             approval.get("project_sha256", ""), canonical_project_digest(plan)
         )
@@ -177,6 +192,14 @@ def validate_execution(plan: dict, approval: dict) -> bool:
             valid = valid and binding.get("arguments_sha256") == arguments_digest(
                 tool, arguments, order=binding.get("order"), task_id=binding.get("task_id")
             )
+            if str(tool or "").startswith("project."):
+                project_payload = binding.get("project_payload")
+                valid = valid and isinstance(project_payload, dict)
+                valid = valid and secrets.compare_digest(
+                    binding.get("project_sha256", ""),
+                    canonical_project_digest({"project_payload": project_payload})
+                    if isinstance(project_payload, dict) else "0",
+                )
         valid = valid and secrets.compare_digest(
             approval.get("sdb_sha256", ""), canonical_sdb_digest(sdb)
         )
@@ -187,7 +210,7 @@ def validate_execution(plan: dict, approval: dict) -> bool:
         valid = valid and secrets.compare_digest(
             approval.get("arguments_sha256", ""), arguments_digest(tool, arguments)
         )
-    if str(plan.get("tool", "")).startswith("project."):
+    if str(tool or "").startswith("project.") and not isinstance(sdb, dict):
         valid = valid and secrets.compare_digest(
             approval.get("project_sha256", ""), canonical_project_digest(plan)
         )

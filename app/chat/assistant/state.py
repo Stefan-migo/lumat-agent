@@ -98,6 +98,7 @@ class SDBTask(BaseModel):
     verifiable_output: str = Field(min_length=1, max_length=200)
     tool: str = Field(min_length=1, max_length=100)
     arguments: dict
+    decision: dict | None = Field(default=None, exclude=True)
 
     @model_validator(mode="after")
     def validate_read_tool(self) -> "SDBTask":
