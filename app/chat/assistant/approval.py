@@ -8,9 +8,28 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 
-def arguments_digest(tool: str | None, arguments: dict) -> str:
-    payload = json.dumps({"tool": tool, "arguments": arguments}, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(payload.encode()).hexdigest()
+def arguments_digest(tool: str | None, arguments: dict, *, order: int | None = None, task_id: str | None = None) -> str:
+    payload = {"tool": tool, "arguments": arguments}
+    if order is not None or task_id is not None:
+        payload = {"order": order, "task_id": task_id, **payload}
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(encoded.encode()).hexdigest()
+
+
+def _sdb_bindings(payload: dict) -> list[dict]:
+    return [
+        {
+            "order": order,
+            "task_id": task.get("id"),
+            "tool": task.get("tool"),
+            "arguments": task.get("arguments") or {},
+            "arguments_sha256": arguments_digest(
+                task.get("tool"), task.get("arguments") or {}, order=order, task_id=task.get("id")
+            ),
+        }
+        for order, task in enumerate(payload.get("tasks") or [])
+        if isinstance(task, dict)
+    ]
 
 
 def canonical_sdb_payload(payload: dict) -> dict:
@@ -19,6 +38,7 @@ def canonical_sdb_payload(payload: dict) -> dict:
         "phase": payload.get("phase"),
         "spec": payload.get("spec") or {},
         "tasks": payload.get("tasks") or [],
+        "sdb_bindings": _sdb_bindings(payload),
     }
 
 
@@ -64,17 +84,20 @@ def issue_approval(plan: dict, *, expires_at: datetime | None = None) -> dict:
     task = (sdb or {}).get("tasks", [])[0] if isinstance(sdb, dict) else {}
     tool = plan.get("tool") or task.get("tool")
     arguments = plan.get("arguments") or task.get("arguments", {})
+    bindings = _sdb_bindings(sdb) if isinstance(sdb, dict) else []
     approval = {
         "token": token,
         "token_sha256": hashlib.sha256(token.encode()).hexdigest(),
         "tool": tool,
         "arguments": arguments,
-        "arguments_sha256": arguments_digest(tool, arguments),
+        "arguments_sha256": bindings[0]["arguments_sha256"] if bindings else arguments_digest(tool, arguments),
         "expires_at": expiry.isoformat(),
         "status": "pending",
     }
     if isinstance(sdb, dict):
-        approval["sdb_sha256"] = canonical_sdb_digest(sdb)
+        approval["sdb_bindings"] = bindings
+        approval["sdb_payload"] = {**canonical_sdb_payload(sdb), "sdb_bindings": bindings}
+        approval["sdb_sha256"] = canonical_sdb_digest({**sdb, "sdb_bindings": bindings})
         approval["spec_sha256"] = sdb.get("spec", {}).get("sha256", "")
     if str(plan.get("tool", "")).startswith("project."):
         approval["project_payload"] = canonical_project_payload(plan)
@@ -95,18 +118,19 @@ def validate_approval(plan: dict, approval: dict, token: str) -> bool:
         approval.get("status") == "pending"
         and datetime.now(timezone.utc) < expires_at
         and secrets.compare_digest(approval.get("token_sha256", ""), expected)
-        and secrets.compare_digest(
-            approval.get("arguments_sha256", ""),
-            arguments_digest(tool, arguments),
-        )
     )
     sdb = plan.get("sdb")
     if isinstance(sdb, dict):
+        valid = valid and approval.get("sdb_bindings") == _sdb_bindings(sdb)
         valid = valid and secrets.compare_digest(
             approval.get("sdb_sha256", ""), canonical_sdb_digest(sdb)
         )
         valid = valid and secrets.compare_digest(
             str(approval.get("spec_sha256", "")), str(sdb.get("spec", {}).get("sha256", ""))
+        )
+    else:
+        valid = valid and secrets.compare_digest(
+            approval.get("arguments_sha256", ""), arguments_digest(tool, arguments)
         )
     if str(plan.get("tool", "")).startswith("project."):
         valid = valid and secrets.compare_digest(
@@ -118,6 +142,8 @@ def validate_approval(plan: dict, approval: dict, token: str) -> bool:
 def consume_approval(approval: dict, token: str) -> bool:
     """Consume an approval once after validating its token and exact payload."""
     plan = {"tool": approval.get("tool"), "arguments": approval.get("arguments", {})}
+    if isinstance(approval.get("sdb_payload"), dict):
+        plan["sdb"] = approval["sdb_payload"]
     if isinstance(approval.get("project_payload"), dict):
         plan["project_payload"] = approval["project_payload"]
     if not validate_approval(
@@ -134,21 +160,32 @@ def consume_approval(approval: dict, token: str) -> bool:
 def validate_execution(plan: dict, approval: dict) -> bool:
     """Require a consumed approval matching the persisted plan exactly."""
     tool, arguments = _bound_tool_arguments(plan)
-    valid = (
-        approval.get("status") == "consumed"
-        and _approval_is_unexpired(approval)
-        and secrets.compare_digest(
-            approval.get("arguments_sha256", ""),
-            arguments_digest(tool, arguments),
-        )
-    )
+    valid = approval.get("status") == "consumed" and _approval_is_unexpired(approval)
     sdb = plan.get("sdb")
     if isinstance(sdb, dict):
+        expected_bindings = _sdb_bindings(sdb)
+        valid = valid and approval.get("sdb_bindings") == expected_bindings
+        binding = plan.get("task_binding")
+        if not isinstance(binding, dict):
+            binding = next(
+                (item for item in expected_bindings if item["tool"] == tool and item["arguments"] == arguments),
+                None,
+            )
+        valid = valid and isinstance(binding, dict) and binding in approval.get("sdb_bindings", [])
+        if isinstance(binding, dict):
+            valid = valid and binding.get("tool") == tool and binding.get("arguments") == arguments
+            valid = valid and binding.get("arguments_sha256") == arguments_digest(
+                tool, arguments, order=binding.get("order"), task_id=binding.get("task_id")
+            )
         valid = valid and secrets.compare_digest(
             approval.get("sdb_sha256", ""), canonical_sdb_digest(sdb)
         )
         valid = valid and secrets.compare_digest(
             str(approval.get("spec_sha256", "")), str(sdb.get("spec", {}).get("sha256", ""))
+        )
+    else:
+        valid = valid and secrets.compare_digest(
+            approval.get("arguments_sha256", ""), arguments_digest(tool, arguments)
         )
     if str(plan.get("tool", "")).startswith("project."):
         valid = valid and secrets.compare_digest(

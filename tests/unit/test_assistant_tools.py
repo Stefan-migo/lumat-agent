@@ -4,11 +4,17 @@ from types import SimpleNamespace
 import pytest
 
 from app.chat.assistant.tools.registry import (
+    ProjectArchiveArgs,
+    ProjectCreateArgs,
+    ProjectMergeArgs,
+    ProjectRenameArgs,
+    RuleArgs,
     ToolValidationError,
     execute_tool,
     get_tool,
     tool_schemas,
 )
+from app.chat.assistant.state import SDBTask
 from app.chat.assistant.approval import consume_approval, issue_approval, validate_execution
 from app.services.projects import ProjectCandidate, ProjectResult
 from app.chat.assistant.tools.search import DuckDuckGoSearch, SearchFailure
@@ -232,6 +238,71 @@ def test_write_requires_consumed_exact_approval(monkeypatch):
     with pytest.raises(ToolValidationError):
         execute_tool(SimpleNamespace(), "automation.create_rule", args, approval=approval)
     assert called == []
+
+
+def test_sdb_accepts_only_registered_typed_write_tasks():
+    base = {"scope": {}, "summary": "write", "verifiable_output": "result"}
+    for tool, arguments in (
+        ("automation.create_rule", {"name": "n", "event_type": "e", "channel": "c", "template_event": "t", "cooldown_seconds": 0}),
+        ("project.create", {"slug": "s", "name": "N", "purpose": "P"}),
+        ("project.rename", {"project": "s", "name": "N"}),
+        ("project.archive", {"project": "s"}),
+        ("project.merge", {"source": "s", "target": "t"}),
+    ):
+        task = SDBTask.model_validate({**base, "id": tool, "tool": tool, "arguments": arguments})
+        assert task.tool == tool
+
+    with pytest.raises(ValueError, match="write-not-registered"):
+        SDBTask.model_validate({**base, "id": "unknown", "tool": "project.destroy", "arguments": {"project": "s"}})
+
+
+def test_write_argument_schemas_forbid_missing_and_extra_fields():
+    with pytest.raises(ValueError):
+        ProjectCreateArgs.model_validate({"slug": "s", "name": "N"})
+    with pytest.raises(ValueError):
+        ProjectRenameArgs.model_validate({"project": "s", "name": "N", "extra": 1})
+    with pytest.raises(ValueError):
+        ProjectArchiveArgs.model_validate({"project": "s", "extra": 1})
+    with pytest.raises(ValueError):
+        ProjectMergeArgs.model_validate({"source": "s", "target": "t", "extra": 1})
+    with pytest.raises(ValueError):
+        RuleArgs.model_validate({"name": "n", "event_type": "e", "channel": "c", "template_event": "t", "cooldown_seconds": -1})
+
+
+def test_project_create_requires_exact_decision_payload(monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.projects.create",
+        lambda *args, **kwargs: called.append(True),
+    )
+    args = {"slug": "s", "name": "N", "purpose": "P"}
+    approval = issue_approval({
+        "tool": "project.create",
+        "arguments": args,
+        "project_payload": {"operation": "create", "arguments": args, "decision": {"create_distinct": True}},
+    })
+    assert consume_approval(approval, approval["token"])
+    execute_tool(SimpleNamespace(), "project.create", args, approval=approval)
+    assert called == [True]
+
+    bad = issue_approval({"tool": "project.create", "arguments": args, "project_payload": {"operation": "create", "arguments": args, "decision": {"unexpected": True}}})
+    assert consume_approval(bad, bad["token"])
+    with pytest.raises(ToolValidationError, match="decision"):
+        execute_tool(SimpleNamespace(), "project.create", args, approval=bad)
+    assert called == [True]
+
+
+def test_write_handler_failure_is_preserved_as_error_evidence(monkeypatch):
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.automation.create_rule",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database unavailable")),
+    )
+    args = {"name": "n", "event_type": "e", "conditions": {}, "channel": "c", "template_event": "t", "cooldown_seconds": 0}
+    approval = issue_approval({"tool": "automation.create_rule", "arguments": args})
+    assert consume_approval(approval, approval["token"])
+    result = execute_tool(SimpleNamespace(), "automation.create_rule", args, approval=approval)
+    assert result["status"] == "error"
+    assert result["evidence"]["status"] == "error"
 
 
 def test_web_search_is_bounded_and_failures_are_empty():
