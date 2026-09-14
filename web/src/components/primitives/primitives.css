@@ -267,25 +267,19 @@
   padding: var(--space-3) 0;
   color: var(--corp-text);
 }
-/* Dialog (CORP-DIALOG-1): overlay scrim derives from --corp-bg via color-mix
-   (no new color value — palette frozen); panel uses --shadow-3 (DS-reserved
-   overlay shadow) and --corp-radius. */
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--corp-bg) 55%, transparent);
-}
+/* ---- Native dialog (CST-PRIM-7) ---- */
 .dialog {
+  width: min(28rem, calc(100vw - var(--space-5)));
+  margin: auto;
+  padding: 0;
   background: var(--corp-surface);
   border: 1px solid var(--corp-border);
   border-radius: var(--corp-radius);
   box-shadow: var(--shadow-3);
-  width: min(28rem, calc(100vw - var(--space-5)));
   color: var(--corp-fg);
+}
+.dialog::backdrop {
+  background: color-mix(in srgb, var(--corp-bg) 55%, transparent);
 }
 .dialog__header {
   display: flex;
@@ -342,29 +336,6 @@
   .spinner__indicator {
     animation: none;
   }
-}
-.modal {
-  width: min(100%, var(--space-8));
-  padding: var(--space-5);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow-2);
-}
-.modal::backdrop {
-  background: var(--text-muted);
-  opacity: 0.5;
-}
-.modal__title {
-  margin: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-lg);
-}
-.modal__content {
-  display: flex;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
 }
 .flash-message {
   padding: var(--space-3);
