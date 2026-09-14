@@ -31,58 +31,50 @@ The system MUST run the separate durable panel `AssistantState` graph for normal
 
 ### Requirement: AO-2 — Exact-Argument Approval
 
-Every write, including SDB execution, MUST require server-validated approval bound to the exact canonical tool or phase/task plan and serialized arguments. The server MUST reject replayed, altered, expired, or client-only approvals. A read-only SDB task MUST still be bound to the frozen validated tool and arguments before approval is consumed.
-(Previously: approval was bound only to a tool name and serialized arguments.)
+Every SDB mutation MUST require server-validated approval bound to the complete canonical phase/task plan and every ordered `{task_id, tool, validated arguments}` binding. The server MUST reject replayed, altered, expired, or client-only approvals. One approval MUST be consumed once for the frozen plan. (Seams: `app/chat/assistant/approval.py:16-30,85-157`, `app/services/agent_chat.py:567-609`; unit tests MUST cover task substitution, reorder, digest tampering, expiry, and replay.)
 
-#### Scenario: Approved SDB execution
+#### Scenario: Whole-plan approval
 
-- GIVEN a pending SDB plan with an exact canonical phase/task payload
-- WHEN an administrator approves that plan
-- THEN only that payload executes once and approval is durably consumed
+- GIVEN a pending multi-task SDB plan
+- WHEN an administrator approves it
+- THEN one approval covers the unchanged ordered plan and becomes `consumed`
 
-#### Scenario: Tampering is rejected
+#### Scenario: Tampering
 
-- GIVEN an approval whose plan, SPEC digest, or arguments differ from persisted state
+- GIVEN any task identity, tool, argument, order, or SPEC digest differs
 - WHEN execution is requested
-- THEN the server rejects it and performs no write
+- THEN approval fails and no mutation runs
 
 ### Requirement: AO-3 — Admin SSE and Audit
 
-The system MUST expose admin-only ordered events for SDB phases, checkpoints, approval, task execution, verification, evidence, delivery, and errors. Every execution attempt MUST record `record_audit`; streams MUST NOT hold an unbounded transaction. Events MUST identify the run and task and MUST distinguish completed from failed outcomes.
-(Previously: events covered plan, approval, tool, evidence, status, and error but not SDB phases or checkpoints.)
+Admin-only ordered events MUST identify run, task, and completed or failed mutation outcomes. Every attempt MUST call `record_audit`; events MUST be persisted with the same caller transaction as mutation and checkpoint state, and streams MUST NOT hold an unbounded transaction. (Seams: `app/services/agent_chat.py:117-132,625-637`, `app/services/realtime.py:59-70`; integration tests MUST verify ordering, authorization, and rollback.)
 
-#### Scenario: SDB evidence streams
+#### Scenario: Mutation evidence stream
 
-- GIVEN an authorized SDB run
-- WHEN a task produces output
-- THEN ordered events identify the run/task and evidence, while execution audit is persisted
+- GIVEN an authorized SDB mutation run
+- WHEN a task completes
+- THEN ordered task, evidence, checkpoint, and audit data identify the run and task
 
-#### Scenario: Unauthorized stream
-
-- GIVEN an authenticated operador requests an SDB stream
-- WHEN authorization is checked
-- THEN access is rejected and no SDB data is sent
-
-#### Scenario: Failed task stream
-- GIVEN an SDB read fails
+#### Scenario: Failed mutation stream
+- GIVEN a task fails
 - WHEN events are streamed
 - THEN the task event is failed/error and is never presented as completed
 
 ### Requirement: AO-4 — Durable SDB Result Truth
 
-The durable SDB API MUST persist bounded task results, checkpoints, evidence, audit, and ordered phase events for both successful and failed reads. A failed, timed-out, exceptioning, or cost-blocked task MUST remain failed and MUST prevent successful verification or delivery.
+The durable API MUST persist mutation, audit, checkpoint/result, thread state, and artifact in the same caller transaction. A persistence failure MUST roll back the mutation so no committed mutation lacks its checkpoint. Unknown commit outcome MUST fail closed and require recovery. The contract MUST NOT claim exactly-once execution beyond the DB boundary. (Seams: `app/services/agent_chat.py:177-241,622-637`, `app/services/tukulpan.py:268-303`; integration tests MUST force persistence failure and recovery.)
 
-#### Scenario: Successful execution evidence
-- GIVEN an approved SDB read executes successfully
-- WHEN the durable runner completes the task
-- THEN a task-bound result, checkpoint, evidence, audit, and ordered event are persisted
+#### Scenario: Atomic mutation record
+- GIVEN a write service flushes a mutation
+- WHEN audit, checkpoint, result, thread, and artifact persistence succeeds
+- THEN all are committed together
 
-#### Scenario: Failed execution evidence
-- GIVEN the read fails or the cost gate denies execution
-- WHEN the durable runner records the outcome
-- THEN bounded error evidence and audit are persisted, with no completed result
+#### Scenario: Persistence rollback
+- GIVEN any required persistence step fails
+- WHEN the caller transaction rolls back
+- THEN no mutation is committed without its durable execution evidence
 
-#### Scenario: Recovery result set
-- GIVEN a run resumes after one or more completed checkpoints
-- WHEN the API performs verification
-- THEN its verification input includes all persisted completed results and newly executed results
+#### Scenario: Recovery after uncertain commit
+- GIVEN commit outcome is unknown
+- WHEN the run is resumed
+- THEN recovery consults committed checkpoints and executes only incomplete frozen tasks
