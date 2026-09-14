@@ -282,6 +282,7 @@ def execute_tool(
     arguments: dict,
     *,
     approval: dict | None = None,
+    task_binding: dict | None = None,
     whitelist: set[str] | frozenset[str] | None = None,
     cost_allowed: bool = True,
 ) -> dict:
@@ -297,6 +298,10 @@ def execute_tool(
     except Exception as exc:
         raise ToolValidationError(f"invalid arguments for {name}") from exc
     payload = {"tool": name, "arguments": parsed.model_dump()}
+    if task_binding is not None:
+        payload["task_binding"] = task_binding
+    if isinstance(approval, dict) and isinstance(approval.get("sdb_payload"), dict):
+        payload["sdb"] = approval["sdb_payload"]
     project_approval = None
     if name.startswith("project.") and approval:
         project_payload = approval.get("project_payload")

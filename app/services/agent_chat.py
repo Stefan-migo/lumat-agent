@@ -8,13 +8,13 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.chat.assistant.graph import run_assistant
-from app.chat.assistant.approval import canonical_sdb_digest, issue_approval, validate_approval
+from app.chat.assistant.approval import arguments_digest, canonical_sdb_digest, issue_approval, validate_approval
 from app.chat.assistant.nodes import execute, sdb_deliver, sdb_verify
 from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.chat.assistant import nodes as assistant_nodes
 from app.chat.assistant.attachments import prepare_attachment_context
 from app.chat.assistant.state import COMPACTION_RETENTION_TOKENS, COMPACTION_THRESHOLD_TOKENS, INJECTION_TOKEN_BUDGET, estimate_tokens, merge_assistant_state
-from app.chat.assistant.recovery import claim_execution, recover_events, resumable_sdb_tasks
+from app.chat.assistant.recovery import claim_execution, recover_events, revalidate_sdb_resume, resumable_sdb_tasks
 from app.models import AssistantAttachment, InternalChatMessage, InternalChatThread, User
 from app.services.audit import record_audit
 from app.services.realtime import stage_event
@@ -77,7 +77,7 @@ def _thread_project_authorization(session: Session, thread: InternalChatThread):
 
 
 def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, authorization=None) -> dict:
-    """Execute the frozen read plan once, stopping at the first failure."""
+    """Execute the frozen approved plan once, stopping at the first failure."""
     sdb = (thread.assistant_state or {}).get("sdb") or {}
     plan = thread.current_plan or {}
     frozen_tasks = plan.get("sdb", {}).get("tasks", [])
@@ -87,46 +87,114 @@ def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, au
     from app.services.prompts import load_assistant_config
     whitelist = set(load_assistant_config().tools_whitelist)
     cost_allowed = (thread.assistant_state or {}).get("guardrails", {}).get("cost_allowed", True)
-    for offset, task in enumerate(pending, start=len(sdb.get("checkpoints", [])) + 1):
-        result = {"task_id": task.get("id"), "status": "failed", "error": "SDB task rejected"}
+    approval = (thread.assistant_state or {}).get("approval") or {}
+    bindings = approval.get("sdb_bindings") or []
+    for pending_index, task in enumerate(pending):
+        binding = next((item for item in bindings if item.get("task_id") == task.get("id")), None)
+        if binding is None and not bindings:
+            order = next((index for index, item in enumerate(frozen_tasks) if item.get("id") == task.get("id")), None)
+            if order is not None:
+                binding = {
+                    "order": order, "task_id": task.get("id"), "tool": task.get("tool"),
+                    "arguments": task.get("arguments") or {},
+                    "arguments_sha256": arguments_digest(
+                        task.get("tool"), task.get("arguments") or {}, order=order, task_id=task.get("id")
+                    ),
+                }
+        order = binding.get("order") if binding else None
+        result = {
+            "task_id": task.get("id"), "order": order, "tool": task.get("tool"),
+            "status": "failed", "read_only": False, "result": None,
+            "error": "SDB task rejected", "evidence": {},
+        }
         try:
+            if binding is None or order is None:
+                raise ToolValidationError("SDB task is not present in consumed approval")
+            if bindings and not revalidate_sdb_resume(thread, plan, approval, task, order):
+                raise ToolValidationError("SDB task is not present in consumed approval")
             tool_name = task.get("tool")
+            result["order"] = order
             if tool_name not in whitelist:
                 raise ToolValidationError(f"tool is not whitelisted: {tool_name}")
             definition = get_tool(tool_name)
+            result["read_only"] = definition.read_only
             arguments = definition.args_model.model_validate(task.get("arguments", {})).model_dump()
-            if not definition.read_only:
-                raise ToolValidationError("SDB tasks must use read-only tools")
             from app.chat.assistant.state import SDBTask
             typed = SDBTask.model_validate({**task, "arguments": arguments})
             if not cost_allowed:
                 raise ToolValidationError("assistant cost limit blocks tool execution")
-            if typed.scope.get("proyecto", "default") != "default" and authorization is None:
-                raise ToolValidationError("SDB project capability is unavailable")
+            if not definition.read_only and approval.get("status") != "consumed":
+                raise ToolValidationError("SDB tasks must use read-only tools")
+            requested_project = typed.scope.get("proyecto", "default")
+            if requested_project != "default":
+                if authorization is None:
+                    raise ToolValidationError("SDB project capability is unavailable")
+                if authorization.slug != requested_project:
+                    result["evidence"] = {"expected": authorization.slug, "requested": requested_project}
+                    raise ToolValidationError("project-capability-scope-mismatch")
+            if not definition.read_only and tool_name != "project.create":
+                requested_slug = (
+                    typed.arguments.get("project") if tool_name in {"project.rename", "project.archive"}
+                    else typed.arguments.get("source") if tool_name == "project.merge" else requested_project
+                )
+                if authorization is None or requested_slug != authorization.slug:
+                    result["evidence"] = {"expected": authorization.slug if authorization else None, "requested": requested_slug}
+                    raise ToolValidationError("project-capability-scope-mismatch")
             tool_result = execute_tool(
                 session, typed.tool, typed.arguments,
+                approval=approval if not definition.read_only else None,
+                task_binding=binding,
                 whitelist=whitelist, cost_allowed=cost_allowed,
             )
-            result = {"task_id": typed.id, **tool_result}
+            result = {
+                "task_id": typed.id, "order": order, "tool": typed.tool,
+                "status": tool_result.get("status"), "read_only": definition.read_only,
+                "result": tool_result.get("result"), "error": tool_result.get("error"),
+                "evidence": tool_result.get("evidence") or {},
+            }
             if result.get("status") != "completed":
                 result["status"] = "failed"
+            if result["status"] == "completed" and tool_name == "project.create":
+                created = result.get("result") or {}
+                created_slug = created.get("slug") if isinstance(created, dict) else None
+                if created_slug:
+                    authorization = projects.agent_context(session, created_slug)
+            if result["status"] == "completed" and not definition.read_only:
+                requested_project = authorization.slug if authorization else requested_project
         except (ToolValidationError, ToolExecutionError, TimeoutError, ValueError) as exc:
             result["error"] = str(exc)
         except Exception as exc:
             result["error"] = "SDB task failed"
         status = result["status"]
+        audit_entry = None
         if hasattr(session, "add"):
-            record_audit(
+            audit_entry = record_audit(
                 session, actor="assistant", action="internal_chat.sdb_execution",
                 entity="internal_chat_thread", entity_id=str(thread.id),
                 after={"run_id": run_id, "task_id": result["task_id"], "status": status,
-                       "error": result.get("error")},
+                       "order": result.get("order"), "tool": result.get("tool"),
+                       "error": result.get("error"), "evidence": result.get("evidence")},
             )
-        checkpoint = {"sequence": offset, "task_id": result["task_id"], "status": status, "error": result.get("error")}
+            if hasattr(session, "flush"):
+                session.flush()
+        sequence = len(sdb.get("checkpoints", [])) + pending_index + 1
+        checkpoint = {
+            "run_id": run_id, "sequence": sequence, "order": result.get("order"),
+            "task_id": result["task_id"], "tool": result.get("tool"), "status": status,
+            "error": result.get("error"), "result_ref": f"sdb:{run_id}:result:{result['task_id']}",
+        }
+        audit_ref = getattr(audit_entry, "id", None)
+        event = {
+            "type": "task", "run_id": run_id, "sequence": sequence,
+            "order": result.get("order"), "task_id": result["task_id"], "tool": result.get("tool"),
+            "status": status, "error": result.get("error"), "evidence": result.get("evidence"),
+            "checkpoint": checkpoint, "audit_ref": audit_ref,
+            "proyecto": authorization.slug if authorization else "default",
+        }
         persist_sdb_state(
             session, thread, run_id=run_id, phase="EXECUTE",
             checkpoint=checkpoint,
-            events=[{"type": "task", "run_id": run_id, "sequence": offset, "task_id": result["task_id"], "status": status}],
+            events=[event],
             results=[result],
             authorization=authorization,
         )
