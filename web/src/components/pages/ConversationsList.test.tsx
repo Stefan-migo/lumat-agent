@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConversationsList } from './ConversationsList';
 
@@ -71,9 +71,8 @@ describe('production conversations list', () => {
     const user = userEvent.setup();
     render(<ConversationsList />);
     await user.type(screen.getByRole('searchbox'), 'heater');
-    await new Promise((resolve) => setTimeout(resolve, 350));
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?q=heater&limit=20&offset=0', expect.anything()));
     expect(screen.getByText(/no hay conversaciones/i)).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?q=heater&limit=20&offset=0', expect.anything());
     expect(screen.getByRole('button', { name: /siguiente/i })).toBeInTheDocument();
   });
 
