@@ -221,6 +221,37 @@ describe("AgentChat", () => {
     await waitFor(() => expect(screen.getByRole("textbox", { name: /mensaje/i })).toBeEnabled());
   });
 
+  it("does not call a disconnected stream successful and exposes recovery state", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: { id: 2, author: "admin", content: "Hello", status: "processing", assistant_metadata: { run_id: "run-fail" } } }), { status: 201 }))
+      .mockRejectedValueOnce(new Error("socket closed"));
+
+    render(<AgentChat />);
+    await screen.findByText("Chat interno vacío");
+    fireEvent.change(screen.getByRole("textbox", { name: /mensaje/i }), { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/stream del asistente falló/i);
+    expect(screen.getByRole("status", { name: /recuperable/i })).toHaveTextContent(/recuperable/i);
+  });
+
+  it("keeps persisted history authoritative when a transient stream is present", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: { id: 2, author: "admin", content: "Hello", status: "processing", assistant_metadata: { run_id: "run-persist" } } }), { status: 201 }))
+      .mockResolvedValueOnce(sseResponse([{ type: "response", thread_id: 4, run_id: "run-persist", sequence: 0, content: "Transient only" }]))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [{ id: 9, author: "agent", content: "Persisted answer", status: "processed" }] }), { status: 200 }));
+
+    render(<AgentChat />);
+    await screen.findByText("Chat interno vacío");
+    fireEvent.change(screen.getByRole("textbox", { name: /mensaje/i }), { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    expect(await screen.findByText("Persisted answer")).toBeInTheDocument();
+    expect(screen.queryByText("Transient only")).not.toBeInTheDocument();
+  });
+
   it("shows the active Cortex indicator and closes through the planning endpoint", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open", assistant_state: { cortex_session: { slug: "budget-4", topic: "Budget", status: "active", handoff: { status: "none", sdb_phase: null } } } }, messages: [] }), { status: 200 }))
