@@ -226,15 +226,33 @@ describe('primitives.css — slice-1 catalog contract (CST-PRIM-1/3 · D7)', () 
     expect(hex).toBeNull();
   });
 
-  it('D7: .btn and .field__control get a 44px touch target under (hover: none) (CST-PRIM-3)', () => {
-    const mediaRe = /@media\s*\(hover\s*:\s*none\)\s*\{([\s\S]*?)\n\}/;
-    const match = primitivesRaw.match(mediaRe);
-    expect(match, 'primitives.css must define an @media (hover: none) block').not.toBeNull();
-    const mediaBody = match![1];
-    // The touch block groups both selectors into one rule (comma list) and sets
-    // a 44px min-height on touch devices; desktop keeps 40px (no media bump).
-    expect(mediaBody).toMatch(/\.btn\s*,/);
-    expect(mediaBody).toMatch(/\.field__control/);
-    expect(mediaBody).toMatch(/min-height\s*:\s*44px/);
+  it('D7: one (hover: none) block owns every 44px touch target (CST-PRIM-3)', () => {
+    // The touch bump is cross-cutting: every interactive control takes its 44px
+    // hit area from ONE block. A second, parallel @media (hover: none) block is
+    // the regression this asserts against — it shipped twice already (combobox,
+    // then menu), so the rule lives here now, not in a comment.
+    const touchBlocks =
+      primitivesRaw.match(/@media\s*\(hover\s*:\s*none\)\s*\{[\s\S]*?\n\}/g) ?? [];
+    expect(
+      touchBlocks.length,
+      'touch sizing must live in exactly one @media (hover: none) block',
+    ).toBe(1);
+
+    const body = touchBlocks[0];
+    expect(body).toMatch(/min-height\s*:\s*44px/);
+    for (const selector of [
+      '.btn',
+      '.field__control',
+      '.popover__trigger',
+      '.tooltip__trigger',
+      '.menu__trigger',
+      '.menu__item',
+      '.combobox__option',
+    ]) {
+      expect(
+        body,
+        `${selector} must take its 44px touch target from the single D7 block`,
+      ).toContain(selector);
+    }
   });
 });

@@ -138,14 +138,17 @@
 /* D7 — touch ergonomics (CST-PRIM-3): on touch devices bump interactive
  * controls to ≥44px hit area so they are comfortably tappable without visually
  * over-scaling dense panels (the 40px control height has no media bump below —
- * desktop keeps 40px). One block, no ::before. */
+ * desktop keeps 40px). One block, no ::before: every control adds its selector
+ * HERE, because a second @media (hover: none) block fails the D7 test in
+ * tokens.test.ts. */
 @media (hover: none) {
   .btn,
   .field__control,
   .popover__trigger,
   .tooltip__trigger,
   .menu__trigger,
-  .menu__item {
+  .menu__item,
+  .combobox__option {
     min-height: 44px;
   }
 }
