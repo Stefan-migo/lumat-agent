@@ -231,15 +231,53 @@ Storybook MUST enable autodocs (`docs.autodocs: true` in `web/.storybook/preview
 - WHEN `web/.storybook/main.ts` is reviewed
 - THEN the stories glob is unchanged
 
+### Requirement: DS-SHELL-7 — Real Storybook Shell Harness
+
+Storybook MUST apply shared `withPanelShell` context and `primitives.css` to every story.
+
+#### Scenario: Production
+
+- GIVEN a story
+- WHEN rendered
+- THEN both apply
+
+#### Scenario: Shared
+
+- GIVEN stories
+- WHEN preview is inspected
+- THEN no local shell or duplicate import
+
+### Requirement: DS-DOC-1 — Platform-First Interaction Policy
+
+`DESIGN_SYSTEM.md` MUST record platform-first popover/CSS anchors/native dialog; Radix only for menu/combobox ARIA composites; package names; and line-480 justification.
+
+#### Scenario: Documented
+
+- GIVEN the document
+- WHEN read
+- THEN defaults, scope, packages, justification appear
+
+#### Scenario: Platform
+
+- GIVEN a platform-covered interaction
+- WHEN reviewed
+- THEN platform precedes Radix
+
 ### Requirement: DS-STORY-7 — Viewports Aligned to Breakpoints
 
-Storybook viewport presets MUST align to the `--bp-*` reference tokens (640 px, 1024 px, 1280 px).
+Presets MUST align to `--bp-*`: 640px, 1024px, and 1280px. A test MUST detect drift without excluding other widths.
 
 #### Scenario: Viewport presets
 
 - GIVEN the Storybook viewport toolbar
 - WHEN a viewport preset is selected
 - THEN the preset matches one of the `--bp-*` reference values
+
+#### Scenario: Drift rejected
+
+- GIVEN a preset or token changes
+- WHEN tested
+- THEN drift fails; 390px and 768px remain permitted
 
 ### Requirement: DS-VER-1 — Web Verification Gates
 
@@ -269,39 +307,50 @@ The change MUST keep `npm test` green in `web/` (all existing and updated tests,
 
 ### Requirement: R-PRD-PG-1 — Page Stories
 
-The change MUST add a CSF story per page under `web/src/stories/pages/*.stories.tsx` (Dashboard, Clientes list/ficha, Conversations list/thread, Cases, KB, Settings, Login), composed from shared patterns and real content per exploration, and MUST NOT modify any file under `web/src/components/**`.
+CSF page stories MUST exist at `web/src/stories/pages/*.stories.tsx` for Dashboard, Clientes list/ficha, Conversations list/thread, Cases, KB, Settings, and Login, composed from shared patterns. The page-story restriction applies only to `web/src/stories/pages/**`; harness, primitive, and closure work MAY modify components. Triage MUST delete `concept/AiAgentGrammar`, quarantine `pages/ChatWithAgent`, and document `pages/InboxThread`.
 
 #### Scenario: Glob unchanged
 
-- GIVEN `web/.storybook/main.ts`
-- WHEN it is reviewed
-- THEN the stories glob `../src/stories/**/*.stories.tsx` is unchanged
+- GIVEN `main.ts`
+- WHEN reviewed
+- THEN the glob is unchanged
 
-#### Scenario: Components untouched
+#### Scenario: Scope
 
-- GIVEN the diff
-- WHEN it is reviewed
-- THEN no file under `web/src/components/**` is modified
+- GIVEN page-story-only diff
+- WHEN reviewed
+- THEN no component changes
+
+#### Scenario: Triage
+
+- GIVEN targeted stories
+- WHEN inspected
+- THEN grammar absent, ChatWithAgent quarantined, InboxThread disposed
 
 ### Requirement: R-PRD-PG-2 — Production Helper Boundary (Slice 2)
 
-The production helper closure MUST be available under `web/src/components/`, including EmptyState, DataTable, PageHeader, StatCard, PageFrame, StateMessage, and toneMaps. Production pages MUST import that closure from components; story wrappers MAY preserve existing story exports, but production code MUST NOT depend on story infrastructure.
-(Previously: helpers were defined in `stories/pages/_shared/`, and component imports from that directory were permitted.)
+The helper closure MUST include EmptyState, DataTable, PageHeader, StatCard, PageFrame, StateMessage, and toneMaps under components. Production pages MUST import components, not stories. The boundary test MUST permit only two compatibility tests to import wrappers.
 
-#### Scenario: Production imports use components
-- GIVEN a production page imports a shared helper
-- WHEN imports are scanned
-- THEN the helper resolves from `web/src/components/`, not `stories/pages/_shared/`
+#### Scenario: Component imports
+- GIVEN production imports a helper
+- WHEN scanned
+- THEN it resolves from components
 
-#### Scenario: Story compatibility remains
-- GIVEN an existing story imports a shared helper or wrapper export
-- WHEN the story suite runs
+#### Scenario: Compatibility
+- GIVEN a story imports a wrapper
+- WHEN the suite runs
 - THEN the export remains available and renders the same contract
 
-#### Scenario: Closure is complete
-- GIVEN production pages use PageFrame, StateMessage, or toneMaps
-- WHEN the boundary test inspects dependencies
-- THEN those dependencies are promoted alongside the four named helpers
+#### Scenario: Boundary
+
+- GIVEN either compatibility test imports a wrapper
+- WHEN tested
+- THEN it passes; production imports fail
+
+#### Scenario: Closure
+- GIVEN production uses a closure helper
+- WHEN inspected
+- THEN it is in the closure
 
 ### Requirement: R-PRD-PG-3 — Typed Mocks
 
