@@ -20,10 +20,13 @@ from app.services.audit import record_audit
 from app.services.realtime import stage_event
 from app.services import tukulpan
 from app.services import projects
+from app.services import costs, llm
 
 
 SDB_EVENT_LIMIT = 4 * 1024
 SDB_EVENT_HISTORY_LIMIT = 64
+TITLE_MAX_BYTES = 120
+TITLE_TIMEOUT_SECONDS = 5.0
 
 
 def _sdb_plan(spec: dict, tasks: list[dict]) -> dict:
@@ -468,6 +471,69 @@ def create_thread(session: Session, user: User) -> InternalChatThread:
     return thread
 
 
+def _bounded_title(value: str) -> str:
+    encoded = str(value or "").strip().encode("utf-8")[:TITLE_MAX_BYTES]
+    return encoded.decode("utf-8", errors="ignore")
+
+
+def _opening_message(session: Session, thread_id: int) -> InternalChatMessage | None:
+    return session.scalar(
+        select(InternalChatMessage)
+        .where(InternalChatMessage.thread_id == thread_id, InternalChatMessage.author == "admin")
+        .order_by(InternalChatMessage.created_at, InternalChatMessage.id)
+    )
+
+
+def _generate_thread_title(
+    session: Session, thread: InternalChatThread, response_message: InternalChatMessage,
+) -> None:
+    """Set a one-time, bounded title without affecting the response path."""
+    if thread.title is not None:
+        return
+    opening = _opening_message(session, thread.id)
+    fallback = _bounded_title(opening.content if opening else "")
+    try:
+        _, mode = costs.internal_thread_cost_state(session, thread.id)
+        if mode != "normal":
+            thread.title = fallback
+            return
+        settings = llm.get_settings()
+        provider = getattr(settings, "assistant_chat_provider", None)
+        try:
+            client = llm.openai_client(provider)
+        except TypeError:
+            client = llm.openai_client()
+        completion = client.chat.completions.create(
+            model=getattr(settings, "assistant_chat_model", llm.CHAT_MODEL),
+            messages=[{
+                "role": "user",
+                "content": "Create a concise title for this opening assistant request. Return title text only.\n\n"
+                           + (opening.content if opening else ""),
+            }],
+            temperature=0,
+            max_tokens=24,
+            timeout=TITLE_TIMEOUT_SECONDS,
+        )
+        choices = getattr(completion, "choices", [])
+        message = getattr(choices[0], "message", None) if choices else None
+        generated = _bounded_title(getattr(message, "content", "") if message else "")
+        if not generated:
+            thread.title = fallback
+            return
+        thread.title = generated
+        usage = getattr(completion, "usage", None)
+        costs.record_llm_cost(
+            session,
+            target=response_message,
+            call_key=f"{response_message.assistant_metadata.get('run_id', '')}:title",
+            model=getattr(settings, "assistant_chat_model", llm.CHAT_MODEL),
+            prompt_tokens=getattr(usage, "prompt_tokens", None),
+            completion_tokens=getattr(usage, "completion_tokens", None),
+        )
+    except Exception:
+        thread.title = fallback
+
+
 def submit_message(
     session: Session,
     thread: InternalChatThread,
@@ -574,6 +640,7 @@ def submit_message(
             )
             session.add(response_message)
             session.flush()
+            _generate_thread_title(session, thread, response_message)
             stage_event(
                 session,
                 type="message",

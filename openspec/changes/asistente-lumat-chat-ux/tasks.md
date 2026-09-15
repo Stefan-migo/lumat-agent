@@ -7,8 +7,8 @@
 
 ## Phase 2: Title Lifecycle and Backend Contracts
 
-- [ ] 2.1 **RED:** add tests for one-time title generation, normal cost gate, `record_llm_cost`, timeout/error/non-normal fallback, and bounded UTF-8 opening-message fallback; **GREEN:** update `app/services/agent_chat.py` without changing SSE, approval, recovery, attachments, or planning APIs.
-- [ ] 2.2 **RED:** extend `tests/integration/test_agent_chat_realtime.py` and `tests/integration/test_assistant_chat.py` for `?thread_id=` ownership, tier metadata, persisted recovery, and localized failure responses; **GREEN:** close contract gaps and verify `uv run pytest tests/`.
+- [x] 2.1 **RED:** add tests for one-time title generation, normal cost gate, `record_llm_cost`, timeout/error/non-normal fallback, and bounded UTF-8 opening-message fallback; **GREEN:** update `app/services/agent_chat.py` without changing SSE, approval, recovery, attachments, or planning APIs.
+- [x] 2.2 **RED:** extend `tests/integration/test_agent_chat_realtime.py` and `tests/integration/test_assistant_chat.py` for `?thread_id=` ownership, tier metadata, persisted recovery, and localized failure responses; **GREEN:** close contract gaps and verify `uv run pytest tests/`.
 
 ## Phase 3: Conversation Surface
 
