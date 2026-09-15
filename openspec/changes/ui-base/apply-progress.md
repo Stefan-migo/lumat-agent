@@ -249,3 +249,27 @@ against the design:
 
 - The "line-480 justification" is recorded as a reference to implementation rule 4
   rather than a line number, so the document does not break when the file grows.
+
+---
+
+## Verification — task 4.2 (automated half)
+
+Recorded on `feat/ui-base-design-system-docs` after the full stack was in place.
+
+| Check | Command | Result |
+|---|---|---|
+| Full suite | `cd web && npm test` | Passed, **76 files / 526 tests**. |
+| Typecheck | `cd web && npx tsc -b` | Clean. |
+| Storybook build | `cd web && npm run build-storybook` | Built; output `web/storybook-static` (gitignored). |
+| Quarantine exclusion | parsed `storybook-static/index.json` | **156 stories, zero** matching `AiAgentGrammar` / `ChatWithAgent` / `InboxThread`. |
+
+### Pending — manual smoke (not claimed)
+
+Task 4.2 also requires a manual browser smoke of the shell, viewport presets,
+dismissal, focus return, and quarantine exclusion. That has **not** been run: it
+needs a human in a browser, and jsdom geometry is explicitly not a substitute.
+Task 4.2 therefore stays open.
+
+This is the step that would have caught the double-shell defect; that defect was
+already found and fixed by static inspection during slice 3A, but the smoke still
+has to confirm the rendered result.
