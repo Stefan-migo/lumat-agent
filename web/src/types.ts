@@ -133,9 +133,9 @@ export interface InternalChatMessage { id: number; thread_id?: number; author: '
 export interface InternalChatResponse { thread: InternalChatThread; messages: InternalChatMessage[]; attachments?: AssistantAttachment[]; }
 export interface InternalChatThreadSummary {
   id: number;
-  title_or_preview: string | null;
+  title: string | null;
+  created_at: string | null;
   updated_at: string | null;
-  status: string;
   run_status: string | null;
   approval_status: string | null;
 }

@@ -42,7 +42,7 @@ describe("AgentChat", () => {
   it("loads bounded navigator entries and selects a thread", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const path = String(input);
-      if (path === "/panel/api/chat/threads?limit=20") return new Response(JSON.stringify({ threads: [{ id: 7, title_or_preview: "Follow-up", updated_at: null, status: "open", run_status: null, approval_status: null }] }), { status: 200 });
+      if (path === "/panel/api/chat/threads?limit=20") return new Response(JSON.stringify({ threads: [{ id: 7, title: "Follow-up", created_at: null, updated_at: null, run_status: null, approval_status: null }] }), { status: 200 });
       return new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 });
     });
     render(<AgentChat />);
@@ -56,7 +56,7 @@ describe("AgentChat", () => {
     setViewport(1024);
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const path = String(input);
-      if (path === "/panel/api/chat/threads?limit=20") return new Response(JSON.stringify({ threads: [{ id: 7, title_or_preview: "Desktop thread", updated_at: null, status: "open", run_status: null, approval_status: null }] }), { status: 200 });
+      if (path === "/panel/api/chat/threads?limit=20") return new Response(JSON.stringify({ threads: [{ id: 7, title: "Desktop thread", created_at: null, updated_at: null, run_status: null, approval_status: null }] }), { status: 200 });
       if (path === "/panel/api/chat/threads/7") return new Response(JSON.stringify({ thread: { id: 7, status: "open" }, messages: [] }), { status: 200 });
       return new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 });
     });

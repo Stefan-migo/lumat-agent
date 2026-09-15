@@ -278,7 +278,7 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
         <div className="command-center" data-tier={tier}>
         <section id="command-center-navigator" data-zone="navigator" data-zone-active={zoneActive("navigator")} role="region" aria-label="Thread navigator">
          <h2>Thread navigator</h2>
-         {navigatorError ? <StateMessage tone="danger" role="alert" title="Thread navigator unavailable" detail={navigatorError} /> : navigatorThreads.length > 0 ? navigatorThreads.map((item) => <button key={item.id} className="command-center__thread" onClick={() => void selectThread(item.id)} aria-current={thread?.id === item.id ? "page" : undefined}><strong>{item.title_or_preview || `Thread #${item.id}`}</strong><span>{item.status}</span></button>) : <StateMessage tone="info" role="status" title="No threads available" />}
+          {navigatorError ? <StateMessage tone="danger" role="alert" title="Thread navigator unavailable" detail={navigatorError} /> : navigatorThreads.length > 0 ? navigatorThreads.map((item) => <button key={item.id} className="command-center__thread" onClick={() => void selectThread(item.id)} aria-current={thread?.id === item.id ? "page" : undefined}><strong>{item.title || "Sin título"}</strong></button>) : <StateMessage tone="info" role="status" title="No threads available" />}
        </section>
        <section id="command-center-conversation" data-zone="conversation" data-zone-active={zoneActive("conversation")} role="region" aria-label="Conversation zone">
         <div className="ai-agent-grammar__thread-area" aria-label="Mensajes del chat interno" aria-live="polite">
