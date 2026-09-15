@@ -127,3 +127,47 @@ Review was explicitly declined for this candidate: `action: "declined"`,
 under ordinary repository policy. Note: RDD derived the candidate with
 `--base-ref=main`, so the offered candidate spanned the whole stack (17 files /
 1588 changed lines), not this 2-file slice.
+
+---
+
+## Work Unit — slice 3A: shell harness and shared closure (PR #193)
+
+### Status
+
+Delivered as **PR #193**, stacked on `feat/ui-base-touch-guard` (#192). Branch
+`feat/ui-base-harness`. Registers tasks **3.1** and **3.3**.
+
+### What changed
+
+| File | Action | Description |
+|---|---|---|
+| `web/.storybook/preview.ts` | Modified | Global `primitives.css` import; outer `withPanelShell` wrapping each story in the production `PanelShell` with a deterministic fixture user; `withPanelSurface` kept as the inner wrapper (DS-SHELL-7). |
+| `web/src/stories/pages/PanelEntry.stories.tsx` | Modified | Declares `parameters.panelShell = false` (its component IS `PanelShell`). |
+| `web/src/stories/domain/AppShell.stories.tsx` | Modified | Declares `parameters.panelShell = false` (`AppShell` renders `PanelShell`). |
+| `web/src/stories/pages/_shared/StateMessage.tsx` | Modified | Drops the duplicate rationale comment from the story re-export. |
+
+### Gatekeeper finding (caught before commit)
+
+The first pass applied `withPanelShell` to every story literally. That nested a
+second shell around the two stories that already own one — `PanelEntry`
+(`component: PanelShell`) and `AppShell` (`AppShell.tsx` returns `<PanelShell>`).
+No test could catch it: jsdom has no layout. Resolved by an explicit opt-out
+parameter read by the decorator, chosen by the maintainer.
+
+### Evidence
+
+| Evidence | Result |
+|---|---|
+| Full suite | `cd web && npm test` — passed, 79 files and 550 tests. |
+| Typecheck | `cd web && npx tsc -b` — clean. |
+| `git diff --check` | Clean. |
+| Rollback boundary | Revert `preview.ts` and the two `parameters.panelShell` lines; the removed comment is not load-bearing. |
+
+### Notes
+
+- The removed rationale comment was partly stale: it described a `.dashboard-shell`
+  scope that no longer exists in the codebase. The remaining contract is recorded
+  by `DS-UI-FRAME` in the spec.
+- Task 3.2 remains open (slice 3B).
+- RDD review was not re-run: the native route derives `--base-ref=main`, so the
+  candidate would be the whole stack rather than this slice.
