@@ -143,7 +143,9 @@
   .btn,
   .field__control,
   .popover__trigger,
-  .tooltip__trigger {
+  .tooltip__trigger,
+  .menu__trigger,
+  .menu__item {
     min-height: 44px;
   }
 }
@@ -459,6 +461,42 @@
     position-area: top;
   }
 }
+
+/* ---- Radix menu (2C-2 / CST-PRIM-7) ---- */
+.menu__trigger,
+.menu__item {
+  min-height: 40px;
+  font: inherit;
+}
+.menu__trigger {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--corp-border);
+  border-radius: var(--corp-radius);
+  background: var(--corp-bg);
+  color: var(--corp-fg);
+  cursor: pointer;
+}
+.menu__content {
+  min-width: 12rem;
+  padding: var(--space-1);
+  border: 1px solid var(--corp-border);
+  border-radius: var(--corp-radius);
+  background: var(--corp-bg);
+  color: var(--corp-fg);
+  box-shadow: var(--shadow-3);
+}
+.menu__item {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--corp-radius);
+  cursor: pointer;
+}
+.menu__item:focus,
+.menu__item:hover { background: var(--corp-surface-hover); outline: none; }
+.menu__trigger:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.menu__trigger:disabled,
+.menu__item[data-disabled] { opacity: 0.5; cursor: not-allowed; }
 
 /* ---- EmptyState, Pagination, KPI, KpiGrid (B10) ---- */
 .empty-state {
