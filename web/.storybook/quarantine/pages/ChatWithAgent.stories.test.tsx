@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ChatWithAgentView } from "./ChatWithAgent.stories";
-import { agentChatMessages } from "./_shared/mockData/chat";
+import { agentChatMessages } from "../../../src/stories/pages/_shared/mockData/chat";
 
 describe("ChatWithAgent Default (R-PRD-PG-11)", () => {
   it("renders the page header, every chat bubble, per-message avatars and idle status", () => {

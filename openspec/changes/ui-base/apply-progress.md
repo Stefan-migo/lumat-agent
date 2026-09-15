@@ -171,3 +171,42 @@ parameter read by the decorator, chosen by the maintainer.
 - Task 3.2 remains open (slice 3B).
 - RDD review was not re-run: the native route derives `--base-ref=main`, so the
   candidate would be the whole stack rather than this slice.
+
+---
+
+## Work Unit — slice 3B: story triage (PR #194)
+
+### Status
+
+Delivered as **PR #194**, stacked on `feat/ui-base-harness` (#193). Branch
+`feat/ui-base-story-triage`. Registers task **3.2**. Gated by the orchestrator:
+renames tracked, imports resolved explicitly, no call sites needed updating.
+
+### What changed
+
+| Path | Action | Description |
+|---|---|---|
+| `web/src/stories/concept/AiAgentGrammar.stories.tsx` | Deleted | Retired concept set. |
+| `web/src/stories/concept/AiAgentGrammar.stories.test.tsx` | Deleted | Retired concept set. |
+| `web/src/stories/pages/ChatWithAgent.stories.tsx` | Moved | → `web/.storybook/quarantine/pages/`, `git mv`, imports re-rooted through `../../../src/`. |
+| `web/src/stories/pages/ChatWithAgent.stories.test.tsx` | Moved | Same. |
+| `web/src/stories/pages/InboxThread.stories.tsx` | Moved | Same. |
+| `web/src/stories/pages/InboxThread.stories.test.tsx` | Moved | Same. |
+| `web/.storybook/quarantine/README.md` | Created | Quarantine marker: contents, reason, and the two discovery rules. |
+
+### Evidence
+
+| Evidence | Result |
+|---|---|
+| Full suite | `cd web && npm test` — passed, 76 files and 526 tests (was 79/550: the three retired test files no longer run). |
+| Typecheck | `cd web && npx tsc -b` — clean. |
+| Renames | `git diff -M` shows the four moves as renames. |
+| Discovery | `main.ts` glob `../src/stories/**/*.stories.tsx` no longer matches the moved stories; `vite.config.ts` exclude already covered their tests. |
+
+### Notes
+
+- `web/tsconfig.json` includes only `src`, so quarantined files are outside
+  `tsc -b` coverage. Every relative import in the moved files was resolved
+  against real paths explicitly rather than assumed.
+- `main.ts` and `preview.ts` were not touched.
+- RDD review not re-run, same stacked-candidate scoping reason as the prior slices.

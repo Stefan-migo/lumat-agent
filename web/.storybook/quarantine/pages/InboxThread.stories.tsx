@@ -1,15 +1,15 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react";
-import { FlashMessage } from "./_shared/FlashMessage";
-import { PageFrame } from "./_shared/PageFrame";
-import { StateMessage } from "./_shared/StateMessage";
-import { Textarea } from "../../components/primitives/Textarea";
-import { Button } from "../../components/primitives/Button";
-import { Avatar } from "../../components/primitives/Avatar";
-import { conversations, messages } from "./_shared/mockData/conversations";
-import { clients } from "./_shared/mockData/clients";
-import { conversationLabel } from "./_shared/toneMaps";
-import type { Conversation } from "../../types";
+import { FlashMessage } from "../../../src/stories/pages/_shared/FlashMessage";
+import { PageFrame } from "../../../src/stories/pages/_shared/PageFrame";
+import { StateMessage } from "../../../src/stories/pages/_shared/StateMessage";
+import { Textarea } from "../../../src/components/primitives/Textarea";
+import { Button } from "../../../src/components/primitives/Button";
+import { Avatar } from "../../../src/components/primitives/Avatar";
+import { conversations, messages } from "../../../src/stories/pages/_shared/mockData/conversations";
+import { clients } from "../../../src/stories/pages/_shared/mockData/clients";
+import { conversationLabel } from "../../../src/stories/pages/_shared/toneMaps";
+import type { Conversation } from "../../../src/types";
 
 const HOURS_24 = 24 * 60 * 60 * 1000;
 const STORY_NOW = Date.parse("2026-08-20T12:00:00-04:00");

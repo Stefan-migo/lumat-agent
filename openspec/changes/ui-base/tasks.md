@@ -40,7 +40,7 @@ Chain strategy: stacked-to-main
 ## Phase 3: Harness and Story Ownership
 
 - [x] 3.1 Modify `web/.storybook/preview.ts`: global `primitives.css`, outer `withPanelShell` with stable user/`PanelShell`, inner `withPanelSurface`, and token-aligned viewport presets. — PR #193. Shell-owning stories opt out with `parameters.panelShell = false` (PanelEntry, AppShell) so the harness never nests two shells.
-- [ ] 3.2 Delete `web/src/stories/concept/AiAgentGrammar.{stories.tsx,stories.test.tsx}`; move `ChatWithAgent.*` and `InboxThread.*` pairs to `web/.storybook/quarantine/pages/` with the README marker.
+- [x] 3.2 Delete `web/src/stories/concept/AiAgentGrammar.{stories.tsx,stories.test.tsx}`; move `ChatWithAgent.*` and `InboxThread.*` pairs to `web/.storybook/quarantine/pages/` with the README marker. — PR #194. Moves tracked as renames; `main.ts` and `preview.ts` untouched.
 - [x] 3.3 Complete `web/src/components/shared/` helper closure without story imports; verify Dashboard, Clientes list/ficha, Conversations list/thread, Cases, KB, Settings, and Login stories remain under `web/src/stories/pages/`, with `main.ts` glob unchanged. — PR #193.
 
 ## Phase 4: Documentation and Verification

@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { PageFrame } from "./_shared/PageFrame";
-import { Textarea } from "../../components/primitives/Textarea";
-import { Button } from "../../components/primitives/Button";
-import { Avatar } from "../../components/primitives/Avatar";
-import { agentChatMessages, agentStatus, type AgentChatRole } from "./_shared/mockData/chat";
-import { PlanCard } from "../../components/pages/AgentChat";
+import { PageFrame } from "../../../src/stories/pages/_shared/PageFrame";
+import { Textarea } from "../../../src/components/primitives/Textarea";
+import { Button } from "../../../src/components/primitives/Button";
+import { Avatar } from "../../../src/components/primitives/Avatar";
+import { agentChatMessages, agentStatus, type AgentChatRole } from "../../../src/stories/pages/_shared/mockData/chat";
+import { PlanCard } from "../../../src/components/pages/AgentChat";
 
 /** Friendly label + avatar initials per chat role (R-PRD-PG-12/D2). Distinct
  *  names so the per-message Avatar initials differ between admin and agent.
