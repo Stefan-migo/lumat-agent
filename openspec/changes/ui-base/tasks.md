@@ -32,9 +32,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: First-Slice Primitives
 
-- [ ] 2.1 Make `web/src/components/primitives/` native popover/tooltip/dropdown presentation, dismissal, focus, and containing-block fallback; add Testing Library keyboard/focus/state tests first.
-- [ ] 2.2 Implement `<dialog>` modal and native combobox-class input/listbox in `web/src/components/primitives/`; test showModal/close, focus return, roles, keyboard navigation, and states first.
-- [ ] 2.3 Implement CSS-only sidebar rail and skeleton, plus Radix menu via `@radix-ui/react-dropdown-menu`; update `web/package.json`/lockfile and test 40px/44px sizing, tokens, labels, and keyboard states.
+- [x] 2.1 Make `web/src/components/primitives/` native popover/tooltip/dropdown presentation, dismissal, focus, and containing-block fallback; add Testing Library keyboard/focus/state tests first. — PR #187. The dropdown lands as the Radix menu in 2.3.
+- [x] 2.2 Implement `<dialog>` modal and native combobox-class input/listbox in `web/src/components/primitives/`; test showModal/close, focus return, roles, keyboard navigation, and states first. — PR #188 and #189.
+- [x] 2.3 Implement CSS-only sidebar rail and skeleton, plus Radix menu via `@radix-ui/react-dropdown-menu`; update `web/package.json`/lockfile and test 40px/44px sizing, tokens, labels, and keyboard states. — PR #190 and #191.
+- [x] 2.4 **Added post-slice (gatekeeper finding):** make the 44px touch rule executable — the D7 test asserts exactly one `@media (hover: none)` block plus its required selector set, and `.combobox__option` rejoins the block. — PR #192.
 
 ## Phase 3: Harness and Story Ownership
 
