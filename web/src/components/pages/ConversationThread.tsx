@@ -13,7 +13,7 @@ import { StateMessage } from "../shared/StateMessage";
 import { conversationLabel } from "../shared/toneMaps";
 import { realtimeClient, type ConnectionStatus } from "../../realtime";
 
-export interface ConversationThreadProps { conversationId?: number; data?: ThreadData | null; state?: AsyncDataState; customerName?: (id: number) => string; refreshKey?: number; onMutate?: () => void; onBack?: () => void; interactive?: boolean; }
+export interface ConversationThreadProps { conversationId?: number; data?: ThreadData | null; state?: AsyncDataState | "stale"; customerName?: (id: number) => string; refreshKey?: number; onMutate?: () => void; onBack?: () => void; interactive?: boolean; }
 export function NoReplyNote() { return <StateMessage tone="info" role="status" title="Canal automático" detail="Este es un canal automático — no respondas a este mensaje (HH-5)." />; }
 function messageAuthor(message: Message, customerId: number, customerName?: (id: number) => string) {
   return message.direction === "inbound"
@@ -89,7 +89,7 @@ export function ConversationThread({ conversationId, data: controlledData, state
   const loadError = fetched.error;
   const loadTitle = loadError instanceof ApiError && loadError.status === 401 ? "Sesión requerida" : loadError instanceof ApiError && loadError.status === 403 ? "No tienes permiso para ver este panel" : "No pudimos cargar la conversación";
   const displayName = conversation ? (conversation.customer?.name ?? customerName?.(conversation.customer_id) ?? `Cliente #${conversation.customer_id}`) : undefined;
-  return <PageFrame className="conversations-page" headerClassName="dashboard-header" title="Conversación" meta={conversation ? <span className="dashboard-meta">#{conversation.id} · {displayName} · {conversation.created_at?.slice(0, 10) ?? "—"}</span> : undefined} state={state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando conversación" /> : state === "error" ? <><StateMessage tone="danger" role="alert" title={loadTitle} /><Button variant="secondary" onClick={refresh}>Reintentar</Button></> : null}>
+  return <PageFrame className="conversations-page" headerClassName="dashboard-header" title="Conversación" meta={conversation ? <span className="dashboard-meta">#{conversation.id} · {displayName} · {conversation.created_at?.slice(0, 10) ?? "—"}</span> : undefined} state={state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando conversación" /> : state === "error" ? <><StateMessage tone="danger" role="alert" title={loadTitle} /><Button variant="secondary" onClick={refresh}>Reintentar</Button></> : state === "stale" ? <StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="Mostramos la información disponible." /> : null}>
       {interactive && onBack ? <div className="conversation-back"><Button variant="secondary" onClick={onBack}>Volver a conversaciones</Button></div> : null}
         {connection !== "connected" && <p className="realtime-status realtime-status--info" role="status"><span aria-hidden="true">ⓘ</span>Conexión en tiempo real: {connection === "reconnecting" ? "reconectando" : "desconectada"}. La historia persistida permanece disponible.</p>}
        {state === "loading" ? null : !data || messages.length === 0 ? <EmptyState title="No hay registros" description="Esta conversación no tiene mensajes para mostrar." /> : <div className="conversation-workspace">
