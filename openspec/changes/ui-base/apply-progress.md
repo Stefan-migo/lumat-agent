@@ -1,4 +1,4 @@
-# Apply Progress: UI Base — PR 1 Foundation and Guards
+# Apply Progress: UI Base
 
 ## Mode
 
@@ -61,11 +61,10 @@ None — implementation matches the assigned Phase 1 design and task scope.
 
 ## Remaining Tasks
 
-- [ ] 2.1 Native popover/tooltip/dropdown mechanics and tests.
-- [ ] 2.2 Native dialog and combobox-class control and tests.
-- [ ] 2.3 CSS-only rail/skeleton and narrow Radix menu.
 - [ ] 3.1–3.3 Storybook harness and story ownership/triage.
 - [ ] 4.1–4.2 Documentation and final verification.
+
+Delivered: 2.1–2.3 across PRs #187–#191; 2.4 (post-slice touch guard) in PR #192.
 
 ## Workload / PR Boundary
 
@@ -73,3 +72,58 @@ None — implementation matches the assigned Phase 1 design and task scope.
 - Current work unit: PR 1 — foundation and guards.
 - Boundary: starts at the unchecked Phase 1 foundation tasks and ends after boundary, viewport-drift, and Vitest quarantine guards plus focused/full verification.
 - Estimated review budget impact: 4 authored code/config/task files plus this evidence; well below the 400-line review budget. No Phase 2–4 implementation included.
+
+---
+
+## Work Unit — touch guard (PR #192)
+
+### Status
+
+Delivered as **PR #192**, stacked on `feat/ui-base-radix-menu` (#191). Branch
+`feat/ui-base-touch-guard`, commit `24e55b8b`. Registers task **2.4**, which was
+added post-slice from the gatekeeper finding.
+
+### What changed
+
+| File | Action | Description |
+|---|---|---|
+| `web/src/components/primitives/primitives.css` | Modified | `.combobox__option` rejoins the single D7 `@media (hover: none)` block; the block comment now names the test that enforces the one-block rule. |
+| `web/src/tokens/tokens.test.ts` | Modified | D7 test rewritten: asserts exactly one `@media (hover: none)` block plus its required selector set. |
+| `openspec/changes/ui-base/tasks.md` | Modified | Registered 2.4 and reconciled the Phase 2 checkboxes. |
+| `openspec/changes/ui-base/apply-progress.md` | Modified | This entry. |
+
+### Why this exists
+
+The same defect shipped twice (combobox, then menu): each slice added its own
+parallel `@media (hover: none)` block instead of extending the central one. The
+rule lived only in a comment, and the D7 test used a non-global regex, so
+`.match()` returned the first block and a second one passed green. The test could
+not fail on the regression it was meant to guard.
+
+The correction was also asymmetric: `.menu__item` was moved into the block, but
+`.combobox__option` was not, so listbox options sat below the 44px touch target.
+The combobox input stays covered by `.field__control`.
+
+### Evidence
+
+| Evidence | Result |
+|---|---|
+| Focused test | `cd web && npm test -- tokens` — passed, 2 files and 20 tests. |
+| Negative check | Injecting a second `@media (hover: none)` block fails with `touch sizing must live in exactly one @media (hover: none) block: expected 2 to be 1`; the injected block was removed afterwards. |
+| Full suite | `cd web && npm test` — passed, 79 files and 550 tests. |
+| Typecheck | `cd web && npx tsc -b` — clean. |
+| Rollback boundary | Revert the two source files. No dependency, config, or spec change. |
+
+### Spec Check
+
+No spec change. `CST-PRIM-3 — Control Height and Touch Target`
+(`openspec/specs/corp-primitives/spec.md`) already requires the 44px touch target;
+this slice makes the existing requirement executable.
+
+### RDD
+
+Review was explicitly declined for this candidate: `action: "declined"`,
+`consent: "declined_this_candidate"`, no review record created; delivery proceeds
+under ordinary repository policy. Note: RDD derived the candidate with
+`--base-ref=main`, so the offered candidate spanned the whole stack (17 files /
+1588 changed lines), not this 2-file slice.
