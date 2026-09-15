@@ -567,7 +567,7 @@ def submit_message(
             response_message = InternalChatMessage(
                 thread_id=thread.id,
                 author="agent",
-                content=result.get("response") or "I could not produce an answer. Please try again.",
+                content=result.get("response") or "No pude generar una respuesta. Inténtalo nuevamente.",
                 status="processed",
                 completed_at=datetime.now(timezone.utc),
                 assistant_metadata={"run_id": run_id},
@@ -582,7 +582,7 @@ def submit_message(
             )
     except Exception as exc:
         message.status = "failed"
-        message.error = "The agent could not process this message. Retry it."
+        message.error = "El agente no pudo procesar este mensaje. Reinténtalo."
         message.completed_at = datetime.now(timezone.utc)
         message.assistant_metadata = {**(message.assistant_metadata or {}), "run_id": run_id}
         thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
