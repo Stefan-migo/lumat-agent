@@ -154,6 +154,8 @@ export interface PanelShellProps {
   notificationState?: NotificationState;
   notifications?: PanelNotification[];
   onMarkAllNotificationsRead?: () => void | Promise<void>;
+  focusMode?: boolean;
+  onFocusModeChange?: (focused: boolean) => void;
 }
 
 export type NotificationState = { status: "loading" } | { status: "ready"; unread: number } | { status: "error" };
@@ -255,6 +257,8 @@ export function PanelShell({
   notificationState = { status: "loading" },
   notifications = [],
   onMarkAllNotificationsRead,
+  focusMode: controlledFocusMode,
+  onFocusModeChange,
 }: PanelShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
@@ -266,10 +270,54 @@ export function PanelShell({
   const notificationsRef = useRef<HTMLDivElement>(null);
   const bellRef = useRef<HTMLButtonElement>(null);
   const notificationCloseRef = useRef<HTMLButtonElement>(null);
+  const focusTriggerRef = useRef<HTMLButtonElement>(null);
+  const focusCloseRef = useRef<HTMLButtonElement>(null);
+  const focusRegionRef = useRef<HTMLDivElement>(null);
+  const [internalFocusMode, setInternalFocusMode] = useState(false);
+  const focusMode = controlledFocusMode ?? internalFocusMode;
+  const setFocusMode = (focused: boolean) => {
+    if (controlledFocusMode === undefined) setInternalFocusMode(focused);
+    onFocusModeChange?.(focused);
+  };
+
+  const closeFocusMode = () => {
+    setFocusMode(false);
+    queueMicrotask(() => focusTriggerRef.current?.focus());
+  };
 
   const closeDrawer = () => {
     setDrawerOpen(false);
     queueMicrotask(() => menuButtonRef.current?.focus());
+  };
+
+  useEffect(() => {
+    if (!focusMode) return;
+    focusCloseRef.current?.focus();
+    const handleEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeFocusMode();
+      }
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [focusMode]);
+
+  const keepFocusInFocusMode = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Tab") return;
+    const focusable = [...(focusRegionRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+    ) ?? [])];
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
 
   useEffect(() => {
@@ -287,7 +335,7 @@ export function PanelShell({
     }
 
     const previousOverflow = document.body.style.overflow;
-    contentArea.setAttribute("inert", "");
+    if (drawerOpen) contentArea.setAttribute("inert", "");
     document.body.style.overflow = "hidden";
     const handleEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") closeDrawer();
@@ -363,10 +411,10 @@ export function PanelShell({
   };
 
   return (
-    <div className={`panel-shell${collapsed ? " panel-shell--collapsed" : ""}${inspector ? " panel-shell--with-inspector" : ""}`}>
+    <div className={`panel-shell${collapsed ? " panel-shell--collapsed" : ""}${inspector ? " panel-shell--with-inspector" : ""}${focusMode ? " panel-shell--focus-mode" : ""}`}>
       <a className="panel-shell__skip-link" href="#panel-main-content">Saltar al contenido</a>
 
-      <aside id="panel-shell-sidebar" className="panel-shell__sidebar panel-shell__rail" aria-label="Panel de navegación">
+      <aside id="panel-shell-sidebar" className="panel-shell__sidebar panel-shell__rail" aria-label="Panel de navegación" aria-hidden={focusMode || undefined}>
         <div className="panel-shell__sidebar-inner">
           <Brand compact={collapsed} />
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} collapsed={collapsed} />
@@ -418,7 +466,7 @@ export function PanelShell({
         </section>
       </div>
 
-      <div ref={contentAreaRef} className="panel-shell__content-area">
+      <div ref={contentAreaRef} className="panel-shell__content-area" onKeyDown={focusMode ? keepFocusInFocusMode : undefined}>
         <div className="panel-shell__header-row">
           <header className="panel-shell__header" aria-label="Encabezado de la vista">
             <button
@@ -440,8 +488,18 @@ export function PanelShell({
                  </>}
                </ol>
              </nav>
-             <div className="panel-shell__header-actions">
-               <div ref={notificationsRef} className="panel-shell__notifications">
+              <div className="panel-shell__header-actions">
+                <button
+                  ref={focusTriggerRef}
+                  type="button"
+                  className="panel-shell__header-action"
+                  aria-expanded={focusMode}
+                  aria-controls="panel-main-content"
+                  aria-label={focusMode ? "Modo foco activo" : "Entrar en modo foco"}
+                  title={focusMode ? "Modo foco activo" : "Entrar en modo foco"}
+                  onClick={() => focusMode ? closeFocusMode() : setFocusMode(true)}
+                >{focusMode ? "×" : "Focus"}</button>
+                <div ref={notificationsRef} className="panel-shell__notifications">
                <button ref={bellRef} type="button" className="panel-shell__header-action" aria-expanded={notificationsOpen} aria-haspopup="dialog" aria-label={notificationState.status === "loading" ? "Cargando notificaciones" : notificationState.status === "error" ? "Notificaciones no disponibles" : notificationState.unread > 0 ? `Notificaciones (${notificationState.unread} sin leer)` : "Notificaciones"} title="Notificaciones" onClick={() => setNotificationsOpen((open) => !open)}>
                  <BellIcon />
                  {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
@@ -463,8 +521,9 @@ export function PanelShell({
             </div>
           ) : null}
         </div>
-        <div id="panel-main-content" className="panel-shell__content" tabIndex={-1}>
-          {children}
+         <div ref={focusRegionRef} id="panel-main-content" className="panel-shell__content" tabIndex={-1} role={focusMode ? "region" : undefined} aria-label={focusMode ? "Modo foco" : undefined}>
+           {focusMode ? <button ref={focusCloseRef} type="button" className="panel-shell__focus-close" aria-label="Salir del modo foco" onClick={closeFocusMode}>Salir del modo foco</button> : null}
+           {children}
         </div>
        </div>
        <nav className={`panel-shell__footer-nav${user.role === "admin" ? " panel-shell__footer-nav--admin" : ""}`} aria-label="Navegación inferior">
@@ -473,7 +532,7 @@ export function PanelShell({
            return <button key={view} type="button" className={view === "chat" ? "panel-shell__footer-nav--primary" : undefined} aria-current={currentView === view ? "page" : undefined} aria-label={item.label} onClick={() => handleNavigation(view)}><item.Icon /><span>{item.label}</span></button>;
          })}
        </nav>
-       {inspector ? <aside className="panel-shell__inspector" aria-label="Inspector operacional">{inspector}</aside> : null}
+        {inspector ? <aside className="panel-shell__inspector" aria-label="Inspector operacional" aria-hidden={focusMode || undefined}>{inspector}</aside> : null}
     </div>
   );
 }

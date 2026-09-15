@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PanelShell } from "./PanelShell";
 import type { User } from "../../types";
@@ -11,6 +11,21 @@ function sidebar(container: HTMLElement) {
 }
 
 describe("PanelShell rail contract (2C-1)", () => {
+  it("enters focus mode from the keyboard, traps focus, and restores the trigger on Escape", async () => {
+    const user = userEvent.setup();
+    render(<PanelShell user={admin}><button type="button">Content action</button></PanelShell>);
+    const trigger = screen.getByRole("button", { name: /modo foco/i });
+    trigger.focus();
+
+    await user.keyboard("[Enter]");
+    expect(screen.getByRole("region", { name: /modo foco/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /salir del modo foco/i })).toHaveFocus();
+
+    await user.keyboard("[Escape]");
+    expect(screen.queryByRole("region", { name: /modo foco/i })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
   it("renders the navigation landmark with named items and marks the active item", () => {
     const { container } = render(
       <PanelShell user={admin} currentView="clients">

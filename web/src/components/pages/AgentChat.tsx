@@ -64,6 +64,7 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
   const [error, setError] = useState<string | null>(null);
   const [connection, setConnection] = useState<ConnectionStatus>("disconnected");
   const [stream, setStream] = useState("");
+  const [streamRecoverable, setStreamRecoverable] = useState(false);
   const [plan, setPlan] = useState<AssistantPlan | null>(null);
   const [approval, setApproval] = useState<AssistantApproval | null>(null);
   const [evidence, setEvidence] = useState<AssistantEvidence[]>([]);
@@ -87,13 +88,27 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
 
   const openStream = async (id: number, run: string) => {
     setRunId(run);
-    try { await streamChatEvents(id, run, handleEvent); } catch (reason: unknown) { setError(reason instanceof ApiError ? reason.detail : "El stream del asistente falló"); }
+    try {
+      await streamChatEvents(id, run, handleEvent);
+      try {
+        const persisted = await getChatThread(id);
+        setMessages(persisted.messages);
+        setStream("");
+        setStreamRecoverable(false);
+      } catch {
+        setStreamRecoverable(true);
+      }
+    } catch (reason: unknown) {
+      setStreamRecoverable(true);
+      setError(reason instanceof ApiError ? `${reason.detail} La ejecución es recuperable.` : "El stream del asistente falló; la ejecución es recuperable.");
+    }
     finally { setProcessing(false); }
   };
 
   const loadThread = (result: InternalChatResponse) => {
       const state = result.thread.assistant_state;
       setThread(result.thread);
+      setStreamRecoverable(false);
       setMessages(result.messages);
       setPlan(result.thread.current_plan ?? null);
       setApproval(state?.approval ?? null);
@@ -172,15 +187,19 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
        const result = await sendChatMessage(thread.id, submitted, attachments.map((item) => item.id));
       setMessages((current) => [...current, result.message]);
       const run = result.message.assistant_metadata?.run_id;
-      if (run) { setProcessing(true); void openStream(thread.id, run); }
-      else setProcessing(false);
+       if (run) {
+         setProcessing(true);
+         void openStream(thread.id, run);
+       } else {
+         setProcessing(false);
+         try {
+           const current = await getChatThread(thread.id);
+           setMessages(current.messages);
+         } catch {
+           // The submitted row remains visible when polling is temporarily unavailable.
+         }
+       }
       if (result.message.status === "failed") setError("No se pudo procesar el mensaje");
-      try {
-        const current = await getChatThread(thread.id);
-        setMessages(current.messages);
-      } catch {
-        // The submitted row remains visible when polling is temporarily unavailable.
-      }
     } catch (reason: unknown) {
       setError(reason instanceof ApiError ? reason.detail : "No se pudo procesar el mensaje");
       setMessages((current) => [...current, { id: Date.now(), thread_id: thread.id, author: "admin", content: submitted, status: "failed", error: "temporary" }]);
@@ -215,7 +234,7 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
     } catch (reason: unknown) { setError(reason instanceof ApiError ? reason.detail : "No pudimos actualizar el plan"); setProcessing(false); }
   };
 
-  const state = loading ? <StateMessage tone="info" role="status" spinner title="Cargando chat" /> : error ? <StateMessage tone="danger" role="alert" title={error} /> : null;
+   const state = loading ? <StateMessage tone="info" role="status" spinner title="Cargando chat" /> : error ? <StateMessage tone="danger" role="alert" title={error} /> : null;
   const canRenderThread = !loading && thread !== null;
   const composerDisabled = loading || processing || thread === null;
    return <PageFrame title="Asistente Lumat" meta="Chat interno con el agente virtual." actions={<div><Button variant="secondary" onClick={() => void openSession()} disabled={composerDisabled || cortex?.status === "active"}>Open planning session</Button>{cortex?.status === "active" ? <Button onClick={() => void closeSession()}>Close session</Button> : null}</div>} state={state}>
@@ -223,12 +242,13 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
       {handoff?.status === "pending" ? <section role="status"><strong>Approved plan pending</strong><p>{report?.contenido ?? "The closing report is ready for approval."}</p></section> : null}
      {capabilities ? <AssistantCapabilitiesView capabilities={capabilities} /> : null}
      <div className="ai-agent-grammar__thread-area" aria-label="Mensajes del chat interno" aria-live="polite">
-       {connection !== "connected" && <p role="status">Conexión en tiempo real: {connection === "reconnecting" ? "reconectando" : "desconectada"}.</p>}
+         {connection !== "connected" && <p role="status">Conexión en tiempo real: {connection === "reconnecting" ? "reconectando" : "desconectada"}.</p>}
+         {streamRecoverable ? <p role="status" aria-label="Ejecución recuperable">La ejecución no está confirmada; es recuperable desde el historial persistido, que sigue siendo la fuente de verdad.</p> : null}
       {canRenderThread && messages.length === 0 && !error ? <StateMessage tone="info" role="status" title="Chat interno vacío" detail="Escribe un mensaje para iniciar la conversación." /> : null}
         {canRenderThread && processing ? <StateMessage tone="info" role="status" title={lifecycle === "approval_pending" ? "Esperando aprobación" : "Procesando respuesta"} /> : null}
         {canRenderThread && plan ? <PlanCard plan={plan} approval={approval} busy={processing} onApprove={approval && (approval.status === "pending" || plan.status === "pending") ? () => void approvalAction(false) : undefined} onReject={approval && (approval.status === "pending" || plan.status === "pending") ? () => void approvalAction(true) : undefined} /> : null}
         {evidence.length > 0 ? <EvidenceList evidence={evidence} /> : null}
-       {stream && <p role="status" aria-label="Respuesta del agente en curso">{stream}</p>}
+       {stream && <p role="status" aria-label={streamRecoverable ? "Respuesta recuperable no persistida" : "Respuesta del agente en curso"}>{stream}</p>}
       {canRenderThread ? messages.map((message) => {
         const author = message.author === "agent" ? "Agente Lumat" : "Administrador";
         const outbound = message.author === "admin";
