@@ -106,3 +106,14 @@
 - **F5 resolved:** The bounded navigator list now loads when `desktop || activeZone === "navigator"`; `desktop` is included in the effect dependencies. Added one 1024px test that loads and selects an entry without clicking the hidden zone tabs.
 - **TDD evidence:** New test RED against active-zone-only gating; GREEN after the condition/dependency change. Focused suite: `cd web && npm test -- --run src/components/pages/AgentChat.test.tsx` — PASS, 1 file and 23 tests.
 - **Scope:** Only `AgentChat.tsx`, `AgentChat.test.tsx`, and this progress note are part of this correction; no CSS, conversation, shell, or task artifact changes.
+
+### Final Verified State (PR 3)
+
+Earlier numbers in this section are chronological and superseded. The slice closed on:
+
+- Full frontend suite: `cd web && npm test -- --run` — PASS, **76 files and 540 tests**.
+- Focused suite: `cd web && npm test -- --run src/components/pages/AgentChat.test.tsx src/components/pages/ConversationThread.test.tsx` — PASS.
+- Build/typecheck: `cd web && npm run build` — PASS (`tsc -b` and Vite build).
+- `git diff --check` — clean.
+- Diff: 7 files, 207 insertions / 371 deletions (354 of the deletions are the two removed quarantine files).
+- Ledger: the work-unit attempt settled `passed` with `changed_line_budget_exceeded` (653 vs 400 declared), resolved by a maintainer-scoped objective reset.
