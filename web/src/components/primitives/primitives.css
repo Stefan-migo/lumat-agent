@@ -233,6 +233,14 @@
   object-fit: cover;
 }
 
+/* ---- Skeleton (2C-1): CSS-only decorative loading placeholder ---- */
+.skeleton {
+  display: block;
+  min-height: var(--space-2);
+  border-radius: var(--corp-radius);
+  background: var(--corp-surface-hover);
+}
+
 /* ---- Table, Tabs, Spinner, Modal, FlashMessage (B9) ---- */
 /* .table consumes catalog `table` slots (CORP-TABLE-1): aliases resolve to the
    same values, so this is contract alignment with zero visual change. */
