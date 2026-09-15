@@ -37,9 +37,9 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Production Composition and Migration (PR 3)
 
-- [ ] 3.1 **RED [M]:** Add Vitest scenarios for desktop order and mobile single-zone selection at `<640` and `640–1023`, preserving selection/actions; add `ConversationThread.test.tsx` coverage for migrated InboxThread scenarios.
-- [ ] 3.2 **GREEN [M]:** Compose navigator, conversation, and read-only context in `AgentChat.tsx`; keep `AppShell.tsx` route-stable and add token-backed tiers/visibility in `web/src/components/primitives/primitives.css`.
-- [ ] 3.3 **GREEN [S]:** Move required story scenarios to `web/src/components/pages/ConversationThread.{tsx,test.tsx}` and delete `web/.storybook/quarantine/pages/InboxThread.{stories.tsx,stories.test.tsx}`; verify no prototype or fabricated catalog ownership remains.
+- [x] 3.1 **RED [M]:** Add Vitest scenarios for desktop order and mobile single-zone selection at `<640` and `640–1023`, preserving selection/actions; add `ConversationThread.test.tsx` coverage for migrated InboxThread scenarios.
+- [x] 3.2 **GREEN [M]:** Compose navigator, conversation, and read-only context in `AgentChat.tsx`; keep `AppShell.tsx` route-stable and add token-backed tiers/visibility in `web/src/components/primitives/primitives.css`.
+- [x] 3.3 **GREEN [S]:** Move required story scenarios to `web/src/components/pages/ConversationThread.{tsx,test.tsx}` and delete `web/.storybook/quarantine/pages/InboxThread.{stories.tsx,stories.test.tsx}`; verify no prototype or fabricated catalog ownership remains.
 
 ## Phase 4: Browser Verification (PR 4)
 
