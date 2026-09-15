@@ -7,6 +7,7 @@ const meta = {
   component: AppShell,
   parameters: {
     layout: 'fullscreen',
+    panelShell: false,
     docs: {
       description: {
         component:
