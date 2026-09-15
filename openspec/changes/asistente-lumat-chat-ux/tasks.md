@@ -3,7 +3,7 @@
 ## Phase 1: Persistence and API Foundation
 
 - [x] 1.1 **RED:** add migration/model tests in `tests/integration/test_migrations.py` for nullable `InternalChatThread.title`; **GREEN:** create `db/migrations/025_internal_chat_thread_title.sql` and update `app/models.py`.
-- [ ] 1.2 **RED:** extend `tests/integration/test_assistant_chat.py` for explicit creation, non-empty filtering, ordering, timestamps, ownership, rename, delete, and Spanish failures; **GREEN:** update `app/panel/api/serializers.py`, `app/panel/api/routes/chat.py`, `web/src/api.ts`, and `web/src/types.ts`.
+- [x] 1.2 **RED:** extend `tests/integration/test_assistant_chat.py` for explicit creation, non-empty filtering, ordering, timestamps, ownership, rename, delete, and Spanish failures; **GREEN:** update `app/panel/api/serializers.py`, `app/panel/api/routes/chat.py`, `web/src/api.ts`, and `web/src/types.ts`.
 
 ## Phase 2: Title Lifecycle and Backend Contracts
 
