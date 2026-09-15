@@ -46,6 +46,10 @@ class PlanningSessionBody(BaseModel):
     thread_id: int | None = None
 
 
+class ChatThreadTitleBody(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+
+
 def _planning_thread(session: Session, slug: str, user_id: int) -> InternalChatThread | None:
     threads = session.scalars(select(InternalChatThread).where(InternalChatThread.user_id == user_id)).all()
     return next((thread for thread in threads if ((thread.assistant_state or {}).get("cortex_session") or {}).get("slug") == slug), None)
@@ -67,13 +71,21 @@ def list_chat_threads(
     session: Session = Depends(get_db),
     current: User = Depends(require_admin_json),
 ) -> dict:
+    latest_created_at = (
+        select(func.max(InternalChatMessage.created_at))
+        .where(InternalChatMessage.thread_id == InternalChatThread.id)
+        .scalar_subquery()
+    )
     rows = session.scalars(
         select(InternalChatThread)
         .where(
             InternalChatThread.user_id == current.id,
             InternalChatThread.assistant_state["cortex_session"].as_string().is_(None),
+            select(InternalChatMessage.id)
+            .where(InternalChatMessage.thread_id == InternalChatThread.id)
+            .exists(),
         )
-        .order_by(InternalChatThread.updated_at.desc(), InternalChatThread.id.desc())
+        .order_by(latest_created_at.desc(), InternalChatThread.id.desc())
         .limit(limit)
     ).all()
     # Cortex sessions have their own lifecycle/list endpoint; they are not chat threads.
@@ -94,6 +106,36 @@ def list_chat_threads(
             for row in threads
         ]
     }
+
+
+@router.patch("/chat/threads/{thread_id}")
+def rename_chat_thread(
+    thread_id: int,
+    body: ChatThreadTitleBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    thread = session.get(InternalChatThread, thread_id)
+    if thread is None or thread.user_id != current.id:
+        raise HTTPException(status_code=404, detail="chat thread not found")
+    thread.title = body.title.strip()
+    if not thread.title:
+        raise HTTPException(status_code=422, detail="title must not be blank")
+    session.flush()
+    return {"thread": to_internal_chat_thread_summary_dict(thread)}
+
+
+@router.delete("/chat/threads/{thread_id}")
+def delete_chat_thread(
+    thread_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    thread = session.get(InternalChatThread, thread_id)
+    if thread is None or thread.user_id != current.id:
+        raise HTTPException(status_code=404, detail="chat thread not found")
+    session.delete(thread)
+    return {"ok": True}
 
 
 @router.post("/planning/sessions", status_code=201)

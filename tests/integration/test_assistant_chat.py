@@ -165,23 +165,31 @@ def test_thread_list_is_admin_only_bounded_and_ordered(client):
     _user("thread-list-admin", "admin")
     _user("thread-list-operator", "operador")
     _login(client, "thread-list-admin")
-    first = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
-    second = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    first_response = client.post("/panel/api/chat/threads", json={})
+    second_response = client.post("/panel/api/chat/threads", json={})
+    assert first_response.status_code == 201
+    assert second_response.status_code == 201
+    first = first_response.json()["thread"]["id"]
+    second = second_response.json()["thread"]["id"]
     with SessionLocal() as session:
         session.add_all([
-            InternalChatMessage(thread_id=first, author="admin", content="older request", status="processed"),
-            InternalChatMessage(thread_id=second, author="admin", content="newer request", status="processing"),
+            InternalChatMessage(thread_id=first, author="admin", content="older request", status="processed",
+                                created_at=datetime(2026, 1, 1, tzinfo=timezone.utc)),
+            InternalChatMessage(thread_id=second, author="admin", content="newer request", status="processing",
+                                created_at=datetime(2026, 1, 2, tzinfo=timezone.utc)),
         ])
-        session.query(InternalChatThread).filter_by(id=first).update({"updated_at": datetime(2026, 1, 1, tzinfo=timezone.utc)})
-        session.query(InternalChatThread).filter_by(id=second).update({"updated_at": datetime(2026, 1, 2, tzinfo=timezone.utc)})
+        session.query(InternalChatThread).filter_by(id=first).update({"title": "Older"})
+        session.query(InternalChatThread).filter_by(id=second).update({"title": "Newer"})
         session.commit()
 
     listed = client.get("/panel/api/chat/threads?limit=1")
 
     assert listed.status_code == 200
     assert [row["id"] for row in listed.json()["threads"]] == [second]
-    assert listed.json()["threads"][0]["title_or_preview"] == "newer request"
+    assert listed.json()["threads"][0]["title"] == "Newer"
+    assert listed.json()["threads"][0]["created_at"]
     assert listed.json()["threads"][0]["updated_at"]
+    assert "status" not in listed.json()["threads"][0]
 
     client.post("/panel/api/logout")
     _login(client, "thread-list-operator")
@@ -201,12 +209,59 @@ def test_thread_list_does_not_fabricate_planning_sessions(client):
     _login(client, "thread-list-planning")
     regular = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
     planning = client.post("/panel/api/planning/sessions", json={"topic": "Planning only"}).json()["thread_id"]
+    with SessionLocal() as session:
+        session.add(InternalChatMessage(thread_id=regular, author="admin", content="regular", status="processed"))
+        session.commit()
 
     response = client.get("/panel/api/chat/threads?limit=10")
 
     assert response.status_code == 200
     assert [row["id"] for row in response.json()["threads"]] == [regular]
     assert planning not in [row["id"] for row in response.json()["threads"]]
+
+
+def test_thread_list_excludes_empty_threads_and_orders_message_ties_by_id(client):
+    _user("thread-list-empty", "admin")
+    _login(client, "thread-list-empty")
+    empty = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    older = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    newer = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    with SessionLocal() as session:
+        timestamp = datetime(2026, 2, 1, tzinfo=timezone.utc)
+        session.add_all([
+            InternalChatMessage(thread_id=older, author="admin", content="older", created_at=timestamp),
+            InternalChatMessage(thread_id=newer, author="agent", content="newer", created_at=timestamp),
+        ])
+        session.commit()
+
+    response = client.get("/panel/api/chat/threads?limit=10")
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()["threads"]] == [newer, older]
+    assert empty not in [row["id"] for row in response.json()["threads"]]
+
+
+def test_thread_rename_and_delete_are_owned_and_not_exposed(client):
+    _user("thread-owner", "admin")
+    _user("thread-other-owner", "admin")
+    _login(client, "thread-owner")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+
+    renamed = client.patch(f"/panel/api/chat/threads/{thread_id}", json={"title": "Operations"})
+    assert renamed.status_code == 200
+    assert renamed.json()["thread"]["title"] == "Operations"
+
+    client.post("/panel/api/logout")
+    _login(client, "thread-other-owner")
+    assert client.patch(f"/panel/api/chat/threads/{thread_id}", json={"title": "Nope"}).status_code == 404
+    assert client.delete(f"/panel/api/chat/threads/{thread_id}").status_code == 404
+
+    client.post("/panel/api/logout")
+    _login(client, "thread-owner")
+    deleted = client.delete(f"/panel/api/chat/threads/{thread_id}")
+    assert deleted.status_code == 200
+    assert deleted.json() == {"ok": True}
+    assert client.get(f"/panel/api/chat/threads/{thread_id}").status_code == 404
 
 
 def test_failed_run_does_not_persist_partial_response(client, monkeypatch):
@@ -224,12 +279,29 @@ def test_failed_run_does_not_persist_partial_response(client, monkeypatch):
 
     assert response.status_code == 201
     assert response.json()["message"]["status"] == "failed"
+    assert response.json()["message"]["error"] == "El agente no pudo procesar este mensaje. Reinténtalo."
     messages = client.get(f"/panel/api/chat/threads/{thread_id}").json()["messages"]
     assert not any(message["author"] == "agent" for message in messages)
     with SessionLocal() as session:
         thread = session.get(InternalChatThread, thread_id)
         assert thread.assistant_state["events"][0]["type"] == "error"
         assert thread.assistant_state["events"][0]["sequence"] == 0
+
+
+def test_empty_agent_response_is_localized(client, monkeypatch):
+    _user("assistant-empty-response", "admin")
+    _login(client, "assistant-empty-response")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    monkeypatch.setattr(
+        "app.services.agent_chat.run_assistant",
+        lambda *args, **kwargs: {"status": "completed", "response": None},
+    )
+
+    response = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Answer"})
+
+    assert response.status_code == 201
+    messages = client.get(f"/panel/api/chat/threads/{thread_id}").json()["messages"]
+    assert messages[-1]["content"] == "No pude generar una respuesta. Inténtalo nuevamente."
 
 
 def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatch):

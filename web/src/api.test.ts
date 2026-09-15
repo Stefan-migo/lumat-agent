@@ -177,7 +177,7 @@ describe('internal chat thread API contracts', () => {
   });
 
   it('preserves the typed navigator fields returned by the API', async () => {
-    const payload = { threads: [{ id: 4, title_or_preview: 'Investigate outage', updated_at: null, status: 'open', run_status: null, approval_status: null }] };
+    const payload = { threads: [{ id: 4, title: 'Investigate outage', created_at: null, updated_at: null, run_status: null, approval_status: null }] };
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
 
     await expect(listChatThreads(1)).resolves.toEqual(payload);
