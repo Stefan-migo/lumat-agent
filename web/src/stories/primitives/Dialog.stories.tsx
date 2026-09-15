@@ -12,7 +12,7 @@ const meta = {
           "Diálogo corporativo (catálogo `dialog`) para confirmaciones destructivas o tareas que deben bloquear la interacción de fondo.\n\n" +
           "**Cuándo usarla** — confirmar una acción destructiva (eliminar registro, cerrar caso) o capturar un dato sin perder contexto.\n" +
           "**Cuándo no usarla** — mensajes informativos pasajeros (para eso están `FlashMessage`/`StateMessage`); el overlay NO cierra con clic afuera a propósito.\n\n" +
-          "**Accesibilidad (DESIGN_SYSTEM §Dialog)** — foco inicial en el primer elemento enfocable al abrir, trampa de foco con Tab mientras está abierto, cierre con Escape y restauración del foco al elemento que lo abrió al cerrar. `aria-modal` y `aria-labelledby` al título.",
+          "**Accesibilidad (DESIGN_SYSTEM §Dialog)** — usa el elemento nativo `<dialog>` y `showModal()`: el navegador gestiona foco, trampa de foco, Escape, restauración y backdrop. El overlay NO cierra con clic afuera a propósito.",
       },
     },
   },
