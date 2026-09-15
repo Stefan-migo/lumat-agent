@@ -132,6 +132,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("022_assistant_attachments",),
         ("023_panel_cost_llm",),
         ("024_projects",),
+        ("025_internal_chat_thread_title",),
     ]
 
 
@@ -151,6 +152,16 @@ def test_internal_chat_cost_column_and_app_grants(migrated_db, admin_conn):
     assert [privilege for (privilege,) in grants] == [
         "DELETE", "INSERT", "SELECT", "UPDATE"
     ]
+
+
+def test_internal_chat_thread_title_is_nullable(migrated_db, admin_conn):
+    """Chat thread titles are optional until title generation or rename."""
+    column = admin_conn.execute(
+        "SELECT data_type, character_maximum_length, is_nullable "
+        "FROM information_schema.columns "
+        "WHERE table_name = 'internal_chat_threads' AND column_name = 'title'"
+    ).fetchone()
+    assert column == ("character varying", 255, "YES")
 
 
 # --- tables ----------------------------------------------------------------
