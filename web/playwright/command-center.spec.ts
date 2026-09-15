@@ -105,6 +105,23 @@ test.describe("Command Center narrow browser contract", () => {
     await expect(page.locator("#panel-shell-sidebar")).not.toHaveAttribute("aria-hidden", "true");
   });
 
+  test("restores shell and selected zone after focus-mode resize", async ({ page }) => {
+    await openCommandCenter(page, 1024);
+    const trigger = page.getByRole("button", { name: "Entrar en modo foco" });
+    await trigger.focus();
+    await trigger.press("Enter");
+    await expect(page.locator("#panel-shell-sidebar")).toHaveAttribute("aria-hidden", "true");
+
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expect(page.locator(".command-center")).toHaveAttribute("data-tier", "compact");
+    await page.keyboard.press("Escape");
+
+    await expect(page.locator("#panel-shell-sidebar")).not.toHaveAttribute("aria-hidden", "true");
+    await expect(page.locator(".command-center [data-zone][data-zone-active='true']")).toHaveCount(1);
+    await expect(page.locator("#command-center-conversation")).toBeVisible();
+    await expect(page.getByText("Persisted context")).toBeVisible();
+  });
+
   for (const width of [390, 768, 1024]) {
     test(`keeps critical actions reachable at ${width}px`, async ({ page }) => {
       await openCommandCenter(page, width);

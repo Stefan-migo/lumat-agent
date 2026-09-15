@@ -275,7 +275,7 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
       </div>
       {cortex?.status === "active" ? <p role="status">Cortex planning active: {cortex.topic}</p> : cortex?.status === "closed" ? <p role="status">Cortex planning closed: {cortex.topic}</p> : null}
       {handoff?.status === "pending" ? <section role="status"><strong>Approved plan pending</strong><p>{report?.contenido ?? "The closing report is ready for approval."}</p></section> : null}
-       <div className="command-center" data-desktop={desktop} data-tier={tier}>
+        <div className="command-center" data-tier={tier}>
         <section id="command-center-navigator" data-zone="navigator" data-zone-active={zoneActive("navigator")} role="region" aria-label="Thread navigator">
          <h2>Thread navigator</h2>
          {navigatorError ? <StateMessage tone="danger" role="alert" title="Thread navigator unavailable" detail={navigatorError} /> : navigatorThreads.length > 0 ? navigatorThreads.map((item) => <button key={item.id} className="command-center__thread" onClick={() => void selectThread(item.id)} aria-current={thread?.id === item.id ? "page" : undefined}><strong>{item.title_or_preview || `Thread #${item.id}`}</strong><span>{item.status}</span></button>) : <StateMessage tone="info" role="status" title="No threads available" />}

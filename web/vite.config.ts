@@ -20,6 +20,6 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['src/test/setup.ts'],
     globals: true,
-    exclude: ['**/node_modules/**', '**/.storybook/quarantine/**/*.test.tsx'],
+    exclude: ['**/node_modules/**', '**/.storybook/quarantine/**/*.test.tsx', 'playwright/**'],
   },
 });
