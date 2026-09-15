@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { conversations, messages } from "./_shared/mockData/conversations";
-import { conversationLabel } from "./_shared/toneMaps";
+import { conversations, messages } from "../../../src/stories/pages/_shared/mockData/conversations";
+import { conversationLabel } from "../../../src/stories/pages/_shared/toneMaps";
 import {
   InboxThreadView,
   isWithinReplyWindow,
