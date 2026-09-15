@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -16,7 +16,12 @@ from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
 from app.services.agent_chat import approve_plan, close_cortex_session, create_thread, get_thread, message_dict, resume_thread, stream_events, submit_message, thread_dict
 from app.chat.assistant.attachments import cleanup_expired, store_attachment
-from app.panel.api.serializers import to_assistant_attachment_dict, to_cortex_report_dict, to_cortex_session_dict
+from app.panel.api.serializers import (
+    to_assistant_attachment_dict,
+    to_cortex_report_dict,
+    to_cortex_session_dict,
+    to_internal_chat_thread_summary_dict,
+)
 from app.services.audit import record_audit
 from sqlalchemy import func, select
 from app.services import tukulpan
@@ -54,6 +59,41 @@ def _planning_report(session: Session, thread: InternalChatThread) -> Memory | N
 @router.post("/chat/threads", status_code=201)
 def new_thread(session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
     return {"thread": thread_dict(create_thread(session, current)), "messages": []}
+
+
+@router.get("/chat/threads")
+def list_chat_threads(
+    limit: int = Query(..., ge=1, le=50),
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    rows = session.scalars(
+        select(InternalChatThread)
+        .where(
+            InternalChatThread.user_id == current.id,
+            InternalChatThread.assistant_state["cortex_session"].as_string().is_(None),
+        )
+        .order_by(InternalChatThread.updated_at.desc(), InternalChatThread.id.desc())
+        .limit(limit)
+    ).all()
+    # Cortex sessions have their own lifecycle/list endpoint; they are not chat threads.
+    threads = list(rows)
+    if not threads:
+        return {"threads": []}
+    latest_messages = session.scalars(
+        select(InternalChatMessage)
+        .where(InternalChatMessage.thread_id.in_([row.id for row in threads]))
+        .order_by(InternalChatMessage.created_at.desc(), InternalChatMessage.id.desc())
+    ).all()
+    latest_by_thread = {}
+    for message in latest_messages:
+        latest_by_thread.setdefault(message.thread_id, message)
+    return {
+        "threads": [
+            to_internal_chat_thread_summary_dict(row, latest_by_thread.get(row.id))
+            for row in threads
+        ]
+    }
 
 
 @router.post("/planning/sessions", status_code=201)

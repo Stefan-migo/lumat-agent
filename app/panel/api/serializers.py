@@ -352,6 +352,22 @@ def to_internal_chat_thread_dict(thread: InternalChatThread) -> dict:
     }
 
 
+def to_internal_chat_thread_summary_dict(
+    thread: InternalChatThread, latest_message: InternalChatMessage | None = None
+) -> dict:
+    """Serialize the bounded navigator shape without inventing thread state."""
+    state = thread.assistant_state or {}
+    approval = state.get("approval") or {}
+    return {
+        "id": thread.id,
+        "title_or_preview": latest_message.content if latest_message else None,
+        "updated_at": _iso(thread.updated_at),
+        "status": thread.status,
+        "run_status": state.get("execution_status"),
+        "approval_status": approval.get("status"),
+    }
+
+
 def to_internal_chat_message_dict(message: InternalChatMessage) -> dict:
     return {
         "id": message.id, "thread_id": message.thread_id, "author": message.author,
