@@ -73,11 +73,12 @@ def test_admin_thread_and_message_are_persisted_and_audited(client, migrated_db,
         assert [message.content for message in messages] == ["What is pending?", "A concise answer"]
         actions = session.scalars(select(AuditLog.action)).all()
         assert {action for action in actions} >= {"internal_chat.thread_created", "internal_chat.message_sent"}
-    assert len(fake_client.calls) == 2
+    assert len(fake_client.calls) == 3
     assert fake_client.calls[1]["stream"] is True
     assert fake_client.calls[1]["messages"][0]["role"] == "system"
     assert "Lumat internal executive operator" in fake_client.calls[1]["messages"][0]["content"]
     assert "tools" not in fake_client.calls[1]
+    assert "stream" not in fake_client.calls[2]
 
 
 def test_operator_cannot_read_or_create_internal_thread(client, migrated_db):

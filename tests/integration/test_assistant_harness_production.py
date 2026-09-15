@@ -54,7 +54,7 @@ def test_valid_read_runs_through_production_graph_with_history_and_registry_prom
 
     assert response.status_code == 201
     assert response.json()["message"]["status"] == "processed"
-    assert len(captured) == 1
+    assert len(captured) == 2
     assert "older context" in captured[0]["messages"][-1]["content"]
     assert captured[0]["messages"][0]["content"].startswith("You are the Lumat internal executive operator")
     with SessionLocal() as session:
@@ -83,6 +83,6 @@ def test_malformed_or_unwhitelisted_production_plan_falls_back_without_execution
         assert thread.assistant_state["planner"]["valid"] is False
         assert thread.assistant_state["guardrails"]["decision"] == "fallback"
         assert thread.assistant_state["execution_status"] == "completed"
-    assert len(captured) == 2
+    assert len(captured) == 3
     assert captured[1]["messages"][0]["content"].startswith("You are the Lumat internal executive operator")
     assert "You are Lumat's internal operations assistant." not in captured[1]["messages"][0]["content"]
