@@ -749,6 +749,7 @@ class InternalChatThread(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(30), default="open", server_default="open")
     assistant_state: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
     current_plan: Mapped[dict | None] = mapped_column(JSONB)
