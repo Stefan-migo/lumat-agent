@@ -4,6 +4,18 @@ import { settings } from "./_shared/mockData/settings";
 import { Settings } from "../../components/pages/Settings";
 import { SettingsView } from "./Settings.stories";
 import * as settingsStories from "./Settings.stories";
+import type { AssistantCapabilities } from "../../types";
+
+const capabilities: AssistantCapabilities = {
+  tools: [
+    { name: "agenda", description: "Consulta horarios", read_only: true, write: false },
+    { name: "crear_visita", description: "Agenda una visita", read_only: false, write: true },
+  ],
+  personas: ["Cercana", "Técnica"],
+  prompts: ["Atención inicial", "Emergencias"],
+  kb_available: true,
+  memory_available: false,
+};
 
 describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () => {
   it("publishes the composed push support and fallback states", () => {
@@ -159,6 +171,56 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     const push = screen.getByRole("heading", { name: "Notificaciones push" }).closest(".card") as HTMLElement;
     expect(push).toBeInTheDocument();
     expect(within(push).getByText(/correo o whatsapp|activa avisos/i)).toBeInTheDocument();
+  });
+
+  it("renders capability data with Spanish labels and translated availability", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (input === "/panel/api/settings") return new Response(JSON.stringify(settings), { status: 200 });
+      if (input === "/panel/api/assistant/capabilities") return new Response(JSON.stringify(capabilities), { status: 200 });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    render(<Settings />);
+
+    const card = await screen.findByRole("heading", { name: "Capacidades del asistente" });
+    expect(within(card.closest(".card") as HTMLElement).getByText("agenda")).toBeInTheDocument();
+    expect(within(card.closest(".card") as HTMLElement).getByText("Solo lectura")).toBeInTheDocument();
+    expect(within(card.closest(".card") as HTMLElement).getByText("Puede escribir")).toBeInTheDocument();
+    expect(screen.getByText("Personas: Cercana, Técnica")).toBeInTheDocument();
+    expect(screen.getByText("Prompts: Atención inicial, Emergencias")).toBeInTheDocument();
+    expect(screen.getByText("KB disponible · Memoria no disponible")).toBeInTheDocument();
+    expect(screen.queryByText(/read_only|kb_available|memory_available/)).toBeNull();
+    fetchMock.mockRestore();
+  });
+
+  it("shows a capability loading state without hiding ready settings", async () => {
+    let resolveCapabilities!: (response: Response) => void;
+    const capabilitiesRequest = new Promise<Response>((resolve) => { resolveCapabilities = resolve; });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (input === "/panel/api/settings") return new Response(JSON.stringify(settings), { status: 200 });
+      if (input === "/panel/api/assistant/capabilities") return capabilitiesRequest;
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    render(<Settings />);
+
+    expect(await screen.findByText("Cargando capacidades del asistente")).toBeInTheDocument();
+    resolveCapabilities(new Response(JSON.stringify(capabilities), { status: 200 }));
+    fetchMock.mockRestore();
+  });
+
+  it("shows a Spanish capability error while preserving settings", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (input === "/panel/api/settings") return new Response(JSON.stringify(settings), { status: 200 });
+      if (input === "/panel/api/assistant/capabilities") return new Response("unavailable", { status: 503 });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+
+    render(<Settings />);
+
+    expect(await screen.findByText("No pudimos cargar las capacidades del asistente")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Configuración" })).toBeInTheDocument();
+    fetchMock.mockRestore();
   });
 
   it("preserves push permission and fallback states in the composed section", async () => {
