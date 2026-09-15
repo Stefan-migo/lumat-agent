@@ -75,6 +75,20 @@ Every core flow follows the same sequence:
 
 Motion and decoration never compete with this sequence.
 
+### Platform-first interaction policy
+
+Use native mechanics by default:
+
+- Native Popover API for popovers and tooltips; CSS anchor positioning enhances placement when supported.
+- Native `<dialog>` for modal behavior.
+- Native input + listbox semantics for comboboxes.
+
+The only approved Radix dependency is `@radix-ui/react-dropdown-menu`, used for menu semantics and keyboard behavior. Radix has no combobox primitive, so no combobox package is justified. This exception follows implementation rule 4 below: “Add no dependency unless the approved requirement cannot be met with the existing stack or platform.” The menu’s composite keyboard semantics are the approved requirement that warrants it; all other listed interactions use the platform.
+
+The browser target is Safari 26+, Chrome 125+, and Firefox 147+ on current operating systems, including iPhone 12+ hardware running current iOS. An iPhone 12 on iOS 18 is below target and does not provide anchor positioning. The Popover API alone remains usable on Safari 17+.
+
+Anchor positioning is progressive enhancement, guarded by `@supports (anchor-name: --popover-trigger)`. Without support, popover and tooltip content stays explicitly positioned with `position: absolute` inside the trigger’s containing block (`.popover` or `.tooltip`). This fallback retains native Popover API dismissal and focus behavior; it is not a silent polyfill.
+
 ### Product principles
 
 1. **Operational clarity over spectacle.** Dense tables, status, and actions must remain easy to scan.
