@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { apiFetch, postJson } from "../../api";
+import { apiFetch, getAssistantCapabilities, postJson } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { Settings as SettingsData } from "../../types";
+import type { AssistantCapabilities, Settings as SettingsData } from "../../types";
 import { Button } from "../primitives/Button";
+import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
 import { Input } from "../primitives/Input";
 import { Textarea } from "../primitives/Textarea";
@@ -12,7 +13,7 @@ import { StateMessage } from "../shared/StateMessage";
 import { PushSettings } from "./PushSettings";
 
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
-export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; }
+export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; capabilities?: AssistantCapabilities; }
 
 function stateMessage(state: SettingsState) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando configuración" />;
@@ -26,10 +27,41 @@ function stateMessage(state: SettingsState) {
   return null;
 }
 
-export function Settings({ data: controlledData, state: controlledState, onRetry }: SettingsProps = {}) {
+export function AssistantCapabilitiesView({ capabilities }: { capabilities: AssistantCapabilities }) {
+  return (
+    <Card title="Capacidades del asistente">
+      <h3>Herramientas</h3>
+      <ul>
+        {capabilities.tools.map((tool) => (
+          <li key={tool.name}>
+            <strong>{tool.name}</strong>: {tool.description}{" "}
+            <Badge tone={tool.read_only ? "neutral" : "warning"}>
+              {tool.read_only ? "Solo lectura" : "Puede escribir"}
+            </Badge>
+          </li>
+        ))}
+      </ul>
+      <h3>Configuración activa</h3>
+      <p>Personas: {capabilities.personas.join(", ")}</p>
+      <p>Prompts: {capabilities.prompts.join(", ")}</p>
+      <p>
+        {capabilities.kb_available ? "KB disponible" : "KB no disponible"} ·{" "}
+        {capabilities.memory_available ? "Memoria disponible" : "Memoria no disponible"}
+      </p>
+    </Card>
+  );
+}
+
+export function Settings({ data: controlledData, state: controlledState, onRetry, capabilities: controlledCapabilities }: SettingsProps = {}) {
   const fetchSettings = useCallback(() => apiFetch<SettingsData>("/panel/api/settings"), []);
   const fetched = useAsyncData(fetchSettings, controlledData === undefined);
+  const fetchCapabilities = useCallback(() => getAssistantCapabilities(), []);
+  const fetchedCapabilities = useAsyncData(fetchCapabilities, controlledCapabilities === undefined);
   const data = controlledData ?? fetched.data;
+  const capabilities = controlledCapabilities ?? fetchedCapabilities.data;
+  const capabilityData = capabilities && Array.isArray(capabilities.tools) && Array.isArray(capabilities.personas) && Array.isArray(capabilities.prompts)
+    ? capabilities
+    : null;
   const pageState = controlledState ?? (controlledData !== undefined ? "ready" : fetched.state);
   const [scope, setScope] = useState(() => data ? Object.entries(data.scope_rules).sort(([a], [b]) => a.localeCompare(b)).map(([category, mode]) => `${category}=${mode}`).join("\n") : "");
   const [keywords, setKeywords] = useState(() => data?.keywords.join("\n") ?? "");
@@ -64,6 +96,12 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   ] : [];
   const state = saveState ?? pageState;
   const retry = onRetry ?? fetched.retry;
+  const capabilityState = controlledCapabilities ? "ready" : fetchedCapabilities.state;
+  const capabilityHost = capabilityState === "loading"
+    ? <Card title="Capacidades del asistente"><StateMessage tone="info" role="status" spinner title="Cargando capacidades del asistente" /></Card>
+    : capabilityState === "error" || capabilityState === "denied"
+      ? <Card title="Capacidades del asistente"><StateMessage tone="danger" role="alert" title="No pudimos cargar las capacidades del asistente" /></Card>
+      : capabilityData ? <AssistantCapabilitiesView capabilities={capabilityData} /> : null;
   useEffect(() => {
     if (!data) return;
     setScope(Object.entries(data.scope_rules).sort(([a], [b]) => a.localeCompare(b)).map(([category, mode]) => `${category}=${mode}`).join("\n"));
@@ -82,6 +120,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     <Card title="Precio Meta"><p>Costo por mensaje de servicio (USD), vigente desde 2026-10-01.</p><Input label="Costo por mensaje (USD)" type="number" value={metaCost} onChange={(event) => setMetaCost(event.target.value)} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/meta", { service_message_cost: Number(metaCost) })}>Guardar precio</Button></Card>
      <Card title="Gasto actual"><DataTable columns={columns} rows={spendRows} rowKey={(row) => row.label} />{snapshot?.conversation_percent !== null ? <p>Conversación {snapshot?.conversation_percent}% de ${snapshot?.conversation_limit.toFixed(2)}</p> : null}</Card>
      <Card title="Notificaciones push"><PushSettings embedded /></Card>
+     {capabilityHost}
     {state === "empty" ? <Button onClick={retry}>Reintentar</Button> : null}
   </PageFrame>;
 }

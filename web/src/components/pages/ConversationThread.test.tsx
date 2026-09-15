@@ -87,8 +87,13 @@ it('presents directional bubbles with identity and owner status', () => {
   ] }} state="ready" customerName={() => 'María González'} />);
 
   expect(screen.getByRole('status', { name: 'Atención humana' })).toBeInTheDocument();
-  expect(screen.getByLabelText(/mensaje entrante de maría/i)).toHaveClass('ai-agent-grammar__bubble-row');
-  expect(screen.getByLabelText(/mensaje saliente de lumat/i)).toHaveClass('ai-agent-grammar__bubble-row--outbound');
+  const inbound = screen.getByLabelText(/mensaje entrante de maría/i);
+  const outbound = screen.getByLabelText(/mensaje saliente de lumat/i);
+  expect(inbound).toHaveClass('ai-agent-grammar__bubble-row');
+  expect(outbound).toHaveClass('ai-agent-grammar__bubble-row--outbound');
+  expect(inbound.querySelector('.ai-agent-grammar__bubble')).toBeTruthy();
+  expect(inbound.querySelector('.ai-agent-grammar__message-meta')).toHaveTextContent('María González');
+  expect(inbound.querySelector('.ai-agent-grammar__message-time')).toHaveTextContent('09:00');
   expect(screen.getByText('María González')).toBeInTheDocument();
   expect(screen.getByText('Lumat')).toBeInTheDocument();
 });

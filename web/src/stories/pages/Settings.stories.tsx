@@ -2,6 +2,15 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { Settings, type SettingsState } from "../../components/pages/Settings";
 import { PushSettings } from "../../components/pages/PushSettings";
 import { settings } from "./_shared/mockData/settings";
+import type { AssistantCapabilities } from "../../types";
+
+const capabilities: AssistantCapabilities = {
+  tools: [{ name: "agenda", description: "Consulta horarios", read_only: true, write: false }],
+  personas: ["Cercana"],
+  prompts: ["Atención inicial"],
+  kb_available: true,
+  memory_available: true,
+};
 
 /** Settings page body grouped by business consequence (design §Configuración).
  *  Plain-Spanish effect explanations precede every input; each independently
@@ -12,7 +21,7 @@ import { settings } from "./_shared/mockData/settings";
 export type { SettingsState };
 
 export function SettingsView({ state = "ready" }: { state?: SettingsState }) {
-  return <Settings data={settings} state={state} />;
+  return <Settings data={settings} state={state} capabilities={capabilities} />;
 }
 
 const meta = {
