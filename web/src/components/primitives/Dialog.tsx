@@ -37,7 +37,8 @@ export function Dialog({ open, onClose, title, children, closeLabel = "Cerrar" }
         aria-modal="true"
         aria-labelledby={titleId}
         className="dialog"
-        onCancel={() => {
+        onCancel={(event) => {
+          event.preventDefault();
           ignoreCloseRef.current = true;
           onClose();
         }}

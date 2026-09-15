@@ -113,6 +113,28 @@
   resize: vertical;
 }
 
+/* ---- Combobox: native input + listbox semantics (CST-PRIM-7) ---- */
+.combobox { position: relative; }
+.combobox__input { min-height: 40px; }
+.combobox__listbox {
+  position: absolute;
+  z-index: var(--z-modal);
+  width: 100%;
+  max-height: calc(var(--space-8) * 8);
+  overflow-y: auto;
+  margin: var(--space-1) 0 0;
+  padding: var(--space-1) 0;
+  border: 1px solid var(--corp-border);
+  border-radius: var(--corp-radius);
+  background: var(--brand-bg-elevated);
+  box-shadow: var(--shadow-2);
+  list-style: none;
+}
+.combobox__option { padding: var(--space-2) var(--space-3); color: var(--corp-text); cursor: pointer; }
+.combobox__option:hover,
+.combobox__option[aria-selected="true"] { background: var(--corp-surface-hover); }
+.combobox__empty { display: block; padding: var(--space-2); color: var(--corp-fg-muted); font-size: var(--text-sm); }
+
 /* D7 — touch ergonomics (CST-PRIM-3): on touch devices bump interactive
  * controls to ≥44px hit area so they are comfortably tappable without visually
  * over-scaling dense panels (the 40px control height has no media bump below —

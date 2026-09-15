@@ -65,7 +65,11 @@ describe("Dialog (CST-PRIM-7, CORP-DIALOG-1)", () => {
   it("calls onClose for the native cancel event", () => {
     const onCancel = vi.fn();
     render(dialogMarkup(true, onCancel));
-    fireEvent(screen.getByRole("dialog"), new Event("cancel", { cancelable: true }));
+    const prevented = fireEvent(
+      screen.getByRole("dialog"),
+      new Event("cancel", { cancelable: true }),
+    );
+    expect(prevented).toBe(false);
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
