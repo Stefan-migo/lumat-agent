@@ -517,3 +517,123 @@ def test_expired_approval_cannot_add_execution_cost(client):
     with SessionLocal() as session:
         request = session.scalar(select(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id, InternalChatMessage.author == "admin"))
         assert list((request.assistant_metadata or {}).get("cost_calls", {})) == [metadata["run_id"] + ":planner"]
+
+
+def _completed_result(response="Answer"):
+    return {"status": "completed", "response": response, "cost_mode": "normal"}
+
+
+def _title_completion(title="Opening title", prompt_tokens=4, completion_tokens=3):
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=title))],
+        usage=SimpleNamespace(prompt_tokens=prompt_tokens, completion_tokens=completion_tokens),
+    )
+
+
+def test_title_is_generated_once_after_first_response_and_uses_opening_admin_message(client, monkeypatch):
+    _user("assistant-title-once", "admin")
+    _login(client, "assistant-title-once")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    monkeypatch.setattr("app.services.agent_chat.run_assistant", lambda *args, **kwargs: _completed_result())
+    calls = []
+    monkeypatch.setattr(
+        "app.services.llm.openai_client",
+        lambda provider=None: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: calls.append(kwargs) or _title_completion()
+        ))),
+    )
+
+    first = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "  Need a gas leak inspection  "})
+    second = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "More details"})
+
+    assert first.status_code == second.status_code == 201
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        assert thread.title == "Opening title"
+        agent_messages = session.scalars(select(InternalChatMessage).where(
+            InternalChatMessage.thread_id == thread_id, InternalChatMessage.author == "agent"
+        ).order_by(InternalChatMessage.id)).all()
+        assert len(agent_messages) == 2
+        assert list((agent_messages[0].assistant_metadata or {}).get("cost_calls", {})) == [f"{first.json()['message']['assistant_metadata']['run_id']}:title"]
+    assert len(calls) == 1
+    assert calls[0]["messages"][-1]["content"].endswith("Need a gas leak inspection")
+
+
+def test_title_cost_is_gated_and_recorded_on_first_assistant_message(client, monkeypatch):
+    _user("assistant-title-cost", "admin")
+    _login(client, "assistant-title-cost")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    monkeypatch.setattr("app.services.agent_chat.run_assistant", lambda *args, **kwargs: _completed_result())
+    monkeypatch.setattr(
+        "app.services.llm.get_settings",
+        lambda: SimpleNamespace(assistant_chat_provider=None, assistant_chat_model="gpt-4o-mini"),
+    )
+    monkeypatch.setattr(
+        "app.services.llm.openai_client",
+        lambda provider=None: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: _title_completion()
+        ))),
+    )
+
+    response = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Inspect the boiler"})
+
+    assert response.status_code == 201
+    with SessionLocal() as session:
+        agent = session.scalar(select(InternalChatMessage).where(
+            InternalChatMessage.thread_id == thread_id, InternalChatMessage.author == "agent"
+        ))
+        request = session.scalar(select(InternalChatMessage).where(
+            InternalChatMessage.thread_id == thread_id, InternalChatMessage.author == "admin"
+        ))
+        assert agent.cost_llm > 0
+        assert float(request.cost_llm or 0) == 0
+        assert f"{request.assistant_metadata['run_id']}:title" in agent.assistant_metadata["cost_calls"]
+
+
+def test_non_normal_title_mode_uses_free_bounded_utf8_fallback(client, monkeypatch):
+    _user("assistant-title-gate", "admin")
+    _login(client, "assistant-title-gate")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    monkeypatch.setattr("app.services.agent_chat.run_assistant", lambda *args, **kwargs: _completed_result())
+    monkeypatch.setattr("app.services.costs.internal_thread_cost_state", lambda *args: (80.0, "conservative"))
+    calls = []
+    monkeypatch.setattr(
+        "app.services.llm.openai_client",
+        lambda provider=None: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: calls.append(kwargs)
+        ))),
+    )
+    opening = "á" * 200
+
+    response = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": opening})
+
+    assert response.status_code == 201
+    with SessionLocal() as session:
+        title = session.get(InternalChatThread, thread_id).title
+        assert title
+        assert len(title.encode("utf-8")) <= 120
+        assert title == opening[: len(title)]
+    assert calls == []
+
+
+@pytest.mark.parametrize("failure", [TimeoutError("title timed out"), RuntimeError("title failed")])
+def test_title_generation_failures_store_the_same_bounded_fallback(client, monkeypatch, failure):
+    _user("assistant-title-failure", "admin")
+    _login(client, "assistant-title-failure")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    monkeypatch.setattr("app.services.agent_chat.run_assistant", lambda *args, **kwargs: _completed_result())
+    monkeypatch.setattr(
+        "app.services.llm.openai_client",
+        lambda provider=None: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: (_ for _ in ()).throw(failure)
+        ))),
+    )
+    opening = "Request: " + " revisión" * 100
+
+    response = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": opening})
+
+    assert response.status_code == 201
+    with SessionLocal() as session:
+        title = session.get(InternalChatThread, thread_id).title
+        assert title == opening.strip()[: len(title)]
+        assert len(title.encode("utf-8")) <= 120

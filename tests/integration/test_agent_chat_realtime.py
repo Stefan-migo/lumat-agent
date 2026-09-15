@@ -107,3 +107,22 @@ def test_operator_remains_denied_from_internal_chat(client):
 
     assert response.status_code == 403
     assert "thread" not in response.text.lower()
+
+
+def test_realtime_response_preserves_cost_tier_metadata(client, monkeypatch):
+    _user("stream-tier", "admin")
+    _login(client, "stream-tier")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    monkeypatch.setattr(
+        "app.services.agent_chat.run_assistant",
+        lambda *args, **kwargs: {
+            "status": "completed", "response": "Tiered answer", "cost_mode": "conservative",
+        },
+    )
+
+    response = client.post(
+        f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Check tier"}
+    )
+
+    assert response.status_code == 201
+    assert response.json()["message"]["assistant_metadata"]["cost_mode"] == "conservative"
