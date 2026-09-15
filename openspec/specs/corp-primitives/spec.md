@@ -96,7 +96,23 @@ Slice-1 MUST NOT add decorative animation components (glitch, gradient-text, mag
 - WHEN the diff is reviewed
 - THEN no decorative-animation component is added under `primitives/`
 
+### Requirement: CST-PRIM-7 — First-Slice Interaction Ownership
+
+The contract MUST assign native/platform ownership to popover, tooltip, dropdown presentation/positioning/dismissal/focus, modal, and combobox-class controls using native input plus listbox semantics; CSS-only ownership to sidebar rail/skeleton; and Radix-backed ownership to menu using `@radix-ui/react-dropdown-menu`. Radix has no combobox primitive, so no package is justified. Resizable/uncertain primitives remain deferred. Each MUST use `--corp-*` or existing tokens, expose keyboard behavior, honor 40px/44px sizing, and expose complete states.
+
+#### Scenario: Ownership and contracts
+
+- GIVEN a first-slice interaction
+- WHEN inspected
+- THEN owner, tokens, accessibility, sizing, and states are testable
+
+#### Scenario: Deferred adoption is rejected
+
+- GIVEN resizable panels or incomplete control
+- WHEN tested
+- THEN it fails; color alone is rejected
+
 ## Non-Goals
 
-- Palette changes, web fonts, icon packages, dark mode, and the full 39-component catalog adoption (Table, Tabs, Dialog, Tooltip, Popover, DropdownMenu, Accordion, Pagination et al.) are chained to later slices.
+- Palette changes, web fonts, icon packages, dark mode, and the full 39-component catalog adoption (Table, Tabs, Accordion, Pagination et al.) are chained to later slices.
 - Jinja panel migration and backend are explicitly out of scope.

@@ -263,13 +263,20 @@ Recorded on `feat/ui-base-design-system-docs` after the full stack was in place.
 | Storybook build | `cd web && npm run build-storybook` | Built; output `web/storybook-static` (gitignored). |
 | Quarantine exclusion | parsed `storybook-static/index.json` | **156 stories, zero** matching `AiAgentGrammar` / `ChatWithAgent` / `InboxThread`. |
 
-### Pending — manual smoke (not claimed)
+### Manual smoke — run and confirmed
 
-Task 4.2 also requires a manual browser smoke of the shell, viewport presets,
-dismissal, focus return, and quarantine exclusion. That has **not** been run: it
-needs a human in a browser, and jsdom geometry is explicitly not a substitute.
-Task 4.2 therefore stays open.
+The maintainer ran the manual browser smoke in Storybook. Result: **no blocker**.
+Shell (single, not nested), viewport presets, dismissal, focus return, and
+quarantine exclusion all behaved as intended.
 
-This is the step that would have caught the double-shell defect; that defect was
-already found and fixed by static inspection during slice 3A, but the smoke still
-has to confirm the rendered result.
+Two observations recorded, neither a defect of this change:
+
+1. `domain/AppShell` shows page error states ("No pudimos cargar el panel") because
+   it composes the real pages, which fetch from the API; Storybook has no backend.
+   This predates the change — the only edit to that story was `panelShell: false`.
+2. The Asistente Lumat has no standalone story after the triage. `AgentChat.tsx` is
+   intact and wired through `AppShell` (`view === 'chat'`). Its product design
+   belongs to the Command Center change.
+
+The double-shell defect that this smoke would have caught was already found and
+fixed by static inspection during slice 3A; the smoke confirms the rendered result.
