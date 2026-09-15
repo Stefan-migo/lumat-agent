@@ -203,3 +203,12 @@ Counter-check evidence for the added assertion (proving it can fail): the PR 3 r
 - Existing React `act(...)` and jsdom navigation warnings remain non-failing.
 - Browser harness logs expected `ECONNRESET` from the intentionally aborted WebSocket fixture; all 8 tests passed.
 - No `ConversationsList` code was changed.
+
+## Pre-existing Flake Fix
+
+- **File:** `web/src/components/pages/ConversationsList.test.tsx`.
+- **Root cause:** The search assertion used a fixed 350 ms sleep, which could expire before the debounced request and React render completed under CPU load.
+- **Fix:** Replaced the sleep and immediate request assertion with `waitFor` around the exact `toHaveBeenLastCalledWith` query URL, then kept the empty-state assertion. The strict URL assertion remains intentional so the test still fails if `q=heater&limit=20&offset=0` is not sent.
+- **Reason:** Required to make the change's full verification command deterministic without changing production code.
+- **Graph check:** Consulted `ConversationsList.test.tsx` and `ConversationsList.tsx`; edge `ConversationsList.test.tsx --imports_from--> ConversationsList.tsx`.
+- **Residual observation (out of scope):** with the CPU fully saturated (four busy loops) a different, unrelated pre-existing test — `src/components/domain/AppShell.test.tsx` ("renders live data pages for every navigation view") — failed once. It is untouched by this change and passes at moderate load (three runs with one busy loop: 540/540, exit 0) and in every unloaded run. Recorded here so it is not mistaken for a regression of this change.
