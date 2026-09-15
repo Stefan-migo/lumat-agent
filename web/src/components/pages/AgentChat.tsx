@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from "react";
-import { ApiError, approveChatPlan, closePlanningSession, createChatThread, getChatThread, listActiveConversations, listConversations, openPlanningSession, sendChatMessage, streamChatEvents, uploadAssistantAttachment } from "../../api";
-import type { AssistantApproval, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantEvent, AssistantPlan, InternalChatMessage, InternalChatResponse, InternalChatThread, PlanningSession, CortexArtifact, CortexHandoff } from "../../types";
+import { ApiError, approveChatPlan, closePlanningSession, createChatThread, getChatThread, listActiveConversations, listChatThreads, listConversations, openPlanningSession, sendChatMessage, streamChatEvents, uploadAssistantAttachment } from "../../api";
+import type { AssistantApproval, AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantEvent, AssistantPlan, InternalChatMessage, InternalChatResponse, InternalChatThread, InternalChatThreadSummary, PlanningSession, CortexArtifact, CortexHandoff } from "../../types";
 import { Avatar } from "../primitives/Avatar";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -34,6 +34,9 @@ function EvidenceList({ evidence }: { evidence: AssistantEvidence[] }) {
 }
 
 export interface AgentChatProps { threadId?: number }
+export const COMMAND_CENTER_BREAKPOINTS = { compactMax: 640, desktopMin: 1024 } as const;
+export type CommandCenterTier = "compact" | "tablet" | "desktop";
+export const commandCenterTier = (width: number): CommandCenterTier => width < COMMAND_CENTER_BREAKPOINTS.compactMax ? "compact" : width < COMMAND_CENTER_BREAKPOINTS.desktopMin ? "tablet" : "desktop";
 
 function planningCommand(value: string): { action: "open" | "close"; topic?: string } | null {
   const match = value.match(/^\/planning(?:\s+(.+))?$/);
@@ -75,6 +78,27 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
   const [cortex, setCortex] = useState<PlanningSession | null>(null);
   const [handoff, setHandoff] = useState<CortexHandoff | null>(null);
   const [report, setReport] = useState<CortexArtifact | null>(null);
+   const [activeZone, setActiveZone] = useState<"navigator" | "conversation" | "context">("conversation");
+   const [tier, setTier] = useState<CommandCenterTier>(() => commandCenterTier(globalThis.innerWidth || COMMAND_CENTER_BREAKPOINTS.desktopMin));
+   const [navigatorThreads, setNavigatorThreads] = useState<InternalChatThreadSummary[]>([]);
+   const [navigatorError, setNavigatorError] = useState<string | null>(null);
+   const desktop = tier === "desktop";
+
+   useEffect(() => {
+     const compact = globalThis.matchMedia?.("(min-width: 40rem)");
+     const expanded = globalThis.matchMedia?.("(min-width: 64rem)");
+     if (!compact || !expanded) return;
+     const update = () => setTier(expanded.matches ? "desktop" : compact.matches ? "tablet" : "compact");
+     update();
+     compact.addEventListener?.("change", update);
+     expanded.addEventListener?.("change", update);
+     return () => { compact.removeEventListener?.("change", update); expanded.removeEventListener?.("change", update); };
+   }, []);
+
+   useEffect(() => {
+      if (loading || (!desktop && activeZone !== "navigator")) return;
+     void listChatThreads(20).then((result) => { setNavigatorThreads(result.threads ?? []); setNavigatorError(null); }).catch((reason: unknown) => setNavigatorError(reason instanceof ApiError ? reason.detail : "Thread navigator unavailable"));
+    }, [activeZone, desktop, loading]);
 
   const handleEvent = (event: AssistantEvent) => {
     if (event.type === "plan") setPlan(event.plan ?? null);
@@ -133,10 +157,17 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
     finally { setUploading(false); }
   };
 
-  useEffect(() => {
+   useEffect(() => {
     const request = requestedThreadId ? getChatThread(requestedThreadId) : createChatThread();
     void request.then(loadThread).catch((reason: unknown) => setError(reason instanceof ApiError ? reason.detail : "No pudimos abrir el chat")).finally(() => setLoading(false));
-  }, [requestedThreadId]);
+   }, [requestedThreadId]);
+
+   const selectThread = async (id: number) => {
+     setLoading(true); setError(null);
+     try { loadThread(await getChatThread(id)); setActiveZone("conversation"); }
+     catch (reason: unknown) { setError(reason instanceof ApiError ? reason.detail : "No pudimos abrir el chat"); }
+     finally { setLoading(false); }
+   };
 
   useEffect(() => {
     if (!thread) return;
@@ -235,13 +266,22 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
   };
 
    const state = loading ? <StateMessage tone="info" role="status" spinner title="Cargando chat" /> : error ? <StateMessage tone="danger" role="alert" title={error} /> : null;
-  const canRenderThread = !loading && thread !== null;
-  const composerDisabled = loading || processing || thread === null;
-   return <PageFrame title="Asistente Lumat" meta="Chat interno con el agente virtual." actions={<div><Button variant="secondary" onClick={() => void openSession()} disabled={composerDisabled || cortex?.status === "active"}>Open planning session</Button>{cortex?.status === "active" ? <Button onClick={() => void closeSession()}>Close session</Button> : null}</div>} state={state}>
+   const canRenderThread = !loading && thread !== null;
+   const composerDisabled = loading || processing || thread === null;
+    const zoneActive = (zone: typeof activeZone) => desktop || activeZone === zone;
+     return <PageFrame title="Asistente Lumat" meta="Chat interno con el agente virtual." actions={<div><Button variant="secondary" onClick={() => void openSession()} disabled={composerDisabled || cortex?.status === "active"}>Open planning session</Button>{cortex?.status === "active" ? <Button onClick={() => void closeSession()}>Close session</Button> : null}</div>} state={state}>
+      <div className="command-center__zone-tabs" role="tablist" aria-label="Command Center zones">
+        {([["navigator", "Thread navigator"], ["conversation", "Conversation zone"], ["context", "Read-only execution context"]] as const).map(([zone, label]) => <button key={zone} role="tab" aria-selected={zoneActive(zone)} aria-controls={`command-center-${zone}`} onClick={() => setActiveZone(zone)}>{label}</button>)}
+      </div>
       {cortex?.status === "active" ? <p role="status">Cortex planning active: {cortex.topic}</p> : cortex?.status === "closed" ? <p role="status">Cortex planning closed: {cortex.topic}</p> : null}
       {handoff?.status === "pending" ? <section role="status"><strong>Approved plan pending</strong><p>{report?.contenido ?? "The closing report is ready for approval."}</p></section> : null}
-     {capabilities ? <AssistantCapabilitiesView capabilities={capabilities} /> : null}
-     <div className="ai-agent-grammar__thread-area" aria-label="Mensajes del chat interno" aria-live="polite">
+       <div className="command-center" data-desktop={desktop} data-tier={tier}>
+        <section id="command-center-navigator" data-zone="navigator" data-zone-active={zoneActive("navigator")} role="region" aria-label="Thread navigator">
+         <h2>Thread navigator</h2>
+         {navigatorError ? <StateMessage tone="danger" role="alert" title="Thread navigator unavailable" detail={navigatorError} /> : navigatorThreads.length > 0 ? navigatorThreads.map((item) => <button key={item.id} className="command-center__thread" onClick={() => void selectThread(item.id)} aria-current={thread?.id === item.id ? "page" : undefined}><strong>{item.title_or_preview || `Thread #${item.id}`}</strong><span>{item.status}</span></button>) : <StateMessage tone="info" role="status" title="No threads available" />}
+       </section>
+       <section id="command-center-conversation" data-zone="conversation" data-zone-active={zoneActive("conversation")} role="region" aria-label="Conversation zone">
+        <div className="ai-agent-grammar__thread-area" aria-label="Mensajes del chat interno" aria-live="polite">
          {connection !== "connected" && <p role="status">Conexión en tiempo real: {connection === "reconnecting" ? "reconectando" : "desconectada"}.</p>}
          {streamRecoverable ? <p role="status" aria-label="Ejecución recuperable">La ejecución no está confirmada; es recuperable desde el historial persistido, que sigue siendo la fuente de verdad.</p> : null}
       {canRenderThread && messages.length === 0 && !error ? <StateMessage tone="info" role="status" title="Chat interno vacío" detail="Escribe un mensaje para iniciar la conversación." /> : null}
@@ -262,8 +302,17 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
           {outbound ? <Avatar name={author} /> : null}
         </article>;
       }) : null}
-    </div>
-     <div className="ai-agent-grammar__composer" aria-label="Enviar mensaje al chat interno">
+        </div>
+       </section>
+       <aside id="command-center-context" data-zone="context" data-zone-active={zoneActive("context")} role="region" aria-label="Read-only execution context" aria-readonly="true">
+        <h2>Execution context</h2>
+        <p>Read-only context. Approval remains a conversation action.</p>
+        <p role="status">Connection: {connection}</p>
+        {capabilities ? <AssistantCapabilitiesView capabilities={capabilities} /> : null}
+        {lifecycle ? <p role="status">Run status: {lifecycle}</p> : null}
+       </aside>
+      </div>
+      <div className="ai-agent-grammar__composer" aria-label="Enviar mensaje al chat interno">
        <Textarea label="Mensaje" value={content} onChange={(event) => setContent(event.target.value)} disabled={composerDisabled} placeholder="Escribe tu mensaje al asistente..." />
        <label>Adjuntar archivo<input aria-label="Adjuntar archivo" type="file" accept="image/*,.pdf,.csv,.txt" onChange={(event) => void attach(event)} disabled={composerDisabled || uploading} /></label>
        {uploading ? <p role="status">Subiendo archivo...</p> : null}
@@ -272,5 +321,5 @@ export function AgentChat({ threadId, capabilities }: AgentChatProps & { capabil
         <Button onClick={() => void send()} disabled={composerDisabled || !content.trim()}>Enviar</Button>
       </div>
     </div>
-  </PageFrame>;
-}
+   </PageFrame>;
+ }

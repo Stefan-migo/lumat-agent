@@ -1423,6 +1423,39 @@
   .ai-agent-grammar__activity { animation: none; transition: none; }
 }
 
+/* Command Center zones: desktop composition, single active zone below 64rem. */
+.command-center {
+  display: grid;
+  grid-template-columns: minmax(calc(var(--space-8) * 6), calc(var(--space-8) * 8)) minmax(0, 1fr) minmax(calc(var(--space-8) * 7), calc(var(--space-8) * 9));
+  gap: var(--space-3);
+  min-width: 0;
+}
+.command-center > [data-zone] {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--corp-border);
+  border-radius: var(--radius-md);
+  background: var(--brand-bg-elevated);
+  overflow-wrap: anywhere;
+}
+.command-center h2 { margin: 0 0 var(--space-3); font-size: var(--text-md); }
+.command-center__thread { display: grid; width: 100%; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--corp-border); border-radius: var(--radius-sm); background: var(--corp-surface-hover); color: var(--corp-text); text-align: left; cursor: pointer; }
+.command-center__thread span { color: var(--corp-fg-muted); font-size: var(--text-xs); }
+.command-center__zone-tabs { display: none; gap: var(--space-1); margin-bottom: var(--space-3); overflow-x: auto; }
+.command-center__zone-tabs button { flex: 1 0 auto; min-height: calc(var(--space-8) + var(--space-2)); padding: var(--space-2); border: 1px solid var(--corp-border); border-radius: var(--radius-sm); background: var(--brand-bg-elevated); color: var(--corp-text); font: inherit; cursor: pointer; }
+.command-center__zone-tabs button[aria-selected="true"] { border-color: var(--corp-accent); background: var(--primary-100); font-weight: var(--weight-semibold); }
+.command-center [data-zone="context"] { color: var(--corp-text); }
+.command-center [data-zone="context"] p { color: var(--corp-fg-muted); font-size: var(--text-sm); }
+@media (max-width: 63.99rem) {
+  .command-center__zone-tabs { display: flex; }
+  .command-center { display: block; }
+  .command-center > [data-zone] { display: none; }
+  .command-center > [data-zone][data-zone-active="true"] { display: block; }
+}
+@media (max-width: 40rem) {
+  .command-center__zone-tabs button { min-height: calc(var(--space-8) + var(--space-4)); }
+}
+
 /* ---- Conversations queue and production workspace ---- */
 .ai-agent-grammar__filters,
 .conversations-queue__toolbar {

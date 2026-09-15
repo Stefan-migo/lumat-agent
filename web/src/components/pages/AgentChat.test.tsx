@@ -4,7 +4,92 @@ import { AgentChat } from "./AgentChat";
 import type { AssistantApproval } from "../../types";
 
 describe("AgentChat", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.restoreAllMocks(); setViewport(768); });
+
+  const setViewport = (width: number) => {
+    vi.stubGlobal("innerWidth", width);
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("64rem") ? width >= 1024 : query.includes("40rem") ? width >= 640 : false, media: query, onchange: null, addListener: () => undefined, removeListener: () => undefined, addEventListener: () => undefined, removeEventListener: () => undefined, dispatchEvent: () => false }));
+  };
+
+  it("marks the compact tier below 640px", async () => {
+    setViewport(390);
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 }));
+    render(<AgentChat />);
+    await screen.findByRole("region", { name: /conversation zone/i });
+    expect(document.querySelector(".command-center")).toHaveAttribute("data-tier", "compact");
+  });
+
+  it("marks the tablet tier from 640px through 1023px", async () => {
+    setViewport(768);
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 }));
+    render(<AgentChat />);
+    await screen.findByRole("region", { name: /conversation zone/i });
+    expect(document.querySelector(".command-center")).toHaveAttribute("data-tier", "tablet");
+  });
+
+  it("keeps exactly one selectable zone active below desktop", async () => {
+    setViewport(768);
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 }));
+    render(<AgentChat />);
+    expect(await screen.findByRole("region", { name: /conversation zone/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { selected: true })).toHaveAttribute("aria-controls", "command-center-conversation");
+    expect(screen.getAllByRole("region").filter((region) => region.getAttribute("data-zone-active") === "true")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("tab", { name: /thread navigator/i }));
+    expect(screen.getByRole("region", { name: /thread navigator/i })).toHaveAttribute("data-zone-active", "true");
+    expect(screen.getByRole("button", { name: "Enviar" })).toBeInTheDocument();
+  });
+
+  it("loads bounded navigator entries and selects a thread", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const path = String(input);
+      if (path === "/panel/api/chat/threads?limit=20") return new Response(JSON.stringify({ threads: [{ id: 7, title_or_preview: "Follow-up", updated_at: null, status: "open", run_status: null, approval_status: null }] }), { status: 200 });
+      return new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 });
+    });
+    render(<AgentChat />);
+    fireEvent.click(screen.getByRole("tab", { name: /thread navigator/i }));
+    expect(await screen.findByRole("button", { name: /follow-up/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /follow-up/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/7", expect.anything()));
+  });
+
+  it("loads the navigator on desktop without selecting its hidden tab", async () => {
+    setViewport(1024);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const path = String(input);
+      if (path === "/panel/api/chat/threads?limit=20") return new Response(JSON.stringify({ threads: [{ id: 7, title_or_preview: "Desktop thread", updated_at: null, status: "open", run_status: null, approval_status: null }] }), { status: 200 });
+      if (path === "/panel/api/chat/threads/7") return new Response(JSON.stringify({ thread: { id: 7, status: "open" }, messages: [] }), { status: 200 });
+      return new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 });
+    });
+
+    render(<AgentChat />);
+
+    const entry = await screen.findByRole("button", { name: /desktop thread/i });
+    expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads?limit=20", expect.anything());
+    fireEvent.click(entry);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/7", expect.anything()));
+    expect(screen.getByRole("button", { name: /desktop thread/i })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("reports an unavailable navigator when the bounded list fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input) === "/panel/api/chat/threads?limit=20") return new Response(JSON.stringify({ detail: "unavailable" }), { status: 503 });
+      return new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 });
+    });
+    render(<AgentChat />);
+    fireEvent.click(screen.getByRole("tab", { name: /thread navigator/i }));
+    expect(await screen.findByText("Thread navigator unavailable")).toBeInTheDocument();
+  });
+
+  it("renders navigator, conversation, and read-only context in desktop order", async () => {
+    setViewport(1024);
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ thread: { id: 4, status: "open" }, messages: [] }), { status: 200 }));
+    render(<AgentChat />);
+    await screen.findByRole("region", { name: /conversation zone/i });
+    const zones = screen.getAllByRole("region").filter((region) => region.hasAttribute("data-zone"));
+    expect(zones.map((zone) => zone.getAttribute("data-zone"))).toEqual(["navigator", "conversation", "context"]);
+    expect(screen.getByRole("region", { name: /read-only execution context/i })).toHaveAttribute("aria-readonly", "true");
+    expect(screen.queryByRole("button", { name: /approve|approval/i })).not.toBeInTheDocument();
+  });
 
   it("renders the read-only assistant capability view from the API", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
