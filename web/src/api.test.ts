@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -161,5 +161,25 @@ describe('planning session API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, thread_id: 8 }), { status: 200 }));
     await reopenPlanningSession('budget-review-8');
     expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/planning/sessions/budget-review-8/reopen', expect.objectContaining({ method: 'POST' }));
+  });
+});
+
+describe('internal chat thread API contracts', () => {
+  beforeEach(() => { globalThis.fetch = vi.fn(); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('requests the bounded typed thread list', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ threads: [] }), { status: 200 }));
+
+    await listChatThreads(12);
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/chat/threads?limit=12', expect.anything());
+  });
+
+  it('preserves the typed navigator fields returned by the API', async () => {
+    const payload = { threads: [{ id: 4, title_or_preview: 'Investigate outage', updated_at: null, status: 'open', run_status: null, approval_status: null }] };
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+
+    await expect(listChatThreads(1)).resolves.toEqual(payload);
   });
 });

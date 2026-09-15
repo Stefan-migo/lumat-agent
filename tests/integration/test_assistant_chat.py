@@ -161,6 +161,54 @@ def test_operator_can_still_read_panel_when_cost_gate_blocks(client):
     assert client.get("/panel/api/me").status_code == 200
 
 
+def test_thread_list_is_admin_only_bounded_and_ordered(client):
+    _user("thread-list-admin", "admin")
+    _user("thread-list-operator", "operador")
+    _login(client, "thread-list-admin")
+    first = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    second = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    with SessionLocal() as session:
+        session.add_all([
+            InternalChatMessage(thread_id=first, author="admin", content="older request", status="processed"),
+            InternalChatMessage(thread_id=second, author="admin", content="newer request", status="processing"),
+        ])
+        session.query(InternalChatThread).filter_by(id=first).update({"updated_at": datetime(2026, 1, 1, tzinfo=timezone.utc)})
+        session.query(InternalChatThread).filter_by(id=second).update({"updated_at": datetime(2026, 1, 2, tzinfo=timezone.utc)})
+        session.commit()
+
+    listed = client.get("/panel/api/chat/threads?limit=1")
+
+    assert listed.status_code == 200
+    assert [row["id"] for row in listed.json()["threads"]] == [second]
+    assert listed.json()["threads"][0]["title_or_preview"] == "newer request"
+    assert listed.json()["threads"][0]["updated_at"]
+
+    client.post("/panel/api/logout")
+    _login(client, "thread-list-operator")
+    assert client.get("/panel/api/chat/threads?limit=1").status_code == 403
+
+
+def test_thread_list_rejects_unbounded_or_oversized_requests(client):
+    _user("thread-list-bounds", "admin")
+    _login(client, "thread-list-bounds")
+
+    assert client.get("/panel/api/chat/threads").status_code == 422
+    assert client.get("/panel/api/chat/threads?limit=51").status_code == 422
+
+
+def test_thread_list_does_not_fabricate_planning_sessions(client):
+    _user("thread-list-planning", "admin")
+    _login(client, "thread-list-planning")
+    regular = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    planning = client.post("/panel/api/planning/sessions", json={"topic": "Planning only"}).json()["thread_id"]
+
+    response = client.get("/panel/api/chat/threads?limit=10")
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()["threads"]] == [regular]
+    assert planning not in [row["id"] for row in response.json()["threads"]]
+
+
 def test_failed_run_does_not_persist_partial_response(client, monkeypatch):
     _user("assistant-failure", "admin")
     _login(client, "assistant-failure")
