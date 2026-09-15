@@ -164,3 +164,42 @@ Resolution: the desktop scenario now asserts that the bounded list seam actually
 
 Counter-check evidence for the added assertion (proving it can fail): the PR 3 regression was temporarily reintroduced in `AgentChat.tsx` (`activeZone !== "navigator"` instead of `!desktop && activeZone !== "navigator"`), the desktop scenario was run alone, and it FAILED at the new navigator assertion. The production file was then restored (`git checkout -- web/src/components/pages/AgentChat.tsx`), confirmed clean, and the full harness re-ran **7 passed**. Production components under `web/src/` remain untouched in this slice.
 
+## Verification Fixes
+
+**Status**: Corrective work unit complete; all three authorized findings addressed.
+**Mode**: Strict TDD for the browser scenario; the resize test was GREEN before any production implementation, so no `PanelShell.tsx` change was needed.
+**Delivery**: auto-chain, stacked-to-main; corrective slice remains bounded to verification coverage and two minimal production cleanups.
+
+### Fixes
+
+- **Fix 1 — Vitest discovery**: Added `playwright/**` to `web/vite.config.ts` `test.exclude`, preserving all `src/**/*.test.tsx` collection.
+- **Fix 2 — CC-2 / DS-CC-2 resize restoration**: First added the browser test `restores shell and selected zone after focus-mode resize` to `web/playwright/command-center.spec.ts`. After correcting a test-authoring selector typo, the test passed against the existing implementation; no speculative resize state or `PanelShell.tsx` implementation was added. The test covers desktop keyboard entry, resize to 390px, Escape exit, sidebar restoration, one coherent compact zone, and selected persisted thread visibility.
+- **Fix 3 — redundant attribute**: Repository search found `data-desktop` only in `AgentChat.tsx` and generated `web/dist`, with no CSS, Playwright, or test consumer. Removed `data-desktop={desktop}` while retaining the `desktop` variable for zone gating and navigator fetch dependencies.
+
+### TDD Cycle Evidence
+
+| Task | Test File | RED | GREEN | REFACTOR |
+|---|---|---|---|---|
+| Resize restoration proof | `web/playwright/command-center.spec.ts` | ✅ Valid test was written before production changes; no implementation RED was required because behavior already satisfied the scenario | ✅ Focused browser run passed 1/1 before implementation; full browser run passed 8/8 | ✅ Minimal assertion-only addition; no production implementation added |
+
+### Work Unit Evidence
+
+- Focused test: `cd web && npx playwright test playwright/command-center.spec.ts --reporter=list -g "restores shell and selected zone after focus-mode resize"` — PASS, 1 passed, exit 0.
+- Required Vitest: `cd web && npm test -- --run` — PASS, **76 files / 540 tests**, exit 0.
+- Runtime harness: `cd web && npx playwright test playwright/command-center.spec.ts --reporter=list` — PASS, **8 passed**, exit 0 in real Chrome; expected `ECONNRESET` logs came from the intentionally aborted `/panel/ws` route.
+- Build/typecheck: `cd web && npm run build` — PASS, exit 0; TypeScript and Vite build completed with 77 modules transformed.
+- Diff hygiene: `git diff --check` — PASS, exit 0, no output.
+- Rollback boundary: revert only `web/vite.config.ts`, `web/src/components/pages/AgentChat.tsx`, `web/playwright/command-center.spec.ts`, and this appended progress section; `PanelShell.tsx`, `verify-report.md`, `tasks.md`, specs, backend, and archive artifacts remain untouched.
+
+### Corrective Graph Check
+
+- Required query: `graphify query "PanelShell focus mode resize restoration visibility"`.
+- Additional queries: `graphify query "Vitest Vite test exclude Playwright discovery"`; `graphify query "AgentChat data-tier data-desktop responsive zone state"`.
+- Consulted nodes: `domain/PanelShell.tsx`, `AgentChat.tsx`, `AgentChat.test.tsx`, `Narrow Playwright Browser Contract`, `web/vite.config.ts`/Vitest package configuration, `api.ts`, `types.ts`, and `domain/AppShell.tsx`.
+- Edges/paths: `domain/PanelShell.tsx --references--> AgentChat.tsx`; `AppShell.tsx → PanelShell.tsx → AgentChat.tsx`; `AgentChat.tsx → api.ts → InternalChatThread`; `command-center.spec.ts --implements--> Narrow Playwright Browser Contract`. Graphify found no directed path for the config-to-spec query and reported an ambiguous source match for the AgentChat/PanelShell path; these were recorded rather than inferred.
+
+### Risks / Issues
+
+- Existing React `act(...)` and jsdom navigation warnings remain non-failing.
+- Browser harness logs expected `ECONNRESET` from the intentionally aborted WebSocket fixture; all 8 tests passed.
+- No `ConversationsList` code was changed.
