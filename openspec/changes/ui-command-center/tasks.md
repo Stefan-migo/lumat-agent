@@ -32,8 +32,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Focus / Conversation (PR 2)
 
-- [ ] 2.1 **RED [S]:** Extend `web/src/components/domain/PanelShell.test.tsx` and `AgentChat.test.tsx` for keyboard entry, focus trap/restoration, Escape, stream failure, persisted-history authority, read-only context, and approval/retry/send actions.
-- [ ] 2.2 **GREEN [M]:** Implement focus/region control in `PanelShell.tsx`; update `AgentChat.tsx` to separate transient SSE/WebSocket state from authoritative data and expose truthful recovery/error semantics.
+- [x] 2.1 **RED [S]:** Extend `web/src/components/domain/PanelShell.test.tsx` and `AgentChat.test.tsx` for keyboard entry, focus trap/restoration, Escape, stream failure, persisted-history authority, read-only context, and approval/retry/send actions.
+- [x] 2.2 **GREEN [M]:** Implement focus/region control in `PanelShell.tsx`; update `AgentChat.tsx` to separate transient SSE/WebSocket state from authoritative data and expose truthful recovery/error semantics.
 
 ## Phase 3: Production Composition and Migration (PR 3)
 
