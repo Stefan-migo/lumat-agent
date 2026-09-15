@@ -117,3 +117,50 @@ Earlier numbers in this section are chronological and superseded. The slice clos
 - `git diff --check` — clean.
 - Diff: 7 files, 207 insertions / 371 deletions (354 of the deletions are the two removed quarantine files).
 - Ledger: the work-unit attempt settled `passed` with `changed_line_budget_exceeded` (653 vs 400 declared), resolved by a maintainer-scoped objective reset.
+
+## PR 4 — Narrow Browser Contract
+
+**Status**: Task 4.1 complete.
+**Mode**: Standard browser verification with explicit RED counter-check.
+**Delivery**: auto-chain, stacked-to-main; this slice is bounded to the browser harness and targets the PR 3 branch.
+
+### Completed Task
+
+- [x] 4.1 RED/GREEN — Added the minimal Playwright configuration, controlled local API fixtures, and narrow geometry, breakpoint, keyboard, focus, restoration, and action-reachability checks at 390px, 768px, and 1024px. No production files, screenshots, snapshots, CI, PWA assertions, or visual regression were added.
+
+### Resolved Local Startup Command
+
+The design open question is resolved with `cd web && npm run test:e2e -- playwright/command-center.spec.ts`. The script runs Playwright's self-contained `webServer` (`npm run dev -- --host 127.0.0.1`) and reuses an existing Vite server when available. The config uses the installed system Chrome channel, avoiding a version-specific Playwright browser download, and blocks service workers.
+
+### Work Unit Evidence
+
+- Install: `cd web && npm install --save-dev @playwright/test@1.63.0` — PASS; 3 packages added, audit completed with 5 moderate advisories.
+- Focused test: `cd web && npx playwright test playwright/command-center.spec.ts` — PASS, **7 passed, 0 failed** (9.8s).
+- Counter-check RED: temporarily inverted the desktop navigator/conversation order assertion, then ran `cd web && npx playwright test playwright/command-center.spec.ts -g "keeps desktop zones ordered"` — FAIL, **1 failed**; expected `> 532`, received `264`.
+- Re-GREEN: restored the order assertion and reran `cd web && npx playwright test playwright/command-center.spec.ts` — PASS, **7 passed, 0 failed** (9.8s).
+- Runtime harness: The Playwright route harness ran against the local Vite app with controlled `/panel/api/**` fixtures and `/panel/ws` aborted; all 7 browser scenarios executed in real Chrome. Vite logged expected `ECONNRESET` messages from the intentionally aborted WebSocket, without test failures.
+- Rollback boundary: revert `web/playwright.config.ts`, `web/playwright/command-center.spec.ts`, `web/package.json`, `web/package-lock.json`, and `web/.gitignore`; production components under `web/src/` are untouched.
+
+### Graph Check
+
+- Required query: `graphify query "Playwright browser harness command center geometry breakpoints focus"`.
+- Consulted nodes: `command-center.spec.ts`, `Narrow Playwright Browser Contract`, `AgentChat.tsx`, `domain/PanelShell.tsx`, `domain/AppShell.tsx`, `api.ts`, `types.ts`, and `pages/ConversationThread.tsx`.
+- Edges/paths: `command-center.spec.ts --implements--> Narrow Playwright Browser Contract`; `AppShell.tsx → PanelShell.tsx → AgentChat.tsx`; `AgentChat.tsx → api.ts → InternalChatThread`. Direct directed paths from the shell/page nodes to the new spec were unavailable; the contract node and affected production paths were queried instead.
+
+### Deviations / Residual Limitations
+
+- The Command Center delegates emergency handling to the production-owned conversations route. The harness follows the visible shell `Conversaciones` affordance at each tier and verifies the real `Reconocer emergencia` action is reachable there, without changing production components.
+- No screenshots, snapshot baselines, CI workflow, PWA assertion, page-object framework, or custom fixture layer were added.
+
+### Diff Summary
+
+- `git diff --stat` plus the two untracked harness files: **7 files changed, 230 insertions(+), 3 deletions(-)** relative to the clean PR 3 HEAD at implementation time (the lockfile is included in this total).
+
+### Orchestrator Addendum — Desktop Navigator Coverage
+
+An independent gatekeeper pass reproduced the harness (`npx playwright test playwright/command-center.spec.ts` → 7 passed) and found one coverage hole: nothing asserted that the desktop navigator zone is **populated**. Zone order and geometry pass even with an empty navigator, so the PR 3 defect (desktop fetch gated on the active zone, leaving the navigator permanently on "No threads available") would not have been caught by the browser contract.
+
+Resolution: the desktop scenario now asserts that the bounded list seam actually renders its entry in the navigator at 1024px.
+
+Counter-check evidence for the added assertion (proving it can fail): the PR 3 regression was temporarily reintroduced in `AgentChat.tsx` (`activeZone !== "navigator"` instead of `!desktop && activeZone !== "navigator"`), the desktop scenario was run alone, and it FAILED at the new navigator assertion. The production file was then restored (`git checkout -- web/src/components/pages/AgentChat.tsx`), confirmed clean, and the full harness re-ran **7 passed**. Production components under `web/src/` remain untouched in this slice.
+

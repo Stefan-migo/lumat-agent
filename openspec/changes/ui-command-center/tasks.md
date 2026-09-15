@@ -43,7 +43,7 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Browser Verification (PR 4)
 
-- [ ] 4.1 **RED/GREEN [M]:** Create `web/playwright/command-center.spec.ts` and local configuration/script; verify geometry/order, breakpoint visibility, keyboard switching, focus/Escape/restoration, and critical actions at 390/768/1024. No screenshots, CI, PWA, or visual regression.
+- [x] 4.1 **RED/GREEN [M]:** Create `web/playwright/command-center.spec.ts` and local configuration/script; verify geometry/order, breakpoint visibility, keyboard switching, focus/Escape/restoration, and critical actions at 390/768/1024. No screenshots, CI, PWA, or visual regression.
 
 ## Graph / Ponytail Review
 
