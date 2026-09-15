@@ -210,3 +210,66 @@ renames tracked, imports resolved explicitly, no call sites needed updating.
   against real paths explicitly rather than assumed.
 - `main.ts` and `preview.ts` were not touched.
 - RDD review not re-run, same stacked-candidate scoping reason as the prior slices.
+
+---
+
+## Work Unit — slice 4.1: platform-first policy docs (PR #195)
+
+### Status
+
+Delivered as **PR #195**, stacked on `feat/ui-base-story-triage` (#194). Branch
+`feat/ui-base-design-system-docs`. Registers task **4.1**. Docs only.
+
+### What changed
+
+| File | Action | Description |
+|---|---|---|
+| `web/DESIGN_SYSTEM.md` | Modified | New `### Platform-first interaction policy` section (DS-DOC-1). |
+
+### Claim verification
+
+Every documented claim was checked against the code before commit, not just
+against the design:
+
+| Claim in the doc | Verified against |
+|---|---|
+| `@supports (anchor-name: --popover-trigger)` guard | `primitives.css:449` — exact match. |
+| Fallback is `position: absolute` inside the trigger's containing block | `.popover, .tooltip { position: relative }` and `position: absolute` on `.popover__panel` / `.tooltip__content`. |
+| Only `@radix-ui/react-dropdown-menu` is approved | `package.json` — no other Radix package. |
+
+### Evidence
+
+| Evidence | Result |
+|---|---|
+| `git status --short` | Only `web/DESIGN_SYSTEM.md` modified. |
+| `git diff --check` | Clean. |
+| Full suite | Not run: a docs-only change cannot affect runtime behavior. Task 4.2 owns the full verification. |
+
+### Notes
+
+- The "line-480 justification" is recorded as a reference to implementation rule 4
+  rather than a line number, so the document does not break when the file grows.
+
+---
+
+## Verification — task 4.2 (automated half)
+
+Recorded on `feat/ui-base-design-system-docs` after the full stack was in place.
+
+| Check | Command | Result |
+|---|---|---|
+| Full suite | `cd web && npm test` | Passed, **76 files / 526 tests**. |
+| Typecheck | `cd web && npx tsc -b` | Clean. |
+| Storybook build | `cd web && npm run build-storybook` | Built; output `web/storybook-static` (gitignored). |
+| Quarantine exclusion | parsed `storybook-static/index.json` | **156 stories, zero** matching `AiAgentGrammar` / `ChatWithAgent` / `InboxThread`. |
+
+### Pending — manual smoke (not claimed)
+
+Task 4.2 also requires a manual browser smoke of the shell, viewport presets,
+dismissal, focus return, and quarantine exclusion. That has **not** been run: it
+needs a human in a browser, and jsdom geometry is explicitly not a substitute.
+Task 4.2 therefore stays open.
+
+This is the step that would have caught the double-shell defect; that defect was
+already found and fixed by static inspection during slice 3A, but the smoke still
+has to confirm the rendered result.

@@ -45,8 +45,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Documentation and Verification
 
-- [ ] 4.1 Update `web/DESIGN_SYSTEM.md` with platform-first defaults, narrow Radix package scope, line-480 justification, Safari 26+/Chrome 125+/Firefox 147+ targets, anchor `@supports`, and containing-block fallback policy.
-- [ ] 4.2 Run `cd web && npm test`, typecheck, and `npm run build-storybook`; manually smoke shell, viewport presets, dismissal, focus return, and quarantine exclusion. Do not claim jsdom geometry.
+- [x] 4.1 Update `web/DESIGN_SYSTEM.md` with platform-first defaults, narrow Radix package scope, line-480 justification, Safari 26+/Chrome 125+/Firefox 147+ targets, anchor `@supports`, and containing-block fallback policy. — PR #195. Every documented claim verified against `primitives.css` and `package.json` before commit.
+- [ ] 4.2 Run `cd web && npm test`, typecheck, and `npm run build-storybook`; manually smoke shell, viewport presets, dismissal, focus return, and quarantine exclusion. Do not claim jsdom geometry. — **Automated half done** (526 tests, `tsc -b` clean, Storybook built with 156 stories and zero quarantined entries). **Manual smoke still pending** — it needs a human in a browser and has not been claimed.
 
 ## Graph Check
 
