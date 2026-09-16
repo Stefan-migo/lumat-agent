@@ -98,11 +98,18 @@ services:
     # (psycopg direct, no SQLAlchemy) so it runs in a SUBSHELL — otherwise the
     # bare `DATABASE_URL=...` assignment would leak into uvicorn's environment
     # and make SQLAlchemy fall back to the psycopg2 dialect (crash: no module).
+    #
+    # --reload: the repo is bind-mounted, so without it the container keeps
+    # serving whatever code was on disk when it started. A five-day-old process
+    # once served a route set that predated a merged endpoint and answered 405,
+    # which reads as a code bug and is not one. This file is dev-only —
+    # infra/docker-compose.prod.yml has its own command and a built image with
+    # no bind mount — so reload never reaches production.
     command: >
       sh -c "uv sync --frozen &&
              (DATABASE_URL=postgresql://lumat:$$POSTGRES_PASSWORD@db:5432/lumat
               APP_DB_PASSWORD=$$APP_DB_PASSWORD db/migrate.sh) &&
-             exec uv run uvicorn app.main:app --host 0.0.0.0 --port 8000"
+             exec uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
 volumes:
   db:
