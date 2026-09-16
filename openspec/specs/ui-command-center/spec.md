@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Define the production-owned assistant workspace for the `chat` route: a responsive three-zone surface with bounded navigation, durable conversation state, read-only execution context, focus mode, and narrow browser-verifiable interaction behavior.
+Define the production-owned assistant workspace for the `chat` route: a centered conversation surface with progressive-disclosure navigation and context, durable conversation state, and narrow browser-verifiable interaction behavior.
 
 ## Requirements
 
 ### Requirement: CC-1 — Responsive Three-Zone Workspace
 
-The Command Center MUST render production-owned left thread navigation, center assistant conversation, and right execution context at `>=1024px`. At `640–1023px` and `<640px`, it MUST select one active zone at a time without horizontal squeezing or clipping critical actions.
+The command center MUST replace the three-zone desktop layout and zone tablist with one centered conversation column inside the existing shell. History SHALL be available through a popover and context through a closed-by-default drawer. At narrow widths, the column MUST reflow without clipping send, approval, retry, attachment, or planning actions.
 
 #### Scenario: Desktop composition
 
@@ -40,7 +40,7 @@ Focus mode MUST hide or minimize secondary shell regions while preserving the cu
 
 ### Requirement: CC-3 — Durable Conversation and Read-Only Context
 
-The center MUST treat persisted messages and evidence as authoritative history. Streaming tokens MAY appear transiently during an active run but MUST NOT imply completion or replace persisted history. The right context zone MUST remain read-only; approval remains an explicit center action.
+The center MUST treat persisted messages, inline evidence, approval, and recovery as authoritative. Streaming MAY be transient but MUST NOT imply completion. The context drawer MUST remain read-only and show operational context only; it MUST be closed by default.
 
 #### Scenario: Recoverable stream
 
@@ -53,6 +53,20 @@ The center MUST treat persisted messages and evidence as authoritative history. 
 - GIVEN the context zone displays capabilities, plan, evidence, or run status
 - WHEN a capability includes a writable tool
 - THEN no context control executes it and approval remains the explicit action boundary
+
+### Requirement: CC-5 — Thread-Scoped Ownership
+
+Every thread-scoped route and action MUST verify that the authenticated user owns the thread or has authorized admin access before reading, renaming, deleting, sending, approving, or opening it.
+
+#### Scenario: Foreign thread
+- GIVEN an authenticated user addresses another user's thread identifier
+- WHEN any thread-scoped route is requested
+- THEN the server rejects the request without exposing thread data or performing the action
+
+#### Scenario: Owned deep link
+- GIVEN an authorized user opens `?thread_id=` for an owned thread
+- WHEN the route loads
+- THEN that thread is selected without creating another thread
 
 ### Requirement: CC-4 — Narrow Browser Verification
 
