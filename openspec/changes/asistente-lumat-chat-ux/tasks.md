@@ -12,7 +12,7 @@
 
 ## Phase 3: Conversation Surface
 
-- [ ] 3.1 **RED:** rewrite the three zone/tab suites—`web/src/components/pages/AgentChat.test.tsx`, `web/src/components/pages/ConversationThread.test.tsx`, and `web/playwright/command-center.spec.ts`—for centered composition, Spanish states, no auto-create, deep links, streaming cursor, copy/retry, attachments, approval/evidence anchoring, planning dialog, and composer keyboard behavior; **GREEN:** recompose `AgentChat.tsx` using existing primitives, inline `PlanCard`/`EvidenceList`, auto-grow composer, popover history, closed context drawer, and responsive token CSS.
+- [x] 3.1 **RED:** rewrite the three zone/tab suites—`web/src/components/pages/AgentChat.test.tsx`, `web/src/components/pages/ConversationThread.test.tsx`, and `web/playwright/command-center.spec.ts`—for centered composition, Spanish states, no auto-create, deep links, streaming cursor, copy/retry, attachments, approval/evidence anchoring, planning dialog, and composer keyboard behavior; **GREEN:** recompose `AgentChat.tsx` using existing primitives, inline `PlanCard`/`EvidenceList`, auto-grow composer, popover history, closed context drawer, and responsive token CSS.
 - [x] 3.2 **RED:** add Settings capability-host assertions; **GREEN:** move `AssistantCapabilitiesView` to `web/src/components/pages/Settings.tsx` and remove the chat-page capability dump.
 - [x] 3.3 **RED:** add browser assertions to the rewritten `web/playwright/command-center.spec.ts` for desktop/narrow layout, history/context disclosure, navigator grouping/actions, focus/zoom/reduced-motion semantics, and preserved send/approval/retry/planning paths; **GREEN:** wire final responsive behavior and verify with `cd web && npm run test:e2e`.
 
