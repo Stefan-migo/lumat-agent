@@ -116,7 +116,7 @@ def build_assistant_graph():
     return builder.compile()
 
 
-def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, session=None, actor=None, actor_role=None, sdb_requested=None, attachments=None, context=None, compaction=None, project_authorization=None, cortex_session=None) -> AssistantState:
+def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, request_message_id: int | None = None, on_token=None, on_stage=None, session=None, actor=None, actor_role=None, sdb_requested=None, attachments=None, context=None, compaction=None, project_authorization=None, cortex_session=None) -> AssistantState:
     if project_authorization is not None:
         from app.services.projects import _ProjectAuthorization
         if not isinstance(project_authorization, _ProjectAuthorization):
@@ -141,4 +141,24 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
         "compaction": compaction or {},
         "cortex_session": cortex_session,
     }
-    return build_assistant_graph().invoke(state)
+    graph = build_assistant_graph()
+    if on_stage is None:
+        return graph.invoke(state)
+    last_state = None
+    stage_nodes = {
+        "assemble_context": "planning", "panel_cost_gate": "planning", "plan_llm": "planning",
+        "cortex_session_gate": "planning", "guardrails": "planning", "sdb_trigger_gate": "planning",
+        "cortex_turn": "responding", "sdb_clarify": "planning", "sdb_spec": "planning",
+        "sdb_plan": "planning", "sdb_approve": "planning", "sdb_execute": "executing",
+        "sdb_verify": "executing", "sdb_deliver": "responding", "execute_tool": "executing",
+        "respond_stream": "streaming",
+    }
+    for mode, chunk in graph.stream(state, stream_mode=["values", "updates"]):
+        if mode == "values":
+            last_state = chunk
+        else:
+            for node in chunk:
+                stage = stage_nodes.get(node)
+                if stage:
+                    on_stage(stage)
+    return last_state

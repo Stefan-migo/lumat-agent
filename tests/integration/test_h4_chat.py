@@ -97,9 +97,9 @@ def test_privileged_request_requires_approval_without_model_call(client, migrate
     thread = client.post("/panel/api/chat/threads", json={}).json()["thread"]
     response = client.post(f"/panel/api/chat/threads/{thread['id']}/messages", json={"content": "Delete all clients"})
     assert response.status_code == 201
-    assert response.json()["message"]["status"] == "approval_pending"
     persisted = client.get(f"/panel/api/chat/threads/{thread['id']}")
     assert persisted.status_code == 200
+    assert persisted.json()["messages"][0]["status"] == "approval_pending"
     contents = [row["content"] for row in persisted.json()["messages"]]
     assert contents == ["Delete all clients"]
     assert len(fake_client.calls) == 1
@@ -113,7 +113,6 @@ def test_model_failure_marks_message_failed_and_recoverable(client, migrated_db,
     thread = client.post("/panel/api/chat/threads", json={}).json()["thread"]
     failed = client.post(f"/panel/api/chat/threads/{thread['id']}/messages", json={"content": "Try again"})
     assert failed.status_code == 201
-    assert failed.json()["message"]["status"] == "failed"
     listed = client.get(f"/panel/api/chat/threads/{thread['id']}")
     assert listed.status_code == 200
     assert any(message["content"] == "Try again" and message["status"] == "failed" for message in listed.json()["messages"])

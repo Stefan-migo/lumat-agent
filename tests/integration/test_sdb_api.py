@@ -53,7 +53,8 @@ def test_authenticated_admin_can_explicitly_enter_sdb(client, migrated_db, mock_
     )
 
     assert response.status_code == 201, response.text
-    assert response.json()["message"]["status"] == "approval_pending"
+    settled = client.get(f"/panel/api/chat/threads/{thread_id}").json()
+    assert settled["messages"][0]["status"] == "approval_pending"
     with SessionLocal() as session:
         thread = session.get(InternalChatThread, thread_id)
         assert thread.assistant_state["sdb"]["phase"] == "APPROVE"
@@ -79,7 +80,8 @@ def test_sdb_stream_contains_ordered_phases_and_evidence(client, migrated_db, mo
         f"/panel/api/chat/threads/{thread_id}/messages",
         json={"content": "Review service history", "sdb_requested": True},
     ).json()["message"]
-    metadata = pending["assistant_metadata"]
+    thread = client.get(f"/panel/api/chat/threads/{thread_id}").json()
+    metadata = thread["messages"][0]["assistant_metadata"]
 
     approval = client.post(
         f"/panel/api/chat/threads/{thread_id}/approval",
@@ -123,7 +125,8 @@ def test_failed_sdb_task_stream_is_error_and_never_completed(client, migrated_db
         f"/panel/api/chat/threads/{thread_id}/messages",
         json={"content": "Review service history", "sdb_requested": True},
     ).json()["message"]
-    metadata = pending["assistant_metadata"]
+    thread = client.get(f"/panel/api/chat/threads/{thread_id}").json()
+    metadata = thread["messages"][0]["assistant_metadata"]
     monkeypatch.setattr(
         "app.services.agent_chat.execute_tool",
         lambda *args, **kwargs: (_ for _ in ()).throw(ToolExecutionError("read failed")),
