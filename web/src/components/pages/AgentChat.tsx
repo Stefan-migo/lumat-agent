@@ -208,13 +208,14 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
   const [deleteTarget, setDeleteTarget] = useState<InternalChatThreadSummary | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
 
-  const loadThread = (result: InternalChatResponse) => {
+  const loadThread = (result: InternalChatResponse, preserveArtifacts = false) => {
     const state = result.thread.assistant_state;
     setThread(result.thread);
     setMessages(result.messages ?? []);
-    setPlan(result.thread.current_plan ?? null);
+    if (!preserveArtifacts) setPlan(result.thread.current_plan ?? null);
     setApproval(state?.approval ?? null);
-    setEvidence((state?.events ?? []).flatMap((event) => event.evidence ?? []));
+    const persistedEvidence = (state?.events ?? []).flatMap((event) => event.evidence ?? []);
+    if (!preserveArtifacts || persistedEvidence.length > 0) setEvidence(persistedEvidence);
     setLifecycle(state?.stage ?? null);
     setRunId(result.thread.active_run_id ?? null);
     setAttachments(result.attachments ?? []);
@@ -292,7 +293,7 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
     try {
       await streamChatEvents(id, run, handleEvent);
       const persisted = await getChatThread(id);
-      loadThread(persisted);
+       loadThread(persisted, true);
       setStream("");
       setRecoverable(false);
     } catch (reason: unknown) {
@@ -348,10 +349,10 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
     }
   };
 
-  const send = async () => {
-    if (!thread || !content.trim() || processing) return;
-    const submitted = content.trim();
-    setContent("");
+  const send = async (value = content, preserveDraft = false) => {
+    if (!thread || !value.trim() || processing) return;
+    const submitted = value.trim();
+    if (!preserveDraft) setContent("");
     setProcessing(true);
     setError(null);
     const command = planningCommand(submitted);
@@ -414,6 +415,11 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void send();
+    } else if (event.key === "Enter" && event.shiftKey) {
+      event.preventDefault();
+      const start = event.currentTarget.selectionStart;
+      const end = event.currentTarget.selectionEnd;
+      setContent((value) => `${value.slice(0, start)}\n${value.slice(end)}`);
     }
   };
 
@@ -646,9 +652,21 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
                 <p>Describe una tarea o consulta para comenzar.</p>
               </div>
             ) : null}
-            {messages.map((message, index) => {
+            {messages.map((message) => {
               const outbound = message.author === "admin";
-              const last = index === messages.length - 1;
+              const messageRunId = message.assistant_metadata?.run_id;
+              const runEvents = (thread?.assistant_state?.events ?? []).filter(
+                (event) => event.run_id === messageRunId,
+              );
+              const messagePlan = runEvents.reduce<AssistantPlan | null>(
+                (current, event) => event.plan ?? current,
+                messageRunId === runId ? plan : null,
+              );
+              const messageEvidence = runEvents.length > 0
+                ? runEvents.flatMap((event) => event.evidence ?? [])
+                : messageRunId === runId
+                  ? evidence
+                  : [];
               return (
                 <article
                   key={message.id}
@@ -683,29 +701,29 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
                         Copiar mensaje
                       </Button>
                       {message.status === "failed" ? (
-                        <Button variant="secondary" onClick={() => setContent(message.content)}>
+                        <Button variant="secondary" onClick={() => void send(message.content, true)}>
                           Reintentar mensaje
                         </Button>
                       ) : null}
                     </div>
-                    {last && plan ? (
+                    {messagePlan ? (
                       <PlanCard
-                        plan={plan}
-                        approval={approval}
+                        plan={messagePlan}
+                        approval={messageRunId === runId ? approval : undefined}
                         busy={processing}
                         onApprove={
-                          approval && (approval.status === "pending" || plan.status === "pending")
+                          messageRunId === runId && approval && (approval.status === "pending" || messagePlan.status === "pending")
                             ? () => void approve(false)
                             : undefined
                         }
                         onReject={
-                          approval && (approval.status === "pending" || plan.status === "pending")
+                          messageRunId === runId && approval && (approval.status === "pending" || messagePlan.status === "pending")
                             ? () => void approve(true)
                             : undefined
                         }
                       />
                     ) : null}
-                    {last && evidence.length > 0 ? <EvidenceList evidence={evidence} /> : null}
+                    {messageEvidence.length > 0 ? <EvidenceList evidence={messageEvidence} /> : null}
                   </div>
                 </article>
               );
