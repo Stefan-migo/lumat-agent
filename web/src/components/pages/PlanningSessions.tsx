@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, type ReactNode } from "react";
 import { getPlanningSession, listPlanningSessions, reopenPlanningSession } from "../../api";
 import type { PlanningSession, PlanningSessionDetailResponse, PlanningSessionsResponse } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -14,7 +14,7 @@ function ReadState({ state, detail }: { state: AsyncDataState; detail: boolean }
   return null;
 }
 
-export function PlanningSessions({ sessionSlug, onOpenSession, onOpenThread, data, state }: { sessionSlug?: string; onOpenSession?: (slug: string) => void; onOpenThread?: (id: number) => void; data?: PlanningSessionsResponse; state?: AsyncDataState }) {
+export function PlanningSessions({ sessionSlug, onOpenSession, onOpenThread, data, state, sectionTabs }: { sessionSlug?: string; onOpenSession?: (slug: string) => void; onOpenThread?: (id: number) => void; data?: PlanningSessionsResponse; state?: AsyncDataState; sectionTabs?: ReactNode }) {
   const list = useAsyncData(useCallback(() => listPlanningSessions(), []), data === undefined);
   const detail = useAsyncData(useCallback(() => getPlanningSession(sessionSlug!), [sessionSlug]), sessionSlug !== undefined);
   if (sessionSlug) {
@@ -26,6 +26,7 @@ export function PlanningSessions({ sessionSlug, onOpenSession, onOpenThread, dat
       onOpenThread?.(session.thread_id);
     };
     return <PageFrame title={session?.topic ?? "Planning session"} meta={session ? <span>Thread {session.thread_id} · {session.status}</span> : undefined} state={<ReadState state={detail.state} detail />}>
+      {sectionTabs}
       <Button variant="secondary" onClick={() => window.history.back()}>Back to planning sessions</Button>
       {session?.status === "closed" ? <Button onClick={() => void reopen()}>Reopen session</Button> : null}
       {body ? <>
@@ -38,6 +39,7 @@ export function PlanningSessions({ sessionSlug, onOpenSession, onOpenThread, dat
   const currentState = state ?? (data ? "ready" : list.state);
   const sessions = result?.sessions ?? [];
   return <PageFrame title="Planning sessions" meta={<span>Durable Cortex planning work</span>} state={<ReadState state={currentState} detail={false} />}>
+    {sectionTabs}
     {currentState === "ready" && sessions.length === 0 ? <EmptyState title="No planning sessions" description="Planning sessions will appear here after an administrator opens one." /> : null}
     {sessions.length > 0 ? <div className="ai-agent-grammar__thread-area" aria-label="Planning session list"><div className="ai-agent-grammar__bubbles">{sessions.map((item: PlanningSession) => <button type="button" className="ai-agent-grammar__bubble" key={item.slug} onClick={() => onOpenSession?.(item.slug)}><strong>{item.topic}</strong><span>Thread {item.thread_id}</span><small>{item.status}</small></button>)}</div></div> : null}
   </PageFrame>;

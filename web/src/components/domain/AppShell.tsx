@@ -23,6 +23,7 @@ import { AdvancedDashboard } from '../pages/AdvancedDashboard';
 import { UserManagement } from '../pages/UserManagement';
 import { ProjectsPage } from '../pages/ProjectsPage';
 import { PlanningSessions } from '../pages/PlanningSessions';
+import { AssistantTabs, type AssistantView } from '../pages/AssistantTabs';
 
 /** Top-level SPA views. Client ficha and conversation thread are drill-downs
  * rendered from list views, not top-level nav, so they do not appear here. */
@@ -100,7 +101,9 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   };
 
   const view = route.view;
-  const shellView = view === 'cases' ? 'conversations' : view;
+  const shellView = view === 'cases' ? 'conversations' : view === 'projects' || view === 'planning-sessions' ? 'chat' : view;
+  const assistantView: AssistantView = view === 'projects' || view === 'planning-sessions' ? view : 'chat';
+  const sectionTabs = <AssistantTabs active={assistantView} onSelect={(target) => navigateToRoute({ view: target })} />;
   const clientId = route.clientId ?? null;
   const conversationId = route.conversationId ?? null;
 
@@ -112,11 +115,11 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
        : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList currentUserId={user.id} initialQueueTab={route.conversationTab === 'cases' ? 'case' : 'all'} refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
      : view === 'notifications' ? <NotificationCenter />
      : view === 'push' ? <PushSettings />
-        : view === 'chat' ? <AgentChat />
+         : view === 'chat' ? <AgentChat sectionTabs={sectionTabs} />
        : view === 'kb' ? <KbList />
       : view === 'users' ? <UserManagement currentUser={user} />
-       : view === 'projects' ? <ProjectsPage projectSlug={route.projectSlug} onOpenProject={(slug) => navigateToRoute({ view: 'projects', projectSlug: slug })} />
-       : view === 'planning-sessions' ? <PlanningSessions sessionSlug={route.planningSessionSlug} onOpenSession={(slug) => navigateToRoute({ view: 'planning-sessions', planningSessionSlug: slug })} onOpenThread={(id) => { window.history.pushState({}, '', `${pathForView('chat')}?thread_id=${id}`); setRoute({ view: 'chat' }); }} />
+        : view === 'projects' ? <ProjectsPage sectionTabs={sectionTabs} projectSlug={route.projectSlug} onOpenProject={(slug) => navigateToRoute({ view: 'projects', projectSlug: slug })} />
+        : view === 'planning-sessions' ? <PlanningSessions sectionTabs={sectionTabs} sessionSlug={route.planningSessionSlug} onOpenSession={(slug) => navigateToRoute({ view: 'planning-sessions', planningSessionSlug: slug })} onOpenThread={(id) => { window.history.pushState({}, '', `${pathForView('chat')}?thread_id=${id}`); setRoute({ view: 'chat' }); }} />
       : <Settings />;
 
   return (

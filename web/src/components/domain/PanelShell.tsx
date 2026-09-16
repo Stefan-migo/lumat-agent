@@ -123,7 +123,7 @@ interface NavigationItem {
   adminOnly?: boolean;
 }
 
-const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" | "advanced-dashboard">, NavigationItem> = {
+const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" | "advanced-dashboard" | "projects" | "planning-sessions">, NavigationItem> = {
   dashboard: { label: "Panel unificado", icon: PanelIcon },
   chat: { label: "Asistente Lumat", icon: AssistantIcon, adminOnly: true },
   conversations: { label: "Conversaciones", icon: ChatIcon },
@@ -133,8 +133,6 @@ const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" |
   'automation-rules': { label: "Automatizaciones", icon: AutomationIcon, adminOnly: true },
   settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
   users: { label: "Usuarios", icon: UsersIcon, adminOnly: true },
-  projects: { label: "Proyectos", icon: UsersIcon },
-  "planning-sessions": { label: "Sesiones de planning", icon: AssistantIcon, adminOnly: true },
 };
 
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
