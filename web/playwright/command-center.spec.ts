@@ -1,6 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const user = { id: 1, username: "admin", role: "admin" };
+const now = Date.now();
+const isoDaysAgo = (days: number) => new Date(now - days * 86400000).toISOString();
+const calls: string[] = [];
+
 const message = (id: number, content: string, status: "processed" | "failed") => ({
   id,
   thread_id: 7,
@@ -8,6 +12,7 @@ const message = (id: number, content: string, status: "processed" | "failed") =>
   content,
   status,
 });
+
 const thread = {
   thread: {
     id: 7,
@@ -25,117 +30,167 @@ const thread = {
   attachments: [],
 };
 
+const summaries = [
+  { id: 7, title: "Conversación de hoy", created_at: isoDaysAgo(0), updated_at: isoDaysAgo(0) },
+  { id: 8, title: "Consulta reciente", created_at: isoDaysAgo(3), updated_at: isoDaysAgo(3) },
+  { id: 9, title: "Consulta anterior", created_at: isoDaysAgo(10), updated_at: isoDaysAgo(10) },
+];
+
 async function stubBackend(page: Page) {
+  calls.length = 0;
   await page.route("**/panel/ws", (route) => route.abort());
   await page.route("**/panel/api/**", async (route) => {
-    const url = new URL(route.request().url());
-    let body: unknown;
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+    calls.push(`${method} ${url.pathname}`);
+
+    let body: unknown = {};
     if (url.pathname === "/panel/api/me") body = user;
     else if (url.pathname === "/panel/api/notifications") body = { notifications: [] };
-    else if (url.pathname === "/panel/api/assistant/capabilities") body = { tools: [{ name: "read", description: "Read-only fixture", read_only: true, write: false }], personas: ["assistant"], prompts: ["default"], kb_available: true, memory_available: true };
-    else if (url.pathname === "/panel/api/chat/threads" && route.request().method() === "GET") body = { threads: [{ id: 7, title_or_preview: "Fixture conversation", updated_at: "2026-09-15T12:00:00Z", status: "active", run_status: "approval_pending", approval_status: "pending" }] };
-    else if (url.pathname === "/panel/api/chat/threads" && route.request().method() === "POST") body = thread;
-    else if (url.pathname === "/panel/api/chat/threads/7") body = thread;
-    else if (url.pathname === "/panel/api/conversations") body = { items: [{ id: 9, customer_id: 1, wa_phone: "+56911111111", state: "bot", responsible_id: null, version: 1, summary: "Emergency fixture", latest_inbound_at: "2026-09-15T12:00:00Z", reply_window_open: true, delivery_summary: { failed: 0, pending: 0, sending: 0, sent: 0, unknown: 0 }, last_message_at: "2026-09-15T12:00:00Z", created_at: "2026-09-15T11:00:00Z", closed_at: null, customer: { id: 1, name: "Fixture customer", phone_e164: "+56911111111" }, case: { id: 44, service: "Emergency", priority: "high", status: "open", emergency: true, summary: "Emergency fixture", acknowledged_at: null }, case_id: 44, emergency: true, acknowledged_at: null, case_status: "open", case_priority: "high", captured_data: null }], total: 1, offset: 0, limit: 20, counts: { all: 1, human: 0, emergency: 1, case: 1, closed: 0 } };
-    else body = {};
+    else if (url.pathname === "/panel/api/assistant/capabilities") body = { tools: [], personas: [], prompts: [], kb_available: true, memory_available: true };
+    else if (url.pathname === "/panel/api/chat/threads" && method === "GET") body = { threads: summaries };
+    else if (url.pathname === "/panel/api/chat/threads" && method === "POST") body = thread;
+    else if (url.pathname === "/panel/api/chat/threads/7" && method === "GET") body = thread;
+    else if (url.pathname === "/panel/api/chat/threads/7/messages") body = { message: message(3, "Mensaje enviado", "processed") };
+    else if (url.pathname === "/panel/api/chat/threads/7/approval") body = { status: "consumed", message: message(4, "Plan aprobado", "processed") };
+    else if (url.pathname === "/panel/api/chat/threads/7/stream") {
+      await route.fulfill({ status: 200, contentType: "text/event-stream", body: "" });
+      return;
+    } else if (url.pathname === "/panel/api/planning/sessions") body = { session: { slug: "tema", topic: "tema", status: "active" } };
+    else if (url.pathname.includes("/attachments")) body = { attachment: { id: 10, filename: "fixture.txt" } };
+    else if (url.pathname === "/panel/api/chat/threads/8" || url.pathname === "/panel/api/chat/threads/9") body = thread;
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
 }
 
-async function openCommandCenter(page: Page, width: number) {
+async function openChat(page: Page, width = 1024, withThread = true) {
   await page.setViewportSize({ width, height: 900 });
   await stubBackend(page);
-  await page.goto("chat");
-  await expect(page.locator("#command-center-conversation")).toBeVisible();
-  await expect(page.getByText("Persisted context")).toBeVisible();
+  await page.goto(withThread ? "chat?thread_id=7" : "chat");
+  await expect(page.locator(".assistant-chat__conversation")).toBeVisible();
+  if (withThread) await expect(page.getByText("Persisted context")).toBeVisible();
 }
 
-test.describe("Command Center narrow browser contract", () => {
-  test("keeps desktop zones ordered and contained", async ({ page }) => {
-    await openCommandCenter(page, 1024);
-    const zones = page.locator(".command-center > [data-zone]");
-    await expect(zones).toHaveCount(3);
-    const boxes = await zones.evaluateAll((elements) => elements.map((element) => {
-      const box = element.getBoundingClientRect();
-      return { left: box.left, right: box.right, visible: getComputedStyle(element).display !== "none" };
-    }));
-    expect(boxes.every((box) => box.visible)).toBe(true);
-    expect(boxes[0].left).toBeLessThan(boxes[1].left);
-    expect(boxes[1].left).toBeLessThan(boxes[2].left);
-    expect(await page.locator(".command-center").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
-    // The navigator zone must be populated from the bounded list seam at desktop,
-    // not merely present: an empty navigator still renders "in order" but is not scannable.
-    await expect(page.locator("#command-center-navigator").getByRole("button", { name: /fixture conversation/i })).toBeVisible();
+test.describe("Assistant browser contract", () => {
+  test("desktop centers one conversation and replaces the old zone tablist", async ({ page }) => {
+    await openChat(page);
+    const column = page.locator(".assistant-chat__conversation");
+    const box = await column.boundingBox();
+    const sidebar = await page.locator("#panel-shell-sidebar").boundingBox();
+    expect(box).not.toBeNull();
+    expect(sidebar).not.toBeNull();
+    expect(box!.width).toBeLessThanOrEqual(768);
+    const contentCenter = (sidebar!.x + sidebar!.width + 1024) / 2;
+    expect(Math.abs(box!.x + box!.width / 2 - contentCenter)).toBeLessThan(20);
+    await expect(page.getByRole("tablist")).toHaveCount(0);
+    await expect(page.locator(".command-center [data-zone]")).toHaveCount(0);
   });
 
-  test("uses one compact zone at 390px and allows keyboard tab switching", async ({ page }) => {
-    await openCommandCenter(page, 390);
-    await expect(page.locator(".command-center")).toHaveAttribute("data-tier", "compact");
-    await expect(page.locator(".command-center [data-zone][data-zone-active='true']")).toHaveCount(1);
-    const contextTab = page.getByRole("tab", { name: "Read-only execution context" });
-    await contextTab.focus();
-    await contextTab.press("Enter");
-    await expect(contextTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator("#command-center-context")).toBeVisible();
-    await expect(page.locator("#command-center-conversation")).toBeHidden();
+  test("history groups threads and context is closed until disclosed", async ({ page }) => {
+    await openChat(page, 1200, false);
+    await expect(page.getByRole("button", { name: "Historial" })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Contexto" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Historial" }).click();
+    const popover = page.getByRole("dialog", { name: "Historial" });
+    await expect(popover).toBeVisible();
+    for (const label of ["Hoy", "Últimos 7 días", "Anteriores"]) await expect(popover.getByRole("heading", { name: label })).toBeVisible();
+    await expect(popover.getByText("Consulta reciente")).toBeVisible();
+    await expect(popover.getByText(/Hace|Hoy|\d/).first()).toBeVisible();
+    await page.getByRole("button", { name: "Contexto" }).click();
+    await expect(page.getByRole("complementary", { name: "Contexto" })).toBeVisible();
+    await expect(page.getByText("Solo lectura")).toBeVisible();
   });
 
-  test("uses the distinct tablet tier at 768px and switches zones with keyboard only", async ({ page }) => {
-    await openCommandCenter(page, 768);
-    await expect(page.locator(".command-center")).toHaveAttribute("data-tier", "tablet");
-    await expect(page.locator(".command-center [data-zone][data-zone-active='true']")).toHaveCount(1);
-    const navigatorTab = page.getByRole("tab", { name: "Thread navigator" });
-    await navigatorTab.focus();
-    await navigatorTab.press("Enter");
-    await expect(navigatorTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator("#command-center-navigator")).toBeVisible();
-    await expect(page.locator("#command-center-conversation")).toBeHidden();
-  });
-
-  test("enters focus mode by keyboard, exposes Escape, and restores focus", async ({ page }) => {
-    await openCommandCenter(page, 1024);
-    const trigger = page.getByRole("button", { name: "Entrar en modo foco" });
-    await trigger.focus();
-    await trigger.press("Enter");
-    await expect(page.getByRole("button", { name: "Salir del modo foco" })).toBeVisible();
-    await expect(page.locator("#panel-shell-sidebar")).toHaveAttribute("aria-hidden", "true");
-    await expect(page.getByRole("button", { name: "Salir del modo foco" })).toBeFocused();
+  test("navigator rename and delete dialogs cancel without requests", async ({ page }) => {
+    await openChat(page, 1200, false);
+    await page.getByRole("button", { name: "Historial" }).click();
+    const rename = page.getByRole("button", { name: /Renombrar Conversación de hoy/ });
+    await rename.click();
+    await expect(page.getByRole("dialog", { name: "Renombrar conversación" })).toBeVisible();
+    const beforeRename = calls.filter((call) => call.startsWith("PATCH")).length;
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("button", { name: "Entrar en modo foco" })).toBeFocused();
-    await expect(page.locator("#panel-shell-sidebar")).not.toHaveAttribute("aria-hidden", "true");
+    await expect(page.getByRole("dialog", { name: "Renombrar conversación" })).toHaveCount(0);
+    expect(calls.filter((call) => call.startsWith("PATCH")).length).toBe(beforeRename);
+
+    await page.getByRole("button", { name: "Historial" }).click();
+    await page.getByRole("button", { name: /Eliminar Conversación de hoy/ }).click();
+    await expect(page.getByRole("dialog", { name: "Eliminar conversación" })).toBeVisible();
+    const beforeDelete = calls.filter((call) => call.startsWith("DELETE")).length;
+    await page.getByRole("button", { name: "Cancelar" }).click();
+    await expect(page.getByRole("dialog", { name: "Eliminar conversación" })).toHaveCount(0);
+    expect(calls.filter((call) => call.startsWith("DELETE")).length).toBe(beforeDelete);
   });
 
-  test("restores shell and selected zone after focus-mode resize", async ({ page }) => {
-    await openCommandCenter(page, 1024);
-    const trigger = page.getByRole("button", { name: "Entrar en modo foco" });
-    await trigger.focus();
-    await trigger.press("Enter");
-    await expect(page.locator("#panel-shell-sidebar")).toHaveAttribute("aria-hidden", "true");
-
-    await page.setViewportSize({ width: 390, height: 900 });
-    await expect(page.locator(".command-center")).toHaveAttribute("data-tier", "compact");
-    await page.keyboard.press("Escape");
-
-    await expect(page.locator("#panel-shell-sidebar")).not.toHaveAttribute("aria-hidden", "true");
-    await expect(page.locator(".command-center [data-zone][data-zone-active='true']")).toHaveCount(1);
-    await expect(page.locator("#command-center-conversation")).toBeVisible();
-    await expect(page.getByText("Persisted context")).toBeVisible();
-  });
-
-  for (const width of [390, 768, 1024]) {
-    test(`keeps critical actions reachable at ${width}px`, async ({ page }) => {
-      await openCommandCenter(page, width);
-      if (width < 1024) {
-        await page.getByRole("tab", { name: "Conversation zone" }).focus();
-        await page.getByRole("tab", { name: "Conversation zone" }).press("Enter");
+  for (const width of [390, 768]) {
+    test(`reflows at ${width}px without overflow while preserving actions`, async ({ page }) => {
+      await openChat(page, width);
+      await expect(page.locator("body")).toHaveJSProperty("scrollWidth", width);
+      for (const control of [
+        page.getByRole("button", { name: "Enviar" }),
+        page.getByLabel("Adjuntar archivo"),
+        page.getByRole("button", { name: "Planificar" }),
+        page.getByRole("button", { name: "Aprobar" }),
+        page.getByRole("button", { name: "Reintentar mensaje" }),
+      ]) {
+        await control.scrollIntoViewIfNeeded();
+        await expect(control).toBeVisible();
       }
-      await expect(page.getByRole("button", { name: "Enviar" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Aprobar" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Reintentar" })).toBeVisible();
-      const conversations = page.getByRole("button", { name: "Conversaciones" }).first();
-      await expect(conversations).toBeVisible();
-      await conversations.click();
-      await expect(page.getByRole("button", { name: "Reconocer emergencia" })).toBeVisible();
     });
   }
+
+  test("preserves send, approval, retry, attachment, and planning paths", async ({ page }) => {
+    await openChat(page);
+    const composer = page.getByRole("textbox", { name: "Mensaje" });
+    await composer.fill("Consulta de prueba");
+    await page.getByRole("button", { name: "Enviar" }).click();
+    await expect.poll(() => calls.filter((call) => call === "POST /panel/api/chat/threads/7/messages").length).toBe(1);
+
+    await page.getByRole("button", { name: "Aprobar" }).click();
+    await expect.poll(() => calls.filter((call) => call === "POST /panel/api/chat/threads/7/approval").length).toBe(1);
+    await page.getByRole("button", { name: "Reintentar mensaje" }).click();
+    await expect(composer).toHaveValue("Retry me");
+    await page.getByLabel("Adjuntar archivo").setInputFiles({ name: "fixture.txt", mimeType: "text/plain", buffer: Buffer.from("fixture") });
+    await expect.poll(() => calls.filter((call) => call === "POST /panel/api/chat/threads/7/attachments").length).toBe(1);
+
+    await page.getByRole("button", { name: "Planificar" }).click();
+    const dialog = page.getByRole("dialog", { name: "Tema de planificación" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Iniciar planificación" }).click();
+    await expect(dialog.getByRole("alert")).toHaveText("Ingresa un tema para continuar.");
+    expect(calls.filter((call) => call === "POST /panel/api/planning/sessions")).toHaveLength(0);
+    await dialog.locator("#planning-topic").fill("  tema  ");
+    await dialog.getByRole("button", { name: "Iniciar planificación" }).click();
+    await expect.poll(() => calls.filter((call) => call === "POST /panel/api/planning/sessions").length).toBe(1);
+  });
+
+  test("keeps visible focus, 200% actions, and reduced motion semantics", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openChat(page, 1024);
+    for (const control of [page.getByRole("textbox", { name: "Mensaje" }), page.getByRole("button", { name: "Historial" }), page.getByRole("button", { name: "Contexto" })]) {
+      await control.focus();
+      await expect(control).toBeFocused();
+    }
+    await page.evaluate(() => { document.documentElement.style.zoom = "2"; });
+    await page.getByRole("button", { name: "Contexto" }).scrollIntoViewIfNeeded();
+    await expect(page.getByRole("button", { name: "Contexto" })).toBeVisible();
+    const reducedMotionAnimation = await page.evaluate(() => {
+      const stream = document.createElement("p");
+      stream.className = "assistant-chat__stream";
+      const cursor = document.createElement("span");
+      stream.append(cursor);
+      document.body.append(stream);
+      const animation = getComputedStyle(cursor).animationName;
+      stream.remove();
+      return animation;
+    });
+    expect(reducedMotionAnimation).toBe("none");
+  });
+
+  test("renders only localized states and generated conversation titles", async ({ page }) => {
+    await openChat(page);
+    const surface = await page.locator("body").innerText();
+    for (const raw of ["open", "processing", "bot", "human"]) expect(surface).not.toMatch(new RegExp(`\\b${raw}\\b`, "i"));
+    expect(surface).not.toMatch(/Thread #\d+/i);
+  });
 });
