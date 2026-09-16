@@ -43,7 +43,7 @@ body {
   --bg: #F1F1E8;
   --surface: #fff;
   --border: #d8dde3;
-  --border-strong: #c3cbd4;
+  --border-strong: #7e858f;
   --text: #1a202c;
   --text-muted: #4a5568;
   --table-head-bg: #eef1f4;
@@ -55,7 +55,7 @@ body {
   --success: #1b5e20;
   --success-bg: #e8f5e9;
   --success-border: #81c784;
-  --warning: #a16207;
+  --warning: #a05e07;
   --warning-bg: #fef3c7;
   --warning-border: #fcd34d; /* new: StatusBadge human/pending */
 

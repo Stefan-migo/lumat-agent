@@ -136,7 +136,7 @@ The current primary scale, neutrals, and semantic pairs in `tokens.css` remain t
 | Text | `--text` | `#1A202C` | Default readable text |
 | Muted text | `--text-muted` | `#4A5568` | Metadata and supporting text, never disabled semantics alone |
 | Success | `--success` | `#1B5E20` | Confirmed success or healthy completion |
-| Warning | `--warning` | `#A16207` | Attention, handoff, approaching limits |
+| Warning | `--warning` | `#A05E07` | Attention, handoff, approaching limits |
 | Danger | `--danger` | `#B71C1C` | Emergency, destructive action, fatal failure |
 
 Do not use `--primary-600` for normal-size links on white. Its current 3.38:1 contrast fails WCAG AA. Use `--primary-700` until an explicit semantic link token is introduced.

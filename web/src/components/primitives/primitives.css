@@ -1438,13 +1438,13 @@
 .assistant-chat__stream { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--corp-text); }
 .assistant-chat__stream span { color: var(--info); animation: assistant-cursor var(--duration-base) steps(2, jump-none) infinite; }
 .assistant-chat__composer-wrap { position: sticky; bottom: 0; display: grid; gap: var(--space-2); padding: var(--space-3) 0; background: var(--brand-bg); }
-.assistant-chat__composer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-2); align-items: end; padding: var(--space-2); border: 1px solid var(--corp-border); border-radius: var(--radius-md); background: var(--brand-bg-elevated); box-shadow: var(--shadow-1); }
+.assistant-chat__composer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-2); align-items: end; padding: var(--space-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--brand-bg-elevated); box-shadow: var(--shadow-1); }
 .assistant-chat__textarea { min-width: 0; }
 .assistant-chat__textarea .field__control { max-height: 10rem; min-height: var(--space-8); resize: none; overflow-y: auto; }
 .assistant-chat__attach { display: inline-flex; align-items: center; min-height: 40px; padding: var(--space-2); color: var(--corp-primary); font-size: var(--text-sm); cursor: pointer; }
 .assistant-chat__attach input { width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); position: absolute; white-space: nowrap; }
 .assistant-chat__status { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; color: var(--corp-fg-muted); font-size: var(--text-xs); }
-.assistant-chat__attachment { padding: var(--space-1) var(--space-2); border: 1px solid var(--corp-border); border-radius: var(--radius-sm); }
+.assistant-chat__attachment { padding: var(--space-1) var(--space-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
 .assistant-chat__context { position: fixed; inset: 0 0 0 auto; z-index: var(--z-modal); width: min(24rem, calc(100vw - var(--space-4))); padding: var(--space-5); background: var(--brand-bg-elevated); color: var(--corp-text); box-shadow: var(--shadow-3); }
 .assistant-chat__context > div { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .assistant-chat__context h2 { margin: 0; font-size: var(--text-lg); }
