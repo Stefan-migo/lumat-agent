@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AgentChat, COMMAND_CENTER_BREAKPOINTS, commandCenterTier } from "./AgentChat";
 
 const makeThread = (id = 4) => ({
@@ -646,6 +646,37 @@ describe("AgentChat", () => {
     expect(messages[0]).toContainElement(screen.getByText("Old evidence"));
     expect(messages[1]).toContainElement(screen.getByText("New evidence"));
     expect(messages[1]).toHaveTextContent("new.tool");
+  });
+
+  it("does not inherit earlier run artifacts when a later run has none", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+      thread: {
+        ...makeThread(),
+        active_run_id: "run-live",
+        assistant_state: {
+          events: [{
+            run_id: "run-a",
+            plan: { tool: "agenda.create", status: "completed" },
+            evidence: [{ tool: "agenda.create", status: "completed", detail: "Cita creada" }],
+          }],
+        },
+      },
+      messages: [
+        { id: 1, author: "agent", content: "Respuesta anterior", status: "processed", assistant_metadata: { run_id: "run-a" } },
+        { id: 2, author: "agent", content: "Respuesta posterior", status: "processed", assistant_metadata: { run_id: "run-b" } },
+      ],
+    }));
+
+    render(<AgentChat threadId={4} />);
+    const messages = await screen.findAllByRole("article");
+    const later = within(messages[1]);
+
+    expect(messages[0]).toHaveTextContent("agenda.create");
+    expect(messages[0]).toHaveTextContent("Cita creada");
+    expect(messages[1]).not.toHaveTextContent("agenda.create");
+    expect(messages[1]).not.toHaveTextContent("Cita creada");
+    expect(later.queryByText("Plan de acción")).not.toBeInTheDocument();
+    expect(later.queryByText(/Evidencia de herramientas/)).not.toBeInTheDocument();
   });
 
   it("keeps the authorized refusal text without escalation copy", async () => {
