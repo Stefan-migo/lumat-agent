@@ -11,6 +11,7 @@ const message = (id: number, content: string, status: "processed" | "failed") =>
   author: "admin" as const,
   content,
   status,
+  assistant_metadata: { run_id: "run-7" },
 });
 
 const thread = {
@@ -55,7 +56,11 @@ async function stubBackend(page: Page) {
     else if (url.pathname === "/panel/api/chat/threads/7/messages") body = { message: message(3, "Mensaje enviado", "processed") };
     else if (url.pathname === "/panel/api/chat/threads/7/approval") body = { status: "consumed", message: message(4, "Plan aprobado", "processed") };
     else if (url.pathname === "/panel/api/chat/threads/7/stream") {
-      await route.fulfill({ status: 200, contentType: "text/event-stream", body: "" });
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: `data: ${JSON.stringify({ type: "plan", thread_id: 7, run_id: "run-7", sequence: 0, plan: { tool: "send_reply", status: "pending" } })}\n\n`,
+      });
       return;
     } else if (url.pathname === "/panel/api/planning/sessions") body = { session: { slug: "tema", topic: "tema", status: "active" } };
     else if (url.pathname.includes("/attachments")) body = { attachment: { id: 10, filename: "fixture.txt" } };
@@ -130,7 +135,7 @@ test.describe("Assistant browser contract", () => {
         page.getByRole("button", { name: "Enviar" }),
         page.getByLabel("Adjuntar archivo"),
         page.getByRole("button", { name: "Planificar" }),
-        page.getByRole("button", { name: "Aprobar" }),
+        page.getByRole("button", { name: "Aprobar" }).last(),
         page.getByRole("button", { name: "Reintentar mensaje" }),
       ]) {
         await control.scrollIntoViewIfNeeded();
@@ -146,10 +151,11 @@ test.describe("Assistant browser contract", () => {
     await page.getByRole("button", { name: "Enviar" }).click();
     await expect.poll(() => calls.filter((call) => call === "POST /panel/api/chat/threads/7/messages").length).toBe(1);
 
-    await page.getByRole("button", { name: "Aprobar" }).click();
+    await page.getByRole("button", { name: "Aprobar" }).last().click();
     await expect.poll(() => calls.filter((call) => call === "POST /panel/api/chat/threads/7/approval").length).toBe(1);
     await page.getByRole("button", { name: "Reintentar mensaje" }).click();
-    await expect(composer).toHaveValue("Retry me");
+    await expect.poll(() => calls.filter((call) => call === "POST /panel/api/chat/threads/7/messages").length).toBe(2);
+    await expect(composer).toHaveValue("");
     await page.getByLabel("Adjuntar archivo").setInputFiles({ name: "fixture.txt", mimeType: "text/plain", buffer: Buffer.from("fixture") });
     await expect.poll(() => calls.filter((call) => call === "POST /panel/api/chat/threads/7/attachments").length).toBe(1);
 

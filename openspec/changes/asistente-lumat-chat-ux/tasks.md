@@ -37,3 +37,26 @@ Decision needed before apply: No
 Chain strategy: stacked-to-main
 
 PR #1 (base feature branch): migration/model + RED/GREEN tests; `uv run pytest tests/`; runtime N/A (schema/model unit boundary); rollback migration/model files. PR #2 (base PR #1): serializer/routes/types + tests; `uv run pytest tests/`; runtime N/A (API contract tests); rollback API contract files. PR #3 (base PR #2): title lifecycle/service + tests; `uv run pytest tests/`; runtime N/A (cost/fallback integration tests); rollback title path. PR #4 (base PR #3): `AgentChat`/CSS/Settings + rewritten Vitest tests; `cd web && npm test && npx tsc -b`; runtime N/A until browser slice; rollback page/UI files. PR #5 (base PR #4): rewritten Playwright command-center coverage and final verification; `cd web && npm run test:e2e`; runtime browser scenarios; rollback e2e file only.
+
+## Corrective Slice: Verification Findings
+
+- [x] C1 Anchor plan and evidence to the producing message's existing `assistant_metadata.run_id` and event `run_id`; add multi-run regression coverage.
+- [x] C2 Make `Reintentar mensaje` resubmit the failed content and preserve any unsent composer draft; strengthen Shift+Enter and retry assertions.
+- [x] C3 Trace titleless-thread reachability and guarantee a bounded non-empty fallback when no admin opening exists.
+
+### Corrective Work Unit Evidence
+
+| Evidence | Exact result |
+|---|---|
+| Focused tests | `cd web && npm test -- --run src/components/pages/AgentChat.test.tsx`; 27 passed. `TEST_ADMIN_DB_URL=... uv run pytest tests/integration/test_assistant_chat.py tests/integration/test_agent_chat_realtime.py -q`; 33 passed. |
+| Runtime harness | `cd web && npm run test:e2e -- playwright/command-center.spec.ts`; 8 passed. |
+| Rollback boundary | Revert `AgentChat.tsx`, `AgentChat.test.tsx`, `agent_chat.py`, `command-center.spec.ts`, and this corrective task section. |
+
+### Corrective TDD Evidence
+
+| Fix | RED counter-check | GREEN |
+|---|---|---|
+| C1 run anchoring | Reverted to `last`; multi-run test failed because old evidence was absent from its producing message. | 27 frontend tests passed. |
+| C2 retry | Reverted retry handler; test failed with only 2 fetch calls instead of the retry POST. | 27 frontend tests passed. |
+| Shift+Enter | Reverted newline branch; test failed: expected `Hola\n`, received `Hola`. | 27 frontend tests passed. |
+| C3 fallback | Reverted default; backend test failed: expected `Conversación con el asistente`, received empty string. | 33 focused backend tests passed. |

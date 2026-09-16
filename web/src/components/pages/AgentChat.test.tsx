@@ -235,8 +235,9 @@ describe("AgentChat", () => {
     expect(composer).toHaveStyle({ height: "96px" });
 
     fireEvent.keyDown(composer, { key: "Enter", shiftKey: true });
-    expect(composer).toHaveValue("Hola");
+    expect(composer).toHaveValue("Hola\n");
     expect(composer).not.toBeDisabled();
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledTimes(1);
   });
 
   it("renders approval and evidence inside the producing message", async () => {
@@ -251,9 +252,9 @@ describe("AgentChat", () => {
             events: [{ evidence: [{ tool: "agenda", status: "completed", detail: "Creado" }] }],
           },
         },
-        messages: [
-          { id: 1, author: "agent", content: "Necesito aprobación", status: "processed" },
-        ],
+         messages: [
+           { id: 1, author: "agent", content: "Necesito aprobación", status: "processed", assistant_metadata: { run_id: "run" } },
+         ],
       }),
     );
 
@@ -399,7 +400,7 @@ describe("AgentChat", () => {
             },
           },
           messages: [
-            { id: 1, author: "agent", content: "Plan pendiente", status: "processed" },
+           { id: 1, author: "agent", content: "Plan pendiente", status: "processed", assistant_metadata: { run_id: "run-2" } },
           ],
         }),
       )
@@ -433,7 +434,7 @@ describe("AgentChat", () => {
           current_plan: { tool: "agenda", status: "pending" },
           assistant_state: { approval: { token: "secret", status: "pending" } },
         },
-        messages: [{ id: 1, author: "agent", content: "Confirma la agenda", status: "processed" }],
+        messages: [{ id: 1, author: "agent", content: "Confirma la agenda", status: "processed", assistant_metadata: { run_id: "run-approve" } }],
       }))
       .mockResolvedValueOnce(jsonResponse({
         status: "consumed",
@@ -470,7 +471,7 @@ describe("AgentChat", () => {
           },
         },
         messages: [
-          { id: 1, author: "agent", content: "Plan recuperado", status: "processed" },
+           { id: 1, author: "agent", content: "Plan recuperado", status: "processed", assistant_metadata: { run_id: "run-3" } },
         ],
       }),
     );
@@ -585,12 +586,17 @@ describe("AgentChat", () => {
     );
   });
 
-  it("keeps a failed submitted message visible and actionable", async () => {
-    vi.spyOn(globalThis, "fetch")
+  it("resubmits a failed message in place and preserves an unsent draft", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
       .mockResolvedValueOnce(
         jsonResponse({
-          message: { id: 3, author: "admin", content: "Retry me", status: "failed", error: "temporary" },
+         message: { id: 3, author: "admin", content: "Retry me", status: "failed", error: "temporary" },
+        }, 201),
+       )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          message: { id: 4, author: "admin", content: "Retry me", status: "failed", error: "temporary" },
         }, 201),
       );
 
@@ -603,7 +609,43 @@ describe("AgentChat", () => {
       item.textContent?.includes("No se pudo procesar el mensaje"),
     )).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: /reintentar/i }));
-    expect(composer).toHaveValue("Retry me");
+    await waitFor(() => expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/panel/api/chat/threads/4/messages",
+      expect.objectContaining({ body: JSON.stringify({ content: "Retry me", attachment_ids: [] }) }),
+    ));
+
+    fireEvent.change(composer, { target: { value: "draft" } });
+    fireEvent.click(screen.getAllByRole("button", { name: /reintentar/i })[0]);
+    expect(composer).toHaveValue("draft");
+  });
+
+  it("keeps plan and evidence with the message that owns their run", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+      thread: {
+        ...makeThread(),
+        active_run_id: "run-two",
+        current_plan: { tool: "new.tool", status: "pending" },
+        assistant_state: {
+          events: [
+            { run_id: "run-one", evidence: [{ tool: "old.tool", status: "completed", detail: "Old evidence" }] },
+            { run_id: "run-two", evidence: [{ tool: "new.tool", status: "completed", detail: "New evidence" }], plan: { tool: "new.tool", status: "pending" } },
+          ],
+          approval: { token: "token", status: "pending" },
+        },
+      },
+      messages: [
+        { id: 1, author: "admin", content: "Old request", status: "processed", assistant_metadata: { run_id: "run-one" } },
+        { id: 2, author: "admin", content: "New request", status: "processed", assistant_metadata: { run_id: "run-two" } },
+      ],
+    }));
+
+    render(<AgentChat threadId={4} />);
+    const messages = await screen.findAllByRole("article");
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toContainElement(screen.getByText("Old evidence"));
+    expect(messages[1]).toContainElement(screen.getByText("New evidence"));
+    expect(messages[1]).toHaveTextContent("new.tool");
   });
 
   it("keeps the authorized refusal text without escalation copy", async () => {

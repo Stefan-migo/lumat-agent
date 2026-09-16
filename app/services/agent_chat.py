@@ -491,7 +491,7 @@ def _generate_thread_title(
     if thread.title is not None:
         return
     opening = _opening_message(session, thread.id)
-    fallback = _bounded_title(opening.content if opening else "")
+    fallback = _bounded_title(opening.content if opening else "") or "Conversación con el asistente"
     try:
         _, mode = costs.internal_thread_cost_state(session, thread.id)
         if mode != "normal":
