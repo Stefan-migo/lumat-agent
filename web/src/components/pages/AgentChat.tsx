@@ -12,6 +12,7 @@ import {
   closePlanningSession,
   createChatThread,
   deleteChatThread,
+  getAssistantCapabilities,
   getChatThread,
   listChatThreads,
   openPlanningSession,
@@ -32,6 +33,7 @@ import type {
   InternalChatResponse,
   InternalChatThread,
   InternalChatThreadSummary,
+  AssistantCapabilities,
   PlanningSession,
 } from "../../types";
 import { realtimeClient, type ConnectionStatus } from "../../realtime";
@@ -327,6 +329,10 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
   const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
   const [navigatorError, setNavigatorError] = useState<string | null>(null);
   const [contextOpen, setContextOpen] = useState(false);
+  const [capabilities, setCapabilities] = useState<AssistantCapabilities | null>(null);
+  const [capabilitiesLoading, setCapabilitiesLoading] = useState(false);
+  const [capabilitiesError, setCapabilitiesError] = useState(false);
+  const capabilitiesRequested = useRef(false);
   const [planningOpen, setPlanningOpen] = useState(false);
   // Copy feedback: the icon that was just used swaps to a check and says so,
   // then reverts. Without it the click is silent and reads as a no-op.
@@ -403,6 +409,27 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
       unsubscribeStatus();
     };
   }, [thread]);
+
+  useEffect(() => {
+    if (!contextOpen || capabilitiesRequested.current) return;
+    capabilitiesRequested.current = true;
+    setCapabilitiesLoading(true);
+    void getAssistantCapabilities()
+      .then(setCapabilities)
+      .catch(() => setCapabilitiesError(true))
+      .finally(() => setCapabilitiesLoading(false));
+  }, [contextOpen]);
+
+  const [settledStream, setSettledStream] = useState("");
+
+  useEffect(() => {
+    if (!stream) {
+      setSettledStream("");
+      return;
+    }
+    const timer = window.setTimeout(() => setSettledStream(stream), 200);
+    return () => window.clearTimeout(timer);
+  }, [stream]);
 
   const handleEvent = (event: AssistantEvent) => {
     if (event.type === "plan") setPlan(event.plan ?? null);
@@ -804,7 +831,24 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
             <Button variant="secondary" onClick={() => setContextOpen(false)}>Cerrar</Button>
           </div>
           <p>Solo lectura. La aprobación se realiza en el flujo de conversación.</p>
-          <p role="status">Conexión: {stateLabels[connection] ?? "No disponible"}</p>
+          {capabilitiesLoading ? <p role="status">Cargando capacidades…</p> : null}
+          {capabilitiesError ? (
+            <p role="alert">No pudimos cargar las capacidades del asistente.</p>
+          ) : null}
+          {capabilities ? (
+            <>
+              <p>Herramientas disponibles: {capabilities.tools.length}</p>
+              <p>
+                Base de conocimientos: {capabilities.kb_available ? "Disponible" : "No disponible"}
+              </p>
+              <p>Memoria: {capabilities.memory_available ? "Disponible" : "No disponible"}</p>
+              <p>
+                Persona activa: {capabilities.personas.map((persona) => (
+                  persona === "personas/assistant.md" ? "Asistente Lumat" : persona
+                )).join(", ") || "No configurada"}
+              </p>
+            </>
+          ) : null}
           {lifecycle ? (
             <p role="status">Ejecución: {stateLabels[lifecycle] ?? "En curso"}</p>
           ) : null}
@@ -964,7 +1008,20 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
                 >
                   <span className="ai-agent-grammar__message-meta">Agente Lumat</span>
                   {stream ? (
-                    <p className="assistant-chat__message-content assistant-chat__stream">{stream}<span aria-hidden="true">▌</span></p>
+                    // While tokens are still arriving the buffer is rendered as
+                    // literal text, cursor included: partial markdown (an open
+                    // fence, a half-written table) would re-lay-out the block on
+                    // every chunk, and react-markdown re-parses the whole
+                    // accumulated string each time. Once the buffer settles it is
+                    // rendered as markdown, exactly like a persisted reply.
+                    settledStream ? (
+                      <Markdown
+                        className="assistant-chat__message-content assistant-chat__stream"
+                        content={settledStream}
+                      />
+                    ) : (
+                      <p className="assistant-chat__message-content assistant-chat__stream">{stream}<span aria-hidden="true">▌</span></p>
+                    )
                   ) : (
                     <span className="assistant-chat__thinking-row">
                       <span className="assistant-chat__thinking-dots" aria-hidden="true">
