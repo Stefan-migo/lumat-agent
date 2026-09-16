@@ -14,7 +14,7 @@ from app.agent_registry import get_registry
 from app.chat.assistant.tools.registry import get_tool
 from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
-from app.services.agent_chat import approve_plan, close_cortex_session, create_run_message, create_thread, get_thread, message_dict, reap_stale_run, resume_thread, run_agent_turn, stream_events, thread_dict
+from app.services.agent_chat import approve_plan, close_cortex_session, create_run_message, create_thread, get_thread, message_dict, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
 from app.db import SessionLocal
 from app.chat.assistant.attachments import cleanup_expired, store_attachment
 from app.panel.api.serializers import (
@@ -292,7 +292,7 @@ def send_message(thread_id: int, body: ChatMessageBody, background_tasks: Backgr
 
 
 @router.get("/chat/threads/{thread_id}/stream")
-def stream_thread(
+async def stream_thread(
     thread_id: int,
     run_id: str | None = None,
     session: Session = Depends(get_db),
@@ -301,10 +301,16 @@ def stream_thread(
     result = get_thread(session, thread_id, current.id)
     if result is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
-    events = stream_events(SessionLocal, thread_id, run_id or result[0].active_run_id)
+    run = run_id or result[0].active_run_id
+    # Release the connection before streaming: FastAPI keeps the request
+    # dependency open until the response is fully sent, so an open stream would
+    # hold a pooled connection for up to 300 s (pool_size 5 + overflow 10). The
+    # route is a read-only GET, so there is nothing left to commit.
+    session.close()
+    events = stream_events_async(SessionLocal, thread_id, run)
 
-    def body():
-        for event in events:
+    async def body():
+        async for event in events:
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(body(), media_type="text/event-stream")
