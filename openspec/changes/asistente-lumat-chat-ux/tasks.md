@@ -14,11 +14,11 @@
 
 - [ ] 3.1 **RED:** rewrite the three zone/tab suites—`web/src/components/pages/AgentChat.test.tsx`, `web/src/components/pages/ConversationThread.test.tsx`, and `web/playwright/command-center.spec.ts`—for centered composition, Spanish states, no auto-create, deep links, streaming cursor, copy/retry, attachments, approval/evidence anchoring, planning dialog, and composer keyboard behavior; **GREEN:** recompose `AgentChat.tsx` using existing primitives, inline `PlanCard`/`EvidenceList`, auto-grow composer, popover history, closed context drawer, and responsive token CSS.
 - [x] 3.2 **RED:** add Settings capability-host assertions; **GREEN:** move `AssistantCapabilitiesView` to `web/src/components/pages/Settings.tsx` and remove the chat-page capability dump.
-- [ ] 3.3 **RED:** add browser assertions to the rewritten `web/playwright/command-center.spec.ts` for desktop/narrow layout, history/context disclosure, navigator grouping/actions, focus/zoom/reduced-motion semantics, and preserved send/approval/retry/planning paths; **GREEN:** wire final responsive behavior and verify with `cd web && npm run test:e2e`.
+- [x] 3.3 **RED:** add browser assertions to the rewritten `web/playwright/command-center.spec.ts` for desktop/narrow layout, history/context disclosure, navigator grouping/actions, focus/zoom/reduced-motion semantics, and preserved send/approval/retry/planning paths; **GREEN:** wire final responsive behavior and verify with `cd web && npm run test:e2e`.
 
 ## Phase 4: Verification and Cleanup
 
-- [ ] 4.1 Run `uv run pytest tests/`, `cd web && npm test`, `cd web && npx tsc -b`, and browser verification; fix only scoped regressions and inspect the diff for forbidden token changes, dependencies, dark-mode work, D5/D6 work, raw status, or `Thread #N`.
+- [x] 4.1 Run `uv run pytest tests/`, `cd web && npm test`, `cd web && npx tsc -b`, and browser verification; fix only scoped regressions and inspect the diff for forbidden token changes, dependencies, dark-mode work, D5/D6 work, raw status, or `Thread #N`.
 
 ## Review Workload Forecast
 
