@@ -36,7 +36,9 @@ Assistant states MUST use existing primitives and semantic tokens for loading, e
 
 ### Requirement: DS-CC-5 — Accessibility and Primitive Reuse
 
-The surface MUST reuse existing primitives and semantic tokens, add no dependency, and preserve token values. It SHALL support keyboard operation, visible focus, WCAG 2.2 AA contrast, 200% zoom reflow, reduced motion, and non-color-only state communication.
+The surface MUST reuse existing primitives and semantic tokens, add no dependency, and preserve token values. It SHALL support keyboard operation, visible focus, 200% zoom reflow, reduced motion, and non-color-only state communication. Every contrast pair the surface introduces or modifies SHALL meet the applicable WCAG 2.2 AA threshold.
+
+Contrast of an inherited token pair is outside this change's authority: the change MAY NOT alter token values, so a pair whose ratio predates it cannot be remediated here. Such a pair SHALL be recorded with its computed ratio rather than silently dropped or silently tolerated.
 
 #### Scenario: Keyboard and responsive accessibility
 - GIVEN a user operates the assistant by keyboard, at 200% zoom, or with reduced motion enabled
@@ -44,9 +46,14 @@ The surface MUST reuse existing primitives and semantic tokens, add no dependenc
 - THEN focus remains visible and ordered, actions reflow without loss, and motion is reduced without removing meaning
 
 #### Scenario: Contrast and semantics
-- GIVEN a state or action is shown
+- GIVEN a state or action the surface introduces or modifies is shown
 - WHEN it is inspected or announced
-- THEN text and boundaries meet the applicable contrast threshold, and accessible names plus status/alert semantics identify the action and result
+- THEN its text and boundary contrasts meet the applicable WCAG 2.2 AA threshold, and accessible names plus status/alert semantics identify the action and result
+
+#### Scenario: Inherited contrast debt is recorded, not hidden
+- GIVEN the surface reuses a token pair whose contrast ratio predates this change and whose token value this change may not alter
+- WHEN contrast is verified
+- THEN the pair is listed with its computed ratio and threshold in `contrast-verification.md`, and it is attributed to a design-system change rather than to this one
 
 ## Graph Check Consulted
 
