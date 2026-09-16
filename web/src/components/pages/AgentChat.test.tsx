@@ -174,19 +174,52 @@ describe("AgentChat", () => {
     );
   });
 
-  it("keeps Contexto closed until requested and translates connection state", async () => {
-    render(<AgentChat />);
+  it("keeps Contexto closed until requested and renders assistant capabilities", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).includes("/assistant/capabilities")
+        ? jsonResponse({
+            tools: [{ name: "kb.retrieve", description: "Busca en la base", read_only: true, write: false }],
+            personas: ["personas/assistant.md"],
+            prompts: [],
+            kb_available: true,
+            memory_available: false,
+          })
+        : jsonResponse({ threads: [] }),
+    );
 
+    render(<AgentChat />);
     expect(
       screen.queryByRole("complementary", { name: "Contexto" }),
     ).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Contexto" }));
 
-    expect(screen.getByRole("complementary", { name: "Contexto" })).toHaveTextContent(
-      "Conexión",
+    const context = screen.getByRole("complementary", { name: "Contexto" });
+    expect(await within(context).findByText("Herramientas disponibles: 1")).toBeInTheDocument();
+    expect(context).toHaveTextContent("Base de conocimientos: Disponible");
+    expect(context).toHaveTextContent("Memoria: No disponible");
+    expect(context).toHaveTextContent("Persona activa: Asistente Lumat");
+    expect(context).not.toHaveTextContent("Conexión");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/assistant/capabilities",
+      expect.anything(),
+    );
+  });
+
+  it("shows an honest capabilities error in Contexto", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      String(input).includes("/assistant/capabilities")
+        ? jsonResponse({ detail: "forbidden" }, 403)
+        : jsonResponse({ threads: [] }),
+    );
+
+    render(<AgentChat />);
+    fireEvent.click(await screen.findByRole("button", { name: "Contexto" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No pudimos cargar las capacidades del asistente.",
     );
     expect(screen.getByRole("complementary", { name: "Contexto" })).not.toHaveTextContent(
-      "disconnected",
+      "Cargando capacidades",
     );
   });
 
@@ -310,6 +343,54 @@ describe("AgentChat", () => {
 
     expect(await screen.findByText("Still streaming")).toBeInTheDocument();
     expect(composer).toBeDisabled();
+    closeStream();
+    await waitFor(() => expect(composer).toBeEnabled());
+  });
+
+  it("switches a settled stream from literal text to markdown", async () => {
+    let closeStream: () => void = () => undefined;
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            `data: ${JSON.stringify({
+              type: "response",
+              thread_id: 4,
+              run_id: "run-markdown",
+              sequence: 0,
+              content: "**respuesta en curso**",
+            })}\n\n`,
+          ),
+        );
+        closeStream = () => controller.close();
+      },
+    });
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse({
+        message: {
+          id: 2,
+          author: "admin",
+          content: "Hello",
+          status: "processing",
+          assistant_metadata: { run_id: "run-markdown" },
+        },
+      }, 201))
+      .mockResolvedValueOnce(new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }))
+      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }));
+
+    render(<AgentChat threadId={4} />);
+    const composer = await screen.findByRole("textbox", { name: /mensaje/i });
+    fireEvent.change(composer, { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    expect(await screen.findByText("**respuesta en curso**")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("respuesta en curso").tagName).toBe("STRONG"), {
+      timeout: 500,
+    });
     closeStream();
     await waitFor(() => expect(composer).toBeEnabled());
   });
