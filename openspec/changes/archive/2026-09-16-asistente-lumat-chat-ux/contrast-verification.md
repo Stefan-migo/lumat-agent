@@ -73,6 +73,8 @@ status text is not disabled text and is covered by the explicit passing row.
 
 ## Failures and recommended remediation
 
+As recorded at archive time, with no token changed by this change:
+
 1. **Warning badge:** `--warning` on `--warning-bg` is 4.42:1, below 4.5:1
    for normal-size badge text. The token or badge background pairing should
    change in a future approved design-system change. No token was changed here.
@@ -81,6 +83,28 @@ status text is not disabled text and is covered by the explicit passing row.
    control boundary, the border role or adjacent surface should change in a
    future approved design-system change. No production CSS or token was changed
    here.
+
+### Resolution (after archiving, commit `63c4acd1`)
+
+The remediation separated the two cases this section had left together, and one
+recommendation above turned out to be unnecessary:
+
+1. `--warning` `#A16207` → `#A05E07`: **4.60:1** on `--warning-bg`. It also fixed a
+   pairing this audit missed — `--warning` on `--bg` was **4.33:1**, now **4.51:1** —
+   and improved white to **5.12:1**.
+2. **`--border` is unchanged.** Its usages were re-examined per-consumer: all sixteen are
+   decorative separators that WCAG 1.4.11 exempts, so it was never a failure.
+   `--border-strong` `#C3CBD4` → `#7E858F` is the real fix at **3.18:1** on
+   `--brand-bg-elevated` and **3.72:1** on white, and it had only two consumers, both
+   button boundaries.
+
+   One number in the table above is wrong: the composer row pairs `--border` with
+   `--surface` white, but the composer sits on `--brand-bg-elevated`, so its real
+   boundary contrast was **1.17:1**, worse than the 1.37:1 recorded. The composer and
+   the attachment chip now use `--border-strong` and reach **3.18:1**.
+
+`tokens.test.ts` now computes and asserts every remediated pair, so re-running this
+audit by hand is no longer the only way to catch a regression.
 
 ## Agreement with the design-system measurements
 

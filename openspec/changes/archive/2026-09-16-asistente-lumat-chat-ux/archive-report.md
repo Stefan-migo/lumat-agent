@@ -22,21 +22,41 @@ assistant surface and explicitly requires inherited debt to be recorded with its
 ratio and attributed to a future design-system change. This archive records that
 rescoping rather than the pre-amendment requirement text.
 
-## Open inherited contrast debt
+## Inherited contrast debt (opened by this change, since resolved)
 
 `contrast-verification.md` is a first-class artifact. It records a computed
 token-pair verification, not a rendered-pixel audit; no accessibility tooling was
-added because that was out of scope. The following unchanged inherited pairs remain
-below their applicable thresholds and require a future approved design-system
-change:
+added because that was out of scope. At archive time the following unchanged inherited
+pairs remained below their applicable thresholds and required a future approved
+design-system change:
 
 - `--warning #A16207` on `--warning-bg #FEF3C7`: **4.42:1**, below 4.5:1.
 - `--border #D8DDE3` on `--surface #FFFFFF`: **1.37:1**, below 3:1.
 - `--border #D8DDE3` on `--bg #F1F1E8`: **1.20:1**, below 3:1.
 - `--border-strong #C3CBD4` on effective `--brand-bg-elevated #EBEEE7`: **1.40:1**, below 3:1.
 
-No token value was changed by this change. The debt is intentionally open and is
+No token value was changed by this change. The debt was left intentionally open and is
 attributed to a future design-system change, not treated as an unqualified success.
+
+**Resolved after archiving, in commit `63c4acd1`.** The remediation turned out to be
+narrower than this list implied, and one entry above was misclassified:
+
+- **`--border` was not changed.** All sixteen of its usages are decorative separators
+  (`.ai-agent-grammar__header`, `__bubble`, `__inspector section`, page cards), which
+  WCAG 1.4.11 exempts because no control is identified by them. Darkening it would have
+  hardened every divider in the panel for no accessibility gain.
+- `--border-strong` `#C3CBD4` → `#7E858F`: **3.18:1** on the elevated background and
+  **3.72:1** on white.
+- `--warning` `#A16207` → `#A05E07`: **4.60:1** on the warning background. This also
+  repaired a pairing the original audit did not catch — `--warning` on `--bg` was
+  **4.33:1** and is now **4.51:1**.
+- The assistant composer and attachment chip relied on `--corp-border`, the alias
+  pointing at the decorative `--border`, for a boundary that is in fact load-bearing:
+  **1.17:1**, worse than the 1.37:1 recorded above because the composer sits on
+  `--brand-bg-elevated` rather than white. They now use `--border-strong`.
+
+`tokens.test.ts` guards every remediated pair by resolving the token values, computing
+the ratios, and failing below threshold, so the debt cannot return silently.
 
 ## Specs synchronized
 
@@ -62,6 +82,11 @@ the structured handoff, so no review topics are claimed here.
 
 ## Archive disposition
 
-Intentional-with-warnings: implementation is delivered and all tasks are complete,
-but the inherited contrast debt remains explicitly open under the rescoped
-requirement.
+Intentional-with-warnings at the time of archiving: implementation was delivered and
+all tasks were complete, but the inherited contrast debt was explicitly open.
+
+That warning is now discharged. The debt was resolved in commit `63c4acd1` — see
+"Inherited contrast debt" above, which records both the original finding and its
+resolution. The rescoped `DS-CC-5` requirement stands unchanged as a general contract:
+inherited contrast debt must be recorded with its ratio and attributed, rather than
+silently tolerated or silently dropped.
