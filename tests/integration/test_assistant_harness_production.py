@@ -53,7 +53,8 @@ def test_valid_read_runs_through_production_graph_with_history_and_registry_prom
         response = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Find Ana"})
 
     assert response.status_code == 201
-    assert response.json()["message"]["status"] == "processed"
+    settled = client.get(f"/panel/api/chat/threads/{thread_id}").json()
+    assert settled["messages"][0]["status"] == "processed"
     assert len(captured) == 2
     assert "older context" in captured[0]["messages"][-1]["content"]
     assert captured[0]["messages"][0]["content"].startswith("You are the Lumat internal executive operator")
@@ -76,7 +77,8 @@ def test_malformed_or_unwhitelisted_production_plan_falls_back_without_execution
         response = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Do something"})
 
     assert response.status_code == 201
-    assert response.json()["message"]["status"] == "processed"
+    settled = client.get(f"/panel/api/chat/threads/{thread_id}").json()
+    assert settled["messages"][0]["status"] == "processed"
     with SessionLocal() as session:
         from app.models import InternalChatThread
         thread = session.get(InternalChatThread, thread_id)

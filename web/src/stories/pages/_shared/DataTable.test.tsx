@@ -19,7 +19,7 @@ describe("DataTable", () => {
         rows={[{ id: 1, name: "Ada" }]}
       />,
     );
-    expect(screen.getByRole("columnheader", { name: "Nombre" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Nombre" })).toHaveAttribute("scope", "col");
   });
 
   it("renders a cell for each row", () => {
@@ -134,4 +134,3 @@ describe("tabularNum (DS-UI-TABLES)", () => {
     }
   });
 });
-

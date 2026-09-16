@@ -56,6 +56,7 @@ ALLOWED_PLAIN_VALUES = {
     "lumat",
     "deepseek",  # CHAT_PROVIDER default
     "deepseek-chat",  # CHAT_MODEL default
+    "deepseek-flash",  # ASSISTANT_CHAT_MODEL default
     "384",  # EMBED_DIMS default
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",  # EMBED_MODEL default
 }

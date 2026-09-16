@@ -45,7 +45,7 @@ def clean_chat_tables(migrated_db):
         )
 
 
-def test_internal_chat_publishes_ordered_tokens_and_keeps_post_response(client, monkeypatch):
+def test_internal_chat_uses_sse_preview_instead_of_realtime_tokens(client, monkeypatch):
     _user("stream-admin", "admin")
     _login(client, "stream-admin")
     fake_client = _StreamingChatClient(["A ", "streamed", " answer"])
@@ -65,11 +65,7 @@ def test_internal_chat_publishes_ordered_tokens_and_keeps_post_response(client, 
     assert response.status_code == 201
     assert response.json()["message"]["content"] == "What is pending?"
     token_events = [event for event in published if event.type == "token"]
-    assert [event.data["token"] for event in token_events] == ["A ", "streamed", " answer"]
-    assert all(event.conversation_id == thread_id for event in token_events)
-    assert published[-1].type == "message"
-    assert published[-1].conversation_id == thread_id
-    assert published[-1].data["content"] == "A streamed answer"
+    assert token_events == []
     assert fake_client.calls[1]["stream"] is True
 
     with SessionLocal() as session:
@@ -93,10 +89,11 @@ def test_token_delivery_failure_does_not_change_persisted_post_contract(client, 
     )
 
     assert response.status_code == 201
-    assert response.json()["message"]["status"] == "processed"
+    persisted = client.get(f"/panel/api/chat/threads/{thread_id}")
+    assert persisted.json()["messages"][0]["status"] == "processed"
     assert response.json()["message"]["content"] == "Continue"
-    persisted = client.get(f"/panel/api/chat/threads/{thread_id}").json()["messages"]
-    assert [message["content"] for message in persisted] == ["Continue", "complete"]
+    messages = persisted.json()["messages"]
+    assert [message["content"] for message in messages] == ["Continue", "complete"]
 
 
 def test_operator_remains_denied_from_internal_chat(client):
@@ -125,4 +122,5 @@ def test_realtime_response_preserves_cost_tier_metadata(client, monkeypatch):
     )
 
     assert response.status_code == 201
-    assert response.json()["message"]["assistant_metadata"]["cost_mode"] == "conservative"
+    persisted = client.get(f"/panel/api/chat/threads/{thread_id}").json()
+    assert persisted["messages"][0]["assistant_metadata"]["cost_mode"] == "conservative"

@@ -81,7 +81,7 @@ def test_exact_approval_replay_is_rejected_after_first_consumption(client, monke
     _login(client, "compat-replay-admin")
     thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
     pending = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"})
-    metadata = pending.json()["message"]["assistant_metadata"]
+    metadata = client.get(f"/panel/api/chat/threads/{thread_id}").json()["messages"][0]["assistant_metadata"]
     monkeypatch.setattr(
         "app.services.agent_chat.execute",
         lambda state: {"status": "completed", "response": "created", "evidence": []},
@@ -104,7 +104,7 @@ def test_streaming_failure_is_persisted_as_recoverable_error(client, monkeypatch
     sent = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "continue"})
     loaded = client.get(f"/panel/api/chat/threads/{thread_id}")
 
-    assert sent.json()["message"]["status"] == "failed"
+    assert loaded.json()["messages"][0]["status"] == "failed"
     assert loaded.json()["thread"]["assistant_state"]["recoverable"] is True
     assert not any(message["author"] == "agent" for message in loaded.json()["messages"])
 

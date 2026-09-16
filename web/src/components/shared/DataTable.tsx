@@ -68,18 +68,18 @@ export function DataTable<T>({
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.key} style={{ textAlign: c.align ?? "left", gap: "var(--space-3)" }}>{c.header}</th>
+              <th key={c.key} scope="col" style={{ textAlign: c.align ?? "left" }}>{c.header}</th>
             ))}
-            {actions ? <th style={{ gap: "var(--space-3)" }}>{actionsHeader}</th> : null}
+            {actions ? <th scope="col">{actionsHeader}</th> : null}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => (
             <tr key={rowKey ? rowKey(row) : i} style={rowStyle ? rowStyle(row) : undefined}>
               {columns.map((c) => (
-                <td key={c.key} style={{ textAlign: c.align ?? "left", gap: "var(--space-3)" }}>{c.render(row)}</td>
+                <td key={c.key} style={{ textAlign: c.align ?? "left" }}>{c.render(row)}</td>
               ))}
-              {actions ? <td style={{ gap: "var(--space-3)" }}>{actions(row)}</td> : null}
+              {actions ? <td>{actions(row)}</td> : null}
             </tr>
           ))}
         </tbody>

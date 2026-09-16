@@ -753,4 +753,135 @@ describe("AgentChat", () => {
     await waitFor(() => expect(screen.getByText("Done.")).toBeInTheDocument());
     expect(screen.getByText("Completado")).toBeInTheDocument();
   });
+
+  it("renders a run's artifacts once, on the agent reply, not on both messages", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+      thread: {
+        ...makeThread(),
+        active_run_id: "run-1",
+        assistant_state: {
+          events: [{
+            run_id: "run-1",
+            plan: { tool: "agenda.create", status: "completed" },
+            evidence: [{ tool: "agenda.create", status: "completed", detail: "Cita creada" }],
+          }],
+        },
+      },
+      messages: [
+        { id: 1, author: "admin", content: "Agenda una visita", status: "processed", assistant_metadata: { run_id: "run-1" } },
+        { id: 2, author: "agent", content: "Listo", status: "processed", assistant_metadata: { run_id: "run-1" } },
+      ],
+    }));
+
+    render(<AgentChat threadId={4} />);
+    const messages = await screen.findAllByRole("article");
+
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).not.toHaveTextContent("Cita creada");
+    expect(messages[1]).toHaveTextContent("Cita creada");
+    expect(screen.getAllByText(/Actividad del agente/)).toHaveLength(1);
+  });
+
+  it("renders no activity block for a plain answer with no tool work", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+      thread: {
+        ...makeThread(),
+        active_run_id: "run-1",
+        assistant_state: {
+          events: [{
+            run_id: "run-1",
+            plan: { tool: null, arguments: {}, summary: "hey chat estas disponible" },
+          }],
+        },
+      },
+      messages: [
+        { id: 2, author: "agent", content: "Sí, estoy disponible.", status: "processed", assistant_metadata: { run_id: "run-1" } },
+      ],
+    }));
+
+    render(<AgentChat threadId={4} />);
+    const message = await screen.findByRole("article", { name: "Mensaje de agente" });
+
+    expect(message).toHaveTextContent("Sí, estoy disponible.");
+    expect(message).not.toHaveTextContent("Actividad del agente");
+    expect(screen.queryByText("Plan de acción")).not.toBeInTheDocument();
+  });
+
+  it("shows a working indicator while the agent is thinking", async () => {
+    let closeStream: () => void = () => undefined;
+    const stream = new ReadableStream({
+      start(controller) {
+        closeStream = () => controller.close();
+      },
+    });
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          message: {
+            id: 2,
+            author: "admin",
+            content: "Hola",
+            status: "processing",
+            assistant_metadata: { run_id: "run-4" },
+          },
+        }, 201),
+      )
+      .mockResolvedValueOnce(
+        new Response(stream, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      );
+
+    render(<AgentChat threadId={4} />);
+    const composer = await screen.findByRole("textbox", { name: /mensaje/i });
+    fireEvent.change(composer, { target: { value: "Hola" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    await screen.findByRole("article", { name: "El agente está trabajando" });
+    expect(screen.getByText("Analizando tu solicitud…")).toBeInTheDocument();
+    closeStream();
+    await waitFor(() => expect(composer).toBeEnabled());
+  });
+
+  it("renders agent replies as markdown and leaves the operator text literal", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+      thread: makeThread(),
+      messages: [
+        { id: 1, author: "admin", content: "**esto** no debe formatearse", status: "processed" },
+        { id: 2, author: "agent", content: "**esto sí** debe formatearse", status: "processed" },
+      ],
+    }));
+
+    render(<AgentChat threadId={4} />);
+    const admin = await screen.findByRole("article", { name: "Mensaje de administrador" });
+    const agent = screen.getByRole("article", { name: "Mensaje de agente" });
+
+    expect(within(agent).getByText("esto sí").tagName).toBe("STRONG");
+    expect(within(agent).queryByText("*esto sí*")).not.toBeInTheDocument();
+    expect(admin).toHaveTextContent("**esto** no debe formatearse");
+    expect(within(admin).queryByText("esto")).not.toBeInTheDocument();
+  });
+
+  it("confirms a copy with a transient label", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({
+      thread: makeThread(),
+      messages: [{ id: 1, author: "agent", content: "Copia esto", status: "processed" }],
+    }));
+
+    render(<AgentChat threadId={4} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Copiar mensaje" }));
+
+    expect(writeText).toHaveBeenCalledWith("Copia esto");
+    expect(screen.getByText("Copiado")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Mensaje copiado al portapapeles" }),
+    ).toBeInTheDocument();
+  });
 });

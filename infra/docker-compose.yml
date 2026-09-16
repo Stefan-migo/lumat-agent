@@ -83,6 +83,14 @@ services:
       CHAT_MODEL: ${CHAT_MODEL:-deepseek-chat}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # Panel assistant (AgentChat) provider is configured independently from
+      # the WhatsApp chat provider. These MUST be forwarded here: without them
+      # the container silently falls back to app/config.py defaults
+      # (openrouter + google/gemini-2.5-flash) and the assistant answers 401
+      # "Missing Authentication header" whenever OPENROUTER_API_KEY is a
+      # placeholder — the keys in infra/.env never get a chance to apply.
+      ASSISTANT_CHAT_PROVIDER: ${ASSISTANT_CHAT_PROVIDER:-deepseek}
+      ASSISTANT_CHAT_MODEL: ${ASSISTANT_CHAT_MODEL:-deepseek-chat}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-}
       SMTP_USER: ${SMTP_USER:-}

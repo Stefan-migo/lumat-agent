@@ -1,6 +1,7 @@
 """PR1 contract tests for the isolated assistant graph boundary."""
 
 import json
+import time
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -15,7 +16,13 @@ from app.chat.assistant.approval import (
     validate_execution,
 )
 from app.models import InternalChatMessage, InternalChatThread, Message, User
-from app.services.agent_chat import _generate_thread_title
+from app.services.agent_chat import (
+    STALE_RUN_SECONDS,
+    _generate_thread_title,
+    create_run_message,
+    reap_stale_run,
+    stream_events,
+)
 from app.services.users import hash_password
 @pytest.fixture(autouse=True)
 def assistant_client(monkeypatch):
@@ -41,6 +48,114 @@ def _login(client, username: str) -> None:
     response = client.post("/panel/api/login", json={"username": username, "password": "pass"})
     assert response.status_code == 200
     assert client.get("/panel/api/me").status_code == 200
+
+
+def _wait_for_run(client, thread_id: int, run_id: str) -> dict:
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        result = client.get(f"/panel/api/chat/threads/{thread_id}").json()
+        message = next((item for item in result["messages"] if item.get("assistant_metadata", {}).get("run_id") == run_id and item["author"] == "admin"), None)
+        if message and message["status"] != "processing":
+            return result
+        time.sleep(0.05)
+    raise AssertionError("assistant run did not finish")
+
+
+def test_stream_events_emits_live_stage_and_terminal_status():
+    class Session:
+        def get(self, model, thread_id):
+            return SimpleNamespace(assistant_state={"live": {
+                "run_id": "run-live", "stage": "streaming", "preview": "partial", "status": "failed",
+            }, "events": []})
+
+        def close(self):
+            pass
+
+    events = list(stream_events(lambda: Session(), 1, "run-live", timeout=1, interval=0))
+
+    assert [event["type"] for event in events] == ["status", "response"]
+    assert events[0]["status"] == "streaming"
+    assert events[1]["content"] == "partial"
+
+
+def test_reap_stale_run_fails_an_orphaned_run_once_it_stops_advancing():
+    message = SimpleNamespace(status="processing", error=None, completed_at=None)
+
+    class Session:
+        def scalar(self, statement):
+            return message
+
+        def flush(self):
+            pass
+
+    stale = (datetime.now(timezone.utc) - timedelta(seconds=STALE_RUN_SECONDS + 1)).isoformat()
+    thread = SimpleNamespace(id=7, active_run_id="run-orphan", assistant_state={
+        "stage": "planning", "execution_status": "pending",
+        "live": {
+            "run_id": "run-orphan", "stage": "planning", "preview": "", "status": "running",
+            "updated_at": stale,
+        },
+    })
+
+    assert reap_stale_run(Session(), thread) is True
+    assert message.status == "failed"
+    assert message.error == "El agente no pudo procesar este mensaje. Reinténtalo."
+    assert message.completed_at is not None
+    assert thread.assistant_state["stage"] == "failed"
+    assert thread.assistant_state["execution_status"] == "failed"
+    assert thread.assistant_state["recoverable"] is True
+    assert thread.assistant_state["live"]["status"] == "failed"
+
+
+def test_reap_stale_run_leaves_a_live_run_and_a_resumable_run_alone():
+    class Session:
+        def scalar(self, statement):
+            raise AssertionError("a reclaimable run must not be touched")
+
+        def flush(self):
+            pass
+
+    fresh = SimpleNamespace(id=7, active_run_id="run-live", assistant_state={
+        "stage": "planning", "execution_status": "pending",
+        "live": {
+            "run_id": "run-live", "status": "running",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    })
+    # `resume_thread` owns a persisted execution it can still claim: recovering
+    # it beats failing it, so the reaper must not pre-empt that path.
+    resumable = SimpleNamespace(id=8, active_run_id="run-resume", assistant_state={
+        "stage": "executing", "execution_status": "pending",
+        "live": {
+            "run_id": "run-resume", "status": "running",
+            "updated_at": "2000-01-01T00:00:00+00:00",
+        },
+    })
+
+    assert reap_stale_run(Session(), fresh) is False
+    assert reap_stale_run(Session(), resumable) is False
+    assert fresh.assistant_state["live"]["status"] == "running"
+    assert resumable.assistant_state["live"]["status"] == "running"
+
+
+def test_create_run_message_stamps_live_state_for_stale_run_recovery(migrated_db):
+    with SessionLocal() as session:
+        owner = User(username="reap-stamp-admin", password_hash=hash_password("pass"), role="admin")
+        session.add(owner)
+        session.flush()
+        thread = InternalChatThread(user_id=owner.id)
+        session.add(thread)
+        session.flush()
+
+        message = create_run_message(session, thread, owner, "hello")
+
+        live = thread.assistant_state["live"]
+        assert live["run_id"] == message.assistant_metadata["run_id"]
+        assert live["status"] == "running"
+        # The reaper parses this value; assert the round trip, because a stamp
+        # that cannot be parsed reads as stale and would fail a live run.
+        assert datetime.fromisoformat(live["updated_at"]).tzinfo is not None
+        session.rollback()
 
 
 def test_operator_cannot_read_assistant_stream(client):
@@ -114,7 +229,7 @@ def test_stream_reconnect_returns_ordered_persisted_events(client):
         if line.startswith("data: ")
     ]
     assert [event["type"] for event in events] == [
-        "plan", "approval", "tool", "evidence", "status", "response"
+        "plan", "approval", "tool", "evidence", "status", "response", "status", "response"
     ]
     assert all(event["thread_id"] == thread_id for event in events)
     assert all(event["run_id"] == run_id for event in events)
@@ -146,7 +261,8 @@ def test_blocked_cost_gate_persists_canned_reply_without_llm(client, monkeypatch
     )
 
     assert response.status_code == 201
-    assert response.json()["message"]["status"] == "processed"
+    assert response.json()["message"]["status"] == "processing"
+    _wait_for_run(client, thread_id, response.json()["message"]["assistant_metadata"]["run_id"])
     messages = client.get(f"/panel/api/chat/threads/{thread_id}").json()["messages"]
     assert messages[-1]["author"] == "agent"
     assert messages[-1]["content"] == (
@@ -279,8 +395,11 @@ def test_failed_run_does_not_persist_partial_response(client, monkeypatch):
     )
 
     assert response.status_code == 201
-    assert response.json()["message"]["status"] == "failed"
-    assert response.json()["message"]["error"] == "El agente no pudo procesar este mensaje. Reinténtalo."
+    assert response.json()["message"]["status"] == "processing"
+    failed = _wait_for_run(client, thread_id, response.json()["message"]["assistant_metadata"]["run_id"])
+    failed_message = next(item for item in failed["messages"] if item["author"] == "admin")
+    assert failed_message["status"] == "failed"
+    assert failed_message["error"] == "El agente no pudo procesar este mensaje. Reinténtalo."
     messages = client.get(f"/panel/api/chat/threads/{thread_id}").json()["messages"]
     assert not any(message["author"] == "agent" for message in messages)
     with SessionLocal() as session:
@@ -301,7 +420,7 @@ def test_empty_agent_response_is_localized(client, monkeypatch):
     response = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Answer"})
 
     assert response.status_code == 201
-    messages = client.get(f"/panel/api/chat/threads/{thread_id}").json()["messages"]
+    messages = _wait_for_run(client, thread_id, response.json()["message"]["assistant_metadata"]["run_id"])["messages"]
     assert messages[-1]["content"] == "No pude generar una respuesta. Inténtalo nuevamente."
 
 
@@ -335,6 +454,8 @@ def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatc
     result = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "hello"})
     assert result.status_code == 201
     metadata = result.json()["message"]["assistant_metadata"]
+    settled = _wait_for_run(client, thread_id, metadata["run_id"])
+    metadata = next(item["assistant_metadata"] for item in settled["messages"] if item["author"] == "admin")
     assert set(metadata["cost_calls"]) == {metadata["run_id"] + ":planner", metadata["run_id"] + ":response"}
     assert metadata["cost_calls"][metadata["run_id"] + ":planner"]["prompt_tokens"] == 10
     response_call = metadata["cost_calls"][metadata["run_id"] + ":response"]
@@ -367,7 +488,8 @@ def test_stream_disconnect_keeps_known_usage_and_failed_request(client, monkeypa
     client_stub = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=disconnecting)))
     monkeypatch.setattr("app.services.llm.openai_client", lambda: client_stub)
     result = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "hello"})
-    assert result.json()["message"]["status"] == "failed"
+    assert result.json()["message"]["status"] == "processing"
+    _wait_for_run(client, thread_id, result.json()["message"]["assistant_metadata"]["run_id"])
     with SessionLocal() as session:
         message = session.scalar(select(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id,
                                                                     InternalChatMessage.author == "admin"))
@@ -409,7 +531,10 @@ def test_approved_plan_route_records_execution_audit(client):
     pending = client.post(
         f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"}
     )
-    approval = pending.json()["message"]["assistant_metadata"]["approval"]
+    metadata = pending.json()["message"]["assistant_metadata"]
+    settled = _wait_for_run(client, thread_id, metadata["run_id"])
+    approval = next(item["assistant_metadata"]["approval"] for item in settled["messages"] if item["author"] == "admin")
+    metadata = next(item["assistant_metadata"] for item in settled["messages"] if item["author"] == "admin")
 
     response = client.post(
         f"/panel/api/chat/threads/{thread_id}/approval",
@@ -435,6 +560,10 @@ def test_approved_plan_stream_replays_complete_execution_sequence(client, monkey
 
     pending = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"})
     metadata = pending.json()["message"]["assistant_metadata"]
+    settled = _wait_for_run(client, thread_id, metadata["run_id"])
+    metadata = next(item["assistant_metadata"] for item in settled["messages"] if item["author"] == "admin")
+    settled = _wait_for_run(client, thread_id, metadata["run_id"])
+    metadata = next(item["assistant_metadata"] for item in settled["messages"] if item["author"] == "admin")
     approved = client.post(
         f"/panel/api/chat/threads/{thread_id}/approval",
         json={"run_id": metadata["run_id"], "token": metadata["approval"]["token"]},
@@ -443,9 +572,9 @@ def test_approved_plan_stream_replays_complete_execution_sequence(client, monkey
 
     stream = client.get(f"/panel/api/chat/threads/{thread_id}/stream?run_id={metadata['run_id']}")
     events = [json.loads(line.removeprefix("data: ")) for line in stream.text.splitlines() if line.startswith("data: ")]
-    assert [event["type"] for event in events] == ["plan", "approval", "tool", "evidence", "status", "response"]
+    assert [event["type"] for event in events] == ["plan", "approval", "tool", "evidence", "status", "response", "status", "response"]
     assert all(event["thread_id"] == thread_id and event["run_id"] == metadata["run_id"] for event in events)
-    assert [event["sequence"] for event in events] == list(range(6))
+    assert [event["sequence"] for event in events[:6]] == list(range(6))
 
 
 def test_recovery_resumes_pending_execution_once():
@@ -481,6 +610,8 @@ def test_rejected_approval_only_leaves_planner_cost_and_preserves_whatsapp_total
     pending = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"})
     assert pending.status_code == 201
     metadata = pending.json()["message"]["assistant_metadata"]
+    settled = _wait_for_run(client, thread_id, metadata["run_id"])
+    metadata = next(item["assistant_metadata"] for item in settled["messages"] if item["author"] == "admin")
 
     rejected = client.post(
         f"/panel/api/chat/threads/{thread_id}/approval",
@@ -501,6 +632,8 @@ def test_expired_approval_cannot_add_execution_cost(client):
     thread_id = client.post(f"/panel/api/chat/threads", json={}).json()["thread"]["id"]
     pending = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"})
     metadata = pending.json()["message"]["assistant_metadata"]
+    settled = _wait_for_run(client, thread_id, metadata["run_id"])
+    metadata = next(item["assistant_metadata"] for item in settled["messages"] if item["author"] == "admin")
     with SessionLocal() as session:
         thread = session.get(InternalChatThread, thread_id)
         thread.assistant_state = {
@@ -545,7 +678,9 @@ def test_title_is_generated_once_after_first_response_and_uses_opening_admin_mes
     )
 
     first = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "  Need a gas leak inspection  "})
+    _wait_for_run(client, thread_id, first.json()["message"]["assistant_metadata"]["run_id"])
     second = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "More details"})
+    _wait_for_run(client, thread_id, second.json()["message"]["assistant_metadata"]["run_id"])
 
     assert first.status_code == second.status_code == 201
     with SessionLocal() as session:
@@ -577,6 +712,7 @@ def test_title_cost_is_gated_and_recorded_on_first_assistant_message(client, mon
     )
 
     response = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Inspect the boiler"})
+    _wait_for_run(client, thread_id, response.json()["message"]["assistant_metadata"]["run_id"])
 
     assert response.status_code == 201
     with SessionLocal() as session:
@@ -607,6 +743,7 @@ def test_non_normal_title_mode_uses_free_bounded_utf8_fallback(client, monkeypat
     opening = "á" * 200
 
     response = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": opening})
+    _wait_for_run(client, thread_id, response.json()["message"]["assistant_metadata"]["run_id"])
 
     assert response.status_code == 201
     with SessionLocal() as session:
@@ -632,6 +769,7 @@ def test_title_generation_failures_store_the_same_bounded_fallback(client, monke
     opening = "Request: " + " revisión" * 100
 
     response = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": opening})
+    _wait_for_run(client, thread_id, response.json()["message"]["assistant_metadata"]["run_id"])
 
     assert response.status_code == 201
     with SessionLocal() as session:

@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -14,7 +14,8 @@ from app.agent_registry import get_registry
 from app.chat.assistant.tools.registry import get_tool
 from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
-from app.services.agent_chat import approve_plan, close_cortex_session, create_thread, get_thread, message_dict, resume_thread, stream_events, submit_message, thread_dict
+from app.services.agent_chat import approve_plan, close_cortex_session, create_run_message, create_thread, get_thread, message_dict, reap_stale_run, resume_thread, run_agent_turn, stream_events, thread_dict
+from app.db import SessionLocal
 from app.chat.assistant.attachments import cleanup_expired, store_attachment
 from app.panel.api.serializers import (
     to_assistant_attachment_dict,
@@ -229,6 +230,7 @@ def read_thread(thread_id: int, session: Session = Depends(get_db), current: Use
     if result is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
     thread, messages = result
+    reap_stale_run(session, thread)
     resume_thread(session, thread, current)
     messages = get_thread(session, thread_id, current.id)[1]
     attachments = session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread_id, AssistantAttachment.deleted_at.is_(None)).order_by(AssistantAttachment.id)).all()
@@ -259,7 +261,7 @@ def assistant_capabilities(current: User = Depends(require_admin_json)) -> dict:
 
 
 @router.post("/chat/threads/{thread_id}/messages", status_code=201)
-def send_message(thread_id: int, body: ChatMessageBody, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
+def send_message(thread_id: int, body: ChatMessageBody, background_tasks: BackgroundTasks, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
     result = get_thread(session, thread_id, current.id)
     if result is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
@@ -268,8 +270,22 @@ def send_message(thread_id: int, body: ChatMessageBody, session: Session = Depen
     owned = list(session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread_id, AssistantAttachment.id.in_(body.attachment_ids), AssistantAttachment.deleted_at.is_(None)))) if body.attachment_ids else []
     if len(owned) != len(set(body.attachment_ids)):
         raise HTTPException(status_code=404, detail="attachment not found")
-    message = submit_message(
+    message = create_run_message(
         session, result[0], current, body.content, [row.id for row in owned],
+        sdb_requested=body.sdb_requested,
+    )
+    # Commit before scheduling: FastAPI may run background tasks before the
+    # request dependency's teardown, and the runner must see this row without
+    # waiting on the request transaction.
+    session.commit()
+    background_tasks.add_task(
+        run_agent_turn,
+        thread_id=thread_id,
+        run_id=message.assistant_metadata["run_id"],
+        user_id=current.id,
+        username=current.username,
+        actor_role=current.role.value,
+        attachment_ids=[row.id for row in owned],
         sdb_requested=body.sdb_requested,
     )
     return {"message": message_dict(message)}
@@ -285,7 +301,7 @@ def stream_thread(
     result = get_thread(session, thread_id, current.id)
     if result is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
-    events = stream_events(session, result[0], run_id)
+    events = stream_events(SessionLocal, thread_id, run_id or result[0].active_run_id)
 
     def body():
         for event in events:

@@ -2,6 +2,8 @@
 
 from datetime import datetime, timezone
 import json
+import logging
+import time
 from uuid import uuid4
 
 from sqlalchemy import select, text
@@ -22,11 +24,22 @@ from app.services import tukulpan
 from app.services import projects
 from app.services import costs, llm
 
+logger = logging.getLogger(__name__)
+
 
 SDB_EVENT_LIMIT = 4 * 1024
 SDB_EVENT_HISTORY_LIMIT = 64
 TITLE_MAX_BYTES = 120
 TITLE_TIMEOUT_SECONDS = 5.0
+# A panel run is orphaned once its `live` state stops advancing. The SSE poller
+# already gives up after 300s, so a run silent for twice that window cannot
+# still be executing; failing it closed is what turns an eternal spinner into a
+# retryable failure.
+STALE_RUN_SECONDS = 600
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _sdb_plan(spec: dict, tasks: list[dict]) -> dict:
@@ -534,7 +547,7 @@ def _generate_thread_title(
         thread.title = fallback
 
 
-def submit_message(
+def create_run_message(
     session: Session,
     thread: InternalChatThread,
     user: User,
@@ -554,11 +567,63 @@ def submit_message(
     )
     session.add(message)
     session.flush()
-    try:
-        def publish_token(token: str) -> None:
-            stage_event(session, type="token", conversation_id=thread.id, data={"token": token})
+    thread.active_run_id = run_id
+    thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
+        "execution_status": "pending",
+        "live": {
+            "run_id": run_id, "stage": "planning", "preview": "", "status": "running",
+            "updated_at": _now_iso(),
+        },
+    })
+    return message
 
-        attachments = list(session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread.id, AssistantAttachment.id.in_(attachment_ids or []), AssistantAttachment.deleted_at.is_(None)))) if attachment_ids else []
+
+def publish_live(session_factory, thread_id: int, run_id: str, *, stage=None, preview=None, status=None) -> None:
+    """Best-effort short transaction for progress visible to SSE clients."""
+    session = session_factory()
+    try:
+        thread = session.get(InternalChatThread, thread_id)
+        if thread is None:
+            return
+        state = dict(thread.assistant_state or {})
+        live = dict(state.get("live") or {})
+        if live.get("run_id") != run_id:
+            return
+        live["run_id"] = run_id
+        live["updated_at"] = _now_iso()
+        for key, value in (("stage", stage), ("preview", preview), ("status", status)):
+            if value is not None:
+                live[key] = value
+        thread.assistant_state = {**state, "live": live}
+        session.commit()
+    except Exception:
+        session.rollback()
+        logger.exception("Unable to publish assistant live progress")
+    finally:
+        session.close()
+
+
+def _run_agent_turn_session(
+    session: Session, thread: InternalChatThread, user: User, message: InternalChatMessage,
+    attachment_ids: list[int], sdb_requested: bool | None, project_authorization=None,
+) -> None:
+    run_id = message.assistant_metadata["run_id"]
+    try:
+        preview: list[str] = []
+        token_count = 0
+        last_flush = time.monotonic()
+
+        def publish_token(token: str) -> None:
+            nonlocal token_count, last_flush
+            preview.append(token)
+            token_count += 1
+            now = time.monotonic()
+            if token_count >= 40 or now - last_flush >= 0.25:
+                publish_live(_session_factory(), thread.id, run_id, preview="".join(preview))
+                token_count = 0
+                last_flush = now
+
+        attachments = list(session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread.id, AssistantAttachment.id.in_(attachment_ids), AssistantAttachment.deleted_at.is_(None)))) if attachment_ids else []
         context_attachments = prepare_attachment_context(attachments) if attachments else []
         context = assemble_context(session, thread.id, attachments=context_attachments)
         compaction = compact_session(
@@ -584,7 +649,9 @@ def submit_message(
             compaction=compaction,
             project_authorization=project_authorization,
             cortex_session=(thread.assistant_state or {}).get("cortex_session"),
+            on_stage=lambda stage: publish_live(_session_factory(), thread.id, run_id, stage=stage),
         )
+        publish_live(_session_factory(), thread.id, run_id, preview="".join(preview))
         thread.active_run_id = run_id
         thread.current_plan = result.get("plan")
         if result.get("sdb_phase"):
@@ -598,6 +665,7 @@ def submit_message(
             "recoverable": True,
             "approval": result.get("approval"),
             "execution_status": "pending" if result.get("status") == "approval_pending" else "completed",
+            "live": {"run_id": run_id, "preview": "".join(preview), "status": "approval_pending" if result.get("status") == "approval_pending" else "completed"},
             "events": _events_for(result, thread.id, run_id),
             "context_meta": context["meta"],
             "planner": result.get("planner", {}),
@@ -654,6 +722,8 @@ def submit_message(
         message.assistant_metadata = {**(message.assistant_metadata or {}), "run_id": run_id}
         thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
             "stage": "failed",
+            "execution_status": "failed",
+            "live": {"run_id": run_id, "stage": "failed", "status": "failed"},
             "recoverable": True,
             "events": [{
                 "type": "error",
@@ -665,10 +735,61 @@ def submit_message(
             }],
         })
         thread.active_run_id = run_id
+        logger.exception("Assistant run failed", exc_info=exc)
     record_audit(session, actor=user.username, action="internal_chat.message_sent",
                  entity="internal_chat_message", entity_id=str(message.id),
                  after={"status": message.status})
     session.flush()
+
+
+def _session_factory():
+    from app.db import SessionLocal
+    return SessionLocal
+
+
+def run_agent_turn(*, thread_id: int, run_id: str, user_id: int, username: str, actor_role: str,
+                   attachment_ids: list[int], sdb_requested: bool | None) -> None:
+    """Background entry point; owns and closes its database session."""
+    session = _session_factory()()
+    try:
+        thread = session.get(InternalChatThread, thread_id)
+        user = session.get(User, user_id)
+        message = session.scalar(select(InternalChatMessage).where(
+            InternalChatMessage.thread_id == thread_id,
+            InternalChatMessage.assistant_metadata["run_id"].as_string() == run_id,
+        ).order_by(InternalChatMessage.id.desc()))
+        if thread is None or user is None or message is None:
+            return
+        _run_agent_turn_session(session, thread, user, message, attachment_ids, sdb_requested)
+        record_audit(session, actor=username, action="internal_chat.message_sent",
+                     entity="internal_chat_message", entity_id=str(message.id), after={"status": message.status})
+        session.commit()
+        publish_live(_session_factory(), thread_id, run_id,
+                     status=(thread.assistant_state or {}).get("live", {}).get("status"),
+                     preview=(thread.assistant_state or {}).get("live", {}).get("preview"))
+    except Exception:
+        session.rollback()
+        logger.exception("Unable to complete background assistant run")
+        if 'message' in locals() and message is not None and 'thread' in locals() and thread is not None:
+            message.status = "failed"
+            thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
+                "stage": "failed", "live": {"run_id": run_id, "stage": "failed", "status": "failed"},
+            })
+            session.commit()
+    finally:
+        session.close()
+
+
+def submit_message(
+    session: Session, thread: InternalChatThread, user: User, content: str,
+    attachment_ids: list[int] | None = None, *, sdb_requested: bool | None = None,
+    project_authorization=None,
+) -> InternalChatMessage:
+    """Compatibility wrapper retaining the historical synchronous service API."""
+    message = create_run_message(session, thread, user, content, attachment_ids, sdb_requested=sdb_requested, project_authorization=project_authorization)
+    _run_agent_turn_session(session, thread, user, message, attachment_ids or [], sdb_requested, project_authorization)
+    record_audit(session, actor=user.username, action="internal_chat.message_sent",
+                 entity="internal_chat_message", entity_id=str(message.id), after={"status": message.status})
     return message
 
 
@@ -703,8 +824,53 @@ def _execution_events(result: dict, thread_id: int, run_id: str, sequence: int) 
     ]
 
 
-def stream_events(session: Session, thread: InternalChatThread, run_id: str | None = None) -> list[dict]:
-    return recover_events(thread, run_id)
+def stream_events(session_factory, thread_id: int, run_id: str, *, timeout=300.0, interval=0.25):
+    """Poll short transactions so persisted events and live progress are observable."""
+    # Keep the pre-live service helper callable for older integrations; HTTP
+    # callers always use the polling branch below.
+    if not isinstance(thread_id, int):
+        return recover_events(thread_id, run_id)
+    if not run_id:
+        return iter(())
+
+    def poll():
+        """Yield each event once while the run remains observable."""
+        started = time.monotonic()
+        seen = set()
+        sequence = 0
+        previous_stage = object()
+        previous_preview = object()
+        terminal = {"completed", "failed", "approval_pending"}
+        while time.monotonic() - started < timeout:
+            session = session_factory()
+            try:
+                thread = session.get(InternalChatThread, thread_id)
+                if thread is None:
+                    return
+                events = recover_events(thread, run_id)
+                live = (thread.assistant_state or {}).get("live") or {}
+                for event in events:
+                    identity = (event.get("run_id"), event.get("sequence"), event.get("type"), event.get("task_id"), event.get("tool"))
+                    if identity not in seen:
+                        seen.add(identity)
+                        yield event
+                        sequence = max(sequence, int(event.get("sequence", 0)) + 1)
+                if live.get("run_id") == run_id:
+                    if live.get("stage") != previous_stage:
+                        previous_stage = live.get("stage")
+                        yield {"type": "status", "thread_id": thread_id, "run_id": run_id, "sequence": sequence, "status": previous_stage}
+                        sequence += 1
+                    if live.get("preview") != previous_preview:
+                        previous_preview = live.get("preview")
+                        yield {"type": "response", "thread_id": thread_id, "run_id": run_id, "sequence": sequence, "content": previous_preview}
+                        sequence += 1
+                    if live.get("status") in terminal:
+                        return
+            finally:
+                session.close()
+            time.sleep(interval)
+
+    return poll()
 
 
 def approve_plan(session: Session, thread: InternalChatThread, user: User, run_id: str, token: str, *, reject: bool = False) -> InternalChatMessage | None:
@@ -780,6 +946,59 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
     }
     session.flush()
     return message
+
+
+def reap_stale_run(session: Session, thread: InternalChatThread) -> bool:
+    """Fail closed on a panel run whose background task never ran, or died.
+
+    `create_run_message` commits the operator's message as `processing` and the
+    HTTP handler hands the turn to an in-process FastAPI background task, so a
+    crash or redeploy between those two points leaves the row spinning forever.
+    Nothing can still be working on a run whose `live` state stopped advancing
+    for `STALE_RUN_SECONDS`, so mark it failed with the same copy a crashed run
+    produces — which is what re-enables the operator's Retry action.
+
+    A run the durable `resume_thread` path can still reclaim is left alone:
+    recovering a persisted execution beats failing it. Rows written before
+    `live.updated_at` existed are reaped on sight, which is correct because the
+    deploy that introduced this field is exactly what orphaned them.
+    """
+    state = thread.assistant_state or {}
+    if state.get("stage") == "executing" and state.get("execution_status") == "pending":
+        return False
+    live = state.get("live") or {}
+    if live.get("status") != "running":
+        return False
+    try:
+        updated_at = datetime.fromisoformat(live.get("updated_at") or "")
+    except (TypeError, ValueError):
+        updated_at = None
+    now = datetime.now(timezone.utc)
+    if updated_at is not None and (now - updated_at).total_seconds() < STALE_RUN_SECONDS:
+        return False
+    run_id = live.get("run_id") or thread.active_run_id
+    message = session.scalar(
+        select(InternalChatMessage).where(
+            InternalChatMessage.thread_id == thread.id,
+            InternalChatMessage.assistant_metadata["run_id"].as_string() == run_id,
+            InternalChatMessage.status == "processing",
+        ).order_by(InternalChatMessage.id.desc())
+    )
+    if message is not None:
+        message.status = "failed"
+        message.error = "El agente no pudo procesar este mensaje. Reinténtalo."
+        message.completed_at = now
+    thread.assistant_state = merge_assistant_state(state, {
+        "stage": "failed",
+        "execution_status": "failed",
+        "recoverable": True,
+        "live": {
+            "run_id": run_id, "stage": "failed", "status": "failed", "updated_at": now.isoformat(),
+        },
+    })
+    logger.warning("Reaped an orphaned assistant run for thread %s", thread.id)
+    session.flush()
+    return True
 
 
 def resume_thread(session: Session, thread: InternalChatThread, user: User) -> bool:
