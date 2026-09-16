@@ -1,6 +1,7 @@
 """Persistence boundary for the panel assistant graph."""
 
 from datetime import datetime, timezone
+import asyncio
 import json
 import logging
 import time
@@ -824,10 +825,61 @@ def _execution_events(result: dict, thread_id: int, run_id: str, sequence: int) 
     ]
 
 
+_TERMINAL_RUN_STATUSES = {"completed", "failed", "approval_pending"}
+
+
+class _EventCursor:
+    """Turns successive polls into a single de-duplicated view of one run.
+
+    Persisted events are authoritative and emitted once each; the live stage and
+    preview are emitted only when they change. Keeping this state in one place is
+    what stops the sync and async polls from drifting apart.
+    """
+
+    def __init__(self) -> None:
+        self._seen: set[tuple] = set()
+        self._stage: object = object()
+        self._preview: object = object()
+        self.sequence = 0
+
+    def feed(self, events: list[dict], live: dict, thread_id: int, run_id: str) -> tuple[list[dict], bool]:
+        """Return the events to emit now and whether the run reached a terminal status."""
+        fresh: list[dict] = []
+        for event in events:
+            identity = (event.get("run_id"), event.get("sequence"), event.get("type"), event.get("task_id"), event.get("tool"))
+            if identity not in self._seen:
+                self._seen.add(identity)
+                fresh.append(event)
+                self.sequence = max(self.sequence, int(event.get("sequence", 0)) + 1)
+        if live.get("run_id") != run_id:
+            return fresh, False
+        if live.get("stage") != self._stage:
+            self._stage = live.get("stage")
+            fresh.append({"type": "status", "thread_id": thread_id, "run_id": run_id, "sequence": self.sequence, "status": self._stage})
+            self.sequence += 1
+        if live.get("preview") != self._preview:
+            self._preview = live.get("preview")
+            fresh.append({"type": "response", "thread_id": thread_id, "run_id": run_id, "sequence": self.sequence, "content": self._preview})
+            self.sequence += 1
+        return fresh, live.get("status") in _TERMINAL_RUN_STATUSES
+
+
+def _poll_once(session_factory, thread_id: int, run_id: str) -> tuple[list[dict], dict] | None:
+    """Read one snapshot in a short transaction; None when the thread is gone."""
+    session = session_factory()
+    try:
+        thread = session.get(InternalChatThread, thread_id)
+        if thread is None:
+            return None
+        return recover_events(thread, run_id), dict((thread.assistant_state or {}).get("live") or {})
+    finally:
+        session.close()
+
+
 def stream_events(session_factory, thread_id: int, run_id: str, *, timeout=300.0, interval=0.25):
     """Poll short transactions so persisted events and live progress are observable."""
-    # Keep the pre-live service helper callable for older integrations; HTTP
-    # callers always use the polling branch below.
+    # Keep the pre-live service helper callable for older integrations; the SSE
+    # endpoint uses `stream_events_async` instead (see `assistant-sse-resource-hold`).
     if not isinstance(thread_id, int):
         return recover_events(thread_id, run_id)
     if not run_id:
@@ -836,41 +888,46 @@ def stream_events(session_factory, thread_id: int, run_id: str, *, timeout=300.0
     def poll():
         """Yield each event once while the run remains observable."""
         started = time.monotonic()
-        seen = set()
-        sequence = 0
-        previous_stage = object()
-        previous_preview = object()
-        terminal = {"completed", "failed", "approval_pending"}
+        cursor = _EventCursor()
         while time.monotonic() - started < timeout:
-            session = session_factory()
-            try:
-                thread = session.get(InternalChatThread, thread_id)
-                if thread is None:
-                    return
-                events = recover_events(thread, run_id)
-                live = (thread.assistant_state or {}).get("live") or {}
-                for event in events:
-                    identity = (event.get("run_id"), event.get("sequence"), event.get("type"), event.get("task_id"), event.get("tool"))
-                    if identity not in seen:
-                        seen.add(identity)
-                        yield event
-                        sequence = max(sequence, int(event.get("sequence", 0)) + 1)
-                if live.get("run_id") == run_id:
-                    if live.get("stage") != previous_stage:
-                        previous_stage = live.get("stage")
-                        yield {"type": "status", "thread_id": thread_id, "run_id": run_id, "sequence": sequence, "status": previous_stage}
-                        sequence += 1
-                    if live.get("preview") != previous_preview:
-                        previous_preview = live.get("preview")
-                        yield {"type": "response", "thread_id": thread_id, "run_id": run_id, "sequence": sequence, "content": previous_preview}
-                        sequence += 1
-                    if live.get("status") in terminal:
-                        return
-            finally:
-                session.close()
+            snapshot = _poll_once(session_factory, thread_id, run_id)
+            if snapshot is None:
+                return
+            fresh, done = cursor.feed(*snapshot, thread_id, run_id)
+            yield from fresh
+            if done:
+                return
             time.sleep(interval)
 
     return poll()
+
+
+async def stream_events_async(session_factory, thread_id: int, run_id: str, *, timeout=300.0, interval=0.25):
+    """Poll without holding a worker thread while a stream waits.
+
+    Only the database read hops to a thread; the wait between polls is an
+    `asyncio.sleep` on the event loop. A sync generator here would be consumed
+    through the process-wide AnyIO pool (40 workers), so an open stream would
+    keep one of those workers busy for its whole 300 s life.
+    """
+    if not isinstance(thread_id, int):
+        for event in recover_events(thread_id, run_id):
+            yield event
+        return
+    if not run_id:
+        return
+    started = time.monotonic()
+    cursor = _EventCursor()
+    while time.monotonic() - started < timeout:
+        snapshot = await asyncio.to_thread(_poll_once, session_factory, thread_id, run_id)
+        if snapshot is None:
+            return
+        fresh, done = cursor.feed(*snapshot, thread_id, run_id)
+        for event in fresh:
+            yield event
+        if done:
+            return
+        await asyncio.sleep(interval)
 
 
 def approve_plan(session: Session, thread: InternalChatThread, user: User, run_id: str, token: str, *, reject: bool = False) -> InternalChatMessage | None:

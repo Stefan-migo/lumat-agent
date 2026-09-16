@@ -1,5 +1,6 @@
 """PR1 contract tests for the isolated assistant graph boundary."""
 
+import asyncio
 import json
 import time
 from datetime import datetime, timedelta, timezone
@@ -22,6 +23,7 @@ from app.services.agent_chat import (
     create_run_message,
     reap_stale_run,
     stream_events,
+    stream_events_async,
 )
 from app.services.users import hash_password
 @pytest.fixture(autouse=True)
@@ -794,3 +796,92 @@ def test_title_fallback_is_non_empty_when_an_assistant_response_has_no_admin_ope
         _generate_thread_title(session, thread, response)
         assert thread.title == "Conversación con el asistente"
         assert thread.title
+
+
+def test_stream_events_async_polls_without_blocking_the_event_loop():
+    """A stream idles on the event loop; a blocking poll would starve every other task.
+
+    The ticker only advances when the poll loop yields. A `time.sleep` between
+    polls (or a generator consumed on a worker thread) freezes it for the whole
+    stream window — the resource hold `assistant-sse-resource-hold` fixes.
+    """
+    polls = 0
+
+    class Session:
+        def get(self, model, thread_id):
+            nonlocal polls
+            polls += 1
+            return SimpleNamespace(assistant_state={"events": [], "live": {
+                "run_id": "run-live", "stage": "streaming", "preview": f"chunk-{polls}", "status": "processing",
+            }})
+
+        def close(self):
+            pass
+
+    async def collect() -> tuple[list[dict], int]:
+        ticks = 0
+
+        async def ticker():
+            nonlocal ticks
+            while True:
+                await asyncio.sleep(0.01)
+                ticks += 1
+
+        beat = asyncio.create_task(ticker())
+        try:
+            events = [
+                event
+                async for event in stream_events_async(lambda: Session(), 1, "run-live", timeout=0.3, interval=0.05)
+            ]
+        finally:
+            beat.cancel()
+        return events, ticks
+
+    events, ticks = asyncio.run(collect())
+
+    assert [event["type"] for event in events] == ["status"] + ["response"] * polls
+    assert polls >= 3
+    assert ticks >= 10
+
+
+def test_open_assistant_stream_releases_its_pooled_connection(client):
+    """An open SSE stream must not keep a request-scoped connection checked out.
+
+    FastAPI closes request dependencies only after the response is fully sent, so
+    a stream would hold one pooled connection for its whole life (up to 300 s)
+    unless the route releases the session before it starts yielding.
+    """
+    from sqlalchemy import event as sqlalchemy_event
+
+    from app.db import engine
+
+    _user("stream-pool", "admin")
+    _login(client, "stream-pool")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    sent = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Summarize operations"})
+    run_id = sent.json()["message"]["assistant_metadata"]["run_id"]
+
+    open_connections = 0
+    peak = 0
+
+    def _checkout(*args):
+        nonlocal open_connections, peak
+        open_connections += 1
+        peak = max(peak, open_connections)
+
+    def _checkin(*args):
+        nonlocal open_connections
+        open_connections -= 1
+
+    sqlalchemy_event.listen(engine, "checkout", _checkout)
+    sqlalchemy_event.listen(engine, "checkin", _checkin)
+    try:
+        assert engine.pool.checkedout() == 0
+        with client.stream("GET", f"/panel/api/chat/threads/{thread_id}/stream?run_id={run_id}") as stream:
+            assert stream.status_code == 200
+            first = next(stream.iter_lines(), None)
+            assert first is not None and first.startswith("data: ")
+            assert peak == 1
+    finally:
+        sqlalchemy_event.remove(engine, "checkout", _checkout)
+        sqlalchemy_event.remove(engine, "checkin", _checkin)
