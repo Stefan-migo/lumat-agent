@@ -15,6 +15,7 @@ from app.chat.assistant.approval import (
     validate_execution,
 )
 from app.models import InternalChatMessage, InternalChatThread, Message, User
+from app.services.agent_chat import _generate_thread_title
 from app.services.users import hash_password
 @pytest.fixture(autouse=True)
 def assistant_client(monkeypatch):
@@ -637,3 +638,21 @@ def test_title_generation_failures_store_the_same_bounded_fallback(client, monke
         title = session.get(InternalChatThread, thread_id).title
         assert title == opening.strip()[: len(title)]
         assert len(title.encode("utf-8")) <= 120
+
+
+def test_title_fallback_is_non_empty_when_an_assistant_response_has_no_admin_opening(monkeypatch):
+    user = _user("assistant-title-no-opening", "admin")
+    with SessionLocal() as session:
+        owner = session.scalar(select(User).where(User.username == "assistant-title-no-opening"))
+        thread = InternalChatThread(user_id=owner.id)
+        session.add(thread)
+        session.flush()
+        response = InternalChatMessage(
+            thread_id=thread.id, author="agent", content="Respuesta persistida", status="processed"
+        )
+        session.add(response)
+        session.flush()
+        monkeypatch.setattr("app.services.costs.internal_thread_cost_state", lambda session, thread_id: (0, "conservative"))
+        _generate_thread_title(session, thread, response)
+        assert thread.title == "Conversación con el asistente"
+        assert thread.title
