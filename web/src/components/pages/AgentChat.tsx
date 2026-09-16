@@ -1012,9 +1012,9 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
                     // literal text, cursor included: partial markdown (an open
                     // fence, a half-written table) would re-lay-out the block on
                     // every chunk, and react-markdown re-parses the whole
-                    // accumulated string each time. Once the buffer settles it is
-                    // rendered as markdown, exactly like a persisted reply.
-                    settledStream ? (
+                    // accumulated string each time. Once the current buffer has
+                    // settled it is rendered as markdown, exactly like a persisted reply.
+                    settledStream === stream ? (
                       <Markdown
                         className="assistant-chat__message-content assistant-chat__stream"
                         content={settledStream}

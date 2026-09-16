@@ -395,6 +395,61 @@ describe("AgentChat", () => {
     await waitFor(() => expect(composer).toBeEnabled());
   });
 
+  it("renders new stream content while a previous markdown snapshot is stale", async () => {
+    let pushEvent: (content: string) => void = () => undefined;
+    let closeStream: () => void = () => undefined;
+    const stream = new ReadableStream({
+      start(controller) {
+        pushEvent = (content) =>
+          controller.enqueue(
+            new TextEncoder().encode(
+              `data: ${JSON.stringify({
+                type: "response",
+                thread_id: 4,
+                run_id: "run-stale-markdown",
+                sequence: 0,
+                content,
+              })}\n\n`,
+            ),
+          );
+        pushEvent("**respuesta inicial**");
+        closeStream = () => controller.close();
+      },
+    });
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse({
+        message: {
+          id: 2,
+          author: "admin",
+          content: "Hello",
+          status: "processing",
+          assistant_metadata: { run_id: "run-stale-markdown" },
+        },
+      }, 201))
+      .mockResolvedValueOnce(new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }))
+      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }));
+
+    render(<AgentChat threadId={4} />);
+    const composer = await screen.findByRole("textbox", { name: /mensaje/i });
+    fireEvent.change(composer, { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    await waitFor(() => expect(screen.getByText("respuesta inicial").tagName).toBe("STRONG"), {
+      timeout: 500,
+    });
+    pushEvent("**respuesta inicial** y contenido nuevo");
+    await waitFor(
+      () => expect(screen.getByText("**respuesta inicial** y contenido nuevo")).toBeInTheDocument(),
+      { timeout: 150 },
+    );
+    closeStream();
+    await waitFor(() => expect(composer).toBeEnabled());
+  });
+
   it("does not call a disconnected stream successful and exposes recovery state", async () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
