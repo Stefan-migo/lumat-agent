@@ -8,6 +8,61 @@ import { spacing, radius, zIndex } from './tokens';
 const componentsRoot = join(process.cwd(), 'src');
 const tokensRaw = readFileSync(join(componentsRoot, 'tokens', 'tokens.css'), 'utf8');
 
+const cssVars = new Map<string, string>();
+for (const line of tokensRaw.split('\n')) {
+  const m = line.match(/^\s*(--[\w-]+)\s*:\s*([^;]+);/);
+  if (m) cssVars.set(m[1], m[2].trim());
+}
+
+type Rgb = [number, number, number];
+
+const resolveColor = (name: string): Rgb => {
+  const value = cssVars.get(name) ?? name;
+  const alias = value.match(/^var\((--[\w-]+)\)$/);
+  if (alias) return resolveColor(alias[1]);
+  const hex = value.match(/^#([\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i);
+  if (!hex) throw new Error(`Unsupported color token: ${name} = ${value}`);
+  const raw = hex[1].length === 3
+    ? hex[1].split('').map((channel) => channel + channel).join('')
+    : hex[1];
+  const rgb: Rgb = [parseInt(raw.slice(0, 2), 16), parseInt(raw.slice(2, 4), 16), parseInt(raw.slice(4, 6), 16)];
+  if (raw.length === 8) {
+    const alpha = parseInt(raw.slice(6), 16) / 255;
+    const background = resolveColor('--bg');
+    return rgb.map((channel, index) => alpha * channel + (1 - alpha) * background[index]) as Rgb;
+  }
+  return rgb;
+};
+
+const relativeLuminance = ([r, g, b]: Rgb): number => {
+  const linear = (channel: number): number => {
+    const normalized = channel / 255;
+    return normalized <= 0.04045
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+};
+
+const contrast = (foreground: Rgb, background: Rgb): number => {
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+};
+
+const brandBgElevated = (): Rgb => {
+  const declaration = cssVars.get('--brand-bg-elevated') ?? '';
+  const mix = declaration.match(
+    /^color-mix\(in srgb, var\((--[\w-]+)\) ([\d.]+)%, var\((--[\w-]+)\)\)$/,
+  );
+  if (!mix) throw new Error(`Unsupported elevated background token: ${declaration}`);
+  const first = resolveColor(mix[1]);
+  const second = resolveColor(mix[3]);
+  const firstWeight = Number(mix[2]) / 100;
+  return first.map((channel, index) => firstWeight * channel + (1 - firstWeight) * second[index]) as Rgb;
+};
+
 describe('design tokens (PDW-TKN-1 / PDW-TKN-2)', () => {
   it('tokens.css is a single :root source with the exact spot-checked palette', () => {
     expect(tokensRaw).toContain(':root');
@@ -124,6 +179,22 @@ describe('design tokens — B9 foundation additions (DS-TKN-3..7)', () => {
     expect(cssVars.get('--brand-forest')).toBe('#576f31');
     expect(cssVars.get('--brand-graphite')).toBe('#656665');
     expect(cssVars.get('--info')).toBe('#14788f');
+  });
+});
+
+describe('design tokens — WCAG 2.2 AA contrast remediation', () => {
+  it('keeps remediated token pairs above their applicable contrast thresholds', () => {
+    const elevated = brandBgElevated();
+    const surface = resolveColor('--surface');
+    const bg = resolveColor('--bg');
+    const strongBorder = resolveColor('--border-strong');
+    const warning = resolveColor('--warning');
+
+    expect(contrast(strongBorder, elevated), '--border-strong on --brand-bg-elevated').toBeGreaterThanOrEqual(3);
+    expect(contrast(strongBorder, surface), '--border-strong on --surface').toBeGreaterThanOrEqual(3);
+    expect(contrast(warning, resolveColor('--warning-bg')), '--warning on --warning-bg').toBeGreaterThanOrEqual(4.5);
+    expect(contrast(warning, surface), '--warning on --surface').toBeGreaterThanOrEqual(4.5);
+    expect(contrast(warning, bg), '--warning on --bg').toBeGreaterThanOrEqual(4.5);
   });
 });
 
