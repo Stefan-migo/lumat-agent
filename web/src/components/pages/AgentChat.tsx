@@ -1,8 +1,10 @@
 import {
   useEffect,
+  useRef,
   useState,
   type ChangeEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import {
   ApiError,
@@ -41,7 +43,74 @@ import { Dialog } from "../primitives/Dialog";
 import { Popover } from "../primitives/Popover";
 import { Textarea } from "../primitives/Textarea";
 import { PageFrame } from "../shared/PageFrame";
+import { Markdown } from "../shared/Markdown";
 import { StateMessage } from "../shared/StateMessage";
+
+/**
+ * Inline SVG icons. The project ships no icon dependency on purpose, so these
+ * follow the same convention as `PanelShell`/`Dashboard`: a tiny local helper
+ * over a stroked 24x24 viewBox, `currentColor`, and `aria-hidden` (the
+ * accessible name always lives on the button, never on the glyph).
+ */
+const icon = (children: ReactNode, size: number) => (
+  <svg
+    viewBox="0 0 24 24"
+    width={size}
+    height={size}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    {children}
+  </svg>
+);
+
+function CopyIcon({ size = 16 }: { size?: number }) {
+  return icon(
+    <>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>,
+    size,
+  );
+}
+
+function RetryIcon({ size = 16 }: { size?: number }) {
+  return icon(
+    <>
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+    </>,
+    size,
+  );
+}
+
+function CheckIcon({ size = 16 }: { size?: number }) {
+  return icon(<path d="M20 6 9 17l-5-5" />, size);
+}
+
+function PaperclipIcon({ size = 20 }: { size?: number }) {
+  return icon(
+    <path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l8.57-8.57a4 4 0 1 1 5.66 5.66l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />,
+    size,
+  );
+}
+
+function SendIcon({ size = 18 }: { size?: number }) {
+  // Points right on purpose: a 45° paper plane carries its visual mass at the
+  // top-right tip and reads as off-centre inside a circle even when the
+  // geometry is centred. A horizontally symmetric glyph centres cleanly.
+  return icon(
+    <>
+      <path d="M3.5 3.5 21 12 3.5 20.5l3.2-8.5z" />
+      <path d="M6.7 12H21" />
+    </>,
+    size,
+  );
+}
 
 export const COMMAND_CENTER_BREAKPOINTS = {
   compactMax: 640,
@@ -65,6 +134,16 @@ const stateLabels: Record<string, string> = {
   disconnected: "Desconectada",
   reconnecting: "Reconectando",
   connected: "Conectada",
+};
+
+/** Stage copy for the in-flight bubble, so a waiting turn never looks dead.
+ *  Deliberately avoids the word "planificar": every turn runs the planner, and
+ *  naming it that way collides with the opt-in Cortex planning session. */
+const THINKING_LABELS: Record<string, string> = {
+  planning: "Analizando tu solicitud…",
+  executing: "Consultando herramientas…",
+  streaming: "Redactando…",
+  approval_pending: "Esperando aprobación…",
 };
 
 function relativeTime(value: string | null | undefined): string {
@@ -146,26 +225,72 @@ export function PlanCard({
   );
 }
 
-function EvidenceList({ evidence }: { evidence: AssistantEvidence[] }) {
+/**
+ * One collapsed block per run holding the summarized action trail: what the
+ * planner decided and which tools ran with what they returned. Renders nothing
+ * when a turn was a plain answer with no tool work — a "plan" that plans
+ * nothing is noise, not information.
+ */
+function AgentActivity({
+  plan,
+  evidence,
+  includePlan = true,
+}: {
+  plan?: AssistantPlan | null;
+  evidence: AssistantEvidence[];
+  includePlan?: boolean;
+}) {
+  // Gate on a real tool: the backend's fallback plan carries the user's own
+  // text as `summary`, so keying off the summary alone would render a
+  // "Planificó <your message>" card for every plain answer.
+  const planTool = plan?.tool?.trim() || "";
+  const planDetail = includePlan && planTool ? plan?.summary?.trim() || planTool : "";
+  const steps = (planDetail ? 1 : 0) + evidence.length;
+  if (steps === 0) return null;
+
   return (
-    <details className="assistant-chat__evidence">
-      <summary>Evidencia de herramientas ({evidence.length})</summary>
-      <div>
-        {evidence.map((item, index) => (
-          <div
-            className="assistant-chat__evidence-item"
-            key={`${item.tool ?? "asistente"}-${index}`}
-          >
-            <strong>{item.tool || "Asistente"}</strong>
-            <Badge
-              tone={item.status === "error" ? "danger" : item.status === "completed" ? "success" : "neutral"}
-            >
-              {stateLabels[item.status] ?? "En curso"}
-            </Badge>
-            {item.detail ? <p>{item.detail}</p> : null}
-            {item.result !== undefined ? <code>{JSON.stringify(item.result)}</code> : null}
-          </div>
-        ))}
+    <details className="assistant-chat__activity">
+      <summary>
+        Actividad del agente ({steps} {steps === 1 ? "paso" : "pasos"})
+      </summary>
+      <div className="assistant-chat__activity-body">
+        {planDetail ? (
+          <p className="assistant-chat__activity-step">
+            <strong>Planificó</strong> {planDetail}
+          </p>
+        ) : null}
+        {evidence.length > 0 ? (
+          <>
+            <p className="assistant-chat__activity-step">
+              <strong>Evidencia de herramientas</strong>
+            </p>
+            {evidence.map((item, index) => (
+              <div
+                className="assistant-chat__evidence-item"
+                key={`${item.tool ?? "asistente"}-${index}`}
+              >
+                <span>
+                  {item.tool || "Asistente"}{" "}
+                  <Badge
+                    tone={
+                      item.status === "error"
+                        ? "danger"
+                        : item.status === "completed"
+                          ? "success"
+                          : "neutral"
+                    }
+                  >
+                    {stateLabels[item.status] ?? "En curso"}
+                  </Badge>
+                </span>
+                {item.detail ? <p>{item.detail}</p> : null}
+                {item.result !== undefined ? (
+                  <code>{JSON.stringify(item.result)}</code>
+                ) : null}
+              </div>
+            ))}
+          </>
+        ) : null}
       </div>
     </details>
   );
@@ -173,9 +298,10 @@ function EvidenceList({ evidence }: { evidence: AssistantEvidence[] }) {
 
 export interface AgentChatProps {
   threadId?: number;
+  sectionTabs?: ReactNode;
 }
 
-export function AgentChat({ threadId }: AgentChatProps = {}) {
+export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
   const requestedId =
     threadId ??
     (Number(new URLSearchParams(globalThis.location.search).get("thread_id")) || undefined);
@@ -202,6 +328,10 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
   const [navigatorError, setNavigatorError] = useState<string | null>(null);
   const [contextOpen, setContextOpen] = useState(false);
   const [planningOpen, setPlanningOpen] = useState(false);
+  // Copy feedback: the icon that was just used swaps to a check and says so,
+  // then reverts. Without it the click is silent and reads as a no-op.
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const copyTimer = useRef<number | null>(null);
   const [topic, setTopic] = useState("");
   const [topicError, setTopicError] = useState("");
   const [renameTarget, setRenameTarget] = useState<InternalChatThreadSummary | null>(null);
@@ -375,13 +505,31 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
     setPlan(null);
     setApproval(null);
     setEvidence([]);
+    // The run is scheduled after the POST, so show the message immediately and
+    // reconcile it with the persisted row when it lands. Negative ids never
+    // collide with server ids.
+    const optimisticId = -Date.now();
+    setMessages((current) => [
+      ...current,
+      {
+        id: optimisticId,
+        thread_id: thread.id,
+        author: "admin",
+        content: submitted,
+        status: "processing",
+        created_at: new Date().toISOString(),
+      },
+    ]);
     try {
       const result = await sendChatMessage(
         thread.id,
         submitted,
         attachments.map((item) => item.id),
       );
-      setMessages((current) => [...current, result.message]);
+      setMessages((current) => [
+        ...current.filter((item) => item.id !== optimisticId),
+        result.message,
+      ]);
       const run = result.message.assistant_metadata?.run_id;
       if (run) {
         void openStream(thread.id, run);
@@ -398,7 +546,7 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
       setProcessing(false);
       setError(reason instanceof ApiError ? reason.detail : "No pudimos enviar el mensaje");
       setMessages((current) => [
-        ...current,
+        ...current.filter((item) => item.id !== optimisticId),
         {
           id: Date.now(),
           thread_id: thread.id,
@@ -406,10 +554,22 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
           content: submitted,
           status: "failed",
           error: "temporary",
+          created_at: new Date().toISOString(),
         },
       ]);
     }
   };
+
+  const copyMessage = (message: InternalChatMessage) => {
+    void navigator.clipboard?.writeText(message.content);
+    setCopiedId(message.id);
+    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+    copyTimer.current = window.setTimeout(() => setCopiedId(null), 1600);
+  };
+
+  useEffect(() => () => {
+    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+  }, []);
 
   const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -500,6 +660,18 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
     <StateMessage tone="danger" role="alert" title={error} />
   ) : null;
 
+  // The backend stamps the same `run_id` on the message that STARTED a run and
+  // on the agent's reply, so filtering events by run_id alone matched BOTH and
+  // the plan card rendered twice per turn. A run's artifacts render exactly
+  // once: on the agent's reply when one exists, otherwise on the message that
+  // owns the run — the approval-pending case has no reply yet, and that message
+  // is the only place the Aprobar/Rechazar actions can live.
+  const runsWithReply = new Set(
+    messages
+      .filter((item) => item.author === "agent" && item.assistant_metadata?.run_id)
+      .map((item) => item.assistant_metadata?.run_id as string),
+  );
+
   return (
     <PageFrame
       title="Asistente Lumat"
@@ -565,6 +737,7 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
         </div>
       }
     >
+      {sectionTabs}
       <Dialog
         open={planningOpen}
         onClose={() => {
@@ -655,18 +828,42 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
             {messages.map((message) => {
               const outbound = message.author === "admin";
               const messageRunId = message.assistant_metadata?.run_id;
-              const runEvents = (thread?.assistant_state?.events ?? []).filter(
-                (event) => event.run_id === messageRunId,
-              );
-              const messagePlan = runEvents.reduce<AssistantPlan | null>(
-                (current, event) => event.plan ?? current,
-                messageRunId === runId ? plan : null,
-              );
-              const messageEvidence = runEvents.length > 0
-                ? runEvents.flatMap((event) => event.evidence ?? [])
-                : messageRunId === runId
-                  ? evidence
-                  : [];
+              // Outbound messages only render the run's artifacts when no agent
+              // reply exists for that run (see `runsWithReply` above).
+              const rendersRun =
+                messageRunId !== undefined &&
+                (outbound ? !runsWithReply.has(messageRunId) : true);
+              const runEvents = rendersRun
+                ? (thread?.assistant_state?.events ?? []).filter(
+                    (event) => event.run_id === messageRunId,
+                  )
+                : [];
+              const messagePlan = rendersRun
+                ? runEvents.reduce<AssistantPlan | null>(
+                    (current, event) => event.plan ?? current,
+                    messageRunId === runId ? plan : null,
+                  )
+                : null;
+              const messageEvidence =
+                rendersRun && runEvents.length > 0
+                  ? runEvents.flatMap((event) => event.evidence ?? [])
+                  : rendersRun && messageRunId === runId
+                    ? evidence
+                    : [];
+              const ownsLiveApproval =
+                rendersRun &&
+                messageRunId === runId &&
+                Boolean(
+                  approval &&
+                    (approval.status === "pending" || messagePlan?.status === "pending"),
+                );
+              // A pending approval needs its Aprobar/Rechazar buttons, and a
+              // rejected plan is a terminal outcome the operator must still be
+              // able to read back. Every other turn is a plain answer whose
+              // trail belongs in the collapsed activity block, not in a card.
+              const showsPlanCard =
+                messagePlan !== null &&
+                (ownsLiveApproval || messagePlan.status === "rejected");
               return (
                 <article
                   key={message.id}
@@ -678,9 +875,18 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
                     <span className="ai-agent-grammar__message-meta">
                       {outbound ? "Administrador" : "Agente Lumat"}
                     </span>
-                    <p className="assistant-chat__message-content">{message.content}</p>
+                    {outbound ? (
+                      <p className="assistant-chat__message-content">{message.content}</p>
+                    ) : (
+                      <Markdown
+                        className="assistant-chat__message-content"
+                        content={message.content}
+                      />
+                    )}
                     {message.status === "failed" ? (
-                      <p role="alert">No se pudo procesar el mensaje</p>
+                      <p className="assistant-chat__message-error" role="alert">
+                        No se pudo procesar el mensaje
+                      </p>
                     ) : null}
                     <time
                       className="ai-agent-grammar__message-time"
@@ -694,44 +900,81 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
                         : "Ahora"}
                     </time>
                     <div className="assistant-chat__message-actions">
-                      <Button
-                        variant="secondary"
-                        onClick={() => void navigator.clipboard?.writeText(message.content)}
+                      <button
+                        type="button"
+                        className={`assistant-chat__icon-button${copiedId === message.id ? " assistant-chat__icon-button--done" : ""}`}
+                        aria-label={
+                          copiedId === message.id
+                            ? "Mensaje copiado al portapapeles"
+                            : "Copiar mensaje"
+                        }
+                        title={
+                          copiedId === message.id
+                            ? "Mensaje copiado al portapapeles"
+                            : "Copiar mensaje"
+                        }
+                        onClick={() => copyMessage(message)}
                       >
-                        Copiar mensaje
-                      </Button>
+                        {copiedId === message.id ? <CheckIcon /> : <CopyIcon />}
+                      </button>
+                      {copiedId === message.id ? (
+                        <span className="assistant-chat__copy-done" role="status">
+                          Copiado
+                        </span>
+                      ) : null}
                       {message.status === "failed" ? (
-                        <Button variant="secondary" onClick={() => void send(message.content, true)}>
-                          Reintentar mensaje
-                        </Button>
+                        <button
+                          type="button"
+                          className="assistant-chat__icon-button"
+                          aria-label="Reintentar mensaje"
+                          title="Reintentar mensaje"
+                          onClick={() => void send(message.content, true)}
+                        >
+                          <RetryIcon />
+                        </button>
                       ) : null}
                     </div>
-                    {messagePlan ? (
+                    {messagePlan && showsPlanCard ? (
                       <PlanCard
                         plan={messagePlan}
                         approval={messageRunId === runId ? approval : undefined}
                         busy={processing}
-                        onApprove={
-                          messageRunId === runId && approval && (approval.status === "pending" || messagePlan.status === "pending")
-                            ? () => void approve(false)
-                            : undefined
-                        }
-                        onReject={
-                          messageRunId === runId && approval && (approval.status === "pending" || messagePlan.status === "pending")
-                            ? () => void approve(true)
-                            : undefined
-                        }
+                        onApprove={ownsLiveApproval ? () => void approve(false) : undefined}
+                        onReject={ownsLiveApproval ? () => void approve(true) : undefined}
                       />
                     ) : null}
-                    {messageEvidence.length > 0 ? <EvidenceList evidence={messageEvidence} /> : null}
+                    <AgentActivity
+                      plan={messagePlan}
+                      evidence={messageEvidence}
+                      includePlan={!showsPlanCard}
+                    />
                   </div>
                 </article>
               );
             })}
-            {stream ? (
-              <p role="status" aria-label="Respuesta del agente en curso" className="assistant-chat__stream">
-                {stream}<span aria-hidden="true">▌</span>
-              </p>
+            {processing || stream ? (
+              <article
+                className="ai-agent-grammar__bubble-row"
+                aria-label={stream ? "Respuesta del agente en curso" : "El agente está trabajando"}
+              >
+                <Avatar name="Agente Lumat" />
+                <div
+                  className="ai-agent-grammar__bubble assistant-chat__thinking"
+                  role="status"
+                >
+                  <span className="ai-agent-grammar__message-meta">Agente Lumat</span>
+                  {stream ? (
+                    <p className="assistant-chat__message-content assistant-chat__stream">{stream}<span aria-hidden="true">▌</span></p>
+                  ) : (
+                    <span className="assistant-chat__thinking-row">
+                      <span className="assistant-chat__thinking-dots" aria-hidden="true">
+                        <i /><i /><i />
+                      </span>
+                      {THINKING_LABELS[lifecycle ?? ""] ?? "Pensando…"}
+                    </span>
+                  )}
+                </div>
+              </article>
             ) : null}
             {recoverable ? (
               <p role="status" aria-label="Ejecución recuperable">
@@ -741,16 +984,6 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
           </div>
           <div className="assistant-chat__composer-wrap">
             <div className="assistant-chat__composer">
-              <label className="assistant-chat__attach">
-                Adjuntar
-                <input
-                  aria-label="Adjuntar archivo"
-                  type="file"
-                  accept="image/*,.pdf,.csv,.txt"
-                  onChange={(event) => void attach(event)}
-                  disabled={!thread || processing || uploading}
-                />
-              </label>
               <Textarea
                 label="Mensaje"
                 value={content}
@@ -763,9 +996,28 @@ export function AgentChat({ threadId }: AgentChatProps = {}) {
                 placeholder="Escribe tu mensaje al asistente..."
                 className="assistant-chat__textarea"
               />
-              <Button onClick={() => void send()} disabled={!thread || processing || !content.trim()}>
-                Enviar
-              </Button>
+              <div className="assistant-chat__composer-controls">
+                <label className="assistant-chat__attach" title="Adjuntar archivo">
+                  <PaperclipIcon />
+                  <input
+                    aria-label="Adjuntar archivo"
+                    type="file"
+                    accept="image/*,.pdf,.csv,.txt"
+                    onChange={(event) => void attach(event)}
+                    disabled={!thread || processing || uploading}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="assistant-chat__send"
+                  aria-label="Enviar"
+                  title="Enviar"
+                  onClick={() => void send()}
+                  disabled={!thread || processing || !content.trim()}
+                >
+                  <SendIcon />
+                </button>
+              </div>
             </div>
             <div className="assistant-chat__status">
               <span>Conexión: {stateLabels[connection] ?? "No disponible"}</span>
