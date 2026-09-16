@@ -8,7 +8,7 @@ describe("AssistantTabs", () => {
 
     expect(screen.getByRole("tab", { name: "Chat" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Proyectos" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Sesiones de planning" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Sesiones de planificación" })).toBeInTheDocument();
   });
 
   it("marks the active section as selected", () => {
@@ -22,7 +22,7 @@ describe("AssistantTabs", () => {
     const onSelect = vi.fn();
     render(<AssistantTabs active="chat" onSelect={onSelect} />);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Sesiones de planning" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Sesiones de planificación" }));
 
     expect(onSelect).toHaveBeenCalledWith("planning-sessions");
   });

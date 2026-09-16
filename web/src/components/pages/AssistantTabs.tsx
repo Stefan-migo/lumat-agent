@@ -10,7 +10,7 @@ export interface AssistantTabsProps {
 const tabs = [
   { id: "chat", label: "Chat" },
   { id: "projects", label: "Proyectos" },
-  { id: "planning-sessions", label: "Sesiones de planning" },
+  { id: "planning-sessions", label: "Sesiones de planificación" },
 ];
 
 export function AssistantTabs({ active, onSelect }: AssistantTabsProps) {

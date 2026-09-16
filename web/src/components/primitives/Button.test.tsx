@@ -50,11 +50,13 @@ describe("Button (T7.1)", () => {
     expect(custom).toHaveTextContent("Algo");
   });
 
-  it("renders both variants as enabled buttons (visual difference is token-only, PDW-TKN-2)", () => {
+  it("renders all variants as enabled buttons (visual difference is token-only, PDW-TKN-2)", () => {
     render(<Button variant="primary">Guardar</Button>);
     render(<Button variant="secondary">Cancelar</Button>);
+    render(<Button variant="tertiary">Operations</Button>);
     expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Operations" })).toBeEnabled();
   });
 });
 
