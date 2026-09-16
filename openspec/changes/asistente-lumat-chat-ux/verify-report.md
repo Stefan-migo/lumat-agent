@@ -1,24 +1,27 @@
 ```yaml
 schema: gentle-ai.verify-result/v1
-evidence_revision: sha256:7f06df4b1ec53a5b5e0a9b7994f4b2dcddcb7b6ad5bbf9cb5f47ac6df8c8d3d1
+evidence_revision: sha256:9d43b2f0e7a1d06a9b0ecb44b2c46d8b8b6fdbfdb2ad0a9c3a0c9b4ea12f7d61
 verdict: fail
-blockers: 2
-critical_findings: 2
+blockers: 1
+critical_findings: 1
 requirements: 11/11
-scenarios: 20/22
+scenarios: 21/22
 test_command: TEST_ADMIN_DB_URL="postgresql://lumat:lumat@localhost:5432/lumat" uv run pytest tests/
 test_exit_code: 0
-test_output_hash: sha256:2d8f6f0f8e1e64d2e8ce2c37c7dfdf9ea8e7a1550c6adf4f2b0f2c1a5d3e8b11
+test_output_hash: sha256:b812be49c0bfb9c07ba3f63f07c634bd76ebee1d3f9a6c9847fa704206a27597
 build_command: cd web && npm run build
 build_exit_code: 0
-build_output_hash: sha256:0dd4f3eec6d9b5b642b4f8e15f5f5e6d9b0d0c6c9cb6c4c6b9b8d4a0c1e9f2a3
+build_output_hash: sha256:ff86fd75a5d06bc80b8c9e912d1644e6d9650a1b47638f1163d6f3a70981a596
 ```
 
 ## Verification Report
 **Change**: asistente-lumat-chat-ux
-**Mode**: hybrid re-verification
+**Mode**: hybrid final verification
 
-> Previous pass note: the prior report was **FAIL** with 8/10 requirements, 17/22 scenarios, and three critical findings (artifact anchoring, retry resubmission, and empty title fallback). This report supersedes that verdict for the current committed tree.
+### History
+- Pass 1: **FAIL**, 8/10 requirements and 17/22 scenarios; three critical behavioral defects.
+- Pass 2 (PR #208): **FAIL**, 11/11 requirements and 20/22 scenarios; anchoring, retry, and fallback behavior were resolved, but the exact no-artifacts-later-run test and contrast scenario remained unverified.
+- This pass (PR #209): the anchoring coverage gap is closed; the contrast scenario remains unsatisfied because four declared pairs fail their applicable thresholds.
 
 ### Completeness
 | Tasks total | Complete | Incomplete |
@@ -28,65 +31,67 @@ build_output_hash: sha256:0dd4f3eec6d9b5b642b4f8e15f5f5e6d9b0d0c6c9cb6c4c6b9b8d4
 ### Requirements and scenarios
 | Capability | Requirements | Scenarios | Result |
 |---|---:|---:|---|
-| internal-agent-chat | 5/5 | 9/10 | Run-based implementation and a two-run test pass; the exact earlier-artifact/later-no-artifact scenario lacks a covering runtime test. |
-| ui-command-center | 3/3 | 6/6 | Verified by full tests and browser suite. |
-| panel-design-system | 3/3 | 5/6 | Contrast threshold has no automated audit, so that scenario is not runtime-verified; other accessibility behavior passes. |
-| **Total** | **11/11** | **20/22** | **FAIL** |
+| internal-agent-chat | 5/5 | 10/10 | PASS |
+| ui-command-center | 3/3 | 6/6 | PASS |
+| panel-design-system | 3/3 | 5/6 | Contrast scenario is not satisfied; keyboard, semantic, responsive, and primitive checks pass. |
+| **Total** | **11/11** | **21/22** | **FAIL** |
 
 ### Build and test evidence
-- Backend full suite: **850 passed, 2 warnings in 534.17s**, exit **0**.
-- Frontend full suite: **547 passed, 76 files**, exit **0**. React `act(...)` warnings and jsdom navigation diagnostics were emitted; no test failed.
-- Frontend focused AgentChat suite: **27 passed**, exit **0**.
-- Focused backend assistant/realtime suites: **33 passed**, exit **0**.
+- Backend full suite: **850 passed, 2 warnings**, exit **0**, 651.56s. Output hash is recorded in the envelope.
+- Frontend full suite: **548 passed, 76 files**, exit **0**, rerun after an initial concurrent run had three timing failures. The rerun is the authoritative result.
+- Focused AgentChat suite: **28 passed**, exit **0**.
 - TypeScript build: `cd web && npx tsc -b`, exit **0**.
-- Production build: `cd web && npm run build`, exit **0**; Vite transformed 78 modules.
-- Browser suite: `cd web && npm run test:e2e -- playwright/command-center.spec.ts`, **8 passed**, exit **0**. One transient Vite websocket `ECONNRESET` diagnostic did not fail a test.
-- Coverage: not available.
+- Production build: `cd web && npm run build`, exit **0**; 78 modules transformed.
+- Browser suite: `cd web && npm run test:e2e -- playwright/command-center.spec.ts`, **8 passed**, exit **0** on rerun. The initial concurrent run had one startup timing failure; rerun passed all eight.
+- Coverage: unavailable; no coverage command is configured for this change.
 
 ### Previous critical findings
 | Finding | Verdict | Evidence |
 |---|---|---|
-| Artifact anchoring to final message | **partially resolved** | `AgentChat.tsx:657-669` matches each message’s `assistant_metadata.run_id` to event `run_id`; the two-run regression test passes. The test uses two artifact-producing runs, not the requested earlier-artifact/later-no-artifact case, so that exact adversarial scenario remains unverified. |
-| Retry only refilled composer | **resolved** | `AgentChat.tsx:703-705` calls `send(message.content, true)`; focused runtime test observed a third POST containing the failed content and confirmed a draft remains. `send` guards `processing`, preventing duplicate requests. |
-| Empty title fallback | **resolved** | `agent_chat.py:493-499` guarantees `Conversación con el asistente` when no admin opening exists. Normal `submit_message` creates the admin row before the assistant response (`agent_chat.py:548-556`, `633-643`), so the no-opening branch is only reachable for legacy/manual persisted data. |
+| Artifact anchoring to the producing message | **resolved** | `AgentChat.tsx:657-669` filters events by each message's `assistant_metadata.run_id`. The new test passes with `run-a` artifacts and a later `run-b` message with no events. |
+| Retry only refilled composer | **resolved** | `AgentChat.tsx:703-705` calls `send(message.content, true)`; the focused runtime test observes the retry POST and preserves a subsequently entered draft. |
 
-### Six requested probes
-1. **Anchoring — WARNING / partially verified.** Source inspection confirms run-based association and the two-run test passes. The committed test does not construct the precise case where an earlier run owns artifacts and a later run owns none; therefore that case is not runtime-proven. Under valid backend state, each submitted run writes its own run-tagged events and `current_plan` is replaced by the latest result, so no inheritance was observed or inferred from the normal path.
-2. **Retry — verified.** A real `POST /panel/api/chat/threads/4/messages` was observed with `{"content":"Retry me","attachment_ids":[]}`. The `preserveDraft` branch leaves the composer unchanged, and the `processing` guard rejects a second send.
-3. **Fallback — verified/inferred reachability.** The supported submit path persists the admin request before producing the assistant response, making an assistant-only thread unreachable through that endpoint. The helper remains reachable for manually/legacy persisted rows; the non-empty bounded default is therefore still correct and harmless.
-4. **Shift+Enter — verified.** Runtime test passes with `Hola\n`; source inserts between `selectionStart` and `selectionEnd`, and the test confirms the fetch count remains the initial load only. No request is issued.
-5. **Streaming/reload — verified.** The stream test shows transient output while processing; the persisted-history test confirms the persisted response remains authoritative after reload. `loadThread(..., true)` preserves live plan/evidence when persisted state is empty and replaces evidence when persisted evidence exists; focused and browser suites pass.
-6. **Regressions — verified.** Full backend/frontend suites, typecheck, production build, and 8 browser tests passed. No dropped or duplicated streamed artifact was detected.
+### New test inspection and counter-check
+`AgentChat.test.tsx:651-680` constructs two agent messages: the first owns `run-a`, whose sole event contains both `agenda.create` plan and `Cita creada` evidence; the second owns `run-b`, while `active_run_id` is `run-live` and no `run-b` event exists. It asserts the first message contains both artifacts and the second contains neither, including absence of both artifact sections.
 
-### Counter-check results
-- **C1 anchoring rollback reproduced:** replacing `AgentChat.tsx` with its pre-fix version caused the multi-run anchoring test to fail (old evidence was absent from its producing article). Tree restored byte-for-byte.
-- **C2 retry rollback reproduced:** replacing `AgentChat.tsx` with its pre-fix version caused the strengthened retry test to fail because only two fetch calls occurred; no retry POST was issued. Tree restored byte-for-byte.
-- Additional Shift+Enter rollback also failed (`Hola` instead of `Hola\n`). The fallback rollback failed its helper test (`""` instead of the default). Both implementation files were restored exactly.
+The second assertion is distinguishing: the pre-fix implementation used positional `last` gating (`git show 3666fcd5^:web/src/components/pages/AgentChat.tsx`), so the later message would have received the current/last artifact state. This fixture would therefore fail under positional anchoring. The focused suite passed all 28 tests, including this case. The claim is verified.
+
+### Contrast judgement
+The documented calculation does **not** discharge DS-CC-5's contrast scenario as a pass. DS-CC-5 requires applicable thresholds to be met; documenting failures is honest evidence, not conformance evidence.
+
+Independent recomputations using the documented WCAG sRGB luminance formula:
+- `--warning #A16207` on `--warning-bg #FEF3C7`: **4.421256:1**, rounded **4.42:1**. This matches and fails the **4.5:1** normal-text threshold.
+- `--text #1A202C` on `--surface #FFFFFF`: **16.318323:1**, rounded **16.32:1**. This matches and passes.
+- `--primary-700 #256F51` on `--surface #FFFFFF`: **6.049685:1**, rounded **6.05:1**. This matches and passes.
+- Additional check: `--border #D8DDE3` on white: **1.366158:1**, rounded **1.37:1**, matching the documented failure below **3:1**.
+
+The four failures documented in `contrast-verification.md` are one normal-text warning badge pair and three boundary pairs. `web/src/tokens/tokens.css` is byte-identical with respect to the entire change range (`git diff d7cdb1ba^..HEAD -- web/src/tokens/tokens.css` produced no output), so these values are pre-existing. The change introduced no failing token pair and explicitly forbids token-value changes or new accessibility dependencies.
+
+Therefore, the contrast defect belongs to a future approved design-system change, but it still prevents this SDD change from claiming full formal conformance because its own DS-CC-5 scenario is not met. It is a real inherited design-system debt, not a PR #209 behavioral regression.
 
 ### Correctness and design coherence
 | Dimension | Result | Evidence |
 |---|---|---|
-| Implementation vs specs | PASS WITH WARNINGS | All requirements are implemented; two scenarios lack complete automated evidence as noted above. |
-| Design coherence | PASS | Centered surface, shipped primitives/tokens, no dependency/token-value change, preserved SSE/approval/recovery/planning/deep-link contracts. |
-| Task completion | PASS | All tracked task items are checked. |
+| Implementation vs specs | **FAIL WITH SCOPED DEBT** | All 11 requirements are implemented; 21/22 scenarios are verified. DS-CC-5 contrast remains objectively unmet. |
+| Design coherence | **PASS WITH WARNING** | Centered surface, existing primitives/tokens, no dependency/token-value change, and preserved SSE/approval/recovery/planning/deep-link contracts match design. Contrast values are inherited and unchanged. |
+| Task completion | **PASS** | All tracked task items are checked. |
 
 ### Issues
 #### CRITICAL
-- The exact required multi-run case with earlier artifacts and a later message producing none has no covering runtime test; the implementation is source-consistent, but the scenario cannot be admitted as verified.
-- DS-CC-5 contrast compliance has no runtime contrast audit, so the required WCAG threshold scenario is unverified.
+- **DS-CC-5 contrast scenario remains unsatisfied:** `--warning`/`--warning-bg` is 4.42:1 for normal text, and three documented border pairs are below 3:1. This blocks a strict full-spec PASS and archive readiness, although remediation belongs in a separate design-system change and no token was changed here.
 
 #### WARNING
-- The multi-run anchoring test does not include the requested later-message-with-no-artifacts case; it verifies two artifact-bearing runs instead.
-- DS-CC-5 contrast threshold has no automated contrast audit.
-- Full frontend tests emit existing React `act(...)` warnings; backend emits two runtime/user warnings.
-- Coverage report was unavailable.
+- Contrast verification is token arithmetic, not rendered-pixel or screen-reader evidence; `DESIGN_SYSTEM.md` explicitly says automated checks do not prove conformance.
+- Existing React `act(...)` warnings, jsdom navigation diagnostics, and two backend runtime/user warnings remain non-failing.
+- Coverage is unavailable.
+- The first concurrent full frontend/e2e attempt had timing failures; focused and serial reruns passed, so no implementation defect is inferred from those transient failures.
 
 #### SUGGESTION
-- Add one focused multi-run test with artifacts only on the earlier run and assert every later message contains neither the earlier plan nor evidence.
-- Add an automated contrast check for the assistant state/action matrix.
+- Open a bounded design-system change to remediate the warning badge and meaningful boundary token pairs, then rerun DS-CC-5 contrast verification.
+- Keep the new adversarial multi-run test as a permanent regression guard.
 
 ### Verdict
-**FAIL** — the three previous behavioral defects are resolved and all executed suites pass, but two required scenarios remain unverified under the runtime-evidence gate: the exact adversarial multi-run case and contrast compliance.
+**FAIL** — PR #209 resolves the remaining anchoring coverage gap, but the required contrast scenario is objectively unmet by four unchanged token pairs. This change is not archive-ready under the current strict specification; archive after an explicit scope/spec decision or a follow-up design-system remediation.
 
 ### Graph Check Consulted
-Nodes: `AgentChat()`, `AgentChat.tsx`, `AgentChat.test.tsx`, `agent_chat.py`, `InternalChatThread`, `InternalChatMessage`, `recover_events()`, `chat.py`, `api.ts`, `command-center.spec.ts`, `Dialog.tsx`, `Popover.tsx`, `Textarea.tsx`, `tokens.css`, `test_assistant_chat.py`, `test_agent_chat_realtime.py`. Edges: `AgentChat.tsx` → `api.ts`/realtime/primitives; `agent_chat.py` → `InternalChatThread`/`InternalChatMessage`/cost recording; `chat.py` → ownership serializers and stream recovery; `AgentChat.test.tsx` → `AgentChat.tsx`; browser spec → production assistant route.
+Nodes: `AgentChat()`, `AgentChat.tsx`, `AgentChat.test.tsx`, `InternalChatThread`, `InternalChatMessage`, `tokens.css`, `DESIGN_SYSTEM.md`, `test_assistant_chat.py`, `command-center.spec.ts`, `Dialog.tsx`, `Popover.tsx`, `Textarea.tsx`, `api.ts`. Edges: `AgentChat.tsx` → `api.ts`/realtime/primitives/tokens; `AgentChat.test.tsx` → `AgentChat.tsx`; `DESIGN_SYSTEM.md` → accessibility/token contracts; backend assistant tests → `agent_chat.py`/thread persistence; browser spec → production assistant route.
