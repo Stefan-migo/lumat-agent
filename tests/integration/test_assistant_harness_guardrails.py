@@ -7,6 +7,7 @@ import pytest
 from app.chat.assistant.approval import issue_approval
 from app.chat.assistant.nodes import execute, panel_cost_gate, plan_llm
 from app.chat.assistant.tools.registry import ToolValidationError, execute_tool
+from app.services.prompts import load_assistant_config
 
 
 def _rule_args():
@@ -181,6 +182,37 @@ def test_conservative_directive_is_added_to_planner_user_prompt(monkeypatch):
     })
 
     assert "Answer concisely" in calls[0]["messages"][-1]["content"]
+
+
+def test_responder_user_prompt_carries_the_declared_tool_inventory(monkeypatch):
+    """The writer of the reply must see the tools the panel sidebar reports.
+
+    The sidebar reads `assistant.tools_whitelist` straight from the registry, so a
+    responder that never receives that inventory answers capability questions with a
+    denial while the panel advertises 19 tools and available memory.
+    """
+    calls = []
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: calls.append(kwargs) or [
+                SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"))]),
+            ],
+        ))),
+    )
+
+    execute({
+        "thread_id": 7,
+        "run_id": "run-tools",
+        "content": "which tools do you have",
+        "plan": {"kind": "respond", "tool": None, "arguments": {}, "requires_approval": False},
+        "context": {"items": []},
+        "on_token": lambda token: None,
+    })
+
+    prompt = calls[0]["messages"][-1]["content"]
+    for name in load_assistant_config().tools_whitelist:
+        assert name in prompt
 
 
 def test_denied_approval_keeps_completed_planner_cost_but_never_executes(monkeypatch):
