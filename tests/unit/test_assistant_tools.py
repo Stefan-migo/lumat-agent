@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.chat.assistant.tools.registry import (
+    MemoryArgs,
     ProjectArchiveArgs,
     ProjectCreateArgs,
     ProjectMergeArgs,
@@ -26,6 +27,13 @@ def test_registry_exposes_typed_bounded_tools():
     assert schemas["customers.search"]["type"] == "object"
     assert get_tool("customers.search").read_only is True
     assert get_tool("automation.create_rule").read_only is False
+
+
+def test_memory_args_reject_unknown_scope_and_expose_closed_scope_schema():
+    with pytest.raises(ValueError):
+        MemoryArgs.model_validate({"scope": "banana", "entity_id": "whatever"})
+
+    assert MemoryArgs.model_json_schema()["properties"]["scope"]["enum"] == ["panel", "customer"]
 
 
 def test_project_tools_are_typed_bounded_and_classified():

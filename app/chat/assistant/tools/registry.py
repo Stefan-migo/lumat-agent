@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.chat.assistant.approval import issue_approval, validate_execution
@@ -70,7 +70,7 @@ class KpiArgs(BaseModel):
 
 class MemoryArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    scope: str = Field(min_length=1, max_length=100)
+    scope: Literal["panel", "customer"]
     entity_id: str = Field(min_length=1, max_length=100)
     topic: str | None = Field(default=None, max_length=255)
     limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
@@ -252,7 +252,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "cases.list": ToolDefinition("cases.list", CasesArgs, True, _open_cases, "List open cases."),
     "kb.retrieve": ToolDefinition("kb.retrieve", KbArgs, True, _retrieve_kb, "Retrieve grounded knowledge-base results."),
     "memory.kpis": ToolDefinition("memory.kpis", KpiArgs, True, _kpis, "Read operational KPI totals."),
-    "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory, "Read scoped customer memory."),
+    "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory, "Read scoped memory."),
     "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis, "Read the operational dashboard summary."),
     "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter."),
     "automation.create_rule": ToolDefinition("automation.create_rule", RuleArgs, False, _create_rule, "Create an automation after approval."),
