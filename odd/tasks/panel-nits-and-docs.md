@@ -86,7 +86,9 @@ Out of scope (explicitly):
   - [x] T1.3 GREEN: make the section id collision-safe and free of whitespace,
         without introducing a new helper or dependency.
   - [x] T1.4 GREEN: remove the `Identificador técnico` column.
-  - [ ] T1.5 All web tests pass and `npm run build` (tsc + vite) passes.
+  - [x] T1.5 All web tests pass and `npm run build` (tsc + vite) passes.
+        Observed: `npm run test` 77 files / 566 tests green; `npm run build`
+        exit 0.
 - [x] **T2 — `web/DESIGN_SYSTEM.md` page architecture**
       — accepted scope: document the two reported surfaces, Proyectos and
       Sesiones de planificación, and correct `### Navigation`. The same
@@ -137,8 +139,11 @@ involved, so no Python runner is exercised.
   identifier column is removed.
 - Full web suite: `npm run test` reported 76 passing files / 565 passing tests
   and 1 failing pre-existing `AppShell.test.tsx` test (`renders live data pages
-  for every navigation view`, 5000 ms timeout). The failure is outside the
-  changed files, so T1.5 remains unchecked.
+  for every navigation view`, 5000 ms timeout). Re-verified as a load flake
+  rather than a defect: the same file passes 22/22 in 23 s on the base
+  (`main` @ `b43712dd`), and the full suite passes in this worktree with 77
+  files / 566 tests green. T1.5 is therefore satisfied; the writer's failing
+  run is recorded as-is above.
 - Build: `npm run build` passed (`tsc -b` and Vite build; 332 modules).
 - Repository measurements used for `openspec/config.yaml`: 16 unit, 45
   integration, 23 functional, 1 injection, 6 spec Python files; 77 Vitest
@@ -157,5 +162,7 @@ involved, so no Python runner is exercised.
 
 ## Next step
 
-T2 is complete. The remaining next step is to resolve the pre-existing
-`AppShell.test.tsx` timeout and complete T1.5; T3 is complete.
+T1, T2, and T3 are complete and verified. The branch holds three reviewable
+work units plus the design-system documentation. Still undocumented in
+`web/DESIGN_SYSTEM.md`: `Asistente Lumat`, `Agenda`, `Automatizaciones`, and
+`Usuarios`, recorded there as a known gap rather than improvised.
