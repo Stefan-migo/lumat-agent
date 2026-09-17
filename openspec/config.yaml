@@ -5,7 +5,7 @@ context: |
   Phase: Software delivery — Hito 1 (Setup + WhatsApp operativo) active; contract signed 2026-08-07, Pago 1 received 2026-08-11, kickoff 2026-08-17
   Stack: Hostinger KVM 2 (São Paulo) + Ubuntu LTS + Docker Compose + PostgreSQL/pgvector + Python FastAPI/LangGraph
   Structure: Single milestone active (M1/Hito 1: Setup + WhatsApp operativo). M2 (web) on standby. M3 (payments) out of scope. One SDD change per hito (4 changes total); 12 weeks construction + 5 weeks testing, acceptance ~16-dic-2026.
-  Existing: documentation-only (LumatRequest.md, signed proposal, session docs); no source code — Hito 1 is greenfield
+  Existing: shipped FastAPI/LangGraph application and React/Vite panel with Python, Vitest, and Playwright test coverage
 
 rules:
   proposal:
@@ -37,12 +37,12 @@ testing:
   detected: "2026-08-12"
   runner: pytest (active from B1, strict TDD)
   layers:
-    unit: false
-    integration: false
-    e2e: false
+    unit: true
+    integration: true
+    e2e: true
   coverage: false
   quality:
     linter: false
     type_checker: false
     formatter: false
-  notes: "Greenfield — no test infrastructure yet. H1 establishes pytest; integration, functional and prompt-injection suites are H1 acceptance deliverables (signed proposal)."
+  notes: "Measured suites: 16 unit, 45 integration, 23 functional, 1 injection, and 6 spec Python files; 77 Vitest files under web/src; 1 Playwright spec under web/playwright. No linter, type checker, or formatter is configured in pyproject.toml or web/; npm run build type-checks through tsc -b only."
