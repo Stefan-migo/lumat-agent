@@ -888,6 +888,41 @@ def test_open_assistant_stream_releases_its_pooled_connection(client):
         sqlalchemy_event.remove(engine, "checkin", _checkin)
 
 
+def test_open_assistant_stream_never_reads_the_thread_messages(client):
+    """Opening a stream needs the thread row, never its message history.
+
+    The route reads only `active_run_id`, but it used `get_thread`, which also
+    loads every message of the thread — an unbounded read whose result was
+    discarded. The cost grew with the thread's history for nothing.
+    """
+    from sqlalchemy import event as sqlalchemy_event
+
+    from app.db import engine
+
+    _user("stream-read", "admin")
+    _login(client, "stream-read")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    sent = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Summarize operations"})
+    run_id = sent.json()["message"]["assistant_metadata"]["run_id"]
+
+    statements: list[str] = []
+
+    def _record_statement(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    sqlalchemy_event.listen(engine, "before_cursor_execute", _record_statement)
+    try:
+        with client.stream("GET", f"/panel/api/chat/threads/{thread_id}/stream?run_id={run_id}") as stream:
+            assert stream.status_code == 200
+            first = next(stream.iter_lines(), None)
+            assert first is not None and first.startswith("data: ")
+    finally:
+        sqlalchemy_event.remove(engine, "before_cursor_execute", _record_statement)
+
+    read_messages = [statement for statement in statements if "internal_chat_messages" in statement]
+    assert read_messages == []
+
+
 def _seed_assistant_run(
     username: str, run_id: str, *, stage: str, execution_status: str, updated_at: datetime, live_status: str = "running"
 ) -> tuple[int, int]:

@@ -1,5 +1,6 @@
 """Owner/admin internal agent chat JSON API (IAC-1/2/3)."""
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -14,7 +15,7 @@ from app.agent_registry import get_registry
 from app.chat.assistant.tools.registry import get_tool
 from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
-from app.services.agent_chat import approve_plan, close_cortex_session, create_run_message, create_thread, get_thread, message_dict, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
+from app.services.agent_chat import approve_plan, close_cortex_session, create_run_message, create_thread, get_owned_thread, get_thread, message_dict, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
 from app.db import SessionLocal
 from app.chat.assistant.attachments import cleanup_expired, store_attachment
 from app.panel.api.serializers import (
@@ -296,10 +297,14 @@ async def stream_thread(
     session: Session = Depends(get_db),
     current: User = Depends(require_admin_json),
 ):
-    result = get_thread(session, thread_id, current.id)
-    if result is None:
+    # The read must not block the loop: this route lives as long as the stream,
+    # so a sync query here is the same class of problem #213 fixed for the
+    # polling. Only the thread row is read — `get_thread` would also load every
+    # message of the thread and this route discards that list.
+    thread = await asyncio.to_thread(get_owned_thread, session, thread_id, current.id)
+    if thread is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
-    run = run_id or result[0].active_run_id
+    run = run_id or thread.active_run_id
     # Release the connection before streaming: FastAPI keeps the request
     # dependency open until the response is fully sent, so an open stream would
     # hold a pooled connection for up to 300 s (pool_size 5 + overflow 10). The
