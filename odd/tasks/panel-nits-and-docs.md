@@ -87,14 +87,12 @@ Out of scope (explicitly):
         without introducing a new helper or dependency.
   - [x] T1.4 GREEN: remove the `Identificador técnico` column.
   - [ ] T1.5 All web tests pass and `npm run build` (tsc + vite) passes.
-- [ ] **T2 — `web/DESIGN_SYSTEM.md` page architecture** — *parked, scope decision
-      pending.* The reported gap was Proyectos + Sesiones de planificación, but
-      the real gap is larger: `## Page architecture` covers only Panel,
-      Clientes, Conversaciones, Casos, Base de conocimientos, Configuración and
-      Login, while `### Navigation` lists 6 destinations and the shipped app
-      (PNL-APP-1) exposes 10. `Asistente Lumat`, `Agenda`, `Automatizaciones`,
-      `Usuarios`, `Proyectos` and `Sesiones de planificación` have no section.
-      Do not execute until the scope is chosen.
+- [x] **T2 — `web/DESIGN_SYSTEM.md` page architecture**
+      — accepted scope: document the two reported surfaces, Proyectos and
+      Sesiones de planificación, and correct `### Navigation`. The same
+      measurement confirmed that the shipped navigation has nine destinations,
+      not ten; Proyectos and Sesiones de planificación are drill-downs inside
+      the Asistente Lumat section.
 - [x] **T3 — `openspec/config.yaml` truth**
   - [x] T3.1 Replace the `Existing:` line with the shipped repository reality.
   - [x] T3.2 Set `testing.layers` from the measured suites and keep `e2e`
@@ -150,7 +148,14 @@ involved, so no Python runner is exercised.
   `web/src/components/pages/ProjectsPage.test.tsx`, `shared/DataTable.tsx`,
   `routes/projects.py`, and `web/package.json`; the direct path query was
   ambiguous, so the relevant directed path query returned no path.
+- T2: wrote the Proyectos and Sesiones de planificación page-architecture
+  sections, corrected the shipped navigation order and membership, and added
+  the known-gap note for Asistente Lumat, Agenda, Automatizaciones, and
+  Usuarios. Verified the claims against `PanelShell.tsx`, `AppShell.test.tsx`,
+  `AssistantTabs.tsx`, `ProjectsPage.tsx`, `ProjectsPage.test.tsx`,
+  `PlanningSessions.tsx`, and `PlanningSessions.test.tsx`.
 
 ## Next step
 
-T1 RED, then T1 GREEN, then T3. T2 waits for the scope decision.
+T2 is complete. The remaining next step is to resolve the pre-existing
+`AppShell.test.tsx` timeout and complete T1.5; T3 is complete.
