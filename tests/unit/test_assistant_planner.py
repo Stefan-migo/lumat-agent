@@ -1,9 +1,11 @@
 """Strict structured planner contracts for the panel assistant."""
 
+from types import SimpleNamespace
+
 import pytest
 from pydantic import ValidationError
 
-from app.chat.assistant.nodes import _context_text, bounded_fallback, parse_planner_output, plan
+from app.chat.assistant.nodes import _context_text, bounded_fallback, parse_planner_output, plan, plan_llm
 from app.chat.assistant.state import PlannerOutput
 
 
@@ -43,7 +45,7 @@ def test_tool_plan_requires_tool_but_response_plan_does_not():
             }
         )
 
-    response = parse_planner_output(
+    response, valid = parse_planner_output(
         {
             "kind": "respond",
             "arguments": {},
@@ -51,11 +53,72 @@ def test_tool_plan_requires_tool_but_response_plan_does_not():
             "requires_approval": False,
         }
     )
+    assert valid is True
     assert response.tool is None
 
 
+def test_parse_planner_output_returns_validity_with_plan():
+    plan_result, valid = parse_planner_output(
+        {
+            "kind": "respond",
+            "arguments": {},
+            "summary": "No tool is needed.",
+            "requires_approval": False,
+        }
+    )
+    assert valid is True
+    assert plan_result.tool is None
+
+    malformed, valid = parse_planner_output({"kind": "tool"})
+    assert valid is False
+    assert malformed == bounded_fallback("x")
+
+
+def test_plan_llm_does_not_treat_fallback_summary_collision_as_invalid(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(
+            prompts={"plan": "{{user_input}}"},
+            tools_whitelist=["customers.search"],
+            persona="persona",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+                content='{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"I could not safely plan that request. Please try again.","requires_approval":false}',
+            ))]),
+        ))),
+    )
+
+    result = plan_llm({"content": "Find Ana", "context": {"items": []}})
+
+    assert result["planner"]["valid"] is True
+    assert result["plan"]["tool"] == "customers.search"
+    assert result["plan"]["kind"] == "tool"
+
+
+def test_plan_llm_keeps_malformed_output_invalid(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], persona="persona"),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"kind":"tool"}'))]),
+        ))),
+    )
+
+    result = plan_llm({"content": "Find Ana", "context": {"items": []}})
+
+    assert result["planner"]["valid"] is False
+    assert result["plan"]["summary"] == bounded_fallback("x").summary
+
+
 def test_complex_plan_exposes_metadata_only_hook():
-    result = parse_planner_output(
+    result, valid = parse_planner_output(
         {
             "kind": "complex",
             "arguments": {"steps": ["research", "summarize"]},
@@ -63,6 +126,7 @@ def test_complex_plan_exposes_metadata_only_hook():
             "requires_approval": False,
         }
     )
+    assert valid is True
     assert result.kind == "complex"
     assert result.tool is None
     state = plan({"content": "complex request", "planner_output": result.model_dump()})
@@ -93,7 +157,7 @@ def test_overlong_summary_keeps_tool_plan_instead_of_falling_back():
 def test_summary_at_limit_passes_through_unchanged():
     summary = "x" * 200
 
-    result = parse_planner_output(
+    result, valid = parse_planner_output(
         {
             "kind": "respond",
             "arguments": {},
@@ -102,6 +166,7 @@ def test_summary_at_limit_passes_through_unchanged():
         }
     )
 
+    assert valid is True
     assert result.summary == summary
 
 
