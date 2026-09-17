@@ -56,4 +56,16 @@ describe("planning sessions", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Reabrir sesión" }));
     await waitFor(() => expect(onOpenThread).toHaveBeenCalledWith(8));
   });
+
+  it("surfaces a failed reopen instead of navigating away silently", async () => {
+    const onOpenThread = vi.fn();
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ session, thread: { id: 8, status: "open" }, decisions: [], report: null }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "planning session is already active" }), { status: 409 }));
+    render(<PlanningSessions sessionSlug={session.slug} data={{ sessions: [] }} onOpenThread={onOpenThread} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Reabrir sesión" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos reabrir la sesión de planificación");
+    expect(screen.getByRole("alert")).toHaveTextContent("planning session is already active");
+    expect(onOpenThread).not.toHaveBeenCalled();
+  });
 });
