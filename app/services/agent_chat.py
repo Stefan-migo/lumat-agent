@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import time
+from typing import NamedTuple
 from uuid import uuid4
 
 from sqlalchemy import select, text
@@ -16,8 +17,9 @@ from app.chat.assistant.nodes import execute, sdb_deliver, sdb_verify
 from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.chat.assistant import nodes as assistant_nodes
 from app.chat.assistant.attachments import prepare_attachment_context
-from app.chat.assistant.state import COMPACTION_RETENTION_TOKENS, COMPACTION_THRESHOLD_TOKENS, INJECTION_TOKEN_BUDGET, estimate_tokens, merge_assistant_state
+from app.chat.assistant.state import estimate_tokens, merge_assistant_state
 from app.chat.assistant.recovery import claim_execution, recover_events, revalidate_sdb_resume, resumable_sdb_tasks
+from app.config import get_settings
 from app.models import AssistantAttachment, InternalChatMessage, InternalChatThread, User
 from app.services.audit import record_audit
 from app.services.realtime import stage_event
@@ -26,6 +28,31 @@ from app.services import projects
 from app.services import costs, llm
 
 logger = logging.getLogger(__name__)
+
+
+class HarnessLimits(NamedTuple):
+    """Bounded harness limits, resolved from settings (single source of truth)."""
+
+    injection_budget: int
+    session_window: int
+    compaction_threshold: int
+    compaction_retention: int
+
+
+def harness_limits() -> HarnessLimits:
+    """Resolve the harness limits from settings.
+
+    These were duplicated as module constants in `assistant.state` while the
+    settings were never read, so the configuration did nothing. Settings are now
+    the only source.
+    """
+    settings = get_settings()
+    return HarnessLimits(
+        injection_budget=settings.assistant_context_injection_budget,
+        session_window=settings.assistant_session_window_tokens,
+        compaction_threshold=settings.assistant_compaction_threshold_tokens,
+        compaction_retention=settings.assistant_compaction_retention_tokens,
+    )
 
 
 SDB_EVENT_LIMIT = 4 * 1024
@@ -334,9 +361,16 @@ def persist_sdb_state(
             )
 
 
-def compact_session(session, thread_id: int, messages: list, *, before_tokens: int) -> dict:
-    """Flush and retain the newest bounded history when the session threshold is met."""
-    retention = COMPACTION_RETENTION_TOKENS
+def compact_session(session, thread_id: int, messages: list) -> dict:
+    """Flush and retain the newest bounded history when the session window fills.
+
+    The trigger measures the thread's own window occupancy, computed from the
+    DB-authoritative history. It must never be fed the injected context:
+    `assemble_context` caps that at the injection budget, so a threshold of the
+    same size could never be reached.
+    """
+    limits = harness_limits()
+    retention = limits.compaction_retention
     retained = []
     used = 0
     for message in reversed(messages):
@@ -347,10 +381,14 @@ def compact_session(session, thread_id: int, messages: list, *, before_tokens: i
         used += cost
     retained.reverse()
     truncated = len(retained) != len(messages)
-    if before_tokens < COMPACTION_THRESHOLD_TOKENS:
+    before_tokens = min(
+        sum(estimate_tokens(str(message.content)) for message in messages),
+        limits.session_window,
+    )
+    if before_tokens < limits.compaction_threshold:
         return {
-            "window_tokens": 8_000,
-            "threshold_tokens": COMPACTION_THRESHOLD_TOKENS,
+            "window_tokens": limits.session_window,
+            "threshold_tokens": limits.compaction_threshold,
             "before_tokens": before_tokens,
             "after_tokens": used,
             "flushed": False,
@@ -366,15 +404,15 @@ def compact_session(session, thread_id: int, messages: list, *, before_tokens: i
     written = bool(write.get("written"))
     if not written:
         return {
-            "window_tokens": 8_000, "threshold_tokens": COMPACTION_THRESHOLD_TOKENS,
+            "window_tokens": limits.session_window, "threshold_tokens": limits.compaction_threshold,
             "before_tokens": before_tokens, "after_tokens": used,
             "flushed": False, "rotated": False, "failed": True,
             "retained_message_ids": [message.id for message in retained], "write": write,
         }
     rotated_at = datetime.now(timezone.utc).isoformat()
     return {
-        "window_tokens": 8_000,
-        "threshold_tokens": COMPACTION_THRESHOLD_TOKENS,
+        "window_tokens": limits.session_window,
+        "threshold_tokens": limits.compaction_threshold,
         "before_tokens": before_tokens,
         "after_tokens": used,
         "flushed": True,
@@ -390,12 +428,14 @@ def compact_session(session, thread_id: int, messages: list, *, before_tokens: i
     }
 
 
-def assemble_context(session, thread_id: int, *, messages=None, attachments=None, budget: int = INJECTION_TOKEN_BUDGET) -> dict:
+def assemble_context(session, thread_id: int, *, messages=None, attachments=None, budget: int | None = None) -> dict:
     """Build bounded panel context in stable source order.
 
-    The default is the fixed 4,000-token harness budget; callers may pass a
-    smaller ceiling for focused tests and bounded adapters.
+    The default ceiling is the configured injection budget; callers may pass a
+    smaller one for focused tests and bounded adapters.
     """
+    if budget is None:
+        budget = harness_limits().injection_budget
     if messages is None:
         messages = list(session.scalars(
             select(InternalChatMessage)
@@ -632,7 +672,7 @@ def _run_agent_turn_session(
                 select(InternalChatMessage)
                 .where(InternalChatMessage.thread_id == thread.id)
                 .order_by(InternalChatMessage.created_at, InternalChatMessage.id)
-            )), before_tokens=context["meta"]["estimated_tokens"]
+            ))
         )
         result = run_assistant(
             thread_id=thread.id,
