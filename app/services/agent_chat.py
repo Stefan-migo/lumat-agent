@@ -748,7 +748,7 @@ def _session_factory():
     return SessionLocal
 
 
-def run_agent_turn(*, thread_id: int, run_id: str, user_id: int, username: str, actor_role: str,
+def run_agent_turn(*, thread_id: int, run_id: str, user_id: int, actor_role: str,
                    attachment_ids: list[int], sdb_requested: bool | None) -> None:
     """Background entry point; owns and closes its database session."""
     session = _session_factory()()
@@ -761,9 +761,9 @@ def run_agent_turn(*, thread_id: int, run_id: str, user_id: int, username: str, 
         ).order_by(InternalChatMessage.id.desc()))
         if thread is None or user is None or message is None:
             return
+        # `_run_agent_turn_session` records `message_sent` itself, unconditionally
+        # and with the final status — recording it again here duplicated the row.
         _run_agent_turn_session(session, thread, user, message, attachment_ids, sdb_requested)
-        record_audit(session, actor=username, action="internal_chat.message_sent",
-                     entity="internal_chat_message", entity_id=str(message.id), after={"status": message.status})
         session.commit()
         publish_live(_session_factory(), thread_id, run_id,
                      status=(thread.assistant_state or {}).get("live", {}).get("status"),
@@ -789,8 +789,6 @@ def submit_message(
     """Compatibility wrapper retaining the historical synchronous service API."""
     message = create_run_message(session, thread, user, content, attachment_ids, sdb_requested=sdb_requested, project_authorization=project_authorization)
     _run_agent_turn_session(session, thread, user, message, attachment_ids or [], sdb_requested, project_authorization)
-    record_audit(session, actor=user.username, action="internal_chat.message_sent",
-                 entity="internal_chat_message", entity_id=str(message.id), after={"status": message.status})
     return message
 
 

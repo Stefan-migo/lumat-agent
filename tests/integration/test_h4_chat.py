@@ -73,6 +73,10 @@ def test_admin_thread_and_message_are_persisted_and_audited(client, migrated_db,
         assert [message.content for message in messages] == ["What is pending?", "A concise answer"]
         actions = session.scalars(select(AuditLog.action)).all()
         assert {action for action in actions} >= {"internal_chat.thread_created", "internal_chat.message_sent"}
+        # One message, one audit row: `_run_agent_turn_session` already records
+        # `message_sent` unconditionally with the final status, so the outer
+        # callers must not record it a second time.
+        assert actions.count("internal_chat.message_sent") == 1
     assert len(fake_client.calls) == 3
     assert fake_client.calls[1]["stream"] is True
     assert fake_client.calls[1]["messages"][0]["role"] == "system"
