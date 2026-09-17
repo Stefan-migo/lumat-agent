@@ -53,13 +53,19 @@ The harness MUST replace keyword planning with validated structured LLM output r
 
 ### Requirement: HL-3 — Rolling Session and Recovery Evidence
 
-The harness MUST keep DB thread history authoritative and, before `compact_session()` rotates a session, persist a bounded meaningful recap or milestone with idempotency and source/truncation evidence. It MUST preserve valid Cortex session state and MUST NOT report failed writes as successful completion.
+The harness MUST keep DB thread history authoritative and, before `compact_session()` rotates a session, persist a bounded meaningful recap or milestone with idempotency and source/truncation evidence. The compaction trigger MUST measure the thread's own window occupancy — the DB-authoritative history bounded by the configured session window — and MUST NOT be fed the injected context, which `assemble_context()` caps at the injection budget. The configured limits MUST be resolved from settings and MUST NOT be duplicated as module constants. It MUST preserve valid Cortex session state and MUST NOT report failed writes as successful completion.
 
 #### Scenario: Preflight compaction
 
-- GIVEN the configured compaction threshold is reached
+- GIVEN the thread's window occupancy reaches the configured compaction threshold
 - WHEN a new turn enters preflight
 - THEN the bounded recap is attempted before rotation and its result is persisted in session evidence
+
+#### Scenario: Injected context never opens the gate
+
+- GIVEN a thread whose history exceeds the compaction threshold while the injected context stays capped at the injection budget
+- WHEN compaction runs for the turn
+- THEN the recap is still attempted, because the trigger measures the thread window and not the injected context
 
 #### Scenario: Recovery after interruption
 
