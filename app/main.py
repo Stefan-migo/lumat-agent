@@ -4,9 +4,10 @@
 Settings are validated at import time: missing required env vars fail fast with
 a clear error instead of starting a half-configured server.
 
-Startup (lifespan) runs the webhook recovery sweep: messages persisted as
+Startup (lifespan) runs the crash-recovery sweeps: webhook messages persisted as
 `received` before a crash are reprocessed (design Webhook Pipeline — crash
-recovery via FOR UPDATE SKIP LOCKED).
+recovery via FOR UPDATE SKIP LOCKED), and panel assistant runs orphaned by the
+same crash are failed so the operator gets their Retry action back.
 """
 
 import logging
@@ -16,7 +17,9 @@ from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import get_settings
+from app.db import SessionLocal
 from app.panel.routes import panel_router
+from app.services.agent_chat import reap_orphaned_runs
 from app.webhook.ingest import reset_stale_processing, sweep_received
 from app.webhook.router import router as webhook_router
 from app.ops.sweep import run as run_notification_sweep
@@ -26,17 +29,20 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup sweep: reprocess messages stuck in `received` (crash recovery).
+    """Startup sweeps: recover messages stuck in `received`, fail orphaned runs.
 
     Rows left `processing` by a hard crash are reset to `received` first
-    (single worker: nothing can be actively processing at boot).
+    (single worker: nothing can be actively processing at boot) — the same
+    reasoning that lets the assistant-run sweep treat a `running` live state as
+    proof of orphanhood.
     """
     try:
         reset_stale_processing()
         sweep_received()
         run_notification_sweep()
+        reap_orphaned_runs(SessionLocal)
     except Exception:
-        logger.exception("startup webhook sweep failed")
+        logger.exception("startup recovery sweep failed")
     yield
 
 
