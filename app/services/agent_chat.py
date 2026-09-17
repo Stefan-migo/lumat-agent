@@ -748,7 +748,7 @@ def _session_factory():
     return SessionLocal
 
 
-def run_agent_turn(*, thread_id: int, run_id: str, user_id: int, actor_role: str,
+def run_agent_turn(*, thread_id: int, run_id: str, user_id: int,
                    attachment_ids: list[int], sdb_requested: bool | None) -> None:
     """Background entry point; owns and closes its database session."""
     session = _session_factory()()
