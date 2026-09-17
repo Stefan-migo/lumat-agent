@@ -44,3 +44,18 @@ A standalone skill for structured planning discussions. Load it when the convers
 - **Location**: `.opencode/skills/cortex-session/SKILL.md`
 - **Protocol**: session-init → discuss (auto-capture decisions/tradeoffs/risks to Engram) → session-close (consolidated report + SDD handoff)
 - See cortex-session/SKILL.md for the full protocol
+
+<!-- cortex:start -->
+## ODD Worktrees
+
+During ODD's `Classify` step, substantial work means two or more meaningful implementation steps or progress worth recovering. Code work is born in a sibling worktree (`../<Project>-odd-<slug>`, where `<Project>` is the main worktree's directory name) on branch `odd/<slug>`, not in main. Human consent is explicit and per-feature before invoking `cortex worktree create`; `--yes` is only the consequence of that approval, never a shortcut around it. The ODD task doc `odd/tasks/<feature>.md` is committed on the branch and reaches main through the PR, so it must never live inside a `gentle-ai` managed block.
+
+### 5-Step Execution Gate (MANDATORY)
+```
+Step 1: GRAPH CHECK — query_graph before editing
+Step 2: ATOMIC COMMIT — one concern per commit, ≤5 files
+Step 3: VERIFY — lint + typecheck + tests (block on failure)
+Step 4: SPEC CHECK — /sdd-verify after completion
+Step 5: FINALIZE — mem_save + cortex close --message "<summary>"
+```
+<!-- cortex:end -->
