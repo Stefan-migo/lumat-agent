@@ -29,6 +29,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.3",
+    "pytest-timeout>=2.3",
     "respx>=0.21",
 ]
 
@@ -42,6 +43,15 @@ packages = ["app"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+# A test that hangs had no ceiling or diagnosis: the suite stalls
+# intermittently, unrelated to the code under test. 120s is ~200x the ~0.6s
+# per-test average, so it cannot flake on a slow machine; `thread` is the only
+# method that guarantees the ceiling (it hard-exits even when a C-level call
+# swallows SIGALRM) and it dumps the hanging MainThread stack.
+timeout = 120
+timeout_method = "thread"
+
 markers = [
     "spec: OpenSpec requirement scenario, e.g. @pytest.mark.spec('WH-5')",
     "integration: integration tests against real or mocked external systems",
