@@ -255,7 +255,13 @@ def test_today_requires_json_auth_and_valid_timezone(client, make_user):
 
 
 def test_today_projection_uses_local_bounds_and_operational_predicates(client, make_user):
-    now = datetime.now(timezone.utc)
+    # Anchored to 12:00 UTC of the CURRENT local day: the appointment is seeded
+    # at +1h/+2h, so a wall-clock "now" late in the local evening would push it
+    # across local midnight and out of the day window the route projects.
+    # Deriving the anchor from the local date keeps the assertion stable
+    # no matter when the suite runs.
+    local_today = datetime.now(ZoneInfo("America/Santiago"))
+    now = datetime(local_today.year, local_today.month, local_today.day, 12, 0, tzinfo=timezone.utc)
     make_user("oper", "oper-pass", role="operador")
     with SessionLocal() as session:
         customer = Customer(phone_e164="+56977770000", name="Hoy Cliente", created_at=now)
