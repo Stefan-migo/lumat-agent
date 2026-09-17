@@ -6,9 +6,23 @@ Hito 1 — Setup + WhatsApp operativo: a secure server plus a WhatsApp bot opera
 with real Lumat customers (webhook ingestion, conversation engine, customer records,
 expert KB, emergency detection, human handoff, admin panel).
 
-Project status: in construction (SDD change `hito-1-setup-whatsapp`). Batch 0
-delivers the repo scaffold, the FastAPI app factory with environment-only config,
-and the webhook verify handshake + HMAC signature gate.
+## Status
+
+Feature work for `hito-1-setup-whatsapp` is complete. Its two remaining tasks are
+operational and blocked on the client, not on code:
+
+- **T2.1** — Meta Cloud API onboarding (WABA, Phone Number ID, permanent token,
+  utility template `emergency_alert`) waits on client credentials.
+- **T7.3** — go-live on the dedicated prepago number waits on T2.1.
+
+Later milestones are verified PASS and archived under `openspec/changes/archive/`:
+`hito-2-complete` (human inbox), `hito-3-scheduling-notifications`, and
+`hito-4-automations-chat-pwa`, alongside the panel and UI changes.
+
+- Deploy, hardening, and runbooks: `docs/ops.md`, `docs/hardening.md`
+- Test suite and spec-to-test traceability: `tests/README.md`
+- Live specs and change history: `openspec/`
+- Panel design authority: `web/DESIGN_SYSTEM.md`
 
 ## Prerequisites
 
@@ -18,19 +32,27 @@ and the webhook verify handshake + HMAC signature gate.
 
 ```bash
 uv sync                       # install dependencies + dev tools into .venv
-uv run pytest                 # run the test suites
+uv run pytest                 # run the test suites — needs the pgvector test DB
+                              # and DEEPSEEK_API_KEY; see tests/README.md
 ```
 
-All secrets come from environment variables only (design SH-2 — never commit them):
+All secrets come from environment variables only (design SH-2 — never commit them).
+These six are required at boot:
 
 ```bash
 export APP_SECRET=your-webhook-secret          # Meta webhook HMAC secret
 export VERIFY_TOKEN=your-verify-token          # GET handshake token (hub.verify_token)
-export DATABASE_URL=postgresql://app:app@localhost:5432/app
-export OPENAI_API_KEY=sk-...                   # chat + embeddings (used from T3.x)
-export META_ACCESS_TOKEN=...                   # Meta Cloud API token (used from T3.x)
+export DATABASE_URL=postgresql+psycopg://app:app@localhost:5432/lumat
+export META_ACCESS_TOKEN=...                   # Meta Cloud API permanent token
 export META_PHONE_NUMBER_ID=...                # WhatsApp Business phone number id
+export PANEL_SESSION_SECRET=...                # signs the panel session cookie
 ```
+
+The active chat provider's key is required at first use: `DEEPSEEK_API_KEY` for the
+default `CHAT_PROVIDER=deepseek`, or `OPENROUTER_API_KEY` for `openrouter`
+(enforced in `llm.openai_client()`). The complete local/Compose set — Postgres
+credentials, assistant providers, embeddings, SMTP — is documented in
+`infra/.env.example`.
 
 A missing required variable fails the boot with a clear error (fail fast, never
 half-configured).
@@ -39,7 +61,7 @@ half-configured).
 uv run uvicorn app.main:app --port 8000
 ```
 
-## Prove it — Batch 0 (webhook verify + signature)
+## Prove it — webhook verify + signature
 
 With the server running on `127.0.0.1:8000`:
 
@@ -71,5 +93,6 @@ curl -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8000/webhook/what
 
 The signature is computed over the exact raw request body (never a re-parsed
 payload). Requests with a missing, malformed, or wrong signature are rejected
-with 403 and dropped before any processing (spec WH-2). Accepted POSTs return
-200 immediately; payload persistence arrives with the messages table (T2.2).
+with 403 and dropped before any processing (spec WH-2). Accepted POSTs are
+persisted as a `received` row and processed by a background task after the 200
+(specs WH-3 and WH-4).
