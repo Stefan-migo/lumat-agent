@@ -144,7 +144,7 @@ export interface AssistantAttachment { id: number; thread_id: number; filename: 
 export interface AssistantCapabilityTool { name: string; description: string; read_only: boolean; write: boolean; }
 export interface AssistantCapabilities { tools: AssistantCapabilityTool[]; personas: string[]; prompts: string[]; kb_available: boolean; memory_available: boolean; }
 
-export type RealtimeEnvelopeType = 'token' | 'message' | 'conversation' | 'activity' | 'snapshot';
+export type RealtimeEnvelopeType = 'message' | 'conversation' | 'activity' | 'snapshot';
 export interface RealtimeEnvelope<T = unknown> { type: RealtimeEnvelopeType; conversation_id?: number | null; data: T; }
 export interface RealtimeActivity { id?: number; conversation_id?: number; event: string; cause?: string | null; actor?: string | null; created_at?: string; }
 export interface RealtimeSnapshot { conversations: Conversation[]; activity: RealtimeActivity[]; }

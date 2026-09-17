@@ -15,11 +15,10 @@ export interface RealtimeState {
   conversations: Conversation[];
   threads: Record<number, ConversationThread>;
   activity: Record<number, RealtimeActivity[]>;
-  tokens: Record<number, string>;
   chats: Record<number, { messages: InternalChatMessage[] }>;
   status: ConnectionStatus;
 }
-export const initialRealtimeState: RealtimeState = { conversations: [], threads: {}, activity: {}, tokens: {}, chats: {}, status: 'disconnected' };
+export const initialRealtimeState: RealtimeState = { conversations: [], threads: {}, activity: {}, chats: {}, status: 'disconnected' };
 
 export function coalesceSnapshotRefresh(refresh: () => void, delay = 100) {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -47,14 +46,10 @@ export function reduceRealtimeState(state: RealtimeState, envelope: RealtimeEnve
     return { ...state, conversations: state.conversations.map((conversation) => conversation.id === id ? { ...conversation, ...data } : conversation) };
   }
   if (envelope.type === 'activity') return { ...state, activity: { ...state.activity, [id]: [...(state.activity[id] ?? []), { ...(envelope.data as RealtimeActivity), conversation_id: id }] } };
-  if (envelope.type === 'token') {
-    const token = typeof envelope.data === 'string' ? envelope.data : String((envelope.data as { token?: unknown }).token ?? '');
-    return { ...state, tokens: { ...state.tokens, [id]: `${state.tokens[id] ?? ''}${token}` } };
-  }
   if (envelope.type === 'message') {
     const message = envelope.data as InternalChatMessage;
     const chat = state.chats[id] ?? { messages: [] };
-    return { ...state, tokens: Object.fromEntries(Object.entries(state.tokens).filter(([key]) => Number(key) !== id)), chats: { ...state.chats, [id]: { messages: [...chat.messages.filter((item) => item.id !== message.id), message] } } };
+    return { ...state, chats: { ...state.chats, [id]: { messages: [...chat.messages.filter((item) => item.id !== message.id), message] } } };
   }
   return state;
 }

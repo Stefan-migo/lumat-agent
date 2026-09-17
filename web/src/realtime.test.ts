@@ -40,13 +40,12 @@ describe("realtime reducer", () => {
     expect(withActivity.activity[4][0].event).toBe("classified");
   });
 
-  it("keeps ordered tokens transient and replaces them with the final message", () => {
-    let state = reduceRealtimeState(initialRealtimeState, { type: "token", conversation_id: 12, data: { token: "Hel" } });
-    state = reduceRealtimeState(state, { type: "token", conversation_id: 12, data: { token: "lo" } });
-    expect(state.tokens[12]).toBe("Hello");
-    state = reduceRealtimeState(state, { type: "message", conversation_id: 12, data: { id: 9, thread_id: 12, author: "agent", content: "Hello", status: "processed" } });
-    expect(state.tokens[12]).toBeUndefined();
+  it("appends a committed message and replaces a repeated id in place", () => {
+    let state = reduceRealtimeState(initialRealtimeState, { type: "message", conversation_id: 12, data: { id: 9, thread_id: 12, author: "agent", content: "Hello", status: "processed" } });
     expect(state.chats[12].messages[0].content).toBe("Hello");
+    state = reduceRealtimeState(state, { type: "message", conversation_id: 12, data: { id: 9, thread_id: 12, author: "agent", content: "Hello, edited", status: "processed" } });
+    expect(state.chats[12].messages).toHaveLength(1);
+    expect(state.chats[12].messages[0].content).toBe("Hello, edited");
   });
 });
 
@@ -79,7 +78,7 @@ describe("RealtimeClient", () => {
     client.disconnect();
     await vi.advanceTimersByTimeAsync(100);
     expect(Socket.instances).toHaveLength(1);
-    Socket.instances[0].sendEnvelope({ type: "token", conversation_id: 1, data: { token: "ignored" } });
+    Socket.instances[0].sendEnvelope({ type: "message", conversation_id: 1, data: { id: 1, thread_id: 1, author: "agent", content: "ignored", status: "processed" } });
     expect(listener).not.toHaveBeenCalled();
   });
 
