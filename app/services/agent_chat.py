@@ -1005,6 +1005,37 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
     return message
 
 
+def _fail_orphaned_run(session: Session, thread: InternalChatThread, *, now: datetime, run_id: str | None = None) -> bool:
+    """Fail a run nothing can still be working on, which re-enables the Retry action.
+
+    Callers own the evidence that the run is orphaned; this only writes the
+    terminal state and the operator-facing copy a crashed run produces.
+    """
+    run_id = run_id or (thread.assistant_state or {}).get("live", {}).get("run_id") or thread.active_run_id
+    message = session.scalar(
+        select(InternalChatMessage).where(
+            InternalChatMessage.thread_id == thread.id,
+            InternalChatMessage.assistant_metadata["run_id"].as_string() == run_id,
+            InternalChatMessage.status == "processing",
+        ).order_by(InternalChatMessage.id.desc())
+    )
+    if message is not None:
+        message.status = "failed"
+        message.error = "El agente no pudo procesar este mensaje. Reinténtalo."
+        message.completed_at = now
+    thread.assistant_state = merge_assistant_state(thread.assistant_state or {}, {
+        "stage": "failed",
+        "execution_status": "failed",
+        "recoverable": True,
+        "live": {
+            "run_id": run_id, "stage": "failed", "status": "failed", "updated_at": now.isoformat(),
+        },
+    })
+    logger.warning("Reaped an orphaned assistant run for thread %s", thread.id)
+    session.flush()
+    return True
+
+
 def reap_stale_run(session: Session, thread: InternalChatThread) -> bool:
     """Fail closed on a panel run whose background task never ran, or died.
 
@@ -1033,29 +1064,46 @@ def reap_stale_run(session: Session, thread: InternalChatThread) -> bool:
     now = datetime.now(timezone.utc)
     if updated_at is not None and (now - updated_at).total_seconds() < STALE_RUN_SECONDS:
         return False
-    run_id = live.get("run_id") or thread.active_run_id
-    message = session.scalar(
-        select(InternalChatMessage).where(
-            InternalChatMessage.thread_id == thread.id,
-            InternalChatMessage.assistant_metadata["run_id"].as_string() == run_id,
-            InternalChatMessage.status == "processing",
-        ).order_by(InternalChatMessage.id.desc())
-    )
-    if message is not None:
-        message.status = "failed"
-        message.error = "El agente no pudo procesar este mensaje. Reinténtalo."
-        message.completed_at = now
-    thread.assistant_state = merge_assistant_state(state, {
-        "stage": "failed",
-        "execution_status": "failed",
-        "recoverable": True,
-        "live": {
-            "run_id": run_id, "stage": "failed", "status": "failed", "updated_at": now.isoformat(),
-        },
-    })
-    logger.warning("Reaped an orphaned assistant run for thread %s", thread.id)
-    session.flush()
-    return True
+    return _fail_orphaned_run(session, thread, now=now, run_id=live.get("run_id") or thread.active_run_id)
+
+
+def reap_orphaned_runs(session_factory, *, limit: int = 50) -> int:
+    """Fail every assistant run this fresh process cannot own; called once at boot.
+
+    A single process owns no background task before it serves a request, so a
+    `running` live state at startup is proof the run was orphaned by a crash or a
+    redeploy — no silence timer needed. Waiting for `STALE_RUN_SECONDS` instead
+    leaves the operator with a live spinner and no Retry action for ten minutes
+    after every deploy that lands mid-turn.
+
+    Resumable executions are skipped: `resume_thread` can still reclaim those,
+    and failing them would discard persisted work.
+    """
+    session = session_factory()
+    reaped = 0
+    try:
+        threads = session.scalars(
+            select(InternalChatThread)
+            .where(InternalChatThread.assistant_state["live"]["status"].as_string() == "running")
+            .order_by(InternalChatThread.id)
+            .limit(limit)
+        ).all()
+        now = datetime.now(timezone.utc)
+        for thread in threads:
+            state = thread.assistant_state or {}
+            if state.get("stage") == "executing" and state.get("execution_status") == "pending":
+                continue
+            _fail_orphaned_run(session, thread, now=now)
+            reaped += 1
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+    if reaped:
+        logger.warning("Reaped %s orphaned assistant runs at startup", reaped)
+    return reaped
 
 
 def resume_thread(session: Session, thread: InternalChatThread, user: User) -> bool:

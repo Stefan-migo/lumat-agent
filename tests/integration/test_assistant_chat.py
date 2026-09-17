@@ -21,6 +21,7 @@ from app.services.agent_chat import (
     STALE_RUN_SECONDS,
     _generate_thread_title,
     create_run_message,
+    reap_orphaned_runs,
     reap_stale_run,
     stream_events,
     stream_events_async,
@@ -885,3 +886,87 @@ def test_open_assistant_stream_releases_its_pooled_connection(client):
     finally:
         sqlalchemy_event.remove(engine, "checkout", _checkout)
         sqlalchemy_event.remove(engine, "checkin", _checkin)
+
+
+def _seed_assistant_run(username: str, run_id: str, *, stage: str, execution_status: str, updated_at: datetime) -> tuple[int, int]:
+    """Seed one thread holding a live run and its `processing` message."""
+    with SessionLocal() as session:
+        user = User(username=username, password_hash=hash_password("pass"), role="admin")
+        session.add(user)
+        session.flush()
+        thread = InternalChatThread(
+            user_id=user.id,
+            active_run_id=run_id,
+            assistant_state={
+                "stage": stage,
+                "execution_status": execution_status,
+                "live": {
+                    "run_id": run_id, "stage": stage, "preview": "", "status": "running",
+                    "updated_at": updated_at.isoformat(),
+                },
+            },
+        )
+        session.add(thread)
+        session.flush()
+        message = InternalChatMessage(
+            thread_id=thread.id, author="admin", content="hola", status="processing",
+            assistant_metadata={"run_id": run_id},
+        )
+        session.add(message)
+        session.commit()
+        return thread.id, message.id
+
+
+def test_reap_orphaned_runs_fails_a_fresh_run_the_read_path_would_spare():
+    """At boot a `running` live state is proof of orphanhood; the 600 s timer is not needed."""
+    now = datetime.now(timezone.utc)
+    thread_id, _ = _seed_assistant_run(
+        "orphan-boot", "run-orphan-boot", stage="planning", execution_status="pending", updated_at=now
+    )
+
+    with SessionLocal() as session:
+        assert reap_stale_run(session, session.get(InternalChatThread, thread_id)) is False
+
+    assert reap_orphaned_runs(SessionLocal) == 1
+
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, thread_id)
+        assert thread.assistant_state["stage"] == "failed"
+        assert thread.assistant_state["live"]["status"] == "failed"
+        assert thread.assistant_state["recoverable"] is True
+        message = session.scalar(select(InternalChatMessage).where(InternalChatMessage.thread_id == thread_id))
+        assert message.status == "failed"
+        assert message.error == "El agente no pudo procesar este mensaje. Reinténtalo."
+        assert message.completed_at is not None
+
+
+def test_reap_orphaned_runs_leaves_a_resumable_execution_alone():
+    """`resume_thread` can still reclaim a pending execution: boot must not discard it."""
+    now = datetime.now(timezone.utc)
+    thread_id, message_id = _seed_assistant_run(
+        "orphan-resumable", "run-resumable", stage="executing", execution_status="pending", updated_at=now
+    )
+
+    assert reap_orphaned_runs(SessionLocal) == 0
+
+    with SessionLocal() as session:
+        assert session.get(InternalChatThread, thread_id).assistant_state["stage"] == "executing"
+        assert session.get(InternalChatMessage, message_id).status == "processing"
+
+
+def test_startup_sweep_fails_orphaned_assistant_runs():
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    now = datetime.now(timezone.utc)
+    thread_id, message_id = _seed_assistant_run(
+        "orphan-startup", "run-startup", stage="responding", execution_status="pending", updated_at=now
+    )
+
+    with TestClient(create_app()):
+        pass  # lifespan runs the startup sweeps
+
+    with SessionLocal() as session:
+        assert session.get(InternalChatMessage, message_id).status == "failed"
+        assert session.get(InternalChatThread, thread_id).assistant_state["stage"] == "failed"
