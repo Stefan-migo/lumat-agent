@@ -283,7 +283,6 @@ def send_message(thread_id: int, body: ChatMessageBody, background_tasks: Backgr
         thread_id=thread_id,
         run_id=message.assistant_metadata["run_id"],
         user_id=current.id,
-        username=current.username,
         actor_role=current.role.value,
         attachment_ids=[row.id for row in owned],
         sdb_requested=body.sdb_requested,
