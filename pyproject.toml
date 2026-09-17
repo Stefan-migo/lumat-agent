@@ -1,7 +1,7 @@
 [project]
 name = "lumatagent"
 version = "0.1.0"
-description = "LumatAgent — AI WhatsApp assistant for Lumat (gasfitería, Chile). Hito 1: setup + WhatsApp operativo."
+description = "LumatAgent — AI WhatsApp assistant for Lumat (gasfitería, Chile) and its operations panel."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
