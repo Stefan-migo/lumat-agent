@@ -12,6 +12,7 @@ same crash are failed so the operator gets their Retry action back.
 
 import logging
 from contextlib import asynccontextmanager
+from functools import partial
 
 from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
@@ -35,14 +36,21 @@ async def lifespan(app: FastAPI):
     (single worker: nothing can be actively processing at boot) — the same
     reasoning that lets the assistant-run sweep treat a `running` live state as
     proof of orphanhood.
+
+    They are independent recoveries, so each gets its own `try`: one failing
+    (the notification sweep reaches the database and outbound channels) must not
+    skip the rest, and the log names the sweep that broke.
     """
-    try:
-        reset_stale_processing()
-        sweep_received()
-        run_notification_sweep()
-        reap_orphaned_runs(SessionLocal)
-    except Exception:
-        logger.exception("startup recovery sweep failed")
+    for name, sweep in (
+        ("reset_stale_processing", reset_stale_processing),
+        ("sweep_received", sweep_received),
+        ("notification_sweep", run_notification_sweep),
+        ("reap_orphaned_runs", partial(reap_orphaned_runs, SessionLocal)),
+    ):
+        try:
+            sweep()
+        except Exception:
+            logger.exception("startup sweep %s failed", name)
     yield
 
 

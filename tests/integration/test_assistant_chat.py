@@ -888,7 +888,9 @@ def test_open_assistant_stream_releases_its_pooled_connection(client):
         sqlalchemy_event.remove(engine, "checkin", _checkin)
 
 
-def _seed_assistant_run(username: str, run_id: str, *, stage: str, execution_status: str, updated_at: datetime) -> tuple[int, int]:
+def _seed_assistant_run(
+    username: str, run_id: str, *, stage: str, execution_status: str, updated_at: datetime, live_status: str = "running"
+) -> tuple[int, int]:
     """Seed one thread holding a live run and its `processing` message."""
     with SessionLocal() as session:
         user = User(username=username, password_hash=hash_password("pass"), role="admin")
@@ -901,7 +903,7 @@ def _seed_assistant_run(username: str, run_id: str, *, stage: str, execution_sta
                 "stage": stage,
                 "execution_status": execution_status,
                 "live": {
-                    "run_id": run_id, "stage": stage, "preview": "", "status": "running",
+                    "run_id": run_id, "stage": stage, "preview": "", "status": live_status,
                     "updated_at": updated_at.isoformat(),
                 },
             },
@@ -954,6 +956,35 @@ def test_reap_orphaned_runs_leaves_a_resumable_execution_alone():
         assert session.get(InternalChatMessage, message_id).status == "processing"
 
 
+def test_reap_orphaned_runs_leaves_settled_and_never_ran_threads_alone():
+    """Only a `running` live state proves orphanhood; nothing else may be reaped.
+
+    The settled thread's message stays `processing` on purpose: it shows the SELECT excludes the
+    thread, not that the UPDATE's own guard saved it. The never-ran thread is the JSONB boundary —
+    `{}` yields a NULL path, so the comparison must not match.
+    """
+    now = datetime.now(timezone.utc)
+    settled_id, settled_message_id = _seed_assistant_run(
+        "orphan-settled", "run-settled", stage="completed", execution_status="completed",
+        updated_at=now, live_status="completed",
+    )
+    with SessionLocal() as session:
+        user = User(username="orphan-never-ran", password_hash=hash_password("pass"), role="admin")
+        session.add(user)
+        session.flush()
+        never_ran = InternalChatThread(user_id=user.id, assistant_state={})
+        session.add(never_ran)
+        session.commit()
+        never_ran_id = never_ran.id
+
+    assert reap_orphaned_runs(SessionLocal) == 0
+
+    with SessionLocal() as session:
+        assert session.get(InternalChatThread, settled_id).assistant_state["stage"] == "completed"
+        assert session.get(InternalChatMessage, settled_message_id).status == "processing"
+        assert session.get(InternalChatThread, never_ran_id).assistant_state == {}
+
+
 def test_startup_sweep_fails_orphaned_assistant_runs():
     from fastapi.testclient import TestClient
 
@@ -962,6 +993,30 @@ def test_startup_sweep_fails_orphaned_assistant_runs():
     now = datetime.now(timezone.utc)
     thread_id, message_id = _seed_assistant_run(
         "orphan-startup", "run-startup", stage="responding", execution_status="pending", updated_at=now
+    )
+
+    with TestClient(create_app()):
+        pass  # lifespan runs the startup sweeps
+
+    with SessionLocal() as session:
+        assert session.get(InternalChatMessage, message_id).status == "failed"
+        assert session.get(InternalChatThread, thread_id).assistant_state["stage"] == "failed"
+
+
+def test_startup_sweep_isolation_survives_an_earlier_sweep_failing(monkeypatch):
+    """The sweeps are independent recoveries: one breaking must not skip the rest."""
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    def explode() -> int:
+        raise RuntimeError("notification sweep exploded")
+
+    monkeypatch.setattr("app.main.run_notification_sweep", explode)
+
+    now = datetime.now(timezone.utc)
+    thread_id, message_id = _seed_assistant_run(
+        "orphan-isolated", "run-isolated", stage="responding", execution_status="pending", updated_at=now
     )
 
     with TestClient(create_app()):
