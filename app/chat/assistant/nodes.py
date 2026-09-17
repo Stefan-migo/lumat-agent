@@ -153,12 +153,12 @@ def bounded_fallback(reason: str) -> PlannerOutput:
     )
 
 
-def parse_planner_output(raw: object) -> PlannerOutput:
+def parse_planner_output(raw: object) -> tuple[PlannerOutput, bool]:
     """Validate planner data and convert invalid data to a bounded response."""
     try:
-        return PlannerOutput.model_validate(raw)
+        return PlannerOutput.model_validate(raw), True
     except (TypeError, ValidationError):
-        return bounded_fallback("invalid planner output")
+        return bounded_fallback("invalid planner output"), False
 
 
 def plan(state: AssistantState) -> AssistantState:
@@ -404,8 +404,7 @@ def plan_llm(state: AssistantState) -> AssistantState:
         raw_text = _completion_text(completion)
         if not raw_text:
             raise ValueError("provider returned no structured planner message")
-        planner = parse_planner_output(__import__("json").loads(raw_text))
-        valid = planner.summary != bounded_fallback("").summary
+        planner, valid = parse_planner_output(__import__("json").loads(raw_text))
     except Exception:
         # Compatibility for older injected clients that only implement response
         # streaming; they can still pause a write for approval, but never name a
