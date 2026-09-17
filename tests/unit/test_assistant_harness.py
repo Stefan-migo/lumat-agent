@@ -1,13 +1,6 @@
 """Contracts for bounded assistant context and durable state."""
 
-from app.chat.assistant.state import (
-    ASSISTANT_STATE_KEYS,
-    COMPACTION_RETENTION_TOKENS,
-    COMPACTION_THRESHOLD_TOKENS,
-    INJECTION_TOKEN_BUDGET,
-    SESSION_WINDOW_TOKENS,
-    estimate_tokens,
-)
+from app.chat.assistant.state import ASSISTANT_STATE_KEYS, estimate_tokens
 from app.config import Settings
 
 
@@ -28,11 +21,11 @@ def test_assistant_state_adds_only_optional_harness_contract_keys():
 
 
 def test_harness_budget_defaults_are_resolved():
-    assert INJECTION_TOKEN_BUDGET == 4_000
-    assert SESSION_WINDOW_TOKENS == 8_000
-    assert COMPACTION_THRESHOLD_TOKENS == 4_000
-    assert COMPACTION_RETENTION_TOKENS == 2_000
+    """Settings are the single source for the harness limits.
 
+    They used to be duplicated as module constants in `assistant.state` while the
+    settings were never read, so the configuration did nothing.
+    """
     settings = Settings(
         app_secret="secret",
         verify_token="verify",

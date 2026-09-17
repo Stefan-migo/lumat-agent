@@ -9,11 +9,6 @@ from typing import Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-INJECTION_TOKEN_BUDGET = 4_000
-SESSION_WINDOW_TOKENS = 8_000
-COMPACTION_THRESHOLD_TOKENS = 4_000
-COMPACTION_RETENTION_TOKENS = 2_000
-
 ASSISTANT_STATE_KEYS = {
     "context_meta",
     "planner",
