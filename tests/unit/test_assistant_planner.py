@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.chat.assistant.nodes import bounded_fallback, parse_planner_output, plan
+from app.chat.assistant.nodes import _context_text, bounded_fallback, parse_planner_output, plan
 from app.chat.assistant.state import PlannerOutput
 
 
@@ -101,3 +101,20 @@ def test_normal_planner_flow_remains_unmodified():
     assert state["status"] == "planned"
     assert state["plan"]["summary"] == "The system is operational."
     assert state["plan"]["requires_approval"] is False
+
+
+def test_context_text_includes_conversation_identity_when_available():
+    state = {
+        "context": {
+            "items": [{"content": "Pinned fact"}, {"content": "Recent message"}],
+            "meta": {"scope": "panel", "entity_id": "thread:42"},
+        }
+    }
+
+    assert _context_text(state) == "Pinned fact\nRecent message\nConversation identity: scope=panel entity_id=thread:42"
+
+
+def test_context_text_omits_conversation_identity_without_complete_meta():
+    state = {"context": {"items": [{"content": "Recent message"}], "meta": {}}}
+
+    assert _context_text(state) == "Recent message"

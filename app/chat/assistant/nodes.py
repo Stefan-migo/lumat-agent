@@ -203,7 +203,13 @@ def _completion_text(completion) -> str:
 
 
 def _context_text(state: AssistantState) -> str:
-    return "\n".join(str(item.get("content", "")) for item in (state.get("context", {}).get("items", [])))
+    """Render the context items, then the identity a scoped tool call must echo back."""
+    context = state.get("context", {})
+    text = [str(item.get("content", "")) for item in context.get("items", [])]
+    meta = context.get("meta") or {}
+    if meta.get("scope") and meta.get("entity_id"):
+        text.append(f"Conversation identity: scope={meta['scope']} entity_id={meta['entity_id']}")
+    return "\n".join(text)
 
 
 def _assistant_client():

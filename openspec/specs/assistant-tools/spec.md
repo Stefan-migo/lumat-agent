@@ -26,6 +26,20 @@ The assistant MUST expose the existing typed, exact-argument tools over domain s
 - WHEN approval is prepared
 - THEN validation rejects the task before approval or execution
 
+### Requirement: AT-8 — Scoped Memory Contract
+
+The `memory.read` tool MUST accept only `scope="panel"` or `scope="customer"`. A panel conversation read MUST use `entity_id="thread:<thread id>"`, and a customer read MUST use `entity_id="customer:<customer id>"` or a legacy numeric customer id.
+
+#### Scenario: Valid scoped memory read
+- GIVEN a memory read with a closed-domain scope and its matching entity identifier
+- WHEN the assistant validates the arguments
+- THEN validation accepts the read for execution
+
+#### Scenario: Unknown memory scope
+- GIVEN a memory read with a scope outside `panel` or `customer`
+- WHEN the assistant validates the arguments
+- THEN validation rejects the arguments before service execution
+
 ### Requirement: AT-2 — Confirmed Automation Write
 
 The automation creation tool MUST be classified as a write, MUST execute only after exact approval, and MUST use the existing automation service in the same transaction. It MUST return the created rule and preserve existing history and worker semantics.
