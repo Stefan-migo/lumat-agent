@@ -1161,6 +1161,18 @@ def get_thread(session: Session, thread_id: int, user_id: int) -> tuple[Internal
     return thread, messages
 
 
-def get_owned_thread(session: Session, thread_id: int, user_id: int) -> InternalChatThread | None:
-    """Ownership-scoped thread row for callers that need no message history."""
-    return session.scalar(select(InternalChatThread).where(InternalChatThread.id == thread_id, InternalChatThread.user_id == user_id))
+def read_owned_thread_run(session_factory, thread_id: int, user_id: int) -> tuple[str | None] | None:
+    """Ownership check and `active_run_id` for the assistant stream route.
+
+    Callers run this through `asyncio.to_thread`, so it opens its own short
+    session instead of receiving one: a `Session` is not thread-safe and must
+    not cross threads — the same shape `_poll_once` gives the stream's polling.
+    The one-tuple keeps "not this user's thread" (`None`) distinct from a thread
+    that simply has no active run.
+    """
+    session = session_factory()
+    try:
+        thread = session.scalar(select(InternalChatThread).where(InternalChatThread.id == thread_id, InternalChatThread.user_id == user_id))
+        return None if thread is None else (thread.active_run_id,)
+    finally:
+        session.close()
