@@ -21,7 +21,7 @@ _STAGED_EVENTS_KEY = "realtime_events"
 class RealtimeEnvelope(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["token", "message", "conversation", "activity", "snapshot"]
+    type: Literal["message", "conversation", "activity", "snapshot"]
     conversation_id: int | None = None
     data: Any
 

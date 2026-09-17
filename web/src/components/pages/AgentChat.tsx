@@ -403,13 +403,6 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
     if (!thread) return;
     const unsubscribe = realtimeClient.subscribe((event) => {
       if (event.conversation_id !== thread.id) return;
-      if (event.type === "token") {
-        const token =
-          typeof event.data === "string"
-            ? event.data
-            : String((event.data as { token?: unknown }).token ?? "");
-        setStream((current) => current + token);
-      }
       if (event.type === "message") {
         setStream("");
         setMessages((current) => [

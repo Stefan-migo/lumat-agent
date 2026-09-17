@@ -8,7 +8,7 @@ Provide authenticated, best-effort realtime updates for the panel without replac
 
 ### Requirement: CRT-1 — Authenticated WebSocket Contract
 
-The system MUST expose `/panel/ws`, authenticate the existing session cookie during the handshake, and reject unauthenticated or unauthorized clients. Each frame MUST use `{type, conversation_id?, data}` and MUST use only the event types `token`, `message`, `conversation`, `activity`, or `snapshot`. The server MUST preserve causal order per conversation and send the initial snapshot before live events.
+The system MUST expose `/panel/ws`, authenticate the existing session cookie during the handshake, and reject unauthenticated or unauthorized clients. Each frame MUST use `{type, conversation_id?, data}` and MUST use only the event types `message`, `conversation`, `activity`, or `snapshot`. The server MUST preserve causal order per conversation and send the initial snapshot before live events.
 
 #### Scenario: Authorized connection
 - GIVEN a valid authorized panel session
@@ -31,7 +31,7 @@ Delivery MAY lose events and MUST NOT require a replay bus, durable subscription
 
 ### Requirement: CRT-3 — Typed Live Events and Queue Snapshot
 
-The server MUST publish persisted message, conversation-state, activity, and internal-agent token changes through the shared envelope. The initial `snapshot` MUST include the unified conversation queue view, including the same embedded selected-case context and count data used by REST list/detail payloads, plus reconnect-safe activity history. Token events MUST identify their internal-chat thread and preserve token order. (Previously: snapshots exposed the panel conversation view and activity history but did not require case context or queue counts.)
+The server MUST publish persisted message, conversation-state, and activity changes through the shared envelope. The initial `snapshot` MUST include the unified conversation queue view, including the same embedded selected-case context and count data used by REST list/detail payloads, plus reconnect-safe activity history. (Previously: snapshots exposed the panel conversation view and activity history but did not require case context or queue counts. This channel also published internal-agent `token` events; that transport was removed so tokens are not duplicated across two paths, and the assistant SSE stream is the single live path for run progress and token previews — see IAC-6.)
 
 #### Scenario: Snapshot carries queue context
 - GIVEN an authorized client connects with conversations linked to cases
@@ -42,11 +42,6 @@ The server MUST publish persisted message, conversation-state, activity, and int
 - GIVEN a message or state change is committed
 - WHEN a connected panel client is subscribed
 - THEN the matching `message` or `conversation` event is delivered in causal order
-
-#### Scenario: Internal token stream
-- GIVEN an authorized internal chat request is processing
-- WHEN response tokens become available
-- THEN ordered `token` events are published while the synchronous POST contract remains valid
 
 ### Requirement: CRT-4 — Active Conversation Summary
 
