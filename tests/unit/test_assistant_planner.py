@@ -70,6 +70,59 @@ def test_complex_plan_exposes_metadata_only_hook():
     assert state["status"] == "planned"
 
 
+def test_overlong_summary_keeps_tool_plan_instead_of_falling_back():
+    state = plan(
+        {
+            "content": "Find Ana's customer record.",
+            "planner_output": {
+                "kind": "tool",
+                "tool": "customers.search",
+                "arguments": {"query": "Ana"},
+                "summary": "x" * 250,
+                "requires_approval": False,
+            },
+        }
+    )
+
+    assert state["planner"]["valid"] is True
+    assert state["plan"]["kind"] == "tool"
+    assert state["plan"]["tool"] == "customers.search"
+    assert len(state["plan"]["summary"]) == 200
+
+
+def test_summary_at_limit_passes_through_unchanged():
+    summary = "x" * 200
+
+    result = parse_planner_output(
+        {
+            "kind": "respond",
+            "arguments": {},
+            "summary": summary,
+            "requires_approval": False,
+        }
+    )
+
+    assert result.summary == summary
+
+
+def test_non_string_summary_still_becomes_invalid_planner_fallback():
+    state = plan(
+        {
+            "content": "Respond to the request.",
+            "planner_output": {
+                "kind": "respond",
+                "arguments": {},
+                "summary": 200,
+                "requires_approval": False,
+            },
+        }
+    )
+
+    assert state["planner"]["valid"] is False
+    assert state["plan"]["kind"] == "respond"
+    assert state["error"] == "Invalid planner output."
+
+
 def test_invalid_planner_output_becomes_bounded_response_fallback():
     fallback = bounded_fallback("malformed planner output")
     assert fallback.kind == "respond"

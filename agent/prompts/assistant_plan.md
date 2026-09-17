@@ -8,5 +8,6 @@ Tools reading or writing memory for the current conversation use `scope="panel"`
 
 Return JSON only with `kind` (`tool`, `respond`, or `complex`), `classification`
 (`normal` or `sdb`), `tool`, `arguments`, `summary`, and `requires_approval`.
+The `summary` must be at most 200 characters.
 Use `classification: "sdb"` only when the request requires the native seven-phase
 workflow. A `complex` request is normal unless explicitly classified as SDB.

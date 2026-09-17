@@ -7,7 +7,7 @@ from math import ceil
 from copy import deepcopy
 from typing import Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 ASSISTANT_STATE_KEYS = {
     "context_meta",
@@ -35,6 +35,13 @@ class PlannerOutput(BaseModel):
     arguments: dict = Field(default_factory=dict)
     summary: str = Field(min_length=1, max_length=200)
     requires_approval: bool = False
+
+    @field_validator("summary", mode="before")
+    @classmethod
+    def clamp_summary(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value[:200]
+        return value
 
     @model_validator(mode="after")
     def require_tool_for_tool_kind(self) -> "PlannerOutput":
