@@ -2,14 +2,15 @@ schema: spec-driven
 
 context: |
   Project: LumatAgent — AI WhatsApp assistant for Lumat (gasfitería, Chile)
-  Phase: Software delivery — Hito 1 (Setup + WhatsApp operativo) active; contract signed 2026-08-07, Pago 1 received 2026-08-11, kickoff 2026-08-17
-  Stack: Hostinger KVM 2 (São Paulo) + Ubuntu LTS + Docker Compose + PostgreSQL/pgvector + Python FastAPI/LangGraph
-  Structure: Single milestone active (M1/Hito 1: Setup + WhatsApp operativo). M2 (web) on standby. M3 (payments) out of scope. One SDD change per hito (4 changes total); 12 weeks construction + 5 weeks testing, acceptance ~16-dic-2026.
-  Existing: shipped FastAPI/LangGraph application and React/Vite panel with Python, Vitest, and Playwright test coverage
+  Contract: signed 2026-08-07; Pago 1 received 2026-08-11; kickoff 2026-08-17; acceptance ~16-dic-2026
+  Client milestones (contract; source of truth: LumatRequest.md): M1 bot IA de atención al cliente, captura de datos, orientación inicial, derivación y administración; M2 public Lumat website (services, contact, forms, bot connection); M3 service catalog, scheduling, customer base, payments, operational automation
+  Delivery state: the four internal delivery hitos are shipped and archived under openspec/changes/archive/ — Hito 1 (setup + WhatsApp operativo), Hito 2 (human inbox), Hito 3 (scheduling + notifications), Hito 4 (automations + chat PWA). Hito 1's two remaining tasks are operational and blocked on the client, not on code: Meta Cloud API onboarding (T2.1) and go-live on the dedicated number (T7.3). Delivery hitos are internal and do not map one-to-one onto the contract milestones.
+  Stack: Hostinger KVM 2 (São Paulo) + Ubuntu LTS + Docker Compose + PostgreSQL/pgvector + Python FastAPI/LangGraph + React/Vite
+  Existing: shipped FastAPI/LangGraph application and React/Vite operations panel (`web/` — a panel, not the contract's M2 public website) with Python, Vitest, and Playwright test coverage
 
 rules:
   proposal:
-    - Keep scope tight to H1: no H2-H4 features (multi-agent orchestration, reply-from-panel inbox, calendar/ICS, notifications, automations/event bus, PWA, advanced dashboards), no M2 web, no M3 payments
+    - Scope each proposal to the change actually requested; do not revive shipped Hito 1–4 capabilities, and do not expand into the contract's M2/M3 scope without an explicit request
     - Technical artifacts in English; client-facing docs in Spanish (separate deliverable)
     - Include rollback plan for risky changes
   specs:
@@ -22,7 +23,8 @@ rules:
     - Group by phase, use hierarchical numbering
     - Keep tasks completable in one session
   apply:
-    - Follow existing code patterns
+    guidelines:
+      - Follow existing code patterns
     tdd: true
     test_command: "uv run pytest tests/"
   verify:
