@@ -1,5 +1,5 @@
 import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
-import { getPlanningSession, listPlanningSessions, reopenPlanningSession } from "../../api";
+import { ApiError, getPlanningSession, listPlanningSessions, reopenPlanningSession } from "../../api";
 import type { PlanningSessionDetailResponse, PlanningSessionsResponse } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
@@ -32,22 +32,26 @@ export function PlanningSessions({ sessionSlug, onOpenSession, onOpenThread, dat
   const detail = useAsyncData(useCallback(() => getPlanningSession(sessionSlug!), [sessionSlug]), sessionSlug !== undefined);
   // Declared before the detail early-return so the hook order stays stable.
   const [reopening, setReopening] = useState(false);
+  const [reopenError, setReopenError] = useState<string | null>(null);
   if (sessionSlug) {
     const body = detail.data as PlanningSessionDetailResponse | null;
     const session = body?.session;
     const reopen = async () => {
       if (!session) return;
       setReopening(true);
+      setReopenError(null);
       try {
         await reopenPlanningSession(session.slug);
         onOpenThread?.(session.thread_id);
+      } catch (error) {
+        setReopenError(error instanceof ApiError ? error.detail : "No pudimos completar la acción.");
       } finally {
         setReopening(false);
       }
     };
     const opened = formatTimestamp(session?.opened_at ?? null);
     const closed = formatTimestamp(session?.closed_at ?? null);
-    return <PageFrame title={session?.topic ?? "Sesión de planificación"} meta={session ? <span>Hilo {session.thread_id} · <Badge tone={sessionStatusTone(session.status)}>{sessionStatusLabel(session.status)}</Badge>{opened ? <> · Apertura: {opened}</> : null}{closed ? <> · Cierre: {closed}</> : null}</span> : undefined} actions={<><Button variant="secondary" onClick={() => window.history.back()}>Volver a las sesiones de planificación</Button>{session?.status === "closed" ? <Button disabled={reopening} onClick={() => void reopen()}>Reabrir sesión</Button> : null}</>} state={<ReadState state={detail.state} detail />}>
+    return <PageFrame title={session?.topic ?? "Sesión de planificación"} meta={session ? <span>Hilo {session.thread_id} · <Badge tone={sessionStatusTone(session.status)}>{sessionStatusLabel(session.status)}</Badge>{opened ? <> · Apertura: {opened}</> : null}{closed ? <> · Cierre: {closed}</> : null}</span> : undefined} actions={<><Button variant="secondary" onClick={() => window.history.back()}>Volver a las sesiones de planificación</Button>{session?.status === "closed" ? <Button disabled={reopening} onClick={() => void reopen()}>Reabrir sesión</Button> : null}</>} state={<><ReadState state={detail.state} detail />{reopenError ? <StateMessage tone="danger" role="alert" title="No pudimos reabrir la sesión de planificación" detail={reopenError} /> : null}</>}>
       {sectionTabs}
       {body ? <>
          <section aria-labelledby="session-facts-heading"><h2 id="session-facts-heading">Datos de la sesión</h2><dl style={FACTS_STYLE}>{body.session.turn_index !== null && body.session.turn_index !== undefined ? <><dt>Turno</dt><dd>{body.session.turn_index}</dd></> : null}{body.session.next_decision ? <><dt>Próxima decisión</dt><dd>{body.session.next_decision}</dd></> : null}{body.session.last_class ? <><dt>Última clasificación</dt><dd>{body.session.last_class}</dd></> : null}</dl></section>
