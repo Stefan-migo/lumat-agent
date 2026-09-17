@@ -218,14 +218,19 @@ The shipped 4px spacing scale is canonical. Prefer `--space-2`, `--space-3`, and
 
 Use the shipped order and vocabulary:
 
-1. Panel
-2. Clientes
-3. Conversaciones
-4. Casos
-5. Base de conocimientos — admin only
-6. Configuración — admin only
+1. `Panel unificado`
+2. `Asistente Lumat` — admin only
+3. `Conversaciones`
+4. `Clientes`
+5. `Agenda`
+6. `Base de Conocimientos` — admin only
+7. `Automatizaciones` — admin only
+8. `Configuración` — admin only
+9. `Usuarios` — admin only
 
 Customer ficha, conversation thread, and human inbox thread are drill-down views, not top-level destinations.
+
+`Proyectos` and `Sesiones de planificación` are drill-down views inside the `Asistente Lumat` section, not sidebar destinations. `Casos`, `Notificaciones`, `Notificaciones push`, and `Dashboard avanzado` are compatibility or legacy routes that still resolve, but must not be navigation items. `/panel/app/cases` remains a compatibility deep link.
 
 ### Shell contract
 
@@ -251,6 +256,8 @@ Use the existing reference breakpoints:
 Breakpoints respond to content, not device names. Never hide emergency, handoff, send, acknowledge, save, or retry actions to produce a cleaner screenshot.
 
 ## Page architecture
+
+`Asistente Lumat`, `Agenda`, `Automatizaciones`, and `Usuarios` do not yet have page-architecture sections here; their absence is not permission to improvise.
 
 ### Panel
 
@@ -310,6 +317,24 @@ Do not add autonomous-resolution, response-time, satisfaction, or revenue metric
 - Use one save action per independently persisted group.
 - Show saved, saving, validation, server-error, and stale-value states.
 - Keep advanced machine syntax (`category=mode`, keyword lists) visually separated from ordinary controls and validate it before saving.
+
+### Proyectos
+
+- Treat Proyectos as a read-only registry of projects and their SDB assistant artifacts.
+- Do not expose create, rename, archive, or merge actions on this surface.
+- In the list, use the project name as the drill-down control; show purpose and status as supporting columns.
+- In the detail view, show project name, purpose, status, and the explicit `Volver a proyectos` control.
+- Group artifacts by SDB entity. Use one read-only table per entity, headed by the entity name, with `Título`, `Contenido`, `Tipo`, and `Estado` columns.
+- Never show raw machine identifiers. The former `Identificador técnico` column exposed `topic_key` values and must not return; raw implementation labels belong only in an explicitly advanced technical view.
+- Provide empty states for no projects and for an entity with no artifacts, plus loading and error states.
+
+### Sesiones de planificación
+
+- Reach the surface through the assistant section tabs: `Chat`, `Proyectos`, and `Sesiones de planificación`.
+- In the list, show `Tema`, `Hilo`, and `Estado`; use the topic as the detail control and provide `Abrir hilo` as the row action.
+- In the detail view, show the session topic, thread identity, status, opening and closing timestamps when present, session facts, SDB handoff status and phase, decisions, and the closing report.
+- Provide `Volver a las sesiones de planificación`; show `Reabrir sesión` for closed sessions.
+- Cover loading, administrator-denied, empty, and error states for reads. Surface a failed reopen as an alert with the server detail and do not navigate to the thread.
 
 ### Login
 
