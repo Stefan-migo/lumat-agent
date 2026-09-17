@@ -15,7 +15,7 @@ from app.agent_registry import get_registry
 from app.chat.assistant.tools.registry import get_tool
 from app.panel.api.deps import require_admin_json
 from app.panel.deps import get_db
-from app.services.agent_chat import approve_plan, close_cortex_session, create_run_message, create_thread, get_owned_thread, get_thread, message_dict, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
+from app.services.agent_chat import approve_plan, close_cortex_session, create_run_message, create_thread, get_thread, message_dict, read_owned_thread_run, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
 from app.db import SessionLocal
 from app.chat.assistant.attachments import cleanup_expired, store_attachment
 from app.panel.api.serializers import (
@@ -297,19 +297,23 @@ async def stream_thread(
     session: Session = Depends(get_db),
     current: User = Depends(require_admin_json),
 ):
-    # The read must not block the loop: this route lives as long as the stream,
-    # so a sync query here is the same class of problem #213 fixed for the
-    # polling. Only the thread row is read — `get_thread` would also load every
-    # message of the thread and this route discards that list.
-    thread = await asyncio.to_thread(get_owned_thread, session, thread_id, current.id)
-    if thread is None:
-        raise HTTPException(status_code=404, detail="chat thread not found")
-    run = run_id or thread.active_run_id
-    # Release the connection before streaming: FastAPI keeps the request
+    # Release the request-scoped connection first: FastAPI keeps the request
     # dependency open until the response is fully sent, so an open stream would
-    # hold a pooled connection for up to 300 s (pool_size 5 + overflow 10). The
-    # route is a read-only GET, so there is nothing left to commit.
+    # hold a pooled connection for up to 300 s (pool_size 5 + overflow 10). Auth
+    # shares this session and has already read everything it needs from it, and
+    # the read-only route has nothing to commit.
+    user_id = current.id
     session.close()
+    # The read must not block the loop, and it must not hand that session to a
+    # worker thread (a `Session` is not thread-safe): it opens its own, the same
+    # shape #213 gave the polling below. Only the thread row is read —
+    # `get_thread` would also load every message of the thread, and this route
+    # discards that list.
+    owned = await asyncio.to_thread(read_owned_thread_run, SessionLocal, thread_id, user_id)
+    if owned is None:
+        raise HTTPException(status_code=404, detail="chat thread not found")
+    (active_run_id,) = owned
+    run = run_id or active_run_id
     events = stream_events_async(SessionLocal, thread_id, run)
 
     async def body():

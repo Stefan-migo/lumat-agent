@@ -923,6 +923,27 @@ def test_open_assistant_stream_never_reads_the_thread_messages(client):
     assert read_messages == []
 
 
+def test_stream_without_run_id_follows_the_thread_active_run(client):
+    """`run_id` is optional: without it the stream follows the thread's active run.
+
+    Coverage for the fallback the route takes when the query string omits it —
+    every other stream test either passes a `run_id` or is rejected by role
+    before the handler runs.
+    """
+    _user("stream-fallback", "admin")
+    _login(client, "stream-fallback")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    sent = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Summarize operations"})
+    run_id = sent.json()["message"]["assistant_metadata"]["run_id"]
+
+    response = client.get(f"/panel/api/chat/threads/{thread_id}/stream")
+
+    assert response.status_code == 200
+    payloads = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+    assert payloads
+    assert {payload["run_id"] for payload in payloads} == {run_id}
+
+
 def _seed_assistant_run(
     username: str, run_id: str, *, stage: str, execution_status: str, updated_at: datetime, live_status: str = "running"
 ) -> tuple[int, int]:
