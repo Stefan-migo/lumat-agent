@@ -1159,3 +1159,8 @@ def get_thread(session: Session, thread_id: int, user_id: int) -> tuple[Internal
         return None
     messages = list(session.scalars(select(InternalChatMessage).where(InternalChatMessage.thread_id == thread.id).order_by(InternalChatMessage.created_at, InternalChatMessage.id)))
     return thread, messages
+
+
+def get_owned_thread(session: Session, thread_id: int, user_id: int) -> InternalChatThread | None:
+    """Ownership-scoped thread row for callers that need no message history."""
+    return session.scalar(select(InternalChatThread).where(InternalChatThread.id == thread_id, InternalChatThread.user_id == user_id))
