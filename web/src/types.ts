@@ -124,7 +124,7 @@ export interface AssistantApproval {
   status?: string;
   consumed_at?: string | null;
 }
-export interface AssistantEvidence { tool?: string | null; status: string; detail?: string; result?: unknown; }
+export interface AssistantEvidence { tool?: string | null; status: string; detail?: string; }
 export type AssistantEventType = 'plan' | 'approval' | 'tool' | 'evidence' | 'status' | 'response' | 'error';
 export interface AssistantEvent { type: AssistantEventType; thread_id: number; run_id: string; sequence: number; plan?: AssistantPlan; approval?: AssistantApproval | null; status?: string; tool?: string | null; evidence?: AssistantEvidence[]; content?: string; error?: string; }
 export interface AssistantState { stage?: string; recoverable?: boolean; execution_status?: string; approval?: AssistantApproval | null; events?: AssistantEvent[]; cortex_session?: PlanningSession; }

@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useRef,
   useState,
@@ -183,6 +184,12 @@ function planningCommand(value: string) {
     : { action: "open" as const, topic };
 }
 
+/** Arguments are shown to the operator approving the plan, so values read as
+ * text; a nested value falls back to JSON rather than [object Object]. */
+function displayArgumentValue(value: unknown) {
+  return typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "—");
+}
+
 export function PlanCard({
   plan,
   approval,
@@ -197,6 +204,7 @@ export function PlanCard({
   busy?: boolean;
 }) {
   const pending = approval?.status === "pending" || plan.status === "pending";
+  const argumentEntries = Object.entries(plan.arguments ?? {});
   const label = {
     pending: "Pendiente",
     rejected: "Rechazado",
@@ -211,7 +219,18 @@ export function PlanCard({
         <dd>{plan.tool || "Respuesta del asistente"}</dd>
         <dt>Argumentos</dt>
         <dd>
-          <code>{JSON.stringify(plan.arguments ?? {})}</code>
+          {argumentEntries.length > 0 ? (
+            <dl>
+              {argumentEntries.map(([key, value]) => (
+                <Fragment key={key}>
+                  <dt>{key}</dt>
+                  <dd>{displayArgumentValue(value)}</dd>
+                </Fragment>
+              ))}
+            </dl>
+          ) : (
+            "—"
+          )}
         </dd>
       </dl>
       <Badge tone={pending ? "warning" : plan.status === "rejected" ? "danger" : "success"}>
@@ -229,9 +248,9 @@ export function PlanCard({
 
 /**
  * One collapsed block per run holding the summarized action trail: what the
- * planner decided and which tools ran with what they returned. Renders nothing
- * when a turn was a plain answer with no tool work — a "plan" that plans
- * nothing is noise, not information.
+ * planner decided and which tools ran with their bounded detail. Renders
+ * nothing when a turn was a plain answer with no tool work — a "plan" that
+ * plans nothing is noise, not information.
  */
 function AgentActivity({
   plan,
@@ -286,9 +305,6 @@ function AgentActivity({
                   </Badge>
                 </span>
                 {item.detail ? <p>{item.detail}</p> : null}
-                {item.result !== undefined ? (
-                  <code>{JSON.stringify(item.result)}</code>
-                ) : null}
               </div>
             ))}
           </>
