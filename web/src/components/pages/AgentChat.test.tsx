@@ -561,6 +561,35 @@ describe("AgentChat", () => {
     );
   });
 
+  it("renders plan arguments as a readable list instead of raw JSON", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse({
+        thread: {
+          ...makeThread(),
+          active_run_id: "run-args",
+          current_plan: {
+            tool: "service.create",
+            arguments: { date: "tomorrow", notes: "Puerta azul" },
+            status: "pending",
+          },
+          assistant_state: {
+            stage: "approval_pending",
+            approval: { token: "secret", status: "pending" },
+          },
+        },
+        messages: [
+          { id: 1, author: "agent", content: "Plan pendiente", status: "processed", assistant_metadata: { run_id: "run-args" } },
+        ],
+      }),
+    );
+
+    render(<AgentChat threadId={4} />);
+    expect(await screen.findByText("service.create")).toBeInTheDocument();
+    expect(screen.getByText("tomorrow")).toBeInTheDocument();
+    expect(screen.getByText("Puerta azul")).toBeInTheDocument();
+    expect(screen.queryByText(/\{"date":"tomorrow"/)).not.toBeInTheDocument();
+  });
+
   it("submits the approval verb for a persisted pending plan", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({
