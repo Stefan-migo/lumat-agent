@@ -1,6 +1,8 @@
 import hashlib
 from pathlib import Path
 
+import pytest
+
 import _testdb
 
 
@@ -25,7 +27,7 @@ def test_derivation_is_deterministic_and_in_range(monkeypatch):
 def test_overrides_are_used(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("TEST_ADMIN_DB_URL", raising=False)
-    monkeypatch.delenv("TEST_POSTGRES_PASSWORD", raising=False)
+    monkeypatch.setenv("TEST_POSTGRES_PASSWORD", "lumat")
     monkeypatch.setenv("TEST_DB_PORT", "6001")
     monkeypatch.setenv("TEST_DB_PROJECT", "custom-test-db")
 
@@ -55,3 +57,18 @@ def test_admin_password_override(monkeypatch):
     assert _testdb.admin_database_url() == (
         f"postgresql://lumat:secret@localhost:{_testdb.host_port()}/lumat"
     )
+
+
+def test_missing_password_fails_loudly_instead_of_guessing(monkeypatch):
+    """Regression guard: no password literal may creep back in.
+
+    The default used to live here as well as in infra/.env, which a secret
+    scanner flags and which drifts. The password is declared once, in
+    infra/.env; when nothing declares it this must fail loudly, never guess.
+    """
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("TEST_ADMIN_DB_URL", raising=False)
+    monkeypatch.delenv("TEST_POSTGRES_PASSWORD", raising=False)
+
+    with pytest.raises(_testdb.TestDatabaseConfigError):
+        _testdb.admin_database_url()
