@@ -160,11 +160,22 @@ and the conftests. No data migration is involved. Existing leftover containers:
 ## Progress
 
 - [x] Worktree created, task doc committed.
-- [ ] T1–T7.
+- [x] T1 — shared stdlib derivation module and pytest import path.
+- [x] T2 — derivation regression tests.
+- [x] T3 — parameterized Compose test port.
+- [x] T4 — lifecycle helper commands.
+- [x] T5 — all five conftest refactors and consistent admin URL derivation.
+- [x] T6 — isolated test database lifecycle documentation.
+- [ ] T7 — cross-worktree isolation proof.
 
 ## Verification evidence
 
-_(filled in as tasks complete)_
+- `uv run pytest tests/unit/test_testdb_derivation.py -q`: passed, `4 passed`.
+- `infra/test-db.sh port && infra/test-db.sh port`: printed `5939` twice.
+- `infra/test-db.sh up && eval "$(infra/test-db.sh env)" && uv run pytest tests/ -q`: completed with no test failures; only the two known warnings were emitted.
+- `docker ps --format '{{.Names}}\t{{.Ports}}' | grep -i db-test`: showed `lumat-test-lumat-agent-odd-test-db-isolation-db-test-1` on host port `5939` and `infra-db-test-1` on host port `5432`.
+- `infra/test-db.sh down`: removed only the worktree container, network, and `lumat-test-lumat-agent-odd-test-db-isolation_db-test`; `infra-db-test-1`, `infra_db`, and `infra_db-test` remained.
+- The worktree test database was brought up again on port `5939`; the primary `infra-db-test-1` remained on port `5432`.
 
 ## Next step
 
