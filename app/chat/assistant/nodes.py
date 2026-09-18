@@ -563,7 +563,7 @@ def execute(state: AssistantState) -> AssistantState:
 
         config = load_assistant_config()
         prompt = config.prompts["respond"]
-        for key, value in {"user_input": state["content"], "tool_evidence": str(state.get("tool_result") or ""), "context": _context_text(state)}.items():
+        for key, value in {"user_input": state["content"], "available_tools": ", ".join(config.tools_whitelist), "tool_evidence": str(state.get("tool_result") or ""), "context": _context_text(state)}.items():
             prompt = prompt.replace("{{" + key + "}}", str(value))
         if state.get("cost_directive"):
             prompt += "\n\n" + state["cost_directive"]
