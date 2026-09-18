@@ -29,7 +29,7 @@ def test_memory_tool_declares_visibility_without_a_write_target():
 
 def test_agent_scope_requires_canonical_entity():
     assert registry.MemoryArgs.model_validate(
-        {"scope": "agent", "entity_id": tukulpan.AGENT_MEMORY_ENTITY}
+        {"scope": "agent", "entity_id": tukulpan.agent_memory_entity(tukulpan.WRITABLE_PROYECTO)}
     )
     with pytest.raises(ValueError, match="canonical agent"):
         registry.MemoryArgs.model_validate({"scope": "agent", "entity_id": "agent:other"})
@@ -55,7 +55,8 @@ def test_project_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
 
     assert result == {"written": True, "id": 7, "topic_key": "agent:fact"}
     assert captured["scope"] == "agent"
-    assert captured["entity_id"] == tukulpan.AGENT_MEMORY_ENTITY
+    assert captured["entity_id"] == tukulpan.agent_memory_entity(tukulpan.WRITABLE_PROYECTO)
+    assert captured["proyecto"] == tukulpan.WRITABLE_PROYECTO
     assert captured["producer"] == tukulpan.MemoryProducer.AGENT
     assert captured["origin_thread_id"] == "42"
     assert captured["visibility"] == "project"

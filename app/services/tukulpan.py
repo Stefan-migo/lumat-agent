@@ -56,11 +56,9 @@ FTS_BOOST = 0.3             # fused = vector + 0.3 * fts (vector dominates)
 DEFAULT_TOP_K = 5
 WRITABLE_PROYECTO = "default"
 AGENT_SCOPE = "agent"
-AGENT_MEMORY_ENTITY = "agent:assistant"
 
 __all__ = [
     "DEFAULT_TOP_K",
-    "AGENT_MEMORY_ENTITY",
     "AGENT_SCOPE",
     "EMBED_BACKOFF_SECONDS",
     "EMBED_RETRIES",
@@ -82,6 +80,7 @@ __all__ = [
     "write_recap",
     "set_mark",
     "upsert",
+    "agent_memory_entity",
     "visibility_target",
 ]
 
@@ -93,13 +92,25 @@ SDB_SPEC_LIMIT = 8 * 1024
 SDB_CHECKPOINT_LIMIT = 4 * 1024
 
 
-def visibility_target(visibility: MemoryVisibility | str, *, thread_id: int) -> tuple[str, str]:
-    """Derive the persisted memory axis from the declared visibility."""
+def agent_memory_entity(proyecto: str) -> str:
+    """Canonical agent-axis entity for one project namespace.
+
+    The project is part of the entity so a project-visible memory cannot be
+    reached by a read bound to a different project, even when the writable
+    namespace widens.
+    """
+    return f"agent:{proyecto}"
+
+
+def visibility_target(
+    visibility: MemoryVisibility | str, *, thread_id: int, proyecto: str
+) -> tuple[str, str]:
+    """Derive the persisted axis from the declared visibility and its project."""
     value = visibility.value if isinstance(visibility, MemoryVisibility) else visibility
     if value == MemoryVisibility.THREAD.value:
         return "panel", f"thread:{thread_id}"
     if value == MemoryVisibility.PROJECT.value:
-        return AGENT_SCOPE, AGENT_MEMORY_ENTITY
+        return AGENT_SCOPE, agent_memory_entity(proyecto)
     raise ValueError(f"unknown memory visibility: {visibility!r}")
 
 

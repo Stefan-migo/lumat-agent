@@ -478,7 +478,7 @@ def test_mem3_top_k_caps_results(fake_embedder, migrated_db):
 def test_mem9_project_visibility_records_provenance_and_cross_thread_read(
     fake_embedder, migrated_db
 ):
-    """Project visibility uses the canonical agent axis and is transversal."""
+    """Project visibility uses the canonical project-qualified agent axis."""
     from app.chat.assistant.tools import registry
 
     with SessionLocal() as session:
@@ -495,15 +495,18 @@ def test_mem9_project_visibility_records_provenance_and_cross_thread_read(
         row = tukulpan.get_by_key(
             session,
             scope="agent",
-            entity_id="agent:assistant",
+            entity_id="agent:default",
             topic_key="agent:fact",
         )
         assert row.producer is MemoryProducer.AGENT
         assert row.origin_thread_id == "11"
         assert row.visibility is MemoryVisibility.PROJECT
         assert [item.id for item in tukulpan.list_for_entity(
-            session, scope="agent", entity_id="agent:assistant"
+            session, scope="agent", entity_id="agent:default"
         )] == [row.id]
+        assert tukulpan.list_for_entity(
+            session, scope="agent", entity_id="agent:other", proyecto="other"
+        ) == []
 
 
 def test_mem9_thread_visibility_default_remains_episodic(fake_embedder, migrated_db):

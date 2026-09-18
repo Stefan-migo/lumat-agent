@@ -144,14 +144,15 @@ The `memories` table MUST record `producer` as `user`, `system`, `agent`, or
 `thread` or `project`. Existing rows MUST use `system` and `thread` as
 conservative backfill values because their true producer is unrecoverable. The
 database MUST enforce `visibility='project'` if and only if `scope='agent'`.
-Agent-axis reads and writes MUST use `entity_id='agent:assistant'`; the server
-MUST derive this target from the declared visibility rather than accepting it
-from the model.
+The agent-axis entity MUST be project-qualified as `entity_id='agent:<project>'`
+so a project-visible memory can never be reached by a read bound to another
+project. The server MUST derive this target from the declared visibility rather
+than accepting it from the model.
 
 #### Scenario: Provenance and coherent axis
 - GIVEN an agent writes project-visible memory from a trusted thread
 - WHEN the row is persisted
-- THEN it records `producer='agent'`, the origin thread, `visibility='project'`, `scope='agent'`, and `entity_id='agent:assistant'`
+- THEN it records `producer='agent'`, the origin thread, `visibility='project'`, `scope='agent'`, and the project-qualified entity `entity_id='agent:<project>'`
 
 #### Scenario: Coherence constraint
 - GIVEN a memory row declares `visibility='project'` with `scope='panel'`

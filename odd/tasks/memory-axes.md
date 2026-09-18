@@ -87,7 +87,7 @@ Graph queried from the worktree (symlinked `graphify-out/`, main's graph).
 | declared `visibility` | derived `scope` | derived `entity_id` | meaning |
 |---|---|---|---|
 | `thread` (default) | `panel` | `thread:{trusted thread id}` | episodic, thread-local |
-| `project` | `agent` | `agent:assistant` | semantic, transversal within the project |
+| `project` | `agent` | `agent:<project>` | semantic, transversal within that project only |
 
 The server derives both values. The model declares only the visibility.
 
@@ -101,10 +101,12 @@ The server derives both values. The model declares only the visibility.
 
 ### The agent entity is a canonical constant, not a model choice
 
-`AGENT_MEMORY_ENTITY = "agent:assistant"` lives in the service. A test asserts it
-equals `f"agent:{assistant registry name}"` so it cannot drift from
-`agent/registry.yaml`. Reads and writes both validate against it — the same shape
-as the existing `panel` `thread:` prefix rule, so no conditional-required schema.
+`agent_memory_entity(proyecto)` lives in the service and returns `f"agent:{proyecto}"`.
+The project is part of the entity so a project-visible row can never be reached by
+a read bound to a different project. `visibility_target` takes `proyecto` as a
+REQUIRED keyword-only argument — no default — so no caller can silently produce a
+global entity. Reads and writes both validate against it, the same shape as the
+existing `panel` `thread:` prefix rule, so no conditional-required schema.
 
 ### Trade-off check on the `visibility` column (Ponytail, two-sided)
 
@@ -249,3 +251,64 @@ T1: write the migration, then observe RED for the schema shape before T2.
 - New test coverage: migration/model shape, project visibility across threads, thread default, canonical agent entity, provenance, coherence rejection, client-ficha filtering, forbidden write targets, and unchanged autonomous-write/tool whitelist contracts.
 - Graph nodes consulted: `test_migrations.py`, `test_memory_spec.py`, `test_api_memories.py`, `test_assistant_tools.py`, `Memory row -> snake_case service dict`, `clients.py`, `registry.py`, `tukulpan.py`.
 - Graph path query: `_write_memory` → `clients.py` returned no directed path; the query resolved the assistant registry and panel client serializer/read communities.
+
+---
+
+## Correction — R3-project-isolation (CRITICAL, one bounded round)
+
+**Raised by the native review** (lineage `review-970417edde559528`, lens `review-reliability`) and **corroborated by the refuter**:
+
+> Project-visible memories are mapped to one global agent entity without deriving or preserving the current project, so memories written from one project can be exposed to another project's agent reads.
+
+**Root cause.** `AGENT_MEMORY_ENTITY = "agent:assistant"` was a single global constant and
+`visibility_target()` ignored the project entirely, so a declared `visibility="project"` write was
+never bound to a project namespace. The `proyecto` filter would have hidden it only by accident, and
+only while one namespace stayed writable.
+
+**Fix applied.**
+
+- `AGENT_MEMORY_ENTITY` removed; replaced by `agent_memory_entity(proyecto) -> f"agent:{proyecto}"`.
+  The project is now part of the entity, so a project-visible row cannot be reached by a read bound
+  to a different project even when the writable namespace widens.
+- `visibility_target(..., proyecto)` — `proyecto` is now a REQUIRED keyword-only argument with no
+  default, which is the enforcement that stops any caller from silently producing a global entity.
+- The assistant tool layer binds the project at the write boundary, which is where the binding is
+  created: `_write_memory` passes `proyecto=WRITABLE_PROYECTO` through `visibility_target` and to
+  `upsert`. The read side is deliberately NOT churned: `list_for_entity` / `hybrid_search` already
+  resolve the same canonical namespace through their service default, so passing the constant again
+  from the tool layer was redundant plumbing — and it broke the pinned call contract in
+  `tests/integration/test_assistant_harness_compatibility.py`. Isolation is enforced by the
+  project-qualified entity, not by restating the default.
+- Specs updated: AT-8 (canonical project-scoped agent entity), AT-9 (`project` → `agent:<project>`,
+  project bound server-side), MEM-9 (the entity MUST be project-qualified).
+- Tests: the project-derivation assertion replaces the registry-name drift test (no longer
+  applicable, since the entity no longer encodes the assistant name), plus a proof that a row
+  written for one project is unreachable from a read bound to another.
+
+**Scope of the round:** 9 files, +63/−37 (the declared `correction_lines`), inside the native
+correction budget of 200. Targeted verification: `97 passed in 23.00s`. No commit was created by the
+implementer; the correction is committed on the branch so the corrected candidate exists under the
+`--committed-only` review projection.
+
+**Regression found and fixed by the orchestrator's full-suite run.** The implementer verified only
+the seven touched test files, and the first full suite on the corrected candidate showed
+`2 failed, 907 passed`:
+
+- `tests/integration/test_db.py::test_audit_is_append_only_via_grants` — pre-existing and unrelated:
+  it hard-codes `localhost:5432` while every environment derives its own test-DB port (main `5986`,
+  this worktree `5537`), so it fails with `Connection refused` on any checkout after the worktree
+  isolation landed. Not caused by this work unit.
+- `tests/integration/test_assistant_harness_compatibility.py::test_memory_read_rejects_cross_scope_entity_shapes`
+  — **caused by this correction**. It pins the exact kwargs of the `memory.read` call, and the
+  correction had added `proyecto` to the read path. Fixed by removing that redundant plumbing rather
+  than by relaxing the pinned contract: the service default already resolves the same namespace, so
+  the read-side pass-through changed nothing behaviourally while widening the blast radius of the
+  correction.
+
+Lesson recorded: a bounded correction must be verified with the full suite, not only with the test
+files the implementer happened to touch.
+
+**Honest limitation.** There is still no thread→project binding in the assistant: `InternalChatThread`
+carries no project and `WRITABLE_PROYECTO` is the only writable namespace today. The fix makes the
+project an explicit, required, recorded part of the agent axis, so the isolation is structural rather
+than incidental — but it does not invent a per-thread project that the data model does not have.

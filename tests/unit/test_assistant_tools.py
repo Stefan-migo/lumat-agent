@@ -538,7 +538,8 @@ def test_memory_write_project_visibility_uses_canonical_agent_axis(monkeypatch):
 
     assert result["result"] == {"written": True, "id": 5, "topic_key": "agent:fact"}
     assert calls[0]["scope"] == "agent"
-    assert calls[0]["entity_id"] == "agent:assistant"
+    assert calls[0]["entity_id"] == "agent:default"
+    assert calls[0]["proyecto"] == "default"
     assert calls[0]["producer"].value == "agent"
     assert calls[0]["origin_thread_id"] == "8"
 

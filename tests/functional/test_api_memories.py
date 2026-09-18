@@ -498,7 +498,7 @@ def test_api_memory_surfaces_on_ficha_e2e(client, make_user):
         memory_service.upsert(
             session,
             scope="agent",
-            entity_id="agent:assistant",
+            entity_id="agent:default",
             topic_key="agent:project-fact",
             tipo=MemoryType.DISCOVERY,
             titulo="Project fact",

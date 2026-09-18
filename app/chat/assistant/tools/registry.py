@@ -84,8 +84,8 @@ class _MemoryScopeArgs(BaseModel):
             and not self.entity_id.isdigit()
         ):
             raise ValueError("customer memory reads require customer:{id} or a legacy numeric id")
-        if self.scope == "agent" and self.entity_id != memory.AGENT_MEMORY_ENTITY:
-            raise ValueError("canonical agent memory reads require agent:assistant entity")
+        if self.scope == "agent" and self.entity_id != memory.agent_memory_entity(memory.WRITABLE_PROYECTO):
+            raise ValueError("canonical agent memory reads require the project-qualified canonical agent entity")
         return self
 
 
@@ -238,7 +238,10 @@ def _search_memory(session, args: MemorySearchArgs):
 
 def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int):
     key = args.topic_key
-    scope, entity_id = memory.visibility_target(args.visibility, thread_id=trusted_thread_id)
+    proyecto = memory.WRITABLE_PROYECTO
+    scope, entity_id = memory.visibility_target(
+        args.visibility, thread_id=trusted_thread_id, proyecto=proyecto
+    )
     try:
         with session.begin_nested():
             row = memory.upsert(
@@ -246,6 +249,7 @@ def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int):
                 scope=scope,
                 entity_id=entity_id,
                 topic_key=key,
+                proyecto=proyecto,
                 tipo=memory.MemoryType(args.tipo),
                 titulo=args.titulo,
                 contenido=args.contenido,
