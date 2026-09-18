@@ -4,7 +4,10 @@ from types import SimpleNamespace
 import pytest
 
 from app.chat.assistant.tools.registry import (
+    AUTONOMOUS_WRITE_ALLOWLIST,
     MemoryArgs,
+    MemorySearchArgs,
+    MemoryWriteArgs,
     ProjectArchiveArgs,
     ProjectCreateArgs,
     ProjectMergeArgs,
@@ -445,6 +448,84 @@ def test_memory_read_is_bounded_and_uses_memory_service(monkeypatch):
     )
     assert result["status"] == "completed"
     assert len(result["result"]) == 5
+
+
+def test_memory_search_is_scoped_and_bounds_content(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.memory.hybrid_search",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or [{
+            "id": 1,
+            "scope": "panel",
+            "entity_id": "thread:7",
+            "contenido": "x" * 5000,
+        }],
+    )
+
+    result = execute_tool(
+        SimpleNamespace(),
+        "memory.search",
+        {"query": "launch", "scope": "panel", "entity_id": "thread:7", "limit": 1},
+    )
+
+    assert result["status"] == "completed"
+    assert len(result["result"][0]["contenido"]) == 2_000
+    assert calls[0][1] == {"scope": "panel", "entity_id": "thread:7", "top_k": 1}
+    with pytest.raises(ToolValidationError):
+        execute_tool(SimpleNamespace(), "memory.search", {"query": "x", "scope": "panel", "entity_id": "customer:7"})
+
+
+def test_memory_write_is_thread_anchored(monkeypatch):
+    assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write"})
+    assert "scope" not in MemoryWriteArgs.model_json_schema()["properties"]
+    assert "entity_id" not in MemoryWriteArgs.model_json_schema()["properties"]
+    with pytest.raises(ValueError):
+        MemoryWriteArgs.model_validate({"titulo": "x", "contenido": "y", "topic_key": "system:row"})
+
+    class Savepoint:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    session = SimpleNamespace(begin_nested=lambda: Savepoint())
+    row = SimpleNamespace(id=4)
+    calls = []
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.memory.upsert",
+        lambda session, **kwargs: calls.append(kwargs) or row,
+    )
+    args = {"titulo": "Decision", "contenido": "Use the panel", "topic_key": "agent:decision"}
+
+    first = execute_tool(session, "memory.write", args, trusted_thread_id=7)
+    second = execute_tool(session, "memory.write", args, trusted_thread_id=7)
+
+    assert first["result"] == {"written": True, "id": 4, "topic_key": "agent:decision"}
+    assert second["result"] == first["result"]
+    assert all(call["scope"] == "panel" and call["entity_id"] == "thread:7" for call in calls)
+
+
+def test_memory_write_degrades_and_fails_closed_without_trusted_thread(monkeypatch):
+    class Savepoint:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    session = SimpleNamespace(begin_nested=lambda: Savepoint())
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.memory.upsert",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("embedding unavailable")),
+    )
+    args = {"titulo": "Discovery", "contenido": "Fact", "topic_key": "agent:fact"}
+    with pytest.raises(ToolValidationError):
+        execute_tool(session, "memory.write", args)
+
+    result = execute_tool(session, "memory.write", args, trusted_thread_id=7)
+    assert result["result"]["written"] is False
+    assert result["result"]["degraded_reason"] == "embedding unavailable"
 
 
 def test_websearch_failure_is_error_evidence(monkeypatch):
