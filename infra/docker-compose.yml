@@ -41,7 +41,7 @@ services:
       POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:-lumat}
       POSTGRES_DB: lumat
     ports:
-      - "5432:5432"
+      - "${TEST_DB_PORT:-5432}:5432"
     volumes:
       - db-test:/var/lib/postgresql/data
     healthcheck:
