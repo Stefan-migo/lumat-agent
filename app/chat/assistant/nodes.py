@@ -109,22 +109,6 @@ def cortex_session_turn(state: AssistantState) -> AssistantState:
     return result
 
 
-def load_panel_context(session, thread_id: int) -> dict:
-    """Read the Tukulpan panel scope, with pinned memories first and bounded."""
-    if session is None or not hasattr(session, "execute"):
-        return {"pinned": [], "panel": []}
-    from app.services.prompts import load_assistant_config
-    from app.services.tukulpan import list_for_entity
-
-    scope = load_assistant_config().memoria_scope or "panel"
-    rows = list_for_entity(session, scope=scope, entity_id=f"thread:{thread_id}")
-    result = {"pinned": [], "panel": []}
-    for row in rows:
-        content = str(row.contenido)
-        result["pinned" if row.pin else "panel"].append({"id": str(row.id), "content": content})
-    return result
-
-
 def flush_panel_session(session, thread_id: int, *, source_message_ids: list[int], recap: str,
                         source_tokens: int, truncated: bool) -> dict:
     """Persist meaningful pre-rotation content through the canonical write seam."""

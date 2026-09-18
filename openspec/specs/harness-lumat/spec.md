@@ -8,13 +8,13 @@ Provide a durable, session-aware panel harness without duplicating the database,
 
 ### Requirement: HL-1 — Session-Aware Turn Harness
 
-The harness MUST assemble each authorized panel turn from DB-authoritative thread history, attachments, and the Tukulpan projection limited to `scope='panel'` and `entity_id='thread:{id}'`. The projection MUST place pinned entries first, use the fixed deterministic injection budget, and expose source IDs plus truncation metadata. It MUST NOT auto-invoke `hybrid_search()`.
+The harness MUST assemble each authorized panel turn from DB-authoritative thread history and attachments within the fixed deterministic injection budget. It MUST expose history and attachment source IDs plus truncation metadata, preserve panel identity keys for explicit scoped memory reads, and MUST NOT automatically inject memory rows or invoke `hybrid_search()`.
 
 #### Scenario: Deterministic context assembly
 
-- GIVEN an authorized thread with prior messages, attachments, and panel/pinned context
+- GIVEN an authorized thread with prior messages and attachments
 - WHEN `assemble_context()` runs
-- THEN pinned Tukulpan entries precede other panel entries and the planner receives only budgeted context with source IDs
+- THEN the planner receives only budgeted history and attachment context with source IDs and no memory content
 
 #### Scenario: Context over budget
 

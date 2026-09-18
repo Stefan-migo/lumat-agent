@@ -280,11 +280,6 @@ def message_dict(message: InternalChatMessage) -> dict:
     return to_internal_chat_message_dict(message)
 
 
-def load_panel_context(session, thread_id: int) -> dict:
-    """Delegate the read-only Tukulpan panel context seam."""
-    return assistant_nodes.load_panel_context(session, thread_id)
-
-
 def flush_panel_session(session, thread_id: int, *, source_message_ids: list[int], recap: str,
                         source_tokens: int, truncated: bool) -> dict:
     """Delegate the meaningful Tukulpan recap seam."""
@@ -443,24 +438,11 @@ def assemble_context(session, thread_id: int, *, messages=None, attachments=None
             .order_by(InternalChatMessage.created_at, InternalChatMessage.id)
         ))
     attachments = attachments or []
-    tukulpan = load_panel_context(session, thread_id)
     items: list[dict] = []
     message_ids: list[int] = []
     attachment_ids: list[int] = []
-    tukulpan_ids: list[str] = []
     used = 0
     truncated = False
-
-    for source in (tukulpan.get("pinned", []), tukulpan.get("panel", [])):
-        for entry in source:
-            content = str(entry.get("content", ""))
-            cost = estimate_tokens(content)
-            if used + cost > budget:
-                truncated = True
-                continue
-            items.append({"source": "tukulpan", "content": content, "id": entry.get("id")})
-            tukulpan_ids.append(str(entry.get("id")))
-            used += cost
 
     messages = sorted(
         messages,
@@ -509,7 +491,6 @@ def assemble_context(session, thread_id: int, *, messages=None, attachments=None
             "entity_id": f"thread:{thread_id}",
             "message_ids": message_ids,
             "attachment_ids": attachment_ids,
-            "tukulpan_ids": tukulpan_ids,
             "estimated_tokens": used,
             "truncated": truncated,
         },
