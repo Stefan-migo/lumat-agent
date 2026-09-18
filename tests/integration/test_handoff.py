@@ -20,8 +20,6 @@ Scenarios mapped 1:1 from openspec/changes/hito-1-setup-whatsapp/specs/human-han
 The chat LLM (gpt-4o-mini) is mocked via respx — no real API calls.
 """
 
-import os
-
 import psycopg
 import pytest
 from sqlalchemy import select
@@ -46,10 +44,9 @@ from app.models import (  # noqa: E402
 )
 from app.services.customers import get_or_create_customer  # noqa: E402
 from app.services.settings import set_setting  # noqa: E402
+from _testdb import admin_database_url  # noqa: E402
 
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 @pytest.fixture(autouse=True)

@@ -5,7 +5,9 @@ from types import SimpleNamespace
 import psycopg
 import pytest
 
-from tests.integration.conftest import ADMIN_DB_URL
+from _testdb import admin_database_url
+
+ADMIN_DB_URL = admin_database_url()
 
 from app.db import SessionLocal
 from app.models import InternalChatMessage, User

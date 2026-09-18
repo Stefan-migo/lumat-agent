@@ -14,8 +14,6 @@ Scenarios mapped 1:1 from openspec/specs/customer-records/spec.md:
 Runs against the migrated pgvector test DB (conftest DATABASE_URL).
 """
 
-import os
-
 import psycopg
 import pytest
 from sqlalchemy import func, select
@@ -34,10 +32,9 @@ from app.models import (  # noqa: E402
     MessageType,
 )
 from app.services import customers  # noqa: E402
+from _testdb import admin_database_url  # noqa: E402
 
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 @pytest.fixture(autouse=True)

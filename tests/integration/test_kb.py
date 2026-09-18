@@ -18,7 +18,6 @@ text -> 0.0: retrieval threshold behavior is fully exercised.
 """
 
 import hashlib
-import os
 
 import psycopg
 import pytest
@@ -27,10 +26,9 @@ from sqlalchemy import func, select
 from app.db import SessionLocal  # noqa: E402
 from app.models import DocumentFormat, KbChunk, KbDocument  # noqa: E402
 from app.services import kb  # noqa: E402
+from _testdb import admin_database_url  # noqa: E402
 
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 def _embed(text: str) -> list[float]:

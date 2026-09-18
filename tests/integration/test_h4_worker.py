@@ -1,7 +1,6 @@
 """EO-1/2 and DW-1/2/3 integration coverage for the H4 outbox worker."""
 
 from datetime import datetime, timedelta, timezone
-import os
 
 import psycopg
 import pytest
@@ -11,11 +10,9 @@ from app.db import SessionLocal
 from app.models import DomainEvent, NotificationOperation
 from app.ops import worker
 from app.services.events import publish_event
+from _testdb import admin_database_url
 
-
-ADMIN_DB_URL = os.environ.get("TEST_ADMIN_DB_URL") or os.environ["DATABASE_URL"].replace(
-    "postgresql+psycopg://", "postgresql://", 1
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 @pytest.fixture(autouse=True)

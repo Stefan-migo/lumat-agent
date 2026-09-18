@@ -45,6 +45,19 @@ def test_slug_distinguishes_punctuation_and_is_ascii_for_unicode():
     assert all(char in "abcdefghijklmnopqrstuvwxyz0123456789-" for char in unicode_slug)
 
 
+def test_test_modules_have_one_database_url_derivation_source():
+    legacy_url = "postgresql://" + "lumat:lumat@" + "localhost:" + "5432/lumat"
+    divergent = 'os.environ["' + "DATABASE_URL" + '"].replace('
+    offenders = []
+
+    for path in Path(__file__).parents[1].rglob("*.py"):
+        source = path.read_text()
+        if legacy_url in source or divergent in source:
+            offenders.append(str(path))
+
+    assert offenders == []
+
+
 def test_overrides_are_used(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("TEST_ADMIN_DB_URL", raising=False)

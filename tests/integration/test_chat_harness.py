@@ -13,7 +13,6 @@ Only deterministic paths are asserted here:
   call is expected and mocked, never asserted away.
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -29,10 +28,9 @@ from chat_harness import ensure_conversation, inspect, run_turn  # noqa: E402
 from app.chat.state import MENU_CATEGORIES  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import Case, Conversation, ConversationState, Customer  # noqa: E402
+from _testdb import admin_database_url  # noqa: E402
 
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
+ADMIN_DB_URL = admin_database_url()
 
 PHONE = "+56912345678"
 STRONG_EMERGENCY = "hay una fuga de gas en el calefont"

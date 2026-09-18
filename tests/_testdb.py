@@ -48,6 +48,10 @@ def database_url() -> str:
     return os.environ.get("DATABASE_URL", _default_database_url())
 
 
+def libpq_database_url(url: str) -> str:
+    return url.replace("postgresql+psycopg://", "postgresql://", 1)
+
+
 class TestDatabaseConfigError(RuntimeError):
     """The admin connection cannot be derived and nothing declared it."""
 
@@ -58,7 +62,7 @@ def admin_database_url() -> str:
         return explicit
     configured = os.environ.get("DATABASE_URL")
     if configured:
-        return configured.replace("postgresql+psycopg://", "postgresql://", 1)
+        return libpq_database_url(configured)
     # No password literal here on purpose. The value is declared once, in
     # infra/.env, which is also the file compose reads through --env-file; a
     # second copy in Python is what a secret scanner flags and what drifts.

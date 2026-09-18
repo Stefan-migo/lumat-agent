@@ -20,7 +20,6 @@ Runs against the migrated pgvector test DB (conftest DATABASE_URL).
 import hashlib
 import hmac
 import json
-import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -45,6 +44,7 @@ from app.models import (  # noqa: E402
 )
 from app.webhook import ingest  # noqa: E402
 from app.webhook import router as router_module  # noqa: E402
+from _testdb import admin_database_url  # noqa: E402
 
 WEBHOOK_URL = "/webhook/whatsapp"
 SECRET = "test-app-secret"
@@ -107,9 +107,7 @@ def _message_rows() -> list[Message]:
         return list(session.scalars(select(Message).order_by(Message.id)))
 
 
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 @pytest.fixture(autouse=True)

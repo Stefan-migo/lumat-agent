@@ -1,6 +1,5 @@
 """NT-1/NT-2 integration tests for durable notification delivery."""
 
-import os
 from datetime import datetime, timedelta, timezone
 
 import psycopg
@@ -11,11 +10,10 @@ from app.db import SessionLocal
 from app.models import AuditLog, Customer, NotificationAttempt, NotificationOperation
 from app.services import notifications
 from app.services.customers import get_or_create_customer
+from _testdb import admin_database_url
 
 
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 @pytest.fixture(autouse=True)

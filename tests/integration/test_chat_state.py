@@ -14,8 +14,6 @@ closed conversation -> new conversation (CR-5). Runs against the migrated
 pgvector test DB.
 """
 
-import os
-
 import psycopg
 import pytest
 from sqlalchemy import func, select
@@ -34,10 +32,9 @@ from app.models import (  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
 from app.services import memory as memory_service  # noqa: E402
 from app.models import MemoryType  # noqa: E402
+from _testdb import admin_database_url  # noqa: E402
 
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 @pytest.fixture(autouse=True)

@@ -1,7 +1,5 @@
 """Integration coverage for native SDB typed artifacts and durable state."""
 
-import os
-
 import psycopg
 import pytest
 from sqlalchemy import func, select
@@ -10,11 +8,9 @@ from app.db import SessionLocal
 from app.models import AutomationRule, InternalChatThread, Memory, MemoryStatus, MemoryType, Project, User
 from app.chat.assistant.approval import issue_approval
 from app.services import agent_chat, projects, tukulpan
+from _testdb import admin_database_url
 
-
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 @pytest.fixture(autouse=True)
