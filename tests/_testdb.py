@@ -43,7 +43,7 @@ def admin_database_url() -> str:
     if explicit:
         return explicit
     configured = os.environ.get("DATABASE_URL")
-    if configured and configured != _default_database_url():
+    if configured:
         return configured.replace("postgresql+psycopg://", "postgresql://", 1)
     # No password literal here on purpose. The value is declared once, in
     # infra/.env, which is also the file compose reads through --env-file; a

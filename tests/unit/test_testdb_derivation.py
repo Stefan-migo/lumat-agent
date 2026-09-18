@@ -56,6 +56,19 @@ def test_explicit_urls_override_derivation(monkeypatch):
     assert _testdb.admin_database_url() == "postgresql://custom:secret@db.example:6543/test"
 
 
+def test_declared_database_url_equal_to_default_is_honoured(monkeypatch):
+    monkeypatch.setenv("TEST_DB_PORT", "6001")
+    monkeypatch.delenv("TEST_ADMIN_DB_URL", raising=False)
+    monkeypatch.delenv("TEST_POSTGRES_PASSWORD", raising=False)
+    default_url = _testdb._default_database_url()
+    monkeypatch.setenv("DATABASE_URL", default_url)
+
+    assert _testdb.database_url() == default_url
+    assert _testdb.admin_database_url() == default_url.replace(
+        "postgresql+psycopg://", "postgresql://", 1
+    )
+
+
 def test_admin_password_override(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("TEST_ADMIN_DB_URL", raising=False)
