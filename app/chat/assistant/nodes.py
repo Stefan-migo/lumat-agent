@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import json
+import re
 from datetime import datetime, timezone
 from hashlib import sha256
-import re
 from pydantic import ValidationError
 
 from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.evidence import make_evidence
 from app.chat.assistant.state import AssistantState, PlannerOutput, SDBTask, estimate_tokens, validate_cortex_session
-from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool, get_tool
+from app.chat.assistant.tools.registry import TOOL_REGISTRY, ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
 from app.services import llm
 from app.services.costs import (
@@ -382,13 +383,25 @@ def panel_cost_gate(state: AssistantState) -> AssistantState:
     }
 
 
+def _planner_tool_catalog(whitelist: list[str]) -> str:
+    return json.dumps(
+        [
+            {"name": name, "description": definition.description, "arguments": definition.schema()}
+            for name in whitelist
+            if (definition := TOOL_REGISTRY.get(name)) is not None
+        ],
+        separators=(",", ":"),
+    )
+
+
 def plan_llm(state: AssistantState) -> AssistantState:
     """Ask the configured provider for a strict plan on every production turn."""
     from app.services.prompts import load_assistant_config
 
     config = load_assistant_config()
     user_prompt = config.prompts["plan"]
-    for key, value in {"user_input": state["content"], "available_tools": ", ".join(config.tools_whitelist), "context": _context_text(state)}.items():
+    available_tools = _planner_tool_catalog(config.tools_whitelist)
+    for key, value in {"user_input": state["content"], "available_tools": available_tools, "context": _context_text(state)}.items():
         user_prompt = user_prompt.replace("{{" + key + "}}", str(value))
     if state.get("cost_directive"):
         user_prompt += "\n\n" + state["cost_directive"]
@@ -404,7 +417,7 @@ def plan_llm(state: AssistantState) -> AssistantState:
         raw_text = _completion_text(completion)
         if not raw_text:
             raise ValueError("provider returned no structured planner message")
-        planner, valid = parse_planner_output(__import__("json").loads(raw_text))
+        planner, valid = parse_planner_output(json.loads(raw_text))
     except Exception:
         # Compatibility for older injected clients that only implement response
         # streaming; they can still pause a write for approval, but never name a

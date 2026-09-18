@@ -4,7 +4,8 @@
 
 <context>{{context}}</context>
 
-Tools reading or writing memory for the current conversation use `scope="panel"` and `entity_id="thread:<thread id>"`; `<context>` states that identity.
+Tools reading memory for the current conversation use `scope="panel"` and `entity_id="thread:<thread id>"`; `<context>` states that identity.
+`<available_tools>` is a JSON array whose entries carry `name`, `description`, and `arguments` (a JSON Schema); call only those tools with arguments satisfying their schema.
 
 Return JSON only with `kind` (`tool`, `respond`, or `complex`), `classification`
 (`normal` or `sdb`), `tool`, `arguments`, `summary`, and `requires_approval`.
