@@ -188,12 +188,24 @@ def _completion_text(completion) -> str:
 
 
 def _context_text(state: AssistantState) -> str:
-    """Render the context items, then the identity a scoped tool call must echo back."""
+    """Render the context items, the conversation identity, and any compaction rotation cue."""
     context = state.get("context", {})
     text = [str(item.get("content", "")) for item in context.get("items", [])]
     meta = context.get("meta") or {}
     if meta.get("scope") and meta.get("entity_id"):
         text.append(f"Conversation identity: scope={meta['scope']} entity_id={meta['entity_id']}")
+    compaction = state.get("compaction") or {}
+    if compaction.get("failed"):
+        text.append(
+            "History recap unavailable: this thread was compacted but no recap could be saved, so "
+            "no memory row holds the earlier messages. Do not claim to remember them."
+        )
+    elif compaction.get("rotated"):
+        text.append(
+            "History recap saved: earlier messages in this thread were compacted into a recap "
+            "stored as thread memory. Pull it with memory.read using the conversation identity "
+            "above before claiming to remember earlier turns."
+        )
     return "\n".join(text)
 
 

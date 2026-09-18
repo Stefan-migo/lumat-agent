@@ -271,3 +271,37 @@ def test_context_text_omits_conversation_identity_without_complete_meta():
     state = {"context": {"items": [{"content": "Recent message"}], "meta": {}}}
 
     assert _context_text(state) == "Recent message"
+
+
+def test_context_text_announces_saved_recap_after_rotation():
+    state = {
+        "context": {"items": [{"content": "Recent message"}], "meta": {"scope": "panel", "entity_id": "thread:42"}},
+        "compaction": {"rotated": True, "failed": False},
+    }
+
+    text = _context_text(state)
+
+    assert "recap saved" in text.lower()
+    assert "memory.read" in text
+    assert "unavailable" not in text.lower()
+
+
+def test_context_text_marks_failed_recap_as_unavailable():
+    state = {
+        "context": {"items": [{"content": "Recent message"}], "meta": {}},
+        "compaction": {"rotated": False, "failed": True},
+    }
+
+    text = _context_text(state)
+
+    assert "unavailable" in text.lower()
+    assert "memory.read" not in text
+
+
+def test_context_text_omits_recap_cue_when_compaction_did_not_rotate():
+    state = {
+        "context": {"items": [{"content": "Recent message"}], "meta": {}},
+        "compaction": {"rotated": False, "failed": False},
+    }
+
+    assert _context_text(state) == "Recent message"
