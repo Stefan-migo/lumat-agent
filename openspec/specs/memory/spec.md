@@ -38,12 +38,12 @@ The canonical Tukulpan façade MUST expose upsert, get, list, delete, mark, and 
 
 ### Requirement: MEM-3 — Explicit, Scoped Hybrid Search
 
-The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. `assemble_context()` and `load_panel_context()` MUST NOT invoke it; panel reads MUST use `scope='panel'`, `entity_id='thread:{id}'`, and WhatsApp reads MUST retain customer scope.
+The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope.
 
 #### Scenario: Explicit search only
 - GIVEN a panel turn enters `assemble_context()`
 - WHEN context is assembled without a `memory.read` tool call
-- THEN no hybrid search runs and only the deterministic panel projection is used
+- THEN no hybrid search runs and no memory row is added to the panel context
 
 #### Scenario: Threshold recall
 - GIVEN memories where one is semantically close to the query
