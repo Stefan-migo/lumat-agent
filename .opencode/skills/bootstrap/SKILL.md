@@ -9,7 +9,7 @@ metadata:
 ---
 
 ## What It Does
-Transforms the generic Cortex template into a fully specialized, professional-grade project environment with custom primary agents, specialized subagent teams, MCP servers, and tools — all tailored to the project's tech stack, domain, and architecture.
+Transforms the generic Rapsodia template into a fully specialized, professional-grade project environment with custom primary agents, specialized subagent teams, MCP servers, and tools — all tailored to the project's tech stack, domain, and architecture.
 
 ## When to Load
 - User types `/new-project`

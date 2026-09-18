@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "_comment": "=== Cortex MCP Server Template ===",
+  "_comment": "=== Rapsodia MCP Server Template ===",
   "_comment2": "Copy the servers you want into your opencode.json and set enabled: true",
   "mcp": {
     "docs-search": {

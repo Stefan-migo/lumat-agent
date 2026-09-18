@@ -19,9 +19,9 @@ When entering a new codebase, run graphify to build structural understanding:
 /graphify .
 ```
 This produces:
-- `wiki/graph/graph.html` — Interactive graph visualization
-- `wiki/graph/GRAPH_REPORT.md` — God nodes, communities, surprising connections
-- `wiki/graph/graph.json` — Persistent queryable graph
+- `graphify-out/graph.html` — Interactive graph visualization
+- `graphify-out/GRAPH_REPORT.md` — God nodes, communities, surprising connections
+- `graphify-out/graph.json` — Persistent queryable graph
 
 ### After Significant Changes
 When the codebase structure changes substantially:
@@ -57,7 +57,7 @@ Interactive visualization. Open in browser to explore communities, click nodes f
 ## MCP Integration
 If graphify MCP server is running (via opencode.json config), agents can query the graph directly:
 ```
-python -m graphify.serve wiki/graph/graph.json
+python -m graphify.serve graphify-out/graph.json
 ```
 
 ## Workflow Integration

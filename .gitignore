@@ -38,17 +38,15 @@ web/graphify-out/
 web/src/graphify-out/
 .opencode/skills/web-design-engineer/
 
-# cortex:start
-# Cortex managed entries
-.cortex/
-wiki/graph/cache/
+# rapso:start
+# Rapsodia managed entries
+.rapsodia-code/
 .opencode/tools/node_modules/
 .engram/
 .obsidian/workspace.json
 .obsidian/workspace
-.specify/integrations/
 *.pyc
 *.pyo
 .ruff_cache/
 .mypy_cache/
-# cortex:end
+# rapso:end

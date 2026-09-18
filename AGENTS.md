@@ -59,3 +59,18 @@ Step 4: SPEC CHECK — /sdd-verify after completion
 Step 5: FINALIZE — mem_save + rapso close --message "<summary>"
 ```
 <!-- rapso:end -->
+
+## Reporting Rapsodia Defects
+
+Rapsodia is a tool you are USING, not the project you are working on.
+
+When you identify a failure that belongs to Rapsodia itself — not to this project, its
+configuration, or its environment — say so, and **suggest** opening an issue at
+https://github.com/Stefan-migo/rapsodia-code/issues with the evidence: what you ran, what happened,
+and the smallest reproduction you have.
+
+- Suggest only. Never open the issue, never run `gh`, and never write to the Rapsodia
+  repository from a project workflow. The human decides.
+- Only for an identified defect. Do not speculate, and do not suggest an issue for expected
+  refusals, for this project's own bugs, or for environment and dependency failures.
+- If you cannot tell whether the cause is Rapsodia, say that instead of filing.
