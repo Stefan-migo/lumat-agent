@@ -1,5 +1,6 @@
 """Strict structured planner contracts for the panel assistant."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -97,6 +98,40 @@ def test_plan_llm_does_not_treat_fallback_summary_collision_as_invalid(monkeypat
     assert result["planner"]["valid"] is True
     assert result["plan"]["tool"] == "customers.search"
     assert result["plan"]["kind"] == "tool"
+
+
+def test_plan_llm_includes_whitelisted_tool_catalog_in_prompt(monkeypatch):
+    captured = {}
+
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(
+            prompts={"plan": "<available_tools>{{available_tools}}</available_tools>"},
+            tools_whitelist=["memory.read", "customers.search"],
+            persona="persona",
+        ),
+    )
+
+    def create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"kind":"respond","arguments":{},"summary":"Done.","requires_approval":false}'))])
+
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))),
+    )
+
+    plan_llm({"content": "Read the conversation memory", "context": {"items": []}})
+
+    prompt = captured["messages"][1]["content"]
+    catalog = json.loads(prompt.split("<available_tools>", 1)[1].split("</available_tools>", 1)[0])
+
+    assert [entry["name"] for entry in catalog] == ["memory.read", "customers.search"]
+    assert all(set(entry) == {"name", "description", "arguments"} for entry in catalog)
+    memory_entry = catalog[0]
+    assert memory_entry["description"] == "Read scoped memory."
+    assert {"scope", "entity_id"}.issubset(memory_entry["arguments"]["required"])
+    assert "project.archive" not in prompt
 
 
 def test_plan_llm_keeps_malformed_output_invalid(monkeypatch):
