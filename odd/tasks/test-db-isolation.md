@@ -230,9 +230,15 @@ further corrections followed, both correct regardless of any scanner:
 - The unit test uses an explicit placeholder, not a realistic password.
 
 Clearing the check needs either a history rewrite or marking incident `37436093`
-resolved in the GitGuardian dashboard. It is a substantive false positive: the
-same dev default is already on `main` at `infra/docker-compose.yml:41` and
-`tests/functional/conftest.py:50`.
+resolved in the GitGuardian dashboard. The maintainer chose the dashboard route,
+so the branch history stays intact and the check remains red until the incident
+is marked. It is a substantive false positive: the same dev default is already on
+`main` at `infra/docker-compose.yml:41` and `tests/functional/conftest.py:50`.
+
+Follow-up, deliberately not done here: a `.gitguardian.yaml` documenting the dev
+default would stop this recurring on every future PR. It was left out rather than
+adding configuration whose effect on the GitHub App cannot be verified from this
+machine.
 
 ## Verification evidence
 
