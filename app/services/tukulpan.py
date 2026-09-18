@@ -35,8 +35,10 @@ from app.models import (
     ConversationState as ConversationStateEnum,
     Memory,
     MemoryObservation,
+    MemoryProducer,
     MemoryStatus,
     MemoryType,
+    MemoryVisibility,
     Message,
     MessageDirection,
     ObservationType,
@@ -53,9 +55,13 @@ REL_MIN_SIM = 0.85          # cosine pair gate for suggest_relations (S3+)
 FTS_BOOST = 0.3             # fused = vector + 0.3 * fts (vector dominates)
 DEFAULT_TOP_K = 5
 WRITABLE_PROYECTO = "default"
+AGENT_SCOPE = "agent"
+AGENT_MEMORY_ENTITY = "agent:assistant"
 
 __all__ = [
     "DEFAULT_TOP_K",
+    "AGENT_MEMORY_ENTITY",
+    "AGENT_SCOPE",
     "EMBED_BACKOFF_SECONDS",
     "EMBED_RETRIES",
     "FTS_BOOST",
@@ -76,6 +82,7 @@ __all__ = [
     "write_recap",
     "set_mark",
     "upsert",
+    "visibility_target",
 ]
 
 # Embedder resilience (R4-001): bounded retry with short backoff on transient
@@ -84,6 +91,16 @@ EMBED_RETRIES = 2
 EMBED_BACKOFF_SECONDS = (0.1, 0.3)
 SDB_SPEC_LIMIT = 8 * 1024
 SDB_CHECKPOINT_LIMIT = 4 * 1024
+
+
+def visibility_target(visibility: MemoryVisibility | str, *, thread_id: int) -> tuple[str, str]:
+    """Derive the persisted memory axis from the declared visibility."""
+    value = visibility.value if isinstance(visibility, MemoryVisibility) else visibility
+    if value == MemoryVisibility.THREAD.value:
+        return "panel", f"thread:{thread_id}"
+    if value == MemoryVisibility.PROJECT.value:
+        return AGENT_SCOPE, AGENT_MEMORY_ENTITY
+    raise ValueError(f"unknown memory visibility: {visibility!r}")
 
 
 def _guard_writable_project(
@@ -131,6 +148,9 @@ def upsert(
     contenido: str,
     proyecto: str = WRITABLE_PROYECTO,
     pin: bool = False,
+    producer: MemoryProducer = MemoryProducer.SYSTEM,
+    origin_thread_id: str | None = None,
+    visibility: MemoryVisibility = MemoryVisibility.THREAD,
     authorization: projects._ProjectAuthorization | None = None,
 ) -> Memory:
     """Create-or-update one memory by (proyecto, scope, entity_id, topic_key).
@@ -167,6 +187,9 @@ def upsert(
             contenido=contenido,
             embedding=embedding,
             pin=pin,
+            producer=producer,
+            origin_thread_id=origin_thread_id,
+            visibility=visibility,
         )
         session.add(row)
     else:
@@ -175,6 +198,9 @@ def upsert(
         row.contenido = contenido
         row.embedding = embedding
         row.pin = pin
+        row.producer = producer
+        row.origin_thread_id = origin_thread_id
+        row.visibility = visibility
     session.flush()
     return row
 
@@ -199,6 +225,8 @@ def record_milestone(
         titulo=title,
         contenido=content,
         proyecto=proyecto,
+        producer=MemoryProducer.SYSTEM,
+        origin_thread_id=str(thread_id),
         authorization=authorization,
     )
 
@@ -223,6 +251,8 @@ def record_decision(
         titulo=title,
         contenido=content,
         proyecto=proyecto,
+        producer=MemoryProducer.SYSTEM,
+        origin_thread_id=str(thread_id),
         authorization=authorization,
     )
 
@@ -247,6 +277,8 @@ def archive_report(
         titulo=title,
         contenido=content,
         proyecto=proyecto,
+        producer=MemoryProducer.SYSTEM,
+        origin_thread_id=str(thread_id),
         authorization=authorization,
     )
     return set_mark(session, row.id, status=MemoryStatus.ARCHIVED)
@@ -299,6 +331,8 @@ def persist_sdb_artifact(
         titulo=title,
         contenido=_bounded_json(payload, limit),
         proyecto=proyecto,
+        producer=MemoryProducer.PIPELINE,
+        origin_thread_id=str(thread_id),
         authorization=authorization,
     )
 
@@ -336,6 +370,8 @@ def write_recap(
                 tipo=MemoryType.SUMMARY,
                 titulo="Assistant session recap",
                 contenido=json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                producer=MemoryProducer.PIPELINE,
+                origin_thread_id=str(thread_id),
             )
         return {"written": True, "id": row.id, "topic_key": key}
     except Exception as exc:
@@ -569,6 +605,8 @@ def close_conversation(session: Session, conversation: Conversation, *, acta_tex
         # Reuse the CM-5 acta verbatim. A conversation with no summary yet
         # degrades to an empty memo rather than inventing content (CM-9).
         contenido=acta_text or "",
+        producer=MemoryProducer.SYSTEM,
+        origin_thread_id=str(conversation.id),
     )
     _record_observations(session, conversation)
 

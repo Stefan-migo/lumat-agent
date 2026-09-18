@@ -72,7 +72,7 @@ class KpiArgs(BaseModel):
 
 class _MemoryScopeArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    scope: Literal["panel", "customer"]
+    scope: Literal["panel", "customer", "agent"]
     entity_id: str = Field(min_length=1, max_length=100)
 
     @model_validator(mode="after")
@@ -84,6 +84,8 @@ class _MemoryScopeArgs(BaseModel):
             and not self.entity_id.isdigit()
         ):
             raise ValueError("customer memory reads require customer:{id} or a legacy numeric id")
+        if self.scope == "agent" and self.entity_id != memory.AGENT_MEMORY_ENTITY:
+            raise ValueError("canonical agent memory reads require agent:assistant entity")
         return self
 
 
@@ -103,6 +105,7 @@ class MemoryWriteArgs(BaseModel):
     contenido: str = Field(min_length=1, max_length=2000)
     topic_key: str = Field(min_length=1, max_length=200)
     tipo: Literal["decision", "discovery", "pattern", "preference"] = "discovery"
+    visibility: Literal["thread", "project"] = "thread"
 
     @field_validator("topic_key")
     @classmethod
@@ -235,16 +238,20 @@ def _search_memory(session, args: MemorySearchArgs):
 
 def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int):
     key = args.topic_key
+    scope, entity_id = memory.visibility_target(args.visibility, thread_id=trusted_thread_id)
     try:
         with session.begin_nested():
             row = memory.upsert(
                 session,
-                scope="panel",
-                entity_id=f"thread:{trusted_thread_id}",
+                scope=scope,
+                entity_id=entity_id,
                 topic_key=key,
                 tipo=memory.MemoryType(args.tipo),
                 titulo=args.titulo,
                 contenido=args.contenido,
+                producer=memory.MemoryProducer.AGENT,
+                origin_thread_id=str(trusted_thread_id),
+                visibility=args.visibility,
             )
         return {"written": True, "id": row.id, "topic_key": key}
     except Exception as exc:
