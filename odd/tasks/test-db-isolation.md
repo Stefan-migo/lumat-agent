@@ -169,7 +169,17 @@ and the conftests. No data migration is involved. Existing leftover containers:
 - [x] T4 — lifecycle helper commands.
 - [x] T5 — all five conftest refactors and consistent admin URL derivation.
 - [x] T6 — isolated test database lifecycle documentation.
-- [ ] T7 — cross-worktree isolation proof.
+- [x] T7 — cross-worktree isolation proof (run by the orchestrator; see below).
+
+Corrections applied after orchestrator validation of the first implementation pass:
+
+- The derivation test hardcoded this worktree's project name, so it would have
+  failed on `main` and in every other worktree. It now derives the expectation.
+- All derivation tests are now hermetic against inherited `TEST_DB_PORT` /
+  `TEST_DB_PROJECT` / `TEST_DB_URL`-style overrides.
+- Dead `ADMIN_DB_URL` removed from `tests/unit/conftest.py`.
+- `infra/docker-compose.harness.yml` comment corrected: it still claimed
+  `db-test` is shared and instructed readers not to start a second one.
 
 ## Verification evidence
 
@@ -180,6 +190,35 @@ and the conftests. No data migration is involved. Existing leftover containers:
 - `infra/test-db.sh down`: removed only the worktree container, network, and `lumat-test-lumat-agent-odd-test-db-isolation_db-test`; `infra-db-test-1`, `infra_db`, and `infra_db-test` remained.
 - The worktree test database was brought up again on port `5939`; the primary `infra-db-test-1` remained on port `5432`.
 
+### T7 — cross-worktree isolation proof (orchestrator)
+
+Design: run the identical DB-touching selection (`tests/functional tests/spec`)
+concurrently in two worktrees that use two different Compose projects and two
+different `db-test` containers, then repeat it with one worktree alone as a
+control. The isolated worktree resolves port `5939` via `infra/test-db.sh`; the
+primary worktree (branch `main`, no fix yet) resolves the hardcoded `5432`.
+
+| Run | Environment | Observed |
+| --- | --- | --- |
+| Concurrent — isolated worktree | `eval "$(infra/test-db.sh env)"` → port `5939` | **exit 0**, `[100%]`, only the known fastembed warning |
+| Concurrent — primary, shared DB | `TEST_ADMIN_DB_URL=…localhost:5432/lumat` → port `5432` | **exit 1**, `F.FEFE` then pytest-timeout |
+| Control — primary alone, no concurrency | same port `5432`, nothing else running | **exit 0**, `[100%]`, same single warning |
+
+The failing concurrent run hung with the test thread blocked in
+`client.post(...)` → AnyIO portal → `app/services/settings.py` `session.get(Settings, key)`
+→ psycopg waiting on the socket, while the other worktree's autouse `clean_db`
+held `TRUNCATE ... RESTART IDENTITY CASCADE` against the same database. That is
+the reported symptom reproduced, and the same subset passes with nothing
+concurrent — so the sharing is the cause, not the test code.
+
+Containers during the concurrent run, both healthy, distinct projects and ports:
+
+```text
+lumat-test-lumat-agent-odd-test-db-isolation-db-test-1  0.0.0.0:5939->5432/tcp
+infra-db-test-1                                        0.0.0.0:5432->5432/tcp
+```
+
 ## Next step
 
-Delegate T1–T6 to a single writer, then run the T7 isolation proof.
+Run the native review preflight at the deliverable boundary, then deliver the
+branch through a PR. This worktree's `db-test` is left running on port `5939`.
