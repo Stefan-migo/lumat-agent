@@ -10,7 +10,7 @@
         "--project-dir",
         "/home/stefan/repos/lumat-agent"
       ],
-      "_description": "Graphify \u2014 knowledge graph queries via MCP"
+      "_description": "Graphify — knowledge graph queries via MCP"
     },
     "engram": {
       "type": "local",
@@ -26,7 +26,7 @@
     ".opencode/plugins/graphify.js"
   ],
   "agent": {
-    "cortex-planner": {
+    "rapso-planner": {
       "mode": "primary",
       "model": "anthropic/claude-sonnet-4-20250514",
       "temperature": 0.3,
@@ -46,7 +46,7 @@
       },
       "__managed_by": "cortex"
     },
-    "cortex-developer": {
+    "rapso-developer": {
       "mode": "primary",
       "model": "anthropic/claude-sonnet-4-20250514",
       "temperature": 0.2,
