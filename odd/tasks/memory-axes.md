@@ -3,7 +3,7 @@
 **Work unit:** #4 of the Tukulpan/Engram series (decisions D2 / D2a)
 **Source session:** `.rapsodia-code/sessions/ready-for-odd/2026-09-17-memoria-tukulpan-vs-engram/report.md`
 **Worktree:** `../lumat-agent-odd-memory-axes` · branch `odd/memory-axes` · base `745cf0b4`
-**Status:** in progress
+**Status:** complete, verified, RDD-approved (lineage `review-970417edde559528`, authority burned)
 
 ---
 
@@ -312,3 +312,36 @@ files the implementer happened to touch.
 carries no project and `WRITABLE_PROYECTO` is the only writable namespace today. The fix makes the
 project an explicit, required, recorded part of the agent axis, so the isolation is structural rather
 than incidental — but it does not invent a per-thread project that the data model does not have.
+
+---
+
+## Review outcome — RDD lineage `review-970417edde559528`
+
+- **Tier:** medium · **lenses:** one (`review-reliability`) · **correction budget:** 200 lines.
+- **Frozen candidate:** base tree `3cc3abe1` (commit `745cf0b4`) → candidate tree `b27ca1fa`, 14
+  paths, 656 changed lines.
+- **Lens result:** one CRITICAL — `R3-project-isolation`, causal disposition `introduced`.
+- **Refuter:** corroborated → `correction_required`.
+- **Correction:** one bounded round, declared at 63 positive lines, committed as `4e4df1ca`
+  (final tree `2c05a4b0`).
+- **Targeted validation:** passed → **state `approved`**.
+- **Acknowledgement:** `gentle-ai.review-acknowledged/v1`, `action: acknowledged`,
+  `authority: burned`, consumed revision `sha256:25cb7a16…`.
+- **Verification of record (orchestrator):** `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/`
+  → `1 failed, 908 passed, 2 warnings in 403.60s`. The single failure is the pre-existing
+  `tests/integration/test_db.py` hard-coded port, unrelated to this work unit.
+- Commit, push, and PR remain separate human decisions under ordinary repository policy.
+
+### Transport note (recorded honestly, root cause not established)
+
+The first three `review-validator` Task launches were refused with
+`opencode_provider_role_result_refused` — "OpenCode Task transport did not produce a capturable
+reviewer result" — deterministically, and independently of the prompt shape (three different
+shapes were tried). The fourth launch, on the fresh binding produced after the correction commit,
+succeeded. `review-reliability` and `review-refuter` worked on their first attempts.
+
+`~/.config/opencode/plugins/opencode-review-transport.ts` sends
+`error: "opencode_task_host_output_unavailable"` when the host Task output is not a string, and the
+`review-validator` agent declares `bash` as a permission **object** pattern while every other review
+agent declares a flat `"deny"`. Neither observation was confirmed as the cause. Recorded as an
+observation; no defect was filed and no report was opened.
