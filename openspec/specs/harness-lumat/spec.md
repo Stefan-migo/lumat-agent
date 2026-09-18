@@ -53,7 +53,7 @@ The harness MUST replace keyword planning with validated structured LLM output r
 
 ### Requirement: HL-3 — Rolling Session and Recovery Evidence
 
-The harness MUST keep DB thread history authoritative and, before `compact_session()` rotates a session, persist a bounded meaningful recap or milestone with idempotency and source/truncation evidence. The compaction trigger MUST measure the thread's own window occupancy — the DB-authoritative history bounded by the configured session window — and MUST NOT be fed the injected context, which `assemble_context()` caps at the injection budget. The configured limits MUST be resolved from settings and MUST NOT be duplicated as module constants. It MUST preserve valid Cortex session state and MUST NOT report failed writes as successful completion.
+The harness MUST keep DB thread history authoritative and, before `compact_session()` rotates a session, persist a bounded meaningful recap or milestone with idempotency and source/truncation evidence. The compaction trigger MUST measure the thread's own window occupancy — the DB-authoritative history bounded by the configured session window — and MUST NOT be fed the injected context, which `assemble_context()` caps at the injection budget. The configured limits MUST be resolved from settings and MUST NOT be duplicated as module constants. It MUST preserve valid Cortex session state and MUST NOT report failed writes as successful completion. The rotated window's recap MUST be signalled into the assistant prompt as harness metadata — never as memory content — together with the `memory.read` pull path, so the model can retrieve it explicitly. A failed recap write MUST be signalled as unavailable and MUST NOT be signalled as a saved recap.
 
 #### Scenario: Preflight compaction
 
@@ -66,6 +66,18 @@ The harness MUST keep DB thread history authoritative and, before `compact_sessi
 - GIVEN a thread whose history exceeds the compaction threshold while the injected context stays capped at the injection budget
 - WHEN compaction runs for the turn
 - THEN the recap is still attempted, because the trigger measures the thread window and not the injected context
+
+#### Scenario: Rotation cue reaches the prompt
+
+- GIVEN a turn whose compaction rotated the thread and persisted the bounded recap
+- WHEN the assistant prompt context is rendered
+- THEN the prompt states that a recap was saved as thread memory and how to pull it, without injecting any memory content
+
+#### Scenario: Failed recap is signalled as unavailable
+
+- GIVEN a turn whose compaction reached the threshold while the recap write failed
+- WHEN the assistant prompt context is rendered
+- THEN the prompt states that no recap is available and does not claim a saved recap
 
 #### Scenario: Recovery after interruption
 
