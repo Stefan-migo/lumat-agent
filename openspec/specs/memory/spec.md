@@ -53,7 +53,7 @@ The system MUST retain `hybrid_search()` as an explicit, project- and scope/enti
 #### Scenario: Role isolation
 - GIVEN a search by a role without cross-project rights
 - WHEN the search runs
-- THEN only that scope's visible memories return, never another's
+- THEN thread-visible memories return only from their own thread, project-visible agent memories return from any thread in the same project, and customer memories remain client-gated
 
 #### Scenario: Empty result
 - GIVEN no memory above the threshold
@@ -136,6 +136,37 @@ The memory layer MUST support bounded native SDB artifacts in panel scope using 
 - GIVEN an SDB task needs memory recall
 - WHEN no explicit scoped search is requested
 - THEN no hybrid search or out-of-scope fallback runs
+
+### Requirement: MEM-9 — Memory Provenance and Axis Coherence
+
+The `memories` table MUST record `producer` as `user`, `system`, `agent`, or
+`pipeline`, the nullable `origin_thread_id`, and the declared `visibility` as
+`thread` or `project`. Existing rows MUST use `system` and `thread` as
+conservative backfill values because their true producer is unrecoverable. The
+database MUST enforce `visibility='project'` if and only if `scope='agent'`.
+Agent-axis reads and writes MUST use `entity_id='agent:assistant'`; the server
+MUST derive this target from the declared visibility rather than accepting it
+from the model.
+
+#### Scenario: Provenance and coherent axis
+- GIVEN an agent writes project-visible memory from a trusted thread
+- WHEN the row is persisted
+- THEN it records `producer='agent'`, the origin thread, `visibility='project'`, `scope='agent'`, and `entity_id='agent:assistant'`
+
+#### Scenario: Coherence constraint
+- GIVEN a memory row declares `visibility='project'` with `scope='panel'`
+- WHEN the row is inserted
+- THEN the database rejects it
+
+#### Scenario: Project visibility across threads
+- GIVEN a project-visible agent memory written from one thread
+- WHEN another thread in the same project reads the agent axis
+- THEN the memory is readable
+
+#### Scenario: Thread default remains episodic
+- GIVEN a memory write omits `visibility`
+- WHEN the row is persisted
+- THEN it uses `visibility='thread'`, `scope='panel'`, and the writing thread entity
 
 ## MODIFIED Requirements
 

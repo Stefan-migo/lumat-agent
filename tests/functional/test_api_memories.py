@@ -459,7 +459,13 @@ def test_api_memory_surfaces_on_ficha_e2e(client, make_user):
     close writes the customer_memo (MEM-4), and GET /clients/{id} surfaces it
     distinct from notes (CR-7).
     """
-    from app.models import Conversation, ConversationState
+    from app.models import (
+        Conversation,
+        ConversationState,
+        MemoryProducer,
+        MemoryType,
+        MemoryVisibility,
+    )
     from app.services import memory as memory_service
 
     customer_id = _seed_customer()
@@ -489,6 +495,18 @@ def test_api_memory_surfaces_on_ficha_e2e(client, make_user):
         memory_service.close_conversation(
             session, conversation, acta_text="acta del cierre final"
         )
+        memory_service.upsert(
+            session,
+            scope="agent",
+            entity_id="agent:assistant",
+            topic_key="agent:project-fact",
+            tipo=MemoryType.DISCOVERY,
+            titulo="Project fact",
+            contenido="Agent-wide fact",
+            visibility=MemoryVisibility.PROJECT,
+            producer=MemoryProducer.AGENT,
+            origin_thread_id=str(conversation.id),
+        )
         session.commit()
 
     # 3) the ficha surfaces the memo (CR-7) and both rows exist
@@ -497,5 +515,6 @@ def test_api_memory_surfaces_on_ficha_e2e(client, make_user):
     assert ficha.json()["memo"] == "acta del cierre final"
 
     listed = client.get(f"/panel/api/clients/{customer_id}/memories", follow_redirects=False)
+    assert all(memory["scope"] == "customer" for memory in listed.json()["memories"])
     keys = {m["topic_key"] for m in listed.json()["memories"]}
     assert {"general", "customer_memo"} <= keys
