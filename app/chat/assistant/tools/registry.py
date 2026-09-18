@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
@@ -25,6 +25,8 @@ SDB_WRITE_ALLOWLIST = frozenset({
     "project.archive",
     "project.merge",
 })
+AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write"})
+MEMORY_SEARCH_CONTENT_LIMIT = 2_000
 
 
 class ToolValidationError(ValueError):
@@ -68,15 +70,13 @@ class KpiArgs(BaseModel):
     window_days: int = Field(default=7, ge=1, le=31)
 
 
-class MemoryArgs(BaseModel):
+class _MemoryScopeArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     scope: Literal["panel", "customer"]
     entity_id: str = Field(min_length=1, max_length=100)
-    topic: str | None = Field(default=None, max_length=255)
-    limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
 
     @model_validator(mode="after")
-    def validate_scope_entity(self) -> "MemoryArgs":
+    def validate_scope_entity(self) -> "_MemoryScopeArgs":
         if self.scope == "panel" and not self.entity_id.startswith("thread:"):
             raise ValueError("panel memory reads require a thread:{id} entity")
         if self.scope == "customer" and (
@@ -85,6 +85,31 @@ class MemoryArgs(BaseModel):
         ):
             raise ValueError("customer memory reads require customer:{id} or a legacy numeric id")
         return self
+
+
+class MemoryArgs(_MemoryScopeArgs):
+    topic: str | None = Field(default=None, max_length=255)
+    limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
+
+
+class MemorySearchArgs(_MemoryScopeArgs):
+    query: str = Field(min_length=1, max_length=500)
+    limit: int = Field(default=5, ge=1, le=10)
+
+
+class MemoryWriteArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    titulo: str = Field(min_length=1, max_length=200)
+    contenido: str = Field(min_length=1, max_length=2000)
+    topic_key: str = Field(min_length=1, max_length=200)
+    tipo: Literal["decision", "discovery", "pattern", "preference"] = "discovery"
+
+    @field_validator("topic_key")
+    @classmethod
+    def validate_topic_namespace(cls, value: str) -> str:
+        if not value.startswith("agent:"):
+            raise ValueError("autonomous memory topic_key must start with agent:")
+        return value
 
 
 class WebSearchArgs(BaseModel):
@@ -194,6 +219,38 @@ def _read_memory(session, args: MemoryArgs):
     return rows[: args.limit]
 
 
+def _search_memory(session, args: MemorySearchArgs):
+    rows = memory.hybrid_search(
+        session,
+        args.query,
+        scope=args.scope,
+        entity_id=args.entity_id,
+        top_k=args.limit,
+    )
+    return [
+        {**row, "contenido": row.get("contenido", "")[:MEMORY_SEARCH_CONTENT_LIMIT]}
+        for row in rows
+    ]
+
+
+def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int):
+    key = args.topic_key
+    try:
+        with session.begin_nested():
+            row = memory.upsert(
+                session,
+                scope="panel",
+                entity_id=f"thread:{trusted_thread_id}",
+                topic_key=key,
+                tipo=memory.MemoryType(args.tipo),
+                titulo=args.titulo,
+                contenido=args.contenido,
+            )
+        return {"written": True, "id": row.id, "topic_key": key}
+    except Exception as exc:
+        return {"written": False, "degraded_reason": str(exc), "topic_key": key}
+
+
 def _create_rule(session, args: RuleArgs):
     return automation.create_rule(session, args.model_dump(), actor="assistant", executor_origin=True)
 
@@ -253,6 +310,8 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "kb.retrieve": ToolDefinition("kb.retrieve", KbArgs, True, _retrieve_kb, "Retrieve grounded knowledge-base results."),
     "memory.kpis": ToolDefinition("memory.kpis", KpiArgs, True, _kpis, "Read operational KPI totals."),
     "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory, "Read scoped memory."),
+    "memory.search": ToolDefinition("memory.search", MemorySearchArgs, True, _search_memory, "Search scoped memory."),
+    "memory.write": ToolDefinition("memory.write", MemoryWriteArgs, False, _write_memory, "Write memory to the current panel thread."),
     "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis, "Read the operational dashboard summary."),
     "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter."),
     "automation.create_rule": ToolDefinition("automation.create_rule", RuleArgs, False, _create_rule, "Create an automation after approval."),
@@ -285,11 +344,15 @@ def execute_tool(
     task_binding: dict | None = None,
     whitelist: set[str] | frozenset[str] | None = None,
     cost_allowed: bool = True,
+    trusted_thread_id: int | None = None,
 ) -> dict:
     definition = get_tool(name)
     if whitelist is not None and name not in whitelist:
         raise ToolValidationError(f"tool is not whitelisted: {name}")
-    if definition.write and name not in SDB_WRITE_ALLOWLIST:
+    autonomous_write = name in AUTONOMOUS_WRITE_ALLOWLIST
+    if autonomous_write and (type(trusted_thread_id) is not int or trusted_thread_id <= 0):
+        raise ToolValidationError("autonomous memory write requires a positive trusted thread id")
+    if definition.write and not autonomous_write and name not in SDB_WRITE_ALLOWLIST:
         raise ToolValidationError("write-not-registered")
     if not cost_allowed:
         raise ToolValidationError("assistant cost limit blocks tool execution")
@@ -331,15 +394,17 @@ def execute_tool(
             project_approval = projects._ApprovedProjectDecision(
                 operation=name.removeprefix("project."), decision=decision
             )
-    if not definition.read_only and not approval:
+    if not definition.read_only and not autonomous_write and not approval:
         raise ToolValidationError("write tool requires consumed exact approval")
-    if not definition.read_only and not project_approval and not validate_execution(payload, approval or {}):
+    if not definition.read_only and not autonomous_write and not project_approval and not validate_execution(payload, approval or {}):
         raise ToolValidationError("approval does not match exact tool arguments")
     try:
         if name == "project.find":
             result = _plain(definition.handler(session, parsed, _approval=project_approval))
         elif name == "project.create":
             result = _plain(definition.handler(session, parsed, _approval=project_approval))
+        elif name == "memory.write":
+            result = _plain(definition.handler(session, parsed, trusted_thread_id=trusted_thread_id))
         else:
             result = _plain(definition.handler(session, parsed))
     except SearchFailure as exc:

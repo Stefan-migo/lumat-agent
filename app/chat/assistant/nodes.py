@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.evidence import make_evidence
 from app.chat.assistant.state import AssistantState, PlannerOutput, SDBTask, estimate_tokens, validate_cortex_session
-from app.chat.assistant.tools.registry import TOOL_REGISTRY, ToolExecutionError, ToolValidationError, execute_tool, get_tool
+from app.chat.assistant.tools.registry import AUTONOMOUS_WRITE_ALLOWLIST, TOOL_REGISTRY, ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
 from app.services import llm
 from app.services.costs import (
@@ -441,6 +441,10 @@ def assemble_context_node(state: AssistantState) -> AssistantState:
     return {"context": context, "context_meta": context["meta"], "projection_evidence": context["meta"]}
 
 
+def _is_autonomous_write(tool_name: str | None, thread_id: object) -> bool:
+    return tool_name in AUTONOMOUS_WRITE_ALLOWLIST and type(thread_id) is int and thread_id > 0
+
+
 def guardrails(state: AssistantState) -> AssistantState:
     plan_data = state.get("plan") or {}
     if state.get("legacy_compat"):
@@ -464,7 +468,8 @@ def guardrails(state: AssistantState) -> AssistantState:
     if not whitelisted or not arguments_valid:
         fallback = bounded_fallback("unsafe plan")
         return {"planner": {**fallback.model_dump(), "valid": False}, "plan": fallback.model_dump(), "guardrails": {**decisions, "decision": "fallback"}, "response": fallback.summary, "status": "responding"}
-    if not get_tool(tool_name).read_only and not state.get("approval"):
+    autonomous_write = _is_autonomous_write(tool_name, state.get("thread_id"))
+    if not get_tool(tool_name).read_only and not autonomous_write and not state.get("approval"):
         from app.chat.assistant.approval import issue_approval
         decisions["approval_required"] = True
         decisions["decision"] = "approval_pending"
@@ -474,7 +479,8 @@ def guardrails(state: AssistantState) -> AssistantState:
 
 def execute(state: AssistantState) -> AssistantState:
     plan_data = state["plan"]
-    if plan_data["requires_approval"] and not validate_execution(plan_data, state.get("approval") or {}):
+    autonomous_write = _is_autonomous_write(plan_data.get("tool"), state.get("thread_id"))
+    if plan_data["requires_approval"] and not autonomous_write and not validate_execution(plan_data, state.get("approval") or {}):
         detail = "approval is missing, expired, tampered, or already consumed"
         evidence = make_evidence(tool=plan_data.get("tool"), status="error", detail=detail)
         state.setdefault("evidence", []).append(evidence)
@@ -504,6 +510,7 @@ def execute(state: AssistantState) -> AssistantState:
                 approval=state.get("approval"),
                 whitelist=set(config.tools_whitelist),
                 cost_allowed=state.get("guardrails", {}).get("cost_allowed", True),
+                trusted_thread_id=state.get("thread_id"),
             )
         except (ToolExecutionError, ToolValidationError) as exc:
             detail = str(exc)

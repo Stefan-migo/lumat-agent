@@ -4,10 +4,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.chat.assistant.approval import issue_approval
-from app.chat.assistant.nodes import execute, panel_cost_gate, plan_llm
+from app.chat.assistant.approval import consume_approval, issue_approval
+from app.chat.assistant.nodes import execute, guardrails, panel_cost_gate, plan_llm
 from app.chat.assistant.tools.registry import ToolValidationError, execute_tool
+from app.db import SessionLocal
+from app.models import Memory
 from app.services.prompts import load_assistant_config
+from sqlalchemy import select
 
 
 def _rule_args():
@@ -224,6 +227,103 @@ def test_denied_approval_keeps_completed_planner_cost_but_never_executes(monkeyp
     with pytest.raises(PermissionError):
         execute({"thread_id": 7, "run_id": "run-denied", "plan": plan, "approval": {**approval, "status": "rejected"}, "session": SimpleNamespace(add=lambda entry: None), "evidence": []})
 
+    assert calls == []
+
+
+def _memory_plan():
+    return {
+        "kind": "tool",
+        "tool": "memory.write",
+        "arguments": {"titulo": "Fact", "contenido": "Panel fact", "topic_key": "agent:fact"},
+        "requires_approval": False,
+    }
+
+
+def test_memory_write_guardrail_is_autonomous_for_trusted_thread():
+    result = guardrails({"thread_id": 7, "plan": _memory_plan(), "planner": {"valid": True}})
+
+    assert result["status"] == "executing"
+    assert result["guardrails"]["approval_required"] is False
+
+
+def test_memory_write_guardrail_requires_approval_without_trusted_thread():
+    result = guardrails({"plan": _memory_plan(), "planner": {"valid": True}})
+
+    assert result["status"] == "approval_pending"
+    assert result["guardrails"]["approval_required"] is True
+
+
+def test_other_write_guardrail_still_requires_approval_with_trusted_thread():
+    plan = {"kind": "tool", "tool": "automation.create_rule", "arguments": _rule_args(), "requires_approval": True}
+
+    result = guardrails({"thread_id": 7, "plan": plan, "planner": {"valid": True}})
+
+    assert result["status"] == "approval_pending"
+    assert result["guardrails"]["approval_required"] is True
+
+
+def test_execute_forwards_trusted_thread_to_memory_write(migrated_db):
+    with SessionLocal() as session:
+        result = execute({
+            "thread_id": 7,
+            "run_id": "run-memory-write",
+            "plan": _memory_plan(),
+            "session": session,
+            "evidence": [],
+        })
+
+        row = session.execute(
+            select(Memory).where(Memory.topic_key == "agent:fact", Memory.entity_id == "thread:7")
+        ).scalar_one()
+
+    assert result["status"] == "completed"
+    assert row.entity_id == "thread:7"
+
+
+def test_memory_write_is_idempotent_in_db(migrated_db):
+    first = _memory_plan()
+    with SessionLocal() as session:
+        execute({"thread_id": 7, "run_id": "run-memory-first", "plan": first, "session": session, "evidence": []})
+        second = {
+            **first,
+            "arguments": {**first["arguments"], "contenido": "Refreshed fact"},
+        }
+        execute({"thread_id": 7, "run_id": "run-memory-second", "plan": second, "session": session, "evidence": []})
+
+        rows = session.execute(
+            select(Memory).where(Memory.topic_key == "agent:fact", Memory.entity_id == "thread:7")
+        ).scalars().all()
+
+    assert len(rows) == 1
+    assert rows[0].contenido == "Refreshed fact"
+
+
+def test_sdb_dispatch_fails_closed_for_memory_write(monkeypatch):
+    from app.services import agent_chat
+
+    task = {
+        "id": "memory-write",
+        "scope": {"proyecto": "default"},
+        "summary": "remember fact",
+        "verifiable_output": "memory row",
+        "tool": "memory.write",
+        "arguments": {"titulo": "Fact", "contenido": "Panel fact", "topic_key": "agent:fact"},
+    }
+    sdb_plan = {"phase": "EXECUTE", "spec": {"sha256": "spec"}, "tasks": [task]}
+    approval = issue_approval({"sdb": sdb_plan})
+    assert consume_approval(approval, approval["token"])
+    thread = SimpleNamespace(
+        id=7,
+        current_plan={"sdb": sdb_plan},
+        assistant_state={"sdb": {"checkpoints": []}, "approval": approval},
+    )
+    calls = []
+    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: calls.append(args) or {"status": "completed"})
+    monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: None)
+
+    result = agent_chat._run_sdb_tasks(SimpleNamespace(), thread, "run-sdb-memory", SimpleNamespace(slug="default"))
+
+    assert result["results"][0]["status"] == "failed"
     assert calls == []
 
 

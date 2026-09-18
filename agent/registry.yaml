@@ -72,6 +72,8 @@ assistant:
     - kb.retrieve
     - memory.kpis
     - memory.read
+    - memory.search
+    - memory.write
     - dashboard.summary
     - web.search
     - automation.create_rule
