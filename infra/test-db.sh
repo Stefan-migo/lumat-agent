@@ -11,8 +11,8 @@ if [[ -z "$command_name" ]]; then
     exit 2
 fi
 
-# `port` and `project` are pure derivation and need nothing else. `up`, `down`
-# and `env` need the dev credentials, which are declared once in infra/.env.
+# `port` and `project` are pure derivation. `up` and `env` need the dev
+# credentials, which are declared once in infra/.env.
 require_env_file() {
     if [[ ! -f "$ROOT_DIR/infra/.env" ]]; then
         printf 'Missing %s. Copy it with: cp ../lumat-agent/infra/.env infra/.env\n' \
@@ -40,19 +40,29 @@ case "$command_name" in
         exec "$PYTHON" "$TESTDB" env
         ;;
     up|down)
-        require_env_file
-        TEST_POSTGRES_PASSWORD="$(env_file_value TEST_POSTGRES_PASSWORD)"
-        export TEST_POSTGRES_PASSWORD
+        if [[ "$command_name" == up ]]; then
+            require_env_file
+        fi
+        if [[ -f "$ROOT_DIR/infra/.env" ]]; then
+            TEST_POSTGRES_PASSWORD="$(env_file_value TEST_POSTGRES_PASSWORD)"
+            export TEST_POSTGRES_PASSWORD
+        else
+            export POSTGRES_PASSWORD=teardown-placeholder
+            export APP_SECRET=teardown-placeholder
+            export VERIFY_TOKEN=teardown-placeholder
+            export DATABASE_URL=postgresql://teardown-placeholder
+            export META_ACCESS_TOKEN=teardown-placeholder
+            export META_PHONE_NUMBER_ID=teardown-placeholder
+            export PANEL_SESSION_SECRET=teardown-placeholder
+        fi
         port="$($PYTHON "$TESTDB" port)"
         project="$($PYTHON "$TESTDB" project)"
         export TEST_DB_PORT="$port"
-        compose=(
-            docker compose
-            --env-file "$ROOT_DIR/infra/.env"
-            -p "$project"
-            -f "$ROOT_DIR/infra/docker-compose.yml"
-            --profile test
-        )
+        compose=(docker compose)
+        if [[ -f "$ROOT_DIR/infra/.env" ]]; then
+            compose+=(--env-file "$ROOT_DIR/infra/.env")
+        fi
+        compose+=(-p "$project" -f "$ROOT_DIR/infra/docker-compose.yml" --profile test)
         if [[ "$command_name" == up ]]; then
             exec "${compose[@]}" up -d db-test
         fi
