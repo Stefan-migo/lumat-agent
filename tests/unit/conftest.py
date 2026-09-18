@@ -9,7 +9,7 @@ that app modules require before import and exposes the repo root for reading
 
 import os
 from pathlib import Path
-from _testdb import admin_database_url, database_url
+from _testdb import database_url
 
 # Required by pydantic-settings before any `app.*` import. Values are inert
 # test placeholders — the unit suite never opens a DB connection.
@@ -23,9 +23,6 @@ for _key, _value in {
     "PANEL_SESSION_SECRET": "test-panel-session-secret",
 }.items():
     os.environ.setdefault(_key, _value)
-
-ADMIN_DB_URL = admin_database_url()
-
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
