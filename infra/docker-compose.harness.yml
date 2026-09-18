@@ -1,0 +1,41 @@
+# Isolated exploration stack for the chat harness (ODD: chat-harness).
+#
+# Why an overlay instead of editing the base file: `infra/docker-compose.yml`
+# resolves to the Compose project `infra` (the compose file's directory name).
+# Bringing a second worktree's copy up without an explicit project name would
+# collide with the running stack — Compose would treat both as the same project
+# and try to recreate `infra-api-1` / `infra-db-1`. Always pass -p:
+#
+#   docker compose -p lumat-harness \
+#     -f infra/docker-compose.yml -f infra/docker-compose.harness.yml up -d
+#
+# The overlay remaps only the host ports, so the main stack keeps 8000/5432:
+#   api  8001 -> 8000   (the panel + JSON API of this worktree)
+#   db   5433 -> 5432   (so memory/event rows can be inspected with psql)
+#
+# The `api` service self-migrates on boot (`db/migrate.sh` in its command), so
+# the fresh, project-scoped database volume comes up with the schema. It starts
+# EMPTY: the knowledge base has no documents, so retrieval intents will miss and
+# hand off until documents are seeded (via the panel KB screen or a script).
+#
+# `db-test` is deliberately not overridden: it sits behind the `test` profile
+# and is shared by every worktree's pytest run. Do not start a second one.
+#
+# infra/.env is gitignored and therefore absent from a fresh worktree — copy it
+# from the primary worktree first, or Compose fails on the required variables:
+#   cp <primary>/infra/.env infra/.env
+
+services:
+  api:
+    # `!override` is required: Compose CONCATENATES multi-value keys like
+    # `ports` when merging files, so a plain list here would add 8001 while the
+    # base still binds 8000 and the container fails with "port is already
+    # allocated" against the primary stack.
+    ports: !override
+      - "8001:8000"
+
+  db:
+    # The base file publishes no port for `db`, so there is nothing to override
+    # and a plain list is correct here.
+    ports:
+      - "5433:5432"
