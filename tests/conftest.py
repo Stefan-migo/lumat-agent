@@ -61,7 +61,9 @@ from app.chat.nodes.classify_intent import is_injection  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.main import create_app  # noqa: E402
 
-ADMIN_DB_URL = admin_database_url()
+# The admin URL is resolved inside the DB fixtures, never at import time. This
+# conftest is loaded for every suite, and a DB-free run (`pytest tests/unit`)
+# must not require database credentials.
 
 # Tables truncated before each test (full set — shared test DB).
 TRUNCATE_TABLES = (
@@ -75,7 +77,7 @@ TRUNCATE_TABLES = (
 def run_migrate() -> subprocess.CompletedProcess:
     """Run db/migrate.sh against the test DB (idempotent)."""
     env = os.environ.copy()
-    env["DATABASE_URL"] = ADMIN_DB_URL
+    env["DATABASE_URL"] = admin_database_url()
     env["APP_DB_PASSWORD"] = "app"
     env["PYTHON"] = str(REPO_ROOT / ".venv" / "bin" / "python")
     return subprocess.run(
@@ -98,7 +100,7 @@ def migrated_db() -> None:
 @pytest.fixture(autouse=True)
 def clean_db(migrated_db) -> None:
     """Reset all tables before every test (shared test DB)."""
-    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+    with psycopg.connect(admin_database_url(), autocommit=True) as conn:
         conn.execute(f"TRUNCATE {TRUNCATE_TABLES} RESTART IDENTITY CASCADE")
     yield
 
