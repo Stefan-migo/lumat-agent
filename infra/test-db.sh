@@ -11,19 +11,38 @@ if [[ -z "$command_name" ]]; then
     exit 2
 fi
 
+# `port` and `project` are pure derivation and need nothing else. `up`, `down`
+# and `env` need the dev credentials, which are declared once in infra/.env.
+require_env_file() {
+    if [[ ! -f "$ROOT_DIR/infra/.env" ]]; then
+        printf 'Missing %s. Copy it with: cp ../lumat-agent/infra/.env infra/.env\n' \
+            "$ROOT_DIR/infra/.env" >&2
+        exit 1
+    fi
+}
+
+# Read one KEY=value out of infra/.env WITHOUT sourcing it. Sourcing would export
+# DATABASE_URL (which points at the compose `db` service, host `db`) and poison
+# the derived test URL. Only the superuser password of `db-test` is needed here;
+# tests/_testdb.py refuses to invent it.
+env_file_value() {
+    sed -n "s/^$1=//p" "$ROOT_DIR/infra/.env" | tail -n 1 | sed 's/^"\(.*\)"$/\1/'
+}
+
 case "$command_name" in
     port|project)
         exec "$PYTHON" "$TESTDB" "$command_name"
         ;;
     env)
+        require_env_file
+        TEST_POSTGRES_PASSWORD="$(env_file_value TEST_POSTGRES_PASSWORD)"
+        export TEST_POSTGRES_PASSWORD
         exec "$PYTHON" "$TESTDB" env
         ;;
     up|down)
-        if [[ ! -f "$ROOT_DIR/infra/.env" ]]; then
-            printf 'Missing %s. Copy it with: cp ../lumat-agent/infra/.env infra/.env\n' \
-                "$ROOT_DIR/infra/.env" >&2
-            exit 1
-        fi
+        require_env_file
+        TEST_POSTGRES_PASSWORD="$(env_file_value TEST_POSTGRES_PASSWORD)"
+        export TEST_POSTGRES_PASSWORD
         port="$($PYTHON "$TESTDB" port)"
         project="$($PYTHON "$TESTDB" project)"
         export TEST_DB_PORT="$port"

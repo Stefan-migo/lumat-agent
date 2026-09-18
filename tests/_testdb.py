@@ -33,6 +33,10 @@ def database_url() -> str:
     return os.environ.get("DATABASE_URL", _default_database_url())
 
 
+class TestDatabaseConfigError(RuntimeError):
+    """The admin connection cannot be derived and nothing declared it."""
+
+
 def admin_database_url() -> str:
     explicit = os.environ.get("TEST_ADMIN_DB_URL")
     if explicit:
@@ -40,7 +44,16 @@ def admin_database_url() -> str:
     configured = os.environ.get("DATABASE_URL")
     if configured and configured != _default_database_url():
         return configured.replace("postgresql+psycopg://", "postgresql://", 1)
-    password = os.environ.get("TEST_POSTGRES_PASSWORD", "lumat")
+    # No password literal here on purpose. The value is declared once, in
+    # infra/.env, which is also the file compose reads through --env-file; a
+    # second copy in Python is what a secret scanner flags and what drifts.
+    password = os.environ.get("TEST_POSTGRES_PASSWORD")
+    if not password:
+        raise TestDatabaseConfigError(
+            "TEST_POSTGRES_PASSWORD is not set, so the admin database URL cannot be "
+            "derived. Declare it in infra/.env, run `eval \"$(infra/test-db.sh env)\"`, "
+            "or set TEST_ADMIN_DB_URL explicitly."
+        )
     return f"postgresql://lumat:{password}@localhost:{host_port()}/lumat"
 
 
