@@ -31,6 +31,7 @@ def test_overrides_are_used(monkeypatch):
 
 def test_explicit_urls_override_derivation(monkeypatch):
     monkeypatch.setenv("TEST_DB_PORT", "6001")
+    monkeypatch.delenv("TEST_ADMIN_DB_URL", raising=False)
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql+psycopg://custom:secret@db.example:6543/test"
     )
