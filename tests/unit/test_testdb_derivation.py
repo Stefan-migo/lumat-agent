@@ -1,5 +1,8 @@
 import hashlib
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -77,3 +80,32 @@ def test_missing_password_fails_loudly_instead_of_guessing(monkeypatch):
 
     with pytest.raises(_testdb.TestDatabaseConfigError):
         _testdb.admin_database_url()
+
+
+def test_env_exports_preserve_shell_values_when_evaluated(monkeypatch):
+    password = "$(printf pwned >&2)"
+    child_env = os.environ.copy()
+    child_env.pop("DATABASE_URL", None)
+    child_env.pop("TEST_ADMIN_DB_URL", None)
+    child_env["TEST_POSTGRES_PASSWORD"] = password
+
+    emitted = subprocess.run(
+        [sys.executable, str(Path(_testdb.__file__)) , "env"],
+        env=child_env,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"unset TEST_ADMIN_DB_URL; {emitted}printf '%s' \"$TEST_ADMIN_DB_URL\"",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout == f"postgresql://lumat:{password}@localhost:{_testdb.host_port()}/lumat"
+    assert result.stderr == ""

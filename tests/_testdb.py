@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import shlex
 import sys
 from pathlib import Path
 
@@ -72,7 +73,7 @@ def main() -> None:
         print(project_name())
     elif command == "env":
         for key, value in env().items():
-            print(f"export {key}={value}")
+            print(f"export {key}={shlex.quote(value)}")
     else:
         raise SystemExit(f"unknown command: {command}")
 
