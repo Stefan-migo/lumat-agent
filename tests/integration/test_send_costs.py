@@ -11,7 +11,6 @@ Meta and OpenAI are mocked via respx — never real calls.
 """
 
 import json
-import os
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -34,10 +33,9 @@ from app.models import (  # noqa: E402
 from app.services import costs, send  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
 from app.webhook import ingest  # noqa: E402
+from _testdb import admin_database_url  # noqa: E402
 
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 @pytest.fixture(autouse=True)

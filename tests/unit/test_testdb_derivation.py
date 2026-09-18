@@ -1,5 +1,8 @@
 import hashlib
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -10,9 +13,18 @@ def test_derivation_is_deterministic_and_in_range(monkeypatch):
     monkeypatch.delenv("TEST_DB_PORT", raising=False)
     monkeypatch.delenv("TEST_DB_PROJECT", raising=False)
     worktree_name = Path(_testdb.__file__).resolve().parents[1].name
-    slug = "".join(
-        char.lower() if char.isalnum() else "-" for char in worktree_name
-    )
+    if all(char in "abcdefghijklmnopqrstuvwxyz0123456789-" for char in worktree_name):
+        slug = worktree_name
+    else:
+        slug = "".join(
+            char.lower()
+            if "A" <= char <= "Z"
+            else char
+            if char in "abcdefghijklmnopqrstuvwxyz0123456789-"
+            else "-"
+            for char in worktree_name
+        )
+        slug += "-" + hashlib.sha256(worktree_name.encode()).hexdigest()[:8]
     expected_port = 5432 + int(
         hashlib.sha256(worktree_name.encode()).hexdigest(), 16
     ) % 1000
@@ -22,6 +34,28 @@ def test_derivation_is_deterministic_and_in_range(monkeypatch):
     assert _testdb.project_name() == f"lumat-test-{slug}"
     assert _testdb.host_port() == _testdb.host_port()
     assert _testdb.project_name() == _testdb.project_name()
+
+
+def test_slug_distinguishes_punctuation_and_is_ascii_for_unicode():
+    assert _testdb._slug("foo_bar") != _testdb._slug("foo-bar")
+    assert _testdb._slug("foo.bar") != _testdb._slug("foo-bar")
+    unicode_slug = _testdb._slug("worktree-ñ")
+
+    assert unicode_slug.isascii()
+    assert all(char in "abcdefghijklmnopqrstuvwxyz0123456789-" for char in unicode_slug)
+
+
+def test_test_modules_have_one_database_url_derivation_source():
+    legacy_url = "postgresql://" + "lumat:lumat@" + "localhost:" + "5432/lumat"
+    divergent = 'os.environ["' + "DATABASE_URL" + '"].replace('
+    offenders = []
+
+    for path in Path(__file__).parents[1].rglob("*.py"):
+        source = path.read_text()
+        if legacy_url in source or divergent in source:
+            offenders.append(str(path))
+
+    assert offenders == []
 
 
 def test_overrides_are_used(monkeypatch):
@@ -53,6 +87,19 @@ def test_explicit_urls_override_derivation(monkeypatch):
     assert _testdb.admin_database_url() == "postgresql://custom:secret@db.example:6543/test"
 
 
+def test_declared_database_url_equal_to_default_is_honoured(monkeypatch):
+    monkeypatch.setenv("TEST_DB_PORT", "6001")
+    monkeypatch.delenv("TEST_ADMIN_DB_URL", raising=False)
+    monkeypatch.delenv("TEST_POSTGRES_PASSWORD", raising=False)
+    default_url = _testdb._default_database_url()
+    monkeypatch.setenv("DATABASE_URL", default_url)
+
+    assert _testdb.database_url() == default_url
+    assert _testdb.admin_database_url() == default_url.replace(
+        "postgresql+psycopg://", "postgresql://", 1
+    )
+
+
 def test_admin_password_override(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("TEST_ADMIN_DB_URL", raising=False)
@@ -77,3 +124,32 @@ def test_missing_password_fails_loudly_instead_of_guessing(monkeypatch):
 
     with pytest.raises(_testdb.TestDatabaseConfigError):
         _testdb.admin_database_url()
+
+
+def test_env_exports_preserve_shell_values_when_evaluated(monkeypatch):
+    password = "$(printf pwned >&2)"
+    child_env = os.environ.copy()
+    child_env.pop("DATABASE_URL", None)
+    child_env.pop("TEST_ADMIN_DB_URL", None)
+    child_env["TEST_POSTGRES_PASSWORD"] = password
+
+    emitted = subprocess.run(
+        [sys.executable, str(Path(_testdb.__file__)) , "env"],
+        env=child_env,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"unset TEST_ADMIN_DB_URL; {emitted}printf '%s' \"$TEST_ADMIN_DB_URL\"",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout == f"postgresql://lumat:{password}@localhost:{_testdb.host_port()}/lumat"
+    assert result.stderr == ""

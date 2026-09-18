@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import shlex
 import sys
 from pathlib import Path
 
@@ -10,19 +11,33 @@ _WORKTREE_NAME = Path(__file__).resolve().parents[1].name
 
 
 def _slug(value: str) -> str:
-    return "".join(char.lower() if char.isalnum() else "-" for char in value)
+    if value and all(char in "abcdefghijklmnopqrstuvwxyz0123456789-" for char in value):
+        return value
+    base = "".join(
+        char.lower()
+        if "A" <= char <= "Z"
+        else char
+        if char in "abcdefghijklmnopqrstuvwxyz0123456789-"
+        else "-"
+        for char in value
+    )
+    return f"{base}-{hashlib.sha256(value.encode()).hexdigest()[:8]}"
+
+
+def _derive_worktree(name: str) -> tuple[str, int]:
+    digest = hashlib.sha256(name.encode()).hexdigest()
+    return _slug(name), 5432 + int(digest, 16) % 1000
 
 
 def project_name() -> str:
-    return os.environ.get("TEST_DB_PROJECT", f"lumat-test-{_slug(_WORKTREE_NAME)}")
+    return os.environ.get("TEST_DB_PROJECT", f"lumat-test-{_derive_worktree(_WORKTREE_NAME)[0]}")
 
 
 def host_port() -> int:
     override = os.environ.get("TEST_DB_PORT")
     if override is not None:
         return int(override)
-    digest = hashlib.sha256(_WORKTREE_NAME.encode()).hexdigest()
-    return 5432 + int(digest, 16) % 1000
+    return _derive_worktree(_WORKTREE_NAME)[1]
 
 
 def _default_database_url() -> str:
@@ -31,6 +46,10 @@ def _default_database_url() -> str:
 
 def database_url() -> str:
     return os.environ.get("DATABASE_URL", _default_database_url())
+
+
+def libpq_database_url(url: str) -> str:
+    return url.replace("postgresql+psycopg://", "postgresql://", 1)
 
 
 class TestDatabaseConfigError(RuntimeError):
@@ -42,8 +61,8 @@ def admin_database_url() -> str:
     if explicit:
         return explicit
     configured = os.environ.get("DATABASE_URL")
-    if configured and configured != _default_database_url():
-        return configured.replace("postgresql+psycopg://", "postgresql://", 1)
+    if configured:
+        return libpq_database_url(configured)
     # No password literal here on purpose. The value is declared once, in
     # infra/.env, which is also the file compose reads through --env-file; a
     # second copy in Python is what a secret scanner flags and what drifts.
@@ -72,7 +91,7 @@ def main() -> None:
         print(project_name())
     elif command == "env":
         for key, value in env().items():
-            print(f"export {key}={value}")
+            print(f"export {key}={shlex.quote(value)}")
     else:
         raise SystemExit(f"unknown command: {command}")
 

@@ -3,7 +3,6 @@
 from datetime import datetime, timedelta, timezone
 from datetime import date, time
 from uuid import uuid4
-import os
 
 import psycopg
 import pytest
@@ -14,11 +13,9 @@ from app.models import AuditLog, Appointment, AutomationExecution, AutomationRul
 from app.webhook.ingest import NormalizedMessage, persist_message
 from app.services.events import publish_event
 from app.services import cases, scheduling
+from _testdb import admin_database_url
 
-
-ADMIN_DB_URL = os.environ.get("TEST_ADMIN_DB_URL") or os.environ["DATABASE_URL"].replace(
-    "postgresql+psycopg://", "postgresql://", 1
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 @pytest.fixture(autouse=True)

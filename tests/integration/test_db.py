@@ -9,8 +9,6 @@ application uses). Verifies:
   admin read lists them
 """
 
-import os
-
 import psycopg
 import pytest
 from sqlalchemy import select
@@ -31,10 +29,9 @@ from app.models import (  # noqa: E402
     Settings,
 )
 from app.services.audit import list_audit_entries, record_audit  # noqa: E402
+from _testdb import admin_database_url, database_url, libpq_database_url  # noqa: E402
 
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -200,7 +197,7 @@ def test_audit_is_append_only_via_grants():
         session.commit()
 
     with psycopg.connect(
-        "postgresql://app:app@localhost:5432/lumat", autocommit=True
+        libpq_database_url(database_url()), autocommit=True
     ) as conn:
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             conn.execute("UPDATE audit_log SET after = '{}'::jsonb")

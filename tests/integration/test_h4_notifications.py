@@ -1,7 +1,6 @@
 """H4 Slice 3 RED tests: notification center read model and push fallback."""
 
 from datetime import datetime, timedelta, timezone
-import os
 
 import psycopg
 import pytest
@@ -11,11 +10,9 @@ from app.db import SessionLocal
 from app.models import AuditLog, AutomationExecution, AutomationRule, DomainEvent, NotificationOperation, PanelNotification, User
 from app.services.events import publish_event
 from app.services import notifications
+from _testdb import admin_database_url
 
-
-ADMIN_DB_URL = os.environ.get("TEST_ADMIN_DB_URL") or os.environ["DATABASE_URL"].replace(
-    "postgresql+psycopg://", "postgresql://", 1
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 @pytest.fixture(autouse=True)

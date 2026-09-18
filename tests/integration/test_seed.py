@@ -24,14 +24,12 @@ from app.db import SessionLocal
 from app.models import AuditLog, Settings, User
 from app.services.settings import SETTINGS_DEFAULTS
 from app.services.users import verify_password
+from _testdb import admin_database_url
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-_seed_admin_db_url = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
 SEED_ADMIN_DB_URL = os.environ.get(
     "TEST_SEED_DB_URL",
-    _seed_admin_db_url.replace("postgresql://", "postgresql+psycopg://", 1),
+    admin_database_url().replace("postgresql://", "postgresql+psycopg://", 1),
 )
 
 

@@ -11,9 +11,8 @@ Data Model acceptance criteria:
 - app DB role: INSERT+SELECT only on `audit_log` (append-only, SH-5),
   full CRUD on business tables
 
-The runner connects as the admin role (env TEST_ADMIN_DB_URL, default
-`postgresql://lumat:lumat@localhost:5432/lumat` — the compose dev/test DB) and
-creates the least-privilege `app` role itself; tests connect as `app` via
+The runner connects as the admin role from the shared test database derivation
+and creates the least-privilege `app` role itself; tests connect as `app` via
 TEST_APP_DB_URL to verify grants.
 """
 
@@ -22,11 +21,11 @@ import os
 import psycopg
 import pytest
 
-from tests.integration.conftest import ADMIN_DB_URL, run_migrate  # noqa: E402
+from _testdb import admin_database_url, database_url, libpq_database_url  # noqa: E402
+from tests.integration.conftest import run_migrate  # noqa: E402
 
-APP_URL = os.environ.get("TEST_APP_DB_URL") or ADMIN_DB_URL.replace(
-    "postgresql://lumat:lumat@", "postgresql://app:app@", 1
-)
+ADMIN_DB_URL = admin_database_url()
+APP_URL = os.environ.get("TEST_APP_DB_URL") or libpq_database_url(database_url())
 
 EXPECTED_TABLES = {
     "customers",

@@ -16,7 +16,6 @@ Part 2 (graph): full-graph runs against the migrated pgvector test DB with
 the OpenAI chat mocked via respx (emergency paths must NOT call it).
 """
 
-import os
 import re
 
 import psycopg
@@ -38,10 +37,9 @@ from app.services.settings import DEFAULT_EMERGENCY_KEYWORDS, set_setting  # noq
 from app.chat.graph import run_conversation  # noqa: E402
 from app.chat.state import get_or_create_conversation  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
+from _testdb import admin_database_url  # noqa: E402
 
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 # ---------------------------------------------------------------------------
