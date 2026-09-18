@@ -9,17 +9,23 @@
 
 ## Running the suite
 
-The suites run against a shared pgvector test database. Bring it up with the
-compose `test` profile (T6.1):
+The suites run against this worktree's isolated pgvector test database. Copy the
+test environment once in a fresh worktree, then use the helper for its lifecycle:
 
 ```bash
-docker compose -f infra/docker-compose.yml --profile test up -d db-test
+cp ../lumat-agent/infra/.env infra/.env
+infra/test-db.sh up
+eval "$(infra/test-db.sh env)"
 export DEEPSEEK_API_KEY=sk-test       # optional: tests/conftest.py forces this value before importing app
 .venv/bin/pytest tests/              # full suite
 .venv/bin/pytest -m "spec"           # only OpenSpec requirement scenarios
 .venv/bin/pytest tests/functional    # functional flows (T6.2)
 .venv/bin/pytest tests/injection     # prompt-injection suite (T6.3, SH-4)
 ```
+
+The derived project and host port are deterministic per worktree. Run
+`infra/test-db.sh down` when removing the worktree; teardown is not tied to a
+pytest run, so a stopped or killed test process does not remove the database.
 
 `pyproject.toml` configures `pytest-timeout` (`timeout = 120`,
 `timeout_method = "thread"`), so a hung test is hard-exited with a
