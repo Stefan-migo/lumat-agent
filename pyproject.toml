@@ -42,6 +42,7 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 addopts = "-q"
 
 # A test that hangs had no ceiling or diagnosis: the suite stalls

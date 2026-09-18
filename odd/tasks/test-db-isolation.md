@@ -71,8 +71,9 @@ Out of scope:
 - **D2 — Derivation**: identity is the worktree root directory name
   (`Path(__file__).resolve().parents[1].name`).
   - `project = "lumat-test-" + slug(dir_name)` (lowercase, non-alphanumeric → `-`).
-  - `port = 5432 + (int(sha256(dir_name).hexdigest(), 16) % 1000)` → range 5432–6431.
-  - Deterministic: the same worktree always resolves the same values.
+   - `port = 5432 + (int(sha256(dir_name).hexdigest(), 16) % 1000)` → range 5432–6431.
+   - Deterministic: the same worktree always resolves the same values.
+   - For this worktree the derived values are project `lumat-test-lumat-agent-odd-test-db-isolation` and its hash-derived port; no repo-prefix stripping is applied.
 - **D3 — Determinism over collision-avoidance.** A collision makes `up` fail loudly
   with "port is already allocated". It must never be resolved by probing for a free
   port, because a probe cannot stay consistent between the shell and Python.
