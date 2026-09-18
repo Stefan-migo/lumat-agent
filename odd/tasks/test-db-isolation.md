@@ -75,8 +75,11 @@ Out of scope:
    - Deterministic: the same worktree always resolves the same values.
    - For this worktree the derived values are project `lumat-test-lumat-agent-odd-test-db-isolation` and its hash-derived port; no repo-prefix stripping is applied.
 - **D3 — Determinism over collision-avoidance.** A collision makes `up` fail loudly
-  with "port is already allocated". It must never be resolved by probing for a free
-  port, because a probe cannot stay consistent between the shell and Python.
+   with "port is already allocated". It must never be resolved by probing for a free
+   port, because a probe cannot stay consistent between the shell and Python.
+   The harness overlay's `db` service publishes host port 5433, which is inside the
+   derived test-port range. By design, D3 does not avoid this by probing: a worktree
+   that derives 5433 fails loudly at `up`; use `TEST_DB_PORT=<free port>` to override it.
 - **D4 — Escape hatch**: `TEST_DB_PORT` and `TEST_DB_PROJECT` env vars override the
   derivation, and are read by *both* the shell and Python. Explicit
   `DATABASE_URL` / `TEST_ADMIN_DB_URL` still win over everything (preserve the

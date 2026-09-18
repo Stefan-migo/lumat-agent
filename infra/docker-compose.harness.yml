@@ -18,8 +18,9 @@
 # EMPTY: the knowledge base has no documents, so retrieval intents will miss and
 # hand off until documents are seeded (via the panel KB screen or a script).
 #
-# `db-test` is deliberately not overridden: it sits behind the `test` profile
-# and is shared by every worktree's pytest run. Do not start a second one.
+# `db-test` is isolated per worktree via its own Compose project and
+# `TEST_DB_PORT`, and is brought up with `infra/test-db.sh up`. This overlay
+# deliberately does not override it.
 #
 # infra/.env is gitignored and therefore absent from a fresh worktree — copy it
 # from the primary worktree first, or Compose fails on the required variables:
