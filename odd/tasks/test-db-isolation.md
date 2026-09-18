@@ -216,6 +216,24 @@ by deleting the literal rather than by reshaping code to dodge the scanner:
 - `tests/unit/test_testdb_derivation.py`: `test_overrides_are_used` now declares
   the password instead of asserting the old literal.
 
+**The tip alone could not clear the check, and the reason is worth recording.**
+GitGuardian scans every commit in the pull request, not just its head, so it kept
+reporting the commits that ever contained the literal even after the tip stopped
+containing it — and the two replacement literals added here were flagged too and
+folded into the same incident, because the tracked value was the same. Two
+further corrections followed, both correct regardless of any scanner:
+
+- `infra/.env.example` commits `change-me` placeholders only, per its own header;
+  a realistic-looking value broke that convention. It now declares
+  `change-me-test-postgres-password`, and the plausible value lives only in the
+  gitignored `infra/.env`.
+- The unit test uses an explicit placeholder, not a realistic password.
+
+Clearing the check needs either a history rewrite or marking incident `37436093`
+resolved in the GitGuardian dashboard. It is a substantive false positive: the
+same dev default is already on `main` at `infra/docker-compose.yml:41` and
+`tests/functional/conftest.py:50`.
+
 ## Verification evidence
 
 - `uv run pytest tests/unit/test_testdb_derivation.py -q`: passed, `4 passed`.
