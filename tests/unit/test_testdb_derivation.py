@@ -27,14 +27,19 @@ def test_derivation_is_deterministic_and_in_range(monkeypatch):
 def test_overrides_are_used(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("TEST_ADMIN_DB_URL", raising=False)
-    monkeypatch.setenv("TEST_POSTGRES_PASSWORD", "lumat")
+    # Deliberately a placeholder, never a plausible-looking password: this file
+    # ships in the repository and a realistic literal is what scanners flag.
+    password = "change-me"
+    monkeypatch.setenv("TEST_POSTGRES_PASSWORD", password)
     monkeypatch.setenv("TEST_DB_PORT", "6001")
     monkeypatch.setenv("TEST_DB_PROJECT", "custom-test-db")
 
     assert _testdb.host_port() == 6001
     assert _testdb.project_name() == "custom-test-db"
     assert _testdb.database_url() == "postgresql+psycopg://app:app@localhost:6001/lumat"
-    assert _testdb.admin_database_url() == "postgresql://lumat:lumat@localhost:6001/lumat"
+    assert _testdb.admin_database_url() == (
+        f"postgresql://lumat:{password}@localhost:6001/lumat"
+    )
 
 
 def test_explicit_urls_override_derivation(monkeypatch):
