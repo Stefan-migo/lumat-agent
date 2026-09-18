@@ -26,6 +26,16 @@ one latent inconsistency:
    `tests/integration/conftest.py:34`, `tests/spec/conftest.py:23`,
    `tests/unit/conftest.py:18`.
 
+   **Correction to this diagnosis (found late).** The scope was wider than the
+   five conftests: roughly twenty `tests/integration/test_*.py` files carry their
+   own `ADMIN_DB_URL = os.environ.get("TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat")`
+   fallback, and three import the one from `tests/integration/conftest.py`. They
+   are inert under the documented workflow, because the helper exports
+   `TEST_ADMIN_DB_URL` and the env value wins over the literal — and the
+   integration conftest now fails loudly before a silent `5432` could be used.
+   They are left as-is and recorded as follow-up: rewriting twenty files is out
+   of scope here, and they are pre-existing rather than introduced by this change.
+
 The actual interference mechanism is the autouse `clean_db` fixture
 (`tests/conftest.py:102-107`): it runs `TRUNCATE ... RESTART IDENTITY CASCADE`
 before *every* test. So this is not stale data — a concurrent run destroys the
@@ -91,8 +101,11 @@ Out of scope:
 - **D6 — Misconfiguration must fail loudly, never silently share.** If someone runs
   the old raw `docker compose ... up db-test`, pytest gets connection-refused, not a
   shared database.
-- **D7 — Admin credentials** default to `lumat:${TEST_POSTGRES_PASSWORD:-lumat}`,
-  matching the compose `db-test` service.
+- **D7 — Admin credentials**: the `db-test` superuser password is declared once,
+  as `TEST_POSTGRES_PASSWORD` in `infra/.env`. `_testdb.py` carries no fallback
+  literal: it reads the env var, and fails loudly when nothing declares it.
+  A second copy in Python would drift, and is what a secret scanner flags
+  (see the correction below).
 
 ## Tasks
 
@@ -181,6 +194,28 @@ Corrections applied after orchestrator validation of the first implementation pa
 - `infra/docker-compose.harness.yml` comment corrected: it still claimed
   `db-test` is shared and instructed readers not to start a second one.
 
+### Second correction — the duplicated password default
+
+GitGuardian failed PR #240 with **one Generic Password** at `tests/_testdb.py:43`
+(`password = os.environ.get("TEST_POSTGRES_PASSWORD", "lumat")`). PRs #237, #238
+and #239 all passed, so this was introduced here. The value is not a secret — it
+is the dev default already declared in `infra/docker-compose.yml:41` — but the
+line duplicated it, which is the same sin this change exists to remove. Resolved
+by deleting the literal rather than by reshaping code to dodge the scanner:
+
+- `tests/_testdb.py`: no fallback. `TEST_POSTGRES_PASSWORD` is required; a new
+  `TestDatabaseConfigError` names both fixes otherwise. Guarded by
+  `test_missing_password_fails_loudly_instead_of_guessing`.
+- `infra/.env.example` and `infra/.env`: declare `TEST_POSTGRES_PASSWORD` once,
+  next to the other dev credentials. `infra/test-db.sh` reads that single key out
+  of `infra/.env` — it deliberately does **not** source the file, because
+  sourcing would export `DATABASE_URL` (host `db`) and poison the derived URL.
+- `tests/conftest.py`: the admin URL is now resolved inside the DB fixtures
+  instead of at import. Resolving it at import made even `pytest tests/unit`,
+  which never opens a database, demand credentials.
+- `tests/unit/test_testdb_derivation.py`: `test_overrides_are_used` now declares
+  the password instead of asserting the old literal.
+
 ## Verification evidence
 
 - `uv run pytest tests/unit/test_testdb_derivation.py -q`: passed, `4 passed`.
@@ -189,6 +224,21 @@ Corrections applied after orchestrator validation of the first implementation pa
 - `docker ps --format '{{.Names}}\t{{.Ports}}' | grep -i db-test`: showed `lumat-test-lumat-agent-odd-test-db-isolation-db-test-1` on host port `5939` and `infra-db-test-1` on host port `5432`.
 - `infra/test-db.sh down`: removed only the worktree container, network, and `lumat-test-lumat-agent-odd-test-db-isolation_db-test`; `infra-db-test-1`, `infra_db`, and `infra_db-test` remained.
 - The worktree test database was brought up again on port `5939`; the primary `infra-db-test-1` remained on port `5432`.
+
+After the second correction:
+
+- `uv run pytest tests/unit/test_testdb_derivation.py -q`: `.....` — 5 passed.
+- `env -u TEST_ADMIN_DB_URL -u TEST_POSTGRES_PASSWORD uv run pytest tests/unit -q`:
+  green with no credentials in the environment — the DB-free run is not punished.
+- `env -u TEST_ADMIN_DB_URL -u TEST_POSTGRES_PASSWORD .venv/bin/python tests/_testdb.py env`:
+  fails with `TestDatabaseConfigError` naming `infra/.env`, instead of guessing.
+- `infra/test-db.sh port`: `5939` without needing `infra/.env` at all.
+- `infra/test-db.sh env`: `DATABASE_URL` on port `5939` and `TEST_ADMIN_DB_URL` on
+  port `5939` — the `.env` read did not leak the compose `db` host.
+- `bash -n infra/test-db.sh`: syntax OK. **`shellcheck` is not installed on this
+  machine, so it was not run.**
+- `eval "$(infra/test-db.sh env)" && uv run pytest tests/ -q`: exit `0`, full
+  suite green, only the two known warnings.
 
 ### T7 — cross-worktree isolation proof (orchestrator)
 

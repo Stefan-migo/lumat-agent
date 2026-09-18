@@ -27,6 +27,15 @@ The derived project and host port are deterministic per worktree. Run
 `infra/test-db.sh down` when removing the worktree; teardown is not tied to a
 pytest run, so a stopped or killed test process does not remove the database.
 
+The superuser password of the `db-test` service is declared once, as
+`TEST_POSTGRES_PASSWORD` in `infra/.env` — the same file compose reads through
+`--env-file`. `infra/test-db.sh` reads that one key out of it. `tests/_testdb.py`
+has no hardcoded fallback on purpose: a second copy drifts, and a password
+literal in Python is what secret scanners flag. Without it, DB-backed suites fail
+with a message naming the fix instead of quietly connecting somewhere else.
+`tests/unit` needs no database credentials at all, because the admin URL is
+resolved inside the DB fixtures rather than at import.
+
 `pyproject.toml` configures `pytest-timeout` (`timeout = 120`,
 `timeout_method = "thread"`), so a hung test is hard-exited with a
 MainThread stack dump after 120 seconds instead of hanging forever.
