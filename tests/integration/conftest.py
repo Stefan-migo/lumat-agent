@@ -25,13 +25,14 @@ import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
+from _testdb import admin_database_url, database_url
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 TEST_ENV = {
     "APP_SECRET": "test-app-secret",
     "VERIFY_TOKEN": "test-verify-token",
-    "DATABASE_URL": "postgresql+psycopg://app:app@localhost:5432/lumat",
+    "DATABASE_URL": database_url(),
     "DEEPSEEK_API_KEY": "sk-test",
     "META_ACCESS_TOKEN": "meta-test-token",
     "META_PHONE_NUMBER_ID": "123456789",
@@ -53,12 +54,7 @@ os.environ["DEEPSEEK_API_KEY"] = "sk-test"
 from app.config import get_settings  # noqa: E402
 from app.main import create_app  # noqa: E402
 
-_database_url = os.environ.get("DATABASE_URL")
-if not _database_url:
-    raise RuntimeError("DATABASE_URL must be set for integration tests")
-ADMIN_DB_URL = os.environ.get("TEST_ADMIN_DB_URL") or _database_url.replace(
-    "postgresql+psycopg://", "postgresql://", 1
-)
+ADMIN_DB_URL = admin_database_url()
 
 
 def run_migrate() -> subprocess.CompletedProcess:

@@ -14,13 +14,14 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from _testdb import admin_database_url, database_url
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 TEST_ENV = {
     "APP_SECRET": "test-app-secret",
     "VERIFY_TOKEN": "test-verify-token",
-    "DATABASE_URL": "postgresql+psycopg://app:app@localhost:5432/lumat",
+    "DATABASE_URL": database_url(),
     "DEEPSEEK_API_KEY": "sk-test",
     "META_ACCESS_TOKEN": "meta-test-token",
     "META_PHONE_NUMBER_ID": "123456789",
@@ -37,9 +38,7 @@ os.environ["DEEPSEEK_API_KEY"] = "sk-test"
 
 from app.services import kb as kb_service  # noqa: E402
 
-ADMIN_DB_URL = os.environ.get(
-    "TEST_ADMIN_DB_URL", "postgresql://lumat:lumat@localhost:5432/lumat"
-)
+ADMIN_DB_URL = admin_database_url()
 
 # All business tables + memory tables (reset before each test — shared test DB).
 TRUNCATE_TABLES = (

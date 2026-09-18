@@ -34,13 +34,14 @@ import psycopg
 import pytest
 import respx
 from fastapi.testclient import TestClient
+from _testdb import admin_database_url, database_url
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 TEST_ENV = {
     "APP_SECRET": "test-app-secret",
     "VERIFY_TOKEN": "test-verify-token",
-    "DATABASE_URL": "postgresql+psycopg://app:app@localhost:5432/lumat",
+    "DATABASE_URL": database_url(),
     "DEEPSEEK_API_KEY": "sk-test",
     "META_ACCESS_TOKEN": "meta-test-token",
     "META_PHONE_NUMBER_ID": "123456789",
@@ -60,12 +61,9 @@ from app.chat.nodes.classify_intent import is_injection  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.main import create_app  # noqa: E402
 
-_database_url = os.environ.get("DATABASE_URL")
-if not _database_url:
-    raise RuntimeError("DATABASE_URL must be set for test database cleanup")
-ADMIN_DB_URL = os.environ.get("TEST_ADMIN_DB_URL") or _database_url.replace(
-    "postgresql+psycopg://", "postgresql://", 1
-)
+# The admin URL is resolved inside the DB fixtures, never at import time. This
+# conftest is loaded for every suite, and a DB-free run (`pytest tests/unit`)
+# must not require database credentials.
 
 # Tables truncated before each test (full set — shared test DB).
 TRUNCATE_TABLES = (
@@ -79,7 +77,7 @@ TRUNCATE_TABLES = (
 def run_migrate() -> subprocess.CompletedProcess:
     """Run db/migrate.sh against the test DB (idempotent)."""
     env = os.environ.copy()
-    env["DATABASE_URL"] = ADMIN_DB_URL
+    env["DATABASE_URL"] = admin_database_url()
     env["APP_DB_PASSWORD"] = "app"
     env["PYTHON"] = str(REPO_ROOT / ".venv" / "bin" / "python")
     return subprocess.run(
@@ -102,7 +100,7 @@ def migrated_db() -> None:
 @pytest.fixture(autouse=True)
 def clean_db(migrated_db) -> None:
     """Reset all tables before every test (shared test DB)."""
-    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+    with psycopg.connect(admin_database_url(), autocommit=True) as conn:
         conn.execute(f"TRUNCATE {TRUNCATE_TABLES} RESTART IDENTITY CASCADE")
     yield
 

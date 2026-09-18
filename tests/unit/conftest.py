@@ -9,20 +9,20 @@ that app modules require before import and exposes the repo root for reading
 
 import os
 from pathlib import Path
+from _testdb import database_url
 
 # Required by pydantic-settings before any `app.*` import. Values are inert
 # test placeholders — the unit suite never opens a DB connection.
 for _key, _value in {
     "APP_SECRET": "test-app-secret",
     "VERIFY_TOKEN": "test-verify-token",
-    "DATABASE_URL": "postgresql+psycopg://app:app@localhost:5432/lumat",
+    "DATABASE_URL": database_url(),
     "DEEPSEEK_API_KEY": "sk-test",
     "META_ACCESS_TOKEN": "meta-test-token",
     "META_PHONE_NUMBER_ID": "123456789",
     "PANEL_SESSION_SECRET": "test-panel-session-secret",
 }.items():
     os.environ.setdefault(_key, _value)
-
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
