@@ -13,9 +13,18 @@ def test_derivation_is_deterministic_and_in_range(monkeypatch):
     monkeypatch.delenv("TEST_DB_PORT", raising=False)
     monkeypatch.delenv("TEST_DB_PROJECT", raising=False)
     worktree_name = Path(_testdb.__file__).resolve().parents[1].name
-    slug = "".join(
-        char.lower() if char.isalnum() else "-" for char in worktree_name
-    )
+    if all(char in "abcdefghijklmnopqrstuvwxyz0123456789-" for char in worktree_name):
+        slug = worktree_name
+    else:
+        slug = "".join(
+            char.lower()
+            if "A" <= char <= "Z"
+            else char
+            if char in "abcdefghijklmnopqrstuvwxyz0123456789-"
+            else "-"
+            for char in worktree_name
+        )
+        slug += "-" + hashlib.sha256(worktree_name.encode()).hexdigest()[:8]
     expected_port = 5432 + int(
         hashlib.sha256(worktree_name.encode()).hexdigest(), 16
     ) % 1000
@@ -25,6 +34,15 @@ def test_derivation_is_deterministic_and_in_range(monkeypatch):
     assert _testdb.project_name() == f"lumat-test-{slug}"
     assert _testdb.host_port() == _testdb.host_port()
     assert _testdb.project_name() == _testdb.project_name()
+
+
+def test_slug_distinguishes_punctuation_and_is_ascii_for_unicode():
+    assert _testdb._slug("foo_bar") != _testdb._slug("foo-bar")
+    assert _testdb._slug("foo.bar") != _testdb._slug("foo-bar")
+    unicode_slug = _testdb._slug("worktree-ñ")
+
+    assert unicode_slug.isascii()
+    assert all(char in "abcdefghijklmnopqrstuvwxyz0123456789-" for char in unicode_slug)
 
 
 def test_overrides_are_used(monkeypatch):

@@ -11,19 +11,33 @@ _WORKTREE_NAME = Path(__file__).resolve().parents[1].name
 
 
 def _slug(value: str) -> str:
-    return "".join(char.lower() if char.isalnum() else "-" for char in value)
+    if value and all(char in "abcdefghijklmnopqrstuvwxyz0123456789-" for char in value):
+        return value
+    base = "".join(
+        char.lower()
+        if "A" <= char <= "Z"
+        else char
+        if char in "abcdefghijklmnopqrstuvwxyz0123456789-"
+        else "-"
+        for char in value
+    )
+    return f"{base}-{hashlib.sha256(value.encode()).hexdigest()[:8]}"
+
+
+def _derive_worktree(name: str) -> tuple[str, int]:
+    digest = hashlib.sha256(name.encode()).hexdigest()
+    return _slug(name), 5432 + int(digest, 16) % 1000
 
 
 def project_name() -> str:
-    return os.environ.get("TEST_DB_PROJECT", f"lumat-test-{_slug(_WORKTREE_NAME)}")
+    return os.environ.get("TEST_DB_PROJECT", f"lumat-test-{_derive_worktree(_WORKTREE_NAME)[0]}")
 
 
 def host_port() -> int:
     override = os.environ.get("TEST_DB_PORT")
     if override is not None:
         return int(override)
-    digest = hashlib.sha256(_WORKTREE_NAME.encode()).hexdigest()
-    return 5432 + int(digest, 16) % 1000
+    return _derive_worktree(_WORKTREE_NAME)[1]
 
 
 def _default_database_url() -> str:
