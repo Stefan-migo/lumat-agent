@@ -133,6 +133,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("023_panel_cost_llm",),
         ("024_projects",),
         ("025_internal_chat_thread_title",),
+        ("026_memory_provenance",),
     ]
 
 
@@ -338,6 +339,32 @@ def test_enums_materialized(migrated_db, admin_conn):
         "received", "processing", "processed", "failed",
     ]
     assert by_type["document_format"] == ["pdf", "md", "csv"]
+
+
+def test_memory_provenance_schema(migrated_db, admin_conn):
+    """Memory rows carry producer, origin, and declared visibility."""
+    rows = admin_conn.execute(
+        "SELECT typname, enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
+        "WHERE typname IN ('memory_producer', 'memory_visibility') "
+        "ORDER BY typname, enumsortorder"
+    ).fetchall()
+    by_type: dict[str, list[str]] = {}
+    for typname, label in rows:
+        by_type.setdefault(typname, []).append(label)
+    assert by_type["memory_producer"] == ["user", "system", "agent", "pipeline"]
+    assert by_type["memory_visibility"] == ["thread", "project"]
+
+    columns = admin_conn.execute(
+        "SELECT column_name, column_default, is_nullable, udt_name "
+        "FROM information_schema.columns WHERE table_name = 'memories' "
+        "AND column_name IN ('producer', 'origin_thread_id', 'visibility') "
+        "ORDER BY column_name"
+    ).fetchall()
+    assert columns == [
+        ("origin_thread_id", None, "YES", "varchar"),
+        ("producer", "'system'::memory_producer", "NO", "memory_producer"),
+        ("visibility", "'thread'::memory_visibility", "NO", "memory_visibility"),
+    ]
 
 
 # --- H2 schema/domain contracts --------------------------------------------
