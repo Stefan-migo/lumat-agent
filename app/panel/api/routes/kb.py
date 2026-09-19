@@ -4,6 +4,8 @@ Admin-only JSON wrappers over `app/services/kb.py` (thin, no new business
 logic; the mutation audits are the existing service calls, SH-5):
 
 - GET  /kb              -> {"docs": [{provider, model, cost_meta}]} (newest 1st)
+- GET  /kb/{id}         -> document detail including content
+- GET  /kb/search       -> retrieval probe with ranked chunks and titles
 - POST /kb              -> multipart title + file (pdf/md/txt/csv); ingest + audit
 - POST /kb/{id}/edit    -> {"title","content"}: new version + re-embed (KB-4)
 - POST /kb/{id}/disable -> KB-3 disable (excluded from retrieval)
@@ -20,7 +22,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -66,6 +68,46 @@ def kb_list(
     """Document list for the KB manager (provider/model/cost exposed, AP-6)."""
     docs = session.scalars(select(KbDocument).order_by(KbDocument.id.desc())).all()
     return {"docs": [to_doc_dict(doc) for doc in docs]}
+
+
+@router.get("/kb/search")
+def kb_search(
+    q: str = Query(...),
+    top_k: int = kb_service.DEFAULT_TOP_K,
+    min_sim: float = kb_service.DEFAULT_MIN_SIM,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """Run the existing KB retrieval pipeline for panel evaluation."""
+    if not q.strip():
+        raise HTTPException(status_code=400, detail="query must not be blank")
+
+    results = kb_service.retrieve(session, q, top_k=top_k, min_sim=min_sim)
+    document_ids = {result["document_id"] for result in results}
+    titles = {}
+    if document_ids:
+        docs = session.scalars(
+            select(KbDocument).where(KbDocument.id.in_(document_ids))
+        ).all()
+        titles = {doc.id: doc.title for doc in docs}
+
+    return {
+        "results": [
+            {**result, "title": titles[result["document_id"]]}
+            for result in results
+        ]
+    }
+
+
+@router.get("/kb/{doc_id}")
+def kb_detail(
+    doc_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """Return one KB document, including its stored content."""
+    doc = _doc_or_404(session, doc_id)
+    return to_doc_dict(doc, include_content=True)
 
 
 @router.post("/kb")

@@ -395,9 +395,9 @@ def to_assistant_attachment_dict(attachment: AssistantAttachment) -> dict:
             "created_at": _iso(attachment.created_at)}
 
 
-def to_doc_dict(doc: KbDocument) -> dict:
+def to_doc_dict(doc: KbDocument, *, include_content: bool = False) -> dict:
     """KB document row -> snake_case dict (B4/T4.1; provider/model/cost, KB-3)."""
-    return {
+    payload = {
         "id": doc.id,
         "title": doc.title,
         "format": doc.format.value,
@@ -409,6 +409,9 @@ def to_doc_dict(doc: KbDocument) -> dict:
         "cost_meta": float(doc.cost_meta) if doc.cost_meta is not None else None,
         "created_at": _iso(doc.created_at),
     }
+    if include_content:
+        payload["content"] = doc.content
+    return payload
 
 
 def to_memory_dict(memory: Memory) -> dict:

@@ -141,9 +141,29 @@ describe("KbList page story (T5.2 / S6 DS-UI-COPY/STATES/LABELS)", () => {
 });
 
 describe("KbList Empty story", () => {
-  it("renders the empty state with the approved Spanish message", () => {
+  it("renders the empty state with an operable upload action", () => {
     render(<KbListEmpty />);
     expect(screen.getByText("No hay documentos")).toBeInTheDocument();
+    const addCard = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
+    expect(within(addCard).getByRole("button", { name: "Agregar" })).toBeEnabled();
+  });
+});
+
+describe("KbList editor", () => {
+  it("loads the stored document content when editing", async () => {
+    const user = userEvent.setup();
+    const storedContent = "Contenido almacenado desde la base de conocimientos.";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ...docs[0], content: storedContent }), { status: 200 }),
+    );
+
+    render(<KbList data={{ docs }} />);
+    const row = within(screen.getByRole("table")).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
+    await user.click(within(row).getByText("Editar"));
+
+    expect(await within(row).findByDisplayValue(storedContent)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(`/panel/api/kb/${docs[0].id}`, expect.objectContaining({ credentials: "include" }));
+    fetchMock.mockRestore();
   });
 });
 
@@ -202,12 +222,14 @@ describe("KbList API page", () => {
     const user = userEvent.setup();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       if (init?.method === "POST") return new Response(JSON.stringify({ ok: true, doc: docs[0] }), { status: 200 });
+      if (String(_input).includes(`/kb/${docs[0].id}`)) return new Response(JSON.stringify({ ...docs[0], content: "Contenido existente" }), { status: 200 });
       return new Response(JSON.stringify({ docs }), { status: 200 });
     });
 
     render(<KbList data={{ docs }} />);
     const row = within(screen.getByRole("table")).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
     await user.click(within(row).getByText("Editar"));
+    await within(row).findByDisplayValue("Contenido existente");
     await user.click(within(row).getByRole("button", { name: /guardar/i }));
     await user.click(within(row).getByRole("button", { name: "Deshabilitar" }));
     const restoreRow = within(screen.getByRole("table")).getByText(`#${docs.find((doc) => doc.version > 1)!.id}`).closest("tr") as HTMLElement;
@@ -218,21 +240,23 @@ describe("KbList API page", () => {
     expect((mutationCalls[0][1]?.body as string)).toContain('"content"');
     expect((mutationCalls[1][0] as string)).toContain(`/kb/${docs[0].id}/disable`);
     expect((mutationCalls[2][0] as string)).toContain(`/kb/${docs.find((doc) => doc.version > 1)!.id}/restore`);
-    expect(fetchMock.mock.calls.filter(([, init]) => !init?.method || init.method === "GET")).toHaveLength(3);
+    expect(fetchMock.mock.calls.filter(([, init]) => !init?.method || init.method === "GET")).toHaveLength(4);
     fetchMock.mockRestore();
   });
 
   it.each([400, 422])("maps %i validation failures to safe actionable feedback", async (status) => {
     const user = userEvent.setup();
     const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...docs[0], content: "Contenido existente" }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "database secret" }), { status }));
     render(<KbList data={{ docs }} />);
     const row = within(screen.getByRole("table")).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
     await user.click(within(row).getByText("Editar"));
+    await within(row).findByDisplayValue("Contenido existente");
     await user.click(within(row).getByRole("button", { name: /guardar/i }));
     expect(await screen.findByRole("heading", { name: /revisa los campos/i })).toBeInTheDocument();
     expect(screen.getByRole("alert")).not.toHaveTextContent("database secret");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     fetchMock.mockRestore();
   });
 
