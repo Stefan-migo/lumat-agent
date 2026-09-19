@@ -255,7 +255,25 @@ Resume with `mem_context`, then the project-scoped `mem_search` for this feature
 
 ## Review (native RDD)
 
-_Not started. Filled in at the delivery boundary._
+- **Lineage** `review-308aef6320ef2aa9` · risk tier **medium** (`configuration_change` in
+  `agent/registry.yaml`) · one lens: **`review-reliability`** · 25 files / 944 changed lines ·
+  correction budget 200, unused.
+- **Approved on the first capture, zero findings.** 0 correction rounds.
+- **Consent**: the medium-risk envelope was relayed losslessly and the human chose
+  *"Revisar este cambio"* (`granted`); the provider-owned grant invocation was executed once.
+- **Acknowledgement consumed**: `gentle-ai.review-acknowledged/v1`, `authority: burned`,
+  consumed revision `sha256:fc2a10e8f36c0f1de7f8b6eadf5f336d2ad48de8f5ce296821f5f859e8efabcf`.
+- **Projection note (recurring trap, confirmed again):** the `workspace` projection reviews
+  *uncommitted* changes. With the work already committed the candidate comes back empty
+  (`base_tree == candidate_tree`). The fix is `--base-ref <merge-base> --committed-only` on the
+  STATUS preflight — **not** un-committing.
+- **Untracked scope:** `rapso worktree create` leaves an untracked
+  `.opencode/tools/package-lock.json`. The preflight refuses to freeze a candidate while an
+  eligible untracked path is undeclared; declaring `--untracked-scope=exclude` with the canonical
+  `--expected-untracked-inventory` digest (both required together) resolves it without committing
+  or deleting the generated file.
+
+No advisory findings were raised for this candidate.
 
 ## Next step
 
