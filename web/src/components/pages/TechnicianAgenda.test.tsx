@@ -68,3 +68,28 @@ describe('technician surface composition', () => {
     expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument();
   });
 });
+
+describe('technician surface — reaching the customer', () => {
+  const renderWith = (rows: TechnicianAppointment[]) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ appointments: rows }), { status: 200 }),
+    );
+    return render(<TechnicianAgenda />);
+  };
+
+  it('never renders an empty tel: link when the customer has no phone', async () => {
+    renderWith([{ ...appointment, id: 8, customer: { ...appointment.customer, phone: null } }]);
+
+    expect(await screen.findByText('Calefont')).toBeInTheDocument();
+    expect(screen.getByText('Teléfono no registrado')).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('makes the phone reachable through the shared Button primitive when it exists', async () => {
+    renderWith([appointment]);
+
+    const call = await screen.findByRole('link', { name: '+56912345678' });
+    expect(call).toHaveAttribute('href', 'tel:+56912345678');
+    expect(call).toHaveClass('btn');
+  });
+});

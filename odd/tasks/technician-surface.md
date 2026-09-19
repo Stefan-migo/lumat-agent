@@ -135,9 +135,14 @@ login, and other page surfaces.
   centred content on desktop (measured, not eyeballed). Shell keeps brand + session controls.
   Absorbed the shell half of T10: the styles now live in `primitives.css` and the injected `<style>`
   block is gone.
-- [ ] **T2** — RED/GREEN: a null phone renders as plain text with no anchor; a present phone renders
-  an operable control.
-- [ ] **T3** — RED/GREEN: the phone control's computed height is at least 44px.
+- [x] **T2** — RED/GREEN: a null phone renders as plain text with no anchor; a present phone renders
+  an operable control. The control reuses `Button` with `href`, so it is the shared primitive rather
+  than a bare anchor.
+- [x] **T3** — RED/GREEN: the phone control clears the touch-target minimum. Measured on an emulated
+  touch device (`hover: none, pointer: coarse`): 127.3 × 62px against the 44 × 44 target. On a pointer
+  device it is 127.3 × 34.3px, which is the primitive's own `min-height: var(--space-8)` (32px).
+  The 44px comes from the existing guarded `@media (hover: none)` block in `primitives.css`; no
+  bespoke rule was added, because a second such block fails the D7 test in `tokens.test.ts`.
 - [ ] **T4** — RED/GREEN: each card leads with the appointment time; service becomes supporting.
 - [ ] **T5** — RED/GREEN: the list is grouped by day, today is marked, and past is separated from
   upcoming. Edge cases: an empty day set, a single day, and every appointment in the past.
@@ -145,13 +150,14 @@ login, and other page surfaces.
   last-loaded state is visible to the user. No automatic polling.
 - [ ] **T7** — RED/GREEN: `Cerrar sesión` and `Reintentar` use the `Button` primitive; no raw
   `<button>` remains on the surface.
-- [ ] **T8** — Remove the dead `technician-agenda` class or give it a purpose; no orphan class names.
+- [x] **T8** — the dead `technician-agenda` class is now a real class, and the agenda's inline styles
+  moved to `primitives.css` (T10's first half). No orphan class names remain.
 - [ ] **T9** — Storybook story covering ready / long content / null customer / empty / error, and
   Vitest coverage for the new grouping, null-phone, and single-`h1` behaviour. Move the existing test
   next to its component in `pages/`, preserving its assertions verbatim.
-- [ ] **T10** — move `TechnicianAgenda`'s inline styles into the technician section of
-  `primitives.css`, and raise the card boundary from `--border` to `--border-strong` so the card edge
-  meets the 3:1 requirement. (The shell half moved into T1.)
+- [ ] **T10** — the agenda's inline styles are already at the boundary (done with T2/T3). What remains
+  is raising the card boundary from `--border` to `--border-strong` so the card edge meets the 3:1
+  requirement. (The shell half moved into T1.)
 
 ## Acceptance criteria
 
@@ -190,12 +196,23 @@ login, and other page surfaces.
 - [x] Graph Check (Step 1): `graphify query` over the technician area and
       `graphify path TechnicianAgenda() primitives.css` / `... tokens`. Both paths return none, which
       is the graph-level confirmation of the design-system disconnect recorded above.
-- [x] T1 — commit pending. RED observed: `expected [ <h1></h1>, <h1></h1> ] to have a length of 1 but
+- [x] T1 — commit `bc6db8cf`. RED observed: `expected [ <h1></h1>, <h1></h1> ] to have a length of 1 but
       got 2`. GREEN: 3/3 tests, `tsc -b --noEmit` exit 0. Browser-verified at 1440 and 390: one `h1`,
       and `headerInner.left = content.left = pageH1.left = article.left = 208` at 1440 (16 at 390).
       Shell header height 214.8 → 130.9; first appointment top 356.8 → 272.9 at 1440, and
       ≈610 → 272.9 at 390. No `style` element is emitted by `TechnicianShell` any more.
-- [ ] T2..T10
+- [x] T2 + T3 + T8 — commit pending. RED observed for both: the null-phone case still emitted the
+      anchor, and the phone anchor had no `.btn` class. GREEN: 5/5 technician tests. Browser-verified:
+      `uaBlueLinks: 0` on both pointer and touch (the UA `rgb(0, 0, 238)` is gone), the placeholder is a
+      plain `span`, and the call control measures 127.3 × 62px on touch. `app.test.tsx` asserted
+      `findAllByText('Agenda técnica')` **toHaveLength(2)** — it blessed the duplicate-heading bug the
+      way T4 of `kb-workspace` blessed the KB deadlock; it now asserts one heading.
+- [x] Full-suite context: `npm run test` reported 4 files / 7 tests failing, but one of them
+      (`app.test.tsx`) was a real regression from T1 and is fixed. The other six (AppShell ×3,
+      AgendaPage ×1, AgentChat ×2) are contention artifacts: load average was 180 during the run, and
+      the same three files pass 66/66 both on `main` at the base commit and in this worktree in
+      isolation. Re-run the full suite when the machine is quiet before trusting a green signal.
+- [ ] T4..T7, T9, T10
 
 ## Recovery
 

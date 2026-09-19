@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { fetchTechnicianAgenda } from '../../api';
 import type { TechnicianAppointment } from '../../types';
 import { useAsyncData, type AsyncDataState } from '../../hooks/useAsyncData';
+import { Button } from '../primitives/Button';
 import { EmptyState } from '../shared/EmptyState';
 import { PageFrame } from '../shared/PageFrame';
 import { StateMessage } from '../shared/StateMessage';
@@ -24,14 +25,16 @@ export function TechnicianAgenda() {
   return (
     <PageFrame title="Agenda técnica" meta={state === 'ready' ? `${appointments.length} visitas` : undefined} state={stateMessage(state, retry)}>
       {state === 'loading' || state === 'error' || state === 'denied' ? null : state === 'empty' ? <EmptyState title="No hay visitas asignadas" description="No tienes visitas en tu agenda." /> : (
-        <div className="technician-agenda" style={{ display: 'grid', gap: 'var(--space-3)' }}>
-          {appointments.map((row) => <article key={row.id} style={{ display: 'grid', gap: 'var(--space-2)', padding: 'var(--space-4)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+        <div className="technician-agenda">
+          {appointments.map((row) => <article key={row.id} className="technician-agenda__item">
             <h2>{row.service}</h2>
             <time dateTime={row.starts_at}>{localTime(row)}</time>
             <strong>{row.customer.name ?? 'Cliente sin nombre'}</strong>
             <span>{row.customer.address ?? 'Dirección no registrada'}</span>
             <span>{row.customer.comuna ?? 'Comuna no registrada'}</span>
-            <a href={`tel:${row.customer.phone ?? ''}`}>{row.customer.phone ?? 'Teléfono no registrado'}</a>
+            {row.customer.phone
+              ? <Button className="technician-agenda__call" variant="secondary" href={`tel:${row.customer.phone}`}>{row.customer.phone}</Button>
+              : <span>Teléfono no registrado</span>}
             {row.case_summary ? <p>{row.case_summary}</p> : null}
           </article>)}
         </div>
