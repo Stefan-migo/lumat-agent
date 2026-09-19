@@ -1,7 +1,7 @@
 from datetime import date, time
 
 from app.db import SessionLocal
-from app.models import Case, Conversation, Customer
+from app.models import Appointment, Case, Conversation, Customer
 from app.services import scheduling
 
 
@@ -43,9 +43,24 @@ def test_technician_cannot_forge_ownership_or_receive_sensitive_fields(client, m
     response = client.get("/panel/api/technician/agenda", params={"technician_id": other, "appointment_id": 1})
     row = response.json()["appointments"][0]
     assert [row["case_summary"]] == ["allowed"]
-    assert set(row) == {"id", "service", "local_start", "starts_at", "ends_at", "timezone", "customer", "case_summary"}
+    assert set(row) == {"id", "service", "local_start", "starts_at", "ends_at", "timezone", "status", "customer", "case_summary"}
     assert set(row["customer"]) == {"name", "address", "comuna", "phone"}
-    assert all(value not in response.text for value in ("private@example.test", "consent_status", "history", "sync", "status", "notes"))
+    assert row["status"] in {"booked", "cancelled", "completed", "no_show"}
+    assert all(value not in response.text for value in ("private@example.test", "consent_status", "history", "sync", "notes"))
+
+
+def test_cancelled_appointment_stays_visible_and_marked(client, make_user):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _appointment(technician, "+56900000013", date(2026, 1, 3), "cancelled visit")
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        scheduling.cancel(session, appointment, actor="oper", reason="dispatch cancelled")
+        session.commit()
+    _login(client)
+    response = client.get("/panel/api/technician/agenda")
+    assert response.status_code == 200
+    row = next(item for item in response.json()["appointments"] if item["id"] == appointment_id)
+    assert row["status"] == "cancelled"
 
 
 def test_technician_agenda_requires_authenticated_session(client):

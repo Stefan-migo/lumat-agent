@@ -215,6 +215,7 @@ def to_technician_appointment_dict(
         "starts_at": _iso(appointment.starts_at),
         "ends_at": _iso(appointment.ends_at),
         "timezone": appointment.timezone,
+        "status": appointment.status.value,
         "customer": {
             "name": customer.name,
             "address": customer.address,
