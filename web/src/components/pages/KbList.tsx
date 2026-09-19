@@ -89,7 +89,7 @@ function stateMessage(state: KbListState, storyError: boolean) {
 function SearchPanel() {
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState("5");
-  const [minSim, setMinSim] = useState("0.65");
+  const [minSim, setMinSim] = useState("0");
   const [results, setResults] = useState<KbSearchResult[]>([]);
   const [searchState, setSearchState] = useState<"idle" | "loading" | "ready" | "empty" | "error" | "denied">("idle");
 
@@ -112,6 +112,7 @@ function SearchPanel() {
         <Input label="Similitud mínima" type="number" min="0" max="1" step="0.01" value={minSim} onChange={(event) => setMinSim(event.target.value)} />
         <Button onClick={() => void runSearch()} disabled={searchState === "loading"}>Buscar</Button>
       </div>
+      <p className="kb-search__hint">La similitud mínima filtra los resultados: con 0 ves el ranking completo y sus puntajes. Auméntala para exigir más coincidencia.</p>
       {searchState === "loading" ? <StateMessage tone="info" role="status" spinner title="Buscando en la base de conocimientos" /> : null}
       {searchState === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para buscar en la base de conocimientos" /> : null}
       {searchState === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos realizar la búsqueda" detail="Revisa la consulta y los parámetros e inténtalo nuevamente." /> : null}
