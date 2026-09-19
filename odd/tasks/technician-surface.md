@@ -249,10 +249,34 @@ for a design-system change; `tokens.test.ts` was left asserting only the pairs i
       AgendaPage ×1, AgentChat ×2) are contention artifacts: load average was 180 during the run, and
       the same three files pass 66/66 both on `main` at the base commit and in this worktree in
       isolation. Re-run the full suite when the machine is quiet before trusting a green signal.
-- [x] T9 — commit pending. 7 story tests + 12 page tests + 8 app tests + tokens + closure = 48 green;
+- [x] T9 — commit `ca741fff`. 7 story tests + 12 page tests + 8 app tests + tokens + closure = 48 green;
       `tsc -b --noEmit` exit 0.
-- [x] All ten tasks complete. Remaining before the PR: `npm run build`, and a full-suite run on a quiet
-      machine (see the contention note above).
+- [x] All ten tasks complete.
+
+## Verification of record (final)
+
+- `cd web && npm run test` → **78 files, 584 tests, all passing**, 50.81s, on a quiet machine (load
+  average 6.6). The earlier 4-file / 7-test run was contention, exactly as recorded above: only
+  `app.test.tsx` was a real regression, fixed in `b7258850`.
+- `cd web && npm run build` → exit 0 (332 modules; the 509 kB chunk and its pre-existing
+  bundle-size warning are unchanged in kind from before this change).
+- `cd web && npm run build-storybook` → exit 0, preview built in 13s.
+- `cd web && npx tsc -b --noEmit` → exit 0.
+- Browser-verified at 1440 and 390 on an emulated touch device against the real `infra-api-1` on
+  `:8000`: one `h1`; header, page title and cards sharing one gutter; header 214.8 → 130.9px; first
+  appointment 356.8 → 272.9px at 1440 and ≈610 → 272.9px at 390; `uaBlueLinks: 0`; the call control
+  127.3 × 62px; day labels `["Hoy", "Martes, 15 de septiembre"]`; sections in upcoming → past order;
+  slots `["15:00–16:00", "11:00–12:00"]`; the roster surviving an in-flight refresh alongside
+  `"1 visita · Actualizado 14:00"`.
+
+## Size
+
+`b38e33bd..HEAD` is **748 changed lines under `web/`** (689 added, 59 deleted) plus this 276-line ODD
+record. Production is roughly 307 of that (`TechnicianAgenda.tsx` +175, `primitives.css` +108,
+`TechnicianShell.tsx` 24); the rest is tests, the story and its mock payload. The pre-implementation
+forecast was 450–650, so the real figure came in above it. It stays inside this repository's observed
+merge range (PR #242 landed 767 lines, #239 593), but it is over the 400-line review-focus budget, so
+splitting is a live option rather than a settled one.
 
 ## Follow-up finding (not in this change's scope)
 
@@ -266,11 +290,16 @@ every page, so it belongs in its own change rather than here.
 ## Recovery
 
 - Worktree: `/home/stefan/repos/lumat-agent-odd-technician-surface`, branch `odd/technician-surface`.
-- Dev server for this worktree: `cd web && npm run dev -- --host 127.0.0.1 --port 5174`, with the API
-  proxy pointed at the running `infra-api-1` on `:8000`.
+- Dev server for this worktree: `cd web && npm run dev -- --host 127.0.0.1 --port 5175`, with the API
+  proxy pointed at the running `infra-api-1` on `:8000`. (`VITE_API_TARGET` retargets the proxy; `5174`
+  is taken by the `odd/kb-workspace` dev server.)
 - Review fixture (main dev DB, reversible): user `tec-agenda` (role `tecnico`) and appointments
   ids 5-8 owned by it. Delete those five rows to remove the fixture.
 - Playwright review scripts used to produce the evidence live in `/tmp/opencode/` (`tec-review.cjs`,
-  `tec-probe.cjs`, `tec-mobile.cjs`); screenshots in `/tmp/opencode/shots/`.
-- On resume: read this file, reconcile the checkbox state against `git log`, and confirm that T10's
-  blocker (`odd/kb-workspace` holding `primitives.css`) is still accurate before starting it.
+  `tec-probe.cjs`, `tec-mobile.cjs`, `tec-t1-verify.cjs`, `tec-t2-verify.cjs`, `tec-t6.cjs`,
+  `tec-t7.cjs`, `tec-slot.cjs`); screenshots in `/tmp/opencode/shots/`.
+- On resume: read this file and reconcile the checkbox state against `git log`. T10 is done — its
+  original blocker (`odd/kb-workspace` holding `primitives.css`) was released mid-flight by
+  `9f153656`, and the technician section was placed beside the panel-shell block rather than at the
+  end of the file so the two branches merge without overlapping hunks. Verify that is still true
+  before rebasing onto a `main` that already contains the KB change.
