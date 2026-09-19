@@ -3,7 +3,7 @@
 **Work unit:** #7 of the Tukulpan/Engram series (reported defect carried over from WU#4)
 **Source:** `odd/tasks/memory-axes.md` → "Explicitly out of scope" → *"a `panel` read may target `thread:{any id}` … gets its own work unit"*
 **Worktree:** `../lumat-agent-odd-memory-read-binding` · branch `odd/memory-read-binding` · base `5a7297c3`
-**Status:** completed
+**Status:** complete, verified, RDD-approved (lineage `review-0c539927b0989fcd`, authority burned)
 
 ---
 
@@ -275,3 +275,20 @@ Verification of record (orchestrator, after the follow-up fix):
 
 - Targeted: `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/unit/test_assistant_planner.py tests/unit/test_assistant_tools.py tests/integration/test_assistant_harness_compatibility.py tests/integration/test_assistant_harness_guardrails.py tests/spec/test_memory_spec.py` → `101 passed in 17.49s`.
 - Full suite: `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/` → `916 passed, 2 warnings in 396.14s (0:06:36)`. No failure; the historically documented `test_db.py` hard-coded-port failure does not exist at this base.
+
+---
+
+## Review outcome — RDD lineage `review-0c539927b0989fcd`
+
+- **Tier:** medium · **lenses:** one (`review-reliability`) · **correction budget:** 200 lines.
+- **Frozen candidate:** base tree `6ca4dff1` (commit `5a7297c3`) → candidate tree `814babb9`,
+  10 paths, 404 changed lines.
+- **Consent:** human granted the review for this candidate (`risk_level: medium`,
+  `consent_required` relayed losslessly and answered "Revisar este cambio").
+- **Lens result:** no findings — 0 BLOCKER, 0 CRITICAL, 0 WARNING, 0 SUGGESTION.
+- **State:** `approved` on the first admitted capture; no refuter and no correction round were needed.
+- **Acknowledgement:** `gentle-ai.review-acknowledged/v1`, `action: acknowledged`,
+  `authority: burned`, consumed revision `sha256:f836c340…`.
+- **Verification of record (orchestrator):** `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/`
+  → `916 passed, 2 warnings in 396.14s`.
+- Commit, push, PR, and merge remain separate human decisions under ordinary repository policy.
