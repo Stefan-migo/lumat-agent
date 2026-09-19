@@ -110,23 +110,27 @@ amendment.
 
 ## Tasks
 
-- [ ] **T1** — RED/GREEN: `GET /panel/api/kb/{doc_id}` returning the document **including
+- [x] **T1** — RED/GREEN: `GET /panel/api/kb/{doc_id}` returning the document **including
   `content`**, admin-only, 404 JSON when absent. Tests in
   `tests/functional/test_api_kb_settings.py` following its existing `_login`/`_seed_doc` patterns.
-- [ ] **T2** — RED/GREEN: `GET /panel/api/kb/search?q=&top_k=&min_sim=` returning
+- [x] **T2** — RED/GREEN: `GET /panel/api/kb/search?q=&top_k=&min_sim=` returning
   `document_id`, `title`, `version`, `chunk_index`, `content`, `similarity`, ordered best-first.
   Tests: relevant hit, below-threshold → empty, disabled document excluded, `top_k` and `min_sim`
   honoured, admin-only 401/403.
-- [ ] **T3** — `web/src/api.ts` + `web/src/types.ts`: `getKbDocument`, `searchKb` and their types.
-- [ ] **T4** — RED/GREEN: the upload control is reachable in the empty state. **Fix the test that
+- [x] **T3** — `web/src/api.ts` + `web/src/types.ts`: `getKbDocument`, `searchKb` and their types.
+- [x] **T4** — RED/GREEN: the upload control is reachable in the empty state. **Fix the test that
   blessed the bug**: the empty story must assert the available action, not only the message.
-- [ ] **T5** — The edit form loads the stored content from T1 instead of a placeholder.
-- [ ] **T6** — KB search surface: query field, results with similarity, empty/error states, using the
+- [x] **T5** — The edit form loads the stored content from T1 instead of a placeholder.
+- [x] **T6** — KB search surface: query field, results with similarity, empty/error states, using the
   existing control-room primitives.
-- [ ] **T7** — Copy: neutral Chilean Spanish (remove voseo) and status labels per `DESIGN_SYSTEM.md:375`.
-- [ ] **T8** — Layout extracted from inline styles into `primitives.css` with existing tokens;
+- [x] **T7** — Copy: neutral Chilean Spanish (remove voseo) and status labels per `DESIGN_SYSTEM.md:375`.
+- [x] **T8** — Layout extracted from inline styles into `primitives.css` with existing tokens;
   DS-GRAMMAR-2 satisfied (no hard-coded colours, no new dependency).
-- [ ] **T9** — Storybook stories and tests updated; full suite green.
+- [x] **T9** — Storybook stories and tests updated; full suite green. **Partial:** the story *file*
+  itself was not modified — the component's props did not change, so the existing stories still
+  render and every story test passes. No story can yet drive the search-result state, because
+  `SearchPanel` owns its own fetch instead of taking injectable props like `KbList` does. Recorded
+  as a limitation, not silently claimed as done.
 
 ## Acceptance criteria
 
@@ -157,7 +161,50 @@ amendment.
 - [x] Graph Check (Step 1): `graphify query` over the KB area; `graphify-out/` present and fresh.
       It surfaced `PNL-APP-12` and the canonical `DS-GRAMMAR-1`, which is what stopped an
       out-of-scope redesign.
-- [ ] T1..T9
+- [x] T1 + T2 — commit `27b6dfd0`. RED observed (`assert 404 == 200`, `KeyError: 'results'`,
+      `{'detail': 'Not Found'} != {'detail': 'kb document not found'`, `assert 404 == 400`).
+- [x] Verification of T1 + T2 — `uv run pytest tests/functional/test_api_kb_settings.py -q` →
+      `29 passed`; `tests/integration/test_kb.py` → `14 passed`; **full suite `tests/` → 100%,
+      `EXIT=0`**. The delegated writer reported `partial` only because the full suite exceeded its
+      20-minute budget; re-run by the orchestrator proved the timeout was CPU contention from a
+      sibling worktree (`odd/tool-name-honesty`) running the suite concurrently, not a failure.
+- [x] T3..T9 — commit `9f153656`.
+- [x] RED proven empirically for T4/T5: with the **pre-change** `KbList.tsx` restored and the new
+      tests in place, `renders the empty state with an operable upload action` fails with
+      `Unable to find an accessible element with the role "heading" and name "Agregar documento"`
+      — i.e. the upload control genuinely did not exist in the empty state — and
+      `loads the stored document content when editing` fails with
+      `Unable to find an element with the display value: Contenido almacenado desde la base de conocimientos..`
+- [x] GREEN: `npx vitest run` → **567 passed / 77 files**; `npm run build` (`tsc -b && vite build`) →
+      `✓ 332 modules transformed`, `built in 4.21s`.
+- [x] Spec check: `KbList` still renders `DataTable` for both the document list and the search
+      results (DS-GRAMMAR-1); no hard-coded colour in the CSS additions, no new dependency
+      (DS-GRAMMAR-2); only the nine authorized files changed.
+- [x] End-to-end against the isolated stack (`-p lumat-kb`, host `:8001`, freshly seeded admin):
+      login `200`; upload of a real `.md` → `200` with `provider=local`,
+      `model=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (real embeddings, no fake);
+      `GET /panel/api/kb/1` returns `content`; `GET /panel/api/kb` does **not**; `/kb/search` honours
+      `min_sim` and `top_k`; blank `q` → `400`, missing `q` → `422`.
+
+### Finding worth escalating: the production similarity threshold looks too strict
+
+Measured against one small seeded document with the real embedding model:
+
+| Query | Similarity | vs production `min_sim = 0.65` |
+| --- | --- | --- |
+| `cuanto cuesta la mantencion del calefont` | **0.6237** | **below — miss** |
+| `instalacion cocina a gas` | 0.5491 | below — miss |
+| `mantencion anual calefont` | 0.5070 | below — miss |
+| `receta de empanadas` (unrelated control) | 0.1935 | below — correctly a miss |
+
+A clearly relevant, naturally phrased question about a document that **is** in the KB scores below
+the threshold, so the brain takes the "cannot answer reliably" path and hands off. The probe is
+exactly what surfaced this.
+
+**Honest limits:** one three-line document, four queries, no chunk-boundary study, and the model is a
+small multilingual MiniLM. This is a signal, not a benchmark. It does not, on its own, prove the
+threshold is wrong — but it does mean the threshold must be evaluated against a realistic document
+corpus before go-live, and `min_sim` is now tunable from the panel for exactly that.
 
 ## Recovery
 
