@@ -53,7 +53,7 @@ The system MUST retain `hybrid_search()` as an explicit, project- and scope/enti
 #### Scenario: Role isolation
 - GIVEN a search by a role without cross-project rights
 - WHEN the search runs
-- THEN thread-visible memories return only from their own thread, project-visible agent memories return from any thread in the same project, and customer memories remain client-gated
+- THEN panel reads derive `thread:<trusted thread id>` server-side and return only that thread's memories, project-visible agent memories return from any thread in the same project, and customer memories remain client-gated
 
 #### Scenario: Empty result
 - GIVEN no memory above the threshold

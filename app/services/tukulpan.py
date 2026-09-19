@@ -81,6 +81,7 @@ __all__ = [
     "set_mark",
     "upsert",
     "agent_memory_entity",
+    "thread_memory_entity",
     "visibility_target",
 ]
 
@@ -102,13 +103,18 @@ def agent_memory_entity(proyecto: str) -> str:
     return f"agent:{proyecto}"
 
 
+def thread_memory_entity(thread_id: int) -> str:
+    """Canonical panel entity for one conversation thread."""
+    return f"thread:{thread_id}"
+
+
 def visibility_target(
     visibility: MemoryVisibility | str, *, thread_id: int, proyecto: str
 ) -> tuple[str, str]:
     """Derive the persisted axis from the declared visibility and its project."""
     value = visibility.value if isinstance(visibility, MemoryVisibility) else visibility
     if value == MemoryVisibility.THREAD.value:
-        return "panel", f"thread:{thread_id}"
+        return "panel", thread_memory_entity(thread_id)
     if value == MemoryVisibility.PROJECT.value:
         return AGENT_SCOPE, agent_memory_entity(proyecto)
     raise ValueError(f"unknown memory visibility: {visibility!r}")

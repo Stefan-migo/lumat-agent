@@ -130,7 +130,8 @@ def test_plan_llm_includes_whitelisted_tool_catalog_in_prompt(monkeypatch):
     assert all(set(entry) == {"name", "description", "arguments"} for entry in catalog)
     memory_entry = catalog[0]
     assert memory_entry["description"] == "Read scoped memory."
-    assert {"scope", "entity_id"}.issubset(memory_entry["arguments"]["required"])
+    assert memory_entry["arguments"]["required"] == ["scope"]
+    assert memory_entry["arguments"]["properties"]["entity_id"].get("default") is None
     assert "project.archive" not in prompt
 
 
@@ -264,7 +265,11 @@ def test_context_text_includes_conversation_identity_when_available():
         }
     }
 
-    assert _context_text(state) == "Pinned fact\nRecent message\nConversation identity: scope=panel entity_id=thread:42"
+    assert _context_text(state) == (
+        "Pinned fact\nRecent message\nConversation identity: scope=panel "
+        "(the panel memory read target is derived server-side)"
+    )
+    assert "entity_id=thread:42" not in _context_text(state)
 
 
 def test_context_text_omits_conversation_identity_without_complete_meta():
@@ -282,7 +287,8 @@ def test_context_text_announces_saved_recap_after_rotation():
     text = _context_text(state)
 
     assert "recap saved" in text.lower()
-    assert "memory.read" in text
+    assert "memory.read with scope=panel and no entity_id" in text
+    assert "conversation identity above" not in text
     assert "unavailable" not in text.lower()
 
 

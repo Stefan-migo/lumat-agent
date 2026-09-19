@@ -41,6 +41,17 @@ def test_memory_args_reject_unknown_scope_and_expose_canonical_scope_schema():
     ]
 
 
+def test_memory_scope_entity_is_conditional_and_panel_entity_is_forbidden():
+    assert MemoryArgs.model_validate({"scope": "panel"}).entity_id is None
+
+    with pytest.raises(ValueError, match="derived server-side"):
+        MemoryArgs.model_validate({"scope": "panel", "entity_id": "thread:7"})
+    with pytest.raises(ValueError):
+        MemoryArgs.model_validate({"scope": "customer"})
+    with pytest.raises(ValueError):
+        MemoryArgs.model_validate({"scope": "agent"})
+
+
 def test_project_tools_are_typed_bounded_and_classified():
     expected = {
         "project.list": True,
@@ -452,6 +463,27 @@ def test_memory_read_is_bounded_and_uses_memory_service(monkeypatch):
     assert len(result["result"]) == 5
 
 
+def test_panel_memory_read_uses_trusted_thread_and_fails_closed(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.memory.list_for_entity",
+        lambda *args, **kwargs: calls.append(kwargs) or [],
+    )
+
+    result = execute_tool(
+        SimpleNamespace(), "memory.read", {"scope": "panel"}, trusted_thread_id=7
+    )
+    assert result["status"] == "completed"
+    assert calls == [{"scope": "panel", "entity_id": "thread:7"}]
+
+    with pytest.raises(ToolValidationError, match="positive trusted thread id"):
+        execute_tool(SimpleNamespace(), "memory.read", {"scope": "panel"})
+    with pytest.raises(ToolValidationError, match="positive trusted thread id"):
+        execute_tool(
+            SimpleNamespace(), "memory.search", {"scope": "panel", "query": "launch"}
+        )
+
+
 def test_memory_search_is_scoped_and_bounds_content(monkeypatch):
     calls = []
     monkeypatch.setattr(
@@ -466,8 +498,8 @@ def test_memory_search_is_scoped_and_bounds_content(monkeypatch):
 
     result = execute_tool(
         SimpleNamespace(),
-        "memory.search",
-        {"query": "launch", "scope": "panel", "entity_id": "thread:7", "limit": 1},
+        "memory.search", {"query": "launch", "scope": "panel", "limit": 1},
+        trusted_thread_id=7,
     )
 
     assert result["status"] == "completed"

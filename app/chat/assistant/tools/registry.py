@@ -73,18 +73,24 @@ class KpiArgs(BaseModel):
 class _MemoryScopeArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     scope: Literal["panel", "customer", "agent"]
-    entity_id: str = Field(min_length=1, max_length=100)
+    entity_id: str | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
     def validate_scope_entity(self) -> "_MemoryScopeArgs":
-        if self.scope == "panel" and not self.entity_id.startswith("thread:"):
-            raise ValueError("panel memory reads require a thread:{id} entity")
+        if self.scope == "panel" and self.entity_id is not None:
+            raise ValueError("panel memory reads require the thread to be derived server-side")
         if self.scope == "customer" and (
+            self.entity_id is None
+            or (
             not self.entity_id.startswith("customer:")
             and not self.entity_id.isdigit()
+            )
         ):
             raise ValueError("customer memory reads require customer:{id} or a legacy numeric id")
-        if self.scope == "agent" and self.entity_id != memory.agent_memory_entity(memory.WRITABLE_PROYECTO):
+        if self.scope == "agent" and (
+            self.entity_id is None
+            or self.entity_id != memory.agent_memory_entity(memory.WRITABLE_PROYECTO)
+        ):
             raise ValueError("canonical agent memory reads require the project-qualified canonical agent entity")
         return self
 
@@ -215,19 +221,29 @@ def _kpis(session, args: KpiArgs):
     return dashboard.compute_kpis(session, args.window_days)
 
 
-def _read_memory(session, args: MemoryArgs):
-    rows = memory.list_for_entity(session, scope=args.scope, entity_id=args.entity_id)
+def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None):
+    entity_id = args.entity_id
+    if args.scope == "panel":
+        if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
+            raise ToolValidationError("panel memory read requires a positive trusted thread id")
+        entity_id = memory.thread_memory_entity(trusted_thread_id)
+    rows = memory.list_for_entity(session, scope=args.scope, entity_id=entity_id)
     if args.topic:
         rows = [row for row in rows if row.topic_key == args.topic]
     return rows[: args.limit]
 
 
-def _search_memory(session, args: MemorySearchArgs):
+def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | None):
+    entity_id = args.entity_id
+    if args.scope == "panel":
+        if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
+            raise ToolValidationError("panel memory search requires a positive trusted thread id")
+        entity_id = memory.thread_memory_entity(trusted_thread_id)
     rows = memory.hybrid_search(
         session,
         args.query,
         scope=args.scope,
-        entity_id=args.entity_id,
+        entity_id=entity_id,
         top_k=args.limit,
     )
     return [
@@ -415,6 +431,8 @@ def execute_tool(
         elif name == "project.create":
             result = _plain(definition.handler(session, parsed, _approval=project_approval))
         elif name == "memory.write":
+            result = _plain(definition.handler(session, parsed, trusted_thread_id=trusted_thread_id))
+        elif name in {"memory.read", "memory.search"}:
             result = _plain(definition.handler(session, parsed, trusted_thread_id=trusted_thread_id))
         else:
             result = _plain(definition.handler(session, parsed))

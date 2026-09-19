@@ -193,7 +193,10 @@ def _context_text(state: AssistantState) -> str:
     text = [str(item.get("content", "")) for item in context.get("items", [])]
     meta = context.get("meta") or {}
     if meta.get("scope") and meta.get("entity_id"):
-        text.append(f"Conversation identity: scope={meta['scope']} entity_id={meta['entity_id']}")
+        text.append(
+            f"Conversation identity: scope={meta['scope']} "
+            "(the panel memory read target is derived server-side)"
+        )
     compaction = state.get("compaction") or {}
     if compaction.get("failed"):
         text.append(
@@ -203,8 +206,8 @@ def _context_text(state: AssistantState) -> str:
     elif compaction.get("rotated"):
         text.append(
             "History recap saved: earlier messages in this thread were compacted into a recap "
-            "stored as thread memory. Pull it with memory.read using the conversation identity "
-            "above before claiming to remember earlier turns."
+            "stored as thread memory. Pull it with memory.read with scope=panel and no entity_id "
+            "before claiming to remember earlier turns."
         )
     return "\n".join(text)
 
