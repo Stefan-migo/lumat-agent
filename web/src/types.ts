@@ -316,10 +316,24 @@ export interface Doc {
   created_at: string | null;
 }
 
+export interface KbDocument extends Doc {
+  content: string;
+}
+
 export interface DocsResponse {
   docs: Doc[];
 }
 export interface KbMutationResponse { ok: true; doc: Doc; }
+export interface KbSearchResult {
+  document_id: number;
+  title: string;
+  version: number;
+  chunk_index: number;
+  content: string;
+  source_meta: Record<string, unknown> | null;
+  similarity: number;
+}
+export interface KbSearchResponse { results: KbSearchResult[]; }
 
 export interface SpendSnapshot {
   date: string;

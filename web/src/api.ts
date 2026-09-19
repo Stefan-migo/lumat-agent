@@ -55,7 +55,7 @@ export function postJson<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-import type { DocsResponse, KbMutationResponse } from './types';
+import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse } from './types';
 export const uploadKbDocument = (title: string, file: File) => {
   const body = new FormData();
   body.append('title', title);
@@ -66,6 +66,11 @@ export const editKbDocument = (id: number, body: { title: string; content: strin
 export const disableKbDocument = (id: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/disable`);
 export const restoreKbDocument = (id: number, version: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/restore`, { version });
 export const refreshKbDocuments = () => apiFetch<DocsResponse>('/panel/api/kb');
+export const getKbDocument = (id: number) => apiFetch<KbDocument>(`/panel/api/kb/${id}`);
+export function searchKb({ q, topK, minSim }: { q: string; topK: number; minSim: number }) {
+  const params = new URLSearchParams({ q, top_k: String(topK), min_sim: String(minSim) });
+  return apiFetch<KbSearchResponse>(`/panel/api/kb/search?${params.toString()}`);
+}
 
 import type { ActiveConversationsResponse, AdminUser, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AssistantAttachment, AssistantCapabilities, AutomationRuleResponse, AutomationRulesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse, ProjectsResponse, ProjectDetailResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; q?: string; limit?: number; offset?: number; }
