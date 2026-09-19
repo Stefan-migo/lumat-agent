@@ -179,4 +179,19 @@ design-system disconnect recorded in `technician-surface`. This change does not 
 - [x] T6 complete except the browser check. Everything green: backend functional 186/186, frontend
       589/589, `tsc` and `build` exit 0. Full backend suite not completed (user aborted at ~23%, no
       failures seen) — recorded as partial.
-- [ ] Not committed, not pushed, no PR. Nothing left to implement.
+- [x] Committed as four work units and opened as **PR #247** (`odd/technician-status` → `main`):
+      `7a8bcd7c` backend, `db534347` payload type, `6e3cf3d5` card + counter, `dc7718aa` this record.
+      Label `type:feature`, GitGuardian pass, MERGEABLE / CLEAN.
+- [x] Base note: the branch was fast-forwarded to main `e9b8191b` ("run the test database in RAM…")
+      before committing, and `tests/functional/` was re-run green on that base. That commit is **local
+      to main and unpushed** (`origin/main` = `bc2ee447`), so the PR diff currently also carries its
+      four files (`app/config.py`, `app/services/users.py`, `infra/docker-compose.yml`,
+      `tests/conftest.py`). Pushing main removes them from this PR without a rewrite.
+- [ ] Browser verification still pending. Nothing left to implement.
+
+## Size
+
+`e9b8191b..HEAD` is **300 changed lines over 10 files**: 182 lines of ODD record, and 118 of code,
+spec and tests — 15 of them deletions. Production is small (`TechnicianAgenda.tsx` 11,
+`primitives.css` 5, `serializers.py` 1, `types.ts` 3); the rest is tests, the story fixtures and the
+spec. Comfortably inside the 400-line review budget.
