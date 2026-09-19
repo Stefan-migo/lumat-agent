@@ -154,8 +154,12 @@ login, and other page surfaces.
   `["Próximas visitas", "Visitas anteriores"]`, and no past section when every visit is ahead.
 - [ ] **T6** — RED/GREEN: a refresh control re-fetches through `useAsyncData.retry` and the
   last-loaded state is visible to the user. No automatic polling.
-- [ ] **T7** — RED/GREEN: `Cerrar sesión` and `Reintentar` use the `Button` primitive; no raw
-  `<button>` remains on the surface.
+- [x] **T7** — RED/GREEN: `Cerrar sesión` and `Reintentar` use the `Button` primitive; no raw
+  `<button>` remains on the surface (`grep -n "<button"` returns nothing). The shell's bespoke
+  `.technician-shell__logout` rule was deleted — `.btn--secondary` plus the guarded
+  `@media (hover: none)` block already covered it, and the UA font (13.33px) is gone: both controls
+  now measure 34.3px on a pointer device at `--text-sm`. The recovery control gets its own grid so it
+  sits under the alert rather than attached to it.
 - [x] **T8** — the dead `technician-agenda` class is now a real class, and the agenda's inline styles
   moved to `primitives.css` (T10's first half). No orphan class names remain.
 - [ ] **T9** — Storybook story covering ready / long content / null customer / empty / error, and
@@ -218,7 +222,7 @@ login, and other page surfaces.
       AgendaPage ×1, AgentChat ×2) are contention artifacts: load average was 180 during the run, and
       the same three files pass 66/66 both on `main` at the base commit and in this worktree in
       isolation. Re-run the full suite when the machine is quiet before trusting a green signal.
-- [ ] T6..T7, T9, T10
+- [ ] T6, T9, T10
 
 ## Recovery
 

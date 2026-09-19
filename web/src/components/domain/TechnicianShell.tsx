@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Button } from '../primitives/Button';
 import type { User } from '../../types';
 
 export interface TechnicianShellProps {
@@ -25,7 +26,7 @@ export function TechnicianShell({ user, onLogout, children }: TechnicianShellPro
             <img src="/panel/app/brand/lumat-logo.png" alt="Lumat" />
             <span>{user.username}</span>
           </div>
-          {onLogout ? <button type="button" className="technician-shell__logout" onClick={() => void onLogout()}>Cerrar sesión</button> : null}
+          {onLogout ? <Button variant="secondary" onClick={() => void onLogout()}>Cerrar sesión</Button> : null}
         </div>
       </header>
       <div className="technician-shell__content">{children}</div>

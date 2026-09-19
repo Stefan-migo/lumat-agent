@@ -149,3 +149,16 @@ describe('technician surface — reading the agenda as a schedule', () => {
     expect(screen.queryByRole('region', { name: 'Visitas anteriores' })).not.toBeInTheDocument();
   });
 });
+
+describe('technician surface — controls come from the panel primitives', () => {
+  it('renders the recovery and session controls through the shared Button', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'boom' }), { status: 500 }),
+    );
+
+    renderSurface();
+
+    expect(await screen.findByRole('button', { name: 'Reintentar' })).toHaveClass('btn');
+    expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toHaveClass('btn');
+  });
+});

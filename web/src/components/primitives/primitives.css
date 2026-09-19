@@ -1381,20 +1381,9 @@
   margin: 0 auto;
   padding: var(--space-5) 0;
 }
-.technician-shell__logout {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: inherit;
-  padding: var(--space-2) var(--space-3);
-  cursor: pointer;
-}
 @media (max-width: 40rem) {
   .technician-shell__header-inner {
     align-items: flex-start;
-  }
-  .technician-shell__logout {
-    min-height: 2.75rem;
   }
 }
 
@@ -1406,6 +1395,15 @@
 .technician-agenda__section {
   display: grid;
   gap: var(--space-4);
+}
+/* Recovery control sits under the alert, not attached to it. The alert keeps the
+   full width; only the button hugs its own label. */
+.technician-agenda__error {
+  display: grid;
+  gap: var(--space-3);
+}
+.technician-agenda__error .btn {
+  justify-self: start;
 }
 .technician-agenda__section-title {
   margin: 0;

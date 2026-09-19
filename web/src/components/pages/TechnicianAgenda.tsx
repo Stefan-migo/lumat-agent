@@ -81,7 +81,7 @@ function splitAtToday(rows: TechnicianAppointment[], now: Date) {
 function stateMessage(state: AsyncDataState, retry: () => void) {
   if (state === 'loading') return <StateMessage tone="info" role="status" spinner title="Cargando agenda" />;
   if (state === 'denied') return <StateMessage tone="danger" role="alert" title="No tienes permiso para ver la agenda" />;
-  if (state === 'error') return <div><StateMessage tone="danger" role="alert" title="No pudimos cargar la agenda" /><button type="button" onClick={retry}>Reintentar</button></div>;
+  if (state === 'error') return <div className="technician-agenda__error"><StateMessage tone="danger" role="alert" title="No pudimos cargar la agenda" /><Button variant="secondary" onClick={retry}>Reintentar</Button></div>;
   return null;
 }
 
