@@ -33,6 +33,18 @@ services:
   # Test DB for the pytest suites (T6.1): pgvector on localhost:5432, same
   # credentials the tests conftests use (lumat/lumat admin, app/app role
   # created by db/migrate.sh). Started only with --profile test.
+  #
+  # Data lives in RAM (tmpfs), NOT a named volume. Why: the autouse `clean_db`
+  # fixture TRUNCATEs 25 tables before EVERY test, and on this host's
+  # btrfs-over-overlayfs that costs ~308ms per test — one relfilenode
+  # create/unlink + fsync per relation and index, independent of table size (a
+  # 16KB/2-index table measured ~215ms on its own). The same TRUNCATE against
+  # tmpfs measures ~31ms. That is a 10x on the ~230s the 755-test DB-backed
+  # suite spends truncating, for a one-line infra change.
+  #
+  # Nothing here needs to survive a container restart: `migrated_db` re-runs
+  # db/migrate.sh once per pytest session, and migrate.sh is idempotent and
+  # recreates the `app` role on a virgin cluster.
   db-test:
     image: pgvector/pgvector:pg16
     profiles: ["test"]
@@ -43,7 +55,10 @@ services:
     ports:
       - "${TEST_DB_PORT:-5432}:5432"
     volumes:
-      - db-test:/var/lib/postgresql/data
+      - type: tmpfs
+        target: /var/lib/postgresql/data
+        tmpfs:
+          size: 1g
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U lumat -d lumat"]
       interval: 5s
@@ -121,7 +136,6 @@ services:
 
 volumes:
   db:
-  db-test:
   venv:
   media:
   backups:

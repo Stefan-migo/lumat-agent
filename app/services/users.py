@@ -18,6 +18,7 @@ import bcrypt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models import User, UserRole
 
 # AP-1: lock after this many consecutive failures, for this long.
@@ -26,8 +27,15 @@ LOCK_MINUTES = 15
 
 
 def hash_password(password: str) -> str:
-    """bcrypt hash for a plaintext panel password (seed script + tests)."""
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    """bcrypt hash for a plaintext panel password (seed script + tests).
+
+    The work factor comes from `settings.panel_bcrypt_rounds` (default 12,
+    production). The test harness lowers it because cost 12 is ~306ms per hash
+    on the dev host; `verify_password` needs no matching change — bcrypt stores
+    the cost in the hash and reads it back out.
+    """
+    rounds = get_settings().panel_bcrypt_rounds
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str) -> bool:

@@ -66,6 +66,14 @@ class Settings(BaseSettings):
     # forgeable. SH-2: env-only, never in the repo.
     panel_session_secret: str
 
+    # Panel (AP-1): bcrypt work factor for panel password hashes. 12 is the
+    # production value and MUST stay the default. The test harness lowers it
+    # (PANEL_BCRYPT_ROUNDS=4) because cost 12 measures ~306ms per hash on the
+    # dev host and the auth/user/seed suites hash dozens of passwords per run.
+    # Safe to lower for tests: the factor is a work factor, not a format, and
+    # verify_password reads the cost back out of each stored hash.
+    panel_bcrypt_rounds: int = 12
+
     # Memoria (design "fines de detalle fino"; S3 close observations).
     # Product values pending sanity before merge (open design question), so
     # they ship as env-configurable constants with the design defaults.
