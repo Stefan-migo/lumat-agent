@@ -14,6 +14,7 @@ from app.chat.assistant.tools.registry import (
     ProjectRenameArgs,
     RuleArgs,
     ToolValidationError,
+    TOOL_REGISTRY,
     execute_tool,
     get_tool,
     tool_schemas,
@@ -30,6 +31,24 @@ def test_registry_exposes_typed_bounded_tools():
     assert schemas["customers.search"]["type"] == "object"
     assert get_tool("customers.search").read_only is True
     assert get_tool("automation.create_rule").read_only is False
+
+
+def test_memory_kpis_is_not_a_registered_tool():
+    assert "memory.kpis" not in TOOL_REGISTRY
+    assert "dashboard.summary" in TOOL_REGISTRY
+
+
+def test_appointments_list_is_not_a_registered_tool():
+    assert "appointments.list" not in TOOL_REGISTRY
+    assert "appointments.upcoming" in TOOL_REGISTRY
+
+
+def test_no_handler_is_shared_across_tool_domains():
+    handler_domains = {}
+    for name, definition in TOOL_REGISTRY.items():
+        handler_domains.setdefault(definition.handler, set()).add(name.split(".", 1)[0])
+
+    assert all(len(domains) == 1 for domains in handler_domains.values())
 
 
 def test_memory_args_reject_unknown_scope_and_expose_canonical_scope_schema():
