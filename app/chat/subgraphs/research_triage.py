@@ -36,6 +36,7 @@ from app.chat.nodes.handoff import handoff
 from app.chat.nodes.orchestrate import RESEARCH_TRIAGE, is_tool_whitelisted
 from app.chat.state import ConversationState
 from app.db import session_scope
+from app.models import KbVisibility
 from app.services import kb
 from app.services.realtime import record_activity
 
@@ -95,6 +96,8 @@ def _kb_check(state: ConversationState) -> dict:
             top_k=kb.DEFAULT_TOP_K,
             min_sim=kb.DEFAULT_MIN_SIM,
             scope=scope,
+            # This subgraph is part of the customer-facing chat surface.
+            audience=KbVisibility.CUSTOMER,
         )
         if chunks:
             record_activity(
