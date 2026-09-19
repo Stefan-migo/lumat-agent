@@ -1347,6 +1347,114 @@
   }
 }
 
+/* ---- Technician shell (TECH-ROLE-1) ----
+   The technician surface is its own shell: one page, phone-first, field use.
+   Its styles live at this boundary like the panel shell's, not in an injected
+   `<style>` block (DS-SHELL-3). Chrome and content share one centred gutter so
+   the header brand lines up with the page title at >=64rem. */
+.technician-shell {
+  min-height: 100vh;
+  background: var(--brand-bg);
+  color: var(--text);
+}
+.technician-shell__header {
+  border-bottom: 1px solid var(--border);
+}
+.technician-shell__header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: min(100% - 2rem, 64rem);
+  margin: 0 auto;
+  padding: var(--space-4) 0;
+}
+.technician-shell__brand {
+  display: grid;
+  gap: var(--space-1);
+}
+.technician-shell__brand img {
+  width: 7rem;
+}
+.technician-shell__content {
+  width: min(100% - 2rem, 64rem);
+  margin: 0 auto;
+  padding: var(--space-5) 0;
+}
+@media (max-width: 40rem) {
+  .technician-shell__header-inner {
+    align-items: flex-start;
+  }
+}
+
+/* ---- Technician agenda (TECH-AGENDA-1) ---- */
+.technician-agenda {
+  display: grid;
+  gap: var(--space-6);
+}
+.technician-agenda__section {
+  display: grid;
+  gap: var(--space-4);
+}
+/* Recovery control sits under the alert, not attached to it. The alert keeps the
+   full width; only the button hugs its own label. */
+.technician-agenda__error {
+  display: grid;
+  gap: var(--space-3);
+}
+.technician-agenda__error .btn {
+  justify-self: start;
+}
+.technician-agenda__section-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.technician-agenda__day {
+  display: grid;
+  gap: var(--space-3);
+}
+.technician-agenda__day-label {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+.technician-agenda__item {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  /* Same idiom as the panel Card and EmptyState: the card is delimited by its
+     elevated surface and shadow, not by a stroke. The technician card was the
+     outlier — transparent background, no shadow, so adjacent visits blurred
+     together on a page that already carries --brand-bg. */
+  border: 1px solid var(--corp-border);
+  border-radius: var(--radius-md);
+  background: var(--brand-bg-elevated);
+  box-shadow: var(--shadow-1);
+}
+/* The slot leads each card: a technician scans by "when", then "what". */
+.technician-agenda__slot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: var(--corp-value);
+}
+.technician-agenda__service {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+/* The item is a grid, so children stretch by default. The call control must hug
+   its own label: a full-width 990px "phone number" button is not a phone number. */
+.technician-agenda__call {
+  justify-self: start;
+}
+
 /* ---- Agent application grammar (DS-GRAMMAR-1/2/3) ---- */
 .panel-shell__inspector {
   display: grid;

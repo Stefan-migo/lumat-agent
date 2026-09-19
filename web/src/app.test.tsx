@@ -73,7 +73,8 @@ describe('App /me auth gate (T6.4)', () => {
     const user = userEvent.setup();
     const { container } = render(<App />);
 
-    expect(await screen.findAllByText('Agenda técnica')).toHaveLength(2);
+    expect(await screen.findAllByText('Agenda técnica')).toHaveLength(1);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(container.querySelector('.technician-shell')).toBeInTheDocument();
     expect(await screen.findByText('Técnico Cliente')).toBeInTheDocument();
     expect(screen.queryByText('Clientes')).not.toBeInTheDocument();
