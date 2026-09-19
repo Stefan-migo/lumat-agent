@@ -446,6 +446,9 @@ export interface TechnicianAppointment {
   starts_at: string;
   ends_at: string;
   timezone: string;
+  /** `booked | cancelled | completed | no_show` — the technician must be able to
+   *  tell a cancelled visit from a booked one without leaving the agenda. */
+  status: string;
   customer: TechnicianCustomer;
   case_summary: string | null;
 }

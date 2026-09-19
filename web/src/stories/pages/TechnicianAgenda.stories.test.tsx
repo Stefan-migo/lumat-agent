@@ -27,7 +27,7 @@ describe("TechnicianAgenda page story", () => {
     expect(within(upcoming).getByRole("heading", { name: "Hoy" })).toBeInTheDocument();
     expect(within(upcoming).getByRole("heading", { name: "Mañana" })).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "Visitas anteriores" })).getByText("Cliente Demo H3")).toBeInTheDocument();
-    expect(screen.getByText("4 visitas · Actualizado", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("3 visitas · 1 cancelada · Actualizado", { exact: false })).toBeInTheDocument();
 
     const card = screen.getByText("Revisión de calefont").closest("article");
     expect(card?.firstElementChild).toHaveClass("technician-agenda__slot");
@@ -47,7 +47,7 @@ describe("TechnicianAgenda page story", () => {
   it("groups a twelve-visit roster without losing a day or a card", () => {
     render(<TechnicianSurfaceView data={agendaLong} />);
 
-    expect(screen.getByText("12 visitas · Actualizado", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("9 visitas · 3 canceladas · Actualizado", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("Mantención programada número 12")).toBeInTheDocument();
     // Twelve consecutive days from the fixed clock: today is day one.
     expect(screen.getByRole("heading", { name: "Hoy" })).toBeInTheDocument();
