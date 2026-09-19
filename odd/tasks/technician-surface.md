@@ -152,8 +152,13 @@ login, and other page surfaces.
   Upcoming renders first, past second; today and tomorrow are named, other days are dated. Today stays
   with the upcoming work — it is still today's round. Verified: `["Hoy", "Martes, 15 de septiembre"]`,
   `["Próximas visitas", "Visitas anteriores"]`, and no past section when every visit is ahead.
-- [ ] **T6** — RED/GREEN: a refresh control re-fetches through `useAsyncData.retry` and the
-  last-loaded state is visible to the user. No automatic polling.
+- [x] **T6** — RED/GREEN: an `Actualizar` control in the `PageFrame` actions re-fetches through
+  `useAsyncData.retry`; no polling (D7). The header carries `N visitas · Actualizado HH:MM`. Two extra
+  defects surfaced while building it and are fixed here: the count read `1 visitas` in the singular,
+  and a refresh blanked the roster because the page rendered `null` for any loading state. The list now
+  renders whenever a payload exists, so a refresh keeps the previous roster readable under the loading
+  banner. The freshness stamp is derived with `useMemo` on the payload rather than set from an effect:
+  an extra commit flashed the header without it. It stays visible while a refresh is in flight.
 - [x] **T7** — RED/GREEN: `Cerrar sesión` and `Reintentar` use the `Button` primitive; no raw
   `<button>` remains on the surface (`grep -n "<button"` returns nothing). The shell's bespoke
   `.technician-shell__logout` rule was deleted — `.btn--secondary` plus the guarded
@@ -222,7 +227,16 @@ login, and other page surfaces.
       AgendaPage ×1, AgentChat ×2) are contention artifacts: load average was 180 during the run, and
       the same three files pass 66/66 both on `main` at the base commit and in this worktree in
       isolation. Re-run the full suite when the machine is quiet before trusting a green signal.
-- [ ] T6, T9, T10
+- [ ] T9, T10
+
+## Follow-up finding (not in this change's scope)
+
+The injected-`<style>` pattern (V9) is not unique to `TechnicianShell`. `StateMessage`, `PageFrame`,
+`Dashboard`, and `AgendaPage` also inject their own `<style>` blocks, and `DS-SHELL-3` only forbade it
+for `PanelShell`. It is visible in the DOM: the `role="status"` element rendered by `StateMessage`
+contains its own `<style>` node, so its `textContent` starts with CSS. No screen reader announces that
+as text, but the boundary migration was never applied to these four components. Fixing them touches
+every page, so it belongs in its own change rather than here.
 
 ## Recovery
 

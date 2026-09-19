@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { TechnicianAgenda } from './TechnicianAgenda';
 import { TechnicianShell } from '../domain/TechnicianShell';
 import type { TechnicianAppointment, User } from '../../types';
@@ -160,5 +161,58 @@ describe('technician surface — controls come from the panel primitives', () =>
 
     expect(await screen.findByRole('button', { name: 'Reintentar' })).toHaveClass('btn');
     expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toHaveClass('btn');
+  });
+});
+
+describe('technician surface — freshness', () => {
+  const mock = () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ appointments: [appointment] }), { status: 200 }),
+    );
+    return fetchMock;
+  };
+
+  it('re-fetches on demand instead of polling', async () => {
+    const fetchMock = mock();
+    const user = userEvent.setup();
+
+    render(<TechnicianAgenda />);
+
+    await screen.findByText('Calefont');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: 'Actualizar' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('tells the technician when the agenda was last loaded', async () => {
+    mock();
+
+    render(<TechnicianAgenda />);
+
+    await screen.findByText('Calefont');
+    expect(screen.getByText(/Actualizado/)).toBeInTheDocument();
+    expect(screen.getByText(/1 visita ·/)).toBeInTheDocument();
+  });
+
+  it('keeps the loaded agenda on screen while it refreshes', async () => {
+    let settle: ((value: Response) => void) | undefined;
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ appointments: [appointment] }), { status: 200 }))
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { settle = resolve; }));
+    const user = userEvent.setup();
+
+    render(<TechnicianAgenda />);
+
+    await screen.findByText('Calefont');
+    await user.click(screen.getByRole('button', { name: 'Actualizar' }));
+
+    // While the refresh is in flight the roster stays readable instead of blanking.
+    expect(screen.getByText('Calefont')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Cargando agenda');
+
+    settle?.(new Response(JSON.stringify({ appointments: [] }), { status: 200 }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 });

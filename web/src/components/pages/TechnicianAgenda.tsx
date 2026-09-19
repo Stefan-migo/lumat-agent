@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { fetchTechnicianAgenda } from '../../api';
 import type { TechnicianAppointment } from '../../types';
 import { useAsyncData, type AsyncDataState } from '../../hooks/useAsyncData';
@@ -12,7 +12,11 @@ import { StateMessage } from '../shared/StateMessage';
  * The endpoint returns past, today and future appointments in one chronological
  * list, so the reading work belongs here: the list splits at today and groups by
  * the appointment's own local day. A technician scans by "when" and then "what",
- * which is why the slot leads each card and the day carries the heading. */
+ * which is why the slot leads each card and the day carries the heading.
+ *
+ * Refreshing is explicit, never polled: a field phone should not spend battery
+ * re-fetching a page that is opened on purpose, and the technician needs to know
+ * how current what they are reading is. */
 
 /** 24-hour: an agenda slot must be unambiguous and fit a phone width, and a
  *  range rendered as "03:00 p. m. – 04:00 p. m." repeats the meridiem. */
@@ -26,6 +30,9 @@ const dayKeyFormat = (timeZone: string) =>
 const dayLabelFormat = (timeZone: string) =>
   new Intl.DateTimeFormat('es-CL', { timeZone, weekday: 'long', day: 'numeric', month: 'long' });
 
+/** Freshness is about the reader's own clock, so it stays in the host zone. */
+const stampFormat = new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+
 /** Local calendar day of an instant in the appointment's own zone. */
 function dayKey(iso: string, timezone: string) {
   return dayKeyFormat(timezone).format(new Date(iso));
@@ -33,6 +40,10 @@ function dayKey(iso: string, timezone: string) {
 
 function clock(iso: string, timezone: string) {
   return clockFormat(timezone).format(new Date(iso));
+}
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 interface DayGroup {
@@ -61,10 +72,6 @@ function groupByDay(rows: TechnicianAppointment[], now: Date): DayGroup[] {
     groups.push({ key, label, rows: [row] });
   }
   return groups;
-}
-
-function capitalize(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 /** Today stays with the upcoming work: it is still today's round. */
@@ -120,9 +127,22 @@ export function TechnicianAgenda() {
   const appointments = data ?? [];
   const now = new Date();
   const { upcoming, past } = splitAtToday(appointments, now);
+  const loading = state === 'loading';
+  /** Stamped when the payload changes, so it reflects the last successful load
+   *  and never moves on its own. Derived in render rather than set from an
+   *  effect: an extra commit would flash the header without its freshness. */
+  const loadedAt = useMemo(() => (data ? stampFormat.format(new Date()) : null), [data]);
+
   return (
-    <PageFrame title="Agenda técnica" meta={state === 'ready' ? `${appointments.length} visitas` : undefined} state={stateMessage(state, retry)}>
-      {state === 'loading' || state === 'error' || state === 'denied' ? null : state === 'empty' ? <EmptyState title="No hay visitas asignadas" description="No tienes visitas en tu agenda." /> : (
+    <PageFrame
+      title="Agenda técnica"
+      meta={loadedAt
+        ? `${appointments.length} ${appointments.length === 1 ? 'visita' : 'visitas'} · Actualizado ${loadedAt}`
+        : undefined}
+      actions={<Button variant="secondary" disabled={loading} onClick={retry}>Actualizar</Button>}
+      state={stateMessage(state, retry)}
+    >
+      {appointments.length > 0 ? (
         <div className="technician-agenda">
           {upcoming.length > 0 ? (
             <section className="technician-agenda__section" aria-labelledby="technician-upcoming">
@@ -137,7 +157,9 @@ export function TechnicianAgenda() {
             </section>
           ) : null}
         </div>
-      )}
+      ) : state === 'empty' ? (
+        <EmptyState title="No hay visitas asignadas" description="No tienes visitas en tu agenda." />
+      ) : null}
     </PageFrame>
   );
 }
