@@ -365,7 +365,7 @@ def test_ao9_research_reply_matches_pre_h2_single_agent(mock_openai_chat, fake_e
     """
     from app.chat.nodes import respond as respond_node
     from app.chat.state import ConversationState
-    from app.models import DocumentFormat
+    from app.models import DocumentFormat, KbVisibility
     from app.services import kb as kb_service
 
     # A values doc that contains NO equipment keyword ("calefont"/"caldera"/
@@ -381,6 +381,7 @@ def test_ao9_research_reply_matches_pre_h2_single_agent(mock_openai_chat, fake_e
             fmt=DocumentFormat.MD,
             content=valores_text.encode(),
             source_meta={"category": "valores"},
+            visibility=KbVisibility.CUSTOMER,
         )
         session.commit()
 
