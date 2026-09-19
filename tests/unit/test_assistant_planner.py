@@ -265,7 +265,11 @@ def test_context_text_includes_conversation_identity_when_available():
         }
     }
 
-    assert _context_text(state) == "Pinned fact\nRecent message\nConversation identity: scope=panel entity_id=thread:42"
+    assert _context_text(state) == (
+        "Pinned fact\nRecent message\nConversation identity: scope=panel "
+        "(the panel memory read target is derived server-side)"
+    )
+    assert "entity_id=thread:42" not in _context_text(state)
 
 
 def test_context_text_omits_conversation_identity_without_complete_meta():

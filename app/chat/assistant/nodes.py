@@ -193,7 +193,10 @@ def _context_text(state: AssistantState) -> str:
     text = [str(item.get("content", "")) for item in context.get("items", [])]
     meta = context.get("meta") or {}
     if meta.get("scope") and meta.get("entity_id"):
-        text.append(f"Conversation identity: scope={meta['scope']} entity_id={meta['entity_id']}")
+        text.append(
+            f"Conversation identity: scope={meta['scope']} "
+            "(the panel memory read target is derived server-side)"
+        )
     compaction = state.get("compaction") or {}
     if compaction.get("failed"):
         text.append(
