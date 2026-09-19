@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.evidence import make_evidence
+from app.chat.assistant.markup import ToolCallMarkupSanitizer
 from app.chat.assistant.state import AssistantState, PlannerOutput, SDBTask, estimate_tokens, validate_cortex_session
 from app.chat.assistant.tools.registry import AUTONOMOUS_WRITE_ALLOWLIST, TOOL_REGISTRY, ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
@@ -599,6 +600,7 @@ def execute(state: AssistantState) -> AssistantState:
             stream_options={"include_usage": True},
         )
         chunks: list[str] = []
+        markup_sanitizer = ToolCallMarkupSanitizer()
         usage_seen = False
         for chunk in completion:
             if getattr(chunk, "usage", None) is not None:
@@ -606,8 +608,14 @@ def execute(state: AssistantState) -> AssistantState:
                 usage_seen = True
             token = (chunk.choices[0].delta.content or "") if chunk.choices else ""
             if token:
-                chunks.append(token)
-                on_token(token)
+                clean_token = markup_sanitizer.feed(token)
+                if clean_token:
+                    chunks.append(clean_token)
+                    on_token(clean_token)
+        clean_tail = markup_sanitizer.flush()
+        if clean_tail:
+            chunks.append(clean_tail)
+            on_token(clean_tail)
         if not usage_seen:
             _record_usage(state, "response", None)
         response = "".join(chunks) or response
