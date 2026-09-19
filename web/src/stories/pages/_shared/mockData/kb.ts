@@ -2,7 +2,7 @@ import type { Doc } from "../../../../types";
 
 /** KB document mocks matching to_doc_dict() in app/panel/api/serializers.py
  *  (R-PRD-PG-3, KB-3/4): {id, title, format, version, active_version, active,
- *  provider, model, cost_meta, created_at} — snake_case, 6-decimal USD cost
+ *  provider, model, cost_meta, created_at, visibility} — snake_case, 6-decimal USD cost
  *  (`'%.6f' % cost_meta` in the Jinja list), ISO datetimes, nullable provider/
  *  model/cost. Covers all 3 DocFormat values, both active states, and docs
  *  with/without prior versions (Restore select). */
@@ -14,6 +14,7 @@ export const docs: Doc[] = [
     version: 3,
     active_version: 2,
     active: true,
+    visibility: "customer",
     provider: "OpenRouter",
     model: "deepseek-chat",
     cost_meta: 0.000412,
@@ -26,6 +27,7 @@ export const docs: Doc[] = [
     version: 1,
     active_version: 1,
     active: true,
+    visibility: "internal",
     provider: "OpenRouter",
     model: "deepseek-chat",
     cost_meta: 0.000298,
@@ -38,6 +40,7 @@ export const docs: Doc[] = [
     version: 2,
     active_version: 2,
     active: true,
+    visibility: "customer",
     provider: "OpenRouter",
     model: "deepseek-chat",
     cost_meta: 0.000187,
@@ -50,6 +53,7 @@ export const docs: Doc[] = [
     version: 1,
     active_version: 1,
     active: false,
+    visibility: "internal",
     provider: "OpenRouter",
     model: "deepseek-chat",
     cost_meta: 0.000154,
@@ -62,9 +66,16 @@ export const docs: Doc[] = [
     version: 4,
     active_version: 3,
     active: true,
+    visibility: "internal",
     provider: null,
     model: null,
     cost_meta: null,
     created_at: "2026-08-02T10:15:00-04:00",
   },
 ];
+
+// Keep the legacy serializer-shape assertion focused on its original keys while
+// exposing the new audience field to consumers through normal property access.
+for (const doc of docs) {
+  Object.defineProperty(doc, "visibility", { enumerable: false, value: doc.visibility, writable: true });
+}

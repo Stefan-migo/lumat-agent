@@ -302,6 +302,7 @@ export interface CasesResponse {
 }
 
 export type DocFormat = 'pdf' | 'md' | 'csv';
+export type KbVisibility = 'customer' | 'internal';
 
 export interface Doc {
   id: number;
@@ -310,6 +311,7 @@ export interface Doc {
   version: number;
   active_version: number;
   active: boolean;
+  visibility: KbVisibility;
   provider: string | null;
   model: string | null;
   cost_meta: number | null;
