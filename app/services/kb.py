@@ -26,7 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.models import DocumentFormat, KbChunk, KbDocument
+from app.models import DocumentFormat, KbChunk, KbDocument, KbVisibility
 from app.services.audit import record_audit
 
 EMBED_MODEL = get_settings().embed_model  # fastembed model id, multilingual, 384d
@@ -181,6 +181,7 @@ def ingest_document(
     content: bytes,
     source_meta: dict | None = None,
     actor: str = "system",
+    visibility: KbVisibility | str = KbVisibility.INTERNAL,
 ) -> KbDocument:
     """Create a document (version 1) and ingest its chunks (KB-1)."""
     doc = KbDocument(
@@ -190,6 +191,7 @@ def ingest_document(
         version=1,
         active_version=1,
         active=True,
+        visibility=KbVisibility(visibility),
         provider=PROVIDER,
         model=EMBED_MODEL,
     )
@@ -202,7 +204,12 @@ def ingest_document(
         action="kb.document_ingest",
         entity="kb_document",
         entity_id=str(doc.id),
-        after={"title": title, "format": fmt.value, "version": 1},
+        after={
+            "title": title,
+            "format": fmt.value,
+            "version": 1,
+            "visibility": doc.visibility.value,
+        },
     )
     return doc
 
@@ -250,6 +257,9 @@ def restore_version(
     previous = doc.active_version
     doc.active_version = version
     doc.active = True
+    # KB-5/D4: restored bytes were authored under an audience we do not store;
+    # reopen them internally and require explicit re-classification.
+    doc.visibility = KbVisibility.INTERNAL
     record_audit(
         session,
         actor=actor,
@@ -257,7 +267,7 @@ def restore_version(
         entity="kb_document",
         entity_id=str(doc.id),
         before={"active_version": previous},
-        after={"active_version": version},
+        after={"active_version": version, "visibility": doc.visibility.value},
     )
     return doc
 
@@ -279,6 +289,31 @@ def disable_document(session: Session, doc_id: int, actor: str = "system") -> Kb
     return doc
 
 
+def set_visibility(
+    session: Session,
+    doc_id: int,
+    visibility: KbVisibility | str,
+    actor: str = "system",
+) -> KbDocument:
+    """Reclassify a document without creating a version or re-embedding."""
+    doc = session.get(KbDocument, doc_id)
+    if doc is None:
+        raise ValueError(f"kb document {doc_id} not found")
+    resolved = KbVisibility(visibility)
+    previous = doc.visibility
+    doc.visibility = resolved
+    record_audit(
+        session,
+        actor=actor,
+        action="kb.document_visibility",
+        entity="kb_document",
+        entity_id=str(doc.id),
+        before={"visibility": previous.value},
+        after={"visibility": resolved.value},
+    )
+    return doc
+
+
 # ---------------------------------------------------------------------------
 # Retrieval (KB-2)
 # ---------------------------------------------------------------------------
@@ -290,12 +325,18 @@ def retrieve(
     top_k: int = DEFAULT_TOP_K,
     min_sim: float = DEFAULT_MIN_SIM,
     scope: list[str] | None = None,
+    audience: KbVisibility | str | None = KbVisibility.CUSTOMER,
 ) -> list[dict]:
     """Semantic retrieval over the ACTIVE versions of enabled documents.
 
     Filters: kb_documents.active AND kb_chunks.version == active_version.
     Cosine similarity >= min_sim (pgvector <=> distance); ordered best-first.
     Below-threshold queries return [] -> the CM-4 "cannot answer reliably" path.
+
+    The audience defaults to ``customer`` so a caller that forgets the argument
+    cannot read internal-only documents. ``audience=None`` disables the filter
+    and is passed only explicitly by internal surfaces (the Lumat assistant and
+    the admin probe).
 
     ``scope`` (AO-7): when provided (e.g. a sub-agent's ``kb_scope``), only
     chunks whose ``source_meta.category`` (JSONB) is in the scope list are
@@ -316,6 +357,8 @@ def retrieve(
         if not scope:
             return []  # empty scope matches nothing by definition
         filters.append(KbChunk.source_meta["category"].astext.in_(scope))
+    if audience is not None:
+        filters.append(KbDocument.visibility == KbVisibility(audience))
     rows = session.execute(
         select(KbChunk, distance.label("distance"))
         .join(KbDocument, KbChunk.document_id == KbDocument.id)

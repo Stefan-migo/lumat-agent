@@ -24,7 +24,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.db import SessionLocal  # noqa: E402
-from app.models import DocumentFormat, KbChunk, KbDocument  # noqa: E402
+from app.models import AuditLog, DocumentFormat, KbChunk, KbDocument, KbVisibility  # noqa: E402
 from app.services import kb  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
@@ -107,6 +107,63 @@ def test_kb1_ingest_markdown_chunks_stored(fake_embedder):
     assert stored.provider == "local"
     assert stored.model == kb.EMBED_MODEL
     assert stored.cost_meta is not None and stored.cost_meta == 0  # local: free
+
+
+def test_kb5_ingest_defaults_to_internal(fake_embedder):
+    with SessionLocal() as session:
+        doc = kb.ingest_document(
+            session, title="Internal manual", fmt=DocumentFormat.MD, content=b"internal"
+        )
+        session.commit()
+
+    assert doc.visibility == KbVisibility.INTERNAL
+
+
+def test_kb5_retrieve_defaults_to_customer_and_hides_internal(fake_embedder):
+    query = "shared audience phrase"
+    with SessionLocal() as session:
+        internal_id = _ingest_with_visibility(
+            session, "Internal", query, KbVisibility.INTERNAL
+        )
+        customer_id = _ingest_with_visibility(
+            session, "Customer", query, KbVisibility.CUSTOMER
+        )
+        session.commit()
+
+    with SessionLocal() as session:
+        results = kb.retrieve(session, query)
+
+    assert [result["document_id"] for result in results] == [customer_id]
+    assert internal_id not in {result["document_id"] for result in results}
+
+
+def test_kb5_retrieve_audience_none_reads_whole_corpus(fake_embedder):
+    query = "shared audience phrase"
+    with SessionLocal() as session:
+        internal_id = _ingest_with_visibility(
+            session, "Internal", query, KbVisibility.INTERNAL
+        )
+        customer_id = _ingest_with_visibility(
+            session, "Customer", query, KbVisibility.CUSTOMER
+        )
+        session.commit()
+
+    with SessionLocal() as session:
+        results = kb.retrieve(session, query, audience=None)
+
+    assert {result["document_id"] for result in results} == {internal_id, customer_id}
+
+
+def _ingest_with_visibility(session, title, text, visibility):
+    doc = kb.ingest_document(
+        session,
+        title=title,
+        fmt=DocumentFormat.MD,
+        content=text.encode(),
+        visibility=visibility,
+    )
+    session.flush()
+    return doc.id
 
 
 def _pdf_with_text(text: str) -> bytes:
@@ -215,7 +272,9 @@ def test_kb2_retrieval_relevant_hit(fake_embedder):
         session.commit()
 
     with SessionLocal() as session:
-        results = kb.retrieve(session, "como enciendo mi calefont correctamente")
+        results = kb.retrieve(
+            session, "como enciendo mi calefont correctamente", audience=None
+        )
 
     assert len(results) == 1
     assert "como enciendo mi calefont correctamente" in results[0]["content"]
@@ -229,7 +288,7 @@ def test_kb2_retrieval_threshold_miss(fake_embedder):
         session.commit()
 
     with SessionLocal() as session:
-        results = kb.retrieve(session, "que precio tiene un grifo de cocina")
+        results = kb.retrieve(session, "que precio tiene un grifo de cocina", audience=None)
 
     assert results == []  # unrelated -> below min_sim 0.65 (CM-4 unresolved path)
 
@@ -241,7 +300,9 @@ def test_kb2_retrieval_top_k_limits_results(fake_embedder):
         session.commit()
 
     with SessionLocal() as session:
-        results = kb.retrieve(session, "marca de calefont modelo 3", top_k=5)
+        results = kb.retrieve(
+            session, "marca de calefont modelo 3", top_k=5, audience=None
+        )
 
     assert len(results) <= 5  # top_k respected even with 8 near-matches
 
@@ -253,12 +314,14 @@ def test_kb2_min_sim_configurable(fake_embedder):
 
     # strict default: unrelated query -> no hit
     with SessionLocal() as session:
-        strict = kb.retrieve(session, "como enciendo mi calefont")
+        strict = kb.retrieve(session, "como enciendo mi calefont", audience=None)
     assert strict == []
 
     # relaxed threshold: everything matches
     with SessionLocal() as session:
-        relaxed = kb.retrieve(session, "como enciendo mi calefont", min_sim=0.0)
+        relaxed = kb.retrieve(
+            session, "como enciendo mi calefont", min_sim=0.0, audience=None
+        )
     assert len(relaxed) == 1
 
 
@@ -289,7 +352,9 @@ def test_kb4_update_creates_new_version_and_reembeds(fake_embedder):
 
     # retrieval uses the ACTIVE version (v2)
     with SessionLocal() as session:
-        results = kb.retrieve(session, "revision anual 20000, nuevo valor")
+        results = kb.retrieve(
+            session, "revision anual 20000, nuevo valor", audience=None
+        )
     assert len(results) == 1
     assert results[0]["version"] == 2
 
@@ -314,7 +379,7 @@ def test_kb4_restore_previous_version_flip_no_reembed(fake_embedder):
         stored = session.get(KbDocument, doc_id)
         assert stored.active_version == 1
         assert stored.version == 2  # document version history untouched
-        results = kb.retrieve(session, "revision anual 15000")
+        results = kb.retrieve(session, "revision anual 15000", audience=None)
     assert len(results) == 1
     assert results[0]["version"] == 1
 
@@ -348,7 +413,7 @@ def test_kb_a7_scoped_retrieve_filters_by_category(fake_embedder):
         session.commit()
 
     with SessionLocal() as session:
-        scoped = kb.retrieve(session, valores_text, scope=["valores"])
+        scoped = kb.retrieve(session, valores_text, scope=["valores"], audience=None)
     assert len(scoped) == 1
     assert scoped[0]["source_meta"]["category"] == "valores"
 
@@ -377,7 +442,7 @@ def test_kb_a7_scoped_retrieve_excludes_non_matching_category(fake_embedder):
         session.commit()
 
     with SessionLocal() as session:
-        scoped = kb.retrieve(session, valores_text, scope=["postventa"])
+        scoped = kb.retrieve(session, valores_text, scope=["postventa"], audience=None)
     assert scoped == []  # the matching chunk is filtered out by scope
 
 
@@ -397,7 +462,7 @@ def test_kb_a7_unscoped_retrieve_unchanged(fake_embedder):
         session.commit()
 
     with SessionLocal() as session:
-        results = kb.retrieve(session, valores_text)
+        results = kb.retrieve(session, valores_text, audience=None)
     assert len(results) == 1
     assert results[0]["source_meta"]["category"] == "valores"
 
@@ -418,5 +483,71 @@ def test_kb3_disable_document_excludes_from_retrieval(fake_embedder):
     with SessionLocal() as session:
         stored = session.get(KbDocument, doc_id)
         assert stored.active is False
-        results = kb.retrieve(session, "como enciendo mi calefont")
+        results = kb.retrieve(session, "como enciendo mi calefont", audience=None)
     assert results == []  # disabled documents never answer (KB-3)
+
+
+def test_kb5_restore_never_widens(fake_embedder):
+    with SessionLocal() as session:
+        doc_id = _ingest_with_visibility(
+            session, "Customer manual", "version one", KbVisibility.CUSTOMER
+        )
+        session.commit()
+    with SessionLocal() as session:
+        kb.update_document(session, doc_id, "version two")
+        session.commit()
+
+    chunks_before = len(_chunk_rows(doc_id))
+    with SessionLocal() as session:
+        kb.restore_version(session, doc_id, version=1)
+        session.commit()
+
+    with SessionLocal() as session:
+        restored = session.get(KbDocument, doc_id)
+    assert restored.visibility == KbVisibility.INTERNAL
+    assert restored.active_version == 1
+    assert len(_chunk_rows(doc_id)) == chunks_before
+
+
+def test_kb5_set_visibility_does_not_create_version(fake_embedder):
+    with SessionLocal() as session:
+        doc_id = _ingest_with_visibility(
+            session, "Internal manual", "internal content", KbVisibility.INTERNAL
+        )
+        session.commit()
+    chunk_count = len(_chunk_rows(doc_id))
+
+    with SessionLocal() as session:
+        changed = kb.set_visibility(session, doc_id, KbVisibility.CUSTOMER)
+        session.commit()
+
+    with SessionLocal() as session:
+        stored = session.get(KbDocument, doc_id)
+        audit = session.scalar(
+            select(AuditLog)
+            .where(AuditLog.action == "kb.document_visibility")
+            .order_by(AuditLog.id.desc())
+        )
+    assert changed.visibility == KbVisibility.CUSTOMER
+    assert stored.version == 1
+    assert len(_chunk_rows(doc_id)) == chunk_count
+    assert audit is not None
+    assert audit.action == "kb.document_visibility"
+
+
+def test_kb5_invalid_visibility_rejected(fake_embedder):
+    with SessionLocal() as session:
+        with pytest.raises(ValueError):
+            kb.ingest_document(
+                session,
+                title="Invalid",
+                fmt=DocumentFormat.MD,
+                content=b"invalid",
+                visibility="public",
+            )
+
+        doc_id = _ingest_with_visibility(
+            session, "Internal", "content", KbVisibility.INTERNAL
+        )
+        with pytest.raises(ValueError):
+            kb.set_visibility(session, doc_id, "public")

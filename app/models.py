@@ -117,6 +117,11 @@ class DocumentFormat(str, enum.Enum):
     CSV = "csv"
 
 
+class KbVisibility(str, enum.Enum):
+    CUSTOMER = "customer"
+    INTERNAL = "internal"
+
+
 class MemoryType(str, enum.Enum):
     DECISION = "decision"
     DISCOVERY = "discovery"
@@ -413,6 +418,14 @@ class KbDocument(Base):
     version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     active_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # 027: KB audience. `internal` is the fail-safe default: a document nobody
+    # classified stays out of the customer-facing chatbot's reach.
+    visibility: Mapped[KbVisibility] = mapped_column(
+        pg_enum(KbVisibility, "kb_visibility"),
+        nullable=False,
+        default=KbVisibility.INTERNAL,
+        server_default="'internal'",
+    )
     provider: Mapped[str | None] = mapped_column(String(100))
     model: Mapped[str | None] = mapped_column(String(100))
     cost_meta: Mapped[float | None] = mapped_column(Numeric(12, 6))
