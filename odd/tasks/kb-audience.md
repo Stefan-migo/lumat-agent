@@ -73,7 +73,9 @@ redesign of `KbList`; any change to retrieval ranking, chunking, or the embeddin
 
 - Worktree: `/home/stefan/repos/lumat-agent-odd-kb-audience`
 - Branch: `odd/kb-audience`
-- Base: `337fa3da`
+- Base: `4527fcc9` — the merge-base with `main`. The branch was cut after PR #246
+  (`odd/tool-name-honesty`) had already landed, so `337fa3da` (the commit the previous session
+  recorded) is NOT this branch's base. Verified with `git merge-base HEAD main`.
 - Files:
   - `odd/tasks/kb-audience.md`
   - `db/migrations/027_kb_visibility.sql`
@@ -215,6 +217,20 @@ pre-existing harness quirk, not something this change introduced.
 - `cd web && npm run test`
 - `cd web && npm run build`
 - `git status --short` / `git diff --check`
+
+## Size
+
+`git diff --shortstat 4527fcc9..HEAD` → **25 files, 883 insertions, 45 deletions**.
+
+Breakdown: the ODD record is ~283 of those lines; tests are ~445; the rest is source
+(`db/migrations/027_kb_visibility.sql` 11, `app/models.py` 13, `app/services/kb.py` 49,
+`app/panel/api/routes/kb.py` 41, `app/panel/api/serializers.py` 1, the three chat call sites 15,
+the web client + UI 34, specs + registry 43).
+
+This is above the 400-line review heuristic. It is reported honestly rather than hidden: the
+production-source surface is ~160 lines, and the remainder is the tests that prove the boundary,
+the spec entry, and this record. It is consistent with the two most recent units in this repo
+(PR #245: 9 files / +576; PR #244: 10 files / +994).
 
 ## Progress
 
