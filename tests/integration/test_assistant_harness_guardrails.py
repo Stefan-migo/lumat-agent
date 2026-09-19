@@ -218,6 +218,74 @@ def test_responder_user_prompt_carries_the_declared_tool_inventory(monkeypatch):
         assert name in prompt
 
 
+def test_responder_user_prompt_forbids_tool_invocation_markup(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: calls.append(kwargs) or [
+                SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"))]),
+            ],
+        ))),
+    )
+
+    execute({
+        "thread_id": 7,
+        "run_id": "run-instructions",
+        "content": "which tools do you have",
+        "plan": {"kind": "respond", "tool": None, "arguments": {}, "requires_approval": False},
+        "context": {"items": []},
+        "on_token": lambda token: None,
+    })
+
+    prompt = calls[0]["messages"][-1]["content"].lower()
+    assert "cannot invoke" in prompt
+    assert "must not emit tool-call markup" in prompt
+
+
+def test_responder_stream_and_persisted_response_strip_split_dsml(monkeypatch):
+    bar = "\uff5c"
+    streamed = [
+        "Answer ",
+        f"<{bar}tool_calls{bar}",
+        f"{bar}>",
+        f'<{bar}invoke name="customers.search"{bar}>',
+        f'<{bar}parameter name="query" string="true"{bar}>Ana\n',
+        "García",
+        f"</{bar}parameter{bar}></{bar}invoke{bar}>",
+        f"</{bar}tool_calls{bar}> done",
+    ]
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: [
+                SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=token))])
+                for token in streamed
+            ],
+        ))),
+    )
+    emitted = []
+
+    result = execute({
+        "thread_id": 7,
+        "run_id": "run-split-dsml",
+        "content": "search",
+        "plan": {"kind": "respond", "tool": None, "arguments": {}, "requires_approval": False},
+        "context": {"items": []},
+        "on_token": emitted.append,
+    })
+
+    emitted_text = "".join(emitted)
+    assert "Ana" not in emitted_text
+    assert "García" not in emitted_text
+    assert "tool_calls" not in emitted_text
+    assert "invoke" not in emitted_text
+    assert "Ana" not in result["response"]
+    assert "García" not in result["response"]
+    assert "tool_calls" not in result["response"]
+    assert "invoke" not in result["response"]
+
+
 def test_denied_approval_keeps_completed_planner_cost_but_never_executes(monkeypatch):
     calls = []
     monkeypatch.setattr("app.chat.assistant.nodes.record_llm_cost", lambda *args, **kwargs: calls.append(kwargs))
