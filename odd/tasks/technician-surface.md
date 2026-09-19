@@ -173,9 +173,14 @@ login, and other page surfaces.
   sits under the alert rather than attached to it.
 - [x] **T8** — the dead `technician-agenda` class is now a real class, and the agenda's inline styles
   moved to `primitives.css` (T10's first half). No orphan class names remain.
-- [ ] **T9** — Storybook story covering ready / long content / null customer / empty / error, and
-  Vitest coverage for the new grouping, null-phone, and single-`h1` behaviour. Move the existing test
-  next to its component in `pages/`, preserving its assertions verbatim.
+- [x] **T9** — `src/stories/pages/TechnicianAgenda.stories.tsx` plus its test, and
+  `_shared/mockData/technicianAgenda.ts` with a pinned `agendaNow` so the day labels cannot drift with
+  the run date. Six stories: `Default`, `LongRoster`, `NoCustomerData`, `Empty`, `Loading`, `Error`.
+  The story renders the composed session (shell + agenda) with `parameters.panelShell = false`, because
+  `TechnicianShell` is its own shell. `TechnicianAgenda` gained controlled `data` / `state` / `onRetry`
+  / `now` props for this, following the `CasesList` and `Settings` pattern — with controlled data the
+  hook is disabled and no request is made. The old test that lived in `components/domain/` was already
+  moved next to its component during T1, with its assertions preserved.
 - [x] **T10** — the appointment card now uses the panel's card idiom: `--brand-bg-elevated` surface
   plus `--shadow-1` and `--corp-border`, exactly as `Card` and `EmptyState` do. That is what actually
   separates it from the `--brand-bg` page; the stroke was never the mechanism (see the corrected
@@ -244,7 +249,10 @@ for a design-system change; `tokens.test.ts` was left asserting only the pairs i
       AgendaPage ×1, AgentChat ×2) are contention artifacts: load average was 180 during the run, and
       the same three files pass 66/66 both on `main` at the base commit and in this worktree in
       isolation. Re-run the full suite when the machine is quiet before trusting a green signal.
-- [ ] T9
+- [x] T9 — commit pending. 7 story tests + 12 page tests + 8 app tests + tokens + closure = 48 green;
+      `tsc -b --noEmit` exit 0.
+- [x] All ten tasks complete. Remaining before the PR: `npm run build`, and a full-suite run on a quiet
+      machine (see the contention note above).
 
 ## Follow-up finding (not in this change's scope)
 

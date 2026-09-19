@@ -121,11 +121,24 @@ function DayGroups({ groups }: { groups: DayGroup[] }) {
   ));
 }
 
-export function TechnicianAgenda() {
+export interface TechnicianAgendaProps {
+  /** Controlled payload for stories and tests; when provided, no request is made. */
+  data?: TechnicianAppointment[] | null;
+  /** Controlled state for stories and tests. */
+  state?: AsyncDataState;
+  onRetry?: () => void;
+  /** Fixed clock for deterministic day labels in stories and tests. */
+  now?: Date;
+}
+
+export function TechnicianAgenda({ data: controlledData, state: controlledState, onRetry, now: controlledNow }: TechnicianAgendaProps = {}) {
   const load = useCallback(() => fetchTechnicianAgenda().then((response) => response.appointments), []);
-  const { data, state, retry } = useAsyncData(load);
+  const fetched = useAsyncData(load, controlledData === undefined);
+  const data = controlledData !== undefined ? controlledData : fetched.data;
+  const state = controlledState ?? fetched.state;
+  const retry = onRetry ?? fetched.retry;
   const appointments = data ?? [];
-  const now = new Date();
+  const now = controlledNow ?? new Date();
   const { upcoming, past } = splitAtToday(appointments, now);
   const loading = state === 'loading';
   /** Stamped when the payload changes, so it reflects the last successful load
