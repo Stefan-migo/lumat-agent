@@ -277,7 +277,7 @@ def test_valid_registry_resolves_assistant_runtime_configuration(repo_root):
         "respond": "prompts/assistant_respond.md",
         "classify": "prompts/assistant_classify.md",
     }
-    assert len(reg.assistant.tools_whitelist) == 21
+    assert len(reg.assistant.tools_whitelist) == 19
     assert "automation.create_rule" in reg.assistant.tools_whitelist
 
 
