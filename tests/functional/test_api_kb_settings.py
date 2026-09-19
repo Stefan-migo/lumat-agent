@@ -6,6 +6,8 @@ existing service calls, SH-5):
 
 KB (endpoints 13-17):
 - GET  /panel/api/kb               -> {"docs": [{provider, model, cost_meta}]}
+- GET  /panel/api/kb/{id}           -> document detail including content
+- GET  /panel/api/kb/search         -> retrieval probe
 - POST /panel/api/kb               -> multipart title + file (pdf/md/txt/csv)
                                      ingest + audit (PDW-API-1)
 - POST /panel/api/kb/{id}/edit     -> {"title","content"} new version re-embed
@@ -80,6 +82,8 @@ def test_kb_endpoints_require_login_401_json(client):
     """No session -> every KB endpoint answers 401 JSON, never a 302 (D1 P4)."""
     kb_calls = [
         ("get", "/panel/api/kb"),
+        ("get", "/panel/api/kb/1"),
+        ("get", "/panel/api/kb/search?q=tarifas"),
         ("post", "/panel/api/kb"),
         ("post", "/panel/api/kb/1/edit"),
         ("post", "/panel/api/kb/1/disable"),
@@ -128,6 +132,8 @@ def test_kb_endpoints_denied_403_for_operador_json(client, make_user):
     _login(client, "oper", "oper-pass")
     kb_calls = [
         ("get", "/panel/api/kb"),
+        ("get", "/panel/api/kb/1"),
+        ("get", "/panel/api/kb/search?q=tarifas"),
         ("post", "/panel/api/kb"),
         ("post", "/panel/api/kb/1/edit"),
         ("post", "/panel/api/kb/1/disable"),
@@ -189,6 +195,80 @@ def test_kb_list_returns_docs_with_provider_model_cost(client, make_user, fake_e
 
     datetime.fromisoformat(docs[0]["created_at"])
     assert all("id" in d and "title" in d and "version" in d for d in docs)
+    assert all("content" not in d for d in docs)
+
+
+def test_kb_detail_returns_content(client, make_user, fake_embedder):
+    doc_id = _seed_doc(content=b"stored document content")
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.get(f"/panel/api/kb/{doc_id}", follow_redirects=False)
+
+    assert resp.status_code == 200
+    assert resp.json()["content"] == "stored document content"
+
+
+def test_kb_detail_missing_doc_404_json(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.get("/panel/api/kb/999999", follow_redirects=False)
+
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "kb document not found"}
+
+
+def test_kb_search_returns_ranked_title_and_similarity(client, make_user, fake_embedder):
+    doc_id = _seed_doc(title="Tarifas 2026", content=b"revision anual precio gas")
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.get("/panel/api/kb/search?q=revision anual precio gas", follow_redirects=False)
+
+    assert resp.status_code == 200
+    result = resp.json()["results"][0]
+    assert result["document_id"] == doc_id
+    assert result["title"] == "Tarifas 2026"
+    assert result["similarity"] > 0
+
+
+def test_kb_search_filters_threshold_and_disabled_documents(client, make_user, fake_embedder):
+    doc_id = _seed_doc(title="Enabled", content=b"common retrieval phrase")
+    disabled_id = _seed_doc(title="Disabled", content=b"common retrieval phrase")
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    client.post(f"/panel/api/kb/{disabled_id}/disable", follow_redirects=False)
+
+    hit = client.get("/panel/api/kb/search?q=common retrieval phrase&min_sim=0", follow_redirects=False)
+    miss = client.get("/panel/api/kb/search?q=unrelated&min_sim=1", follow_redirects=False)
+
+    assert [item["document_id"] for item in hit.json()["results"]] == [doc_id]
+    assert miss.json() == {"results": []}
+
+
+def test_kb_search_honors_top_k_and_min_sim(client, make_user, fake_embedder):
+    _seed_doc(title="One", content=b"shared phrase one")
+    _seed_doc(title="Two", content=b"shared phrase two")
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    limited = client.get("/panel/api/kb/search?q=shared phrase&top_k=1&min_sim=0")
+    low = client.get("/panel/api/kb/search?q=shared phrase&min_sim=0")
+    high = client.get("/panel/api/kb/search?q=shared phrase&min_sim=1")
+
+    assert len(limited.json()["results"]) == 1
+    assert len(low.json()["results"]) >= len(high.json()["results"])
+
+
+def test_kb_search_blank_query_400_json(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.get("/panel/api/kb/search?q=%20%20", follow_redirects=False)
+
+    assert resp.status_code == 400
+    assert "detail" in resp.json()
 
 
 def test_kb_upload_ingests_and_audits(client, make_user, fake_embedder):
