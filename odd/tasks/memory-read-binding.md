@@ -255,3 +255,23 @@ All tasks are implemented and verified; no next implementation step remains.
 - Targeted command: `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/unit/test_assistant_tools.py tests/integration/test_assistant_harness_compatibility.py tests/integration/test_assistant_harness_guardrails.py tests/spec/test_memory_spec.py -q` → `84 passed`.
 - Full-suite command: `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/` → `916 passed, 2 warnings in 441.41s (0:07:21)`.
 - An earlier full-suite run exposed one contract assertion in `test_plan_llm_includes_whitelisted_tool_catalog_in_prompt`; it was updated to expect only `scope` as required and the optional `entity_id`, then the full suite passed. The documented hard-coded-port failure did not reproduce in this environment.
+
+### Orchestrator follow-up — context identity contradicted the new contract
+
+The recap line (T4) stopped telling the model to send the panel identity, but
+`_context_text()` still rendered `Conversation identity: scope=panel entity_id=thread:42`
+(`app/chat/assistant/nodes.py:196`, meta built at `app/services/agent_chat.py:487-496`).
+Under the new reject rule that value is exactly the argument a panel read must omit, so
+the context advertised a call the validator now refuses. The model would have seen both
+the forbidden value and the instruction not to send it — a self-correcting one-turn
+stumble, but an incoherent contract.
+
+Fix: the identity line no longer renders the entity. It states the scope and that the
+panel read target is derived server-side.
+`tests/unit/test_assistant_planner.py::test_context_text_includes_conversation_identity_when_available`
+was updated to pin the new text and to assert `entity_id=thread:42` is absent.
+
+Verification of record (orchestrator, after the follow-up fix):
+
+- Targeted: `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/unit/test_assistant_planner.py tests/unit/test_assistant_tools.py tests/integration/test_assistant_harness_compatibility.py tests/integration/test_assistant_harness_guardrails.py tests/spec/test_memory_spec.py` → `101 passed in 17.49s`.
+- Full suite: `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/` → `916 passed, 2 warnings in 396.14s (0:06:36)`. No failure; the historically documented `test_db.py` hard-coded-port failure does not exist at this base.
