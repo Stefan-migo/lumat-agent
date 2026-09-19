@@ -10,6 +10,7 @@ which is the intended "missing env -> clear boot error" behavior (T0.2).
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -72,7 +73,12 @@ class Settings(BaseSettings):
     # dev host and the auth/user/seed suites hash dozens of passwords per run.
     # Safe to lower for tests: the factor is a work factor, not a format, and
     # verify_password reads the cost back out of each stored hash.
-    panel_bcrypt_rounds: int = 12
+    #
+    # The bounds are bcrypt's own: gensalt accepts 4..31 and raises ValueError
+    # outside it. Without them an out-of-range env value boots fine and then
+    # fails every hash_password call at runtime (user creation, password reset,
+    # db/seed.sh); with them it fails at boot, where a bad value belongs.
+    panel_bcrypt_rounds: int = Field(default=12, ge=4, le=31)
 
     # Memoria (design "fines de detalle fino"; S3 close observations).
     # Product values pending sanity before merge (open design question), so
