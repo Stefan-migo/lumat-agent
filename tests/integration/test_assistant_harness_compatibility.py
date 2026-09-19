@@ -140,6 +140,17 @@ def test_memory_read_rejects_cross_scope_entity_shapes(monkeypatch):
             SimpleNamespace(), "memory.read",
             {"scope": "panel", "entity_id": "customer:42"},
         )
+    with pytest.raises(ToolValidationError):
+        execute_tool(
+            SimpleNamespace(), "memory.read",
+            {"scope": "panel", "entity_id": "thread:999"}, trusted_thread_id=7,
+        )
+
+    panel = execute_tool(
+        SimpleNamespace(), "memory.read", {"scope": "panel"}, trusted_thread_id=7
+    )
+    assert panel["status"] == "completed"
+    assert seen == {"scope": "panel", "entity_id": "thread:7"}
 
     result = execute_tool(
         SimpleNamespace(), "memory.read", {"scope": "customer", "entity_id": "42"}

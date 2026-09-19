@@ -282,7 +282,8 @@ def test_context_text_announces_saved_recap_after_rotation():
     text = _context_text(state)
 
     assert "recap saved" in text.lower()
-    assert "memory.read" in text
+    assert "memory.read with scope=panel and no entity_id" in text
+    assert "conversation identity above" not in text
     assert "unavailable" not in text.lower()
 
 
