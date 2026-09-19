@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { ApiError, disableKbDocument, editKbDocument, getKbDocument, refreshKbDocuments, restoreKbDocument, searchKb, uploadKbDocument } from "../../api";
+import { ApiError, disableKbDocument, editKbDocument, getKbDocument, refreshKbDocuments, restoreKbDocument, searchKb, setKbVisibility, uploadKbDocument } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { Doc, DocsResponse, KbSearchResult } from "../../types";
+import type { Doc, DocsResponse, KbSearchResult, KbVisibility } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
@@ -19,16 +19,17 @@ export interface KbListProps { data?: DocsResponse | null; state?: KbListState; 
 
 function docStatus(doc: Doc): "activo" | "deshabilitado" { return doc.active ? "activo" : "deshabilitado"; }
 
-type Mutation = "upload" | "edit" | "disable" | "restore";
+type Mutation = "upload" | "edit" | "disable" | "restore" | "visibility";
 function safeMutationError(error: unknown): string {
   if (error instanceof ApiError && (error.status === 400 || error.status === 422)) return "Revisa los campos e inténtalo nuevamente.";
   if (error instanceof ApiError && error.status === 403) return "No tienes permiso para modificar la base de conocimientos.";
   return "No pudimos guardar los cambios. Inténtalo nuevamente.";
 }
 
-function DocActions({ doc, busy, onEdit, onDisable, onRestore }: { doc: Doc; busy: Mutation | null; onEdit: (title: string, content: string) => void; onDisable: () => void; onRestore: (version: number) => void }) {
+function DocActions({ doc, busy, onEdit, onDisable, onRestore, onVisibility }: { doc: Doc; busy: Mutation | null; onEdit: (title: string, content: string) => void; onDisable: () => void; onRestore: (version: number) => void; onVisibility: (visibility: KbVisibility) => void }) {
   const [content, setContent] = useState<string | null>(null);
   const [contentState, setContentState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [visibility, setVisibility] = useState<KbVisibility>(doc.visibility);
   const loadContent = async () => {
     setContentState("loading");
     try {
@@ -57,6 +58,11 @@ function DocActions({ doc, busy, onEdit, onDisable, onRestore }: { doc: Doc; bus
       </div>
     </details>
     {doc.active ? <Button variant="secondary" disabled={busy !== null} onClick={onDisable}>Deshabilitar</Button> : <span className="kb-actions__technical-copy">Deshabilitado</span>}
+    <div className="kb-actions__visibility">
+      <Select label="Audiencia" aria-label={`Audiencia doc ${doc.id}`} value={visibility} options={[{ value: "internal", label: "Interno (solo Lumat)" }, { value: "customer", label: "Cliente" }]} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} />
+      <p className="kb-actions__technical-copy">Un documento interno nunca se usa para responder a clientes.</p>
+      <Button variant="secondary" disabled={busy !== null || visibility === doc.visibility} onClick={() => onVisibility(visibility)}>Cambiar audiencia</Button>
+    </div>
     {doc.version > 1 ? <div className="kb-actions__restore"><Select label="Restaurar" aria-label={`Restaurar doc ${doc.id}`} defaultValue={String(doc.active_version)} options={Array.from({ length: doc.version }, (_, index) => ({ value: String(index + 1), label: `v${index + 1}` }))} size="sm" disabled={busy !== null} /><Button variant="secondary" disabled={busy !== null} onClick={(event) => onRestore(Number((event.currentTarget.parentElement?.querySelector("select") as HTMLSelectElement).value))}>Restaurar</Button></div> : null}
   </div>;
 }
@@ -67,6 +73,7 @@ const columns: Column<Doc>[] = [
   { key: "format", header: "Formato", render: (doc) => doc.format },
   { key: "version", header: "Versión", render: (doc) => `${doc.version} (activa: ${doc.active_version})` },
   { key: "status", header: "Estado", render: (doc) => <Badge tone={doc.active ? "success" : "neutral"}>{kbStatusLabel(docStatus(doc))}</Badge> },
+  { key: "visibility", header: "Audiencia", render: (doc) => <Badge tone={doc.visibility === "customer" ? "success" : "neutral"}>{doc.visibility === "customer" ? "Cliente" : "Interno (solo Lumat)"}</Badge> },
   { key: "cost", header: "Costo", render: (doc) => doc.cost_meta !== null ? tabularNum(`$${doc.cost_meta.toFixed(6)}`) : "—" },
 ];
 
@@ -130,6 +137,8 @@ export function KbList({ data: controlledData, state: controlledState, onRetry }
   const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; title: string } | null>(null);
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [visibility, setVisibility] = useState<KbVisibility>("internal");
+  const [restoreConfirmation, setRestoreConfirmation] = useState<{ doc: Doc; version: number } | null>(null);
   const data = refreshed ?? controlledData ?? fetched.data;
   const state = controlledState ?? (controlledData !== undefined ? "ready" : fetched.state);
   const docs = data?.docs ?? [];
@@ -145,10 +154,11 @@ export function KbList({ data: controlledData, state: controlledState, onRetry }
   return <PageFrame title="Base de conocimientos" meta={data ? `${docs.length} documentos` : undefined} state={stateMessage(state, controlledState === "error")}>
     {feedback ? <StateMessage tone={feedback.tone} role="alert" title={feedback.title} /> : null}
     {showWorkspace ? <>
-      <Card title="Agregar documento"><div className="kb-upload__fields"><Input label="Título" placeholder="Título del documento" value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy !== null} /><Input label="Archivo (pdf / md / txt / csv)" type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} disabled={busy !== null} /><Button disabled={busy !== null} onClick={() => file && mutate("upload", () => uploadKbDocument(title, file))}>Agregar</Button></div></Card>
-      {docs.length === 0 ? <EmptyState title="No hay documentos" description="Sube el primer documento para comenzar." /> : <DataTable columns={columns} rows={docs} rowKey={(doc) => String(doc.id)} actions={(doc) => <DocActions doc={doc} busy={busy} onEdit={(nextTitle, content) => mutate("edit", () => editKbDocument(doc.id, { title: nextTitle, content }))} onDisable={() => mutate("disable", () => disableKbDocument(doc.id))} onRestore={(version) => mutate("restore", () => restoreKbDocument(doc.id, version))} />} />}
+       <Card title="Agregar documento"><div className="kb-upload__fields"><Input label="Título" placeholder="Título del documento" value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy !== null} /><Input label="Archivo (pdf / md / txt / csv)" type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} disabled={busy !== null} /><Select label="Audiencia" value={visibility} options={[{ value: "internal", label: "Interno (solo Lumat)" }, { value: "customer", label: "Cliente" }]} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} /><p className="kb-search__hint">Un documento interno nunca se usa para responder a clientes.</p><Button disabled={busy !== null} onClick={() => file && mutate("upload", () => uploadKbDocument(title, file, visibility))}>Agregar</Button></div></Card>
+       {docs.length === 0 ? <EmptyState title="No hay documentos" description="Sube el primer documento para comenzar." /> : <DataTable columns={columns} rows={docs} rowKey={(doc) => String(doc.id)} actions={(doc) => <DocActions doc={doc} busy={busy} onEdit={(nextTitle, content) => mutate("edit", () => editKbDocument(doc.id, { title: nextTitle, content }))} onDisable={() => mutate("disable", () => disableKbDocument(doc.id))} onVisibility={(nextVisibility) => mutate("visibility", () => setKbVisibility(doc.id, nextVisibility))} onRestore={(version) => setRestoreConfirmation({ doc, version })} />} />}
       <SearchPanel />
-    </> : null}
+     </> : null}
+     {restoreConfirmation ? <><StateMessage tone="warning" role="alert" title="Confirma la restauración" detail={`El documento se reabrirá como Interno (solo Lumat). El asistente dejará de usarlo para responder a clientes hasta que lo marques como Cliente nuevamente.`} /><div className="kb-actions__restore-confirmation"><Button onClick={() => { const pending = restoreConfirmation; setRestoreConfirmation(null); void mutate("restore", () => restoreKbDocument(pending.doc.id, pending.version)); }}>Confirmar</Button><Button variant="secondary" onClick={() => setRestoreConfirmation(null)}>Cancelar</Button></div></> : null}
     {controlledState === "disable-confirmation" ? <StateMessage tone="warning" role="alert" title="Confirma la desactivación" detail={`Al deshabilitar «${docs.find((doc) => doc.active)?.title ?? "este documento"}», el agente dejará de responder con él. Puedes volver a activarlo cuando quieras.`} /> : null}
     {state === "error" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}
   </PageFrame>;
