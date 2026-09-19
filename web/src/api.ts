@@ -55,16 +55,18 @@ export function postJson<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse } from './types';
-export const uploadKbDocument = (title: string, file: File) => {
+import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility } from './types';
+export const uploadKbDocument = (title: string, file: File, visibility: KbVisibility) => {
   const body = new FormData();
   body.append('title', title);
   body.append('file', file);
+  body.append('visibility', visibility);
   return apiFetch<KbMutationResponse>('/panel/api/kb', { method: 'POST', body });
 };
 export const editKbDocument = (id: number, body: { title: string; content: string }) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/edit`, body);
 export const disableKbDocument = (id: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/disable`);
 export const restoreKbDocument = (id: number, version: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/restore`, { version });
+export const setKbVisibility = (id: number, visibility: KbVisibility) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/visibility`, { visibility });
 export const refreshKbDocuments = () => apiFetch<DocsResponse>('/panel/api/kb');
 export const getKbDocument = (id: number) => apiFetch<KbDocument>(`/panel/api/kb/${id}`);
 export function searchKb({ q, topK, minSim }: { q: string; topK: number; minSim: number }) {

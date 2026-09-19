@@ -593,7 +593,7 @@ def test_daily_blocked_escalates_no_llm(mock_openai_chat, no_real_smtp):
 def test_conservative_mode_brief_respond(mock_openai_chat, fake_embedder, no_real_smtp):
     """SS-3 at 80%: LLM still allowed, respond answers briefly, owner alerted."""
     from app.services import kb as kb_service
-    from app.models import DocumentFormat
+    from app.models import DocumentFormat, KbVisibility
 
     with SessionLocal() as session:
         kb_service.ingest_document(
@@ -604,6 +604,7 @@ def test_conservative_mode_brief_respond(mock_openai_chat, fake_embedder, no_rea
             # H2 (PR 2, AO-7): the valores query is answered by the scoped
             # research_triage sub-graph, so the doc needs a values category.
             source_meta={"category": "valores"},
+            visibility=KbVisibility.CUSTOMER,
         )
         session.commit()
     conv_id = _seed("mi calefont no enciende", "wamid.cg5")

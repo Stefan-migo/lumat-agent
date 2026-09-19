@@ -21,7 +21,7 @@ describe("KbList page story (T5.2 / S6 DS-UI-COPY/STATES/LABELS)", () => {
     expect(withinCard.getByRole("button", { name: "Agregar" })).toBeInTheDocument();
   });
 
-  it("renders the docs DataTable with approved Spanish headers (#, Título, Formato, Versión, Estado, Costo)", () => {
+  it("renders the docs DataTable with approved Spanish headers and audience badges", () => {
     render(<KbListView />);
     const table = screen.getByRole("table");
     const first = docs[0];
@@ -44,6 +44,10 @@ describe("KbList page story (T5.2 / S6 DS-UI-COPY/STATES/LABELS)", () => {
     expect(within(row).getByText(estadoLabel)).toBeInTheDocument();
     // Costo 6-decimal USD (formatted like '%.6f')
     expect(within(row).getByText("$0.000412")).toBeInTheDocument();
+    expect(within(row).getAllByText("Cliente").some((element) => element.getAttribute("data-tone") === "success")).toBe(true);
+    const internal = docs.find((doc) => doc.visibility === "internal")!;
+    const internalRow = within(table).getByText(`#${internal.id}`).closest("tr") as HTMLElement;
+    expect(within(internalRow).getAllByText("Interno (solo Lumat)").some((element) => element.getAttribute("data-tone") === "neutral")).toBe(true);
   });
 
   it("renders an approved Spanish status label per document (triangulation across activo/deshabilitado)", () => {
@@ -125,6 +129,28 @@ describe("KbList page story (T5.2 / S6 DS-UI-COPY/STATES/LABELS)", () => {
     expect(within(alert).getByText("Confirma la desactivación")).toBeInTheDocument();
     expect(within(alert).getByText(new RegExp(activeDoc.title))).toBeInTheDocument();
     expect(within(alert).getByText(/el agente dejará de responder/i)).toBeInTheDocument();
+  });
+
+  it("preselects internal audience and sends the selected audience when uploading", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, doc: docs[0] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
+
+    render(<KbList />);
+    await screen.findByText(docs[0].title);
+    const addCard = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
+    const audience = within(addCard).getByLabelText("Audiencia");
+    expect(audience).toHaveValue("internal");
+    await user.selectOptions(audience, "customer");
+    await user.type(within(addCard).getByLabelText("Título"), "Guide");
+    await user.upload(within(addCard).getByLabelText(/archivo/i), new File(["# Content"], "guide.md", { type: "text/markdown" }));
+    await user.click(within(addCard).getByRole("button", { name: "Agregar" }));
+
+    const body = fetchMock.mock.calls[1][1]?.body as FormData;
+    expect(body.get("visibility")).toBe("customer");
+    fetchMock.mockRestore();
   });
 
   it("renders a processing state banner pairing status role with a visible label (DS-UI-STATES)", () => {
@@ -213,12 +239,13 @@ describe("KbList API page", () => {
     expect(uploadRequest.body).toBeInstanceOf(FormData);
     expect((uploadRequest.body as FormData).get("title")).toBe("Guide");
     expect((uploadRequest.body as FormData).get("file")).toBeInstanceOf(File);
+    expect((uploadRequest.body as FormData).get("visibility")).toBe("internal");
     expect((uploadRequest.headers as Record<string, string> | undefined)?.["Content-Type"]).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
     fetchMock.mockRestore();
   });
 
-  it("posts edit, disable, and restore JSON mutations and refreshes after each commit", async () => {
+  it("requires restore confirmation, then posts the restore mutation and refreshes", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       if (init?.method === "POST") return new Response(JSON.stringify({ ok: true, doc: docs[0] }), { status: 200 });
@@ -235,12 +262,39 @@ describe("KbList API page", () => {
     const restoreRow = within(screen.getByRole("table")).getByText(`#${docs.find((doc) => doc.version > 1)!.id}`).closest("tr") as HTMLElement;
     await user.click(within(restoreRow).getByRole("button", { name: "Restaurar" }));
 
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(2);
+    const confirmation = (await screen.findAllByRole("alert")).find((element) => element.textContent?.includes("Confirma la restauración"))!;
+    expect(confirmation).toHaveTextContent(/reabrirá como Interno \(solo Lumat\)/i);
+    expect(confirmation).toHaveTextContent(/dejará de usarlo para responder a clientes/i);
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
     const mutationCalls = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
     expect(mutationCalls).toHaveLength(3);
     expect((mutationCalls[0][1]?.body as string)).toContain('"content"');
     expect((mutationCalls[1][0] as string)).toContain(`/kb/${docs[0].id}/disable`);
     expect((mutationCalls[2][0] as string)).toContain(`/kb/${docs.find((doc) => doc.version > 1)!.id}/restore`);
     expect(fetchMock.mock.calls.filter(([, init]) => !init?.method || init.method === "GET")).toHaveLength(4);
+    fetchMock.mockRestore();
+  });
+
+  it("reclassifies a document and refreshes the list from the server", async () => {
+    const user = userEvent.setup();
+    const refreshedDocs = docs.map((doc) => doc.id === docs[0].id ? { ...doc, visibility: "internal" as const } : doc);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      if (init?.method === "POST") return new Response(JSON.stringify({ ok: true, doc: refreshedDocs[0] }), { status: 200 });
+      return new Response(JSON.stringify({ docs: refreshedDocs }), { status: 200 });
+    });
+
+    render(<KbList data={{ docs }} />);
+    const row = within(screen.getByRole("table")).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
+    const audience = within(row).getByLabelText(`Audiencia doc ${docs[0].id}`);
+    await user.selectOptions(audience, "internal");
+    await user.click(within(row).getByRole("button", { name: "Cambiar audiencia" }));
+
+    expect(fetchMock.mock.calls[0][0]).toContain(`/kb/${docs[0].id}/visibility`);
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({ visibility: "internal" });
+    expect(within(row).getAllByText("Interno (solo Lumat)").some((element) => element.getAttribute("data-tone") === "neutral")).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     fetchMock.mockRestore();
   });
 

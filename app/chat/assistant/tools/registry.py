@@ -210,7 +210,8 @@ def _open_cases(session, args: CasesArgs):
 
 
 def _retrieve_kb(session, args: KbArgs):
-    return kb.retrieve(session, args.query, top_k=args.top_k)
+    # The Lumat assistant is internal and deliberately reads the whole corpus, including internal documents.
+    return kb.retrieve(session, args.query, top_k=args.top_k, audience=None)
 
 
 def _kpis(session, args: KpiArgs):

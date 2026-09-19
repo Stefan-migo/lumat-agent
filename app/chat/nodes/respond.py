@@ -20,7 +20,7 @@ from sqlalchemy import select
 
 from app.chat.state import ConversationState
 from app.db import session_scope
-from app.models import Message
+from app.models import KbVisibility, Message
 from app.services import kb, prompts
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
@@ -129,7 +129,12 @@ def respond(state: ConversationState) -> dict:
 
     with session_scope() as session:
         chunks = kb.retrieve(
-            session, text, top_k=kb.DEFAULT_TOP_K, min_sim=kb.DEFAULT_MIN_SIM
+            session,
+            text,
+            top_k=kb.DEFAULT_TOP_K,
+            min_sim=kb.DEFAULT_MIN_SIM,
+            # Customer chat may use customer-audience documents only.
+            audience=KbVisibility.CUSTOMER,
         )
         if not chunks:
             # CM-4: cannot answer reliably + CM-6 log + default escalation.

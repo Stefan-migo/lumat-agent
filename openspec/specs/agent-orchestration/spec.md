@@ -96,6 +96,8 @@ The system MUST gate each sub-agent's service calls against its `tools_whitelist
 
 Chunks carry `source_meta.category` (JSONB convention, no schema change): documents ingested with a category store `source_meta: {"category": "..."}`. `kb.retrieve(..., scope=...)` SHOULD filter chunks to those whose `source_meta.category` is in the scope list; `scope=None` returns the unfiltered active-version set (backward compatible). A sub-agent with `kb_scope: [valores, postventa]` (e.g. research_triage) may only retrieve chunks whose category is in that list. Memory stays customer-scoped (unchanged).
 
+The `scope` filter is the TOPIC axis only. Document audience (`customer` | `internal`, see KB-5) is a separate orthogonal axis enforced on `kb_documents.visibility`, and audience MUST NOT be folded into `source_meta.category`.
+
 #### Scenario: Scoped retrieve
 - GIVEN a sub-agent with `kb_scope`
 - WHEN it calls `kb.retrieve(scope=kb_scope)`

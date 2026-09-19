@@ -13,6 +13,7 @@ KB (endpoints 13-17):
 - POST /panel/api/kb/{id}/edit     -> {"title","content"} new version re-embed
 - POST /panel/api/kb/{id}/disable  -> KB-3 disable, audited
 - POST /panel/api/kb/{id}/restore  -> {"version":n} pointer flip, audited (D8)
+- POST /panel/api/kb/{id}/visibility -> {"visibility":...} reclassification, audited
 
 Settings (endpoints 18-19):
 - GET  /panel/api/settings                         -> all sections + snapshot
@@ -88,6 +89,7 @@ def test_kb_endpoints_require_login_401_json(client):
         ("post", "/panel/api/kb/1/edit"),
         ("post", "/panel/api/kb/1/disable"),
         ("post", "/panel/api/kb/1/restore"),
+        ("post", "/panel/api/kb/1/visibility"),
     ]
     for method, path in kb_calls:
         resp = getattr(client, method)(path, follow_redirects=False)
@@ -138,6 +140,7 @@ def test_kb_endpoints_denied_403_for_operador_json(client, make_user):
         ("post", "/panel/api/kb/1/edit"),
         ("post", "/panel/api/kb/1/disable"),
         ("post", "/panel/api/kb/1/restore"),
+        ("post", "/panel/api/kb/1/visibility"),
     ]
     for method, path in kb_calls:
         resp = getattr(client, method)(path, follow_redirects=False)
@@ -302,7 +305,132 @@ def test_kb_upload_ingests_and_audits(client, make_user, fake_embedder):
     audit = _last_audit("kb.document_ingest")
     assert audit is not None
     assert audit.actor == "adm"
-    assert audit.after == {"title": "Tarifas 2026", "format": "md", "version": 1}
+    assert audit.after == {
+        "title": "Tarifas 2026",
+        "format": "md",
+        "version": 1,
+        "visibility": "internal",
+    }
+
+
+def test_kb_upload_explicit_customer_visibility(client, make_user, fake_embedder):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/kb",
+        data={"title": "Customer guide", "visibility": "customer"},
+        files={"file": ("guide.md", b"customer content", "text/markdown")},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["doc"]["visibility"] == "customer"
+    with SessionLocal() as session:
+        assert session.get(KbDocument, resp.json()["doc"]["id"]).visibility.value == "customer"
+
+
+def test_kb_upload_without_visibility_defaults_internal(client, make_user, fake_embedder):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/kb",
+        data={"title": "Internal guide"},
+        files={"file": ("guide.md", b"internal content", "text/markdown")},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["doc"]["visibility"] == "internal"
+    audit = _last_audit("kb.document_ingest")
+    assert audit is not None and audit.after["visibility"] == "internal"
+
+
+def test_kb_upload_invalid_visibility_400_without_document(client, make_user, fake_embedder):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/kb",
+        data={"title": "Invalid", "visibility": "secret"},
+        files={"file": ("invalid.md", b"content", "text/markdown")},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 400
+    assert resp.headers["content-type"].startswith("application/json")
+    assert "visibility" in resp.json()["detail"]
+    with SessionLocal() as session:
+        assert session.scalar(select(KbDocument).where(KbDocument.title == "Invalid")) is None
+
+
+def test_kb_set_visibility_audits_without_new_version(client, make_user, fake_embedder):
+    doc_id = _seed_doc()
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        f"/panel/api/kb/{doc_id}/visibility",
+        json={"visibility": "customer"},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["doc"]["visibility"] == "customer"
+    assert resp.json()["doc"]["version"] == 1
+    with SessionLocal() as session:
+        doc = session.get(KbDocument, doc_id)
+        assert doc.visibility.value == "customer"
+        assert doc.version == 1
+    audit = _last_audit("kb.document_visibility")
+    assert audit is not None and audit.actor == "adm"
+    assert audit.before == {"visibility": "internal"}
+    assert audit.after == {"visibility": "customer"}
+
+
+def test_kb_set_visibility_missing_doc_404_json(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/kb/999999/visibility",
+        json={"visibility": "customer"},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "kb document not found"}
+
+
+def test_kb_set_visibility_invalid_value_400_json(client, make_user, fake_embedder):
+    doc_id = _seed_doc()
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        f"/panel/api/kb/{doc_id}/visibility",
+        json={"visibility": "secret"},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 400
+    assert resp.headers["content-type"].startswith("application/json")
+    assert "secret" in resp.json()["detail"]
+
+
+def test_kb_set_visibility_requires_admin(client, make_user):
+    make_user("oper", "oper-pass", role="operador")
+    _login(client, "oper", "oper-pass")
+
+    resp = client.post(
+        "/panel/api/kb/1/visibility",
+        json={"visibility": "customer"},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 403
+    assert resp.json() == {"detail": "admin role required"}
 
 
 def test_kb_upload_unsupported_type_400_json(client, make_user):
@@ -440,7 +568,29 @@ def test_kb_restore_previous_version_audits(client, make_user, fake_embedder):
     audit = _last_audit("kb.document_restore")
     assert audit is not None and audit.actor == "adm"
     assert audit.before == {"active_version": 2}
-    assert audit.after == {"active_version": 1}
+    assert audit.after == {"active_version": 1, "visibility": "internal"}
+
+
+def test_kb_restore_customer_document_reopens_internal(client, make_user, fake_embedder):
+    doc_id = _seed_doc()
+    _seed_version2(doc_id=doc_id)
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    set_resp = client.post(
+        f"/panel/api/kb/{doc_id}/visibility",
+        json={"visibility": "customer"},
+        follow_redirects=False,
+    )
+    assert set_resp.status_code == 200
+
+    resp = client.post(
+        f"/panel/api/kb/{doc_id}/restore",
+        json={"version": 1},
+        follow_redirects=False,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["doc"]["visibility"] == "internal"
 
 
 def test_kb_restore_invalid_version_400_json(client, make_user, fake_embedder):

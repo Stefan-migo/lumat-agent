@@ -25,6 +25,7 @@ from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
     Conversation,
     DocumentFormat,
+    KbVisibility,
     MemoryType,
     Message,
     MessageDirection,
@@ -52,7 +53,7 @@ def clean_db(migrated_db):
     yield
 
 
-def _seed_kb_doc(text: str) -> None:
+def _seed_kb_doc(text: str, visibility: KbVisibility) -> None:
     # H2 (PR 2, AO-7): the valores query is answered by the scoped
     # research_triage sub-graph, which only retrieves chunks whose
     # source_meta.category is in its kb_scope — seed the category so the
@@ -64,6 +65,7 @@ def _seed_kb_doc(text: str) -> None:
             fmt=DocumentFormat.MD,
             content=text.encode(),
             source_meta={"category": "valores"},
+            visibility=visibility,
         )
         session.commit()
 
@@ -126,7 +128,7 @@ def _respond_user_content(mock_openai_chat: list[dict]) -> str:
 
 
 def test_cm7_context_injected_for_returning_customer(mock_openai_chat):
-    _seed_kb_doc("cuanto cuesta la revision anual 15000")
+    _seed_kb_doc("cuanto cuesta la revision anual 15000", KbVisibility.CUSTOMER)
     conv_id, customer_id = _start_conversation()
     _seed_customer_memo(customer_id, "Cliente comento que ya intento varias reparaciones")
 
@@ -140,7 +142,7 @@ def test_cm7_context_injected_for_returning_customer(mock_openai_chat):
 
 
 def test_cm7_empty_context_on_first_contact_not_blocked(mock_openai_chat):
-    _seed_kb_doc("cuanto cuesta la revision anual 15000")
+    _seed_kb_doc("cuanto cuesta la revision anual 15000", KbVisibility.CUSTOMER)
     conv_id, _ = _start_conversation()
 
     replies = _turn(conv_id, "cuanto cuesta la revision anual", "wamid.mem1")
@@ -156,7 +158,7 @@ def test_cm7_empty_context_on_first_contact_not_blocked(mock_openai_chat):
 
 
 def test_cm8_session_persisted_and_seen_next_turn(mock_openai_chat):
-    _seed_kb_doc("cuanto cuesta la revision anual 15000")
+    _seed_kb_doc("cuanto cuesta la revision anual 15000", KbVisibility.CUSTOMER)
     conv_id, customer_id = _start_conversation()
 
     _turn(conv_id, "cuanto cuesta la revision anual", "wamid.p1")

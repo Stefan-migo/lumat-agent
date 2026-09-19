@@ -57,5 +57,44 @@ The system MUST version documents and re-ingest on update, preserving the previo
 - WHEN an admin restores a prior version
 - THEN the prior version becomes active and re-ingested
 
+### Requirement: KB-5 — Document Audience
+
+The system MUST classify every KB document with an audience of `customer` or `internal`, stored as a `NOT NULL`, database-enforced column on `kb_documents`, defaulting to `internal` (fail-safe). The audience axis MUST remain independent of the AO-7 topic scope (`source_meta.category`): a document MAY be topic-scoped and `internal` at the same time.
+
+Customer-facing readers MUST retrieve only `customer` documents; the customer WhatsApp chatbot and its research-triage sub-graph MUST filter to `customer`. Internal readers — the Lumat assistant and the admin retrieval probe — MAY read the whole active corpus.
+
+Retrieving KB content MUST default to the `customer` audience, so a caller that omits the audience cannot read internal-only content.
+
+Restoring a document version MUST NOT widen the audience; a restore re-opens the document as `internal`, and re-publishing it to customers MUST be an explicit, separate action.
+
+Reclassifying a document MUST NOT create a new version and MUST be recorded in the audit log.
+
+#### Scenario: Internal document is invisible to the customer
+- GIVEN a KB document with audience `internal`
+- WHEN the customer chatbot retrieves KB content for a question that document answers
+- THEN the document is not retrieved and the bot does not answer from it
+
+#### Scenario: Fail-safe default
+- GIVEN a document ingested without an explicit audience
+- WHEN it is stored
+- THEN its audience is `internal`
+
+#### Scenario: Restore never widens
+- GIVEN a `customer` document with more than one version
+- WHEN an admin restores a prior version
+- THEN the document's audience becomes `internal`
+- AND re-publishing it to customers requires an explicit reclassification
+
+#### Scenario: Explicit reclassification
+- GIVEN an existing document
+- WHEN an admin changes its audience
+- THEN the change takes effect without creating a new version
+- AND it is recorded in the audit log
+
+#### Scenario: Assistant keeps full access
+- GIVEN an `internal` document
+- WHEN the Lumat assistant retrieves KB content
+- THEN the document IS retrievable
+
 ## Boundary
 KB retrieval supplies content for `conversation-manager` (CM-4); the manager view is exposed in `admin-panel` (AP-6).

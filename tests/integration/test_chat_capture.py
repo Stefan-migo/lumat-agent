@@ -27,6 +27,7 @@ from app.models import (  # noqa: E402
     Conversation,
     Customer,
     DocumentFormat,
+    KbVisibility,
     Message,
     MessageDirection,
     MessageStatus,
@@ -173,7 +174,7 @@ def test_cm2_skip_is_unknown_and_non_blocking(mock_openai_chat):
 # ---------------------------------------------------------------------------
 
 
-def _seed_kb_doc(text: str) -> None:
+def _seed_kb_doc(text: str, visibility: KbVisibility) -> None:
     # H2 (PR 2, AO-7): KB retail (valores) queries are answered by the scoped
     # research_triage sub-graph, which only retrieves chunks whose
     # source_meta.category is in its kb_scope. Seed the manual with the
@@ -186,13 +187,17 @@ def _seed_kb_doc(text: str) -> None:
             fmt=DocumentFormat.MD,
             content=text.encode(),
             source_meta={"category": "valores"},
+            visibility=visibility,
         )
         session.commit()
 
 
 def test_cm4_kb_grounded_answer_with_kb_tags(mock_openai_chat, fake_embedder):
     # the customer question is a prefix of the chunk -> semantic hit (mocked)
-    _seed_kb_doc("cuanto cuesta la revision anual de calefont: 15000 pesos")
+    _seed_kb_doc(
+        "cuanto cuesta la revision anual de calefont: 15000 pesos",
+        KbVisibility.CUSTOMER,
+    )
     conv_id = _start_conversation()
     replies = _turn(conv_id, "cuanto cuesta la revision anual", "wamid.kb0")
 
@@ -212,7 +217,7 @@ def test_cm4_kb_grounded_answer_with_kb_tags(mock_openai_chat, fake_embedder):
 
 
 def test_cm4_kb_miss_cannot_answer_and_logs_unresolved(mock_openai_chat, fake_embedder):
-    _seed_kb_doc("revision anual 15000")
+    _seed_kb_doc("revision anual 15000", KbVisibility.CUSTOMER)
     conv_id = _start_conversation()
     replies = _turn(conv_id, "cuanto cuesta un grifo de cocina marca x", "wamid.miss0")
 
@@ -240,13 +245,59 @@ def test_cm4_kb_miss_cannot_answer_and_logs_unresolved(mock_openai_chat, fake_em
 
 
 def test_cm6_no_unresolved_when_kb_hits(mock_openai_chat, fake_embedder):
-    _seed_kb_doc("cuanto cuesta la revision anual de calefont: 15000 pesos")
+    _seed_kb_doc(
+        "cuanto cuesta la revision anual de calefont: 15000 pesos",
+        KbVisibility.CUSTOMER,
+    )
     conv_id = _start_conversation()
     _turn(conv_id, "cuanto cuesta la revision anual", "wamid.hit0")
 
     with session_scope() as session:
         unresolved = list_unresolved_questions(session)
     assert unresolved == []  # answered from KB -> nothing logged
+
+
+def test_customer_chat_cannot_ground_on_internal_kb_document(
+    mock_openai_chat, fake_embedder, monkeypatch
+):
+    internal_text = "cuanto cuesta la revision anual de calefont: precio interno 15000"
+    _seed_kb_doc(internal_text, KbVisibility.INTERNAL)
+    retrieve_calls = []
+    original_retrieve = kb_service.retrieve
+
+    def capture_retrieve(*args, **kwargs):
+        retrieve_calls.append(kwargs)
+        return original_retrieve(*args, **kwargs)
+
+    monkeypatch.setattr(kb_service, "retrieve", capture_retrieve)
+    conv_id = _start_conversation()
+    replies = _turn(conv_id, "cuanto cuesta la revision anual", "wamid.internal-customer")
+
+    assert retrieve_calls
+    assert all(call["audience"] is KbVisibility.CUSTOMER for call in retrieve_calls)
+    assert all("<kb>" not in request["messages"][-1]["content"] for request in mock_openai_chat)
+    assert replies[-1] == "Un asesor revisará tu caso y te contactará a la brevedad."
+
+
+def test_lumat_assistant_can_retrieve_internal_kb_document(fake_embedder):
+    from app.chat.assistant.tools.registry import KbArgs, _retrieve_kb
+
+    internal_text = "manual interno para configurar el tablero de operaciones"
+    with SessionLocal() as session:
+        kb_service.ingest_document(
+            session,
+            title="Internal assistant manual",
+            fmt=DocumentFormat.MD,
+            content=internal_text.encode(),
+            visibility=KbVisibility.INTERNAL,
+        )
+        session.commit()
+
+    with SessionLocal() as session:
+        chunks = _retrieve_kb(session, KbArgs(query=internal_text))
+
+    assert chunks
+    assert chunks[0]["content"] == internal_text
 
 
 # ---------------------------------------------------------------------------
