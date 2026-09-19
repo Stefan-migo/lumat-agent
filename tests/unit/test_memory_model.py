@@ -1,0 +1,13 @@
+import app.models as models
+
+
+def test_memory_provenance_model_shape():
+    assert hasattr(models, "MemoryProducer")
+    assert hasattr(models, "MemoryVisibility")
+    assert [member.value for member in models.MemoryProducer] == [
+        "user", "system", "agent", "pipeline"
+    ]
+    assert [member.value for member in models.MemoryVisibility] == ["thread", "project"]
+    assert models.Memory.__table__.c.producer.type.name == "memory_producer"
+    assert models.Memory.__table__.c.origin_thread_id.type.length == 100
+    assert models.Memory.__table__.c.visibility.type.name == "memory_visibility"

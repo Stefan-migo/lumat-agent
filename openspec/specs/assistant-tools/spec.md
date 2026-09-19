@@ -28,7 +28,7 @@ The assistant MUST expose the existing typed, exact-argument tools over domain s
 
 ### Requirement: AT-8 — Scoped Memory Contract
 
-The `memory.read` and `memory.search` tools MUST accept only `scope="panel"` or `scope="customer"`. A panel conversation read MUST use `entity_id="thread:<thread id>"`, and a customer read MUST use `entity_id="customer:<customer id>"` or a legacy numeric customer id. `memory.search` MUST bound each returned `contenido` field before it becomes tool evidence.
+The `memory.read` and `memory.search` tools MUST accept only `scope="panel"`, `scope="customer"`, or `scope="agent"`. A panel conversation read MUST use `entity_id="thread:<thread id>"`, a customer read MUST use `entity_id="customer:<customer id>"` or a legacy numeric customer id, and an agent read MUST use the canonical project-scoped agent entity `entity_id="agent:<project>"`. `memory.search` MUST bound each returned `contenido` field before it becomes tool evidence.
 
 #### Scenario: Valid scoped memory read
 - GIVEN a memory read with a closed-domain scope and its matching entity identifier
@@ -50,14 +50,24 @@ The `memory.read` and `memory.search` tools MUST accept only `scope="panel"` or 
 - WHEN the assistant validates the arguments
 - THEN validation rejects the search before service execution
 
+#### Scenario: Canonical agent scope
+- GIVEN an agent memory read with an entity other than the canonical project-scoped `agent:<project>` entity
+- WHEN the assistant validates the arguments
+- THEN validation rejects the read before service execution
+
 ### Requirement: AT-9 — Autonomous Thread Memory Write
 
-The `memory.write` tool MUST write only to `scope="panel"` and `entity_id="thread:<trusted thread id>"`, with both values derived server-side. It MUST accept no model-supplied scope or entity identifier, require an `agent:` topic namespace, use nested-savepoint upsert semantics, and return a degraded result rather than raising on persistence failure. Only `memory.write` may skip approval, and only with a positive trusted thread id; every other write MUST retain exact approval.
+The `memory.write` tool MUST accept a declared `visibility` of `thread` or `project`, defaulting to `thread`. It MUST accept no model-supplied scope or entity identifier: the server derives `thread` as `scope="panel"`, `entity_id="thread:<trusted thread id>"`, and `project` as `scope="agent"`, `entity_id="agent:<project>"`, with the project bound server-side. The server MUST stamp `producer="agent"` and the trusted origin thread. It MUST require an `agent:` topic namespace, use nested-savepoint upsert semantics, and return a degraded result rather than raising on persistence failure. Only `memory.write` may skip approval, and only with a positive trusted thread id; every other write MUST retain exact approval.
 
 #### Scenario: Bounded autonomous write
 - GIVEN an allow-listed `memory.write` call with a positive trusted thread id
 - WHEN the assistant executes it without approval
 - THEN the memory is upserted in the current panel thread and the result reports the written row
+
+#### Scenario: Declared project visibility
+- GIVEN an allow-listed `memory.write` call with `visibility="project"`
+- WHEN the assistant executes it with a positive trusted thread id
+- THEN the memory is stored on the canonical agent axis with agent provenance and the trusted origin thread
 
 #### Scenario: Autonomous target cannot be supplied by the model
 - GIVEN a `memory.write` payload containing `scope` or `entity_id`

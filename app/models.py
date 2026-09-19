@@ -134,6 +134,18 @@ class MemoryStatus(str, enum.Enum):
     ARCHIVED = "archived"
 
 
+class MemoryProducer(str, enum.Enum):
+    USER = "user"
+    SYSTEM = "system"
+    AGENT = "agent"
+    PIPELINE = "pipeline"
+
+
+class MemoryVisibility(str, enum.Enum):
+    THREAD = "thread"
+    PROJECT = "project"
+
+
 class AppointmentStatus(str, enum.Enum):
     BOOKED = "booked"
     CANCELLED = "cancelled"
@@ -461,6 +473,19 @@ class Memory(Base):
         pg_enum(MemoryStatus, "memory_status"),
         default=MemoryStatus.ACTIVE,
         server_default="active",
+    )
+    producer: Mapped[MemoryProducer] = mapped_column(
+        pg_enum(MemoryProducer, "memory_producer"),
+        default=MemoryProducer.SYSTEM,
+        server_default="system",
+        nullable=False,
+    )
+    origin_thread_id: Mapped[str | None] = mapped_column(String(100))
+    visibility: Mapped[MemoryVisibility] = mapped_column(
+        pg_enum(MemoryVisibility, "memory_visibility"),
+        default=MemoryVisibility.THREAD,
+        server_default="thread",
+        nullable=False,
     )
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = mapped_column(

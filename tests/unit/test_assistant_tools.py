@@ -32,11 +32,13 @@ def test_registry_exposes_typed_bounded_tools():
     assert get_tool("automation.create_rule").read_only is False
 
 
-def test_memory_args_reject_unknown_scope_and_expose_closed_scope_schema():
+def test_memory_args_reject_unknown_scope_and_expose_canonical_scope_schema():
     with pytest.raises(ValueError):
         MemoryArgs.model_validate({"scope": "banana", "entity_id": "whatever"})
 
-    assert MemoryArgs.model_json_schema()["properties"]["scope"]["enum"] == ["panel", "customer"]
+    assert MemoryArgs.model_json_schema()["properties"]["scope"]["enum"] == [
+        "panel", "customer", "agent"
+    ]
 
 
 def test_project_tools_are_typed_bounded_and_classified():
@@ -504,6 +506,42 @@ def test_memory_write_is_thread_anchored(monkeypatch):
     assert first["result"] == {"written": True, "id": 4, "topic_key": "agent:decision"}
     assert second["result"] == first["result"]
     assert all(call["scope"] == "panel" and call["entity_id"] == "thread:7" for call in calls)
+
+
+def test_memory_write_project_visibility_uses_canonical_agent_axis(monkeypatch):
+    class Savepoint:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    session = SimpleNamespace(begin_nested=lambda: Savepoint())
+    row = SimpleNamespace(id=5)
+    calls = []
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.memory.upsert",
+        lambda session, **kwargs: calls.append(kwargs) or row,
+    )
+
+    result = execute_tool(
+        session,
+        "memory.write",
+        {
+            "titulo": "Project fact",
+            "contenido": "Reuse this",
+            "topic_key": "agent:fact",
+            "visibility": "project",
+        },
+        trusted_thread_id=8,
+    )
+
+    assert result["result"] == {"written": True, "id": 5, "topic_key": "agent:fact"}
+    assert calls[0]["scope"] == "agent"
+    assert calls[0]["entity_id"] == "agent:default"
+    assert calls[0]["proyecto"] == "default"
+    assert calls[0]["producer"].value == "agent"
+    assert calls[0]["origin_thread_id"] == "8"
 
 
 def test_memory_write_degrades_and_fails_closed_without_trusted_thread(monkeypatch):
