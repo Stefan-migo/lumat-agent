@@ -277,8 +277,22 @@ def test_valid_registry_resolves_assistant_runtime_configuration(repo_root):
         "respond": "prompts/assistant_respond.md",
         "classify": "prompts/assistant_classify.md",
     }
-    assert len(reg.assistant.tools_whitelist) == 19
+    # Derive the surface from the code registry so adding or removing a tool
+    # updates both sides together instead of hardcoding the size (WU#8 R3).
+    from app.chat.assistant.tools.registry import TOOL_REGISTRY
+
+    assert set(reg.assistant.tools_whitelist) == set(TOOL_REGISTRY)
     assert "automation.create_rule" in reg.assistant.tools_whitelist
+
+
+def test_assistant_whitelist_excludes_removed_aliases(repo_root):
+    # WU#8 R3 follow-up: prove the removed aliases are absent from the declared
+    # whitelist directly. The surface assert above is transitive — the loader's
+    # fail-fast only rejects whitelist entries missing from TOOL_REGISTRY, so a
+    # wrong replacement could preserve the set while one alias stays declared.
+    whitelist = _load(repo_root).assistant.tools_whitelist
+    assert "memory.kpis" not in whitelist
+    assert "appointments.list" not in whitelist
 
 
 def test_registry_declares_cortex_classes_and_literal_commands(repo_root):
