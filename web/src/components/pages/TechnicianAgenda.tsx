@@ -2,10 +2,12 @@ import { useCallback, useMemo } from 'react';
 import { fetchTechnicianAgenda } from '../../api';
 import type { TechnicianAppointment } from '../../types';
 import { useAsyncData, type AsyncDataState } from '../../hooks/useAsyncData';
+import { Badge } from '../primitives/Badge';
 import { Button } from '../primitives/Button';
 import { EmptyState } from '../shared/EmptyState';
 import { PageFrame } from '../shared/PageFrame';
 import { StateMessage } from '../shared/StateMessage';
+import { appointmentStatusLabel, appointmentStatusTone } from '../shared/toneMaps';
 
 /** Technician agenda (TECH-AGENDA-1).
  *
@@ -100,6 +102,9 @@ function AppointmentCard({ row }: { row: TechnicianAppointment }) {
         <span aria-hidden="true">–</span>
         <time dateTime={row.ends_at}>{clock(row.ends_at, row.timezone)}</time>
       </p>
+      <Badge tone={appointmentStatusTone(row.status)} className="technician-agenda__status">
+        {appointmentStatusLabel(row.status)}
+      </Badge>
       <p className="technician-agenda__service">{row.service}</p>
       <strong>{row.customer.name ?? 'Cliente sin nombre'}</strong>
       <span>{row.customer.address ?? 'Dirección no registrada'}</span>
@@ -145,12 +150,16 @@ export function TechnicianAgenda({ data: controlledData, state: controlledState,
    *  and never moves on its own. Derived in render rather than set from an
    *  effect: an extra commit would flash the header without its freshness. */
   const loadedAt = useMemo(() => (data ? stampFormat.format(new Date()) : null), [data]);
+  /** The header counts the visits that happen. A cancelled visit stays listed and
+   *  badged, so it is named apart instead of quietly inflating the count. */
+  const cancelled = appointments.filter((row) => row.status === 'cancelled').length;
+  const happening = appointments.length - cancelled;
 
   return (
     <PageFrame
       title="Agenda técnica"
       meta={loadedAt
-        ? `${appointments.length} ${appointments.length === 1 ? 'visita' : 'visitas'} · Actualizado ${loadedAt}`
+        ? `${happening} ${happening === 1 ? 'visita' : 'visitas'}${cancelled > 0 ? ` · ${cancelled} ${cancelled === 1 ? 'cancelada' : 'canceladas'}` : ''} · Actualizado ${loadedAt}`
         : undefined}
       actions={<Button variant="secondary" disabled={loading} onClick={retry}>Actualizar</Button>}
       state={stateMessage(state, retry)}

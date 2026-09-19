@@ -6,7 +6,7 @@ import { TechnicianShell } from '../domain/TechnicianShell';
 import type { TechnicianAppointment, User } from '../../types';
 
 const appointment: TechnicianAppointment = {
-  id: 7, service: 'Calefont', local_start: '2026-01-02T10:00:00', starts_at: '2026-01-02T13:00:00+00:00', ends_at: '2026-01-02T14:00:00+00:00', timezone: 'America/Santiago',
+  id: 7, service: 'Calefont', local_start: '2026-01-02T10:00:00', starts_at: '2026-01-02T13:00:00+00:00', ends_at: '2026-01-02T14:00:00+00:00', timezone: 'America/Santiago', status: 'booked',
   customer: { name: 'María Silva', address: 'Los Alerces 42', comuna: 'Ñuñoa', phone: '+56912345678' }, case_summary: 'Revisar fuga del calefont',
 };
 
@@ -106,7 +106,7 @@ describe('technician surface — reading the agenda as a schedule', () => {
   const visit = (id: number, offsetDays: number, hour: number, service: string): TechnicianAppointment => ({
     id, service, local_start: at(offsetDays, hour).toISOString().slice(0, 19),
     starts_at: at(offsetDays, hour).toISOString(), ends_at: at(offsetDays, hour + 1).toISOString(),
-    timezone: 'UTC', customer: { name: `Cliente ${id}`, address: `Calle ${id}`, comuna: 'Ñuñoa', phone: '+56900000000' },
+    timezone: 'UTC', status: 'booked', customer: { name: `Cliente ${id}`, address: `Calle ${id}`, comuna: 'Ñuñoa', phone: '+56900000000' },
     case_summary: null,
   });
   const mock = (rows: TechnicianAppointment[]) => {
@@ -148,6 +148,68 @@ describe('technician surface — reading the agenda as a schedule', () => {
     await screen.findByText('Calefont hoy');
     expect(screen.getByRole('region', { name: 'Próximas visitas' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Visitas anteriores' })).not.toBeInTheDocument();
+  });
+});
+
+describe('technician surface — appointment state', () => {
+  const mock = (rows: TechnicianAppointment[]) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ appointments: rows }), { status: 200 }),
+    );
+  };
+
+  it('states every appointment status in words, so colour is never the only channel', async () => {
+    mock([
+      { ...appointment, id: 1, service: 'Reparación', status: 'booked' },
+      { ...appointment, id: 2, service: 'Revisión', status: 'cancelled' },
+      { ...appointment, id: 3, service: 'Instalación', status: 'completed' },
+      { ...appointment, id: 4, service: 'Mantención', status: 'no_show' },
+    ]);
+
+    render(<TechnicianAgenda />);
+
+    await screen.findByText('Reparación');
+    expect(screen.getByText('Reservada')).toBeInTheDocument();
+    expect(screen.getByText('Cancelada')).toBeInTheDocument();
+    expect(screen.getByText('Completada')).toBeInTheDocument();
+    expect(screen.getByText('No asistió')).toBeInTheDocument();
+  });
+
+  it('marks a cancelled visit so it cannot be read as a booked one', async () => {
+    mock([
+      { ...appointment, id: 1, service: 'Reparación', status: 'booked' },
+      { ...appointment, id: 2, service: 'Revisión', status: 'cancelled' },
+    ]);
+
+    render(<TechnicianAgenda />);
+
+    const cancelled = (await screen.findByText('Revisión')).closest('article');
+    const booked = screen.getByText('Reparación').closest('article');
+    expect(within(cancelled as HTMLElement).getByText('Cancelada')).toBeInTheDocument();
+    expect(within(booked as HTMLElement).getByText('Reservada')).toBeInTheDocument();
+  });
+
+  it('counts the visits that happen and names the cancelled ones apart', async () => {
+    mock([
+      { ...appointment, id: 1, service: 'Reparación', status: 'booked' },
+      { ...appointment, id: 2, service: 'Revisión', status: 'cancelled' },
+      { ...appointment, id: 3, service: 'Instalación', status: 'cancelled' },
+    ]);
+
+    render(<TechnicianAgenda />);
+
+    await screen.findByText('Reparación');
+    expect(screen.getByText(/1 visita · 2 canceladas ·/)).toBeInTheDocument();
+  });
+
+  it('drops the cancelled suffix when no visit was cancelled', async () => {
+    mock([{ ...appointment, id: 1, service: 'Reparación', status: 'booked' }]);
+
+    render(<TechnicianAgenda />);
+
+    await screen.findByText('Reparación');
+    expect(screen.getByText(/1 visita · Actualizado/)).toBeInTheDocument();
+    expect(screen.queryByText(/cancelada/)).not.toBeInTheDocument();
   });
 });
 
