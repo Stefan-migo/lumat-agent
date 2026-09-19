@@ -248,5 +248,5 @@ derived read target, then implement.
 ### T6 — regression and compatibility coverage
 
 - RED: covered by the T3 assertion-level RED above: panel reads/searches passed `None` to the service instead of deriving `thread:7`; the compatibility contract was then extended to pin rejection of `thread:999` and forwarding of `thread:7`.
-- GREEN: `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/unit/test_assistant_tools.py tests/integration/test_assistant_harness_compatibility.py tests/integration/test_assistant_harness_guardrails.py tests/spec/test_memory_spec.py -q` → `88 passed`.
+- GREEN: `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/unit/test_assistant_tools.py tests/integration/test_assistant_harness_compatibility.py tests/integration/test_assistant_harness_guardrails.py tests/spec/test_memory_spec.py -q` → `84 passed`.
 - Graph nodes consulted: `test_assistant_harness_compatibility.py`, `test_assistant_harness_guardrails.py`, `execute_tool()`, `registry.py`, `nodes.py`; edge `test_memory_read_rejects_cross_scope_entity_shapes() --calls--> execute_tool() <--calls-- execute() <--calls-- test_execute_forwards_trusted_thread_to_memory_write()`.
