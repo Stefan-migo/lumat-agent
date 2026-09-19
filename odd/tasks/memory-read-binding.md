@@ -3,7 +3,7 @@
 **Work unit:** #7 of the Tukulpan/Engram series (reported defect carried over from WU#4)
 **Source:** `odd/tasks/memory-axes.md` → "Explicitly out of scope" → *"a `panel` read may target `thread:{any id}` … gets its own work unit"*
 **Worktree:** `../lumat-agent-odd-memory-read-binding` · branch `odd/memory-read-binding` · base `5a7297c3`
-**Status:** in progress
+**Status:** completed
 
 ---
 
@@ -210,8 +210,7 @@ _(appended as tasks complete — RED output, GREEN output, suite result, review 
 
 ## Next step
 
-T1–T3: observe RED at assertion level for the rejected panel entity and the
-derived read target, then implement.
+All tasks are implemented and verified; no next implementation step remains.
 
 ## Apply progress
 
@@ -250,3 +249,9 @@ derived read target, then implement.
 - RED: covered by the T3 assertion-level RED above: panel reads/searches passed `None` to the service instead of deriving `thread:7`; the compatibility contract was then extended to pin rejection of `thread:999` and forwarding of `thread:7`.
 - GREEN: `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/unit/test_assistant_tools.py tests/integration/test_assistant_harness_compatibility.py tests/integration/test_assistant_harness_guardrails.py tests/spec/test_memory_spec.py -q` → `84 passed`.
 - Graph nodes consulted: `test_assistant_harness_compatibility.py`, `test_assistant_harness_guardrails.py`, `execute_tool()`, `registry.py`, `nodes.py`; edge `test_memory_read_rejects_cross_scope_entity_shapes() --calls--> execute_tool() <--calls-- execute() <--calls-- test_execute_forwards_trusted_thread_to_memory_write()`.
+
+### Final verification
+
+- Targeted command: `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/unit/test_assistant_tools.py tests/integration/test_assistant_harness_compatibility.py tests/integration/test_assistant_harness_guardrails.py tests/spec/test_memory_spec.py -q` → `84 passed`.
+- Full-suite command: `eval "$(infra/test-db.sh env)" && .venv/bin/pytest tests/` → `916 passed, 2 warnings in 441.41s (0:07:21)`.
+- An earlier full-suite run exposed one contract assertion in `test_plan_llm_includes_whitelisted_tool_catalog_in_prompt`; it was updated to expect only `scope` as required and the optional `entity_id`, then the full suite passed. The documented hard-coded-port failure did not reproduce in this environment.
