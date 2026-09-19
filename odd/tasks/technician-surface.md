@@ -143,9 +143,15 @@ login, and other page surfaces.
   device it is 127.3 × 34.3px, which is the primitive's own `min-height: var(--space-8)` (32px).
   The 44px comes from the existing guarded `@media (hover: none)` block in `primitives.css`; no
   bespoke rule was added, because a second such block fails the D7 test in `tokens.test.ts`.
-- [ ] **T4** — RED/GREEN: each card leads with the appointment time; service becomes supporting.
-- [ ] **T5** — RED/GREEN: the list is grouped by day, today is marked, and past is separated from
-  upcoming. Edge cases: an empty day set, a single day, and every appointment in the past.
+- [x] **T4** — RED/GREEN: each card leads with the appointment slot, not the service name. The slot
+  shows the full range (`ends_at` was already in the payload and a technician needs the duration).
+  Rendered in 24-hour: `Intl` with `timeStyle: 'short'` produced `03:00 p. m. – 04:00 p. m.`, which
+  repeats the meridiem and costs width on a phone. The service name stops being a heading and becomes
+  card content, so the outline reads H1 page → H2 section → H3 day.
+- [x] **T5** — RED/GREEN: the list splits at today and groups by the appointment's own local day.
+  Upcoming renders first, past second; today and tomorrow are named, other days are dated. Today stays
+  with the upcoming work — it is still today's round. Verified: `["Hoy", "Martes, 15 de septiembre"]`,
+  `["Próximas visitas", "Visitas anteriores"]`, and no past section when every visit is ahead.
 - [ ] **T6** — RED/GREEN: a refresh control re-fetches through `useAsyncData.retry` and the
   last-loaded state is visible to the user. No automatic polling.
 - [ ] **T7** — RED/GREEN: `Cerrar sesión` and `Reintentar` use the `Button` primitive; no raw
@@ -212,7 +218,7 @@ login, and other page surfaces.
       AgendaPage ×1, AgentChat ×2) are contention artifacts: load average was 180 during the run, and
       the same three files pass 66/66 both on `main` at the base commit and in this worktree in
       isolation. Re-run the full suite when the machine is quiet before trusting a green signal.
-- [ ] T4..T7, T9, T10
+- [ ] T6..T7, T9, T10
 
 ## Recovery
 

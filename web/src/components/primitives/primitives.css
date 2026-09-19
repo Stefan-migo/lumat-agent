@@ -1401,7 +1401,27 @@
 /* ---- Technician agenda (TECH-AGENDA-1) ---- */
 .technician-agenda {
   display: grid;
+  gap: var(--space-6);
+}
+.technician-agenda__section {
+  display: grid;
+  gap: var(--space-4);
+}
+.technician-agenda__section-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.technician-agenda__day {
+  display: grid;
   gap: var(--space-3);
+}
+.technician-agenda__day-label {
+  margin: 0;
+  font-size: var(--text-lg);
 }
 .technician-agenda__item {
   display: grid;
@@ -1409,6 +1429,21 @@
   padding: var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+}
+/* The slot leads each card: a technician scans by "when", then "what". */
+.technician-agenda__slot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: var(--corp-value);
+}
+.technician-agenda__service {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
 }
 /* The item is a grid, so children stretch by default. The call control must hug
    its own label: a full-width 990px "phone number" button is not a phone number. */
