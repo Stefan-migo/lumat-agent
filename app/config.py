@@ -68,11 +68,10 @@ class Settings(BaseSettings):
     panel_session_secret: str
 
     # Panel (AP-1): bcrypt work factor for panel password hashes. 12 is the
-    # production value and MUST stay the default. The test harness lowers it
-    # (PANEL_BCRYPT_ROUNDS=4) because cost 12 measures ~306ms per hash on the
-    # dev host and the auth/user/seed suites hash dozens of passwords per run.
-    # Safe to lower for tests: the factor is a work factor, not a format, and
-    # verify_password reads the cost back out of each stored hash.
+    # production value and MUST stay the default; the test harness lowers it
+    # (tests/conftest.py) because bcrypt's cost dominates the auth/user/seed
+    # suites. Safe to lower there: the factor is a work factor, not a format,
+    # and verify_password reads the cost back out of each stored hash.
     #
     # The bounds are bcrypt's own: gensalt accepts 4..31 and raises ValueError
     # outside it. Without them an out-of-range env value boots fine and then

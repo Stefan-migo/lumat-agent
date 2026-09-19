@@ -35,12 +35,10 @@ services:
   # created by db/migrate.sh). Started only with --profile test.
   #
   # Data lives in RAM (tmpfs), NOT a named volume. Why: the autouse `clean_db`
-  # fixture TRUNCATEs 25 tables before EVERY test, and on this host's
-  # btrfs-over-overlayfs that costs ~308ms per test — one relfilenode
-  # create/unlink + fsync per relation and index, independent of table size (a
-  # 16KB/2-index table measured ~215ms on its own). The same TRUNCATE against
-  # tmpfs measures ~31ms. That is a 10x on the ~230s the 755-test DB-backed
-  # suite spends truncating, for a one-line infra change.
+  # fixture TRUNCATEs 25 tables before EVERY test, and on a btrfs-backed host
+  # that costs hundreds of milliseconds per test — one relfilenode create/unlink
+  # + fsync per relation and index, independent of table size. tmpfs removes
+  # essentially all of it (measured ~10x on the TRUNCATE itself).
   #
   # Nothing here needs to survive a container restart: `migrated_db` re-runs
   # db/migrate.sh once per pytest session, and migrate.sh is idempotent and

@@ -46,14 +46,12 @@ TEST_ENV = {
     "META_ACCESS_TOKEN": "meta-test-token",
     "META_PHONE_NUMBER_ID": "123456789",
     "PANEL_SESSION_SECRET": "test-panel-session-secret",
-    # bcrypt work factor for panel password hashes. Cost 12 (the production
-    # default) measures ~306ms per hash on the dev host and the auth/user/seed
-    # suites hash dozens of passwords, which put minutes into the suite. Cost 4
-    # keeps the hashing path real but ~280x cheaper; `verify_password` reads the
-    # cost back out of each stored hash, so no test needs to change. Set HERE on
-    # purpose: this conftest loads before the suite conftests (rootdir -> leaf)
-    # and db/seed.sh inherits it through `os.environ.copy()`, so the
-    # integration/functional/spec conftests must NOT duplicate it.
+    # bcrypt work factor for panel password hashes. Production keeps the
+    # setting's default (12); the suite lowers it because bcrypt's cost
+    # dominates the auth/user/seed suites. Set HERE on purpose: this conftest
+    # loads before the suite conftests (rootdir -> leaf) and db/seed.sh inherits
+    # it through `os.environ.copy()`, so the integration/functional/spec
+    # conftests must NOT duplicate it.
     "PANEL_BCRYPT_ROUNDS": "4",
     # LangGraph auto-tracing (langsmith) must never hit the network in tests.
     "LANGCHAIN_TRACING_V2": "false",

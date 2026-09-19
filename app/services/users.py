@@ -29,10 +29,8 @@ LOCK_MINUTES = 15
 def hash_password(password: str) -> str:
     """bcrypt hash for a plaintext panel password (seed script + tests).
 
-    The work factor comes from `settings.panel_bcrypt_rounds` (default 12,
-    production). The test harness lowers it because cost 12 is ~306ms per hash
-    on the dev host; `verify_password` needs no matching change — bcrypt stores
-    the cost in the hash and reads it back out.
+    The work factor comes from `settings.panel_bcrypt_rounds`; `verify_password`
+    needs no matching change because bcrypt stores the cost inside the hash.
     """
     rounds = get_settings().panel_bcrypt_rounds
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)).decode("utf-8")
