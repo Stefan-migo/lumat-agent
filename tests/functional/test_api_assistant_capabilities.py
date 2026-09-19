@@ -33,7 +33,11 @@ def test_admin_capabilities_reflect_real_tools_and_runtime_config(client, make_u
 
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload["tools"]) == 19
+    # Derive the expected surface from the code registry so adding or removing a
+    # tool does not break this contract test (WU#8 R3 follow-up).
+    from app.chat.assistant.tools.registry import TOOL_REGISTRY
+
+    assert {tool["name"] for tool in payload["tools"]} == set(TOOL_REGISTRY)
     assert {tool["name"] for tool in payload["tools"]} >= {
         "kb.retrieve", "memory.read", "memory.search", "memory.write", "automation.create_rule"
     }
