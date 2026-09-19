@@ -10,6 +10,7 @@ logic; the mutation audits are the existing service calls, SH-5):
 - POST /kb/{id}/edit    -> {"title","content"}: new version + re-embed (KB-4)
 - POST /kb/{id}/disable -> KB-3 disable (excluded from retrieval)
 - POST /kb/{id}/restore -> {"version":n}: active_version pointer flip (D8)
+- POST /kb/{id}/visibility -> {"visibility":...}: explicit audience reclassification
 
 Role enforcement server-side (PDW-API-4): `require_admin_json` -> operador 403
 {"detail":"admin role required"}; unauthenticated 401 {"detail":"unauthorized"}
@@ -27,7 +28,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import DocumentFormat, KbDocument, User
+from app.models import DocumentFormat, KbDocument, KbVisibility, User
 from app.panel.api.deps import require_admin_json
 from app.panel.api.serializers import to_doc_dict
 from app.panel.deps import get_db
@@ -51,6 +52,10 @@ class DocEditBody(BaseModel):
 
 class DocRestoreBody(BaseModel):
     version: int
+
+
+class DocVisibilityBody(BaseModel):
+    visibility: str
 
 
 def _doc_or_404(session: Session, doc_id: int) -> KbDocument:
@@ -82,7 +87,10 @@ def kb_search(
     if not q.strip():
         raise HTTPException(status_code=400, detail="query must not be blank")
 
-    results = kb_service.retrieve(session, q, top_k=top_k, min_sim=min_sim)
+    # The admin probe deliberately reads the whole corpus, including internal documents.
+    results = kb_service.retrieve(
+        session, q, top_k=top_k, min_sim=min_sim, audience=None
+    )
     document_ids = {result["document_id"] for result in results}
     titles = {}
     if document_ids:
@@ -114,6 +122,7 @@ def kb_detail(
 def kb_upload(
     title: str = Form(...),
     file: UploadFile = File(...),
+    visibility: str = Form("internal"),
     session: Session = Depends(get_db),
     current: User = Depends(require_admin_json),
 ) -> dict:
@@ -124,8 +133,15 @@ def kb_upload(
     content = file.file.read()
     if not content.strip():
         raise HTTPException(status_code=400, detail="empty document")
+    try:
+        KbVisibility(visibility)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="invalid visibility; expected customer or internal",
+        )
     doc = kb_service.ingest_document(
-        session, title, fmt, content, actor=current.username
+        session, title, fmt, content, actor=current.username, visibility=visibility
     )
     session.commit()
     return {"ok": True, "doc": to_doc_dict(doc)}
@@ -172,6 +188,25 @@ def kb_restore(
     try:
         doc = kb_service.restore_version(
             session, doc_id, body.version, actor=current.username
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    session.commit()
+    return {"ok": True, "doc": to_doc_dict(doc)}
+
+
+@router.post("/kb/{doc_id}/visibility")
+def kb_set_visibility(
+    doc_id: int,
+    body: DocVisibilityBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """Reclassify a document without creating a new version."""
+    _doc_or_404(session, doc_id)
+    try:
+        doc = kb_service.set_visibility(
+            session, doc_id, body.visibility, actor=current.username
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
