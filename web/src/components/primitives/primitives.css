@@ -1425,8 +1425,14 @@
   display: grid;
   gap: var(--space-2);
   padding: var(--space-4);
-  border: 1px solid var(--border);
+  /* Same idiom as the panel Card and EmptyState: the card is delimited by its
+     elevated surface and shadow, not by a stroke. The technician card was the
+     outlier — transparent background, no shadow, so adjacent visits blurred
+     together on a page that already carries --brand-bg. */
+  border: 1px solid var(--corp-border);
   border-radius: var(--radius-md);
+  background: var(--brand-bg-elevated);
+  box-shadow: var(--shadow-1);
 }
 /* The slot leads each card: a technician scans by "when", then "what". */
 .technician-agenda__slot {

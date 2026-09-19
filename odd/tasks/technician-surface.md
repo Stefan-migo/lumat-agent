@@ -37,8 +37,14 @@ observed, not inferred.
 - **The phone number renders in the browser default link colour.** Computed `rgb(0, 0, 238)`.
   `primitives.css` contains no bare `a` rule. The primary action of the surface is the only
   untokenized element on it.
-- **Card boundary contrast is 1.37:1** (`--border` `#d8dde3` on `--brand-bg`). `DESIGN_SYSTEM.md:463`
-  requires at least 3:1 for meaningful UI boundaries; `--border-strong` (`#7e858f`) exists for this.
+- **The appointment card had no visual boundary.** Every other card in the panel (`Card` at
+  `primitives.css:194`, `EmptyState`) separates by an elevated surface (`--brand-bg-elevated`) plus
+  `--shadow-1`. The technician card had a transparent background and no shadow, so on a page that
+  already carries `--brand-bg` its edge measured **1.04:1** against the page and adjacent visits
+  blurred together. The obvious fix — a `--border-strong` stroke — does not work either: that token
+  measures **2.84:1** on `--brand-bg`, under the 3:1 `DESIGN_SYSTEM.md:463` asks of a meaningful UI
+  boundary. The panel idiom is the correct answer here, not a darker stroke; the token gap is recorded
+  as an open item.
 - **Raw `<button>` elements.** `Cerrar sesión` (`TechnicianShell.tsx:22`) and `Reintentar`
   (`TechnicianAgenda.tsx:15`) bypass the `Button` primitive. The logout inherits the UA font size
   (computed `13.33px`) instead of `--text-md`.
@@ -170,9 +176,20 @@ login, and other page surfaces.
 - [ ] **T9** — Storybook story covering ready / long content / null customer / empty / error, and
   Vitest coverage for the new grouping, null-phone, and single-`h1` behaviour. Move the existing test
   next to its component in `pages/`, preserving its assertions verbatim.
-- [ ] **T10** — the agenda's inline styles are already at the boundary (done with T2/T3). What remains
-  is raising the card boundary from `--border` to `--border-strong` so the card edge meets the 3:1
-  requirement. (The shell half moved into T1.)
+- [x] **T10** — the appointment card now uses the panel's card idiom: `--brand-bg-elevated` surface
+  plus `--shadow-1` and `--corp-border`, exactly as `Card` and `EmptyState` do. That is what actually
+  separates it from the `--brand-bg` page; the stroke was never the mechanism (see the corrected
+  Problem entry). The first attempt — a `--border-strong` stroke — was reverted after the guard
+  measured it at 2.84:1 on `--brand-bg`.
+
+## Open item — token pair
+
+`--border-strong` clears 3:1 on `--surface` (3.72) and on `--brand-bg-elevated` (guarded in
+`tokens.test.ts:193`), but only **2.84:1 on `--brand-bg`**. That is a design-system token-pair gap, not
+a fault of this surface: DS-CC-5 puts inherited token pairs outside a slice's authority, and the
+correct response is to record the computed ratio rather than change the value or assert a threshold it
+cannot meet. Any future surface that needs a ≥3:1 stroke directly on `--brand-bg` will hit it. Left
+for a design-system change; `tokens.test.ts` was left asserting only the pairs it can honour.
 
 ## Acceptance criteria
 
@@ -227,7 +244,7 @@ login, and other page surfaces.
       AgendaPage ×1, AgentChat ×2) are contention artifacts: load average was 180 during the run, and
       the same three files pass 66/66 both on `main` at the base commit and in this worktree in
       isolation. Re-run the full suite when the machine is quiet before trusting a green signal.
-- [ ] T9, T10
+- [ ] T9
 
 ## Follow-up finding (not in this change's scope)
 
