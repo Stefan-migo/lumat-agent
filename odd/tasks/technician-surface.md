@@ -118,19 +118,23 @@ login, and other page surfaces.
   `odd/kb-workspace`. Either exit (exclude cancelled server-side in `scheduling.list_for_technician`,
   or serialize a status) is a product decision, recorded as an open item below rather than decided
   here.
-- **D6 — The stylesheet-boundary migration is the last task, deliberately.** `primitives.css` is where
-  `odd/kb-workspace` intends to land its KB grammar styles. Every other task keeps its changes inside
-  the two technician components, so this branch can land without touching that file; T10 waits for the
-  KB worktree to release it. Until then the existing injected `<style>` remains the shell's style
-  boundary, and T10 moves it.
+- **D6 — The stylesheet-boundary migration was released mid-flight.** T10 was sequenced last because
+  `primitives.css` is where `odd/kb-workspace` intended to land its KB grammar styles. That worktree
+  finished during this session: commit `9f153656` added its KB section (+66 lines, appended at the end
+  of the file) and its working tree went clean. The technician section is therefore inserted next to
+  the panel-shell block (around line 1350), far from that end-of-file append, so the two branches merge
+  without overlapping hunks. The shell half of T10 folded into T1, which was already rewriting those
+  styles; T10 now covers only the agenda's inline styles and the card boundary token.
 - **D7 — No polling.** A refresh control reuses `useAsyncData`'s existing `retry`; an interval would
   add battery and network cost on a field phone for a page that is opened deliberately. If the user
   wants automatic refresh it becomes its own task.
 
 ## Tasks
 
-- [ ] **T1** — RED/GREEN: exactly one `h1` on the surface, and the shell gutter aligns with the
+- [x] **T1** — RED/GREEN: exactly one `h1` on the surface, and the shell gutter aligns with the
   centred content on desktop (measured, not eyeballed). Shell keeps brand + session controls.
+  Absorbed the shell half of T10: the styles now live in `primitives.css` and the injected `<style>`
+  block is gone.
 - [ ] **T2** — RED/GREEN: a null phone renders as plain text with no anchor; a present phone renders
   an operable control.
 - [ ] **T3** — RED/GREEN: the phone control's computed height is at least 44px.
@@ -145,9 +149,9 @@ login, and other page surfaces.
 - [ ] **T9** — Storybook story covering ready / long content / null customer / empty / error, and
   Vitest coverage for the new grouping, null-phone, and single-`h1` behaviour. Move the existing test
   next to its component in `pages/`, preserving its assertions verbatim.
-- [ ] **T10** (blocked on `odd/kb-workspace` releasing `primitives.css`) — move the shell styles out
-  of the injected `<style>` into a technician-scoped section of `primitives.css`, and raise the card
-  boundary from `--border` to `--border-strong` to meet the 3:1 requirement.
+- [ ] **T10** — move `TechnicianAgenda`'s inline styles into the technician section of
+  `primitives.css`, and raise the card boundary from `--border` to `--border-strong` so the card edge
+  meets the 3:1 requirement. (The shell half moved into T1.)
 
 ## Acceptance criteria
 
@@ -186,7 +190,12 @@ login, and other page surfaces.
 - [x] Graph Check (Step 1): `graphify query` over the technician area and
       `graphify path TechnicianAgenda() primitives.css` / `... tokens`. Both paths return none, which
       is the graph-level confirmation of the design-system disconnect recorded above.
-- [ ] T1..T10
+- [x] T1 — commit pending. RED observed: `expected [ <h1></h1>, <h1></h1> ] to have a length of 1 but
+      got 2`. GREEN: 3/3 tests, `tsc -b --noEmit` exit 0. Browser-verified at 1440 and 390: one `h1`,
+      and `headerInner.left = content.left = pageH1.left = article.left = 208` at 1440 (16 at 390).
+      Shell header height 214.8 → 130.9; first appointment top 356.8 → 272.9 at 1440, and
+      ≈610 → 272.9 at 390. No `style` element is emitted by `TechnicianShell` any more.
+- [ ] T2..T10
 
 ## Recovery
 

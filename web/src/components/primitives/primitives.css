@@ -1347,6 +1347,57 @@
   }
 }
 
+/* ---- Technician shell (TECH-ROLE-1) ----
+   The technician surface is its own shell: one page, phone-first, field use.
+   Its styles live at this boundary like the panel shell's, not in an injected
+   `<style>` block (DS-SHELL-3). Chrome and content share one centred gutter so
+   the header brand lines up with the page title at >=64rem. */
+.technician-shell {
+  min-height: 100vh;
+  background: var(--brand-bg);
+  color: var(--text);
+}
+.technician-shell__header {
+  border-bottom: 1px solid var(--border);
+}
+.technician-shell__header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: min(100% - 2rem, 64rem);
+  margin: 0 auto;
+  padding: var(--space-4) 0;
+}
+.technician-shell__brand {
+  display: grid;
+  gap: var(--space-1);
+}
+.technician-shell__brand img {
+  width: 7rem;
+}
+.technician-shell__content {
+  width: min(100% - 2rem, 64rem);
+  margin: 0 auto;
+  padding: var(--space-5) 0;
+}
+.technician-shell__logout {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+}
+@media (max-width: 40rem) {
+  .technician-shell__header-inner {
+    align-items: flex-start;
+  }
+  .technician-shell__logout {
+    min-height: 2.75rem;
+  }
+}
+
 /* ---- Agent application grammar (DS-GRAMMAR-1/2/3) ---- */
 .panel-shell__inspector {
   display: grid;
