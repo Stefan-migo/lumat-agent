@@ -211,6 +211,45 @@ corpus before go-live, and `min_sim` is now tunable from the panel for exactly t
 Resume with `mem_context`, then the project-scoped `mem_search` for this feature, then
 `mem_get_observation` for the full document, then read this file.
 
+## Review (native RDD)
+
+- **Lineage** `review-cbd1881f7f51f9b2` · risk tier **medium** (`executable_change` in
+  `app/panel/api/routes/kb.py`) · one lens: **`review-reliability`** · 9 files / 559 lines ·
+  correction budget 200, unused.
+- **Approved on the first capture, zero blocking findings.** 0 correction rounds.
+- **Projection note (recurring trap):** the `workspace` projection reviews *uncommitted* changes; with
+  the work already committed the candidate came back empty (`base_tree == candidate_tree`,
+  `paths: []`). The fix is `--base-ref <base> --committed-only` on the STATUS preflight — **not**
+  un-committing. See the recorded recipe in Engram.
+- **Advisory findings (non-blocking, no correction offered for this candidate):**
+  - `R3-001` — **WARNING** — `app/panel/api/routes/kb.py:72-74`: the search endpoint accepts
+    unrestricted `top_k` and `min_sim`, including non-positive or out-of-range values, with no API
+    validation. *The orchestrator had already flagged this risk; it is confirmed and deferred.*
+  - `R3-002` — **SUGGESTION** — `web/src/components/pages/KbList.tsx:98-119`: the search panel's
+    request wiring and its loading/empty/error/denied states lack frontend assertions; the backend
+    tests do not prove the UI sends the intended parameters or renders what comes back.
+- Acknowledgement consumed: `gentle-ai.review-acknowledged/v1`, `authority: burned`.
+
+Both advisories are recorded as **separate later work**, never as a reason to re-run review on this
+candidate.
+
 ## Next step
 
-Implement T1 through T9 under strict TDD, then report evidence.
+Reviewed and approved. **Nothing has been pushed and no PR exists.** Delivery (branch push, PR,
+merge) is the next human decision, under ordinary repository policy.
+
+Deferred, recorded, and deliberately NOT folded into this change:
+
+1. **`min_sim` calibration.** The probe measured 0.39–0.62 for clearly relevant queries against a
+   production threshold of 0.65. Suspects, in cheap-to-expensive order: chunking (500/50), the
+   quantized ONNX variant, the model choice, and the absolute-threshold rule itself. Needs a labelled
+   set before any number changes.
+2. **KB audience scoping (decided: option B).** The KB has no visibility field; `kb_scope` is
+   declared in `agent/registry.yaml` but deliberately not enforced; both the chatbot and the Lumat
+   assistant read the whole active corpus. **This is the business-risk item** and it goes first.
+   It gets its own worktree.
+3. **`R3-001`** — bound `top_k`/`min_sim` at the API.
+4. **`R3-002`** — frontend assertions for the search panel.
+5. **Visual direction of `KbList`.** Still formally open: this change respects DS-GRAMMAR-1 and keeps
+   the `DataTable`. A redesign into the Assistant Lumat line would need a DS-GRAMMAR-1 / PNL-APP-12
+   amendment.
