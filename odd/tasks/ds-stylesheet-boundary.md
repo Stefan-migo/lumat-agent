@@ -123,23 +123,23 @@ page's behaviour; any new dependency.
 
 ## Tasks
 
-- [ ] **T1** — RED: add `web/src/components/style-boundary.test.ts`, a source walk over `src/components`
+- [x] **T1** — RED: add `web/src/components/style-boundary.test.ts`, a source walk over `src/components`
   and `src/stories` (test files excluded) asserting no JSX `<style>` injection. Watch it fail, naming
   exactly `StateMessage.tsx`, `PageFrame.tsx`, `Dashboard.tsx`, `AgendaPage.tsx`.
-- [ ] **T2** — GREEN, shared components: move `PAGE_FRAME_STYLES` into the `Page composition` section of
+- [x] **T2** — GREEN, shared components: move `PAGE_FRAME_STYLES` into the `Page composition` section of
   `primitives.css`, delete the constant and the `<style>` from `PageFrame`; move `STATE_STYLES` into a new
   `State message` section, delete the constant and the `<style>` from `StateMessage`. T1 now reports only
   the two pages.
-- [ ] **T3** — GREEN, pages: move `STYLES` (`Dashboard`) and `PAGE_STYLES` (`AgendaPage`) into their own
+- [x] **T3** — GREEN, pages: move `STYLES` (`Dashboard`) and `PAGE_STYLES` (`AgendaPage`) into their own
   sections, delete both constants and both `<style>` elements. T1 is green.
-- [ ] **T4** — spec delta: widen `DS-GRAMMAR-2` in `openspec/specs/panel-design-system/spec.md` so the
+- [x] **T4** — spec delta: widen `DS-GRAMMAR-2` in `openspec/specs/panel-design-system/spec.md` so the
   no-injection rule covers every panel component, with a scenario for the source guard. Keep the
   `(Previously: …)` annotation style the spec already uses.
-- [ ] **T5** — token record: write
+- [x] **T5** — token record: write
   `openspec/specs/panel-design-system/contrast-verification.md` for `--border-strong` on `--brand-bg`,
   including the method, the reproducible luminance inputs, the 2.85:1 ratio against the 3:1 threshold, the
   passing pairs in context, the manual-calculation limitation, and the design-system attribution.
-- [ ] **T6** — close the loop: update the two open items in `odd/tasks/technician-surface.md` to point at
+- [x] **T6** — close the loop: update the two open items in `odd/tasks/technician-surface.md` to point at
   the record and the migration, and reconcile this file's progress against `git log`.
 
 ## Acceptance criteria
