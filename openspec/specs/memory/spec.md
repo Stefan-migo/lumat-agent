@@ -16,12 +16,15 @@ Migration `009_memory.sql` MUST create `memories`, `memory_relations`, and `memo
 - THEN the three tables and the HNSW embedding index exist
 - AND `EXPECTED_TABLES` includes them
 
-#### Scenario: Topic-key uniqueness and content deduplication
+#### Scenario: Topic-key uniqueness
 - GIVEN two stores with identical `(proyecto, scope, entity_id)` but distinct `topic_key`
 - WHEN both upserts run with different normalized content
 - THEN two rows exist (no collision, first untouched)
-- WHEN both upserts run with identical normalized content
-- THEN one row exists and its `duplicate_count` is incremented
+
+#### Scenario: Repeated content under a new topic key deduplicates
+- GIVEN an existing memory holding some content for a `(proyecto, scope, entity_id)`
+- WHEN a second upsert stores content equal to it after normalization under a different `topic_key`
+- THEN no second row is created and the existing row's `duplicate_count` is incremented
 
 ### Requirement: MEM-2 — Tukulpan Boundary and Memory Service CRUD
 
