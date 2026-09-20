@@ -231,4 +231,11 @@ stays is the minimal form: watch the disconnect, wait on both, cancel the loser.
 
 ## Delivery
 
-Human decision pending. The reviewed candidate is uncommitted in the worktree.
+Delivered on 2026-09-20 as **PR #267** (`odd/panel-ws-disconnect` -> `main`, label `type:bug`), three
+commits: the handler fix with its tests, the dev shutdown bound, and this record. The reviewed bytes
+are the first two commits' `app/` + `tests/` files; this task document was excluded from the review
+(`--untracked-scope=exclude`) and is carried into the PR by the delivery commits.
+
+Cleanup: the worktree's test database container and network were removed (`infra/test-db.sh down`).
+The worktree and the remote branch stay until the PR merges — `rapso worktree cleanup --remote`
+before that would close the PR.
