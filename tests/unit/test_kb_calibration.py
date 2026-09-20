@@ -41,6 +41,8 @@ def corpus():
 
 
 def test_corpus_loads_and_ids_are_unique(corpus):
+    assert len(corpus.docs) == 24
+    assert len(corpus.queries) == 52
     doc_ids = [d.id for d in corpus.docs]
     query_ids = [q.id for q in corpus.queries]
     assert len(doc_ids) == len(set(doc_ids)), "duplicate document id"
@@ -192,6 +194,64 @@ def test_load_corpus_rejects_a_dangling_label(tmp_path):
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="ghost"):
+        cal.load_corpus(bad)
+
+
+def test_load_corpus_rejects_an_empty_file(tmp_path):
+    bad = tmp_path / "corpus.yaml"
+    bad.write_text("", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="documents"):
+        cal.load_corpus(bad)
+
+
+def test_load_corpus_rejects_missing_documents(tmp_path):
+    bad = tmp_path / "corpus.yaml"
+    bad.write_text(
+        "queries:\n"
+        "  - {id: q1, text: hola, class: out_of_domain}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="documents"):
+        cal.load_corpus(bad)
+
+
+def test_load_corpus_rejects_missing_queries(tmp_path):
+    bad = tmp_path / "corpus.yaml"
+    bad.write_text(
+        "documents:\n"
+        "  - {id: d1, title: T, doc_class: faq, visibility: customer, content: hola}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="queries"):
+        cal.load_corpus(bad)
+
+
+def test_load_corpus_rejects_empty_documents(tmp_path):
+    bad = tmp_path / "corpus.yaml"
+    bad.write_text(
+        "documents: []\n"
+        "queries:\n"
+        "  - {id: q1, text: hola, class: out_of_domain}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="documents"):
+        cal.load_corpus(bad)
+
+
+def test_load_corpus_rejects_empty_queries(tmp_path):
+    bad = tmp_path / "corpus.yaml"
+    bad.write_text(
+        "documents:\n"
+        "  - {id: d1, title: T, doc_class: faq, visibility: customer, content: hola}\n"
+        "queries: []\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="queries"):
         cal.load_corpus(bad)
 
 
