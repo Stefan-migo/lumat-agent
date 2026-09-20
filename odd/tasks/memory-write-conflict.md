@@ -3,7 +3,7 @@
 **Branch**: `odd/memory-write-conflict`
 **Worktree**: `../lumat-agent-odd-memory-write-conflict`
 **Base**: `481f9cd9`
-**Status**: in progress
+**Status**: completed
 
 ## Objective
 
@@ -81,16 +81,16 @@ retry consumes one extra attempt and then re-raises the same error — never a s
 
 ## Tasks
 
-- [ ] **T1 — RED.** `tests/integration/test_memory_write_conflict.py` reproduces the collision
+- [x] **T1 — RED.** `tests/integration/test_memory_write_conflict.py` reproduces the collision
       deterministically: the loser's `before_flush` hook parks it after its lookups and before its
       INSERT; the winner then upserts and commits; the loser proceeds. Assert no exception, one row,
       `duplicate_count == 2`. Must fail against unmodified `upsert()`.
-- [ ] **T2 — RED (older instance).** Same harness, both writers using the **same** `topic_key`.
+- [x] **T2 — RED (older instance).** Same harness, both writers using the **same** `topic_key`.
       Assert no exception and exactly one row. Must fail against unmodified `upsert()`.
-- [ ] **T3 — GREEN.** `upsert()` wraps its write resolution in `session.begin_nested()` and retries
+- [x] **T3 — GREEN.** `upsert()` wraps its write resolution in `session.begin_nested()` and retries
       once on `IntegrityError`, then re-raises. Extraction into a private helper is acceptable;
       duplicated blocks are not.
-- [ ] **T4 — Verify.** Focused suites green, then the full suite green, with the count measured and
+- [x] **T4 — Verify.** Focused suites green, then the full suite green, with the count measured and
       reported (never asserted from memory).
 
 ## Acceptance criteria
@@ -121,8 +121,13 @@ one. There is no linter, type checker, or formatter — the tests are the verifi
       preflight (it is untracked noise `rapso worktree create` leaves behind).
 - [x] Graph Check: `upsert()` (`tukulpan.py:190`), `Memory` (`models.py:457`), `normalized_hash`,
       community `tukulpan.py`; `graphify affected upsert` matched the caller map.
-- [ ] T1, T2, T3, T4.
+- [x] T1/T2 RED: `eval "$(infra/test-db.sh env)"; uv run pytest tests/integration/test_memory_write_conflict.py -v`
+      failed with `2 failed in 2.04s`. T1 failure text: `E assert not [IntegrityError('(psycopg.errors.UniqueViolation) duplicate key value violates unique constraint "uq_memories_normaliz...ized_hash)=(default, customer, 42, b06a990509975e0b1757061d5d1d86bb5a679ef2aaf8f156e4abb21a66ad5ab0) already exists.')]`.
+      T2 failure text: `E assert not [IntegrityError('(psycopg.errors.UniqueViolation) duplicate key value violates unique constraint "memories_proyecto_sc...d_topic_key_key"\nDETAIL:  Key (proyecto, scope, entity_id, topic_key)=(default, customer, 42, fact) already exists.')]`.
+- [x] T3 GREEN: extracted `_upsert_resolved()` and added a `begin_nested()` savepoint with one
+      `IntegrityError` retry; second failure re-raises. Focused regression: `2 passed in 0.96s`.
+- [x] T4: targeted memory suites: `81 passed, 1 warning in 20.15s`; full suite: `964 passed, 2 warnings in 125.57s (0:02:05)`.
 
 ## Next step
 
-T1 — write the RED concurrency test.
+Commit the completed work unit.
