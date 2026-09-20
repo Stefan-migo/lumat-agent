@@ -179,8 +179,35 @@ than accepting it from the model.
 - WHEN the row is persisted
 - THEN it uses `visibility='thread'`, `scope='panel'`, and the writing thread entity
 
+### Requirement: MEM-10 — Lifecycle Decay
+
+The system MUST assign a 30-day `review_after` instant when it writes a `SUMMARY` or `SESSION` memory, and MUST reset that instant on every write of a decaying row. All other memory types MUST retain `review_after = NULL`. The system MUST evaluate staleness lazily on read, MUST NOT delete or silently filter stale memories, and MUST NOT assign `NEEDS_REVIEW`. `hybrid_search()` MUST include `stale: true` or `stale: false` without changing its filtering or ordering. Customer context injection MUST annotate stale lines as `stale since YYYY-MM-DD`.
+
+#### Scenario: Decaying writes receive a review date
+- GIVEN a `SUMMARY` or `SESSION` memory is written
+- WHEN the write succeeds
+- THEN `review_after` MUST be set to approximately 30 days after the write instant
+- AND a subsequent write of that row MUST reset `review_after`
+
+#### Scenario: Non-decaying writes remain without a review date
+- GIVEN a memory whose type is not `SUMMARY` or `SESSION` is written
+- WHEN the write succeeds, including a duplicate-content fold
+- THEN `review_after` MUST remain `NULL`
+
+#### Scenario: Stale search results remain visible and ordered
+- GIVEN a memory has a `review_after` instant in the past
+- WHEN `hybrid_search()` reads it
+- THEN the result MUST include `stale: true`
+- AND the memory MUST remain in the result without changing result ordering
+
+#### Scenario: Stale injected context is annotated
+- GIVEN a customer `SUMMARY` or `SESSION` memory has passed its review date
+- WHEN customer context is rendered
+- THEN its line MUST include `stale since YYYY-MM-DD`
+- AND fresh and non-decaying lines MUST remain unannotated
+
 ## MODIFIED Requirements
 
 ## Boundary
 
-Batch compression, automatic conflict judgment, and decay are deferred (schema only). Cross-project recall and ToolNode tools are out of scope.
+Batch compression and automatic conflict judgment are still deferred (schema only). Cross-project recall and ToolNode tools are out of scope.

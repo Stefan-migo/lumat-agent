@@ -9,6 +9,7 @@ injection, close memo, panel).
 
 import psycopg
 import pytest
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import inspect
 
 from app.db import SessionLocal
@@ -22,7 +23,146 @@ from app.models import (
 )
 from app.services import memory, tukulpan  # noqa: F401  (services under test)
 
-pytestmark = pytest.mark.spec("MEM-1 MEM-2 MEM-3 MEM-9")
+pytestmark = pytest.mark.spec("MEM-1 MEM-2 MEM-3 MEM-9 MEM-10")
+
+
+# ---------------------------------------------------------------------------
+# MEM-10 — Lifecycle Decay
+# ---------------------------------------------------------------------------
+
+
+def test_mem10_write_policy_stamps_only_decaying_types(fake_embedder, migrated_db):
+    with SessionLocal() as session:
+        rows = {}
+        for tipo in MemoryType:
+            rows[tipo] = tukulpan.upsert(
+                session,
+                scope="customer",
+                entity_id="decay-policy",
+                topic_key=f"{tipo.value}-policy",
+                tipo=tipo,
+                titulo=tipo.value,
+                contenido=f"Content for {tipo.value}",
+            )
+        session.commit()
+
+        for tipo, row in rows.items():
+            if tipo in {MemoryType.SUMMARY, MemoryType.SESSION}:
+                assert row.review_after is not None
+                assert timedelta(days=29, hours=23) < row.review_after - datetime.now(timezone.utc) < timedelta(days=30, minutes=1)
+            else:
+                assert row.review_after is None
+
+        summary = rows[MemoryType.SUMMARY]
+        summary.review_after = datetime.now(timezone.utc) - timedelta(days=1)
+        session.flush()
+        rewritten = tukulpan.upsert(
+            session,
+            scope="customer",
+            entity_id="decay-policy",
+            topic_key="summary-policy",
+            tipo=MemoryType.SUMMARY,
+            titulo="summary",
+            contenido="Refreshed summary",
+        )
+        session.commit()
+        assert rewritten.review_after > datetime.now(timezone.utc)
+
+        fold_source = tukulpan.upsert(
+            session,
+            scope="customer",
+            entity_id="decay-policy-fold",
+            topic_key="source",
+            tipo=MemoryType.SUMMARY,
+            titulo="source",
+            contenido="folded content",
+        )
+        fold_source.review_after = datetime.now(timezone.utc) - timedelta(days=1)
+        session.commit()
+        folded = tukulpan.upsert(
+            session,
+            scope="customer",
+            entity_id="decay-policy-fold",
+            topic_key="duplicate",
+            tipo=MemoryType.CUSTOMER_MEMO,
+            titulo="duplicate",
+            contenido=" FOLDED   CONTENT ",
+        )
+        session.commit()
+        assert folded.tipo is MemoryType.SUMMARY
+        assert folded.review_after > datetime.now(timezone.utc)
+
+        permanent = tukulpan.upsert(
+            session,
+            scope="customer",
+            entity_id="decay-policy-permanent",
+            topic_key="source",
+            tipo=MemoryType.CUSTOMER_MEMO,
+            titulo="source",
+            contenido="permanent content",
+        )
+        folded_permanent = tukulpan.upsert(
+            session,
+            scope="customer",
+            entity_id="decay-policy-permanent",
+            topic_key="duplicate",
+            tipo=MemoryType.SUMMARY,
+            titulo="duplicate",
+            contenido="PERMANENT CONTENT",
+        )
+        session.commit()
+        assert folded_permanent.id == permanent.id
+        assert folded_permanent.review_after is None
+
+
+def test_mem10_hybrid_search_reports_staleness_without_reordering(fake_embedder, migrated_db):
+    with SessionLocal() as session:
+        stale = tukulpan.upsert(
+            session,
+            scope="customer",
+            entity_id="decay-read",
+            topic_key="stale",
+            tipo=MemoryType.SUMMARY,
+            titulo="stale",
+            contenido="memory stale entry",
+        )
+        fresh = tukulpan.upsert(
+            session,
+            scope="customer",
+            entity_id="decay-read",
+            topic_key="fresh",
+            tipo=MemoryType.SUMMARY,
+            titulo="fresh",
+            contenido="memory fresh entry",
+        )
+        never = tukulpan.upsert(
+            session,
+            scope="customer",
+            entity_id="decay-read",
+            topic_key="never",
+            tipo=MemoryType.CUSTOMER_MEMO,
+            titulo="never",
+            contenido="memory permanent entry",
+        )
+        session.commit()
+        stale.review_after = datetime.now(timezone.utc) - timedelta(days=1)
+        fresh.review_after = datetime.now(timezone.utc) + timedelta(days=1)
+        session.commit()
+
+        before = tukulpan.hybrid_search(
+            session, "memory entry", scope="customer", entity_id="decay-read", min_sim=0
+        )
+        after = tukulpan.hybrid_search(
+            session, "memory entry", scope="customer", entity_id="decay-read", min_sim=0
+        )
+
+        assert [row["topic_key"] for row in after] == [row["topic_key"] for row in before]
+        assert {row["topic_key"]: row["stale"] for row in after} == {
+            "stale": True,
+            "fresh": False,
+            "never": False,
+        }
+
 
 
 # ---------------------------------------------------------------------------

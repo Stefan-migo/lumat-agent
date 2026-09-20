@@ -59,6 +59,8 @@ FTS_BOOST = 0.3             # fused = vector + 0.3 * fts (vector dominates)
 DEFAULT_TOP_K = 5
 WRITABLE_PROYECTO = "default"
 AGENT_SCOPE = "agent"
+MEMORY_DECAY_DAYS = 30
+DECAYING_TYPES = frozenset({MemoryType.SUMMARY, MemoryType.SESSION})
 
 __all__ = [
     "DEFAULT_TOP_K",
@@ -67,6 +69,8 @@ __all__ = [
     "EMBED_RETRIES",
     "FTS_BOOST",
     "MEM_MIN_SIM",
+    "MEMORY_DECAY_DAYS",
+    "DECAYING_TYPES",
     "REL_MIN_SIM",
     "WRITABLE_PROYECTO",
     "close_conversation",
@@ -162,6 +166,24 @@ def _normalized_hash(contenido: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
+def _review_after(tipo: MemoryType, *, now: datetime | None = None) -> datetime | None:
+    """Return the review instant for a decaying type, or None otherwise."""
+    if tipo not in DECAYING_TYPES:
+        return None
+    if now is None:
+        now = datetime.now(timezone.utc)
+    return now + timedelta(days=MEMORY_DECAY_DAYS)
+
+
+def _is_stale(review_after: datetime | None, *, now: datetime | None = None) -> bool:
+    """Return whether an existing review instant has passed."""
+    if review_after is None:
+        return False
+    if now is None:
+        now = datetime.now(timezone.utc)
+    return review_after <= now
+
+
 def _fold_duplicate(session: Session, duplicate: Memory, *, survivor: Memory) -> None:
     """Move a duplicate row's references onto its survivor and delete it.
 
@@ -206,6 +228,8 @@ def _upsert_resolved(
     normalized_hash: str,
 ) -> Memory:
     """Resolve and write one already-validated memory payload."""
+    now = datetime.now(timezone.utc)
+    review_after = _review_after(tipo, now=now)
     row = session.execute(
         select(Memory).where(
             Memory.proyecto == proyecto,
@@ -242,11 +266,13 @@ def _upsert_resolved(
             producer=producer,
             origin_thread_id=origin_thread_id,
             visibility=visibility,
+            review_after=review_after,
         )
         session.add(row)
     elif row.topic_key != topic_key:
         row.duplicate_count += 1
         row.last_seen_at = func.now()
+        row.review_after = _review_after(row.tipo, now=now)
     else:
         # Same key: a revision. Its new content may already belong to a sibling row
         # under the hash identity, a state the partial unique index cannot hold. The
@@ -274,6 +300,7 @@ def _upsert_resolved(
         row.producer = producer
         row.origin_thread_id = origin_thread_id
         row.visibility = visibility
+        row.review_after = review_after
     session.flush()
     return row
 
@@ -646,6 +673,7 @@ def hybrid_search(
             "topic_key": m.topic_key,
             "pin": m.pin,
             "status": m.status.value,
+            "stale": _is_stale(m.review_after),
             "score": round(float(score), 4),
         }
         for m, score, _, _ in ranked[:top_k]
@@ -660,7 +688,15 @@ def load_customer_context(session: Session, customer_id: int) -> str:
     caller proceeds with an empty context and never blocks the reply.
     """
     rows = list_for_entity(session, scope="customer", entity_id=str(customer_id))
-    return "\n".join(f"{m.titulo}: {m.contenido}" for m in rows)
+    now = datetime.now(timezone.utc)
+    return "\n".join(
+        (
+            f"{m.titulo} (stale since {m.review_after.date().isoformat()}): {m.contenido}"
+            if _is_stale(m.review_after, now=now)
+            else f"{m.titulo}: {m.contenido}"
+        )
+        for m in rows
+    )
 
 
 def persist_memory_session(session: Session, state: Any) -> None:
