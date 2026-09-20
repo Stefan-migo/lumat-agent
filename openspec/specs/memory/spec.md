@@ -8,7 +8,7 @@ Give the agent a persistent, domain-aware memory layer over PostgreSQL + pgvecto
 
 ### Requirement: MEM-1 — Schema and Migration
 
-Migration `009_memory.sql` MUST create `memories`, `memory_relations`, and `memory_observations`, and MUST index `memories.embedding` with HNSW `vector_cosine_ops` on vector(384, local). `memories` MUST enforce `UNIQUE(proyecto, scope, entity_id, topic_key)`. `EXPECTED_TABLES` MUST list the new tables.
+Migration `009_memory.sql` MUST create `memories`, `memory_relations`, and `memory_observations`, and MUST index `memories.embedding` with HNSW `vector_cosine_ops` on vector(384, local). `memories` MUST enforce `UNIQUE(proyecto, scope, entity_id, topic_key)` and deduplicate normalized content within `(proyecto, scope, entity_id)` using `normalized_hash`, incrementing `duplicate_count` for repeated content under a different `topic_key`. `EXPECTED_TABLES` MUST list the new tables.
 
 #### Scenario: Migration applies
 - GIVEN a reachable pgvector and the current migration runner
@@ -18,8 +18,18 @@ Migration `009_memory.sql` MUST create `memories`, `memory_relations`, and `memo
 
 #### Scenario: Topic-key uniqueness
 - GIVEN two stores with identical `(proyecto, scope, entity_id)` but distinct `topic_key`
-- WHEN both upserts run
+- WHEN both upserts run with different normalized content
 - THEN two rows exist (no collision, first untouched)
+
+#### Scenario: Repeated content under a new topic key deduplicates
+- GIVEN an existing memory holding some content for a `(proyecto, scope, entity_id)`
+- WHEN a second upsert stores content equal to it after normalization under a different `topic_key`
+- THEN no second row is created and the existing row's `duplicate_count` is incremented
+
+#### Scenario: A keyed rewrite colliding with existing content folds the duplicate
+- GIVEN an existing memory holding some content under one `topic_key` for a `(proyecto, scope, entity_id)`
+- WHEN a keyed upsert rewrites a different `topic_key` of the same identity to content equal to it after normalization
+- THEN the written key survives holding that content, and the earlier holder is folded into it with its references re-pointed
 
 ### Requirement: MEM-2 — Tukulpan Boundary and Memory Service CRUD
 

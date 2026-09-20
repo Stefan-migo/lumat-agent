@@ -7,7 +7,17 @@ from sqlalchemy import inspect, select
 from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal
-from app.models import InternalChatThread, Memory, MemoryType, Project, ProjectAlias, ProjectAudit, User
+from app.models import (
+    InternalChatThread,
+    Memory,
+    MemoryObservation,
+    MemoryType,
+    ObservationType,
+    Project,
+    ProjectAlias,
+    ProjectAudit,
+    User,
+)
 from app.services import projects
 
 pytestmark = pytest.mark.spec("PROJECTS-WU1")
@@ -223,6 +233,53 @@ def test_merge_preserves_target_and_records_source_alias(migrated_db, fake_embed
         assert session.get(Project, source.id).status.value == "archived"
         assert session.query(ProjectAlias).filter_by(project_id=target.id, alias="source").count() == 1
         assert session.query(Memory).filter_by(proyecto="target", topic_key="one").count() == 1
+
+
+def test_merge_deduplicates_hash_collisions_and_repoints_observations(migrated_db, fake_embedder):
+    with SessionLocal() as session:
+        source, target = _project(session, "source"), _project(session, "target")
+        from app.services import tukulpan
+
+        source_memory = tukulpan.upsert(
+            session,
+            proyecto="source",
+            scope="panel",
+            entity_id="thread:1",
+            topic_key="source-topic",
+            tipo=MemoryType.DECISION,
+            titulo="Shared fact",
+            contenido="The customer prefers afternoon visits.",
+            authorization=projects.agent_context(session, "source"),
+        )
+        target_memory = tukulpan.upsert(
+            session,
+            proyecto="target",
+            scope="panel",
+            entity_id="thread:1",
+            topic_key="target-topic",
+            tipo=MemoryType.DECISION,
+            titulo="Shared fact",
+            contenido="  THE customer   prefers afternoon visits. ",
+            authorization=projects.agent_context(session, "target"),
+        )
+        observation = MemoryObservation(
+            memory_id=source_memory.id,
+            scope="panel",
+            entity_id="thread:1",
+            tipo=ObservationType.OPORTUNIDAD,
+            detalle={"source": "merge"},
+        )
+        session.add(observation)
+        session.flush()
+
+        projects.merge(session, source, target, actor="agent")
+        session.commit()
+
+        assert session.query(Memory).filter(Memory.proyecto.in_(("source", "target"))).count() == 1
+        surviving = session.query(Memory).one()
+        assert surviving.id == target_memory.id
+        assert surviving.duplicate_count == 2
+        assert session.query(MemoryObservation).one().memory_id == surviving.id
 
 
 def test_default_project_cannot_be_merged_away(migrated_db):

@@ -20,12 +20,13 @@ agreed constant (design "fines de detalle fino").
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -36,6 +37,7 @@ from app.models import (
     Memory,
     MemoryObservation,
     MemoryProducer,
+    MemoryRelation,
     MemoryStatus,
     MemoryType,
     MemoryVisibility,
@@ -154,6 +156,37 @@ def _embed(texts: list[str]) -> list[list[float]]:
     raise last_error
 
 
+def _normalized_hash(contenido: str) -> str:
+    normalized = " ".join(contenido.split()).casefold()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _fold_duplicate(session: Session, duplicate: Memory, *, survivor: Memory) -> None:
+    """Move a duplicate row's references onto its survivor and delete it.
+
+    `projects.merge()` performs the same fold inline: it cannot import this helper
+    without creating a cycle, because this module already imports `projects`.
+    """
+    session.execute(
+        update(MemoryObservation)
+        .where(MemoryObservation.memory_id == duplicate.id)
+        .values(memory_id=survivor.id)
+    )
+    session.execute(
+        update(MemoryRelation)
+        .where(MemoryRelation.id_a == duplicate.id)
+        .values(id_a=survivor.id)
+    )
+    session.execute(
+        update(MemoryRelation)
+        .where(MemoryRelation.id_b == duplicate.id)
+        .values(id_b=survivor.id)
+    )
+    survivor.duplicate_count += duplicate.duplicate_count
+    survivor.last_seen_at = func.now()
+    session.delete(duplicate)
+
+
 def upsert(
     session: Session,
     *,
@@ -179,6 +212,7 @@ def upsert(
     """
     _guard_writable_project(proyecto, authorization)
 
+    normalized_hash = _normalized_hash(contenido)
     embeddings = _embed([contenido])
     if not embeddings:
         raise ValueError("cannot embed empty memory content")
@@ -194,6 +228,16 @@ def upsert(
     ).scalar_one_or_none()
 
     if row is None:
+        row = session.execute(
+            select(Memory).where(
+                Memory.proyecto == proyecto,
+                Memory.scope == scope,
+                Memory.entity_id == entity_id,
+                Memory.normalized_hash == normalized_hash,
+            )
+        ).scalar_one_or_none()
+
+    if row is None:
         row = Memory(
             proyecto=proyecto,
             scope=scope,
@@ -203,17 +247,41 @@ def upsert(
             titulo=titulo,
             contenido=contenido,
             embedding=embedding,
+            normalized_hash=normalized_hash,
+            duplicate_count=1,
+            last_seen_at=func.now(),
             pin=pin,
             producer=producer,
             origin_thread_id=origin_thread_id,
             visibility=visibility,
         )
         session.add(row)
+    elif row.topic_key != topic_key:
+        row.duplicate_count += 1
+        row.last_seen_at = func.now()
     else:
+        # Same key: a revision. Its new content may already belong to a sibling row
+        # under the hash identity, a state the partial unique index cannot hold. The
+        # written key wins, so the sibling is folded into this row. The delete is
+        # flushed first because the update below would otherwise trip the index.
+        duplicate = session.execute(
+            select(Memory).where(
+                Memory.proyecto == proyecto,
+                Memory.scope == scope,
+                Memory.entity_id == entity_id,
+                Memory.normalized_hash == normalized_hash,
+                Memory.id != row.id,
+            )
+        ).scalar_one_or_none()
+        if duplicate is not None:
+            _fold_duplicate(session, duplicate, survivor=row)
+            session.flush()
         row.tipo = tipo
         row.titulo = titulo
         row.contenido = contenido
         row.embedding = embedding
+        row.normalized_hash = normalized_hash
+        row.last_seen_at = func.now()
         row.pin = pin
         row.producer = producer
         row.origin_thread_id = origin_thread_id

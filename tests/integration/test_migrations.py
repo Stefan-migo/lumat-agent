@@ -134,6 +134,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("025_internal_chat_thread_title",),
         ("026_memory_provenance",),
         ("027_kb_visibility",),
+        ("028_memory_dedup",),
     ]
 
 

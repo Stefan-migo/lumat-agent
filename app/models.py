@@ -22,6 +22,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, REAL
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -465,6 +466,15 @@ class Memory(Base):
     __table_args__ = (
         UniqueConstraint("proyecto", "scope", "entity_id", "topic_key"),
         Index("idx_memories_entity", "scope", "entity_id"),
+        Index(
+            "uq_memories_normalized_content",
+            "proyecto",
+            "scope",
+            "entity_id",
+            "normalized_hash",
+            unique=True,
+            postgresql_where=text("normalized_hash IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -480,6 +490,11 @@ class Memory(Base):
     contenido: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBED_DIMS), nullable=False)
     topic_key: Mapped[str] = mapped_column(String(255), default="general", server_default="general")
+    normalized_hash: Mapped[str | None] = mapped_column(String(64))
+    duplicate_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     pin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     review_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[MemoryStatus] = mapped_column(
