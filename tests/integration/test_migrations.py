@@ -135,6 +135,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("026_memory_provenance",),
         ("027_kb_visibility",),
         ("028_memory_dedup",),
+        ("029_memory_relation_resolution",),
     ]
 
 
