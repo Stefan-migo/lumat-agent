@@ -153,6 +153,22 @@ def test_environment_refuses_different_database_names(monkeypatch):
         cal._ensure_environment()
 
 
+def test_environment_refuses_a_malformed_database_port(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", _database_url("abc"))
+    monkeypatch.setenv("TEST_ADMIN_DB_URL", _database_url(_testdb.host_port()))
+
+    with pytest.raises(SystemExit):
+        cal._ensure_environment()
+
+
+def test_environment_refuses_a_malformed_admin_port(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", _database_url(_testdb.host_port()))
+    monkeypatch.setenv("TEST_ADMIN_DB_URL", _database_url("abc"))
+
+    with pytest.raises(SystemExit):
+        cal._ensure_environment()
+
+
 def test_environment_refuses_a_port_not_derived_for_this_worktree(monkeypatch):
     port = _testdb.host_port()
     url = _database_url(port + 1)
