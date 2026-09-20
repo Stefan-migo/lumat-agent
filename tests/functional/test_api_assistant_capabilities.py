@@ -37,7 +37,11 @@ def test_admin_capabilities_reflect_real_tools_and_runtime_config(client, make_u
     # tool does not break this contract test (WU#8 R3 follow-up).
     from app.chat.assistant.tools.registry import TOOL_REGISTRY
 
-    assert {tool["name"] for tool in payload["tools"]} == set(TOOL_REGISTRY)
+    # Compare as a multiset on purpose: a set would collapse a tool listed twice in
+    # the response and still match the registry, so the duplicate would pass unnoticed
+    # (R3-duplicate-tools). The payload follows the YAML whitelist order, not the
+    # registry order, so sorting is what keeps the comparison order-independent.
+    assert sorted(tool["name"] for tool in payload["tools"]) == sorted(TOOL_REGISTRY)
     assert {tool["name"] for tool in payload["tools"]} >= {
         "kb.retrieve", "memory.read", "memory.search", "memory.write", "automation.create_rule"
     }
