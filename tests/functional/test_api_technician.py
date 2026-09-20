@@ -9,13 +9,13 @@ def _login(client, name="tech", password="tech-pass"):
     assert client.post("/panel/api/login", json={"username": name, "password": password}).status_code == 200
 
 
-def _appointment(technician_id, phone, day, summary):
+def _appointment(technician_id, phone, day, summary, *, emergency=False, priority=None):
     with SessionLocal() as session:
         customer = Customer(phone_e164=phone, name=f"Customer {phone[-2:]}", email="private@example.test", address="Sensitive address 42", comuna="Providencia", consent_status=True)
         session.add(customer); session.flush()
         conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
         session.add(conversation); session.flush()
-        case = Case(conversation_id=conversation.id, customer_id=customer.id, service="calefont", summary=summary, status="open")
+        case = Case(conversation_id=conversation.id, customer_id=customer.id, service="calefont", summary=summary, status="open", emergency=emergency, priority=priority)
         session.add(case); session.flush()
         appointment = scheduling.book(session, service="calefont", customer_id=customer.id, case_id=case.id, technician_id=technician_id, local_date=day, local_time=time(10), timezone_name="America/Santiago", duration_minutes=60, actor="oper")
         session.commit()
@@ -43,10 +43,25 @@ def test_technician_cannot_forge_ownership_or_receive_sensitive_fields(client, m
     response = client.get("/panel/api/technician/agenda", params={"technician_id": other, "appointment_id": 1})
     row = response.json()["appointments"][0]
     assert [row["case_summary"]] == ["allowed"]
-    assert set(row) == {"id", "service", "local_start", "starts_at", "ends_at", "timezone", "status", "customer", "case_summary"}
+    assert set(row) == {"id", "service", "local_start", "starts_at", "ends_at", "timezone", "status", "emergency", "priority", "customer", "case_summary"}
     assert set(row["customer"]) == {"name", "address", "comuna", "phone"}
     assert row["status"] in {"booked", "cancelled", "completed", "no_show"}
+    assert row["emergency"] is False
+    assert row["priority"] is None
     assert all(value not in response.text for value in ("private@example.test", "consent_status", "history", "sync", "notes"))
+
+
+def test_technician_receives_visit_safety_fields(client, make_user):
+    technician = make_user("tech", "tech-pass", role="tecnico")
+    appointment_id = _appointment(technician, "+56900000014", date(2026, 1, 4), "emergency visit", emergency=True, priority="alta")
+    _login(client)
+
+    response = client.get("/panel/api/technician/agenda")
+
+    assert response.status_code == 200
+    row = next(item for item in response.json()["appointments"] if item["id"] == appointment_id)
+    assert row["emergency"] is True
+    assert row["priority"] == "alta"
 
 
 def test_cancelled_appointment_stays_visible_and_marked(client, make_user):

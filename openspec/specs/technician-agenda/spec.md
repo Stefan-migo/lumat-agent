@@ -40,12 +40,12 @@ An authenticated tecnico MUST receive only appointments whose `technician_id` eq
 
 ### Requirement: TECH-PRIVACY-1 — Exact Allow-List Serialization
 
-The dedicated technician serializer MUST contain exactly customer name, address, comuna, phone, appointment service, the appointment's own status, and `Case.summary` as a brief note. The status MUST be serialized because a cancelled visit and a booked visit are otherwise indistinguishable, and a technician who cannot tell them apart travels to a visit that no longer exists. Email, consent, conversations, messages, internal notes, calendar sync, and operational fields MUST never be serialized.
+The dedicated technician serializer MUST contain exactly customer name, address, comuna, phone, appointment service, the appointment's own status, `emergency`, `priority`, and `Case.summary` as a brief note. The status MUST be serialized because a cancelled visit and a booked visit are otherwise indistinguishable, and a technician who cannot tell them apart travels to a visit that no longer exists. `emergency` and `priority` MUST be serialized because they describe the safety state of the visit the technician is walking into. Operational fields are the panel's workflow state: `responsible_id`, `reminder_count`, `ack_by`, `notified_at`, `bundle`, and `history`; those fields, along with email, consent, conversations, messages, internal notes, and calendar sync, MUST never be serialized. The safety fields are not operational workflow state and do not widen access to protected customer or case data.
 
 #### Scenario: Exact fields (pytest)
 - GIVEN an owned appointment with every related field populated
 - WHEN it is serialized for tecnico
-- THEN the key set contains only the approved allow-list, including `status`
+- THEN the key set contains only the approved allow-list, including `status`, `emergency`, and `priority`
 
 #### Scenario: Cancelled visit stays visible and marked (pytest)
 - GIVEN an owned appointment that has been cancelled
