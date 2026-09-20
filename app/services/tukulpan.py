@@ -11,10 +11,8 @@ KB-style contract: the caller owns the session transaction and commits.
 This service only stages rows — it never commits.
 
 Later slices (S2/S3) own `load_customer_context`, `persist_memory_session`,
-`close_conversation`, and `record_observation`; `suggest_relations` is deferred
-(YAGNI — no consumer until the relations worker). This slice ships only the
-CRUD + hybrid search primitives; `REL_MIN_SIM` is declared now so S3 reuses the
-agreed constant (design "fines de detalle fino").
+`close_conversation`, and `record_observation`. Relation judging lives in
+`app.services.relations`; `REL_MIN_SIM` remains the shared candidate gate.
 """
 
 from __future__ import annotations
@@ -650,6 +648,7 @@ def hybrid_search(
             Memory.proyecto == proyecto,
             Memory.scope == scope,
             Memory.entity_id == entity_id,
+            Memory.status != MemoryStatus.ARCHIVED,
         )
         .order_by(distance)
         .limit(candidate_limit)
@@ -662,6 +661,9 @@ def hybrid_search(
     ]
     ranked.sort(key=lambda item: item[1], reverse=True)
 
+    from app.services import relations
+
+    relation_map = relations.latest_relations(session, [m.id for m, *_ in ranked[:top_k]])
     return [
         {
             "id": m.id,
@@ -673,6 +675,12 @@ def hybrid_search(
             "topic_key": m.topic_key,
             "pin": m.pin,
             "status": m.status.value,
+            "needs_review": m.status is MemoryStatus.NEEDS_REVIEW,
+            "relation": relation_map[m.id].relation if m.id in relation_map else None,
+            "relation_confidence": (
+                relation_map[m.id].confidence if m.id in relation_map else None
+            ),
+            "relation_reason": relation_map[m.id].reason if m.id in relation_map else None,
             "stale": _is_stale(m.review_after),
             "score": round(float(score), 4),
         }
@@ -687,13 +695,29 @@ def load_customer_context(session: Session, customer_id: int) -> str:
     `titulo: contenido` lines. Empty when the customer has no memories yet — the
     caller proceeds with an empty context and never blocks the reply.
     """
-    rows = list_for_entity(session, scope="customer", entity_id=str(customer_id))
+    from app.services import relations
+
+    rows = [
+        row
+        for row in list_for_entity(session, scope="customer", entity_id=str(customer_id))
+        if row.status is not MemoryStatus.ARCHIVED
+    ]
+    relation_map = relations.latest_relations(session, [row.id for row in rows])
     now = datetime.now(timezone.utc)
     return "\n".join(
         (
-            f"{m.titulo} (stale since {m.review_after.date().isoformat()}): {m.contenido}"
-            if _is_stale(m.review_after, now=now)
-            else f"{m.titulo}: {m.contenido}"
+            f"{m.titulo}"
+            + (
+                f" (stale since {m.review_after.date().isoformat()})"
+                if _is_stale(m.review_after, now=now)
+                else ""
+            )
+            + (
+                f" ({relations.relation_annotation(m.id, relation_map[m.id])})"
+                if m.id in relation_map
+                else ""
+            )
+            + f": {m.contenido}"
         )
         for m in rows
     )

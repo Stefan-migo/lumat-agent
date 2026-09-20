@@ -522,11 +522,7 @@ class Memory(Base):
 
 
 class MemoryRelation(Base):
-    """Schema-only relation between two memory rows (Ponytail deferral).
-
-    No consumer until the relations worker lands; kept to match migration 009
-    (MEM-1 creates the table). Do not write relations here before S3.
-    """
+    """A judged or human-resolved relation between two memory rows."""
 
     __tablename__ = "memory_relations"
 
@@ -536,6 +532,8 @@ class MemoryRelation(Base):
     relation: Mapped[str] = mapped_column(String(50), nullable=False)
     confidence: Mapped[float] = mapped_column(REAL, default=1.0, server_default="1.0")
     reason: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(20), default="judge", server_default="judge")
+    human_resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = _ts()
 
 
