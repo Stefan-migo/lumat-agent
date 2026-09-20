@@ -109,6 +109,20 @@ export interface MemoriesResponse {
   memories: Memory[];
 }
 
+export type MemoryRelationKind = 'supersedes' | 'conflicts' | 'related' | 'compatible' | 'scoped' | 'not_conflict';
+export interface MemoryRelation {
+  id: number;
+  memory_a: Memory;
+  memory_b: Memory;
+  relation: MemoryRelationKind;
+  confidence: number;
+  reason: string | null;
+  source: string;
+  human_resolved_at: string | null;
+  created_at: string | null;
+}
+export interface PendingMemoryRelationsResponse { relations: MemoryRelation[]; }
+
 export interface PanelNotification { id: number; user_id: number; operation_id: number; title: string; content: string; source: string; channel: string | null; status: string; read_at: string | null; created_at: string | null; }
 export interface NotificationsResponse { notifications: PanelNotification[]; }
 
