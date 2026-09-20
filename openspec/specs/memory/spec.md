@@ -26,6 +26,11 @@ Migration `009_memory.sql` MUST create `memories`, `memory_relations`, and `memo
 - WHEN a second upsert stores content equal to it after normalization under a different `topic_key`
 - THEN no second row is created and the existing row's `duplicate_count` is incremented
 
+#### Scenario: A keyed rewrite colliding with existing content folds the duplicate
+- GIVEN an existing memory holding some content under one `topic_key` for a `(proyecto, scope, entity_id)`
+- WHEN a keyed upsert rewrites a different `topic_key` of the same identity to content equal to it after normalization
+- THEN the written key survives holding that content, and the earlier holder is folded into it with its references re-pointed
+
 ### Requirement: MEM-2 — Tukulpan Boundary and Memory Service CRUD
 
 The canonical Tukulpan façade MUST expose upsert, get, list, delete, mark, and SDB artifact/checkpoint writes with an explicit `proyecto` parameter defaulting to `'default'`. It MUST preserve persisted table, enum, and identifier contracts. Writes to `'default'` MUST remain compatible, while writes to non-default namespaces MUST be accepted only when authorized by the agent/service project boundary. `app.services.memory` MUST remain a forwarding-only alias.
