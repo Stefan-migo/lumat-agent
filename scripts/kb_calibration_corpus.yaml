@@ -1,0 +1,521 @@
+# Labeled KB retrieval-calibration corpus.
+#
+# English keys and comments; the document bodies and the query texts are Chilean
+# Spanish on purpose. They are the product's real input distribution on both
+# sides of the comparison: what Lumat uploads, and how a customer actually types
+# into WhatsApp. Translating them would delete the thing being measured.
+# See odd/tasks/kb-retrieval-calibration.md (D1, D2, D3).
+#
+# documents[].doc_class mirrors the document list Lumat was asked to provide
+# (docs/solicitud-al-cliente-lumat.md:204-214). documents[].visibility is the
+# KB-5 audience axis.
+#
+# queries[].class is one of:
+#   answerable    -> a document in this corpus answers it (should hit)
+#   out_of_domain -> nothing here can answer it (should miss)
+#   near_miss     -> adjacent vocabulary, no document actually answers it
+#                    (should miss; this is the class that punishes a low threshold)
+# queries[].visible_to defaults to "customer". "internal" means the answer lives
+# only in an internal document: correct to hit unscoped, correct to MISS as
+# customer. That case is what makes the audience filter observable (D6).
+
+documents:
+  - id: catalogo-gas
+    title: Servicios de gasfitería
+    doc_class: catalogo_servicios
+    visibility: customer
+    content: |
+      Instalamos y reparamos artefactos a gas: cocinas, calefones, calderas y
+      estufas. También hacemos mantención preventiva, cambio de repuestos,
+      detección de fugas y regularización de instalaciones interiores.
+      Cada trabajo incluye prueba de estanqueidad y revisión de la conexión.
+
+  - id: catalogo-climatizacion
+    title: Calefacción central y climatización
+    doc_class: catalogo_servicios
+    visibility: customer
+    content: |
+      Instalamos y mantenemos sistemas de calefacción central y radiadores.
+      Realizamos el cálculo de carga térmica, el trazado de la red y la puesta
+      en marcha. La mantención de calefacción central se cotiza según la
+      cantidad de radiadores de la vivienda.
+
+  - id: catalogo-cocina
+    title: Instalación de cocinas a gas
+    doc_class: catalogo_servicios
+    visibility: customer
+    content: |
+      Instalamos cocinas a gas de tiro natural y de tiro forzado, con conexión
+      a la red o a cilindro. Incluye flexible certificado, regulador cuando
+      corresponde y prueba de estanqueidad. No conectamos artefactos que no
+      cuenten con sello de certificación vigente.
+
+  - id: catalogo-calefont
+    title: Tipos de calefont que instalamos
+    doc_class: catalogo_servicios
+    visibility: customer
+    content: |
+      Trabajamos con calefones de tiro natural y de tiro forzado. Las marcas
+      más comunes en la zona son Junkers, Splendid, Sole y Corsa; también
+      instalamos equipos de marcas equivalentes que estén certificados. Si
+      necesitas cambiar el tipo de tiro, revisamos primero si la ventilación
+      del recinto lo permite.
+
+  - id: tarifas-mantencion
+    title: Tarifas de mantención
+    doc_class: tarifas
+    visibility: customer
+    content: |
+      Mantención de calefón: 45.000 pesos, incluye limpieza del quemador,
+      revisión del intercambiador, prueba de estanqueidad y cambio de gomas.
+      Mantención de estufa a gas: 35.000 pesos. Mantención de caldera:
+      60.000 pesos, incluye limpieza de la cámara de combustión y revisión de
+      los controles de seguridad. Mantención de calefacción central: se cotiza
+      según la cantidad de radiadores, con un mínimo de 80.000 pesos.
+      Los valores incluyen el desplazamiento dentro de las comunas de
+      cobertura. Si la mantención detecta una falla, el presupuesto de la
+      reparación es aparte y se informa antes de intervenir el equipo.
+
+  - id: tarifas-instalaciones
+    title: Tarifas de instalación
+    doc_class: tarifas
+    visibility: customer
+    content: |
+      Instalación de cocina a gas: 80.000 pesos, sin incluir el artefacto.
+      Instalación de calefón: 95.000 pesos, sin incluir el equipo. Instalación
+      de estufa a gas: 55.000 pesos. Instalación de calefacción central:
+      cotización según proyecto. El valor incluye el material de conexión
+      estándar y la prueba de estanqueidad. Si la instalación requiere
+      modificar la red de gas existente, se informa el costo adicional antes
+      de comenzar y el presupuesto se entrega por escrito.
+      No instalamos artefactos comprados por el cliente sin certificación SEC
+      vigente.
+
+  - id: comunas-cobertura
+    title: Comunas y zonas de cobertura
+    doc_class: comunas
+    visibility: customer
+    content: |
+      Atendemos en la zona poniente de Santiago: Maipú, Pudahuel, Cerrillos,
+      Estación Central, Quinta Normal, Lo Prado, Cerro Navia y Peñaflor.
+      Fuera de estas comunas podemos evaluar el servicio según la distancia y
+      el tipo de trabajo; en ese caso se agrega el costo de desplazamiento.
+      Si no estás seguro de si llegamos a tu comuna, consulta con la dirección
+      y te confirmamos.
+
+  - id: garantias
+    title: Garantías y condiciones de los trabajos
+    doc_class: garantias
+    visibility: customer
+    content: |
+      Todos los trabajos tienen 6 meses de garantía de mano de obra y 1 año de
+      garantía en los repuestos que hayamos instalado nosotros. La garantía no
+      cubre daños causados por terceros, por manipulación del equipo después
+      del trabajo, ni por artefactos que no hayan sido instalados por
+      nosotros. Para hacer efectiva la garantía necesitamos el número de boleta
+      y la fecha del trabajo. Las mantenciones también quedan cubiertas si la
+      falla proviene del trabajo realizado.
+
+  - id: procedimiento-visita
+    title: Cómo solicitar una visita técnica
+    doc_class: procedimientos
+    visibility: customer
+    content: |
+      Para pedir una visita necesitamos: nombre completo, dirección con número
+      y comuna, un teléfono de contacto, el tipo de artefacto y una descripción
+      breve del problema. Con esos datos agendamos la visita y te confirmamos
+      por WhatsApp el día y la franja horaria. Si el problema es una fuga de
+      gas, no uses este procedimiento: escríbenos directamente indicando que se
+      trata de una emergencia.
+
+  - id: plazos-respuesta
+    title: Plazos de respuesta
+    doc_class: procedimientos
+    visibility: customer
+    content: |
+      Respondemos los mensajes dentro de 24 horas hábiles. Las visitas técnicas
+      se agendan normalmente dentro de 48 a 72 horas desde la confirmación. En
+      temporada de invierno los plazos pueden extenderse a 5 días por demanda;
+      en ese caso te avisamos al momento de agendar. Las emergencias de gas se
+      atienden dentro de la hora siguiente al aviso.
+
+  - id: procedimiento-mantencion
+    title: Mantención programada
+    doc_class: procedimientos
+    visibility: customer
+    content: |
+      Recomendamos hacer la mantención del calefón una vez al año. La mantención
+      anual del calefón prolonga la vida útil del equipo, mantiene el consumo de
+      gas estable y es la instancia en que se detectan fugas y desgaste antes de
+      que se conviertan en una falla mayor. Agendamos la mantención programada
+      con anticipación y te recordamos la fecha del año siguiente.
+
+  - id: certificacion-sec
+    title: Certificación SEC de instalaciones
+    doc_class: procedimientos
+    visibility: customer
+    content: |
+      Realizamos la declaración de instalación interior de gas ante la
+      Superintendencia de Electricidad y Combustibles (SEC) cuando corresponde.
+      Este trámite deja la instalación regularizada y es exigido al vender una
+      propiedad o al contratar el suministro. Necesitamos los planos de la
+      instalación y la revisión previa del trazado. Los plazos dependen de la
+      SEC y no de nosotros.
+
+  - id: faq-calefont
+    title: Preguntas frecuentes sobre el calefón
+    doc_class: faq
+    visibility: customer
+    content: |
+      Mi calefón no enciende: revisa que el gas esté abierto y que el piloto
+      esté encendido. Si el piloto no enciende o si el equipo no da chispa
+      después de varios intentos, necesitas un técnico. No intentes desarmar el
+      equipo por tu cuenta.
+      Mi calefón pierde agua: puede ser la válvula de alivio, una goma sellada
+      o el intercambiador. Es una falla que empeora con el uso, así que conviene
+      revisarla pronto.
+      Mi calefón hace ruido: normalmente es sarro acumulado en el
+      intercambiador. Se corrige con la mantención.
+      El agua no calienta lo suficiente: puede ser la membrana, el regulador de
+      gas o el quemador sucio.
+      En cualquiera de estos casos la mantención o la reparación la realiza un
+      técnico; nosotros no entregamos instrucciones para intervenir el artefacto.
+
+  - id: faq-boleta
+    title: Preguntas frecuentes sobre pago y boleta
+    doc_class: faq
+    visibility: customer
+    content: |
+      La boleta se entrega al terminar el trabajo y puede ser electrónica si la
+      prefieres. Se puede pagar en efectivo, con transferencia bancaria o con
+      tarjeta de débito. Para transferencias enviamos los datos al momento de
+      confirmar la visita. No pedimos pagos por adelantado para agendar una
+      visita: el pago se realiza cuando el trabajo está hecho.
+
+  - id: faq-agenda
+    title: Preguntas frecuentes sobre agendamiento
+    doc_class: faq
+    visibility: customer
+    content: |
+      Puedo cambiar la hora de la visita: sí, avísanos con al menos 24 horas de
+      anticipación y la reprogramamos sin costo. Si no hay nadie en la dirección
+      a la hora acordada, la visita se considera realizada y se cobra el
+      desplazamiento. Las visitas se agendan en franjas de mañana o de tarde,
+      no en una hora exacta.
+
+  - id: protocolo-fuga-gas
+    title: Protocolo ante fuga de gas
+    doc_class: emergencias
+    visibility: customer
+    content: |
+      Si hueles gas: cierra la llave general de paso. No enciendas luces, no
+      uses el teléfono dentro del recinto, no accionces interruptores y no
+      enciendas fósforos ni encendedores. Abre puertas y ventanas para ventilar.
+      Sal del lugar y avisa desde afuera. Si el olor es fuerte o se escucha un
+      silbido en la cañería, llama de inmediato a los teléfonos de emergencia.
+      No vuelvas a entrar hasta que personal autorizado lo indique.
+
+  - id: protocolo-incendio
+    title: Protocolo ante incendio en la cocina
+    doc_class: emergencias
+    visibility: customer
+    content: |
+      Si se incendia una sartén o una olla, no le eches agua. Corta el gas y
+      tapa el recipiente con una tapa metálica o un paño húmedo para sofocar la
+      llama. Si el fuego se extiende o alcanza la campana, sal del recinto,
+      cierra la puerta y llama a bomberos. Corta la llave general de gas si
+      puedes hacerlo sin exponerte.
+
+  - id: protocolo-monoxido
+    title: Señales de monóxido de carbono
+    doc_class: emergencias
+    visibility: customer
+    content: |
+      El monóxido de carbono no tiene olor ni color, por eso es peligroso. Las
+      señales de alarma son dolor de cabeza, mareos, náuseas y sueño
+      inexplicable en un recinto con un artefacto a gas encendido. Si aparecen
+      esos síntomas, apaga el artefacto, ventila y sal al exterior. Un calefón
+      mal ventilado o una combustión incompleta son las causas más habituales.
+      Hacemos la revisión de ventilación y de combustión en la mantención.
+
+  - id: horarios
+    title: Horarios de atención
+    doc_class: horarios
+    visibility: customer
+    content: |
+      Atendemos de lunes a viernes de 9:00 a 18:00 y sábado de 9:00 a 14:00.
+      Fuera de ese horario respondemos las consultas al día hábil siguiente.
+      Las emergencias de gas se atienden todos los días, también de noche y en
+      días festivos.
+
+  - id: contacto-emergencia
+    title: Contactos de emergencia
+    doc_class: horarios
+    visibility: customer
+    content: |
+      Para emergencias de gas, incendio o sospecha de monóxido de carbono,
+      escríbenos al WhatsApp de emergencias y marca la conversación como
+      emergencia. Si hay riesgo inmediato para personas, llama primero a
+      bomberos o a la empresa distribuidora de gas: ellos tienen atención de
+      urgencia permanente. Nuestro número de emergencias es 56 9 0000 0000.
+
+  - id: formas-pago
+    title: Formas de pago
+    doc_class: tarifas
+    visibility: customer
+    content: |
+      Aceptamos efectivo, transferencia bancaria y tarjeta de débito. También
+      aceptamos crédito con un recargo de la máquina. Para trabajos de más de
+      500.000 pesos pedimos un abono del 30 por ciento al aceptar el
+      presupuesto. Emitimos boleta electrónica.
+
+  - id: tarifario-interno-mayorista
+    title: Tarifario interno para convenios y volumen
+    doc_class: tarifas
+    visibility: internal
+    content: |
+      Uso interno. Descuentos por volumen para convenios con inmobiliarias y
+      administradoras de edificios: 10 por ciento desde 20 mantenciones,
+      18 por ciento desde 50 mantenciones y 25 por ciento desde 100. El margen
+      objetivo de la mantención de calefón en convenio es de 32 por ciento.
+      No comunicar estos valores a clientes finales ni publicarlos en el panel.
+
+  - id: guion-interno-reclamos
+    title: Guion interno para reclamos de operadores
+    doc_class: mensajes_estandar
+    visibility: internal
+    content: |
+      Uso interno. Ante un reclamo, el operador debe: agradecer el aviso,
+      reformular el problema con sus palabras para confirmar comprensión, no
+      prometer plazos sin revisar la agenda, y ofrecer una acción concreta con
+      fecha. Escalar al dueño cuando el reclamo involucre un daño a propiedad o
+      una segunda reiteración del mismo problema.
+
+  - id: tono-asistente
+    title: Tono y presentación del asistente
+    doc_class: tono
+    visibility: internal
+    content: |
+      Uso interno. El asistente se presenta como "el asistente de Lumat". Usa
+      español chileno neutro, trata de usted a los clientes y no usa chilenismos
+      ni diminutivos. No se identifica como humano. Si no sabe algo, ofrece
+      derivar a una persona en lugar de improvisar una respuesta.
+
+queries:
+  # --- answerable, customer-visible -----------------------------------------
+  - id: q-precio-mantencion-calefont
+    text: cuanto cuesta la mantencion del calefont
+    class: answerable
+    relevant_doc_ids: [tarifas-mantencion]
+  - id: q-valor-mantencion-estufa
+    text: que valor tiene la mantencion de una estufa a gas
+    class: answerable
+    relevant_doc_ids: [tarifas-mantencion]
+  - id: q-precio-mantencion-caldera
+    text: cuanto sale la mantencion de la caldera
+    class: answerable
+    relevant_doc_ids: [tarifas-mantencion]
+  - id: q-instalacion-cocina-gas
+    text: instalacion cocina a gas
+    class: answerable
+    relevant_doc_ids: [tarifas-instalaciones, catalogo-cocina]
+  - id: q-precio-instalar-calefont
+    text: cuanto cobran por instalar un calefont
+    class: answerable
+    relevant_doc_ids: [tarifas-instalaciones]
+  - id: q-mantencion-anual
+    text: mantencion anual calefont
+    class: answerable
+    relevant_doc_ids: [procedimiento-mantencion]
+  - id: q-cada-cuanto-mantencion
+    text: cada cuanto tiempo se le hace mantencion al calefon
+    class: answerable
+    relevant_doc_ids: [procedimiento-mantencion]
+  - id: q-comunas
+    text: atienden en maipu
+    class: answerable
+    relevant_doc_ids: [comunas-cobertura]
+  - id: q-lista-comunas
+    text: cuales son las comunas donde trabajan
+    class: answerable
+    relevant_doc_ids: [comunas-cobertura]
+  - id: q-garantia
+    text: los trabajos tienen garantia
+    class: answerable
+    relevant_doc_ids: [garantias]
+  - id: q-pedir-visita
+    text: como pido una visita tecnica
+    class: answerable
+    relevant_doc_ids: [procedimiento-visita]
+  - id: q-datos-visita
+    text: que datos necesitan para agendar la visita
+    class: answerable
+    relevant_doc_ids: [procedimiento-visita]
+  - id: q-plazos
+    text: en cuanto tiempo responden un mensaje
+    class: answerable
+    relevant_doc_ids: [plazos-respuesta]
+  - id: q-calefont-no-enciende
+    text: mi calefont no enciende
+    class: answerable
+    relevant_doc_ids: [faq-calefont]
+  - id: q-calefont-pierde-agua
+    text: el calefon esta perdiendo agua
+    class: answerable
+    relevant_doc_ids: [faq-calefont]
+  - id: q-calefont-ruido
+    text: mi calefon hace un ruido raro
+    class: answerable
+    relevant_doc_ids: [faq-calefont]
+  - id: q-como-pagar
+    text: como puedo pagar el trabajo
+    class: answerable
+    relevant_doc_ids: [faq-boleta, formas-pago]
+  - id: q-cambiar-hora
+    text: puedo cambiar la hora de la visita
+    class: answerable
+    relevant_doc_ids: [faq-agenda]
+  - id: q-olor-gas
+    text: huelo gas en la cocina que hago
+    class: answerable
+    relevant_doc_ids: [protocolo-fuga-gas]
+  - id: q-fuga-gas-pasos
+    text: hay olor a gas que debo hacer
+    class: answerable
+    relevant_doc_ids: [protocolo-fuga-gas]
+  - id: q-incendio-cocina
+    text: se prendio fuego la cocina
+    class: answerable
+    relevant_doc_ids: [protocolo-incendio]
+  - id: q-monoxido
+    text: que es el monoxido de carbono
+    class: answerable
+    relevant_doc_ids: [protocolo-monoxido]
+  - id: q-horarios
+    text: cuales son los horarios de atencion
+    class: answerable
+    relevant_doc_ids: [horarios]
+  - id: q-numero-emergencia
+    text: cual es el numero de emergencia
+    class: answerable
+    relevant_doc_ids: [contacto-emergencia]
+  - id: q-tipos-calefont
+    text: que tipos de calefont instalan
+    class: answerable
+    relevant_doc_ids: [catalogo-calefont]
+  - id: q-certificacion-sec
+    text: necesito regularizar la instalacion de gas ante la sec
+    class: answerable
+    relevant_doc_ids: [certificacion-sec]
+  - id: q-instalar-estufa
+    text: hacen instalacion de estufa a gas
+    class: answerable
+    relevant_doc_ids: [catalogo-gas, tarifas-instalaciones]
+  - id: q-calefaccion-central
+    text: instalan calefaccion central
+    class: answerable
+    relevant_doc_ids: [catalogo-climatizacion]
+
+  # --- answerable, internal-only (D6: makes the audience filter observable) --
+  - id: q-descuento-volumen
+    text: cuanto es el descuento por volumen para una inmobiliaria
+    class: answerable
+    relevant_doc_ids: [tarifario-interno-mayorista]
+    visible_to: internal
+  - id: q-guion-reclamo
+    text: cual es el guion para responder un reclamo
+    class: answerable
+    relevant_doc_ids: [guion-interno-reclamos]
+    visible_to: internal
+
+  # --- near_miss: adjacent vocabulary, no document answers it ---------------
+  - id: q-lavadora
+    text: cuanto cuesta cambiar el filtro de una lavadora
+    class: near_miss
+    relevant_doc_ids: []
+  - id: q-termo-electrico
+    text: reparan termos electricos
+    class: near_miss
+    relevant_doc_ids: []
+  - id: q-estufa-parafina
+    text: cuanto demora instalar una estufa a parafina
+    class: near_miss
+    relevant_doc_ids: []
+  - id: q-certificacion-electrica
+    text: hacen certificacion de la instalacion electrica
+    class: near_miss
+    relevant_doc_ids: []
+  - id: q-medidor-gas
+    text: cuanto cobran por revisar el medidor de gas natural
+    class: near_miss
+    relevant_doc_ids: []
+  - id: q-aire-acondicionado
+    text: instalan aire acondicionado split
+    class: near_miss
+    relevant_doc_ids: []
+  - id: q-llave-cocina
+    text: necesito cambiar las gomas de la llave de la cocina
+    class: near_miss
+    relevant_doc_ids: []
+  - id: q-arriendo-herramientas
+    text: arriendan herramientas de gasfiteria
+    class: near_miss
+    relevant_doc_ids: []
+  - id: q-capacitacion
+    text: hacen capacitacion para gasfiteres
+    class: near_miss
+    relevant_doc_ids: []
+  - id: q-tanque-agua
+    text: cuanto sale instalar un tanque de agua
+    class: near_miss
+    relevant_doc_ids: []
+
+  # --- out_of_domain: nothing in the corpus can answer it -------------------
+  - id: q-empanadas
+    text: receta de empanadas
+    class: out_of_domain
+    relevant_doc_ids: []
+  - id: q-auto-usado
+    text: cuanto sale un auto usado
+    class: out_of_domain
+    relevant_doc_ids: []
+  - id: q-horario-banco
+    text: cual es el horario del banco estado
+    class: out_of_domain
+    relevant_doc_ids: []
+  - id: q-viaje-valparaiso
+    text: como viajo a valparaiso
+    class: out_of_domain
+    relevant_doc_ids: []
+  - id: q-dolor-cabeza
+    text: me duele la cabeza que remedio tomo
+    class: out_of_domain
+    relevant_doc_ids: []
+  - id: q-futbol
+    text: en que canal dan el partido de colo colo
+    class: out_of_domain
+    relevant_doc_ids: []
+  - id: q-licencia-conducir
+    text: que tramites necesito para renovar la licencia de conducir
+    class: out_of_domain
+    relevant_doc_ids: []
+  - id: q-dolar
+    text: a cuanto esta el dolar hoy
+    class: out_of_domain
+    relevant_doc_ids: []
+  - id: q-estudiar
+    text: como hago para estudiar ingenieria
+    class: out_of_domain
+    relevant_doc_ids: []
+  - id: q-pastel-choclo
+    text: receta de pastel de choclo
+    class: out_of_domain
+    relevant_doc_ids: []
+  - id: q-capital-francia
+    text: cual es la capital de francia
+    class: out_of_domain
+    relevant_doc_ids: []
+  - id: q-cine
+    text: cuanto cuesta una entrada al cine
+    class: out_of_domain
+    relevant_doc_ids: []
