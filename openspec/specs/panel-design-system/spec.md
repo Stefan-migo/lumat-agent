@@ -748,12 +748,19 @@ The production panel MUST make `PanelShell`, `ConversationThread`, `Conversation
 
 ### Requirement: DS-GRAMMAR-2 — Tokenized Shared Style Boundary
 
-Grammar styles MUST be implemented in `web/src/components/primitives/primitives.css` or another existing tokenized stylesheet boundary, MUST reuse existing `tokens.css`/`--corp-*` roles before adding any token, MUST add no dependency, and MUST contain no hard-coded color values. `PanelShell` MUST NOT inject shell-owned `<style>` content.
+Grammar styles MUST be implemented in `web/src/components/primitives/primitives.css` or another existing tokenized stylesheet boundary, MUST reuse existing `tokens.css`/`--corp-*` roles before adding any token, MUST add no dependency, and MUST contain no hard-coded color values. Components under `web/src/components` and `web/src/stories` MUST NOT inject component-owned `<style>` content.
+(Previously: the no-injection rule named only `PanelShell` and its shell-owned `<style>` content.)
 
 #### Scenario: Source and DOM contract
 - GIVEN the grammar is rendered by `PanelShell` or a production page
 - WHEN source and computed stylesheet ownership are inspected
 - THEN styles come from the shared stylesheet, colors resolve through `var(--*)`, and no injected shell style or new dependency exists
+
+#### Scenario: No component injects its own stylesheet
+
+- GIVEN any component under `web/src/components` or `web/src/stories` renders
+- WHEN its source and DOM are inspected
+- THEN no `<style>` element is injected and all values resolve through tokens
 
 #### Scenario: Existing token validation
 - GIVEN rail, bubble, inspector, activity, and composer states
