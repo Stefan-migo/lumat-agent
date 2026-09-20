@@ -156,6 +156,10 @@ def index_text(doc: CalibrationDoc, index_title: bool) -> str:
 def load_corpus(path: Path | str = CORPUS_PATH) -> Corpus:
     """Read and validate the labeled corpus. Raises ValueError on any violation."""
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    if not raw.get("documents"):
+        raise ValueError("corpus must contain a non-empty documents section")
+    if not raw.get("queries"):
+        raise ValueError("corpus must contain a non-empty queries section")
 
     docs: list[CalibrationDoc] = []
     for entry in raw.get("documents") or []:
