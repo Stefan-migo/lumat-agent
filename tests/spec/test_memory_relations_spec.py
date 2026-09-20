@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import Memory, MemoryRelation, MemoryStatus, MemoryType
+from app.models import Conversation, Customer, Memory, MemoryRelation, MemoryStatus, MemoryType
 from app.services import relations, tukulpan
 
 pytestmark = pytest.mark.spec("MEM-11")
@@ -80,6 +80,80 @@ def test_mem11_contradicting_write_records_judged_relation(fake_embedder, migrat
         assert client.calls == 1
 
 
+def test_mem11_close_conversation_judges_customer_memo(
+    fake_embedder, migrated_db, monkeypatch
+):
+    client = _Client(_verdict(1))
+    monkeypatch.setattr(relations.llm, "openai_client", lambda: client)
+
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56900000001")
+        session.add(customer)
+        session.flush()
+        previous = _memory(
+            session,
+            content="The customer prefers mornings.",
+            key="preference-old",
+            entity=str(customer.id),
+        )
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add(conversation)
+        session.flush()
+        monkeypatch.setattr(
+            relations,
+            "find_candidates",
+            lambda _session, _memory, top_k=5: [previous],
+        )
+
+        tukulpan.close_conversation(
+            session, conversation, acta_text="The customer prefers afternoons."
+        )
+
+        memo = session.scalar(
+            select(Memory).where(
+                Memory.scope == "customer",
+                Memory.entity_id == str(customer.id),
+                Memory.topic_key == "customer_memo",
+            )
+        )
+        row = session.execute(select(MemoryRelation)).scalar_one()
+        assert memo is not None
+        assert row.id_a == memo.id
+        assert row.id_b == previous.id
+        assert row.relation == "conflicts"
+        assert client.calls == 1
+
+
+def test_mem11_close_conversation_survives_unavailable_judge(
+    fake_embedder, migrated_db, monkeypatch
+):
+    monkeypatch.setattr(relations.llm, "openai_client", Mock(side_effect=TimeoutError()))
+
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56900000002")
+        session.add(customer)
+        session.flush()
+        previous = _memory(
+            session,
+            content="The customer prefers mornings.",
+            key="preference-old",
+            entity=str(customer.id),
+        )
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add(conversation)
+        session.flush()
+        monkeypatch.setattr(relations, "find_candidates", lambda *_args, **_kwargs: [previous])
+
+        tukulpan.close_conversation(session, conversation, acta_text="Customer memo")
+
+        assert session.scalar(
+            select(Memory).where(Memory.topic_key == "customer_memo")
+        ) is not None
+        assert session.execute(select(MemoryRelation)).scalars().all() == []
+
+
 @pytest.mark.parametrize("response", [None, "not json", '{"verdicts": [{"candidate_id": 1}]}' ])
 def test_mem11_bad_judge_response_writes_no_relation(
     fake_embedder, migrated_db, monkeypatch, response
@@ -99,6 +173,25 @@ def test_mem11_bad_judge_response_writes_no_relation(
         relations.judge_memory_relations(session, current)
         assert session.execute(select(MemoryRelation)).scalars().all() == []
         assert session.get(Memory, current.id) is not None
+
+
+def test_mem11_judge_failure_logs_and_writes_no_relation(
+    fake_embedder, migrated_db, monkeypatch, caplog
+):
+    with SessionLocal() as session:
+        previous = _memory(session, content="The customer prefers mornings.", key="preference-old")
+        session.flush()
+        current = _memory(session, content="The customer prefers afternoons.", key="preference-new")
+        session.flush()
+        monkeypatch.setattr(relations, "find_candidates", lambda *_args, **_kwargs: [previous])
+        monkeypatch.setattr(relations.llm, "openai_client", Mock(side_effect=RuntimeError("provider down")))
+
+        with caplog.at_level("WARNING", logger=relations.__name__):
+            relations.judge_memory_relations(session, current)
+
+        assert session.execute(select(MemoryRelation)).scalars().all() == []
+        assert "memory relation judge failed" in caplog.text
+        assert "provider down" in caplog.text
 
 
 def test_mem11_pending_confidence_is_recorded_for_human_queue(fake_embedder, migrated_db, monkeypatch):

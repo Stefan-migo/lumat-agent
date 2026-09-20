@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from sqlalchemy import or_, select
@@ -16,6 +17,7 @@ RELATION_VOCAB = frozenset(
     {"supersedes", "conflicts", "related", "compatible", "scoped", "not_conflict"}
 )
 AUTO_JUDGE_CONFIDENCE = 0.7
+logger = logging.getLogger(__name__)
 
 
 def find_candidates(session: Session, memory: Memory, *, top_k: int = 5) -> list[Memory]:
@@ -116,6 +118,7 @@ def judge_memory_relations(
         content = response.choices[0].message.content
         verdicts = _parse_verdicts(content, {candidate.id for candidate in candidates})
     except Exception:
+        logger.warning("memory relation judge failed", exc_info=True)
         return []
 
     rows = [
@@ -134,6 +137,7 @@ def judge_memory_relations(
             session.add_all(rows)
             session.flush()
     except Exception:
+        logger.warning("memory relation write failed", exc_info=True)
         return []
     return rows
 

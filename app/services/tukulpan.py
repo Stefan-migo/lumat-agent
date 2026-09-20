@@ -787,7 +787,7 @@ def close_conversation(session: Session, conversation: Conversation, *, acta_tex
     KB-style contract: the caller owns the session and commits.
     """
     customer_id = conversation.customer_id
-    upsert(
+    memo = upsert(
         session,
         scope="customer",
         entity_id=str(customer_id),
@@ -800,6 +800,9 @@ def close_conversation(session: Session, conversation: Conversation, *, acta_tex
         producer=MemoryProducer.SYSTEM,
         origin_thread_id=str(conversation.id),
     )
+    from app.services import relations
+
+    relations.judge_memory_relations(session, memo)
     _record_observations(session, conversation)
 
 
