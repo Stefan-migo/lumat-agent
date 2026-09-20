@@ -3,7 +3,7 @@
 **Branch**: `odd/memory-decay-ttl`
 **Worktree**: `../lumat-agent-odd-memory-decay-ttl`
 **Base**: `0b9f3c2e`
-**Status**: in progress
+**Status**: completed
 
 ## Objective
 
@@ -109,19 +109,19 @@ def _is_stale(review_after: datetime | None, *, now: datetime | None = None) -> 
 
 ## Tasks
 
-- [ ] **T1 — RED (policy).** `tests/spec/test_memory_spec.py`: `review_after` is set for `SUMMARY` and
+- [x] **T1 — RED (policy).** `tests/spec/test_memory_spec.py`: `review_after` is set for `SUMMARY` and
       `SESSION` (≈ 30 days ahead), stays `NULL` for `CUSTOMER_MEMO`, `DECISION`, `PATTERN`,
       `PREFERENCE`, `DISCOVERY`, and is refreshed when a decaying row is rewritten.
-- [ ] **T2 — RED (read path).** `tests/spec/test_memory_spec.py`: a fresh row reports `stale: False`;
+- [x] **T2 — RED (read path).** `tests/spec/test_memory_spec.py`: a fresh row reports `stale: False`;
       a row whose `review_after` is in the past reports `stale: True`; a row with `review_after NULL`
       reports `stale: False`; and staleness does not change the returned order.
-- [ ] **T3 — RED (injection path).** `tests/integration/test_chat_state.py`: a stale `SESSION` line is
+- [x] **T3 — RED (injection path).** `tests/integration/test_chat_state.py`: a stale `SESSION` line is
       annotated with `stale since`; a fresh one is not; a `CUSTOMER_MEMO` is never annotated.
-- [ ] **T4 — GREEN.** Implement the contract above.
-- [ ] **T5 — Spec.** Replace `decay` in the deferred sentence at `openspec/specs/memory/spec.md:186`
+- [x] **T4 — GREEN.** Implement the contract above.
+- [x] **T5 — Spec.** Replace `decay` in the deferred sentence at `openspec/specs/memory/spec.md:186`
       and add `### Requirement: MEM-10 — Lifecycle Decay` with RFC 2119 keywords and
       Given/When/Then scenarios. Requirements currently end at `MEM-9`.
-- [ ] **T6 — Verify.** Focused suites, then the full suite, counts measured and reported.
+- [x] **T6 — Verify.** Focused suites, then the full suite, counts measured and reported.
 
 ## Acceptance criteria
 
@@ -149,8 +149,17 @@ formatter exists; the tests are the verification.
 - [x] Graph Check: `load_customer_context` → `.from_db()` (`app/chat/state.py:225`),
       `run_conversation()`; `hybrid_search` → HL-1 spec; nodes `Memory` (`app/models.py:457`),
       `tukulpan.py`, `test_memory_spec.py`, `test_chat_state.py`.
-- [ ] T1–T6.
+- [x] T1–T6.
+
+### Implementation progress
+
+- Graph Check: consulted `tukulpan.py`, `_upsert_resolved()`, `hybrid_search()`, `load_customer_context()`, `Memory`, `test_memory_spec.py`, and `test_chat_state.py`; no directed path was available between the service and test nodes, but the affected nodes and Tukulpan community were present in the graph report.
+- T1 RED: `uv run pytest tests/spec/test_memory_spec.py -k test_mem10_write_policy_stamps_only_decaying_types -v` failed with `assert None is not None` at `tests/spec/test_memory_spec.py:51`.
+- T2 RED: `uv run pytest tests/spec/test_memory_spec.py -k test_mem10_hybrid_search_reports_staleness_without_reordering -v` failed with `KeyError: 'stale'` at `tests/spec/test_memory_spec.py:114`.
+- T3 RED: `uv run pytest tests/integration/test_chat_state.py -k test_s2_memory_context_marks_stale_snapshots_only -v` failed with `AssertionError: assert 'session (stale since ' in 'session: stale session content\nfresh summary: fresh summary content\ncustomer memo: permanent customer content'` at `tests/integration/test_chat_state.py:336`.
+- T4/T5 GREEN: focused command `uv run pytest tests/spec/test_memory_spec.py tests/integration/test_chat_state.py -v` — `36 passed in 5.62s`.
+- T6 full verification: `uv run pytest tests/` — `989 passed, 2 warnings in 136.09s (0:02:16)`. An earlier run with the required environment and a 120-second tool timeout stopped at 58% without a test failure; the complete rerun used a 300-second timeout and passed.
 
 ## Next step
 
-T1 — the policy RED tests.
+None — T1–T6 are complete.

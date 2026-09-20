@@ -16,6 +16,7 @@ pgvector test DB.
 
 import psycopg
 import pytest
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 
 from app.chat.state import MENU_CATEGORIES, WINDOW_SIZE, ConversationState, get_or_create_conversation  # noqa: E402
@@ -294,3 +295,44 @@ def test_s2_from_db_carries_memory_context(fake_embedder):
 
     assert state.memory_context
     assert "tarde" in state.memory_context
+
+
+def test_s2_memory_context_marks_stale_snapshots_only(fake_embedder):
+    conv_id = _seed(["hola"])
+    with SessionLocal() as session:
+        conv = session.get(Conversation, conv_id)
+        stale = memory_service.upsert(
+            session,
+            scope="customer",
+            entity_id=str(conv.customer_id),
+            topic_key="session",
+            tipo=MemoryType.SESSION,
+            titulo="session",
+            contenido="stale session content",
+        )
+        memory_service.upsert(
+            session,
+            scope="customer",
+            entity_id=str(conv.customer_id),
+            topic_key="fresh_summary",
+            tipo=MemoryType.SUMMARY,
+            titulo="fresh summary",
+            contenido="fresh summary content",
+        )
+        memory_service.upsert(
+            session,
+            scope="customer",
+            entity_id=str(conv.customer_id),
+            topic_key="customer_memo",
+            tipo=MemoryType.CUSTOMER_MEMO,
+            titulo="customer memo",
+            contenido="permanent customer content",
+        )
+        session.commit()
+        stale.review_after = datetime.now(timezone.utc) - timedelta(days=1)
+        session.commit()
+        state = ConversationState.from_db(session, conv_id)
+
+    assert "session (stale since " in state.memory_context
+    assert "fresh summary (stale since" not in state.memory_context
+    assert "customer memo (stale since" not in state.memory_context
