@@ -1,4 +1,15 @@
 # registry.yaml — declarative agent registry and assistant runtime config.
+# How far `kb_scope` is actually wired, so nobody has to re-derive it:
+# runtime wiring exists for ONE entry, the `research_triage` sub-agent, whose
+# scope is injected into `kb.retrieve(scope=...)` (AO-7,
+# app/chat/subgraphs/research_triage.py). On `agent:` and `assistant:` the field
+# is parsed and held but never consumed, and it is optional there — the loader
+# requires only name/persona/skills/tools_whitelist/model (app/agent_registry.py).
+# `null` is the intended "no restriction" declaration (`scope=None` returns the
+# unfiltered active-version set), so a non-null value on `agent:` or `assistant:`
+# is a no-op until something reads it. The field stays declared because the
+# `agent:` shape is frozen (AC-4) and its presence is asserted in
+# tests/unit/test_prompts.py; this is deliberate scope, not pending work.
 agent:
   name: orchestrator
   persona: personas/orchestrator.md
