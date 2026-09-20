@@ -186,6 +186,85 @@ def test_mem2_upsert_writes_memory(fake_embedder, migrated_db):
         )
 
 
+def test_mem2_identical_normalized_content_deduplicates_by_hash(fake_embedder, migrated_db):
+    with SessionLocal() as session:
+        first = memory.upsert(
+            session,
+            scope="customer",
+            entity_id="42",
+            topic_key="first",
+            tipo=MemoryType.DECISION,
+            titulo="Fact",
+            contenido="The customer prefers afternoon visits.",
+        )
+        second = memory.upsert(
+            session,
+            scope="customer",
+            entity_id="42",
+            topic_key="second",
+            tipo=MemoryType.DECISION,
+            titulo="Repeated fact",
+            contenido="  THE customer   prefers afternoon visits. ",
+        )
+        session.commit()
+
+        assert second.id == first.id
+        assert second.duplicate_count == 2
+        assert session.query(Memory).filter_by(entity_id="42").count() == 1
+
+
+def test_mem2_distinct_content_and_identity_stays_distinct(fake_embedder, migrated_db):
+    with SessionLocal() as session:
+        for scope, entity_id, proyecto, topic_key, content in (
+            ("customer", "42", "default", "same-content", "Shared fact"),
+            ("customer", "42", "default", "different-content", "Different fact"),
+            ("other", "42", "default", "other-scope", "Shared fact"),
+            ("customer", "99", "default", "other-entity", "Shared fact"),
+        ):
+            memory.upsert(
+                session,
+                scope=scope,
+                entity_id=entity_id,
+                proyecto=proyecto,
+                topic_key=topic_key,
+                tipo=MemoryType.DECISION,
+                titulo=topic_key,
+                contenido=content,
+            )
+        session.commit()
+
+        assert session.query(Memory).count() == 4
+
+
+def test_mem2_same_key_rewrite_is_not_a_duplicate(fake_embedder, migrated_db):
+    with SessionLocal() as session:
+        row = memory.upsert(
+            session,
+            scope="customer",
+            entity_id="42",
+            topic_key="fact",
+            tipo=MemoryType.DECISION,
+            titulo="Fact",
+            contenido="Original fact",
+        )
+        session.commit()
+
+        rewritten = memory.upsert(
+            session,
+            scope="customer",
+            entity_id="42",
+            topic_key="fact",
+            tipo=MemoryType.DECISION,
+            titulo="Rewritten fact",
+            contenido="Updated fact",
+        )
+        session.commit()
+
+        assert rewritten.id == row.id
+        assert rewritten.contenido == "Updated fact"
+        assert rewritten.duplicate_count == 1
+
+
 def test_mem2_get_list_delete_mark(fake_embedder, migrated_db):
     """get_by_key, list_for_entity, delete, set_mark behave per MEM-2."""
     with SessionLocal() as session:

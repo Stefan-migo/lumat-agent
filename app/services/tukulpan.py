@@ -20,6 +20,7 @@ agreed constant (design "fines de detalle fino").
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import time
 from datetime import datetime, timedelta, timezone
@@ -154,6 +155,11 @@ def _embed(texts: list[str]) -> list[list[float]]:
     raise last_error
 
 
+def _normalized_hash(contenido: str) -> str:
+    normalized = " ".join(contenido.split()).casefold()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
 def upsert(
     session: Session,
     *,
@@ -179,6 +185,7 @@ def upsert(
     """
     _guard_writable_project(proyecto, authorization)
 
+    normalized_hash = _normalized_hash(contenido)
     embeddings = _embed([contenido])
     if not embeddings:
         raise ValueError("cannot embed empty memory content")
@@ -194,6 +201,16 @@ def upsert(
     ).scalar_one_or_none()
 
     if row is None:
+        row = session.execute(
+            select(Memory).where(
+                Memory.proyecto == proyecto,
+                Memory.scope == scope,
+                Memory.entity_id == entity_id,
+                Memory.normalized_hash == normalized_hash,
+            )
+        ).scalar_one_or_none()
+
+    if row is None:
         row = Memory(
             proyecto=proyecto,
             scope=scope,
@@ -203,17 +220,25 @@ def upsert(
             titulo=titulo,
             contenido=contenido,
             embedding=embedding,
+            normalized_hash=normalized_hash,
+            duplicate_count=1,
+            last_seen_at=func.now(),
             pin=pin,
             producer=producer,
             origin_thread_id=origin_thread_id,
             visibility=visibility,
         )
         session.add(row)
+    elif row.topic_key != topic_key:
+        row.duplicate_count += 1
+        row.last_seen_at = func.now()
     else:
         row.tipo = tipo
         row.titulo = titulo
         row.contenido = contenido
         row.embedding = embedding
+        row.normalized_hash = normalized_hash
+        row.last_seen_at = func.now()
         row.pin = pin
         row.producer = producer
         row.origin_thread_id = origin_thread_id
