@@ -135,11 +135,13 @@ design-system disconnect recorded in `technician-surface`. This change does not 
     (this repo's pytest config prints no summary line). Includes `test_api_technician.py` 4/4.
   - Backend full suite `uv run pytest tests/` → **not completed**: the user aborted the run at ~23% to
     keep moving. Every dot up to the abort was a pass; this is partial evidence, not a pass. Re-run on
-    a quiet machine before merging.
+    a quiet machine before merging. **Superseded on 2026-09-20 — the suite was run on a quiet machine
+    and passed; see the closure entry in Progress.**
   - Frontend: `cd web && npm run test` → **78 files, 589 tests, all passing, exit 0**.
   - `cd web && npx tsc -b --noEmit` → exit 0. `cd web && npm run build` → exit 0.
   - Browser check against the running panel → **pending**: `infra-api-1` mounts the main worktree, so
-    this needs the worktree's own API + Vite. Not started without asking.
+    this needs the worktree's own API + Vite. Not started without asking. **Superseded on 2026-09-20 —
+    completed against the merged panel; see the closure entry in Progress.**
   - Load average was ~10 during the frontend run. No false red appeared, but the run was not on a quiet
     machine, so a second green on a quiet machine is still the stronger signal.
 
@@ -178,7 +180,8 @@ design-system disconnect recorded in `technician-surface`. This change does not 
       `23 passed`; two story assertions updated to the new intended numbers.
 - [x] T6 complete except the browser check. Everything green: backend functional 186/186, frontend
       589/589, `tsc` and `build` exit 0. Full backend suite not completed (user aborted at ~23%, no
-      failures seen) — recorded as partial.
+      failures seen) — recorded as partial. **Superseded on 2026-09-20 — both leftovers are closed; see
+      the closure entry below.**
 - [x] Committed as four work units and opened as **PR #247** (`odd/technician-status` → `main`):
       `7a8bcd7c` backend, `db534347` payload type, `6e3cf3d5` card + counter, `dc7718aa` this record.
       Label `type:feature`, GitGuardian pass, MERGEABLE / CLEAN.
@@ -187,7 +190,16 @@ design-system disconnect recorded in `technician-surface`. This change does not 
       to main and unpushed** (`origin/main` = `bc2ee447`), so the PR diff currently also carries its
       four files (`app/config.py`, `app/services/users.py`, `infra/docker-compose.yml`,
       `tests/conftest.py`). Pushing main removes them from this PR without a rewrite.
-- [ ] Browser verification still pending. Nothing left to implement.
+- [x] **Closure — 2026-09-20, after PR #247 merged.** The two leftovers recorded above are done, and
+      neither is left implicit:
+      - **Browser verification.** Verified against the merged panel (`main`) with the live `tec-agenda`
+        fixture (user id 4, visits 5-8). The cancelled visit (id 8) renders with the `Cancelada` label,
+        the header reads `3 visitas · 1 cancelada`, sections come in upcoming → past order, and the card
+        keeps the elevated surface plus `--shadow-1` rather than a border stroke. The only console noise
+        was the expected unauthenticated `GET /panel/api/me` 401 and a `favicon.ico` 404.
+      - **Full backend suite.** `eval "$(infra/test-db.sh env)" && uv run pytest tests/` → **957
+        passed**, exit 0, 132s, on a quiet machine (load average 5.4). This supersedes the ~23% partial
+        run recorded in T6 and in the Progress bullet above; it is a completed run, not an extrapolation.
 
 ## Size
 
