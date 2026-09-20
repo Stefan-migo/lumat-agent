@@ -181,12 +181,12 @@ page's behaviour; any new dependency.
       two page files.
 - [x] **T3** — GREEN page migration committed in `3b38af18`; focused guard passed: 1 file, 1 test.
 - [x] **T4** — DS-GRAMMAR-2 widened with the no-component-injection scenario; committed in the closeout
-      commit recorded below.
+      commit `daeed4b0`.
 - [x] **T5** — `contrast-verification.md` records the manual 2.85:1 `--border-strong` / effective
       `--brand-bg` calculation and inherited-design-system attribution; committed in the closeout commit
-      recorded below.
+      `daeed4b0`.
 - [x] **T6** — Both technician-surface open items were closed by appended lines, and this progress record
-      was reconciled against `dc40a98f` and `3b38af18`; committed in the closeout commit recorded below.
+      was reconciled against `dc40a98f` and `3b38af18`; closeout commit `daeed4b0`.
 
 ## Recovery
 
