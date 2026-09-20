@@ -264,6 +264,38 @@ def test_kb_search_honors_top_k_and_min_sim(client, make_user, fake_embedder):
     assert len(low.json()["results"]) >= len(high.json()["results"])
 
 
+@pytest.mark.parametrize(
+    ("parameter", "value"),
+    [
+        ("top_k", "0"),
+        ("top_k", "-1"),
+        ("top_k", "51"),
+        ("min_sim", "-2"),
+        ("min_sim", "2"),
+    ],
+)
+def test_kb_search_rejects_out_of_range_probe_parameters(
+    client, make_user, fake_embedder, parameter, value
+):
+    _seed_doc()
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.get(f"/panel/api/kb/search?q=tarifas&{parameter}={value}")
+
+    assert resp.status_code == 422
+
+
+def test_kb_search_accepts_inclusive_top_k_upper_bound(client, make_user, fake_embedder):
+    _seed_doc()
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.get("/panel/api/kb/search?q=tarifas&top_k=50")
+
+    assert resp.status_code == 200
+
+
 def test_kb_search_blank_query_400_json(client, make_user):
     make_user("adm", "adm-pass", role="admin")
     _login(client)

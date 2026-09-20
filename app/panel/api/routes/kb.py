@@ -78,8 +78,8 @@ def kb_list(
 @router.get("/kb/search")
 def kb_search(
     q: str = Query(...),
-    top_k: int = kb_service.DEFAULT_TOP_K,
-    min_sim: float = kb_service.DEFAULT_MIN_SIM,
+    top_k: int = Query(kb_service.DEFAULT_TOP_K, ge=1, le=50),
+    min_sim: float = Query(kb_service.DEFAULT_MIN_SIM, ge=-1.0, le=1.0),
     session: Session = Depends(get_db),
     current: User = Depends(require_admin_json),
 ) -> dict:
