@@ -240,8 +240,11 @@ MUST write no relation and MUST NOT fail the memory write. `SESSION` and
 
 #### Scenario: Pending relations are human-resolvable
 - GIVEN a valid judge verdict is below confidence 0.7
-- WHEN the human queue reads pending relations
+- WHEN the customer-scoped human queue reads pending relations for the selected customer
 - THEN the pair MUST be available for human resolution and no longer pending after resolution
+- AND the queue MUST expose both memory contents, titles, the proposed relation, confidence, and reason
+- AND a human verdict MUST use `supersedes`, `conflicts`, `related`, `compatible`, `scoped`, or `not_conflict`
+- AND pending relations whose memories are outside the selected customer's scope MUST NOT be listed there
 
 ## MODIFIED Requirements
 
@@ -250,3 +253,5 @@ MUST write no relation and MUST NOT fail the memory write. `SESSION` and
 Batch compression remains deferred. Automatic conflict judgment is now
 implemented as thresholded judging with a human queue for uncertain verdicts.
 Cross-project recall and ToolNode tools are out of scope.
+The human relation queue is customer-scoped: a pending relation between memories outside a customer's
+scope is not listed in that customer's panel queue.
