@@ -2,11 +2,13 @@
 
 Why this exists
 ---------------
-`min_sim=0.65` (`app/services/kb.py:40`) declines questions the KB can answer. The
-only previous evidence was four hand-run queries against a three-line document —
-a signal, not a benchmark. Deciding what threshold (or which *shape* of rule) to
-use needs a labeled corpus and the score distribution of relevant vs. irrelevant
-queries, measured with the real model.
+`min_sim` is a measured parameter here, not a guessed one: it shipped at `0.65`
+(`app/services/kb.py:40`), which declined questions the KB could answer, and this
+harness produced the evidence that retuned it to `0.50`. The only previous
+evidence was four hand-run queries against a three-line document — a signal, not
+a benchmark. Deciding what threshold (or which *shape* of rule) to use needs a
+labeled corpus and the score distribution of relevant vs. irrelevant queries,
+measured with the real model.
 
 This harness is that instrument. It is deliberately NOT part of `pytest tests/`:
 it loads the real ~130MB model and is not deterministic. The model-free half of
@@ -665,7 +667,9 @@ def run(
                         "class": o.query_class,
                         "should_hit": o.should_hit,
                         "top1": (o.scores[0][1] if o.scores else None),
-                        "accepted_at_production_0_65": accept_absolute(o.scores, 0.65),
+                        "accepted_at_production_threshold": accept_absolute(
+                            o.scores, kb.DEFAULT_MIN_SIM
+                        ),
                         "best_relevant_rank": rank_of_best_relevant(o),
                         "top": [
                             {"doc": d, "score": round(s, 4)} for d, s in o.scores[:5]
@@ -729,9 +733,17 @@ def _print_report(report: dict) -> None:
                 f"recall={rule.get('answerable_recall'):.3f} "
                 f"false_accept={rule.get('unanswerable_false_accept_rate'):.3f}"
             )
-        production = sum(1 for q in run_data["per_query"] if q["accepted_at_production_0_65"])
+        production = sum(
+            1
+            for q in run_data["per_query"]
+            if q["accepted_at_production_threshold"]
+        )
         should = sum(1 for q in run_data["per_query"] if q["should_hit"])
-        print(f"  at the shipped 0.65: {production} of {len(run_data['per_query'])} queries accepted; {should} should have been answered")
+        print(
+            f"  at the shipped {report['production_threshold']}: {production} of "
+            f"{len(run_data['per_query'])} queries accepted; {should} should have "
+            "been answered"
+        )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
