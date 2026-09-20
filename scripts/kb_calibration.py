@@ -54,7 +54,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 import yaml
 
@@ -439,6 +439,18 @@ def compare_rules(outcomes: Sequence[QueryOutcome]) -> dict:
     }
 
 
+def _url_port(parsed: ParseResult, label: str) -> int | None:
+    try:
+        return parsed.port
+    except ValueError:
+        raise SystemExit(
+            f"refusing to run: {label} contains a malformed port.\n"
+            "This harness writes and deletes KB documents, so it only runs against "
+            "the isolated test database.\n"
+            'Run: eval "$(bash infra/test-db.sh env)"'
+        ) from None
+
+
 def _ensure_environment() -> None:
     """Load placeholders and refuse to touch anything but the isolated test DB.
 
@@ -471,8 +483,10 @@ def _ensure_environment() -> None:
         )
 
     admin = urlparse(os.environ["TEST_ADMIN_DB_URL"])
-    identity = (database.hostname, database.port, database.path)
-    admin_identity = (admin.hostname, admin.port, admin.path)
+    database_port = _url_port(database, "DATABASE_URL")
+    admin_port = _url_port(admin, "TEST_ADMIN_DB_URL")
+    identity = (database.hostname, database_port, database.path)
+    admin_identity = (admin.hostname, admin_port, admin.path)
     if identity != admin_identity:
         raise SystemExit(
             "refusing to run: DATABASE_URL and TEST_ADMIN_DB_URL name different "
@@ -487,9 +501,9 @@ def _ensure_environment() -> None:
         sys.path.insert(0, tests_dir)
     from _testdb import host_port
 
-    if database.port != host_port():
+    if database_port != host_port():
         raise SystemExit(
-            f"refusing to run: DATABASE_URL port {database.port!r} is not the "
+            f"refusing to run: DATABASE_URL port {database_port!r} is not the "
             f"isolated test database port {host_port()!r}.\n"
             "This harness writes and deletes KB documents, so it only runs against "
             "the isolated test database.\n"
