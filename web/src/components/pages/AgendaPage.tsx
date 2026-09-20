@@ -20,11 +20,6 @@ export interface AgendaPageProps {
   timezone?: string;
 }
 
-const PAGE_STYLES = `
-  .agenda-page__section { display: grid; gap: var(--space-3); min-width: 0; }
-  .agenda-page__table-wrap { min-width: 0; overflow-x: auto; }
-`;
-
 function localDate(value: string) { return value.slice(0, 10); }
 
 function requestDates(timezone: string) {
@@ -113,7 +108,6 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   );
 
   return <PageFrame title="Agenda" meta={data ? `${appointments.length} visitas` : undefined} state={<>{stateMessage(state, retry)}{mutationError ? <StateMessage tone="danger" role="alert" title="No se pudo completar la acción" detail={mutationError} /> : null}</>}>
-    <style>{PAGE_STYLES}</style>
     {state === "loading" || state === "error" || state === "denied" ? null : data?.length === 0 || state === "empty" ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : <>{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</>}
     <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title="Cancelar visita">
       <label htmlFor="cancel-reason">Motivo de cancelación</label>
