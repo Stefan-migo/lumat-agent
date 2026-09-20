@@ -135,6 +135,24 @@ class Corpus:
     queries: tuple[CalibrationQuery, ...]
 
 
+def index_text(doc: CalibrationDoc, index_title: bool) -> str:
+    """The text that actually gets chunked and embedded for one document.
+
+    The experiment this exists for: `_store_chunks` embeds `chunk_text(doc.content)`
+    only (`app/services/kb.py:159`), so a document's title never reaches the vector
+    even though real customers phrase questions like titles. Passing
+    `index_title=True` prepends the title as its own block — one blank line, so the
+    splitter does not fuse it into the first sentence.
+
+    The shape matches the one-line production fix (`chunk_text(f"{title}\\n\\n{content}")`),
+    which puts the title in the first chunk. It is a measurement axis, not a
+    production change: nothing outside this harness is touched.
+    """
+    if not index_title:
+        return doc.content
+    return f"{doc.title}\n\n{doc.content}"
+
+
 def load_corpus(path: Path | str = CORPUS_PATH) -> Corpus:
     """Read and validate the labeled corpus. Raises ValueError on any violation."""
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
@@ -475,7 +493,7 @@ def reset_calibration_documents(session) -> None:
     session.flush()
 
 
-def ingest_corpus(session, corpus: Corpus) -> int:
+def ingest_corpus(session, corpus: Corpus, index_title: bool = False) -> int:
     """Ingest every corpus document through the real pipeline. Returns chunk count."""
     from sqlalchemy import func, select
 
@@ -488,7 +506,7 @@ def ingest_corpus(session, corpus: Corpus) -> int:
             session,
             title=f"{TITLE_PREFIX}{doc.id}",
             fmt=DocumentFormat.MD,
-            content=doc.content.encode("utf-8"),
+            content=index_text(doc, index_title).encode("utf-8"),
             source_meta={"corpus_id": doc.id},
             actor="kb-calibration",
             visibility=doc.visibility,
@@ -559,7 +577,13 @@ def model_metadata(model_id: str) -> dict:
     return {"id": model_id, "hf_source": None, "dims": None}
 
 
-def run(json_path: Path | None, model: str | None, corpus_path: Path, modes: list[str | None]) -> dict:
+def run(
+    json_path: Path | None,
+    model: str | None,
+    corpus_path: Path,
+    modes: list[str | None],
+    index_title: bool = False,
+) -> dict:
     _ensure_environment()
 
     from app.db import SessionLocal
@@ -574,7 +598,7 @@ def run(json_path: Path | None, model: str | None, corpus_path: Path, modes: lis
         kb._embedder = TextEmbedding(model_name=model)
 
     with SessionLocal() as session:
-        chunks = ingest_corpus(session, corpus)
+        chunks = ingest_corpus(session, corpus, index_title=index_title)
 
         runs: dict[str, dict] = {}
         for audience in modes:
@@ -610,6 +634,7 @@ def run(json_path: Path | None, model: str | None, corpus_path: Path, modes: lis
         },
         "model": model_metadata(kb.EMBED_MODEL),
         "chunking": {"chunk_size": kb.CHUNK_SIZE, "chunk_overlap": kb.CHUNK_OVERLAP, "chunks": chunks},
+        "index_title": index_title,
         "production_threshold": kb.DEFAULT_MIN_SIM,
         "runs": runs,
     }
@@ -626,6 +651,7 @@ def _print_report(report: dict) -> None:
         f"-> {report['chunking']['chunks']} chunks "
         f"(chunk_size={report['chunking']['chunk_size']}, overlap={report['chunking']['chunk_overlap']})"
     )
+    print(f"indexed text: {'title + content' if report['index_title'] else 'content only'}")
     print(f"production min_sim: {report['production_threshold']}")
     for label, run_data in report["runs"].items():
         s = run_data["summary"]
@@ -670,6 +696,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="both",
         help="which audience mode(s) to measure (default: both)",
     )
+    parser.add_argument(
+        "--index-title",
+        action="store_true",
+        help="embed the title as its own block before the content (measurement axis; production embeds content only)",
+    )
     args = parser.parse_args(argv)
 
     modes: list[str | None] = {
@@ -678,7 +709,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "customer": ["customer"],
     }[args.audience]
 
-    report = run(args.json, args.model, args.corpus, modes)
+    report = run(args.json, args.model, args.corpus, modes, index_title=args.index_title)
     _print_report(report)
     if args.json:
         print(f"\njson: {args.json}")
