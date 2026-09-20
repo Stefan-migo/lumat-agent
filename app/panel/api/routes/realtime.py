@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,6 +15,20 @@ from app.panel.deps import get_db
 from app.services.realtime import ACTIVITY_EVENTS, publisher
 
 router = APIRouter(tags=["panel-realtime"])
+
+
+async def _peer_disconnected(websocket: WebSocket) -> None:
+    """Return once the client is gone.
+
+    This stream only ever writes, so without reading the socket the handler
+    cannot learn that the peer left: it would stay parked on the subscriber
+    queue, holding its ASGI task open long after the connection ended. A task
+    like that is what makes `uvicorn --reload` wait forever at shutdown.
+    """
+    while True:
+        message = await websocket.receive()
+        if message["type"] == "websocket.disconnect":
+            return
 
 
 def realtime_user(current: User = Depends(get_current_user_json)) -> User:
@@ -51,18 +67,38 @@ async def panel_websocket(
     session: Session = Depends(get_db),
     current: User = Depends(realtime_user),
 ) -> None:
-    """Send a current snapshot, then stream best-effort process-local events."""
+    """Send a current snapshot, then stream best-effort process-local events.
+
+    The next published envelope and the client's disconnect are awaited
+    together: whichever arrives first ends the wait, and the disconnect ends
+    the stream.
+    """
     await websocket.accept()
     subscriber = None
+    disconnect: asyncio.Task[None] | None = None
     try:
         await websocket.send_json(
             {"type": "snapshot", "conversation_id": None, "data": _snapshot(session)}
         )
         subscriber = await publisher.subscribe()
-        async for envelope in subscriber:
-            await websocket.send_json(envelope.model_dump(mode="json"))
+        disconnect = asyncio.create_task(_peer_disconnected(websocket))
+        while True:
+            envelope = asyncio.ensure_future(subscriber.__anext__())
+            done, _ = await asyncio.wait(
+                {disconnect, envelope}, return_when=asyncio.FIRST_COMPLETED
+            )
+            if envelope not in done:
+                envelope.cancel()
+                break
+            try:
+                event = envelope.result()
+            except StopAsyncIteration:  # the publisher dropped this subscriber
+                break
+            await websocket.send_json(event.model_dump(mode="json"))
     except WebSocketDisconnect:
         pass
     finally:
+        if disconnect is not None:
+            disconnect.cancel()
         if subscriber is not None:
             await subscriber.close()
