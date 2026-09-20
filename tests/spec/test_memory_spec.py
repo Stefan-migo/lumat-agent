@@ -12,7 +12,14 @@ import pytest
 from sqlalchemy import inspect
 
 from app.db import SessionLocal
-from app.models import Memory, MemoryProducer, MemoryType, MemoryVisibility
+from app.models import (
+    Memory,
+    MemoryObservation,
+    MemoryProducer,
+    MemoryType,
+    MemoryVisibility,
+    ObservationType,
+)
 from app.services import memory, tukulpan  # noqa: F401  (services under test)
 
 pytestmark = pytest.mark.spec("MEM-1 MEM-2 MEM-3 MEM-9")
@@ -263,6 +270,65 @@ def test_mem2_same_key_rewrite_is_not_a_duplicate(fake_embedder, migrated_db):
         assert rewritten.id == row.id
         assert rewritten.contenido == "Updated fact"
         assert rewritten.duplicate_count == 1
+
+
+def test_mem2_rewrite_collision_keeps_written_key_and_folds_duplicate(fake_embedder, migrated_db):
+    """A keyed rewrite whose new content is already held elsewhere must not crash.
+
+    Rewriting the ``target`` key with content ``holder`` already carries puts both
+    rows on one normalized hash, which the partial unique index cannot represent.
+    The written key wins: ``holder`` is folded into ``target`` (observations
+    re-pointed) so ``target`` survives and stays reachable by its key.
+    """
+    with SessionLocal() as session:
+        holder = memory.upsert(
+            session,
+            scope="customer",
+            entity_id="42",
+            topic_key="holder",
+            tipo=MemoryType.DECISION,
+            titulo="Holder",
+            contenido="Shared fact",
+        )
+        target = memory.upsert(
+            session,
+            scope="customer",
+            entity_id="42",
+            topic_key="target",
+            tipo=MemoryType.DECISION,
+            titulo="Target",
+            contenido="Other fact",
+        )
+        session.add(
+            MemoryObservation(
+                memory_id=holder.id,
+                scope="customer",
+                entity_id="42",
+                tipo=ObservationType.OPORTUNIDAD,
+                detalle={"source": "holder"},
+            )
+        )
+        session.commit()
+
+        rewritten = memory.upsert(
+            session,
+            scope="customer",
+            entity_id="42",
+            topic_key="target",
+            tipo=MemoryType.DECISION,
+            titulo="Target",
+            contenido="  SHARED   fact ",
+        )
+        session.commit()
+
+        assert rewritten.id == target.id
+        assert rewritten.contenido == "  SHARED   fact "
+        assert memory.get_by_key(
+            session, scope="customer", entity_id="42", topic_key="target"
+        ).id == target.id
+        assert session.query(Memory).filter_by(entity_id="42").count() == 1
+        assert session.query(Memory).filter_by(id=holder.id).count() == 0
+        assert session.query(MemoryObservation).one().memory_id == target.id
 
 
 def test_mem2_get_list_delete_mark(fake_embedder, migrated_db):
