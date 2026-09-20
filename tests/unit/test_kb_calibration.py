@@ -137,6 +137,37 @@ def test_load_corpus_rejects_a_dangling_label(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Ingested-text axis — the title-in-embedding experiment.
+# ---------------------------------------------------------------------------
+
+
+def test_index_text_leaves_the_body_alone_when_the_axis_is_off():
+    doc = cal.CalibrationDoc(
+        id="d1",
+        title="Plazos de respuesta",
+        doc_class="procedimientos",
+        visibility="customer",
+        content="Respondemos los mensajes dentro de 24 horas habiles.",
+    )
+    assert cal.index_text(doc, index_title=False) == doc.content
+
+
+def test_index_text_prepends_the_title_as_its_own_block_when_the_axis_is_on():
+    doc = cal.CalibrationDoc(
+        id="d1",
+        title="Plazos de respuesta",
+        doc_class="procedimientos",
+        visibility="customer",
+        content="Respondemos los mensajes dentro de 24 horas habiles.",
+    )
+    text = cal.index_text(doc, index_title=True)
+    # A blank line, not a bare prefix: the splitter then keeps the title and the
+    # first paragraph from being fused into one sentence.
+    assert text == f"{doc.title}\n\n{doc.content}"
+    assert doc.content in text
+
+
+# ---------------------------------------------------------------------------
 # Scoring core — accept predicates. Synthetic scores, known expected answer.
 # ---------------------------------------------------------------------------
 
