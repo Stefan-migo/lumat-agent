@@ -435,11 +435,6 @@ def compare_rules(outcomes: Sequence[QueryOutcome]) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# I/O shell — real model, real database. Not suite-covered by design.
-# ---------------------------------------------------------------------------
-
-
 def _ensure_environment() -> None:
     """Load placeholders and refuse to touch anything but the isolated test DB.
 
@@ -459,12 +454,48 @@ def _ensure_environment() -> None:
             'Run: eval "$(bash infra/test-db.sh env)"'
         )
 
-    host = urlparse(os.environ.get("DATABASE_URL", "")).hostname or ""
+    database_url = os.environ.get("DATABASE_URL", "")
+    database = urlparse(database_url)
+    host = database.hostname or ""
     if host not in _LOCAL_HOSTS:
         raise SystemExit(
             f"refusing to run: DATABASE_URL host {host!r} is not local "
-            f"(expected one of {sorted(_LOCAL_HOSTS)})"
+            f"(expected one of {sorted(_LOCAL_HOSTS)}).\n"
+            "This harness writes and deletes KB documents, so it only runs against "
+            "the isolated test database.\n"
+            'Run: eval "$(bash infra/test-db.sh env)"'
         )
+
+    admin = urlparse(os.environ["TEST_ADMIN_DB_URL"])
+    identity = (database.hostname, database.port, database.path)
+    admin_identity = (admin.hostname, admin.port, admin.path)
+    if identity != admin_identity:
+        raise SystemExit(
+            "refusing to run: DATABASE_URL and TEST_ADMIN_DB_URL name different "
+            "databases.\n"
+            "This harness writes and deletes KB documents, so it only runs against "
+            "the isolated test database.\n"
+            'Run: eval "$(bash infra/test-db.sh env)"'
+        )
+
+    tests_dir = str(_REPO_ROOT / "tests")
+    if tests_dir not in sys.path:
+        sys.path.insert(0, tests_dir)
+    from _testdb import host_port
+
+    if database.port != host_port():
+        raise SystemExit(
+            f"refusing to run: DATABASE_URL port {database.port!r} is not the "
+            f"isolated test database port {host_port()!r}.\n"
+            "This harness writes and deletes KB documents, so it only runs against "
+            "the isolated test database.\n"
+            'Run: eval "$(bash infra/test-db.sh env)"'
+        )
+
+
+# ---------------------------------------------------------------------------
+# I/O shell — real model, real database. Not suite-covered by design.
+# ---------------------------------------------------------------------------
 
 
 def should_hit(query: CalibrationQuery, audience: str | None) -> bool:

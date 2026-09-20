@@ -21,8 +21,10 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+sys.path.insert(0, str(REPO_ROOT / "tests"))
 
 import kb_calibration as cal  # noqa: E402
+import _testdb  # noqa: E402
 
 CORPUS_PATH = REPO_ROOT / "scripts" / "kb_calibration_corpus.yaml"
 
@@ -108,6 +110,63 @@ def test_corpus_makes_the_audience_filter_observable(corpus):
         assert set(q.relevant_doc_ids) <= internal_docs, (
             f"{q.id}: an internal_only query must be answered only by internal documents"
         )
+
+
+def _database_url(port, database="lumat"):
+    return f"postgresql+psycopg://app:app@localhost:{port}/{database}"
+
+
+def test_environment_refuses_missing_test_admin_url(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", _database_url(_testdb.host_port()))
+    monkeypatch.delenv("TEST_ADMIN_DB_URL", raising=False)
+
+    with pytest.raises(SystemExit):
+        cal._ensure_environment()
+
+
+def test_environment_refuses_non_local_database_host(monkeypatch):
+    url = f"postgresql+psycopg://app:app@db:{_testdb.host_port()}/lumat"
+    monkeypatch.setenv("DATABASE_URL", url)
+    monkeypatch.setenv("TEST_ADMIN_DB_URL", url)
+
+    with pytest.raises(SystemExit):
+        cal._ensure_environment()
+
+
+def test_environment_refuses_different_database_ports(monkeypatch):
+    port = _testdb.host_port()
+    monkeypatch.setenv("DATABASE_URL", _database_url(port))
+    monkeypatch.setenv("TEST_ADMIN_DB_URL", _database_url(port + 1))
+
+    with pytest.raises(SystemExit):
+        cal._ensure_environment()
+
+
+def test_environment_refuses_different_database_names(monkeypatch):
+    port = _testdb.host_port()
+    monkeypatch.setenv("DATABASE_URL", _database_url(port, "lumat"))
+    monkeypatch.setenv("TEST_ADMIN_DB_URL", _database_url(port, "other"))
+
+    with pytest.raises(SystemExit):
+        cal._ensure_environment()
+
+
+def test_environment_refuses_a_port_not_derived_for_this_worktree(monkeypatch):
+    port = _testdb.host_port()
+    url = _database_url(port + 1)
+    monkeypatch.setenv("DATABASE_URL", url)
+    monkeypatch.setenv("TEST_ADMIN_DB_URL", url)
+
+    with pytest.raises(SystemExit):
+        cal._ensure_environment()
+
+
+def test_environment_accepts_the_matching_derived_test_database(monkeypatch):
+    url = _database_url(_testdb.host_port())
+    monkeypatch.setenv("DATABASE_URL", url)
+    monkeypatch.setenv("TEST_ADMIN_DB_URL", url)
+
+    cal._ensure_environment()
 
 
 def test_load_corpus_rejects_an_unknown_class(tmp_path):
