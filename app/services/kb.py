@@ -3,7 +3,7 @@
 Ingest (PDF/MD/CSV) -> RecursiveCharacterTextSplitter (500/50, CSV rows
 grouped) -> local fastembed multilingual model (384d, ONNX Runtime, no API)
 -> kb_chunks (version-tagged with source_meta). Retrieval = pgvector cosine
-similarity, top_k=5, min_sim=0.65 (both configurable). Versioning per D8:
+similarity, top_k=5, min_sim=0.50 (both configurable). Versioning per D8:
 update = new version + re-embed; restore = active_version pointer flip
 (chunks persist per version, no re-embed); disable = excluded from retrieval.
 
@@ -37,7 +37,7 @@ CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 
 DEFAULT_TOP_K = 5
-DEFAULT_MIN_SIM = 0.65
+DEFAULT_MIN_SIM = 0.50
 
 PROVIDER = "local"
 
