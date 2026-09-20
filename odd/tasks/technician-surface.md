@@ -196,6 +196,8 @@ correct response is to record the computed ratio rather than change the value or
 cannot meet. Any future surface that needs a ≥3:1 stroke directly on `--brand-bg` will hit it. Left
 for a design-system change; `tokens.test.ts` was left asserting only the pairs it can honour.
 
+Closure: `openspec/specs/panel-design-system/contrast-verification.md` records this inherited pair; unit `odd/tasks/ds-stylesheet-boundary.md` closed it without changing the token.
+
 ## Acceptance criteria
 
 1. The surface renders exactly one `h1`, and the shell chrome and the page content share one left
@@ -286,6 +288,8 @@ for `PanelShell`. It is visible in the DOM: the `role="status"` element rendered
 contains its own `<style>` node, so its `textContent` starts with CSS. No screen reader announces that
 as text, but the boundary migration was never applied to these four components. Fixing them touches
 every page, so it belongs in its own change rather than here.
+
+Closure: the stylesheet-boundary guard and migration in unit `odd/tasks/ds-stylesheet-boundary.md` close this finding.
 
 ## Recovery
 
