@@ -95,6 +95,9 @@ function stateMessage(state: AsyncDataState, retry: () => void) {
 }
 
 function AppointmentCard({ row }: { row: TechnicianAppointment }) {
+  const mapQuery = row.customer.address
+    ? [row.customer.address, row.customer.comuna].filter(Boolean).join(', ')
+    : null;
   return (
     <article className="technician-agenda__item">
       <p className="technician-agenda__slot">
@@ -105,9 +108,13 @@ function AppointmentCard({ row }: { row: TechnicianAppointment }) {
       <Badge tone={appointmentStatusTone(row.status)} className="technician-agenda__status">
         {appointmentStatusLabel(row.status)}
       </Badge>
+      {row.emergency ? <Badge tone="danger" className="technician-agenda__safety">Emergencia</Badge> : null}
+      {row.priority === 'alta' ? <Badge tone="warning" className="technician-agenda__safety">Prioridad alta</Badge> : null}
       <p className="technician-agenda__service">{row.service}</p>
       <strong>{row.customer.name ?? 'Cliente sin nombre'}</strong>
-      <span>{row.customer.address ?? 'Dirección no registrada'}</span>
+      {mapQuery
+        ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}>{row.customer.address ?? 'Dirección no registrada'}</a>
+        : <span>Dirección no registrada</span>}
       <span>{row.customer.comuna ?? 'Comuna no registrada'}</span>
       {row.customer.phone
         ? <Button className="technician-agenda__call" variant="secondary" href={`tel:${row.customer.phone}`}>{row.customer.phone}</Button>

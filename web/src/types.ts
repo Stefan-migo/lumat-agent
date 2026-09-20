@@ -451,6 +451,9 @@ export interface TechnicianAppointment {
   /** `booked | cancelled | completed | no_show` — the technician must be able to
    *  tell a cancelled visit from a booked one without leaving the agenda. */
   status: string;
+  /** Safety properties of the visit, distinct from the appointment workflow status. */
+  emergency: boolean;
+  priority: string | null;
   customer: TechnicianCustomer;
   case_summary: string | null;
 }

@@ -1466,6 +1466,9 @@
 .technician-agenda__status {
   justify-self: start;
 }
+.technician-agenda__safety {
+  justify-self: start;
+}
 /* The item is a grid, so children stretch by default. The call control must hug
    its own label: a full-width 990px "phone number" button is not a phone number. */
 .technician-agenda__call {

@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.db import SessionLocal  # noqa: E402
-from app.panel.api.routes.dashboard import require_dashboard_user  # noqa: E402
+from app.panel.api.deps import require_dashboard_user  # noqa: E402
 from app.models import (  # noqa: E402
     Appointment,
     AppointmentStatus,
@@ -111,6 +111,34 @@ def _login(client, username: str = "oper", password: str = "oper-pass") -> None:
         follow_redirects=False,
     )
     assert resp.status_code == 200, f"api login must succeed: {resp.status_code} {resp.text}"
+
+
+@pytest.mark.parametrize("path", [
+    "/panel/api/kpis",
+    "/panel/api/dashboard/summary?start=2026-08-01T00:00:00Z&end=2026-08-03T00:00:00Z&timezone=UTC",
+    "/panel/api/dashboard/trend?start=2026-08-01T00:00:00Z&end=2026-08-03T00:00:00Z&timezone=UTC&metric=cases",
+    "/panel/api/dashboard/drilldown?start=2026-08-01T00:00:00Z&end=2026-08-03T00:00:00Z&timezone=UTC&metric=cases&bucket_start=2026-08-01",
+])
+def test_dashboard_role_boundary(client, make_user, path):
+    make_user("tech", "tech-pass", role="tecnico")
+    _login(client, "tech", "tech-pass")
+    assert client.get(path).status_code == 403
+
+
+@pytest.mark.parametrize("role,username,password", [
+    ("admin", "admin", "admin-pass"),
+    ("operador", "oper", "oper-pass"),
+])
+@pytest.mark.parametrize("path", [
+    "/panel/api/kpis",
+    "/panel/api/dashboard/summary?start=2026-08-01T00:00:00Z&end=2026-08-03T00:00:00Z&timezone=UTC",
+    "/panel/api/dashboard/trend?start=2026-08-01T00:00:00Z&end=2026-08-03T00:00:00Z&timezone=UTC&metric=cases",
+    "/panel/api/dashboard/drilldown?start=2026-08-01T00:00:00Z&end=2026-08-03T00:00:00Z&timezone=UTC&metric=cases&bucket_start=2026-08-01",
+])
+def test_dashboard_roles_keep_access(client, make_user, role, username, password, path):
+    make_user(username, password, role=role)
+    _login(client, username, password)
+    assert client.get(path).status_code == 200
 
 
 # ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import { TechnicianShell } from '../domain/TechnicianShell';
 import type { TechnicianAppointment, User } from '../../types';
 
 const appointment: TechnicianAppointment = {
-  id: 7, service: 'Calefont', local_start: '2026-01-02T10:00:00', starts_at: '2026-01-02T13:00:00+00:00', ends_at: '2026-01-02T14:00:00+00:00', timezone: 'America/Santiago', status: 'booked',
+  id: 7, service: 'Calefont', local_start: '2026-01-02T10:00:00', starts_at: '2026-01-02T13:00:00+00:00', ends_at: '2026-01-02T14:00:00+00:00', timezone: 'America/Santiago', status: 'booked', emergency: false, priority: null,
   customer: { name: 'María Silva', address: 'Los Alerces 42', comuna: 'Ñuñoa', phone: '+56912345678' }, case_summary: 'Revisar fuga del calefont',
 };
 
@@ -33,7 +33,7 @@ describe('TechnicianAgenda', () => {
 
     expect(await screen.findByText('Calefont')).toBeInTheDocument();
     expect(screen.getByText('María Silva')).toBeInTheDocument();
-    expect(screen.getByText('Los Alerces 42')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Los Alerces 42' })).toBeInTheDocument();
     expect(screen.getByText('Ñuñoa')).toBeInTheDocument();
     expect(screen.getByText('+56912345678')).toBeInTheDocument();
     expect(screen.getByText('Revisar fuga del calefont')).toBeInTheDocument();
@@ -83,7 +83,7 @@ describe('technician surface — reaching the customer', () => {
 
     expect(await screen.findByText('Calefont')).toBeInTheDocument();
     expect(screen.getByText('Teléfono no registrado')).toBeInTheDocument();
-    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link').some((link) => link.getAttribute('href')?.startsWith('tel:'))).toBe(false);
   });
 
   it('makes the phone reachable through the shared Button primitive when it exists', async () => {
@@ -106,7 +106,7 @@ describe('technician surface — reading the agenda as a schedule', () => {
   const visit = (id: number, offsetDays: number, hour: number, service: string): TechnicianAppointment => ({
     id, service, local_start: at(offsetDays, hour).toISOString().slice(0, 19),
     starts_at: at(offsetDays, hour).toISOString(), ends_at: at(offsetDays, hour + 1).toISOString(),
-    timezone: 'UTC', status: 'booked', customer: { name: `Cliente ${id}`, address: `Calle ${id}`, comuna: 'Ñuñoa', phone: '+56900000000' },
+    timezone: 'UTC', status: 'booked', emergency: false, priority: null, customer: { name: `Cliente ${id}`, address: `Calle ${id}`, comuna: 'Ñuñoa', phone: '+56900000000' },
     case_summary: null,
   });
   const mock = (rows: TechnicianAppointment[]) => {
@@ -210,6 +210,49 @@ describe('technician surface — appointment state', () => {
     await screen.findByText('Reparación');
     expect(screen.getByText(/1 visita · Actualizado/)).toBeInTheDocument();
     expect(screen.queryByText(/cancelada/)).not.toBeInTheDocument();
+  });
+});
+
+describe('technician surface — visit safety and location', () => {
+  it('names emergency and high priority visits instead of relying on colour', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ appointments: [
+        { ...appointment, id: 1, emergency: true, priority: null },
+        { ...appointment, id: 2, emergency: false, priority: 'alta' },
+      ] }), { status: 200 }),
+    );
+
+    render(<TechnicianAgenda />);
+
+    await screen.findByText('Emergencia');
+    expect(screen.getByText('Emergencia')).toBeInTheDocument();
+    expect(screen.getByText('Prioridad alta')).toBeInTheDocument();
+  });
+
+  it('links the address and comuna to a Google Maps address search', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ appointments: [appointment] }), { status: 200 }),
+    );
+
+    render(<TechnicianAgenda />);
+
+    const address = await screen.findByRole('link', { name: 'Los Alerces 42' });
+    expect(address).toHaveAttribute(
+      'href',
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Los Alerces 42, Ñuñoa')}`,
+    );
+  });
+
+  it('does not link a comuna when the street address is missing', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ appointments: [{ ...appointment, customer: { ...appointment.customer, address: null, comuna: 'Ñuñoa', phone: null } }] }), { status: 200 }),
+    );
+    render(<TechnicianAgenda />);
+
+    const missingAddress = await screen.findByText('Dirección no registrada');
+    const card = missingAddress.closest('article');
+    expect(missingAddress).toBeInTheDocument();
+    expect(within(card as HTMLElement).queryByRole('link')).not.toBeInTheDocument();
   });
 });
 
