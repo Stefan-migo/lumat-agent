@@ -395,6 +395,48 @@ def test_handoff_bundle_contains_history_summary_customer_captured(mock_openai_c
         assert any("reclamar" in (m["text"] or "") for m in history)
 
 
+def test_handoff_summary_failure_uses_deterministic_fallback(monkeypatch):
+    """A summary exception must not prevent handoff or erase its bundle summary."""
+    monkeypatch.setattr(
+        "app.chat.nodes.handoff.generate_summary",
+        lambda state, customer: (_ for _ in ()).throw(RuntimeError("model unavailable")),
+    )
+    conv_id = _start_conversation()
+
+    replies = _turn(conv_id, "quiero hablar con una persona", "wamid.failure")
+
+    assert replies == ["Un asesor revisará tu caso y te contactará a la brevedad."]
+    assert _conversation_state(conv_id) == "human"
+    with SessionLocal() as session:
+        case = session.scalar(select(Case).where(Case.conversation_id == conv_id))
+        assert case.summary == "Solicitud registrada sin detalle del problema."
+        assert case.bundle["summary"] == case.summary
+
+
+def test_empty_model_summary_is_persisted_as_fallback(monkeypatch):
+    """Empty model content must persist the same non-empty case and bundle summary."""
+    from types import SimpleNamespace
+
+    empty_response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=""))],
+        usage=SimpleNamespace(prompt_tokens=1, completion_tokens=0),
+    )
+    client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=lambda **kwargs: empty_response)
+        )
+    )
+    monkeypatch.setattr("app.chat.nodes.summary.openai_client", lambda: client)
+    conv_id = _start_conversation()
+
+    _turn(conv_id, "quiero hablar con una persona", "wamid.empty")
+
+    with SessionLocal() as session:
+        case = session.scalar(select(Case).where(Case.conversation_id == conv_id))
+        assert case.summary == "Solicitud registrada sin detalle del problema."
+        assert case.bundle["summary"] == case.summary
+
+
 # ---------------------------------------------------------------------------
 # HH-5 — webhook keeps persisting during `human`, no bot loop
 # ---------------------------------------------------------------------------
