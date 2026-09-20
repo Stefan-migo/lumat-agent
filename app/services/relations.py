@@ -165,10 +165,20 @@ def relation_annotation(memory_id: int, relation: MemoryRelation | None) -> str 
     return relation.relation
 
 
+def is_pending(relation: MemoryRelation) -> bool:
+    """Return whether a judge-produced row still belongs to the human queue."""
+    return (
+        relation.source == "judge"
+        and relation.human_resolved_at is None
+        and relation.confidence < AUTO_JUDGE_CONFIDENCE
+    )
+
+
 __all__ = [
     "AUTO_JUDGE_CONFIDENCE",
     "RELATION_VOCAB",
     "find_candidates",
+    "is_pending",
     "judge_memory_relations",
     "latest_relations",
     "relation_annotation",

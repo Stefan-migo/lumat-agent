@@ -1,7 +1,6 @@
 """MEM-11 relation judging and read-path annotations."""
 
 import json
-from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 
 import pytest
@@ -129,6 +128,7 @@ def test_mem11_pending_confidence_is_recorded_for_human_queue(fake_embedder, mig
         row = session.execute(select(MemoryRelation)).scalar_one()
         assert row.confidence == pytest.approx(0.69)
         assert row.human_resolved_at is None
+        assert relations.is_pending(row)
 
 
 def test_mem11_no_candidate_and_decaying_write_make_no_llm_call(fake_embedder, migrated_db, monkeypatch):
