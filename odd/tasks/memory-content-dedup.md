@@ -67,6 +67,17 @@ embedding similarity.
   identical normalized content** — one in source, one in target — coexist today; the new index would
   make `memory.proyecto = target` (`:277`) raise `UniqueViolation` **mid-merge**, leaving the merge
   non-atomic. Shipping the index without this fix would introduce the bug.
+- **A keyed rewrite that collides with a sibling's content resolves in favour of the written key.**
+  Rewriting `topic_key` T with content a sibling U already holds puts both rows on one
+  `normalized_hash`, which the partial index cannot represent. Folding the *written* row away would
+  silently delete a key callers can look up; the insert path has no such pre-existing identity, which
+  is why the asymmetry with the "existing holder wins" insert rule is deliberate. T survives holding
+  the new content, U is folded into it with its observations and relations re-pointed, and
+  `duplicate_count` is carried over. The delete is flushed before the row update, because SQLAlchemy
+  orders updates ahead of deletes within a mapper and the index is immediate.
+- **`_fold_duplicate` lives in `tukulpan.py`; `projects.merge` keeps its own inline copy.**
+  `tukulpan` already imports `projects`, so sharing the helper would require a cycle. The four
+  re-pointing statements are duplicated on purpose rather than routed through a lazy import.
 
 ## Authorized scope
 
@@ -162,6 +173,9 @@ Anything else needs an explicit report before it is touched.
 8. Each criterion fails against the pre-change code (RED observed) and passes after.
 9. `tests/spec/test_memory_spec.py::test_mem2_upsert_writes_memory` passes with unmodified assertions.
 10. Only the authorized files change and the required suites meet the baseline.
+11. Rewriting an existing `topic_key` with content a sibling row already holds completes without an
+    integrity error: the written key survives, the sibling is folded into it, and the sibling's
+    observations end up on the survivor.
 
 ## Checks
 
@@ -186,6 +200,11 @@ Anything else needs an explicit report before it is touched.
       inside one scenario, which the rest of the file does not do.
 - [x] Orchestrator re-verified RED independently: reverting `app/` to `a57b353e` with the new tests in
       place reproduces exactly the three failures the first pass named.
+- [x] First native review round completed (approved, authority burned). It left one advisory the
+      provider classified as non-blocking; the receipt lives in the PR body and in Engram, never here.
+- [x] Follow-up round for that advisory: an existing key rewritten with a sibling's content raised
+      `UniqueViolation` from the new index. RED reproduced, then fixed by folding the sibling into the
+      written key. Spec gained the scenario and this record the decision.
 - [ ] Delivery: native RDD review runs on the frozen candidate at the delivery boundary.
 
 ## Verification evidence
@@ -273,6 +292,30 @@ Honest limits:
   with no `pgcrypto`, so there is no SQL-side `sha256`.
 - Embedding-similarity dedup is out of scope by decision; near-duplicates written under different
   `topic_key`s are still two rows.
+
+Follow-up round for the first review round's advisory (keyed rewrite colliding with a sibling's
+content). RED, before the fix, on the new test:
+
+```text
+$ eval "$(infra/test-db.sh env)" && uv run pytest tests/spec/test_memory_spec.py -k "rewrite_collision"
+E   sqlalchemy.exc.IntegrityError: (psycopg.errors.UniqueViolation) duplicate key value violates
+    unique constraint "uq_memories_normalized_content"
+E   DETAIL: Key (proyecto, scope, entity_id, normalized_hash)=(default, customer, 42, 8d4b16bb...)
+    already exists.
+E   [SQL: UPDATE memories SET contenido=..., normalized_hash=..., last_seen_at=now(), updated_at=now()
+    WHERE memories.id = %(memories_id)s::BIGINT]
+1 failed, 23 deselected
+```
+
+GREEN and re-verification after the fix:
+
+```text
+$ eval "$(infra/test-db.sh env)" && uv run pytest tests/spec/test_memory_spec.py tests/spec/test_projects_spec.py
+39 passed, 1 warning in 15.36s
+
+$ eval "$(infra/test-db.sh env)" && uv run pytest tests/
+962 passed, 2 warnings in 149.83s   (exit 0)
+```
 
 ## Review (native RDD)
 
