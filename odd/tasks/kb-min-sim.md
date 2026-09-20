@@ -2,7 +2,9 @@
 
 **Branch**: `odd/kb-min-sim`
 **Worktree**: `../lumat-agent-odd-kb-min-sim`
-**Base**: `cdda793c`
+**Base**: `0de327d4` (the merge of PR #267, which landed on `main` between the local pull and
+`rapso worktree create`; the earlier `cdda793c` written here was the local `main`, not this branch's
+parent)
 **Status**: implemented and verified; native review approved and its authority burned
 **Source**: the last open item of the KB backlog (handoff Engram #4467) — the `DEFAULT_MIN_SIM` decision.
 
