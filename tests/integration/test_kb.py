@@ -18,6 +18,8 @@ text -> 0.0: retrieval threshold behavior is fully exercised.
 """
 
 import hashlib
+from pathlib import Path
+from runpy import run_path
 
 import psycopg
 import pytest
@@ -27,6 +29,8 @@ from app.db import SessionLocal  # noqa: E402
 from app.models import AuditLog, DocumentFormat, KbChunk, KbDocument, KbVisibility  # noqa: E402
 from app.services import kb  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
+
+fake_embedding = run_path(Path(__file__).with_name("conftest.py"))["fake_embedding"]
 
 ADMIN_DB_URL = admin_database_url()
 
@@ -291,6 +295,35 @@ def test_kb2_retrieval_threshold_miss(fake_embedder):
         results = kb.retrieve(session, "que precio tiene un grifo de cocina", audience=None)
 
     assert results == []  # unrelated -> below min_sim 0.65 (CM-4 unresolved path)
+
+
+def test_kb2_default_threshold_returns_intermediate_similarity_hit(monkeypatch):
+    class _TrigramEmbedder:
+        def embed(self, texts):
+            return (fake_embedding(text) for text in texts)
+
+    monkeypatch.setattr(kb, "get_embedder", lambda: _TrigramEmbedder())
+    document_text = "manual calefont revision anual seguridad mantenimiento precio visita tecnica"
+    query_text = "calefont seguridad"
+    document_embedding = fake_embedding(document_text)
+    query_embedding = fake_embedding(query_text)
+    similarity = sum(
+        left * right for left, right in zip(document_embedding, query_embedding)
+    ) / (
+        sum(value * value for value in document_embedding)
+        * sum(value * value for value in query_embedding)
+    ) ** 0.5
+    assert 0.50 <= similarity < 0.65
+    # The shorter query shares enough trigrams to score 0.5121, inside the old/new band.
+
+    with SessionLocal() as session:
+        document_id = _ingest(session, "Manual", document_text)
+        session.commit()
+
+    with SessionLocal() as session:
+        results = kb.retrieve(session, query_text, audience=None)
+
+    assert [result["document_id"] for result in results] == [document_id]
 
 
 def test_kb2_retrieval_top_k_limits_results(fake_embedder):
