@@ -126,11 +126,19 @@ services:
     # which reads as a code bug and is not one. This file is dev-only —
     # infra/docker-compose.prod.yml has its own command and a built image with
     # no bind mount — so reload never reaches production.
+    #
+    # --timeout-graceful-shutdown: uvicorn's default is to wait forever for a
+    # task that never finishes, and the failure is silent — the port keeps
+    # accepting connections while nothing answers, which reads as an
+    # application bug. One such leak (the panel WebSocket task, fixed in the
+    # handler) cost a hung dev API until this flag's absence was understood.
+    # Bounding the wait turns that class of bug into a five-second reload.
     command: >
       sh -c "uv sync --frozen &&
              (DATABASE_URL=postgresql://lumat:$$POSTGRES_PASSWORD@db:5432/lumat
               APP_DB_PASSWORD=$$APP_DB_PASSWORD db/migrate.sh) &&
-             exec uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+             exec uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+                  --timeout-graceful-shutdown 5"
 
 volumes:
   db:
