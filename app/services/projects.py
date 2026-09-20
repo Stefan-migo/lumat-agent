@@ -265,7 +265,13 @@ def merge(session: Session, source: models.Project | str, target: models.Project
         raise ValueError("cannot merge projects with an active SDB run")
 
     source_memories = session.scalars(select(models.Memory).where(models.Memory.proyecto == source_row.slug)).all()
-    target_by_key = {(m.scope, m.entity_id, m.topic_key): m for m in session.scalars(select(models.Memory).where(models.Memory.proyecto == target_row.slug)).all()}
+    target_memories = session.scalars(select(models.Memory).where(models.Memory.proyecto == target_row.slug)).all()
+    target_by_key = {(m.scope, m.entity_id, m.topic_key): m for m in target_memories}
+    target_by_hash = {
+        (m.scope, m.entity_id, m.normalized_hash): m
+        for m in target_memories
+        if m.normalized_hash is not None
+    }
     for memory in source_memories:
         existing = target_by_key.get((memory.scope, memory.entity_id, memory.topic_key))
         if existing is not None and not _memory_equivalent(memory, existing):
@@ -273,8 +279,24 @@ def merge(session: Session, source: models.Project | str, target: models.Project
 
     for memory in source_memories:
         existing = target_by_key.get((memory.scope, memory.entity_id, memory.topic_key))
+        hash_existing = (
+            target_by_hash.get((memory.scope, memory.entity_id, memory.normalized_hash))
+            if memory.normalized_hash is not None
+            else None
+        )
         if existing is None:
-            memory.proyecto = target_row.slug
+            if hash_existing is None:
+                memory.proyecto = target_row.slug
+                target_by_key[(memory.scope, memory.entity_id, memory.topic_key)] = memory
+                if memory.normalized_hash is not None:
+                    target_by_hash[(memory.scope, memory.entity_id, memory.normalized_hash)] = memory
+            else:
+                session.execute(update(models.MemoryObservation).where(models.MemoryObservation.memory_id == memory.id).values(memory_id=hash_existing.id))
+                session.execute(update(models.MemoryRelation).where(models.MemoryRelation.id_a == memory.id).values(id_a=hash_existing.id))
+                session.execute(update(models.MemoryRelation).where(models.MemoryRelation.id_b == memory.id).values(id_b=hash_existing.id))
+                hash_existing.duplicate_count += memory.duplicate_count
+                hash_existing.last_seen_at = func.now()
+                session.delete(memory)
         else:
             session.execute(update(models.MemoryObservation).where(models.MemoryObservation.memory_id == memory.id).values(memory_id=existing.id))
             session.execute(update(models.MemoryRelation).where(models.MemoryRelation.id_a == memory.id).values(id_a=existing.id))

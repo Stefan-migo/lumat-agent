@@ -8,7 +8,7 @@ Give the agent a persistent, domain-aware memory layer over PostgreSQL + pgvecto
 
 ### Requirement: MEM-1 — Schema and Migration
 
-Migration `009_memory.sql` MUST create `memories`, `memory_relations`, and `memory_observations`, and MUST index `memories.embedding` with HNSW `vector_cosine_ops` on vector(384, local). `memories` MUST enforce `UNIQUE(proyecto, scope, entity_id, topic_key)`. `EXPECTED_TABLES` MUST list the new tables.
+Migration `009_memory.sql` MUST create `memories`, `memory_relations`, and `memory_observations`, and MUST index `memories.embedding` with HNSW `vector_cosine_ops` on vector(384, local). `memories` MUST enforce `UNIQUE(proyecto, scope, entity_id, topic_key)` and deduplicate normalized content within `(proyecto, scope, entity_id)` using `normalized_hash`, incrementing `duplicate_count` for repeated content under a different `topic_key`. `EXPECTED_TABLES` MUST list the new tables.
 
 #### Scenario: Migration applies
 - GIVEN a reachable pgvector and the current migration runner
@@ -16,10 +16,12 @@ Migration `009_memory.sql` MUST create `memories`, `memory_relations`, and `memo
 - THEN the three tables and the HNSW embedding index exist
 - AND `EXPECTED_TABLES` includes them
 
-#### Scenario: Topic-key uniqueness
+#### Scenario: Topic-key uniqueness and content deduplication
 - GIVEN two stores with identical `(proyecto, scope, entity_id)` but distinct `topic_key`
-- WHEN both upserts run
+- WHEN both upserts run with different normalized content
 - THEN two rows exist (no collision, first untouched)
+- WHEN both upserts run with identical normalized content
+- THEN one row exists and its `duplicate_count` is incremented
 
 ### Requirement: MEM-2 — Tukulpan Boundary and Memory Service CRUD
 

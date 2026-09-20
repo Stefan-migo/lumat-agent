@@ -172,10 +172,45 @@ Anything else needs an explicit report before it is touched.
 - [x] ODD record created before the first source change.
 - [x] Worktree created (`rapso worktree create memory-content-dedup`, base `origin/main` `a57b353e`).
 - [x] Provisioned: `infra/.env` copied, `uv sync`, test DB up.
-- [ ] Graph Check recorded: `graphify query` / `graphify path` over `upsert`, `Memory`, `projects.merge`.
-- [ ] T1 — RED observed.
-- [ ] T2 — GREEN implemented.
-- [ ] T3 — Evidence recorded.
+- [x] Graph Check recorded: `graphify query` / `graphify path` over `upsert`, `Memory`, `projects.merge`.
+- [x] T1 — RED observed.
+- [x] T2 — GREEN implemented.
+- [x] T3 — Evidence recorded.
+
+## Verification evidence
+
+Graph Check before edits:
+
+- `graphify query "memory upsert dedup normalized hash projects merge"` consulted `upsert()` (`app/services/tukulpan.py`), `merge()` (`app/services/projects.py`), `Memory` (`app/models.py`), `tukulpan.py`, `services/projects.py`, `test_memory_spec.py`, and `test_projects_spec.py`.
+- `graphify path "projects.py" "tukulpan.py"` found no directed path. The consulted endpoint nodes were `services/projects.py` and `tukulpan.py`; no edge was returned by the directed traversal.
+- `graphify-out/GRAPH_REPORT.md` identified `tukulpan.py` (community 11), `services/projects.py` (community 26), `test_memory_spec.py` (community 32), and the Memory Specification hyperedge as the relevant graph areas.
+
+T1 RED, before source changes:
+
+```text
+$ eval "$(infra/test-db.sh env)" && uv run pytest tests/spec/test_memory_spec.py tests/spec/test_projects_spec.py -q
+.......F.F.........................F..                                   [100%]
+FAILED tests/spec/test_memory_spec.py::test_mem2_identical_normalized_content_deduplicates_by_hash
+FAILED tests/spec/test_memory_spec.py::test_mem2_same_key_rewrite_is_not_a_duplicate
+FAILED tests/spec/test_projects_spec.py::test_merge_deduplicates_hash_collisions_and_repoints_observations
+The command reported the three failures above; the remaining tests passed and emitted the existing embedder warning.
+```
+
+Focused GREEN after source changes:
+
+```text
+$ eval "$(infra/test-db.sh env)" && uv run pytest tests/spec/test_memory_spec.py tests/spec/test_projects_spec.py -q
+......................................                                   [100%]
+38 passed, 1 warning in 9.29s
+```
+
+Required verification:
+
+- `eval "$(infra/test-db.sh env)" && uv run pytest tests/spec/test_memory_spec.py tests/spec/test_projects_spec.py tests/integration/test_migrations.py tests/integration/test_memory_pipeline.py -q` — **failed: 1 failed, 57 passed, 1 warning**. The only failure is the hard-coded migration-version assertion in `tests/integration/test_migrations.py`, which does not list the authorized new `028_memory_dedup` migration. No unauthorized test file was changed.
+- `eval "$(infra/test-db.sh env)" && uv run pytest tests/spec -q` — **passed: 84 passed, 1 warning**.
+- `eval "$(infra/test-db.sh env)" && uv run pytest tests/ -q` — **failed: 1 failed, 987 passed, 2 warnings**. The same migration-version assertion is the only failure.
+- `git diff --check` — passed.
+- The concurrent initial attempt to run the three database suites in parallel was discarded as invalid evidence because the shared test database produced deadlocks and cross-suite contamination; all required suites were rerun sequentially.
 
 ## Review (native RDD)
 
