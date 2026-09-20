@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { BadgeTone } from "../../../components/primitives/Badge";
 import {
+  appointmentStatusLabel,
+  appointmentStatusTone,
   caseStatusLabel,
   caseStatusTone,
   conversationLabel,
@@ -73,6 +75,55 @@ describe("customerStateTone", () => {
   it("maps each distinct state to a distinct tone (no collisions)", () => {
     const tones = ["nuevo", "activo", "inactivo", "bloqueado"].map(customerStateTone);
     expect(new Set(tones).size).toBe(4);
+  });
+});
+
+describe("appointmentStatusTone", () => {
+  // All Appointment.status values on the shared map: booked/cancelled/completed/no_show.
+  it("maps booked to neutral", () => {
+    expect(appointmentStatusTone("booked")).toBe("neutral");
+  });
+
+  it("maps cancelled to neutral", () => {
+    expect(appointmentStatusTone("cancelled")).toBe("neutral");
+  });
+
+  it("maps completed to success", () => {
+    expect(appointmentStatusTone("completed")).toBe("success");
+  });
+
+  it("maps no_show to danger", () => {
+    expect(appointmentStatusTone("no_show")).toBe("danger");
+  });
+
+  it("reserves success for an outcome that actually happened", () => {
+    // DESIGN_SYSTEM.md:416 reserves the Positive level for a confirmed successful
+    // outcome, and :420 states that the business outcome decides the tone. A booking
+    // has not happened yet, so it must not borrow the completed visit's green.
+    for (const state of ["booked", "cancelled"]) {
+      expect(appointmentStatusTone(state)).not.toBe("success");
+    }
+    expect(appointmentStatusTone("completed")).toBe("success");
+  });
+
+  it("maps every documented appointment status to a valid BadgeTone", () => {
+    const statuses: string[] = ["booked", "cancelled", "completed", "no_show"];
+    expect(statuses.length).toBeGreaterThan(0);
+    for (const s of statuses) {
+      expect(VALID_TONES).toContain(appointmentStatusTone(s));
+    }
+  });
+
+  it("lets booked and cancelled share a tone while their labels stay distinct", () => {
+    // Deliberate, and the one place this map must NOT follow the no-collision shape
+    // used above: a booking and a cancellation are both routine records, so they share
+    // the neutral badge. The state channel is the label, as D5 of
+    // odd/tasks/technician-status.md required ("by text, not by colour alone"); the
+    // tone only reinforces it. The outcome tones stay apart from them.
+    expect(appointmentStatusTone("booked")).toBe(appointmentStatusTone("cancelled"));
+    expect(appointmentStatusLabel("booked")).not.toBe(appointmentStatusLabel("cancelled"));
+    expect(appointmentStatusTone("completed")).not.toBe(appointmentStatusTone("booked"));
+    expect(appointmentStatusTone("no_show")).not.toBe(appointmentStatusTone("booked"));
   });
 });
 

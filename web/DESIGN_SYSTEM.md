@@ -372,6 +372,7 @@ Use a dot or icon only as reinforcement. The visible label is mandatory.
 | Conversation | `Agente atendiendo`, `Atención humana`, `Cerrada` | Do not expose raw `bot`/`human`/`closed` values |
 | Customer | `Nuevo`, `Activo`, `Inactivo`, `Bloqueado` | Blocked is danger only when it requires intervention |
 | Case | `Abierto`, `En evaluación`, `Escalado`, `Cerrado` | Escalated is attention/danger; closed is not automatically success |
+| Appointment | `Reservada`, `Cancelada`, `Completada`, `No asistió` | A booking has not happened yet, so it is routine, not success; only `Completada` is a positive outcome, and `No asistió` is danger |
 | KB document | `Activo`, `Deshabilitado`, `Procesando`, `Error` | Pair processing/error with next action |
 | Reply window | `Respuesta disponible`, `Fuera de ventana` | Keep adjacent to composer |
 
