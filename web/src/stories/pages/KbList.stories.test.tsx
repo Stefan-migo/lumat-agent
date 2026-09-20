@@ -175,6 +175,111 @@ describe("KbList Empty story", () => {
   });
 });
 
+describe("KbList search panel", () => {
+  it("wires the search form values to the backend request parameters", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ results: [] }), { status: 200 }));
+
+    render(<KbList />);
+    await screen.findByText(docs[0].title);
+    const searchCard = screen.getByRole("heading", { name: "Probar recuperación" }).closest(".card") as HTMLElement;
+    await user.type(within(searchCard).getByLabelText("Consulta"), "portabilidad numerica");
+    const topK = within(searchCard).getByLabelText("Máximo de resultados");
+    const minSim = within(searchCard).getByLabelText("Similitud mínima");
+    await user.clear(topK);
+    await user.type(topK, "9");
+    await user.clear(minSim);
+    await user.type(minSim, "0.75");
+    await user.click(within(searchCard).getByRole("button", { name: "Buscar" }));
+    await screen.findByText("No encontramos resultados");
+
+    const requestUrl = new URL(String(fetchMock.mock.calls[1][0]), "http://localhost");
+    expect(requestUrl.pathname).toBe("/panel/api/kb/search");
+    expect(requestUrl.searchParams.get("q")).toBe("portabilidad numerica");
+    expect(requestUrl.searchParams.get("top_k")).toBe("9");
+    expect(requestUrl.searchParams.get("min_sim")).toBe("0.75");
+    fetchMock.mockRestore();
+  });
+
+  it("renders the loading search state", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }))
+      .mockReturnValueOnce(new Promise(() => {}));
+
+    render(<KbList />);
+    await screen.findByText(docs[0].title);
+    const searchCard = screen.getByRole("heading", { name: "Probar recuperación" }).closest(".card") as HTMLElement;
+    await user.click(within(searchCard).getByRole("button", { name: "Buscar" }));
+    expect(await within(searchCard).findByRole("status")).toHaveTextContent("Buscando en la base de conocimientos");
+    fetchMock.mockRestore();
+  });
+
+  it("renders the ready search state with its summary and result rows", async () => {
+    const user = userEvent.setup();
+    const results = [
+      { document_id: 1, title: "Manual de atencion al cliente", version: 3, chunk_index: 0, content: "Respuesta sobre atención", source_meta: null, similarity: 0.912 },
+      { document_id: 2, title: "Procedimiento de emergencia gas", version: 1, chunk_index: 2, content: "Respuesta sobre emergencia", source_meta: null, similarity: 0.801 },
+    ];
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ results }), { status: 200 }));
+
+    render(<KbList />);
+    await screen.findByText(docs[0].title);
+    const searchCard = screen.getByRole("heading", { name: "Probar recuperación" }).closest(".card") as HTMLElement;
+    await user.click(within(searchCard).getByRole("button", { name: "Buscar" }));
+    expect(await within(searchCard).findByText("2 resultados ordenados por similitud.")).toBeInTheDocument();
+    expect(within(searchCard).getByText("Manual de atencion al cliente")).toBeInTheDocument();
+    expect(within(searchCard).getByText("Procedimiento de emergencia gas")).toBeInTheDocument();
+    fetchMock.mockRestore();
+  });
+
+  it("renders the empty search state", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ results: [] }), { status: 200 }));
+
+    render(<KbList />);
+    await screen.findByText(docs[0].title);
+    const searchCard = screen.getByRole("heading", { name: "Probar recuperación" }).closest(".card") as HTMLElement;
+    await user.click(within(searchCard).getByRole("button", { name: "Buscar" }));
+    expect(await within(searchCard).findByText("No encontramos resultados")).toBeInTheDocument();
+    fetchMock.mockRestore();
+  });
+
+  it("renders the generic search error state", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "search failed" }), { status: 500 }));
+
+    render(<KbList />);
+    await screen.findByText(docs[0].title);
+    const searchCard = screen.getByRole("heading", { name: "Probar recuperación" }).closest(".card") as HTMLElement;
+    await user.click(within(searchCard).getByRole("button", { name: "Buscar" }));
+    expect(await within(searchCard).findByRole("alert")).toHaveTextContent("No pudimos realizar la búsqueda");
+    fetchMock.mockRestore();
+  });
+
+  it("renders the denied search state for a 403 response", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "search forbidden" }), { status: 403 }));
+
+    render(<KbList />);
+    await screen.findByText(docs[0].title);
+    const searchCard = screen.getByRole("heading", { name: "Probar recuperación" }).closest(".card") as HTMLElement;
+    await user.click(within(searchCard).getByRole("button", { name: "Buscar" }));
+    expect(await within(searchCard).findByRole("alert")).toHaveTextContent("No tienes permiso para buscar en la base de conocimientos");
+    fetchMock.mockRestore();
+  });
+});
+
 describe("KbList editor", () => {
   it("loads the stored document content when editing", async () => {
     const user = userEvent.setup();
