@@ -27,6 +27,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -187,7 +188,7 @@ def _fold_duplicate(session: Session, duplicate: Memory, *, survivor: Memory) ->
     session.delete(duplicate)
 
 
-def upsert(
+def _upsert_resolved(
     session: Session,
     *,
     scope: str,
@@ -196,28 +197,15 @@ def upsert(
     tipo: MemoryType,
     titulo: str,
     contenido: str,
-    proyecto: str = WRITABLE_PROYECTO,
-    pin: bool = False,
-    producer: MemoryProducer = MemoryProducer.SYSTEM,
-    origin_thread_id: str | None = None,
-    visibility: MemoryVisibility = MemoryVisibility.THREAD,
-    authorization: projects._ProjectAuthorization | None = None,
+    proyecto: str,
+    pin: bool,
+    producer: MemoryProducer,
+    origin_thread_id: str | None,
+    visibility: MemoryVisibility,
+    embedding: list[float],
+    normalized_hash: str,
 ) -> Memory:
-    """Create-or-update one memory by (proyecto, scope, entity_id, topic_key).
-
-    Embeds `contenido` via `kb.embed_texts()` (384d). Rejects `proyecto !=
-    'default'` before any DB write and persists nothing (MEM-2). On the same
-    key the existing row is reused and its content/embedding refreshed —
-    uniqueness enforced by `UNIQUE(proyecto, scope, entity_id, topic_key)`.
-    """
-    _guard_writable_project(proyecto, authorization)
-
-    normalized_hash = _normalized_hash(contenido)
-    embeddings = _embed([contenido])
-    if not embeddings:
-        raise ValueError("cannot embed empty memory content")
-    embedding = embeddings[0]
-
+    """Resolve and write one already-validated memory payload."""
     row = session.execute(
         select(Memory).where(
             Memory.proyecto == proyecto,
@@ -288,6 +276,65 @@ def upsert(
         row.visibility = visibility
     session.flush()
     return row
+
+
+def upsert(
+    session: Session,
+    *,
+    scope: str,
+    entity_id: str,
+    topic_key: str,
+    tipo: MemoryType,
+    titulo: str,
+    contenido: str,
+    proyecto: str = WRITABLE_PROYECTO,
+    pin: bool = False,
+    producer: MemoryProducer = MemoryProducer.SYSTEM,
+    origin_thread_id: str | None = None,
+    visibility: MemoryVisibility = MemoryVisibility.THREAD,
+    authorization: projects._ProjectAuthorization | None = None,
+) -> Memory:
+    """Create-or-update one memory by (proyecto, scope, entity_id, topic_key).
+
+    Embeds `contenido` via `kb.embed_texts()` (384d). Rejects `proyecto !=
+    'default'` before any DB write and persists nothing (MEM-2). On the same
+    key the existing row is reused and its content/embedding refreshed —
+    uniqueness enforced by `UNIQUE(proyecto, scope, entity_id, topic_key)`.
+    ``begin_nested()`` may flush pending caller state before the savepoint;
+    that remains inside the caller's transaction and preserves rollback semantics.
+    """
+    _guard_writable_project(proyecto, authorization)
+
+    normalized_hash = _normalized_hash(contenido)
+    embeddings = _embed([contenido])
+    if not embeddings:
+        raise ValueError("cannot embed empty memory content")
+    embedding = embeddings[0]
+
+    # ponytail: two concurrent writers are the ceiling; a third is not covered.
+    # Upgrade to a bounded loop or conflict-target upsert if that ceiling changes.
+    for attempt in range(2):
+        try:
+            with session.begin_nested():
+                return _upsert_resolved(
+                    session,
+                    scope=scope,
+                    entity_id=entity_id,
+                    topic_key=topic_key,
+                    tipo=tipo,
+                    titulo=titulo,
+                    contenido=contenido,
+                    proyecto=proyecto,
+                    pin=pin,
+                    producer=producer,
+                    origin_thread_id=origin_thread_id,
+                    visibility=visibility,
+                    embedding=embedding,
+                    normalized_hash=normalized_hash,
+                )
+        except IntegrityError:
+            if attempt == 1:
+                raise
 
 
 def record_milestone(
