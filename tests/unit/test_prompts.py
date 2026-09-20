@@ -371,6 +371,54 @@ def test_summary_context_roundtrips_through_template():
     assert prompts.render("prompts/summary.md", **ctx) == expected
 
 
+def test_compose_fallback_summary_uses_fixed_field_order():
+    state = _dummy_state(
+        case={"service": "calefont"},
+        captured={
+            "equipment": "Splendid  tiro natural",
+            "failure": "no enciende",
+            "evidence": "video enviado",
+            "availability": "manana en la tarde",
+        },
+    )
+
+    assert _sm.compose_fallback_summary(state) == (
+        "Servicio: calefont. Equipo: Splendid  tiro natural. Problema: no enciende. "
+        "Evidencia: video enviado. Disponibilidad: manana en la tarde."
+    )
+
+
+def test_compose_fallback_summary_omits_unknown_and_internal_fields():
+    state = _dummy_state(
+        case={"service": "unknown"},
+        captured={
+            "equipment": "unknown",
+            "failure": "fuga de agua",
+            "evidence": "unknown",
+            "availability": "_pending",
+            "_pending": "failure",
+            "name": "Ana",
+            "comuna": "Santiago",
+            "address": "Calle 1",
+            "consent": True,
+        },
+        window=[{"text": "RAW-MESSAGE-MUST-NOT-APPEAR"}],
+    )
+
+    result = _sm.compose_fallback_summary(state)
+
+    assert result == "Problema: fuga de agua."
+    assert "RAW-MESSAGE-MUST-NOT-APPEAR" not in result
+    assert "unknown" not in result
+    assert all(value not in result for value in ("Ana", "Santiago", "Calle 1"))
+
+
+def test_compose_fallback_summary_returns_literal_without_usable_fields():
+    state = _dummy_state(case={}, captured={"failure": "unknown", "_pending": "failure"})
+
+    assert _sm.compose_fallback_summary(state) == "Solicitud registrada sin detalle del problema."
+
+
 @pytest.fixture
 def summary_client():
     client = _FakeClient(reply_content="resumen del caso")
@@ -392,6 +440,19 @@ def test_summary_generate_summary_persona_and_template(summary_client):
         "prompts/summary.md", **_sm._summary_context(state, SimpleNamespace(name="Juan Perez"))
     )
     assert text == "resumen del caso"
+
+
+def test_generate_summary_empty_model_content_uses_fallback(monkeypatch):
+    empty_client = _FakeClient(reply_content="")
+    monkeypatch.setattr(_sm, "openai_client", lambda: empty_client)
+    monkeypatch.setattr(_sm, "session_scope", _noop_session_scope)
+    monkeypatch.setattr(_sm, "record_llm_cost", lambda *args, **kwargs: 0)
+
+    state = _dummy_state(case={"service": "calefont"}, captured={"failure": "no enciende"})
+
+    assert _sm.generate_summary(state, SimpleNamespace(name="Juan Perez")) == (
+        "Servicio: calefont. Problema: no enciende."
+    )
 
 
 # --- Task 4.2 / AC-8: no dead constants left; canned replies re-exported ------

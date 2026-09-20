@@ -21,6 +21,19 @@ from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
 
 
+def compose_fallback_summary(state: ConversationState) -> str:
+    """Compose a summary from captured fields without reading conversation text."""
+    fields = (
+        ("Servicio", (state.case or {}).get("service")),
+        ("Equipo", (state.captured or {}).get("equipment")),
+        ("Problema", (state.captured or {}).get("failure")),
+        ("Evidencia", (state.captured or {}).get("evidence")),
+        ("Disponibilidad", (state.captured or {}).get("availability")),
+    )
+    sentences = [f"{label}: {value}." for label, value in fields if value not in (None, "", "unknown", "_pending")]
+    return " ".join(sentences) or "Solicitud registrada sin detalle del problema."
+
+
 def _summary_context(state: ConversationState, customer: Customer) -> dict:
     """Return the prompt-template slot values for a summary render (task 3.3).
 
@@ -60,6 +73,8 @@ def generate_summary(state: ConversationState, customer: Customer | None) -> str
         temperature=0,
     )
     summary_text = (response.choices[0].message.content or "").strip()
+    if not summary_text:
+        summary_text = compose_fallback_summary(state)
 
     with session_scope() as session:
         conv = session.get(Conversation, state.conversation_id)

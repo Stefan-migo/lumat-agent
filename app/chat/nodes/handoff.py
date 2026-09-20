@@ -5,7 +5,7 @@ emergency weak hit, classify/route post-classification escalations — 2x
 unknown, injection, SS-1 always_escalate, KB miss). On handoff:
 
 - generates the CM-5 summary (LLM; a failure never blocks the escalation —
-  the bundle degrades to summary=None)
+  the bundle uses a deterministic captured-data fallback)
 - builds the HH-2 deriva bundle (history + summary + customer + captured)
   onto the case row via app/services/cases.py
 - transitions the conversation bot -> human through the single auditable
@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 
-from app.chat.nodes.summary import generate_summary
+from app.chat.nodes.summary import compose_fallback_summary, generate_summary
 from app.chat.state import ConversationState, set_conversation_state
 from app.db import session_scope
 from app.models import (
@@ -53,9 +53,9 @@ def handoff(state: ConversationState) -> dict:
         customer = session.get(Customer, state.customer_id)
     if state.cost_mode == "blocked":
         # SS-3: under a cost block NO LLM runs anywhere — the escalation
-        # summary is skipped (bundle degrades to summary=None) and the reply
-        # is the deterministic HANDOFF_REPLY canned fallback.
-        summary_text = None
+        # summary is skipped and the reply is the deterministic HANDOFF_REPLY
+        # canned fallback.
+        summary_text = compose_fallback_summary(state)
     else:
         try:
             summary_text = generate_summary(state, customer)
@@ -64,7 +64,7 @@ def handoff(state: ConversationState) -> dict:
                 "summary generation failed for handoff of conversation %s",
                 state.conversation_id,
             )
-            summary_text = None
+            summary_text = compose_fallback_summary(state)
 
     with session_scope() as session:
         conversation = session.get(Conversation, state.conversation_id)

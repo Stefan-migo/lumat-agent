@@ -565,6 +565,8 @@ def test_conversation_blocked_escalates_no_llm(mock_openai_chat, no_real_smtp):
         assert conv.state.value == "human"  # escalated via the T4.4 flow
         case = session.scalar(select(Case).where(Case.conversation_id == conv_id))
         assert case is not None
+        assert case.summary == "Solicitud registrada sin detalle del problema."
+        assert case.summary == case.bundle["summary"]
         assert case.bundle["escalate_reason"] == "cost_conversation_limit"
 
 
