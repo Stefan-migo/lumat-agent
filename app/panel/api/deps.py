@@ -49,6 +49,12 @@ def require_operator_json(current: User = Depends(get_current_user_json)) -> Use
     return current
 
 
+def require_dashboard_user(current: User = Depends(require_user_json)) -> User:
+    if current.role.value not in {"admin", "operador"}:
+        raise HTTPException(status_code=403, detail="dashboard role required")
+    return current
+
+
 def require_tecnico(current: User = Depends(get_current_user_json)) -> User:
     if current.role.value != "tecnico":
         raise HTTPException(status_code=403, detail="tecnico role required")
