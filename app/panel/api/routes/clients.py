@@ -28,6 +28,7 @@ from app.panel.api.serializers import to_customer_dict, to_memory_dict, to_note_
 from app.panel.deps import get_db
 from app.services import customers
 from app.services import memory as memory_service
+from app.services import relations
 from app.services.audit import record_audit
 
 router = APIRouter(tags=["panel-api-clients"])
@@ -220,6 +221,7 @@ def client_memory_upsert(
             titulo=titulo,
             contenido=contenido,
         )
+        relations.judge_memory_relations(session, row)
         record_audit(
             session,
             actor=current.username,

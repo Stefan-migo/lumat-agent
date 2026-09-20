@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
-from app.services import automation, cases, customers, kb, projects, scheduling, tukulpan as memory
+from app.services import automation, cases, customers, kb, projects, relations, scheduling, tukulpan as memory
 
 MAX_ITEMS = 20
 SDB_WRITE_ALLOWLIST = frozenset({
@@ -274,6 +274,7 @@ def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int):
                 origin_thread_id=str(trusted_thread_id),
                 visibility=args.visibility,
             )
+            relations.judge_memory_relations(session, row)
         return {"written": True, "id": row.id, "topic_key": key}
     except Exception as exc:
         return {"written": False, "degraded_reason": str(exc), "topic_key": key}

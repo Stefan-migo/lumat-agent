@@ -206,8 +206,47 @@ The system MUST assign a 30-day `review_after` instant when it writes a `SUMMARY
 - THEN its line MUST include `stale since YYYY-MM-DD`
 - AND fresh and non-decaying lines MUST remain unannotated
 
+### Requirement: MEM-11 — Judged Memory Relations
+
+The system MUST judge a newly written assertional memory against at most `top_k`
+nearby memories in the same `(proyecto, scope, entity_id)` axis, using the
+declared cosine gate. The judge MUST return one fixed-vocabulary relation,
+confidence, and reason per candidate in strict JSON. Confidence at or above
+0.7 MUST record a judged relation; lower confidence MUST record the relation as
+pending for the human queue. A failed, timed-out, or malformed judge response
+MUST write no relation and MUST NOT fail the memory write. `SESSION` and
+`SUMMARY` memories MUST NOT be judged.
+
+#### Scenario: A confident contradiction is recorded
+- GIVEN a newly written assertion has a candidate above the cosine gate
+- WHEN the judge returns `conflicts` with confidence at least 0.7
+- THEN the system MUST record the relation, confidence, and reason with judge provenance
+
+#### Scenario: An uncertain verdict enters the human queue
+- GIVEN a newly written assertion has a candidate above the cosine gate
+- WHEN the judge returns a valid verdict below confidence 0.7
+- THEN the system MUST record the relation as pending and leave it available to the human queue
+
+#### Scenario: Relation signals annotate reads without hiding memories
+- GIVEN a memory is contradicted or superseded by a recorded relation
+- WHEN hybrid search or customer context reads it
+- THEN the result MUST expose or render that relation signal
+- AND the memory MUST remain visible unless its status is `ARCHIVED`
+
+#### Scenario: Archived memories are excluded from reads
+- GIVEN a memory has status `ARCHIVED`
+- WHEN hybrid search or customer context reads the entity
+- THEN that memory MUST NOT be returned or injected
+
+#### Scenario: Pending relations are human-resolvable
+- GIVEN a valid judge verdict is below confidence 0.7
+- WHEN the human queue reads pending relations
+- THEN the pair MUST be available for human resolution and no longer pending after resolution
+
 ## MODIFIED Requirements
 
 ## Boundary
 
-Batch compression and automatic conflict judgment are still deferred (schema only). Cross-project recall and ToolNode tools are out of scope.
+Batch compression remains deferred. Automatic conflict judgment is now
+implemented as thresholded judging with a human queue for uncertain verdicts.
+Cross-project recall and ToolNode tools are out of scope.

@@ -549,6 +549,7 @@ def test_memory_write_is_thread_anchored(monkeypatch):
         "app.chat.assistant.tools.registry.memory.upsert",
         lambda session, **kwargs: calls.append(kwargs) or row,
     )
+    monkeypatch.setattr("app.chat.assistant.tools.registry.relations.judge_memory_relations", lambda *args: [])
     args = {"titulo": "Decision", "contenido": "Use the panel", "topic_key": "agent:decision"}
 
     first = execute_tool(session, "memory.write", args, trusted_thread_id=7)
@@ -574,6 +575,7 @@ def test_memory_write_project_visibility_uses_canonical_agent_axis(monkeypatch):
         "app.chat.assistant.tools.registry.memory.upsert",
         lambda session, **kwargs: calls.append(kwargs) or row,
     )
+    monkeypatch.setattr("app.chat.assistant.tools.registry.relations.judge_memory_relations", lambda *args: [])
 
     result = execute_tool(
         session,
