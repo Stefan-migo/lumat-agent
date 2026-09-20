@@ -3,7 +3,7 @@
 **Branch**: `odd/memory-content-dedup`
 **Worktree**: `../lumat-agent-odd-memory-content-dedup`
 **Base**: `a57b353e`
-**Status**: in progress
+**Status**: implemented and verified (native review pending)
 
 ## Objective
 
@@ -78,6 +78,10 @@ Files:
 - `app/services/projects.py` — the hash-collision path in `merge()`.
 - `openspec/specs/memory/spec.md` — rewrite `MEM-1` and its `Topic-key uniqueness` scenario.
 - `tests/spec/test_memory_spec.py`, `tests/spec/test_projects_spec.py` — dedup and merge coverage.
+- `tests/integration/test_migrations.py` — `test_schema_migrations_records_version` lists every applied
+  migration, so the new `028_memory_dedup` entry belongs to this change. Authorized after the fact:
+  the check was listed in `## Checks` but the file was missing from this list, which is what made the
+  first implementation pass report the unit as partial.
 - `odd/tasks/memory-content-dedup.md` — this record.
 
 Anything else needs an explicit report before it is touched.
@@ -129,15 +133,15 @@ Anything else needs an explicit report before it is touched.
 
 ## Tasks
 
-- [ ] **T1 — RED.** Add failing tests that pin the new contract: identical content under a second
+- [x] **T1 — RED.** Add failing tests that pin the new contract: identical content under a second
       `topic_key` produces one row with `duplicate_count == 2`; distinct content still produces two
       rows; a same-key rewrite updates content without bumping `duplicate_count`; a merge whose
       source and target each hold the same content under different `topic_key`s completes and leaves
       one row. Observe them fail against the current code and capture the output.
-- [ ] **T2 — GREEN.** Add `028_memory_dedup.sql`, extend `Memory`, add `_normalized_hash()` and the
+- [x] **T2 — GREEN.** Add `028_memory_dedup.sql`, extend `Memory`, add `_normalized_hash()` and the
       dedup branch with lazy backfill to `upsert()`, add the hash-collision path to `merge()`, and
       rewrite the `MEM-1` requirement and its `Topic-key uniqueness` scenario.
-- [ ] **T3 — Evidence.** Run the required checks, record the exact RED/GREEN output and honest limits.
+- [x] **T3 — Evidence.** Run the required checks, record the exact RED/GREEN output and honest limits.
 
 ## Acceptance criteria
 
@@ -176,6 +180,13 @@ Anything else needs an explicit report before it is touched.
 - [x] T1 — RED observed.
 - [x] T2 — GREEN implemented.
 - [x] T3 — Evidence recorded.
+- [x] Authorized `tests/integration/test_migrations.py` after the first pass reported `partial`, and
+      added the `028_memory_dedup` entry to the applied-version list.
+- [x] Split `MEM-1` into two single-behaviour scenarios; the first pass left two `WHEN`/`THEN` pairs
+      inside one scenario, which the rest of the file does not do.
+- [x] Orchestrator re-verified RED independently: reverting `app/` to `a57b353e` with the new tests in
+      place reproduces exactly the three failures the first pass named.
+- [ ] Delivery: native RDD review runs on the frozen candidate at the delivery boundary.
 
 ## Verification evidence
 
@@ -212,10 +223,63 @@ Required verification:
 - `git diff --check` — passed.
 - The concurrent initial attempt to run the three database suites in parallel was discarded as invalid evidence because the shared test database produced deadlocks and cross-suite contamination; all required suites were rerun sequentially.
 
+Corrected results, measured by the orchestrator at the final tip after authorizing
+`tests/integration/test_migrations.py` (the `028_memory_dedup` entry) and splitting the `MEM-1`
+scenario:
+
+```text
+$ eval "$(infra/test-db.sh env)" && uv run pytest tests/spec/test_memory_spec.py tests/spec/test_projects_spec.py tests/integration/test_migrations.py tests/integration/test_memory_pipeline.py
+58 passed, 1 warning in 11.44s
+
+$ eval "$(infra/test-db.sh env)" && uv run pytest tests/spec
+86 passed, 1 warning in 10.71s
+
+$ eval "$(infra/test-db.sh env)" && uv run pytest tests/
+961 passed, 2 warnings in 107.26s   (exit 0)
+
+$ eval "$(infra/test-db.sh env)" && uv run pytest tests/ --collect-only
+961 tests collected in 0.87s
+
+$ git diff --check
+clean
+```
+
+Four test functions were added and none removed (`git diff a57b353e -- tests/ | grep -cE '^\+def test_'`
+→ 4), so the `tests/spec` count moved 82 → 86 and the full suite 957 → 961.
+
+Correction to the first pass, recorded rather than silently overwritten: its aggregate figures for
+the full suite (`987 passed, 1 failed`) and for `tests/spec` (`84 passed`) are **not reproducible** —
+collection at this tip is 961 and the `tests/spec` total is 86. Its focused-suite figure
+(`57 passed, 1 failed` = 58) matches exactly, and its three RED test names are genuine. The measured
+numbers above supersede the first pass's aggregates.
+
+Independent RED re-verification, run by the orchestrator at this tip:
+
+```text
+$ git checkout a57b353e -- app/      # production reverted, new tests kept
+$ eval "$(infra/test-db.sh env)" && uv run pytest tests/spec/test_memory_spec.py tests/spec/test_projects_spec.py -q -k "deduplicat or rewrite_is_not"
+FAILED tests/spec/test_memory_spec.py::test_mem2_identical_normalized_content_deduplicates_by_hash
+FAILED tests/spec/test_memory_spec.py::test_mem2_same_key_rewrite_is_not_a_duplicate
+FAILED tests/spec/test_projects_spec.py::test_merge_deduplicates_hash_collisions_and_repoints_observations
+$ git checkout HEAD -- app/          # restored; diff against a57b353e shows the three files back
+```
+
+Honest limits:
+
+- The `normalized_hash` column is nullable and the index is partial, so memories written before this
+  change that are never rewritten stay outside the dedup identity. This is the documented lazy-backfill
+  decision, not a guarantee.
+- No backfill runs in the migration: the runner executes plain `.sql` through `python3` + `psycopg`
+  with no `pgcrypto`, so there is no SQL-side `sha256`.
+- Embedding-similarity dedup is out of scope by decision; near-duplicates written under different
+  `topic_key`s are still two rows.
+
 ## Review (native RDD)
 
 _Not started. Filled in at the delivery boundary._
 
 ## Next step
 
-Implement T1: write the failing tests first and capture the RED output honestly.
+Implemented and verified. Native review runs on the committed candidate; the outcome is recorded in
+the PR body and in Engram (`odd/memory-content-dedup/outcome`), never as a post-freeze commit on this
+branch (`pattern/rdd-receipt-policy`).
