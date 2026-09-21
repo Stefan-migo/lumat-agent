@@ -294,7 +294,7 @@ def test_kb2_retrieval_threshold_miss(fake_embedder):
     with SessionLocal() as session:
         results = kb.retrieve(session, "que precio tiene un grifo de cocina", audience=None)
 
-    assert results == []  # unrelated -> below min_sim 0.65 (CM-4 unresolved path)
+    assert results == []  # unrelated -> below min_sim 0.50 (CM-4 unresolved path)
 
 
 def test_kb2_default_threshold_returns_intermediate_similarity_hit(monkeypatch):
