@@ -5,7 +5,7 @@
 **Base**: `06768699` (scoped at `5c5f4af2`; `main` advanced 33 commits before the branch was cut —
 none of them touched a file in the authorized scope, so the plan below is unchanged)
 **Seeded from**: `.rapsodia-code/sessions/archived/2026-09-20-versionado-release-trazabilidad/report.md`
-**Status**: in progress — T4 next
+**Status**: in progress — T4 delivered; T5 and the CI-branch verification pending
 
 ## Objective
 
@@ -92,9 +92,9 @@ The documented process exists and was never executed:
 - [x] **T3 — `docs/ops.md` release section.** State the CalVer rule, the tag-before-deploy step, and
       the `Status:` line convention; correct the §2.9 go-live record guidance so it matches a process
       someone will actually follow. — **done, see the T3 record below.**
-- [ ] **T4 — CI running the suite.** Add the workflow with a `pgvector` service container. **If this
+- [x] **T4 — CI running the suite.** Add the workflow with a `pgvector` service container. **If this
       grows beyond a single focused workflow it should split into its own work unit** — do not let it
-      derail T1–T3.
+      derail T1–T3. — **done as one focused workflow; see the T4 record below.**
 - [ ] **T5 — Verify.** Focused tests, then the full suite; counts measured and reported.
 
 ## Acceptance criteria
@@ -129,7 +129,47 @@ formatter exists; the tests are the verification.
       branch base, so it is fresh (the "stale at `26b463a2`" note below no longer applies).
 - [x] Baseline measured before touching anything: `uv run pytest tests/` → **1042 passed, 2 warnings,
       exit 0, 112.68s** (Python 3.14, test DB `pgvector/pgvector:pg16` on port 6364).
-- [ ] T4–T5.
+- [ ] T5.
+
+### T4 — done (delivered, reviewed, approved; the CI run itself is not yet verified)
+
+**The workflow** — one file, one job, 48 lines, no matrix, no lint step, no deploy step:
+- Triggers: `pull_request`, `push` to `main`, and `workflow_dispatch` (manual runs exist so a
+  deliberately broken branch can be demonstrated later without inventing a trigger).
+- A `pgvector/pgvector:pg16` service on 5432 with a `pg_isready` health check — waiting on real
+  readiness instead of sleeping — and `--tmpfs /var/lib/postgresql/data`, because the suite TRUNCATEs
+  25 tables before every test and this project measured roughly a 10x cost for exactly that workload
+  between tmpfs and a disk-backed filesystem (`infra/docker-compose.yml`, `db-test` service).
+- Env: `TEST_DB_PORT=5432`, a throwaway `TEST_POSTGRES_PASSWORD` (the database is a disposable
+  localhost container, so no repository secret is wired), and `TEST_ADMIN_DB_URL`.
+- Steps: checkout → `astral-sh/setup-uv@v6` with `python-version: "3.14"` (the interpreter the
+  production image runs, pinned in one action rather than two) → `uv sync --frozen` →
+  `uv run pytest tests/`. `timeout-minutes: 10` against a measured ~90–110 s run.
+- This did NOT grow beyond one focused workflow, so per the task it stays inside this work unit.
+
+**`TEST_ADMIN_DB_URL` is load-bearing, not a workaround.** The orchestrator re-checked the writer's
+claim independently rather than accepting it: without that variable `admin_database_url()` resolves
+`DATABASE_URL` — the *app* role — because `tests/conftest.py` sets it before any fixture runs, so
+migrations would execute as `app` and cannot create the extension or the role. Measured in a clean
+environment against a fresh container: **`1 failed, 235 passed, 808 errors in 10.77s`**. With it:
+**`1044 passed`**. CI therefore exports the same two URLs that `infra/test-db.sh env` exports for a
+local run, which CI cannot call because that script requires the gitignored `infra/.env`.
+
+**Verification performed locally, against a real container replicating the service definition:**
+- the workflow YAML parses and its triggers, env, service, options, and step list match the intent;
+- fresh `pgvector/pgvector:pg16` + the workflow's exact env contract (only the port remapped, to avoid
+  the worktree's own test database) → **1044 passed, 2 warnings, 89.15 s**, equal to the local
+  baseline measured before any change;
+- `uv sync --frozen` unchanged; the container was removed afterwards.
+
+**Not verified:** the GitHub runner itself, and acceptance criterion 4's "fails on a deliberately
+broken branch". Both require a real push to `Stefan-migo/lumat-agent`, which is a remote operation
+that has not been authorized. Left open on purpose rather than reported as done.
+
+**Review:** native RAR, lineage `review-bd09ede235e898af`, risk **high** (`shell_source` in
+`.github/workflows/tests.yml`), consent granted by the human, canonical 4R run, all four lenses
+admitted, **0 findings**; acknowledgement burned (`gentle-ai.review-acknowledged/v1`,
+`authority: burned`).
 
 ### T3 — done (delivered, reviewed, approved)
 
