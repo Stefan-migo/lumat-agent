@@ -15,6 +15,11 @@ here 1:1:
 | unknown (1st, no esc)| —                                | respond             |
 | anything else        | —                                | respond             |
 
+`consulta` is in RETRIEVAL_INTENTS: a question *about* an appliance is answered from the
+KB, while a reported problem with one keeps starting the visit capture. The appliance
+intents and `solicitar_visita` are unchanged. See
+`odd/tasks/classify-question-vs-problem.md`.
+
 RED-first: ``app.chat.nodes.orchestrate._dispatch`` does not exist until task
 2.4 creates the node module, so every assertion fails on import until then.
 """
@@ -87,11 +92,22 @@ def test_capture_intents_route_to_capture(intent):
 # --- RETRIEVAL_INTENTS -> research_triage ------------------------------------
 
 
-@pytest.mark.parametrize("intent", ["valores", "postventa"])
+@pytest.mark.parametrize("intent", ["valores", "postventa", "consulta"])
 def test_retrieval_intents_route_to_research(intent):
     result = _dispatch(intent)
     assert result["next_step"] == "research"
     assert result.get("active_sub_agent") == "research_triage"
+
+
+def test_consulta_does_not_route_to_capture():
+    """A question about an appliance must not start the visit-capture flow.
+
+    The measured cost of the coarse vocabulary (odd/tasks/kb-answer-fidelity.md, F4):
+    14 of 30 answerable queries started capture, and the plainly informational ones
+    got "¿Cuál es tu nombre?" instead of the answer the KB already held.
+    """
+    result = _dispatch("consulta")
+    assert result["next_step"] != "capture"
 
 
 # --- unknown (no escalate) -> respond (clarification) ------------------------
