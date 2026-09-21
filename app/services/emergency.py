@@ -19,9 +19,15 @@ Classification semantics (deterministic; EM-5 conservative default):
   A strong hit runs the full emergency protocol (EM-3): safety instructions +
   contacts + technician-notified, capture abandoned, case flagged, state ->
   human.
-- WEAK hit — possible-risk language that is not an exact keyword (bare "gas",
-  anomalous smells such as "huele raro"/"olor a quemado"). EM-5: ambiguous ->
-  escalate to a human, NEVER silently ignore.
+- WEAK hit — possible-risk language that is not an exact keyword: anomalous
+  smells such as "huele raro"/"olor a quemado". EM-5: ambiguous -> escalate to a
+  human, NEVER silently ignore.
+  Bare "gas" is deliberately NOT a weak marker. Every marker here describes a
+  PERCEPTION; "gas" describes a SUBJECT, so for a gasfitería it fired on the
+  business's own vocabulary and escalated routine commercial questions before
+  classification and retrieval. The phrasings that actually signal a leak
+  ("olor a gas", "huele a gas", "fuga", "fuga de gas") are strong keywords.
+  See odd/tasks/emergency-gas-weak-marker.md.
 - None — no match; the normal commercial flow continues.
 
 Accents are folded (NFD decompose + strip combining marks, then lowercase) so
@@ -39,8 +45,13 @@ from collections.abc import Sequence
 # small and conservative: anything matching escalates to a human instead of
 # being ignored. The panel can promote any of these into the SS-2 keyword
 # list (then they become strong hits).
+#
+# Every entry describes a PERCEPTION (a smell). Bare "gas" was removed: it
+# describes a subject, not a risk, so it escalated every commercial question
+# naming the business's own trade. The realistic leak phrasings are strong
+# keywords already; what the removal leaves uncovered is pinned by
+# `test_leak_phrasings_without_a_strong_keyword_are_not_detected`.
 WEAK_MARKERS: tuple[str, ...] = (
-    r"gas\b",  # bare "gas" mention (design: "gas" stem)
     r"huele raro",  # design example
     r"huele feo",
     r"olor raro",
