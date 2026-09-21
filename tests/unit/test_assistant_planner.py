@@ -1,12 +1,21 @@
 """Strict structured planner contracts for the panel assistant."""
 
 import json
+import logging
 from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
-from app.chat.assistant.nodes import _context_text, bounded_fallback, parse_planner_output, plan, plan_llm
+from app.chat.assistant.nodes import (
+    _PLANNER_FAILURE_EXCERPT_LIMIT,
+    _context_text,
+    bounded_fallback,
+    guardrails,
+    parse_planner_output,
+    plan,
+    plan_llm,
+)
 from app.chat.assistant.state import PlannerOutput
 
 
@@ -46,7 +55,7 @@ def test_tool_plan_requires_tool_but_response_plan_does_not():
             }
         )
 
-    response, valid = parse_planner_output(
+    response, valid, diagnosis = parse_planner_output(
         {
             "kind": "respond",
             "arguments": {},
@@ -55,11 +64,12 @@ def test_tool_plan_requires_tool_but_response_plan_does_not():
         }
     )
     assert valid is True
+    assert diagnosis is None
     assert response.tool is None
 
 
 def test_parse_planner_output_returns_validity_with_plan():
-    plan_result, valid = parse_planner_output(
+    plan_result, valid, diagnosis = parse_planner_output(
         {
             "kind": "respond",
             "arguments": {},
@@ -68,11 +78,13 @@ def test_parse_planner_output_returns_validity_with_plan():
         }
     )
     assert valid is True
+    assert diagnosis is None
     assert plan_result.tool is None
 
-    malformed, valid = parse_planner_output({"kind": "tool"})
+    malformed, valid, diagnosis = parse_planner_output({"kind": "tool"})
     assert valid is False
     assert malformed == bounded_fallback("x")
+    assert diagnosis["reason"] == "planner_output_validation_failed"
 
 
 def test_plan_llm_does_not_treat_fallback_summary_collision_as_invalid(monkeypatch):
@@ -153,8 +165,147 @@ def test_plan_llm_keeps_malformed_output_invalid(monkeypatch):
     assert result["plan"]["summary"] == bounded_fallback("x").summary
 
 
+@pytest.mark.parametrize(
+    ("client", "reason", "stage", "exception_type", "raw_text"),
+    [
+        (
+            SimpleNamespace(
+                chat=SimpleNamespace(
+                    completions=SimpleNamespace(create=lambda **kwargs: (_ for _ in ()).throw(ConnectionError("down")))
+                )
+            ),
+            "provider_call_failed",
+            "provider",
+            "ConnectionError",
+            "",
+        ),
+        (
+            SimpleNamespace(
+                chat=SimpleNamespace(
+                    completions=SimpleNamespace(
+                        create=lambda **kwargs: SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=" "))])
+                    )
+                )
+            ),
+            "empty_completion",
+            "completion",
+            "ValueError",
+            "",
+        ),
+        (
+            SimpleNamespace(
+                chat=SimpleNamespace(
+                    completions=SimpleNamespace(
+                        create=lambda **kwargs: SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="not json"))])
+                    )
+                )
+            ),
+            "invalid_json",
+            "parse",
+            "JSONDecodeError",
+            "not json",
+        ),
+        (
+            SimpleNamespace(
+                chat=SimpleNamespace(
+                    completions=SimpleNamespace(
+                        create=lambda **kwargs: SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"kind":"tool"}'))])
+                    )
+                )
+            ),
+            "planner_output_validation_failed",
+            "validation",
+            "ValidationError",
+            '{"kind":"tool"}',
+        ),
+    ],
+)
+def test_plan_llm_records_distinct_failure_diagnostics(monkeypatch, caplog, client, reason, stage, exception_type, raw_text):
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], persona="persona"),
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    with caplog.at_level(logging.ERROR, logger="app.chat.assistant.nodes"):
+        result = plan_llm({"content": "Find Ana", "context": {"items": []}})
+
+    diagnosis = result["planner"]["failure"]
+    assert diagnosis["reason"] == reason
+    assert diagnosis["stage"] == stage
+    assert diagnosis["exception_type"] == exception_type
+    assert diagnosis["raw_excerpt"] == raw_text
+    assert caplog.records[-1].diagnosis == diagnosis
+    rendered = caplog.records[-1].getMessage()
+    assert reason in rendered
+    assert stage in rendered
+    assert exception_type in rendered
+
+
+def test_plan_llm_records_no_failure_for_valid_plan(monkeypatch, caplog):
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], persona="persona"),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+                content='{"kind":"respond","arguments":{},"summary":"Done","requires_approval":false}'
+            ))]),
+        ))),
+    )
+
+    with caplog.at_level(logging.ERROR, logger="app.chat.assistant.nodes"):
+        result = plan_llm({"content": "Find Ana", "context": {"items": []}})
+
+    assert result["planner"]["valid"] is True
+    assert "failure" not in result["planner"]
+    assert not caplog.records
+
+
+def test_invalid_plan_keeps_degraded_user_visible_output():
+    state = plan({"content": "unsafe request", "planner_output": {"kind": "tool"}})
+
+    assert state["response"] == "I could not safely plan that request. Please try again."
+
+
+def test_plan_invalid_output_and_guardrail_unsafe_plan_have_distinct_diagnostics(caplog):
+    invalid = plan({"content": "unsafe request", "planner_output": {"kind": "tool"}})
+    unsafe = guardrails(
+        {
+            "planner": {"valid": True},
+            "plan": {"kind": "tool", "tool": "not-whitelisted", "arguments": {}, "requires_approval": False},
+        }
+    )
+
+    assert invalid["planner"]["failure"]["reason"] == "planner_output_validation_failed"
+    assert unsafe["planner"]["failure"]["reason"] == "unsafe_plan"
+
+
+def test_planner_failure_excerpt_is_bounded_and_guardrail_logs_diagnosis(caplog):
+    raw_text = "x" * (_PLANNER_FAILURE_EXCERPT_LIMIT + 100)
+    plan_state = {
+        "planner": {"valid": True},
+        "plan": {
+            "kind": "tool",
+            "tool": "not-whitelisted",
+            "arguments": {"payload": raw_text},
+            "requires_approval": False,
+        },
+    }
+
+    with caplog.at_level(logging.ERROR, logger="app.chat.assistant.nodes"):
+        result = guardrails(plan_state)
+
+    diagnosis = result["planner"]["failure"]
+    assert len(diagnosis["raw_excerpt"]) <= _PLANNER_FAILURE_EXCERPT_LIMIT
+    assert caplog.records[-1].diagnosis == diagnosis
+    assert diagnosis["raw_excerpt"]
+
+
 def test_complex_plan_exposes_metadata_only_hook():
-    result, valid = parse_planner_output(
+    result, valid, diagnosis = parse_planner_output(
         {
             "kind": "complex",
             "arguments": {"steps": ["research", "summarize"]},
@@ -163,6 +314,7 @@ def test_complex_plan_exposes_metadata_only_hook():
         }
     )
     assert valid is True
+    assert diagnosis is None
     assert result.kind == "complex"
     assert result.tool is None
     state = plan({"content": "complex request", "planner_output": result.model_dump()})
@@ -193,7 +345,7 @@ def test_overlong_summary_keeps_tool_plan_instead_of_falling_back():
 def test_summary_at_limit_passes_through_unchanged():
     summary = "x" * 200
 
-    result, valid = parse_planner_output(
+    result, valid, diagnosis = parse_planner_output(
         {
             "kind": "respond",
             "arguments": {},
@@ -203,6 +355,7 @@ def test_summary_at_limit_passes_through_unchanged():
     )
 
     assert valid is True
+    assert diagnosis is None
     assert result.summary == summary
 
 

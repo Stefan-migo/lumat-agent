@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -28,7 +29,10 @@ from app.chat.assistant.attachments import build_multimodal_content, prepare_att
 from app.models import InternalChatMessage
 
 
+logger = logging.getLogger(__name__)
+
 _TOOL_EVIDENCE_LIMIT = 4_000
+_PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
 
 
 def _project_slug(state: AssistantState) -> str:
@@ -142,20 +146,49 @@ def bounded_fallback(reason: str) -> PlannerOutput:
     )
 
 
-def parse_planner_output(raw: object) -> tuple[PlannerOutput, bool]:
+def _planner_failure(reason: str, stage: str, error: Exception, raw: object = "") -> dict[str, str]:
+    """Build the bounded, persisted diagnosis for one planner failure."""
+    raw_text = raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False, default=str)
+    return {
+        "reason": reason,
+        "stage": stage,
+        "exception_type": type(error).__name__,
+        "exception": str(error)[:_PLANNER_FAILURE_EXCERPT_LIMIT],
+        "raw_excerpt": raw_text[:_PLANNER_FAILURE_EXCERPT_LIMIT],
+    }
+
+
+def _log_planner_failure(diagnosis: dict[str, str]) -> None:
+    logger.error(
+        "planner failure reason=%s stage=%s exception_type=%s",
+        diagnosis["reason"],
+        diagnosis["stage"],
+        diagnosis["exception_type"],
+        extra={"diagnosis": diagnosis},
+    )
+
+
+def parse_planner_output(
+    raw: object,
+    *,
+    raw_text: str | None = None,
+) -> tuple[PlannerOutput, bool, dict[str, str] | None]:
     """Validate planner data and convert invalid data to a bounded response."""
     try:
-        return PlannerOutput.model_validate(raw), True
-    except (TypeError, ValidationError):
-        return bounded_fallback("invalid planner output"), False
+        return PlannerOutput.model_validate(raw), True, None
+    except (TypeError, ValidationError) as exc:
+        diagnosis = _planner_failure(
+            "planner_output_validation_failed", "validation", exc, raw if raw_text is None else raw_text
+        )
+        return bounded_fallback(diagnosis["reason"]), False, diagnosis
 
 
 def plan(state: AssistantState) -> AssistantState:
     content = state["content"].strip()
     raw = state.get("planner_output")
     if raw is not None:
-        try:
-            planner = PlannerOutput.model_validate(raw)
+        planner, valid, diagnosis = parse_planner_output(raw)
+        if valid:
             planner_data = {**planner.model_dump(), "valid": True}
             result: AssistantState = {
                 "planner": planner_data,
@@ -165,15 +198,14 @@ def plan(state: AssistantState) -> AssistantState:
             if planner.kind == "complex":
                 result["extension_hooks"] = extension_hook_metadata()
             return result
-        except (TypeError, ValidationError):
-            fallback = bounded_fallback("invalid planner output")
-            return {
-                "planner": {**fallback.model_dump(), "valid": False},
-                "plan": fallback.model_dump(),
-                "status": "planned",
-                "response": fallback.summary,
-                "error": "Invalid planner output.",
-            }
+        _log_planner_failure(diagnosis)
+        return {
+            "planner": {**planner.model_dump(), "valid": False, "failure": diagnosis},
+            "plan": planner.model_dump(),
+            "status": "planned",
+            "response": planner.summary,
+            "error": "Invalid planner output.",
+        }
     requires_approval = any(word in content.casefold() for word in ("create", "delete", "change", "send"))
     proposed = {
         "tool": None,
@@ -409,6 +441,8 @@ def plan_llm(state: AssistantState) -> AssistantState:
     if state.get("cost_directive"):
         user_prompt += "\n\n" + state["cost_directive"]
     completion = None
+    raw_text = ""
+    diagnosis = None
     try:
         completion = _assistant_client().chat.completions.create(
             model=getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL),
@@ -416,26 +450,41 @@ def plan_llm(state: AssistantState) -> AssistantState:
             temperature=0,
             response_format={"type": "json_object"},
         )
+    except Exception as exc:
+        diagnosis = _planner_failure("provider_call_failed", "provider", exc)
+    else:
         _record_usage(state, "planner", completion)
         raw_text = _completion_text(completion)
-        if not raw_text:
-            raise ValueError("provider returned no structured planner message")
-        planner, valid = parse_planner_output(json.loads(raw_text))
-    except Exception:
+        if not raw_text.strip():
+            diagnosis = _planner_failure(
+                "empty_completion", "completion", ValueError("provider returned no structured planner message")
+            )
+        else:
+            try:
+                raw = json.loads(raw_text)
+            except json.JSONDecodeError as exc:
+                diagnosis = _planner_failure("invalid_json", "parse", exc, raw_text)
+            else:
+                planner, valid, diagnosis = parse_planner_output(raw, raw_text=raw_text)
+    if diagnosis is not None:
+        _log_planner_failure(diagnosis)
         # Compatibility for older injected clients that only implement response
         # streaming; they can still pause a write for approval, but never name a
         # tool or execute an unchecked action.
-        if not _completion_text(completion) and any(word in state["content"].casefold() for word in ("create", "delete", "change", "send")):
-            return {"plan": {"tool": None, "arguments": {}, "summary": state["content"], "requires_approval": True}, "planner": {"valid": False}, "legacy_compat": True, "status": "planned"}
-        planner = bounded_fallback("provider failure")
+        if not raw_text and any(word in state["content"].casefold() for word in ("create", "delete", "change", "send")):
+            return {"plan": {"tool": None, "arguments": {}, "summary": state["content"], "requires_approval": True}, "planner": {"valid": False, "failure": diagnosis}, "legacy_compat": True, "status": "planned"}
+        planner = bounded_fallback(diagnosis["reason"])
         valid = False
-    return {
+    result = {
         "planner": {**planner.model_dump(), "valid": valid},
         "plan": planner.model_dump(),
         "status": "planned",
         "response": planner.summary if not valid else None,
         "context": state.get("context", {}),
     }
+    if diagnosis is not None:
+        result["planner"]["failure"] = diagnosis
+    return result
 
 
 def assemble_context_node(state: AssistantState) -> AssistantState:
@@ -473,8 +522,12 @@ def guardrails(state: AssistantState) -> AssistantState:
             pass
     decisions = {"whitelisted": whitelisted, "arguments_valid": arguments_valid, "cost_allowed": True, "approval_required": False, "decision": "execute"}
     if not whitelisted or not arguments_valid:
-        fallback = bounded_fallback("unsafe plan")
-        return {"planner": {**fallback.model_dump(), "valid": False}, "plan": fallback.model_dump(), "guardrails": {**decisions, "decision": "fallback"}, "response": fallback.summary, "status": "responding"}
+        diagnosis = _planner_failure(
+            "unsafe_plan", "guardrails", ValueError("planner plan failed guardrails"), plan_data
+        )
+        _log_planner_failure(diagnosis)
+        fallback = bounded_fallback(diagnosis["reason"])
+        return {"planner": {**fallback.model_dump(), "valid": False, "failure": diagnosis}, "plan": fallback.model_dump(), "guardrails": {**decisions, "decision": "fallback"}, "response": fallback.summary, "status": "responding"}
     autonomous_write = _is_autonomous_write(tool_name, state.get("thread_id"))
     if not get_tool(tool_name).read_only and not autonomous_write and not state.get("approval"):
         from app.chat.assistant.approval import issue_approval
