@@ -139,19 +139,56 @@ holder with certainty rather than by inference.
 - [x] Worktree created and provisioned (base `8ad0e026`, `infra/.env` copied, `.opencode` noise removed).
 - [x] Reproduce with live database evidence: 2 of 6 local runs, `idle in transaction` vs blocked
       `TRUNCATE` on `conversation_events`, captured in `pg_stat_activity`.
-- [x] Name the holder with certainty (exact holder query identified, unique match in the repo).
-- [x] Identify the leaking code path (`_snapshot` reached from the panel WebSocket handler).
-- [ ] Fix it at the root — **BLOCKED: the root cause lives in app code, so this needs a human
-      decision before any change** (see "Root cause located" below).
+- [x] Name the holder's statement with certainty (see below; the holder's **SQL** is pinned, the
+      **code path that leaves it open is not**).
+- [ ] Identify the leaking code path and fix it at the root — **open**.
 - [ ] Five consecutive clean runs; then CI.
 
-## Root cause located (2026-09-21) — APP CODE, stop-before-changing
+## Correction (2026-09-21, later the same day)
 
-Instrumented reproduction: a `pg_stat_activity` sampler (1 Hz) plus a watchdog that sends `SIGABRT`
-to the pytest process when a `Lock` wait persists for 15 s. pytest has `faulthandler` enabled, so
-the abort dumps every thread stack at the exact instant of the stall. The 120 s ceiling is untouched.
+An earlier revision of this section claimed the root cause was located in the panel WebSocket path and
+was committed as such (`6f6a2cf0`). **That claim was overconfident and is downgraded here.** The
+statement is pinned; the mechanism is not.
 
-**The holder, captured live twice (same signature):**
+What still holds — the holder's SQL was captured live, twice, and it matches exactly one place:
+
+- `app/panel/api/routes/realtime.py:41-47` — `_snapshot()`, reached only from the `/panel/ws` handler.
+  (Not `app/services/realtime.py:59 activity_events()`, which adds a `conversation_id` predicate the
+  captured statement does not have.)
+
+What does **not** hold — the mechanism I proposed, and the evidence against it:
+
+- The story was "starlette's `WebSocketTestSession` cancels the ASGI task before it processes the
+  disconnect (`starlette/testclient.py`:120,126), so `get_db`'s teardown never runs". Direct single
+  process probes (denial path, success path, with and without `with TestClient(...)`) all showed the
+  handler finishing cleanly: `publisher.subscriber_count` went 1 -> 0 and the pooled connection went
+  back to idle. No leak.
+- Forcing the condition with the cyclic GC disabled (a throwaway plugin, `gc.disable()` at session
+  start, on the theory that the leak is only hidden by GC collecting the abandoned session) did
+  **not** make it deterministic: `tests/functional/test_api_realtime.py` passed 8/8 with the
+  unmodified code.
+- A full `tests/functional` run (217 tests) with a per-test timestamp plugin plus the 1 Hz sampler
+  produced **zero stalls**. The stall is real but rare in that subset, and the WS file alone is not a
+  reliable trigger.
+
+So `tests/functional/test_api_realtime.py` being "sufficient" was based on two stalls in an early
+loop and does not survive repetition. The holder statement is a strong lead, not a confirmed cause,
+and a fix for it has **not** been applied.
+
+Next step: keep the timestamped-per-test + sampler campaign running until a stall is captured, then
+attribute it to the test in flight and work backwards from there.
+
+**Instrumentation used (throwaway, outside the repo):** `/tmp/opencode/stall/sampler.py`,
+`loop.sh`, `focus.sh`, `probe.py`, `probe_plugin.py`, `campaign.sh`, `nogc_plugin.py`. Nothing in
+`pyproject.toml` or the suite was modified.
+
+### Raw capture (still valid)
+
+A `pg_stat_activity` sampler (1 Hz) ran alongside the suite. pytest has `faulthandler` enabled, so
+`SIGABRT` on the pytest process dumps every thread stack at the instant of the stall. The 120 s
+ceiling is untouched.
+
+**The holder, captured live (same signature both times):**
 
 ```
 WAITING pid=19912  wait=Lock|relation  q=TRUNCATE appointment_history, appointments, ...
@@ -164,44 +201,16 @@ HOLDER  pid=19910  state=idle in transaction  xact_age=16.8s
           ORDER BY conversation_events.created_at, conversation_events.id
 ```
 
-That statement matches **exactly one place in the repo**:
-
-- `app/panel/api/routes/realtime.py:41-47` — `_snapshot()`, which filters only on
-  `ConversationEvent.event.in_(ACTIVITY_EVENTS)` and orders by `(created_at, id)`.
-- (Not `app/services/realtime.py:59 activity_events()`, which adds a `conversation_id` predicate
-  the captured query does not have.)
-
-`_snapshot()` is called only from the panel WebSocket handler `panel_websocket` (`/panel/ws`), which
-receives its session from the request-scoped generator dependency `get_db`
-(`app/panel/deps.py`) and holds it for the lifetime of the stream.
-
-**Bisection:** running `tests/functional/test_api_realtime.py` alone reproduces the stall — the
-`TRUNCATE` of the *next* test blocks on the session left open by the WebSocket path. The suite's own
-docstring at `test_api_realtime.py:170-181` already notes that starlette's `WebSocketTestSession`
-**cancels** the ASGI task when its `with` block exits. A cancelled task is the likely reason the
-sync-generator dependency's teardown never runs, leaving the pooled connection with an open
-transaction — hence `idle in transaction` and the held relation lock.
-
-**Timing-dependent, as reported:** 2 stalls in 2 runs, then 0 in 6 after a small I/O-buffering
-change. It is a race, not a deterministic path.
-
-**Why this stops here:** the work unit says that if the root cause turns out to live in app code, the
-finding comes back before any change — it is a different risk class. The two candidate fixes sit on
-opposite sides of that line:
-
-1. **App:** do not hold a transaction open across the stream (e.g. release/commit after the snapshot,
-   or give the stream a session that is not request-scoped).
-2. **Test harness:** ensure the ASGI task has finished before the test ends, so the dependency
-   teardown completes.
-
-**Instrumentation used (throwaway, outside the repo):** `/tmp/opencode/stall/sampler.py`,
-`/tmp/opencode/stall/loop.sh`, `/tmp/opencode/stall/focus.sh`, `/tmp/opencode/stall/probe.py`.
-Nothing in `pyproject.toml` or the suite was modified.
+The statement matches exactly one place in the repo: `app/panel/api/routes/realtime.py:41-47`
+(`_snapshot()`), reached only from the `/panel/ws` handler, whose session comes from the
+request-scoped generator dependency `get_db` (`app/panel/deps.py`). That is a **lead**, and the
+correction above records why it is not yet a confirmed cause.
 
 ## Notes for the executor
 
 - The stall is **intermittent**: it will not necessarily reproduce on demand. Budget for repeated runs,
-  and prefer capturing evidence while it happens over trying to make it happen.
+  and prefer capturing evidence while it happens over trying to make it happen. A single clean run
+  proves nothing; neither does a single stall.
 - Anything that needs a push to `Stefan-migo/lumat-agent` is a remote operation: ask the human first,
   every time. The pushed-artifact idea (a workflow that uploads the sample) needs that authorization.
 - The earlier work unit's records live in `odd/tasks/versioning-release-process.md` on the branch
