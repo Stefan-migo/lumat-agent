@@ -1,8 +1,10 @@
+import json
 from unittest.mock import MagicMock, Mock
 
 import pytest
 
 import app.chat.assistant.tools.registry as registry
+from app.chat.assistant.nodes import _planner_tool_catalog
 from app.services import tukulpan
 
 
@@ -25,6 +27,38 @@ def test_memory_tool_declares_visibility_without_a_write_target():
                 "scope": "agent",
             }
         )
+
+
+def test_memory_write_topic_key_contract_is_advertised_in_the_schema():
+    topic_key_schema = registry.MemoryWriteArgs.model_json_schema()["properties"]["topic_key"]
+
+    assert topic_key_schema.get("pattern") == r"^agent:"
+
+
+def test_planner_catalog_advertises_the_topic_key_contract():
+    catalog = json.loads(_planner_tool_catalog(["memory.write"]))
+    memory_write = next(entry for entry in catalog if entry["name"] == "memory.write")
+
+    assert memory_write["arguments"]["properties"]["topic_key"].get("pattern") == r"^agent:"
+
+
+def test_memory_write_topic_key_still_requires_the_agent_namespace():
+    with pytest.raises(ValueError):
+        registry.MemoryWriteArgs.model_validate(
+            {
+                "titulo": "A fact",
+                "contenido": "A fact",
+                "topic_key": "test",
+            }
+        )
+
+    assert registry.MemoryWriteArgs.model_validate(
+        {
+            "titulo": "A fact",
+            "contenido": "A fact",
+            "topic_key": "agent:fact",
+        }
+    )
 
 
 def test_agent_scope_requires_canonical_entity():
