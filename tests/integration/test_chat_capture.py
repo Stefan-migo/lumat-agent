@@ -175,18 +175,16 @@ def test_cm2_skip_is_unknown_and_non_blocking(mock_openai_chat):
 
 
 def _seed_kb_doc(text: str, visibility: KbVisibility) -> None:
-    # H2 (PR 2, AO-7): KB retail (valores) queries are answered by the scoped
-    # research_triage sub-graph, which only retrieves chunks whose
-    # source_meta.category is in its kb_scope. Seed the manual with the
-    # matching category so the scoped retrieval can find it (same semantic
-    # hit the pre-H2 unscoped path produced).
+    # Ingested the way the panel upload does: no `source_meta`. This used to seed
+    # `{"category": "valores"}` to satisfy the research_triage scope, which made the
+    # test pass while the production path could never satisfy that filter. The scope
+    # is gone (odd/tasks/kb-triage-scope.md), so the seed is gone with it.
     with SessionLocal() as session:
         kb_service.ingest_document(
             session,
             title="Manual",
             fmt=DocumentFormat.MD,
             content=text.encode(),
-            source_meta={"category": "valores"},
             visibility=visibility,
         )
         session.commit()

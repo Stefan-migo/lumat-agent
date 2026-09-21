@@ -54,17 +54,16 @@ def clean_db(migrated_db):
 
 
 def _seed_kb_doc(text: str, visibility: KbVisibility) -> None:
-    # H2 (PR 2, AO-7): the valores query is answered by the scoped
-    # research_triage sub-graph, which only retrieves chunks whose
-    # source_meta.category is in its kb_scope — seed the category so the
-    # scoped retrieve finds it and respond (which injects <memory>) runs.
+    # Ingested the way the panel upload does: no `source_meta`. This used to seed
+    # `{"category": "valores"}` to satisfy the research_triage scope, which no
+    # production path could satisfy. The scope is gone
+    # (odd/tasks/kb-triage-scope.md), so the seed is gone with it.
     with SessionLocal() as session:
         kb_service.ingest_document(
             session,
             title="Manual",
             fmt=DocumentFormat.MD,
             content=text.encode(),
-            source_meta={"category": "valores"},
             visibility=visibility,
         )
         session.commit()
