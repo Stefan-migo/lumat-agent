@@ -2,9 +2,10 @@
 
 **Branch**: `odd/versioning-release-process`
 **Worktree**: `../lumat-agent-odd-versioning-release-process`
-**Base**: `5c5f4af2`
-**Seeded from**: `.rapsodia-code/sessions/ready-for-odd/2026-09-20-versionado-release-trazabilidad/report.md`
-**Status**: scoped — not started
+**Base**: `06768699` (scoped at `5c5f4af2`; `main` advanced 33 commits before the branch was cut —
+none of them touched a file in the authorized scope, so the plan below is unchanged)
+**Seeded from**: `.rapsodia-code/sessions/archived/2026-09-20-versionado-release-trazabilidad/report.md`
+**Status**: in progress — T1 next
 
 ## Objective
 
@@ -123,14 +124,51 @@ formatter exists; the tests are the verification.
 
 ## Progress
 
-- [ ] Worktree created and provisioned; `.opencode/tools/package-lock.json` removed.
-- [ ] Graph Check before editing.
+- [x] Worktree created and provisioned; `.opencode/tools/package-lock.json` removed.
+- [x] Graph Check before editing — the graph at `graphify-out/` was rebuilt at `06768699`, the
+      branch base, so it is fresh (the "stale at `26b463a2`" note below no longer applies).
+- [x] Baseline measured before touching anything: `uv run pytest tests/` → **1042 passed, 2 warnings,
+      exit 0, 112.68s** (Python 3.14, test DB `pgvector/pgvector:pg16` on port 6364).
 - [ ] T1–T5.
+
+### Pre-flight findings (verified on the branch base, 2026-09-21)
+
+Constraints found by reading the code that the plan did not record. They do not change the
+decisions; they change the shape of T1 and T4.
+
+1. **The image cannot read `pyproject.toml` at runtime.** `Dockerfile` installs with
+   `uv sync --frozen --no-dev --no-install-project` and the runtime stage never copies
+   `pyproject.toml`, so `importlib.metadata.version("lumatagent")` is unavailable in the container.
+   The version must be stamped in at build time (build ARG → ENV or a stamped file).
+2. **The commit SHA cannot be read inside the build.** `.dockerignore` excludes `.git/` and
+   `infra/*`, so no build step can resolve `HEAD`; the SHA must arrive as a build ARG.
+3. **`docker compose up -d --build` cannot compute the SHA.** The deploy step must export it
+   (`GIT_SHA`, and the version alongside it) before invoking compose, and compose must forward it via
+   `args: ${...}`. This adds a step to the §2.1 deploy flow in `docs/ops.md` (T3).
+4. **One test encodes the old constant:** `tests/integration/test_health.py:18` asserts
+   `body["version"] == "0.1.0"`. It is the only consumer of the `/health` body shape: the nginx
+   healthcheck only checks status 200, `infra/monitor.sh` never reads the version, and the SPA does
+   not display it. Historical smoke records (`docs/ops.md` §2.1.1, `docs/hardening.md:226`) stay as
+   they are — they are evidence of what the endpoint returned at the time, not live documentation.
+5. **CalVer vs PEP 440:** `2026.09.2` normalises to `2026.9.2`. Decide whether `/health` reports the
+   tag form or the normalised one, so the report and the tag read the same to a human.
+6. **T4 cannot reuse `infra/test-db.sh`:** it requires `infra/.env`, which is gitignored and absent in
+   CI. The workflow must set `TEST_DB_PORT=5432`, `TEST_POSTGRES_PASSWORD` and `TEST_DB_PROJECT`, and
+   let `tests/_testdb.py` derive the rest. Without an explicit `TEST_DB_PORT` the port is derived
+   from the checkout directory name by hash, so CI would get an arbitrary port.
+7. **`web/` has its own test stack** (vitest + playwright, node 22.22.2) that the plan does not
+   mention. "The suite" in this document means the pytest suite. Running the web tests in CI is new
+   scope and is not assumed.
+8. **T2 may be the most expensive task in wall-clock terms:** curating the `v2026.09.1` baseline entry
+   by hand means summarising ~576 commits / ~120 PRs. Agree the granularity before starting — one
+   baseline entry stating what the deployed system is, not 120 bullets.
 
 ## Notes for the executor
 
-- The knowledge graph was built at `26b463a2` and is **stale** relative to this base (`5c5f4af2`).
-  Refresh or rebuild it before Step 1 of the Graph Check.
-- `main` moves in parallel: it advanced from `26b463a2` to `5c5f4af2` while this session ran. Pinning
-  the base at scope time does not pin it at implementation time — re-check before branching.
+- The knowledge graph at `graphify-out/` is built at `06768699`, the branch base — **fresh**, no
+  rebuild needed. (This note previously warned about `26b463a2`; `main` moved again and the graph was
+  rebuilt at the new tip before the branch was cut.)
+- `main` moved from `26b463a2` to `5c5f4af2` to `06768699` while this work unit sat scoped. It was
+  re-checked before branching: the 33 commits added since `5c5f4af2` touch no file in the authorized
+  scope, so the tasks below survived the drift intact. Re-check again before opening the PR.
 - The retroactive baseline tag `v2026.09.1` already exists on the remote. Do not recreate it.
