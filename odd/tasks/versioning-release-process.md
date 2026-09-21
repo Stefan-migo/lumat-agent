@@ -5,7 +5,7 @@
 **Base**: `06768699` (scoped at `5c5f4af2`; `main` advanced 33 commits before the branch was cut —
 none of them touched a file in the authorized scope, so the plan below is unchanged)
 **Seeded from**: `.rapsodia-code/sessions/archived/2026-09-20-versionado-release-trazabilidad/report.md`
-**Status**: in progress — T3 next
+**Status**: in progress — T4 next
 
 ## Objective
 
@@ -89,9 +89,9 @@ The documented process exists and was never executed:
       version rather than a constant. — **done, see the T1 record below.**
 - [x] **T2 — `CHANGELOG.md`.** Create it in Keep a Changelog format; add the curated `v2026.09.1`
       baseline entry, explicitly marked retroactive. — **done, see the T2 record below.**
-- [ ] **T3 — `docs/ops.md` release section.** State the CalVer rule, the tag-before-deploy step, and
+- [x] **T3 — `docs/ops.md` release section.** State the CalVer rule, the tag-before-deploy step, and
       the `Status:` line convention; correct the §2.9 go-live record guidance so it matches a process
-      someone will actually follow.
+      someone will actually follow. — **done, see the T3 record below.**
 - [ ] **T4 — CI running the suite.** Add the workflow with a `pgvector` service container. **If this
       grows beyond a single focused workflow it should split into its own work unit** — do not let it
       derail T1–T3.
@@ -129,7 +129,51 @@ formatter exists; the tests are the verification.
       branch base, so it is fresh (the "stale at `26b463a2`" note below no longer applies).
 - [x] Baseline measured before touching anything: `uv run pytest tests/` → **1042 passed, 2 warnings,
       exit 0, 112.68s** (Python 3.14, test DB `pgvector/pgvector:pg16` on port 6364).
-- [ ] T3–T5.
+- [ ] T4–T5.
+
+### T3 — done (delivered, reviewed, approved)
+
+**Changed (`docs/ops.md`, 104 lines):**
+- §2.1 now states the CalVer rule, that the tag is created **before** the deploy on the exact commit
+  being deployed, and that `pyproject.toml [project] version` is the single source reaching the tag,
+  image, `/health`, and changelog. Release prep is shown as runnable commands (edit, commit, tag,
+  push) instead of prose. The stale `# e.g. v1.4.0` SemVer example is now CalVer.
+- §2.1 deployment and §2.2 rollback both read the deployed commit as `deploy` and pass it to compose:
+  `GIT_SHA="$(sudo -u deploy git rev-parse --short HEAD)"`. Reading it from an admin shell would hit
+  Git's dubious-ownership refusal, since the repo is owned by `deploy`.
+- Smoke expectations now name the version **and** commit and require both to match what was deployed.
+- §2.9 became a one-row-per-deploy release record, seeded with the honest baseline row
+  (`v2026.09.1` / `10165a6d` / 2026-09-08) whose smoke and operator fields are recorded as *never
+  recorded*, not inferred.
+- §2.10 documents the four-value `Status:` convention (`released-in-prod`, `contract-complete`,
+  `in-flux`, `deferred`) as one line inside each spec, with no parallel artifact, and states that
+  applying it to existing specs remains an open decision.
+- **Real defect found and fixed:** §2.2 (twice) and §2.7 told the operator to record incidents in
+  **§10**, and the document had no §10 — it ended at §3. The final section was broadened to
+  "Runbook incident + change record" with an incidents table, and the three references repointed.
+  This is the "no step that cannot be executed" acceptance criterion, paid for in practice.
+- The document header's `Updated:` date moved to 2026-09-21 and two `§2.9 go-live record` pointers
+  were corrected to `release record`. §1's Meta-onboarding "BLOCKED" status was deliberately left
+  alone: it is genuinely still blocked on the client, and reconciling it with production reality is
+  the separate documentation-debt item the report lists.
+
+**Verification:** the orchestrator read the whole diff back and corrected four defects the writer's
+first pass introduced before freezing: a `sed -i` one-liner for release prep (fragile, and it
+hardcoded the next version), a duplicated `GIT_SHA` export, the commit read from an admin shell
+(dubious-ownership refusal), and a §2.9 template pre-filled with `v2026.09.2` for a deploy that never
+happened. Then: `grep -n '§10' docs/ops.md` → no matches; every `§ref` in the file resolves to an
+existing heading; `git diff --check` clean.
+
+**Review:** native RAR, lineage `review-cfba9e910f1395e2`, risk **low**, reason `non_executable_only`,
+zero lenses — START closed as `approved` and the acknowledgement was burned
+(`gentle-ai.review-acknowledged/v1`, `authority: burned`).
+
+**Correction — an orchestrator error worth recording:** T2's START also returned a pending
+acknowledgement, and the first pass reported T2 as approved **without burning it**. The omission was
+caught while handling T3; T2's acknowledgement was then executed with its original token and
+revision (`lineage review-927fe52895260894`, `authority: burned`), even after T3's transaction
+existed. Lesson for T4/T5: an `approved` START is not finished until its `acknowledgement` command
+runs; check the field, do not infer it from the state alone.
 
 ### T2 — done (delivered, reviewed, approved)
 
@@ -147,8 +191,8 @@ openspec/changes/archive/` returns no Tukulpan entry, matching the finding that 
 START closed the transaction as `approved`. A passive document needs structural readback, not an
 artificial semantic-verification pass, so the orchestrator read the file back and re-verified two of
 the writer's evidence commands independently (`git ls-tree` for the Tukulpan absence and for the
-named capability files). No acknowledgement transition was issued, and none should be: there was no
-capture to acknowledge.
+named capability files). START still returned a pending acknowledgement; it was missed at first and
+burned later, in the same pass as T3's — see the correction note under T3.
 
 **Note on the review projection (worth knowing for T3–T5):** the `workspace` projection refuses to
 freeze a candidate whose worktree has untracked files, and it rejected every `--intended-untracked
