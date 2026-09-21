@@ -603,9 +603,9 @@ def test_conservative_mode_brief_respond(mock_openai_chat, fake_embedder, no_rea
             title="Manual",
             fmt=DocumentFormat.MD,
             content=b"cuanto cuesta la revision anual de calefont: 15000 pesos",
-            # H2 (PR 2, AO-7): the valores query is answered by the scoped
-            # research_triage sub-graph, so the doc needs a values category.
-            source_meta={"category": "valores"},
+            # No `source_meta`, exactly as the panel upload ingests. The category
+            # seed that used to live here existed only to satisfy the
+            # research_triage scope; see odd/tasks/kb-triage-scope.md.
             visibility=KbVisibility.CUSTOMER,
         )
         session.commit()

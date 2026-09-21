@@ -375,12 +375,14 @@ def test_ao9_research_reply_matches_pre_h2_single_agent(mock_openai_chat, fake_e
     # as a high-sim KB hit.
     valores_text = "el precio de la revision anual del equipo es 15000 pesos"
     with SessionLocal() as session:
+        # No `source_meta`, exactly as the panel upload ingests. The category seed
+        # that used to live here existed only to satisfy the research_triage scope;
+        # see odd/tasks/kb-triage-scope.md.
         kb_service.ingest_document(
             session,
             title="Valores",
             fmt=DocumentFormat.MD,
             content=valores_text.encode(),
-            source_meta={"category": "valores"},
             visibility=KbVisibility.CUSTOMER,
         )
         session.commit()
