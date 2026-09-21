@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
@@ -109,16 +109,9 @@ class MemoryWriteArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     titulo: str = Field(min_length=1, max_length=200)
     contenido: str = Field(min_length=1, max_length=2000)
-    topic_key: str = Field(min_length=1, max_length=200)
+    topic_key: str = Field(min_length=1, max_length=200, pattern=r"^agent:")
     tipo: Literal["decision", "discovery", "pattern", "preference"] = "discovery"
     visibility: Literal["thread", "project"] = "thread"
-
-    @field_validator("topic_key")
-    @classmethod
-    def validate_topic_namespace(cls, value: str) -> str:
-        if not value.startswith("agent:"):
-            raise ValueError("autonomous memory topic_key must start with agent:")
-        return value
 
 
 class WebSearchArgs(BaseModel):
