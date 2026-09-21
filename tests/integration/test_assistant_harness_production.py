@@ -55,9 +55,10 @@ def test_valid_read_runs_through_production_graph_with_history_and_registry_prom
     assert response.status_code == 201
     settled = client.get(f"/panel/api/chat/threads/{thread_id}").json()
     assert settled["messages"][0]["status"] == "processed"
-    assert len(captured) == 2
+    assert len(captured) == 3
     assert "older context" in captured[0]["messages"][-1]["content"]
     assert captured[0]["messages"][0]["content"].startswith("You are the Lumat internal executive operator")
+    assert any("already run" in call["messages"][-1]["content"] for call in captured)
     with SessionLocal() as session:
         thread = session.get(__import__("app.models", fromlist=["InternalChatThread"]).InternalChatThread, thread_id)
         assert thread.assistant_state["planner"]["kind"] == "tool"
