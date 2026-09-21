@@ -190,8 +190,9 @@ Resume with `mem_context`, then the project-scoped `mem_search` for this feature
 
 ## Next step
 
-Implementation and verification are complete. Nothing is committed, pushed, or opened as a PR —
-delivery is the human's decision, under ordinary repository policy.
+Implementation, verification and delivery are complete: commits `11b3f531` (the fix and its tests) and
+`e1033846` (this record) on `odd/kb-audience-label`, pushed, with **PR #285** open against `main` under
+the `type:bug` label and CI green. Merge remains the human's decision, under ordinary repository policy.
 
 Deliberately NOT folded into this unit:
 
