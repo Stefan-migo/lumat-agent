@@ -6,7 +6,7 @@ import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
 import { Input } from "../primitives/Input";
-import { Select } from "../primitives/Select";
+import { Select, type SelectOption } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
 import { DataTable, tabularNum, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
@@ -16,6 +16,19 @@ import { kbStatusLabel } from "../shared/toneMaps";
 
 export type KbListState = AsyncDataState | "processing" | "disable-confirmation";
 export interface KbListProps { data?: DocsResponse | null; state?: KbListState; onRetry?: () => void; }
+
+// `customer` means the customer channel may ground on the document AND Lumat may still read it —
+// never client-only. The label says who reads it, symmetrically with `internal`.
+const AUDIENCE_LABEL: Record<KbVisibility, string> = {
+  customer: "Cliente y Lumat",
+  internal: "Interno (solo Lumat)",
+};
+
+// One source for the audience choices: the badge and both selectors used to carry their own literal.
+const AUDIENCE_OPTIONS: SelectOption[] = [
+  { value: "internal", label: AUDIENCE_LABEL.internal },
+  { value: "customer", label: AUDIENCE_LABEL.customer },
+];
 
 function docStatus(doc: Doc): "activo" | "deshabilitado" { return doc.active ? "activo" : "deshabilitado"; }
 
@@ -59,7 +72,7 @@ function DocActions({ doc, busy, onEdit, onDisable, onRestore, onVisibility }: {
     </details>
     {doc.active ? <Button variant="secondary" disabled={busy !== null} onClick={onDisable}>Deshabilitar</Button> : <span className="kb-actions__technical-copy">Deshabilitado</span>}
     <div className="kb-actions__visibility">
-      <Select label="Audiencia" aria-label={`Audiencia doc ${doc.id}`} value={visibility} options={[{ value: "internal", label: "Interno (solo Lumat)" }, { value: "customer", label: "Cliente" }]} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} />
+      <Select label="Audiencia" aria-label={`Audiencia doc ${doc.id}`} value={visibility} options={AUDIENCE_OPTIONS} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} />
       <p className="kb-actions__technical-copy">Un documento interno nunca se usa para responder a clientes.</p>
       <Button variant="secondary" disabled={busy !== null || visibility === doc.visibility} onClick={() => onVisibility(visibility)}>Cambiar audiencia</Button>
     </div>
@@ -73,7 +86,7 @@ const columns: Column<Doc>[] = [
   { key: "format", header: "Formato", render: (doc) => doc.format },
   { key: "version", header: "Versión", render: (doc) => `${doc.version} (activa: ${doc.active_version})` },
   { key: "status", header: "Estado", render: (doc) => <Badge tone={doc.active ? "success" : "neutral"}>{kbStatusLabel(docStatus(doc))}</Badge> },
-  { key: "visibility", header: "Audiencia", render: (doc) => <Badge tone={doc.visibility === "customer" ? "success" : "neutral"}>{doc.visibility === "customer" ? "Cliente" : "Interno (solo Lumat)"}</Badge> },
+  { key: "visibility", header: "Audiencia", render: (doc) => <Badge tone={doc.visibility === "customer" ? "success" : "neutral"}>{AUDIENCE_LABEL[doc.visibility]}</Badge> },
   { key: "cost", header: "Costo", render: (doc) => doc.cost_meta !== null ? tabularNum(`$${doc.cost_meta.toFixed(6)}`) : "—" },
 ];
 
@@ -154,11 +167,11 @@ export function KbList({ data: controlledData, state: controlledState, onRetry }
   return <PageFrame title="Base de conocimientos" meta={data ? `${docs.length} documentos` : undefined} state={stateMessage(state, controlledState === "error")}>
     {feedback ? <StateMessage tone={feedback.tone} role="alert" title={feedback.title} /> : null}
     {showWorkspace ? <>
-       <Card title="Agregar documento"><div className="kb-upload__fields"><Input label="Título" placeholder="Título del documento" value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy !== null} /><Input label="Archivo (pdf / md / txt / csv)" type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} disabled={busy !== null} /><Select label="Audiencia" value={visibility} options={[{ value: "internal", label: "Interno (solo Lumat)" }, { value: "customer", label: "Cliente" }]} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} /><p className="kb-search__hint">Un documento interno nunca se usa para responder a clientes.</p><Button disabled={busy !== null} onClick={() => file && mutate("upload", () => uploadKbDocument(title, file, visibility))}>Agregar</Button></div></Card>
+       <Card title="Agregar documento"><div className="kb-upload__fields"><Input label="Título" placeholder="Título del documento" value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy !== null} /><Input label="Archivo (pdf / md / txt / csv)" type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} disabled={busy !== null} /><Select label="Audiencia" value={visibility} options={AUDIENCE_OPTIONS} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} /><p className="kb-search__hint">Un documento interno nunca se usa para responder a clientes.</p><Button disabled={busy !== null} onClick={() => file && mutate("upload", () => uploadKbDocument(title, file, visibility))}>Agregar</Button></div></Card>
        {docs.length === 0 ? <EmptyState title="No hay documentos" description="Sube el primer documento para comenzar." /> : <DataTable columns={columns} rows={docs} rowKey={(doc) => String(doc.id)} actions={(doc) => <DocActions doc={doc} busy={busy} onEdit={(nextTitle, content) => mutate("edit", () => editKbDocument(doc.id, { title: nextTitle, content }))} onDisable={() => mutate("disable", () => disableKbDocument(doc.id))} onVisibility={(nextVisibility) => mutate("visibility", () => setKbVisibility(doc.id, nextVisibility))} onRestore={(version) => setRestoreConfirmation({ doc, version })} />} />}
       <SearchPanel />
      </> : null}
-     {restoreConfirmation ? <><StateMessage tone="warning" role="alert" title="Confirma la restauración" detail={`El documento se reabrirá como Interno (solo Lumat). El asistente dejará de usarlo para responder a clientes hasta que lo marques como Cliente nuevamente.`} /><div className="kb-actions__restore-confirmation"><Button onClick={() => { const pending = restoreConfirmation; setRestoreConfirmation(null); void mutate("restore", () => restoreKbDocument(pending.doc.id, pending.version)); }}>Confirmar</Button><Button variant="secondary" onClick={() => setRestoreConfirmation(null)}>Cancelar</Button></div></> : null}
+     {restoreConfirmation ? <><StateMessage tone="warning" role="alert" title="Confirma la restauración" detail={`El documento se reabrirá como Interno (solo Lumat). El asistente dejará de usarlo para responder a clientes hasta que lo marques como Cliente y Lumat nuevamente.`} /><div className="kb-actions__restore-confirmation"><Button onClick={() => { const pending = restoreConfirmation; setRestoreConfirmation(null); void mutate("restore", () => restoreKbDocument(pending.doc.id, pending.version)); }}>Confirmar</Button><Button variant="secondary" onClick={() => setRestoreConfirmation(null)}>Cancelar</Button></div></> : null}
     {controlledState === "disable-confirmation" ? <StateMessage tone="warning" role="alert" title="Confirma la desactivación" detail={`Al deshabilitar «${docs.find((doc) => doc.active)?.title ?? "este documento"}», el agente dejará de responder con él. Puedes volver a activarlo cuando quieras.`} /> : null}
     {state === "error" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}
   </PageFrame>;

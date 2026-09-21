@@ -44,10 +44,25 @@ describe("KbList page story (T5.2 / S6 DS-UI-COPY/STATES/LABELS)", () => {
     expect(within(row).getByText(estadoLabel)).toBeInTheDocument();
     // Costo 6-decimal USD (formatted like '%.6f')
     expect(within(row).getByText("$0.000412")).toBeInTheDocument();
-    expect(within(row).getAllByText("Cliente").some((element) => element.getAttribute("data-tone") === "success")).toBe(true);
+    expect(within(row).getAllByText("Cliente y Lumat").some((element) => element.getAttribute("data-tone") === "success")).toBe(true);
     const internal = docs.find((doc) => doc.visibility === "internal")!;
     const internalRow = within(table).getByText(`#${internal.id}`).closest("tr") as HTMLElement;
     expect(within(internalRow).getAllByText("Interno (solo Lumat)").some((element) => element.getAttribute("data-tone") === "neutral")).toBe(true);
+  });
+
+  it("declares who reads a customer document on every audience surface (KB-5 copy)", () => {
+    render(<KbList data={{ docs }} />);
+    const customer = docs.find((doc) => doc.visibility === "customer")!;
+    const row = within(screen.getByRole("table")).getByText(`#${customer.id}`).closest("tr") as HTMLElement;
+    // The badge, the reclassification selector and the upload selector must agree: `customer`
+    // means the client channel may ground on it AND Lumat may still read it, never client-only.
+    expect(within(row).getAllByText("Cliente y Lumat").some((element) => element.getAttribute("data-tone") === "success")).toBe(true);
+    expect(within(row).getByRole("option", { name: "Cliente y Lumat" })).toBeInTheDocument();
+    const addCard = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
+    expect(within(addCard).getByRole("option", { name: "Cliente y Lumat" })).toBeInTheDocument();
+    // `internal` was already truthful and stays so, on both selectors.
+    expect(within(row).getByRole("option", { name: "Interno (solo Lumat)" })).toBeInTheDocument();
+    expect(within(addCard).getByRole("option", { name: "Interno (solo Lumat)" })).toBeInTheDocument();
   });
 
   it("renders an approved Spanish status label per document (triangulation across activo/deshabilitado)", () => {
@@ -371,6 +386,8 @@ describe("KbList API page", () => {
     const confirmation = (await screen.findAllByRole("alert")).find((element) => element.textContent?.includes("Confirma la restauración"))!;
     expect(confirmation).toHaveTextContent(/reabrirá como Interno \(solo Lumat\)/i);
     expect(confirmation).toHaveTextContent(/dejará de usarlo para responder a clientes/i);
+    // The confirmation names the audience the admin must pick again, so it must match the option label.
+    expect(confirmation).toHaveTextContent(/marques como Cliente y Lumat/i);
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
 
     const mutationCalls = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
