@@ -9,9 +9,20 @@ which is the intended "missing env -> clear boot error" behavior (T0.2).
 """
 
 from functools import lru_cache
+from pathlib import Path
+import tomllib
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+PYPROJECT_PATH = Path(__file__).resolve().parents[1] / "pyproject.toml"
+
+
+def _read_app_version() -> str:
+    # Keep the deployed version tied to the package metadata used for releases.
+    with PYPROJECT_PATH.open("rb") as pyproject:
+        return tomllib.load(pyproject)["project"]["version"]
 
 
 class Settings(BaseSettings):
@@ -57,7 +68,8 @@ class Settings(BaseSettings):
     meta_access_token: str  # Meta Cloud API permanent token
     meta_phone_number_id: str  # WhatsApp Business Phone Number ID
 
-    app_version: str = "0.1.0"
+    app_version: str = Field(default_factory=_read_app_version)
+    git_sha: str = "unknown"
 
     # Media downloads (design Webhook Pipeline: media -> media/ volume)
     media_dir: str = "media"

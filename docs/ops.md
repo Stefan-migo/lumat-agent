@@ -1,9 +1,9 @@
 # LumatAgent — Operations & Meta Onboarding Checklist
 
-> Change: `panel-spa-delivery` · Tasks: **3.1–3.2** · Updated: 2026-09-04
+> Change: `panel-spa-delivery` · Tasks: **3.1–3.2** · Updated: 2026-09-21
 > Status: **BLOCKED on client action** — waiting on Meta credentials from Lumat (Max).
 > This file is the T2.1 deliverable (onboarding notes structure). The full ops
-> runbook (deploy/rollback, backup restore drill, monitoring triage, go-live
+> runbook (deploy/rollback, backup restore drill, monitoring triage, release
 > record) lands in T6.5 — this checklist is the prerequisite that unblocks the
 > live webhook.
 
@@ -73,7 +73,26 @@ credentials.**
 
 ### 2.1 Deploy — git tag + compose restart
 
-Every deploy is a tagged release; the tag is the rollback point (§2.2).
+The release version is CalVer `YYYY.MM.N`; `N` increments within the month, and
+the annotated tag is `v` + that version. Create the tag **before** the deploy on
+the exact commit being deployed; that makes the rollback point real. The single
+version source is `pyproject.toml [project] version`. The same string reaches the
+tag, image, `/health`, and changelog entry.
+
+Release prep, when the release needs a new number — set `[project] version` in
+`pyproject.toml` to the new CalVer, then tag that exact commit:
+
+```bash
+cd /opt/lumat
+sudo -u deploy git fetch origin main
+sudo -u deploy git checkout main
+# edit pyproject.toml: [project] version = "2026.09.3"  (the tag must match it)
+sudo -u deploy git add pyproject.toml
+sudo -u deploy git commit -m "release: 2026.09.3"
+sudo -u deploy git push origin main
+sudo -u deploy git tag -a v2026.09.3 -m "Release v2026.09.3"
+sudo -u deploy git push origin v2026.09.3
+```
 
 > `--project-name lumat` is REQUIRED: with `-f infra/...` compose would derive
 > the project name from the `infra/` directory, producing `infra-api-1` /
@@ -83,12 +102,16 @@ Every deploy is a tagged release; the tag is the rollback point (§2.2).
 ```bash
 cd /opt/lumat
 sudo -u deploy git fetch origin main
-sudo -u deploy git checkout <tag>            # e.g. v1.4.0
-sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
+sudo -u deploy git checkout <tag>            # e.g. v2026.09.2
+# The api image stamps the deployed commit and prod compose refuses to build
+# without it. Read it as `deploy`, the repo owner: an admin shell in a repo owned
+# by another user hits Git's dubious-ownership refusal.
+GIT_SHA="$(sudo -u deploy git rev-parse --short HEAD)"
+sudo -u deploy env GIT_SHA="$GIT_SHA" docker compose --project-name lumat -f infra/docker-compose.yml \
   -f infra/docker-compose.prod.yml config >/tmp/lumat-compose-config.yml
 sudo -u deploy docker build -f infra/nginx/Dockerfile -t lumat-nginx:prod .
 sudo -u deploy docker run --rm lumat-nginx:prod nginx -t
-sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
+sudo -u deploy env GIT_SHA="$GIT_SHA" docker compose --project-name lumat -f infra/docker-compose.yml \
   -f infra/docker-compose.prod.yml up -d --build
 # Migrate runs automatically inside the api container before uvicorn (compose
 # command chain); re-run it explicitly to prove/refresh idempotence:
@@ -113,8 +136,10 @@ curl -fsS "https://agente.lumat.cl/webhook/whatsapp?hub.mode=subscribe&hub.verif
 sudo -u deploy /opt/lumat/infra/monitor.sh && echo monitor=OK
 ```
 
-Expected: `/health` returns 200; the verify handshake echoes the challenge;
-monitor exits 0. If any smoke fails → roll back (§2.2).
+Expected: `/health` returns 200 and `{"status":"ok","version":"<calver>","commit":"<short sha>"}`;
+the version matches the tag (without `v`) and the commit matches the deployed
+commit; the verify handshake echoes the challenge; monitor exits 0. If any
+smoke fails → roll back (§2.2).
 
 ### 2.1.2 Panel SPA release smoke checklist
 
@@ -139,7 +164,7 @@ put credentials or session cookies in the repository or shell history.
   `curl -fsS https://agente.lumat.cl/health`, the webhook verification probe
   from §2.1, and `sudo -u deploy /opt/lumat/infra/monitor.sh` (exit 0).
 
-Record the tag, timestamp, operator, and any failed check in the go-live record
+Record the tag, timestamp, operator, and any failed check in the release record
 (§2.9). These panel checks require the VPS DNS, TLS certificates, and valid
 panel credentials; they are not reproducible in the local repository test
 environment.
@@ -178,6 +203,8 @@ sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
 
 Smoke outputs (recorded):
 
+> The endpoint now also reports the commit; the recorded output below is what the endpoint returned at the time.
+
 ```
 $ curl -fsS https://agente.lumat.cl/health
 {"status":"ok","version":"0.1.0"}
@@ -213,7 +240,7 @@ Rehearsal-caught bugs fixed in this batch:
 **Remains VPS-only (cannot run locally — no public DNS/LE):** real Let's
 Encrypt issuance for `agente.` + `panel.lumat.cl`, `certbot renew --dry-run`,
 SMTP alert delivery (monitor failure path), and all real credentials
-(`infra/.env` on the server). See `docs/hardening.md` §4/§8 + §2.9 go-live
+(`infra/.env` on the server). See `docs/hardening.md` §4/§8 + §2.9 release
 record.
 
 ### 2.2 Rollback — previous tag + compose restart
@@ -221,9 +248,10 @@ record.
 ```bash
 cd /opt/lumat
 sudo -u deploy git checkout <previous-tag>   # the last known-good tag
+GIT_SHA="$(sudo -u deploy git rev-parse --short HEAD)"
 sudo -u deploy docker build -f infra/nginx/Dockerfile -t lumat-nginx:prod .
 sudo -u deploy docker run --rm lumat-nginx:prod nginx -t
-sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
+sudo -u deploy env GIT_SHA="$GIT_SHA" docker compose --project-name lumat -f infra/docker-compose.yml \
   -f infra/docker-compose.prod.yml up -d --build
 sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
   -f infra/docker-compose.prod.yml exec -T api sh -c \
@@ -233,13 +261,13 @@ sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
 The checkout and rebuild restore the nginx image, embedded SPA bytes, routing,
 and legacy `/panel/` proxy behavior from the known-good tag. This is a code and
 static-artifact rollback only: never roll back database data or an already-run
-schema migration. Re-run §2.1.2 and record the incident in §10.
+schema migration. Re-run §2.1.2 and record the incident in §3.
 
 **Rule: never roll back a schema migration that already ran** (the app
 migrates forward only). If the bad release included a migration, roll back
 code to the previous tag, then run the forward migration manually via
 `db/migrate.sh` before restarting the api — data is never reverted, only code.
-Record the incident in the runbook log (§10).
+Record the incident in the runbook log (§3).
 
 ### 2.3 Backup restore drill (weekly, automated + manual)
 
@@ -343,7 +371,7 @@ Triage table:
 
 After fixing, run `sudo -u deploy /opt/lumat/infra/monitor.sh` → exit 0
 clears the alert (next 5-min run re-alerts if still failing). Log every
-incident + resolution in §10.
+incident + resolution in §3.
 
 ### 2.8 Daily summary cron
 
@@ -362,27 +390,45 @@ crontab /tmp/cron && rm /tmp/cron)
 > digest via the same SMTP path as `monitor.sh`. Add it in T7.2 alongside the
 > seed if not present; the cron entry above is the ops contract.
 
-### 2.9 Go-live record
+### 2.9 Release record
 
-Fill this out at T7.3 (after the prepago number webhook is live and Meta
-validation passes). It is the evidence the change is in production.
+One row per deploy; it is the evidence that the tagged release is in production.
 
-| Item | Value | Date/initials |
-|------|-------|---------------|
-| Deploy tag (git) | `v1.x.x` | |
-| Production URL (webhook) | `https://agente.lumat.cl/webhook/whatsapp` | |
-| Meta number (prepago dedicated) | +56 … | |
-| Meta validation status | ⬜ pending / ✅ approved | |
-| Hardening checklist | `docs/hardening.md` — all 9 ticks | |
-| Backup cron verified | `crontab -l \| grep backup.sh` | |
-| Monitor cron verified | `crontab -l \| grep monitor.sh` | |
-| First real customer conversation | case id: | |
-| Rollback tag (known-good) | `v1.(x-1).y` | |
+Production ran untagged from 2026-09-08 until `v2026.09.1` was created
+retroactively on 2026-09-20, and the previous one-time form of this record was
+never filled in. The baseline row is therefore the first recorded entry: its
+smoke results and operator were never recorded, and they are left unknown rather
+than inferred.
+
+| Deploy tag | Commit | Date | Operator | Smoke (`/health` version + commit, webhook verify, monitor) | Rollback tag | Incidents |
+|------------|--------|------|----------|------------------------------------------------------------|--------------|-----------|
+| `v2026.09.1` | `10165a6d` | 2026-09-08 | not recorded (tag created 2026-09-20) | not recorded | — (first tag) | — |
+
+### 2.10 Spec part-status convention
+
+The convention is one `Status:` line inside each existing spec. There is no
+parallel artifact, so the status cannot drift from the spec.
+
+- `released-in-prod` — deployed and running in production.
+- `contract-complete` — implemented and verified in the repository, not yet deployed.
+- `in-flux` — still being changed, not stable.
+- `deferred` — deliberately postponed.
+
+Applying this line to existing specs retroactively or only to future work is
+still an open decision and is not part of this runbook.
 
 ---
 
-## 3. Runbook change log
+## 3. Runbook incident + change record
+
+### Incidents
+
+| Date | Incident | Resolution | Operator |
+|------|----------|------------|----------|
+
+### Change log
 
 | Date | Change | Operator |
 |------|--------|----------|
 | 2026-08-16 | T7.2 — §2.1 deploy flow updated (`--project-name lumat`, containerized migrate/seed via `docker compose exec api`); §2.1.1 rehearsal record (clean-deploy simulation on the local VM, smoke outputs, rehearsal-caught bugs, VPS-only remainder) | dev |
+| 2026-09-21 | CalVer release rule; tag-before-deploy; `GIT_SHA` build stamp; per-deploy release record; spec part-status convention; repaired incident-record references | dev |
