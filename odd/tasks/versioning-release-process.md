@@ -83,10 +83,10 @@ The documented process exists and was never executed:
 
 ## Tasks
 
-- [ ] **T1 — Version source of truth + `/health`.** Make one value flow from a single source into the
+- [x] **T1 — Version source of truth + `/health`.** Make one value flow from a single source into the
       image and out through `/health`, including the commit. Update `app/config.py`, `app/main.py`,
       `Dockerfile`, `infra/docker-compose.prod.yml`. Tests assert `/health` reports the injected
-      version rather than a constant.
+      version rather than a constant. — **done, see the T1 record below.**
 - [ ] **T2 — `CHANGELOG.md`.** Create it in Keep a Changelog format; add the curated `v2026.09.1`
       baseline entry, explicitly marked retroactive.
 - [ ] **T3 — `docs/ops.md` release section.** State the CalVer rule, the tag-before-deploy step, and
@@ -129,7 +129,53 @@ formatter exists; the tests are the verification.
       branch base, so it is fresh (the "stale at `26b463a2`" note below no longer applies).
 - [x] Baseline measured before touching anything: `uv run pytest tests/` → **1042 passed, 2 warnings,
       exit 0, 112.68s** (Python 3.14, test DB `pgvector/pgvector:pg16` on port 6364).
-- [ ] T1–T5.
+- [ ] T2–T5.
+
+### T1 — done (delivered, reviewed, approved)
+
+**Single source:** `pyproject.toml [project] version`, now `2026.09.2` (CalVer `YYYY.MM.N`, the release
+after the retroactive baseline `v2026.09.1`). `app/config.py` resolves it through a module-level
+`PYPROJECT_PATH` and a `default_factory`, so the value is read per instantiation and no second
+constant exists. The image carries `pyproject.toml` and reads the same file, because
+`uv sync --no-install-project` leaves no importable project metadata. Only the commit SHA travels as a
+build ARG — the build genuinely cannot know it (`.dockerignore` excludes `.git/`). `uv.lock` was
+regenerated: the root package version line is the only change in it (`2026.9.2`, PEP 440 normalising
+the leading zero; the `/health` value stays the tag form `2026.09.2` because the file is read as text).
+
+**Design decision taken with the human (2026-09-21):** `pyproject.toml` as the single source, chosen
+over a root `VERSION` file. Rationale: it needs no new file, no `dynamic` version, no hatchling
+configuration, and above all no manual `export APP_VERSION=$(cat VERSION)` step in the deploy — the
+class of documented-but-never-executed step this work unit exists to remove. The cost accepted is that
+the runtime parses the build file at import.
+
+**Verification (measured, not asserted):**
+- Baseline before any change: `1042 passed, 2 warnings, exit 0, 112.68s`.
+- Focused: `uv run pytest tests/integration/test_health.py tests/integration/test_infra.py` →
+  **13 passed** (re-run independently by the orchestrator: 13 passed in 0.95s).
+- Full suite after the change: **1044 passed, 2 warnings, exit 0** (+2 = the two new tests).
+- `uv run python -c "...get_settings()..."` → `2026.09.2 unknown`.
+- Deploy wiring exercised, not assumed: `docker compose ... config` **fails loudly** without
+  `GIT_SHA` (`required variable GIT_SHA is missing a value: export GIT_SHA=$(git rev-parse --short
+  HEAD) before building`) and parses cleanly with it exported.
+- **Not proven:** an actual Docker image rebuild. The acceptance criterion "changing the source
+  changes `/health` after a rebuild" is proven by the source-redirection test, which exercises the
+  same read path, not by building the image.
+
+**Review:** native RAR, lineage `review-0fc5cb08461445de`, risk **high**, canonical 4R
+(`review-risk`, `review-resilience`, `review-readability`, `review-reliability`), all four admitted.
+Result: **approved, 0 findings** across all four lenses. Authority burned
+(`gentle-ai.review-acknowledged/v1`, `authority: burned`). Delivery remains a separate human decision.
+
+**Graph nodes consulted (Graph Check step 2):** `get_settings`, `CalVer Release Process`,
+`fastapi_app`, `docker_compose_infra`, `test_infra.py`, plus the `version` / `config` /
+`health_counts()` symbols from a scoped query. No directed path exists between the config/main
+community and the Dockerfile/compose community — expected, the coupling is textual (build args and
+file paths), not call-graph.
+
+**Accepted correction noted for T3:** the deploy flow in `docs/ops.md` must now export `GIT_SHA`
+before `up -d --build`, and the release-prep step must bump the CalVer in `pyproject.toml` before
+tagging. Until T3 lands, the documented deploy command fails fast — which is the intended behaviour
+while the doc catches up.
 
 ### Pre-flight findings (verified on the branch base, 2026-09-21)
 
