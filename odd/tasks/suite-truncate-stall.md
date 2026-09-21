@@ -139,9 +139,64 @@ holder with certainty rather than by inference.
 - [x] Worktree created and provisioned (base `8ad0e026`, `infra/.env` copied, `.opencode` noise removed).
 - [x] Reproduce with live database evidence: 2 of 6 local runs, `idle in transaction` vs blocked
       `TRUNCATE` on `conversation_events`, captured in `pg_stat_activity`.
-- [ ] Name the holder with certainty (`pg_blocking_pids()` + `application_name`).
-- [ ] Identify the leaking code path and fix it at the root.
+- [x] Name the holder with certainty (exact holder query identified, unique match in the repo).
+- [x] Identify the leaking code path (`_snapshot` reached from the panel WebSocket handler).
+- [ ] Fix it at the root — **BLOCKED: the root cause lives in app code, so this needs a human
+      decision before any change** (see "Root cause located" below).
 - [ ] Five consecutive clean runs; then CI.
+
+## Root cause located (2026-09-21) — APP CODE, stop-before-changing
+
+Instrumented reproduction: a `pg_stat_activity` sampler (1 Hz) plus a watchdog that sends `SIGABRT`
+to the pytest process when a `Lock` wait persists for 15 s. pytest has `faulthandler` enabled, so
+the abort dumps every thread stack at the exact instant of the stall. The 120 s ceiling is untouched.
+
+**The holder, captured live twice (same signature):**
+
+```
+WAITING pid=19912  wait=Lock|relation  q=TRUNCATE appointment_history, appointments, ...
+HOLDER  pid=19910  state=idle in transaction  xact_age=16.8s
+        q=SELECT conversation_events.id, conversation_events.conversation_id,
+                 conversation_events.event, conversation_events.cause,
+                 conversation_events.actor, conversation_events.created_at
+          FROM conversation_events
+          WHERE conversation_events.event IN ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR)
+          ORDER BY conversation_events.created_at, conversation_events.id
+```
+
+That statement matches **exactly one place in the repo**:
+
+- `app/panel/api/routes/realtime.py:41-47` — `_snapshot()`, which filters only on
+  `ConversationEvent.event.in_(ACTIVITY_EVENTS)` and orders by `(created_at, id)`.
+- (Not `app/services/realtime.py:59 activity_events()`, which adds a `conversation_id` predicate
+  the captured query does not have.)
+
+`_snapshot()` is called only from the panel WebSocket handler `panel_websocket` (`/panel/ws`), which
+receives its session from the request-scoped generator dependency `get_db`
+(`app/panel/deps.py`) and holds it for the lifetime of the stream.
+
+**Bisection:** running `tests/functional/test_api_realtime.py` alone reproduces the stall — the
+`TRUNCATE` of the *next* test blocks on the session left open by the WebSocket path. The suite's own
+docstring at `test_api_realtime.py:170-181` already notes that starlette's `WebSocketTestSession`
+**cancels** the ASGI task when its `with` block exits. A cancelled task is the likely reason the
+sync-generator dependency's teardown never runs, leaving the pooled connection with an open
+transaction — hence `idle in transaction` and the held relation lock.
+
+**Timing-dependent, as reported:** 2 stalls in 2 runs, then 0 in 6 after a small I/O-buffering
+change. It is a race, not a deterministic path.
+
+**Why this stops here:** the work unit says that if the root cause turns out to live in app code, the
+finding comes back before any change — it is a different risk class. The two candidate fixes sit on
+opposite sides of that line:
+
+1. **App:** do not hold a transaction open across the stream (e.g. release/commit after the snapshot,
+   or give the stream a session that is not request-scoped).
+2. **Test harness:** ensure the ASGI task has finished before the test ends, so the dependency
+   teardown completes.
+
+**Instrumentation used (throwaway, outside the repo):** `/tmp/opencode/stall/sampler.py`,
+`/tmp/opencode/stall/loop.sh`, `/tmp/opencode/stall/focus.sh`, `/tmp/opencode/stall/probe.py`.
+Nothing in `pyproject.toml` or the suite was modified.
 
 ## Notes for the executor
 
