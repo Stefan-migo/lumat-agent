@@ -175,8 +175,32 @@ So `tests/functional/test_api_realtime.py` being "sufficient" was based on two s
 loop and does not survive repetition. The holder statement is a strong lead, not a confirmed cause,
 and a fix for it has **not** been applied.
 
-Next step: keep the timestamped-per-test + sampler campaign running until a stall is captured, then
-attribute it to the test in flight and work backwards from there.
+### Then confirmed, with per-test attribution
+
+The campaign described above did capture it: 8 runs of `tests/functional` produced 7 clean runs and
+**1 stall in run 8**, with both ends timestamped. That removes the guesswork.
+
+```
+START 16:13:42.964  test_panel_websocket_mount_sends_snapshot_before_live_events     END 43.160  ok
+START 16:13:43.161  test_panel_websocket_snapshot_has_rest_equivalent_case_context   END 43.548  ok
+START 16:13:43.548  test_admin_panel_websocket_also_receives_snapshot                END 43.782  ok
+START 16:13:43.783  test_panel_websocket_rejects_missing_session                     no END
+```
+
+- The test that **blocks** is the fourth: its `clean_db` TRUNCATE never returns.
+- The test that **leaks** is the third: a *successful* `/panel/ws` test. Its `_snapshot` statement
+  opened a transaction at ~43.5 s and never closed it, so the very next test's TRUNCATE waits on it.
+- The holder's statement in that run is the `_snapshot` SELECT confirmed below, with
+  `xact_start` at 16:13:43.7 — inside that third test's window.
+
+So the earlier claim was right in substance, and the downgrade above was the correct response to
+*insufficient* evidence, not to contrary evidence. What the direct probes proved is narrower than I
+first wrote: the handler does clean up in isolation, so the race needs the suite's context (a rapid
+run of `/panel/ws` tests sharing the module-level engine), not a single WebSocket interaction.
+
+**Rate:** roughly 1 in 8 runs of `tests/functional`, which is why single probes kept missing it.
+
+**Verification campaign:** `/tmp/opencode/stall/campaign.sh` re-run with the harness fix applied.
 
 **Instrumentation used (throwaway, outside the repo):** `/tmp/opencode/stall/sampler.py`,
 `loop.sh`, `focus.sh`, `probe.py`, `probe_plugin.py`, `campaign.sh`, `nogc_plugin.py`. Nothing in
