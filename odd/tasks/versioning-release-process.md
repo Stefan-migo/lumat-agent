@@ -5,7 +5,7 @@
 **Base**: `06768699` (scoped at `5c5f4af2`; `main` advanced 33 commits before the branch was cut —
 none of them touched a file in the authorized scope, so the plan below is unchanged)
 **Seeded from**: `.rapsodia-code/sessions/archived/2026-09-20-versionado-release-trazabilidad/report.md`
-**Status**: in progress — T1 next
+**Status**: in progress — T3 next
 
 ## Objective
 
@@ -87,8 +87,8 @@ The documented process exists and was never executed:
       image and out through `/health`, including the commit. Update `app/config.py`, `app/main.py`,
       `Dockerfile`, `infra/docker-compose.prod.yml`. Tests assert `/health` reports the injected
       version rather than a constant. — **done, see the T1 record below.**
-- [ ] **T2 — `CHANGELOG.md`.** Create it in Keep a Changelog format; add the curated `v2026.09.1`
-      baseline entry, explicitly marked retroactive.
+- [x] **T2 — `CHANGELOG.md`.** Create it in Keep a Changelog format; add the curated `v2026.09.1`
+      baseline entry, explicitly marked retroactive. — **done, see the T2 record below.**
 - [ ] **T3 — `docs/ops.md` release section.** State the CalVer rule, the tag-before-deploy step, and
       the `Status:` line convention; correct the §2.9 go-live record guidance so it matches a process
       someone will actually follow.
@@ -129,7 +129,39 @@ formatter exists; the tests are the verification.
       branch base, so it is fresh (the "stale at `26b463a2`" note below no longer applies).
 - [x] Baseline measured before touching anything: `uv run pytest tests/` → **1042 passed, 2 warnings,
       exit 0, 112.68s** (Python 3.14, test DB `pgvector/pgvector:pg16` on port 6364).
-- [ ] T2–T5.
+- [ ] T3–T5.
+
+### T2 — done (delivered, reviewed, approved)
+
+**Granularity decided with the human (2026-09-21):** product level. The baseline range holds ~431
+commits and 100 merged PRs, so the entry names capability areas instead of listing PRs. 11 bullets,
+26 lines total.
+
+**Accuracy:** every capability in the entry was verified present at `10165a6d`, the deployed revision
+(`git ls-tree` against that commit for the service, route, and SPA files backing each bullet). The
+persistent-memory / Tukulpan line was deliberately left out: `git ls-tree -r --name-only 10165a6d
+openspec/changes/archive/` returns no Tukulpan entry, matching the finding that the memory line was
+0% deployed at the baseline.
+
+**Review:** native RAR, lineage `review-927fe52895260894`, risk **low**, **zero lenses selected** —
+START closed the transaction as `approved`. A passive document needs structural readback, not an
+artificial semantic-verification pass, so the orchestrator read the file back and re-verified two of
+the writer's evidence commands independently (`git ls-tree` for the Tukulpan absence and for the
+named capability files). No acknowledgement transition was issued, and none should be: there was no
+capture to acknowledge.
+
+**Note on the review projection (worth knowing for T3–T5):** the `workspace` projection refuses to
+freeze a candidate whose worktree has untracked files, and it rejected every `--intended-untracked
+-selection` form that omitted the inventory digest. The working form is the full schema JSON:
+
+```json
+{"schema":"gentle-ai.review-intended-untracked-selection/v1","untracked_scope":"select",
+ "intended_untracked":["CHANGELOG.md"],
+ "expected_untracked_inventory":"sha256:<the digest from the previous status call>"}
+```
+
+`untracked_scope` accepts exactly `exclude` or `select`. Committing the candidate before the review
+preflight avoids this step entirely, which is the cheaper path for the remaining tasks.
 
 ### T1 — done (delivered, reviewed, approved)
 
