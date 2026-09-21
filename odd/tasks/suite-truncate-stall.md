@@ -144,7 +144,8 @@ holder with certainty rather than by inference.
 - [x] Fix it in the harness: `_finish_websocket` closes the socket and pumps the portal until the
       request's pooled connection is back, so the ASGI task finishes before starlette cancels it.
 - [x] Consecutive clean runs: **24** on `tests/functional` and **5** on the full suite.
-- [ ] Green CI on the pushed branch — needs explicit push authorization (not requested yet).
+- [x] Green CI, consecutively, on the same commit: PR #274 over `78cb8a56`, two passing runs
+      (2m08s and 1m37s).
 
 ## Correction (2026-09-21, later the same day)
 
@@ -224,8 +225,13 @@ five runs was discarded and re-run because it had used a stricter 45 s override.
 
 With a base rate near 1 in 8, 24 clean runs leave roughly a 4% chance of having been luck.
 
-**Still open:** CI green. That needs a push, which is a remote operation and has not been requested.
-The rate in CI may also differ from local, so the CI result is the last word — not this table.
+**CI:** green on PR #274, twice consecutively on the same commit (`78cb8a56`): 2m08s and 1m37s. The
+workflow only exists from PR #273 onwards, which is why the fix had to land after that merge.
+
+**Follow-up work unit (deliberately not here):** the panel WebSocket holds a transaction open for the
+whole lifetime of the stream. Harmless for the suite now, but in production a connected client keeps
+an `idle in transaction` holding locks on `conversation_events`. Fixing that changes application
+behaviour, so it is out of this change by its own constraint.
 
 **Instrumentation used (throwaway, outside the repo):** `/tmp/opencode/stall/sampler.py`,
 `loop.sh`, `focus.sh`, `probe.py`, `probe_plugin.py`, `campaign.sh`, `nogc_plugin.py`. Nothing in
