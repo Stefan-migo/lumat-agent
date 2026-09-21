@@ -139,10 +139,12 @@ holder with certainty rather than by inference.
 - [x] Worktree created and provisioned (base `8ad0e026`, `infra/.env` copied, `.opencode` noise removed).
 - [x] Reproduce with live database evidence: 2 of 6 local runs, `idle in transaction` vs blocked
       `TRUNCATE` on `conversation_events`, captured in `pg_stat_activity`.
-- [x] Name the holder's statement with certainty (see below; the holder's **SQL** is pinned, the
-      **code path that leaves it open is not**).
-- [ ] Identify the leaking code path and fix it at the root — **open**.
-- [ ] Five consecutive clean runs; then CI.
+- [x] Identify the leaking code path: a *successful* `/panel/ws` test leaves `get_db`'s session open,
+      and the next test's `clean_db` TRUNCATE waits on it (attribution confirmed below).
+- [x] Fix it in the harness: `_finish_websocket` closes the socket and pumps the portal until the
+      request's pooled connection is back, so the ASGI task finishes before starlette cancels it.
+- [x] Consecutive clean runs: **24** on `tests/functional` and **5** on the full suite.
+- [ ] Green CI on the pushed branch — needs explicit push authorization (not requested yet).
 
 ## Correction (2026-09-21, later the same day)
 
@@ -201,6 +203,29 @@ run of `/panel/ws` tests sharing the module-level engine), not a single WebSocke
 **Rate:** roughly 1 in 8 runs of `tests/functional`, which is why single probes kept missing it.
 
 **Verification campaign:** `/tmp/opencode/stall/campaign.sh` re-run with the harness fix applied.
+
+### Fix and verification (2026-09-21)
+
+The fix is test-side and lives in `tests/functional/test_api_realtime.py`: the `_finish_websocket`
+helper closes the socket and pumps the portal until `engine.pool.checkedout()` drops, so the handler
+returns on its own before `WebSocketTestSession` cancels the ASGI task. Application behaviour is
+untouched, and so are `pyproject.toml`, the 120 s ceiling and `timeout_method`.
+
+Measured, same harness and same machine:
+
+| | Before the fix | After the fix |
+|---|---|---|
+| `tests/functional` | 7 clean, **1 stall** in 8 runs | **24 consecutive clean** |
+| full suite (`pytest tests/`) | not measured this way | **5 consecutive clean**, `1044 passed` each, 100–107 s |
+
+The five full runs used the configured 120 s ceiling (no `--timeout` override); the stall detector is
+the sampler observing a sustained lock wait, independent of the pytest ceiling. An earlier set of
+five runs was discarded and re-run because it had used a stricter 45 s override.
+
+With a base rate near 1 in 8, 24 clean runs leave roughly a 4% chance of having been luck.
+
+**Still open:** CI green. That needs a push, which is a remote operation and has not been requested.
+The rate in CI may also differ from local, so the CI result is the last word — not this table.
 
 **Instrumentation used (throwaway, outside the repo):** `/tmp/opencode/stall/sampler.py`,
 `loop.sh`, `focus.sh`, `probe.py`, `probe_plugin.py`, `campaign.sh`, `nogc_plugin.py`. Nothing in
