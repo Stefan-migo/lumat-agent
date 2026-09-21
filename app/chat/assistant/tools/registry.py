@@ -9,9 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Callable, Literal
+from typing import Annotated, Any, Callable, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
@@ -27,6 +27,10 @@ SDB_WRITE_ALLOWLIST = frozenset({
 })
 AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write"})
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
+# The canonical agent axis and the customer id shape are contract values the planner cannot derive
+# from prose. They are declared once, as the constraints the read models both advertise and enforce.
+_AGENT_MEMORY_ENTITY = memory.agent_memory_entity(memory.WRITABLE_PROYECTO)
+_CUSTOMER_ENTITY_PATTERN = r"^(?:customer:\d+|\d+)$"
 
 
 class ToolValidationError(ValueError):
@@ -70,39 +74,64 @@ class KpiArgs(BaseModel):
     window_days: int = Field(default=7, ge=1, le=31)
 
 
-class _MemoryScopeArgs(BaseModel):
+class _MemoryReadBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    scope: Literal["panel", "customer", "agent"]
-    entity_id: str | None = Field(default=None, max_length=100)
-
-    @model_validator(mode="after")
-    def validate_scope_entity(self) -> "_MemoryScopeArgs":
-        if self.scope == "panel" and self.entity_id is not None:
-            raise ValueError("panel memory reads require the thread to be derived server-side")
-        if self.scope == "customer" and (
-            self.entity_id is None
-            or (
-            not self.entity_id.startswith("customer:")
-            and not self.entity_id.isdigit()
-            )
-        ):
-            raise ValueError("customer memory reads require customer:{id} or a legacy numeric id")
-        if self.scope == "agent" and (
-            self.entity_id is None
-            or self.entity_id != memory.agent_memory_entity(memory.WRITABLE_PROYECTO)
-        ):
-            raise ValueError("canonical agent memory reads require the project-qualified canonical agent entity")
-        return self
-
-
-class MemoryArgs(_MemoryScopeArgs):
     topic: str | None = Field(default=None, max_length=255)
     limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
 
 
-class MemorySearchArgs(_MemoryScopeArgs):
+class _MemorySearchBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     query: str = Field(min_length=1, max_length=500)
     limit: int = Field(default=5, ge=1, le=10)
+
+
+class _PanelMemoryArgs(_MemoryReadBase):
+    scope: Literal["panel"]
+    entity_id: None = None
+
+
+class _CustomerMemoryArgs(_MemoryReadBase):
+    scope: Literal["customer"]
+    entity_id: str = Field(min_length=1, max_length=100, pattern=_CUSTOMER_ENTITY_PATTERN)
+
+
+class _AgentMemoryArgs(_MemoryReadBase):
+    scope: Literal["agent"]
+    entity_id: Literal[_AGENT_MEMORY_ENTITY]
+
+
+class _PanelMemorySearchArgs(_MemorySearchBase):
+    scope: Literal["panel"]
+    entity_id: None = None
+
+
+class _CustomerMemorySearchArgs(_MemorySearchBase):
+    scope: Literal["customer"]
+    entity_id: str = Field(min_length=1, max_length=100, pattern=_CUSTOMER_ENTITY_PATTERN)
+
+
+class _AgentMemorySearchArgs(_MemorySearchBase):
+    scope: Literal["agent"]
+    entity_id: Literal[_AGENT_MEMORY_ENTITY]
+
+
+_MemoryRead = Annotated[
+    _PanelMemoryArgs | _CustomerMemoryArgs | _AgentMemoryArgs,
+    Field(discriminator="scope"),
+]
+_MemorySearch = Annotated[
+    _PanelMemorySearchArgs | _CustomerMemorySearchArgs | _AgentMemorySearchArgs,
+    Field(discriminator="scope"),
+]
+
+
+class MemoryArgs(RootModel[_MemoryRead]):
+    """memory.read arguments. Each scope declares its own entity rule in this schema."""
+
+
+class MemorySearchArgs(RootModel[_MemorySearch]):
+    """memory.search arguments. Each scope declares its own entity rule in this schema."""
 
 
 class MemoryWriteArgs(BaseModel):
@@ -216,29 +245,31 @@ def _kpis(session, args: KpiArgs):
 
 
 def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None):
-    entity_id = args.entity_id
-    if args.scope == "panel":
+    parsed = args.root
+    entity_id = parsed.entity_id
+    if parsed.scope == "panel":
         if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
             raise ToolValidationError("panel memory read requires a positive trusted thread id")
         entity_id = memory.thread_memory_entity(trusted_thread_id)
-    rows = memory.list_for_entity(session, scope=args.scope, entity_id=entity_id)
-    if args.topic:
-        rows = [row for row in rows if row.topic_key == args.topic]
-    return rows[: args.limit]
+    rows = memory.list_for_entity(session, scope=parsed.scope, entity_id=entity_id)
+    if parsed.topic:
+        rows = [row for row in rows if row.topic_key == parsed.topic]
+    return rows[: parsed.limit]
 
 
 def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | None):
-    entity_id = args.entity_id
-    if args.scope == "panel":
+    parsed = args.root
+    entity_id = parsed.entity_id
+    if parsed.scope == "panel":
         if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
             raise ToolValidationError("panel memory search requires a positive trusted thread id")
         entity_id = memory.thread_memory_entity(trusted_thread_id)
     rows = memory.hybrid_search(
         session,
-        args.query,
-        scope=args.scope,
+        parsed.query,
+        scope=parsed.scope,
         entity_id=entity_id,
-        top_k=args.limit,
+        top_k=parsed.limit,
     )
     return [
         {**row, "contenido": row.get("contenido", "")[:MEMORY_SEARCH_CONTENT_LIMIT]}
