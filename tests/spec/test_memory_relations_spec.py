@@ -4,7 +4,7 @@ import json
 from unittest.mock import Mock
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.db import SessionLocal
 from app.models import Conversation, Customer, Memory, MemoryRelation, MemoryStatus, MemoryType
@@ -276,3 +276,56 @@ def test_mem11_read_paths_exclude_archived_and_annotate_review_and_relations(
         assert "Archived customer note." not in context
         assert "superseded" in context
         assert "Customer prefers afternoons." in context
+
+
+def test_mem11_candidate_search_failure_degrades_to_no_relation(
+    fake_embedder, migrated_db, monkeypatch, caplog
+):
+    """A candidate-discovery failure must not escape into the write it was judging."""
+    with SessionLocal() as session:
+        current = _memory(session, content="The customer prefers afternoons.", key="preference-new")
+        session.flush()
+        memory_id = current.id
+        monkeypatch.setattr(
+            relations, "find_candidates", Mock(side_effect=RuntimeError("candidate search down"))
+        )
+
+        with caplog.at_level("WARNING", logger=relations.__name__):
+            result = relations.judge_memory_relations(session, current)
+
+        assert result == []
+        assert session.execute(select(MemoryRelation)).scalars().all() == []
+        assert "memory relation judge failed" in caplog.text
+        assert "candidate search down" in caplog.text
+
+        session.commit()
+
+    with SessionLocal() as fresh:
+        assert fresh.get(Memory, memory_id) is not None
+
+
+def test_mem11_candidate_query_error_leaves_the_transaction_usable(
+    fake_embedder, migrated_db, monkeypatch, caplog
+):
+    """A real database error in discovery must not poison the caller's transaction."""
+    def failing_query(_session, _memory, **_kwargs):
+        _session.execute(text("SELECT * FROM a_table_that_does_not_exist"))
+        raise AssertionError("the failing query must raise")
+
+    with SessionLocal() as session:
+        current = _memory(session, content="The customer prefers afternoons.", key="preference-new")
+        session.flush()
+        memory_id = current.id
+        monkeypatch.setattr(relations, "find_candidates", failing_query)
+
+        with caplog.at_level("WARNING", logger=relations.__name__):
+            result = relations.judge_memory_relations(session, current)
+
+        assert result == []
+        assert "memory relation judge failed" in caplog.text
+
+        # The judged write must remain committable: the caller's transaction survives.
+        session.commit()
+
+    with SessionLocal() as fresh:
+        assert fresh.get(Memory, memory_id) is not None

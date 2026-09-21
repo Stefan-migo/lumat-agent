@@ -97,8 +97,21 @@ def _parse_verdicts(content: str, candidate_ids: set[int]) -> list[dict[str, Any
 def judge_memory_relations(
     session: Session, memory: Memory, *, top_k: int = 5
 ) -> list[MemoryRelation]:
-    """Judge one written assertion, degrading to no-op on an invalid LLM answer."""
-    candidates = find_candidates(session, memory, top_k=top_k)
+    """Judge one written assertion, degrading to a no-op on any failure.
+
+    This is an enrichment of a write that has already succeeded, so nothing here
+    may escape into the caller: a candidate-query error, a judge failure, or a
+    relation-insert failure all degrade to "no relation". The candidate search
+    runs inside its own savepoint so a database error rolls back to a point the
+    caller's transaction still survives — a bare catch would leave the session
+    poisoned and break the very write it was judging.
+    """
+    try:
+        with session.begin_nested():
+            candidates = find_candidates(session, memory, top_k=top_k)
+    except Exception:
+        logger.warning("memory relation judge failed", exc_info=True)
+        return []
     if not candidates:
         return []
 
