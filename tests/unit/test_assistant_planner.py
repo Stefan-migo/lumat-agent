@@ -87,6 +87,81 @@ def test_parse_planner_output_returns_validity_with_plan():
     assert diagnosis["reason"] == "planner_output_validation_failed"
 
 
+def test_planner_output_accepts_explicit_null_arguments():
+    result, valid, diagnosis = parse_planner_output(
+        {
+            "kind": "respond",
+            "arguments": None,
+            "summary": "No tool is needed.",
+            "requires_approval": False,
+        }
+    )
+
+    assert valid is True
+    assert diagnosis is None
+    assert result.arguments == {}
+
+
+def test_plan_llm_keeps_respond_plan_with_null_arguments(monkeypatch, caplog):
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], persona="persona"),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+                content='{"kind":"respond","classification":"normal","tool":null,"arguments":null,"summary":"Si: tengo acceso a memoria por ambitos (panel, cliente, agente) en modo lectura con memory.read/memory.search, y escritura solo con tu aprobacion. No accedo a memoria fuera del panel autorizado.","requires_approval":false}',
+            ))]),
+        ))),
+    )
+
+    with caplog.at_level(logging.ERROR, logger="app.chat.assistant.nodes"):
+        result = plan_llm({"content": "Do you have access to memory?", "context": {"items": []}})
+
+    assert result["planner"]["valid"] is True
+    assert "failure" not in result["planner"]
+    assert result["plan"]["arguments"] == {}
+    assert result["plan"]["summary"] == (
+        "Si: tengo acceso a memoria por ambitos (panel, cliente, agente) en modo lectura con "
+        "memory.read/memory.search, y escritura solo con tu aprobacion. No accedo a memoria fuera "
+        "del panel autorizado."
+    )
+    assert not [
+        record
+        for record in caplog.records
+        if record.name == "app.chat.assistant.nodes" and record.levelno >= logging.ERROR
+    ]
+
+
+def test_planner_output_normalizes_null_arguments_for_tool_plans():
+    result = PlannerOutput.model_validate(
+        {
+            "kind": "tool",
+            "tool": "memory.read",
+            "arguments": None,
+            "summary": "Read memory.",
+            "requires_approval": False,
+        }
+    )
+
+    assert result.arguments == {}
+
+
+def test_planner_output_still_rejects_wrong_argument_types_and_extra_keys():
+    payload = {
+        "kind": "respond",
+        "summary": "Answer the request.",
+        "requires_approval": False,
+    }
+
+    with pytest.raises(ValidationError, match="dict_type"):
+        PlannerOutput.model_validate({**payload, "arguments": []})
+
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        PlannerOutput.model_validate({**payload, "arguments": {}, "type": "json_object"})
+
+
 def test_plan_llm_does_not_treat_fallback_summary_collision_as_invalid(monkeypatch):
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",

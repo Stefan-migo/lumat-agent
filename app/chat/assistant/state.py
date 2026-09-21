@@ -43,6 +43,14 @@ class PlannerOutput(BaseModel):
             return value[:200]
         return value
 
+    @field_validator("arguments", mode="before")
+    @classmethod
+    def empty_arguments_for_null(cls, value: object) -> object:
+        """An explicit null means no arguments; the model authors it for respond plans."""
+        if value is None:
+            return {}
+        return value
+
     @model_validator(mode="after")
     def require_tool_for_tool_kind(self) -> "PlannerOutput":
         if self.kind == "tool" and not self.tool:
