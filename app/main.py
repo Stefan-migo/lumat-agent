@@ -74,7 +74,7 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["ops"])
     def health() -> dict:
-        return {"status": "ok", "version": settings.app_version}
+        return {"status": "ok", "version": settings.app_version, "commit": settings.git_sha}
 
     app.include_router(webhook_router)
     app.include_router(panel_router)

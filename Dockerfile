@@ -6,7 +6,8 @@
 # multi-stage build — deps are synced in the `build` stage, the runtime stage
 # keeps only the venv + app code and runs as a non-root user.
 #
-# Used by infra/docker-compose.prod.yml (build context: repo root).
+# The runtime also carries pyproject.toml for the version source, and receives
+# the deployed commit SHA as a build argument from infra/docker-compose.prod.yml.
 
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS build
 WORKDIR /app
@@ -18,12 +19,15 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 WORKDIR /app
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 # Non-root app user (SH-1: the api never runs as root; SH-2 read-only fs).
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser
 COPY --from=build /app/.venv /app/.venv
+COPY pyproject.toml ./
 COPY app/ app/
 COPY db/ db/
 # Pre-create the media dir with appuser ownership so a fresh named volume at
