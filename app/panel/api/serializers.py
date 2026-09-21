@@ -33,6 +33,7 @@ from app.models import (
     AssistantAttachment,
     AutomationRule,
     Project,
+    MemoryRelation,
 )
 
 
@@ -436,6 +437,23 @@ def to_memory_dict(memory: Memory) -> dict:
         "status": memory.status.value,
         "created_at": _iso(memory.created_at),
         "updated_at": _iso(memory.updated_at),
+    }
+
+
+def to_memory_relation_dict(
+    relation: MemoryRelation, memory_a: Memory, memory_b: Memory
+) -> dict:
+    """Pending relation row with both customer memories for human review."""
+    return {
+        "id": relation.id,
+        "memory_a": to_memory_dict(memory_a),
+        "memory_b": to_memory_dict(memory_b),
+        "relation": relation.relation,
+        "confidence": relation.confidence,
+        "reason": relation.reason,
+        "source": relation.source,
+        "human_resolved_at": _iso(relation.human_resolved_at),
+        "created_at": _iso(relation.created_at),
     }
 
 

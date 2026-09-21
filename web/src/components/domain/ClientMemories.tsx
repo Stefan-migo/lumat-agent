@@ -6,7 +6,7 @@ import { Textarea } from "../primitives/Textarea";
 import type { Column } from "../shared/DataTable";
 import { DataTable } from "../shared/DataTable";
 import { PageHeader } from "../shared/PageHeader";
-import type { Memory } from "../../types";
+import type { Memory, MemoryRelation, MemoryRelationKind } from "../../types";
 
 export type MemoryHandler = (memoryId: number) => void;
 export type MemoryPinHandler = (memoryId: number, pin: boolean) => void;
@@ -20,6 +20,8 @@ export interface ClientMemoriesProps {
   onUpsert?: (contenido: string) => void;
   onDelete?: MemoryHandler;
   onPin?: MemoryPinHandler;
+  pendingRelations?: MemoryRelation[];
+  onResolveRelation?: (relationId: number, relation: MemoryRelationKind) => Promise<void> | void;
 }
 
 function statusTone(status: Memory["status"]): "neutral" | "success" | "warning" | "danger" {
@@ -47,8 +49,11 @@ export function ClientMemories({
   onUpsert,
   onDelete,
   onPin,
+  pendingRelations = [],
+  onResolveRelation,
 }: ClientMemoriesProps) {
   const [draft, setDraft] = useState("");
+  const [resolvingId, setResolvingId] = useState<number | null>(null);
 
   const columns: Column<Memory>[] = [
     {
@@ -108,6 +113,37 @@ export function ClientMemories({
               Agregar memoria
             </Button>
           </div>
+        </div>
+      ) : null}
+      {pendingRelations.length ? (
+        <div style={{ display: "grid", gap: "var(--space-3)", marginTop: "var(--space-4)" }}>
+          <h3>Relaciones pendientes</h3>
+          {pendingRelations.map((pending) => (
+            <article key={pending.id} style={{ display: "grid", gap: "var(--space-2)" }}>
+              <strong>{pending.memory_a.titulo} · {pending.memory_b.titulo}</strong>
+              <p>{pending.memory_a.contenido}</p>
+              <p>{pending.memory_b.contenido}</p>
+              <p>Propuesta: {pending.relation} · Confianza: {pending.confidence}</p>
+              <p>Motivo: {pending.reason ?? "—"}</p>
+              {onResolveRelation ? (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
+                  {(["supersedes", "conflicts", "related", "compatible", "scoped", "not_conflict"] as const).map((relation) => (
+                    <Button
+                      key={relation}
+                      variant="secondary"
+                      disabled={resolvingId !== null}
+                      onClick={() => {
+                        setResolvingId(pending.id);
+                        void Promise.resolve(onResolveRelation(pending.id, relation)).finally(() => setResolvingId(null));
+                      }}
+                    >
+                      {relation}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+            </article>
+          ))}
         </div>
       ) : null}
     </Card>

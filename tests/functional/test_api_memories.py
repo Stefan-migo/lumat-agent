@@ -17,6 +17,8 @@ an empty memory content. No redirects, no CORS (D1).
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 
 from app.db import SessionLocal  # noqa: E402
@@ -25,6 +27,7 @@ from app.models import (  # noqa: E402
     Customer,
     CustomerState,
     Memory,
+    MemoryRelation,
     MemoryType,
 )
 
@@ -67,6 +70,34 @@ def _login(client, username: str = "oper", password: str = "oper-pass") -> None:
     assert resp.status_code == 200, f"api login must succeed: {resp.status_code} {resp.text}"
 
 
+def _seed_pending_relation(customer_id: int) -> MemoryRelation:
+    first = _seed_memory(
+        customer_id,
+        topic_key="first",
+        titulo="First preference",
+        contenido="prefiere llamadas por la mañana",
+    )
+    second = _seed_memory(
+        customer_id,
+        topic_key="second",
+        titulo="Second preference",
+        contenido="prefiere llamadas por la tarde",
+    )
+    with SessionLocal() as session:
+        relation = MemoryRelation(
+            id_a=first.id,
+            id_b=second.id,
+            relation="conflicts",
+            confidence=0.5,
+            reason="The judge is unsure which preference is current.",
+            source="judge",
+        )
+        session.add(relation)
+        session.commit()
+        session.refresh(relation)
+        return relation
+
+
 def test_memories_endpoints_require_login_401_json(client, make_user):
     """No session -> every memories endpoint answers 401 JSON, never a 302."""
     for method, path, body in [
@@ -74,6 +105,8 @@ def test_memories_endpoints_require_login_401_json(client, make_user):
         ("post", "/panel/api/clients/1/memories", {}),
         ("delete", "/panel/api/clients/1/memories/1", None),
         ("post", "/panel/api/clients/1/memories/1/mark", {}),
+        ("get", "/panel/api/clients/1/memory-relations/pending", None),
+        ("post", "/panel/api/clients/1/memory-relations/1", {"relation": "related"}),
     ]:
         kwargs = {"json": body} if body is not None else {}
         resp = getattr(client, method)(path, follow_redirects=False, **kwargs)
@@ -150,6 +183,78 @@ def test_memories_list_empty_when_none(client, make_user):
 
     assert resp.status_code == 200
     assert resp.json() == {"memories": []}
+
+
+def test_pending_relations_are_listed_and_resolved_through_panel_api(client, make_user):
+    """The human queue is listable and a verdict removes its row from the queue."""
+    customer_id = _seed_customer()
+    relation = _seed_pending_relation(customer_id)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    listed = client.get(
+        f"/panel/api/clients/{customer_id}/memory-relations/pending",
+        follow_redirects=False,
+    )
+
+    assert listed.status_code == 200
+    body = listed.json()
+    assert set(body) == {"relations"}
+    assert len(body["relations"]) == 1
+    pending = body["relations"][0]
+    assert pending["id"] == relation.id
+    assert pending["relation"] == "conflicts"
+    assert pending["confidence"] == 0.5
+    assert pending["reason"] == "The judge is unsure which preference is current."
+    assert pending["memory_a"]["titulo"] == "First preference"
+    assert pending["memory_a"]["contenido"] == "prefiere llamadas por la mañana"
+    assert pending["memory_b"]["titulo"] == "Second preference"
+    assert pending["memory_b"]["contenido"] == "prefiere llamadas por la tarde"
+
+    resolved = client.post(
+        f"/panel/api/clients/{customer_id}/memory-relations/{relation.id}",
+        json={"relation": "not_conflict"},
+        follow_redirects=False,
+    )
+
+    assert resolved.status_code == 200
+    assert resolved.json()["ok"] is True
+    assert resolved.json()["relation"]["relation"] == "not_conflict"
+    assert resolved.json()["relation"]["source"] == "human"
+    assert resolved.json()["relation"]["human_resolved_at"] is not None
+    datetime.fromisoformat(resolved.json()["relation"]["human_resolved_at"])
+
+    listed_again = client.get(
+        f"/panel/api/clients/{customer_id}/memory-relations/pending",
+        follow_redirects=False,
+    )
+    assert listed_again.status_code == 200
+    assert listed_again.json() == {"relations": []}
+
+    with SessionLocal() as session:
+        stored = session.get(MemoryRelation, relation.id)
+        audit = session.scalar(select(AuditLog).where(AuditLog.action == "memory_relation.resolved"))
+    assert stored is not None
+    assert stored.source == "human"
+    assert stored.human_resolved_at is not None
+    assert stored.human_resolved_at <= datetime.now(timezone.utc)
+    assert audit is not None and audit.actor == "oper"
+
+
+def test_pending_relation_verdict_must_use_fixed_vocabulary(client, make_user):
+    customer_id = _seed_customer()
+    relation = _seed_pending_relation(customer_id)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.post(
+        f"/panel/api/clients/{customer_id}/memory-relations/{relation.id}",
+        json={"relation": "erase"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "unknown memory relation: 'erase'"}
 
 
 # ---------------------------------------------------------------------------

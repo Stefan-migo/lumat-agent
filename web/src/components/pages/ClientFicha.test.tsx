@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApiError, apiFetch, addClientNote, changeClientState } from "../../api";
+import { ApiError, apiFetch, addClientNote, changeClientState, resolveMemoryRelation } from "../../api";
 import { ClientFicha } from "./ClientFicha";
 import type { ClientFichaResponse, Memory } from "../../types";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), resolveMemoryRelation: vi.fn() };
 });
 
 const ficha: ClientFichaResponse = {
@@ -82,7 +82,7 @@ describe("ClientFicha page grammar", () => {
     const user = userEvent.setup();
     vi.mocked(changeClientState).mockResolvedValue({ ok: true, state: "inactivo" });
     vi.mocked(addClientNote).mockResolvedValue({ ok: true, note: ficha.notes[0] });
-    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : ficha);
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
     await user.selectOptions(screen.getByLabelText("Estado del cliente"), "inactivo");
@@ -95,6 +95,40 @@ describe("ClientFicha page grammar", () => {
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7");
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7/memories");
     expect(await screen.findByRole("heading", { name: "Nota agregada" })).toBeInTheDocument();
+  });
+
+  it("shows a pending relation and resolves it through the panel API", async () => {
+    const user = userEvent.setup();
+    const pending = {
+      id: 12,
+      memory_a: memories[0],
+      memory_b: { ...memories[0], id: 6, titulo: "Mañana", contenido: "Prefiere contacto por la mañana." },
+      relation: "conflicts" as const,
+      confidence: 0.42,
+      reason: "The judge is unsure which preference is current.",
+      source: "judge",
+      human_resolved_at: null,
+      created_at: null,
+    };
+    let queue = true;
+    vi.mocked(apiFetch).mockImplementation(async (path) => {
+      if (path.endsWith("/memories")) return { memories };
+      if (path.endsWith("/pending")) return { relations: queue ? [pending] : [] };
+      return ficha;
+    });
+    vi.mocked(resolveMemoryRelation).mockImplementation(async () => {
+      queue = false;
+      return { ok: true, relation: { ...pending, relation: "not_conflict" } };
+    });
+
+    render(<ClientFicha customerId={7} />);
+
+    expect(await screen.findByText(/The judge is unsure/)).toBeInTheDocument();
+    expect(screen.getByText("Prefiere contacto por la mañana.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "not_conflict" }));
+
+    expect(resolveMemoryRelation).toHaveBeenCalledWith(7, 12, "not_conflict");
+    await waitFor(() => expect(screen.queryByText(/The judge is unsure/)).not.toBeInTheDocument());
   });
 
   it("shows safe mutation errors and disables controls while saving", async () => {

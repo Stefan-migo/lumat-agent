@@ -18,16 +18,25 @@ transition or an empty note. No redirects, no CORS (D1).
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, aliased
 
-from app.models import CustomerState, Memory, MemoryStatus, MemoryType, User
+from app.models import CustomerState, Memory, MemoryRelation, MemoryStatus, MemoryType, User
 from app.panel.api.deps import require_operator_json
-from app.panel.api.serializers import to_customer_dict, to_memory_dict, to_note_dict
+from app.panel.api.serializers import (
+    to_customer_dict,
+    to_memory_dict,
+    to_memory_relation_dict,
+    to_note_dict,
+)
 from app.panel.deps import get_db
 from app.services import customers
 from app.services import memory as memory_service
+from app.services import relations
 from app.services.audit import record_audit
 
 router = APIRouter(tags=["panel-api-clients"])
@@ -51,6 +60,10 @@ class MemoryBody(BaseModel):
 class MarkBody(BaseModel):
     pin: bool | None = None
     status: str | None = None
+
+
+class MemoryRelationBody(BaseModel):
+    relation: str
 
 
 def _customer_or_404(session: Session, customer_id: int) -> customers.Customer:
@@ -185,6 +198,101 @@ def client_memories_list(
     return {"memories": [to_memory_dict(m) for m in rows]}
 
 
+def _pending_relation_rows(session: Session, customer_id: int):
+    memory_a = aliased(Memory)
+    memory_b = aliased(Memory)
+    return session.execute(
+        select(MemoryRelation, memory_a, memory_b)
+        .join(memory_a, MemoryRelation.id_a == memory_a.id)
+        .join(memory_b, MemoryRelation.id_b == memory_b.id)
+        .where(
+            MemoryRelation.source == "judge",
+            MemoryRelation.human_resolved_at.is_(None),
+            MemoryRelation.confidence < relations.AUTO_JUDGE_CONFIDENCE,
+            memory_a.proyecto == memory_service.WRITABLE_PROYECTO,
+            memory_a.scope == "customer",
+            memory_a.entity_id == str(customer_id),
+            memory_b.proyecto == memory_service.WRITABLE_PROYECTO,
+            memory_b.scope == "customer",
+            memory_b.entity_id == str(customer_id),
+        )
+        .order_by(MemoryRelation.created_at.desc(), MemoryRelation.id.desc())
+    ).all()
+
+
+@router.get("/clients/{customer_id}/memory-relations/pending")
+def client_pending_memory_relations(
+    customer_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    """List judge relations below the auto-resolution threshold for this ficha."""
+    _customer_or_404(session, customer_id)
+    rows = [
+        (relation, memory_a, memory_b)
+        for relation, memory_a, memory_b in _pending_relation_rows(session, customer_id)
+        if relations.is_pending(relation)
+    ]
+    return {
+        "relations": [
+            to_memory_relation_dict(relation, memory_a, memory_b)
+            for relation, memory_a, memory_b in rows
+        ]
+    }
+
+
+@router.post("/clients/{customer_id}/memory-relations/{relation_id}")
+def client_resolve_memory_relation(
+    customer_id: int,
+    relation_id: int,
+    body: MemoryRelationBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    """Resolve one pending customer relation with a fixed-vocabulary human verdict."""
+    if body.relation not in relations.RELATION_VOCAB:
+        raise HTTPException(status_code=400, detail=f"unknown memory relation: {body.relation!r}")
+    _customer_or_404(session, customer_id)
+    pending = next(
+        (
+            (relation, memory_a, memory_b)
+            for relation, memory_a, memory_b in _pending_relation_rows(session, customer_id)
+            if relation.id == relation_id and relations.is_pending(relation)
+        ),
+        None,
+    )
+    if pending is None:
+        raise HTTPException(status_code=404, detail="pending memory relation not found")
+
+    relation, memory_a, memory_b = pending
+    before = {
+        "relation": relation.relation,
+        "source": relation.source,
+        "confidence": relation.confidence,
+    }
+    try:
+        relation.relation = body.relation
+        relation.source = "human"
+        relation.human_resolved_at = datetime.now(timezone.utc)
+        record_audit(
+            session,
+            actor=current.username,
+            action="memory_relation.resolved",
+            entity="memory_relation",
+            entity_id=str(relation.id),
+            before=before,
+            after={"relation": relation.relation, "source": relation.source},
+        )
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise HTTPException(status_code=500, detail="failed to resolve memory relation")
+    return {
+        "ok": True,
+        "relation": to_memory_relation_dict(relation, memory_a, memory_b),
+    }
+
+
 @router.post("/clients/{customer_id}/memories")
 def client_memory_upsert(
     customer_id: int,
@@ -220,6 +328,7 @@ def client_memory_upsert(
             titulo=titulo,
             contenido=contenido,
         )
+        relations.judge_memory_relations(session, row)
         record_audit(
             session,
             actor=current.username,

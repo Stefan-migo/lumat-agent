@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { addClientNote, ApiError, apiFetch, changeClientState } from "../../api";
+import { addClientNote, ApiError, apiFetch, changeClientState, resolveMemoryRelation } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { Appointment, ClientFichaResponse, CustomerState, Memory, MemoriesResponse, VisitHistoryEvent } from "../../types";
+import type { Appointment, ClientFichaResponse, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse, VisitHistoryEvent } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
 import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
@@ -39,22 +39,24 @@ function stateMessage(state: FichaState) {
 
 export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, isSaving = false, onRetryCalendar }: ClientFichaProps) {
   const [retryingCalendarId, setRetryingCalendarId] = useState<number | null>(null);
-  const [refreshed, setRefreshed] = useState<{ ficha: ClientFichaResponse; memories: Memory[] } | null>(null);
+  const [refreshed, setRefreshed] = useState<{ ficha: ClientFichaResponse; memories: Memory[]; pendingRelations: MemoryRelation[] } | null>(null);
   const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
   const [note, setNote] = useState("");
   const [mutation, setMutation] = useState<"state" | "note" | null>(null);
   const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; title: string; detail?: string } | null>(null);
   const fetchFicha = useCallback(async () => {
     if (customerId === undefined) throw new Error("customer id is required");
-    const [ficha, memoryResponse] = await Promise.all([
+    const [ficha, memoryResponse, pendingResponse] = await Promise.all([
       apiFetch<ClientFichaResponse>(`/panel/api/clients/${customerId}`),
       apiFetch<MemoriesResponse>(`/panel/api/clients/${customerId}/memories`),
+      apiFetch<PendingMemoryRelationsResponse>(`/panel/api/clients/${customerId}/memory-relations/pending`),
     ]);
-    return { ficha, memories: memoryResponse.memories };
+    return { ficha, memories: memoryResponse.memories, pendingRelations: pendingResponse.relations };
   }, [customerId]);
   const fetched = useAsyncData(fetchFicha, controlledData === undefined);
   const data = refreshed?.ficha ?? controlledData ?? fetched.data?.ficha;
   const memories = refreshed?.memories ?? controlledMemories ?? fetched.data?.memories ?? [];
+  const pendingRelations = refreshed?.pendingRelations ?? fetched.data?.pendingRelations ?? [];
   const state: FichaState = controlledData ? "ready" : fetched.state;
 
   if (!data) {
@@ -99,6 +101,11 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     try { await addClientNote(customerId, note.trim()); await refresh(); setNote(""); setFeedback({ tone: "success", title: "Nota agregada" }); }
     catch (error) { setFeedback({ tone: "danger", ...safeError(error, "nota") }); }
     finally { setMutation(null); }
+  };
+  const resolveRelation = async (relationId: number, relation: MemoryRelationKind) => {
+    if (customerId === undefined) return;
+    await resolveMemoryRelation(customerId, relationId, relation);
+    await refresh();
   };
   const conversationColumns: Column<(typeof history.conversations)[number]>[] = [
     { key: "id", header: "#", render: (row) => `#${row.id}` },
@@ -149,7 +156,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
         <Badge tone="neutral">customer_memo</Badge>
       </Card>
 
-      <ClientMemories memories={memories} customerName={customer.name} />
+      <ClientMemories memories={memories} customerName={customer.name} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} />
 
       <Card title="Notas">
         {data.notes.length ? data.notes.map((note) => <p key={note.id}>{note.author ?? "—"} · {note.note}</p>) : <EmptyState title="No hay notas" />}
