@@ -46,7 +46,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import replace
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from sqlalchemy.orm import Session
 
@@ -168,6 +170,31 @@ def _after_respond(state: ConversationState) -> str:
     return "handoff" if state.escalate else END
 
 
+def _triage_node(subgraph):
+    """Wrap the triage sub-graph so it does not re-add the parent's replies.
+
+    `research_triage` is compiled over the same `ConversationState` as this graph
+    (`app/chat/subgraphs/research_triage.py`), and `replies` carries an `add` reducer
+    (`app/chat/state.py`). Added as a plain node, LangGraph hands the sub-graph the
+    parent's `replies` — already holding the CM-1 greeting — and merging the sub-graph's
+    final state back re-adds them, so the customer receives the greeting and menu twice.
+
+    Clearing the accumulator on the way in leaves the merge with exactly the sub-graph's
+    own reply. A partial `input_schema` would also fix the duplication, and is rejected:
+    the sub-graph reads 12 of `ConversationState`'s 21 fields, so a partial schema would
+    make the rest invisible inside it — `memory_context` among them, which `respond`
+    injects into the prompt for CM-7.
+
+    `config` is forwarded so callbacks and tracing propagate the way they do for a
+    sub-graph node.
+    """
+
+    def node(state: ConversationState, config: RunnableConfig) -> dict:
+        return subgraph.invoke(replace(state, replies=[]), config)
+
+    return node
+
+
 def build_graph():
     """Build the compiled conversation graph (B3 flow + T4.2/T4.4 gates).
 
@@ -189,7 +216,7 @@ def build_graph():
     builder.add_node("summary", summary)
     builder.add_node("emergency", emergency)
     builder.add_node("handoff", handoff)
-    builder.add_node("research_triage", research_triage)
+    builder.add_node("research_triage", _triage_node(research_triage))
 
     builder.add_edge(START, "emergency_gate")
     builder.add_conditional_edges(
