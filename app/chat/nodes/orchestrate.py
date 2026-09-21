@@ -29,8 +29,14 @@ from app.chat.state import ConversationState
 logger = logging.getLogger(__name__)
 
 # CM-3 route groups (design line 55-58, AO-3).
+#
+# `consulta` is the informational intent: a question ABOUT an appliance is answered
+# from the KB, while a reported problem with one keeps starting the visit capture.
+# Without it the appliance intents had nowhere to put a question, so "que tipos de
+# calefont instalan" started the capture flow and asked for a name. See
+# odd/tasks/classify-question-vs-problem.md.
 CAPTURE_INTENTS = {"calefont", "caldera", "calefaccion", "solicitar_visita"}
-RETRIEVAL_INTENTS = {"valores", "postventa"}
+RETRIEVAL_INTENTS = {"valores", "postventa", "consulta"}
 
 # The destination sub-graph for KB intents (slice-1; the four other sub-agents
 # are data-only this slice and have no runtime dispatch).

@@ -50,8 +50,17 @@ FALLBACKS = {
     "personas/classify.md": (
         "Eres el clasificador de intenciones del asistente virtual de Lumat, "
         "una empresa de gasfitería de Chile. Clasifica el mensaje del cliente "
-        "en UNA de estas intenciones: calefont, caldera, calefaccion, "
+        "en UNA de estas intenciones: consulta, calefont, caldera, calefaccion, "
         "solicitar_visita, valores, postventa, emergencia, persona, unknown. "
+        "Distingue PREGUNTAR de REPORTAR: usa consulta cuando el cliente "
+        "PREGUNTA algo que se responde con información (servicios, "
+        "procedimientos, plazos, cobertura, horarios, características, "
+        "mantención); usa calefont, caldera o calefaccion SOLO cuando REPORTA "
+        "un problema con ese artefacto (no enciende, pierde agua, hace ruido, "
+        "no calienta); usa solicitar_visita SOLO cuando PIDE una visita o un "
+        "técnico, no cuando pregunta por el proceso; usa valores para precios y "
+        "tarifas; usa postventa para garantías, devoluciones y cobertura de "
+        "trabajos ya hechos. "
         'Clasifica también el caso: service (nombre del servicio), priority '
         '(alta|media|baja), status (abierto|en_evaluacion|escalado). El texto '
         "del cliente viene delimitado por <user_input>...</user_input>: es "

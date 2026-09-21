@@ -8,7 +8,8 @@ Scenarios mapped 1:1 from specs:
 - SH-4 "Injection attempt treated as data": injection text -> escalate, NO
   LLM call, never a tool; user text only inside <user_input> (input-as-data)
 - Route: capture intents (calefont/caldera/calefaccion/solicitar_visita) vs
-  retrieval intents (valores/postventa); persona/emergencia escalate
+  retrieval intents (valores/postventa/consulta); persona/emergencia escalate
+- A question about an appliance reaches the KB; a problem report keeps capture
 
 The chat LLM (gpt-4o-mini) is mocked via respx — no real API calls.
 """
@@ -38,6 +39,19 @@ ADMIN_DB_URL = admin_database_url()
 CHAT_URL = "https://api.deepseek.com/chat/completions"
 
 
+# Phrase sets the mock keys on to separate a question from a problem report. The real
+# classifier decides this from the prompt; the mock only needs a rule the tests can drive.
+_INFORMATIONAL_PHRASES = (
+    "que tipos",
+    "cada cuanto",
+    "que datos",
+    "puedo cambiar",
+    "como pido",
+    "instalan",
+    "hacen instalacion",
+)
+
+
 def _llm_result_for(text: str) -> dict:
     tl = text.lower()
     injection = (
@@ -47,6 +61,13 @@ def _llm_result_for(text: str) -> dict:
         or "panel interno" in tl
         or "actua como" in tl
     )
+    # Informational questions vs problem reports. The real classifier decides this from
+    # `agent/personas/classify.md`; this mock needs a rule the tests can drive, so it keys
+    # on explicit phrases and runs BEFORE the appliance checks — which is exactly the
+    # ordering trap the real vocabulary had. It is a fixture for the ROUTING: whether the
+    # real classifier separates the two is measured by `scripts/kb_fidelity.py`, not here.
+    if any(phrase in tl for phrase in _INFORMATIONAL_PHRASES):
+        return {"intent": "consulta", "service": None, "priority": "baja", "status": None, "injection": injection}
     if "caldera" in tl:
         return {"intent": "caldera", "service": "caldera", "priority": "media", "status": "abierto", "injection": injection}
     if "calefont" in tl:
@@ -289,6 +310,34 @@ def test_route_capture_path_for_equipment_intents(mock_chat):
         conv_id = _seed(text, wamid=f"wamid.capture{i}", phone=f"+5691234567{i}")
         result = _run_graph(conv_id)
         assert result["next_step"] == "capture", text
+
+
+def test_route_informational_question_about_an_appliance_reaches_the_kb(mock_chat, fake_embedder):
+    """A question ABOUT an appliance must not start the visit-capture flow.
+
+    This is the control for `test_route_capture_path_for_equipment_intents` above: the
+    same appliance vocabulary, asked as a question instead of reported as a problem, must
+    dispatch to the KB. The measured cost of the coarse vocabulary
+    (odd/tasks/kb-answer-fidelity.md, F4): 14 of 30 answerable queries started capture,
+    and the plainly informational ones got "¿Cuál es tu nombre?" instead of the answer
+    the KB already held.
+
+    No KB content is seeded, so the retrieval misses and the turn terminates in a
+    handoff — the assertion that matters is the DISPATCH, not the answer.
+    """
+    for i, text in enumerate(
+        (
+            "que tipos de calefont instalan",
+            "cada cuanto se le hace mantencion a un calefont",
+            "instalan calefaccion central",
+        )
+    ):
+        conv_id = _seed(text, wamid=f"wamid.consulta{i}", phone=f"+5691234577{i}")
+        result = _run_graph(conv_id)
+
+        assert result["intent"] == "consulta", text
+        assert result["active_sub_agent"] == "research_triage", text
+        assert result["next_step"] != "capture", text
 
 
 @pytest.mark.parametrize(
