@@ -57,7 +57,11 @@ def test_loads_full_roster_with_seven_fields_each(repo_root):
 
     assert reg.sub_agents["research_triage"].name == "kb-research-triage"
     assert tuple(reg.sub_agents["research_triage"].tools_whitelist) == ("kb.retrieve",)
-    assert tuple(reg.sub_agents["research_triage"].kb_scope) == ("valores", "postventa")
+    # null, not ["valores", "postventa"]: the scope filtered on
+    # `source_meta.category`, which no production path writes, so it emptied
+    # retrieval for every document a client could upload. See
+    # odd/tasks/kb-triage-scope.md.
+    assert reg.sub_agents["research_triage"].kb_scope is None
     assert reg.sub_agents["research_triage"].memoria_scope == "customer"
     assert reg.sub_agents["research_triage"].model == "deepseek-chat"
     assert reg.sub_agents["research_triage"].temperature == 0

@@ -1,10 +1,16 @@
 # registry.yaml — declarative agent registry and assistant runtime config.
 # How far `kb_scope` is actually wired, so nobody has to re-derive it:
-# runtime wiring exists for ONE entry, the `research_triage` sub-agent, whose
-# scope is injected into `kb.retrieve(scope=...)` (AO-7,
-# app/chat/subgraphs/research_triage.py). On `agent:` and `assistant:` the field
-# is parsed and held but never consumed, and it is optional there — the loader
-# requires only name/persona/skills/tools_whitelist/model (app/agent_registry.py).
+# NOTHING consumes it today. No entry declares a non-null scope, so
+# `kb.retrieve(scope=...)` (AO-7, app/services/kb.py) has no production caller and
+# the topical filter never engages. `research_triage` used to be the one wired
+# entry; its scope was removed because `source_meta.category` is written by no
+# production path (the panel upload calls `ingest_document` with no `source_meta`,
+# app/panel/api/routes/kb.py), so the filter silently returned zero chunks for every
+# document a client could upload and every price or warranty question escalated to a
+# human. See odd/tasks/kb-triage-scope.md.
+# On `agent:` and `assistant:` the field is parsed and held but never consumed, and
+# it is optional there — the loader requires only
+# name/persona/skills/tools_whitelist/model (app/agent_registry.py).
 # `null` is the intended "no restriction" declaration (`scope=None` returns the
 # unfiltered active-version set), so a non-null value on `agent:` or `assistant:`
 # is a no-op until something reads it. The field stays declared because the
@@ -30,7 +36,9 @@ sub_agents:
     name: kb-research-triage
     persona: personas/research_triage.md
     tools_whitelist: ["kb.retrieve"]
-    kb_scope: ["valores", "postventa"]
+    # null = no topical restriction. See the header note: `source_meta.category` is
+    # written by nothing, so any non-null value here silently empties retrieval.
+    kb_scope: null
     memoria_scope: "customer"
     model: deepseek-chat
     temperature: 0
