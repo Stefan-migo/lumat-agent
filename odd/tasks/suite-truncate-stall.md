@@ -96,11 +96,51 @@ uv run pytest tests/
 `pyproject.toml` sets `addopts = "-q"` — do not add a second `-q`. No linter, type checker, or
 formatter exists; the tests are the verification.
 
+### Reproduced locally, with the mechanism visible (2026-09-21)
+
+Six consecutive full runs against the worktree's own test database:
+
+| Run | Result | Stalled |
+|---|---|---|
+| 1 | `1044 passed, 2 warnings in 114.28s` | no |
+| 2 | `1044 passed, 2 warnings in 141.25s` | no |
+| 3 | killed by the 120 s ceiling | **yes** |
+| 4 | killed by the 120 s ceiling | **yes** |
+| 5 | `1044 passed, 2 warnings in 111.84s` | no |
+| 6 | `1044 passed, 2 warnings in 115.62s` | no |
+
+**2 of 6**, so it reproduces here and is not a runner quirk. This also means the diagnosis does not
+need CI at all, which removes the push dependency from the critical path.
+
+A `pg_stat_activity` sampler running alongside the loop caught the mechanism twice, in both stalls,
+and it is exactly what the timeout stack implied:
+
+```
+state=idle in transaction   wait_event=Client|ClientRead
+query=SELECT conversation_events.id, conversation_events.conversation_id, ...
+
+state=active                wait_event=Lock|relation
+query=TRUNCATE appointment_history, appointments, technician_availability, ...
+```
+
+The first session held its transaction (and the lock the TRUNCATE needed) for roughly two minutes
+until the ceiling fired; the TRUNCATE waited the whole time. So the blocker is **a session left
+`idle in transaction` holding a lock on `conversation_events`** — a table the `clean_db` fixture
+truncates — and the stall is that wait, not slowness.
+
+**Next step:** identify the code path that opens a `SELECT conversation_events...` transaction and
+never commits or closes it (candidates: the startup sweeps that `TestClient`'s lifespan triggers, the
+notification/integration worker, or a generator dependency whose session outlives the test), then fix
+it where the leak is. Re-run the sampler with `pg_blocking_pids()` and `application_name` to name the
+holder with certainty rather than by inference.
+
 ## Progress
 
 - [x] Worktree created and provisioned (base `8ad0e026`, `infra/.env` copied, `.opencode` noise removed).
-- [ ] Reproduce or capture the block with live database evidence.
-- [ ] Identify the holder and fix it at the root.
+- [x] Reproduce with live database evidence: 2 of 6 local runs, `idle in transaction` vs blocked
+      `TRUNCATE` on `conversation_events`, captured in `pg_stat_activity`.
+- [ ] Name the holder with certainty (`pg_blocking_pids()` + `application_name`).
+- [ ] Identify the leaking code path and fix it at the root.
 - [ ] Five consecutive clean runs; then CI.
 
 ## Notes for the executor
