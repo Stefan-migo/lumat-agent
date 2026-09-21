@@ -20,6 +20,8 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE = REPO_ROOT / "infra" / "docker-compose.yml"
+PROD_COMPOSE = REPO_ROOT / "infra" / "docker-compose.prod.yml"
+DOCKERFILE = REPO_ROOT / "Dockerfile"
 ENV_EXAMPLE = REPO_ROOT / "infra" / ".env.example"
 GITIGNORE = REPO_ROOT / ".gitignore"
 
@@ -98,6 +100,17 @@ def test_api_service_wires_health_endpoint_port():
     api = compose["services"]["api"]
     ports = api.get("ports", [])
     assert any("8000" in p for p in ports), "api must expose port 8000"
+
+
+def test_prod_api_build_wires_deployed_identity():
+    compose_text = PROD_COMPOSE.read_text().replace("!reset", "").replace("!override", "")
+    compose = yaml.safe_load(compose_text)
+    build_args = compose["services"]["api"]["build"]["args"]
+    assert "GIT_SHA" in build_args
+
+    dockerfile = DOCKERFILE.read_text()
+    assert "ARG GIT_SHA=unknown" in dockerfile
+    assert "COPY pyproject.toml ./" in dockerfile
 
 
 def test_env_example_exists_and_has_required_names():

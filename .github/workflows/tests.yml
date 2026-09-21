@@ -1,0 +1,48 @@
+name: Tests
+
+# The suite is the release gate. Before this workflow the only gate was a human
+# remembering to run ~1000 tests by hand.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Disposable localhost credentials for a throwaway container — not project
+      # secrets, so no repository secret is wired.
+      TEST_DB_PORT: 5432
+      TEST_POSTGRES_PASSWORD: ci-throwaway
+      # Mirrors what `infra/test-db.sh env` exports for a local run, which CI
+      # cannot call (it requires the gitignored infra/.env). Without this the
+      # suite reuses DATABASE_URL — the app role — for its migrations, which then
+      # cannot create the extension or the role: every DB-backed test errors.
+      TEST_ADMIN_DB_URL: postgresql://lumat:ci-throwaway@localhost:5432/lumat
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: lumat
+          POSTGRES_PASSWORD: ci-throwaway
+          POSTGRES_DB: lumat
+        ports:
+          - 5432:5432
+        # tmpfs: the suite TRUNCATEs 25 tables before every test, and this
+        # disposable database never needs to survive the container.
+        options: >-
+          --tmpfs /var/lib/postgresql/data
+          --health-cmd "pg_isready -U lumat -d lumat"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      # python-version pins the interpreter the production image runs
+      # (Dockerfile: python3.14-bookworm-slim); uv installs and manages it.
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+      - run: uv sync --frozen
+      - run: uv run pytest tests/
