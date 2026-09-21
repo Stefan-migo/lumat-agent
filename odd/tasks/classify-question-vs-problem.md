@@ -144,6 +144,30 @@ right behaviour; both are updated here.
 
 ## Findings
 
+### This change also closes F5 (`unknown` answerable queries)
+
+`odd/kb-answer-fidelity.md` recorded F5 as a separate defect: four answerable queries
+(`atienden en maipu`, `cuales son las comunas donde trabajan`, `en cuanto tiempo responden un
+mensaje`, `cuales son los horarios de atencion`) were classified `unknown` and received only the
+CM-1 menu. They were never a separate defect — they were the same coarse vocabulary, with nowhere
+for a question to go.
+
+Measured on the same base, before and after:
+
+| | unknown total | by class |
+|---|---|---|
+| before | 19 | 2 answerable, 5 near_miss, 12 out_of_domain |
+| after | **12** | **12 out_of_domain** |
+
+Three of the four are now **answered** from the KB; the fourth (`atienden en maipu`) reaches the KB
+and misses the gate with `chunks=0`, which is a **retrieval** problem — the title-phrased query
+against the `comunas` document — and belongs to F7 (titles are not embedded), not to classification.
+
+The 12 remaining `unknown` are genuinely out of domain (an empanada recipe, the dollar rate, a
+football channel). Each receives the menu only, with no fabrication: the correct outcome.
+
+**No further unit is needed for F5.**
+
 ### The real classifier separates questions from problem reports
 
 Same corpus, same threshold, same model, real provider, 52 queries. The comparison is against the
