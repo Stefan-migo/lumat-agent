@@ -129,7 +129,34 @@ formatter exists; the tests are the verification.
       branch base, so it is fresh (the "stale at `26b463a2`" note below no longer applies).
 - [x] Baseline measured before touching anything: `uv run pytest tests/` → **1042 passed, 2 warnings,
       exit 0, 112.68s** (Python 3.14, test DB `pgvector/pgvector:pg16` on port 6364).
-- [ ] T5.
+- [x] **T5 — Verify.** Focused tests, then the full suite; counts measured and reported. — **done at the
+      frozen branch head (all T1–T4 committed, worktree clean): focused `13 passed in 1.06s`, full
+      `1044 passed, 2 warnings in 109.45s`.**
+
+## Acceptance criteria status
+
+1. `/health` reports the injected version and commit; no hardcoded version constant remains reachable
+   from the health path. — **MET.** The old `"0.1.0"` literal is gone; the value is read from the
+   single source and the commit from the stamped build arg, asserted end to end by
+   `test_health_uses_redirected_version_source_and_git_sha`.
+2. Changing the single version source changes `/health` after a rebuild — proven by a test, not by
+   assertion. — **MET as far as a test can reach.** The redirection test proves the read path; a real
+   image rebuild was NOT performed and is not claimed.
+3. `CHANGELOG.md` exists, is in Keep a Changelog format, and its baseline entry states it is
+   retroactive. — **MET.** And every capability named was verified present at `10165a6d`, with the
+   memory line deliberately excluded because it was 0% deployed.
+4. CI runs the full suite (including the DB-backed tests) and fails on a deliberately broken branch —
+   verified, not assumed. — **PARTIAL, and reported as partial.** The workflow exists, and its exact
+   environment contract was proven locally against a fresh `pgvector/pgvector:pg16` container
+   (`1044 passed`) — including the finding that `TEST_ADMIN_DB_URL` is required. The GitHub run
+   itself and the deliberately broken branch are NOT verified: both need a push, which is a remote
+   operation awaiting human authorization.
+5. `docs/ops.md` describes the process actually in use, with no step that cannot be executed. —
+   **MET, and it paid for itself:** three references pointed operators at a `§10` that did not exist;
+   they are repaired, and the release rule, tag-before-deploy step, build-stamp export and release
+   record are now executable as written.
+6. The full suite is green; the baseline at this base is measured before changing anything. — **MET.**
+   Baseline `1042 passed` before any edit; `1044 passed` at the frozen head (+2 new tests).
 
 ### T4 — done (delivered, reviewed, approved; the CI run itself is not yet verified)
 
