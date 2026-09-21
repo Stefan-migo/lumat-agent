@@ -5,7 +5,8 @@
 **Base**: `06768699` (scoped at `5c5f4af2`; `main` advanced 33 commits before the branch was cut —
 none of them touched a file in the authorized scope, so the plan below is unchanged)
 **Seeded from**: `.rapsodia-code/sessions/archived/2026-09-20-versionado-release-trazabilidad/report.md`
-**Status**: in progress — T4 delivered; T5 and the CI-branch verification pending
+**Status**: delivered in PR #273 (`odd/versioning-release-process` → `main`); the deliberately broken
+branch verification of acceptance 4 is the only piece left open
 
 ## Objective
 
@@ -146,11 +147,10 @@ formatter exists; the tests are the verification.
    retroactive. — **MET.** And every capability named was verified present at `10165a6d`, with the
    memory line deliberately excluded because it was 0% deployed.
 4. CI runs the full suite (including the DB-backed tests) and fails on a deliberately broken branch —
-   verified, not assumed. — **PARTIAL, and reported as partial.** The workflow exists, and its exact
-   environment contract was proven locally against a fresh `pgvector/pgvector:pg16` container
-   (`1044 passed`) — including the finding that `TEST_ADMIN_DB_URL` is required. The GitHub run
-   itself and the deliberately broken branch are NOT verified: both need a push, which is a remote
-   operation awaiting human authorization.
+   verified, not assumed. — **MET for the green half, PENDING for the failure half.** The workflow ran
+   on PR #273 and went green (`1046 passed`, the 2 extra over local being `main`'s new tests via the
+   PR merge). The deliberately broken branch has not been exercised — deferred by the human as its own
+   step, and reported as pending rather than assumed.
 5. `docs/ops.md` describes the process actually in use, with no step that cannot be executed. —
    **MET, and it paid for itself:** three references pointed operators at a `§10` that did not exist;
    they are repaired, and the release rule, tag-before-deploy step, build-stamp export and release
@@ -189,9 +189,27 @@ local run, which CI cannot call because that script requires the gitignored `inf
   baseline measured before any change;
 - `uv sync --frozen` unchanged; the container was removed afterwards.
 
-**Not verified:** the GitHub runner itself, and acceptance criterion 4's "fails on a deliberately
-broken branch". Both require a real push to `Stefan-migo/lumat-agent`, which is a remote operation
-that has not been authorized. Left open on purpose rather than reported as done.
+**Verified on the real runner (PR #273, after the push was authorized):** the workflow ran on the
+pull request. First run **failed** — not on the change, but on the suite's own known stall: ~145 tests
+into the run, `clean_db`'s TRUNCATE in `tests/functional/conftest.py` blocked until the 120 s
+`pytest-timeout` ceiling killed it. `pyproject.toml` already documents this ("the suite stalls
+intermittently, unrelated to the code under test"), so it is pre-existing, not caused by this
+workflow — but CI now makes it visible on every run. Re-running the same job passed:
+**`1046 passed, 2 warnings in 84.57s`** (job 2m07s).
+
+**Why 1046 and not the local 1044 — resolved, not hand-waved:** `pull_request` checks run the merge of
+the branch into the current `main`, and `main` advanced by PR #272 while this branch sat. That merge
+brings 2 extra tests (`tests/spec/test_memory_relations_spec.py`, +54 lines). `1044 + 2 = 1046`, and
+the change under review touches none of those files.
+
+**Still not verified:** acceptance criterion 4's "fails on a deliberately broken branch". The green
+half is now real GitHub evidence; the failure half needs a throwaway branch with a deliberately broken
+test and its own PR, which the human deferred as a separate step.
+
+**Follow-up surfaced by the run (not fixed here, out of scope):** the workflow emits a deprecation
+warning — `actions/checkout@v4` and `astral-sh/setup-uv@v6` target Node.js 20 and are forced onto
+Node.js 24. `setup-uv@v6` is still the latest major (its `action.yml` declares `node20`), so only
+`actions/checkout` has a newer major available.
 
 **Review:** native RAR, lineage `review-bd09ede235e898af`, risk **high** (`shell_source` in
 `.github/workflows/tests.yml`), consent granted by the human, canonical 4R run, all four lenses
