@@ -452,9 +452,20 @@ def plan_llm(state: AssistantState) -> AssistantState:
         )
     except Exception as exc:
         diagnosis = _planner_failure("provider_call_failed", "provider", exc)
-    else:
-        _record_usage(state, "planner", completion)
-        raw_text = _completion_text(completion)
+
+    if diagnosis is None:
+        try:
+            _record_usage(state, "planner", completion)
+        except Exception as exc:
+            diagnosis = _planner_failure("usage_recording_failed", "instrumentation", exc)
+
+    if diagnosis is None:
+        try:
+            raw_text = _completion_text(completion)
+        except Exception as exc:
+            diagnosis = _planner_failure("completion_extraction_failed", "extraction", exc)
+
+    if diagnosis is None:
         if not raw_text.strip():
             diagnosis = _planner_failure(
                 "empty_completion", "completion", ValueError("provider returned no structured planner message")

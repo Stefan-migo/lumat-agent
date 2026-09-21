@@ -242,6 +242,74 @@ def test_plan_llm_records_distinct_failure_diagnostics(monkeypatch, caplog, clie
     assert exception_type in rendered
 
 
+def test_plan_llm_bounds_usage_recording_failure(monkeypatch, caplog):
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], persona="persona"),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+                content='{"kind":"respond","arguments":{},"summary":"Done","requires_approval":false}'
+            ))]),
+        ))),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._record_usage",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("ledger down")),
+    )
+
+    with caplog.at_level(logging.ERROR, logger="app.chat.assistant.nodes"):
+        result = plan_llm({"content": "Find Ana", "context": {"items": []}})
+
+    diagnosis = result["planner"]["failure"]
+    assert diagnosis["reason"] == "usage_recording_failed"
+    assert diagnosis["stage"] == "instrumentation"
+    assert diagnosis["exception_type"] == "RuntimeError"
+    assert result["planner"]["valid"] is False
+    assert result["plan"] == bounded_fallback("x").model_dump()
+    assert caplog.records[-1].diagnosis == diagnosis
+    rendered = caplog.records[-1].getMessage()
+    assert "usage_recording_failed" in rendered
+    assert "instrumentation" in rendered
+    assert "RuntimeError" in rendered
+
+
+def test_plan_llm_bounds_completion_extraction_failure(monkeypatch, caplog):
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], persona="persona"),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+                content='{"kind":"respond","arguments":{},"summary":"Done","requires_approval":false}'
+            ))]),
+        ))),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._completion_text",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("malformed response")),
+    )
+
+    with caplog.at_level(logging.ERROR, logger="app.chat.assistant.nodes"):
+        result = plan_llm({"content": "Find Ana", "context": {"items": []}})
+
+    diagnosis = result["planner"]["failure"]
+    assert diagnosis["reason"] == "completion_extraction_failed"
+    assert diagnosis["stage"] == "extraction"
+    assert diagnosis["exception_type"] == "RuntimeError"
+    assert result["planner"]["valid"] is False
+    assert result["plan"] == bounded_fallback("x").model_dump()
+    assert caplog.records[-1].diagnosis == diagnosis
+    rendered = caplog.records[-1].getMessage()
+    assert "completion_extraction_failed" in rendered
+    assert "extraction" in rendered
+    assert "RuntimeError" in rendered
+
+
 def test_plan_llm_records_no_failure_for_valid_plan(monkeypatch, caplog):
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",
