@@ -4,6 +4,7 @@ import pytest
 
 from app.services.prompts import load_assistant_config
 from app.agent_registry import RegistryError
+from app.chat.assistant.tools.registry import AUTONOMOUS_WRITE_ALLOWLIST
 
 
 def test_complete_assistant_configuration_loads_without_skills(repo_root):
@@ -16,6 +17,22 @@ def test_complete_assistant_configuration_loads_without_skills(repo_root):
     assert config.skills == ()
     assert "skills" not in config.prompts["plan"]
     assert config.memoria_scope == "panel"
+
+
+def test_assistant_persona_authorizes_the_autonomous_write(repo_root):
+    config = load_assistant_config(repo_root / "agent" / "registry.yaml")
+
+    for tool_name in AUTONOMOUS_WRITE_ALLOWLIST:
+        assert tool_name in config.persona
+    assert "except" in config.persona
+    assert "already authorized and runs without asking" in config.persona
+
+
+def test_assistant_persona_keeps_approval_for_every_other_write(repo_root):
+    config = load_assistant_config(repo_root / "agent" / "registry.yaml")
+
+    assert "ask for approval before any write operation" in config.persona
+    assert "Every other write still needs approval" in config.persona
 
 
 def test_missing_assistant_reference_fails_before_runtime_use(tmp_path, repo_root):
