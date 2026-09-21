@@ -28,6 +28,9 @@ from app.chat.assistant.attachments import build_multimodal_content, prepare_att
 from app.models import InternalChatMessage
 
 
+_TOOL_EVIDENCE_LIMIT = 4_000
+
+
 def _project_slug(state: AssistantState) -> str:
     """Read the namespace only from the service-issued project capability."""
     authorization = state.get("project_authorization")
@@ -481,10 +484,22 @@ def guardrails(state: AssistantState) -> AssistantState:
     return {"guardrails": decisions, "status": "executing"}
 
 
+def _render_tool_evidence(state: AssistantState) -> str:
+    result = state.get("tool_result") or {}
+    payload = result.get("result") if isinstance(result, dict) else None
+    if payload is None:
+        return ""
+    rendered = json.dumps(payload, ensure_ascii=False)
+    if len(rendered) <= _TOOL_EVIDENCE_LIMIT:
+        return rendered
+    return rendered[:_TOOL_EVIDENCE_LIMIT - 1] + "…"
+
+
 def execute(state: AssistantState) -> AssistantState:
     plan_data = state["plan"]
+    tool_already_ran = state.get("tool_result") is not None
     autonomous_write = _is_autonomous_write(plan_data.get("tool"), state.get("thread_id"))
-    if plan_data["requires_approval"] and not autonomous_write and not validate_execution(plan_data, state.get("approval") or {}):
+    if not tool_already_ran and plan_data["requires_approval"] and not autonomous_write and not validate_execution(plan_data, state.get("approval") or {}):
         detail = "approval is missing, expired, tampered, or already consumed"
         evidence = make_evidence(tool=plan_data.get("tool"), status="error", detail=detail)
         state.setdefault("evidence", []).append(evidence)
@@ -502,7 +517,7 @@ def execute(state: AssistantState) -> AssistantState:
         error.evidence = [evidence]
         raise error
     tool_name = plan_data.get("tool")
-    if tool_name:
+    if tool_name and not tool_already_ran:
         try:
             from app.services.prompts import load_assistant_config
 
@@ -583,7 +598,20 @@ def execute(state: AssistantState) -> AssistantState:
 
         config = load_assistant_config()
         prompt = config.prompts["respond"]
-        for key, value in {"user_input": state["content"], "available_tools": ", ".join(config.tools_whitelist), "tool_evidence": str(state.get("tool_result") or ""), "context": _context_text(state)}.items():
+        tool_statement = (
+            "A panel tool has already run for this request. Use its evidence to answer with text only; "
+            "you must not emit tool-call markup."
+            if state.get("tool_result") is not None
+            else "The listed tools are panel capabilities only. This reply cannot invoke them. "
+            "Answer with text only; you must not emit tool-call markup."
+        )
+        for key, value in {
+            "user_input": state["content"],
+            "available_tools": ", ".join(config.tools_whitelist),
+            "tool_statement": tool_statement,
+            "tool_evidence": _render_tool_evidence(state),
+            "context": _context_text(state),
+        }.items():
             prompt = prompt.replace("{{" + key + "}}", str(value))
         if state.get("cost_directive"):
             prompt += "\n\n" + state["cost_directive"]
@@ -620,7 +648,7 @@ def execute(state: AssistantState) -> AssistantState:
             _record_usage(state, "response", None)
         response = "".join(chunks) or response
     session = state.get("session")
-    if session is not None:
+    if session is not None and not tool_already_ran:
         record_audit(
             session,
             actor=state.get("actor") or "assistant",

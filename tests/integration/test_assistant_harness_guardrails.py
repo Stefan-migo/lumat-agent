@@ -8,7 +8,7 @@ from app.chat.assistant.approval import consume_approval, issue_approval
 from app.chat.assistant.nodes import execute, guardrails, panel_cost_gate, plan_llm
 from app.chat.assistant.tools.registry import ToolValidationError, execute_tool
 from app.db import SessionLocal
-from app.models import Memory
+from app.models import AuditLog, Memory, MemoryType
 from app.services.prompts import load_assistant_config
 from sqlalchemy import select
 
@@ -112,6 +112,104 @@ def test_execution_audits_before_evidence(monkeypatch):
     assert order == ["handler", "audit"]
     assert result["evidence"][0]["status"] == "completed"
     assert result["status"] == "completed"
+
+
+def _tool_loop_state(**overrides):
+    state = {
+        "thread_id": 7,
+        "run_id": "run-tool-loop",
+        "content": "Find Ana",
+        "plan": {
+            "kind": "tool",
+            "tool": "customers.search",
+            "arguments": {"query": "Ana"},
+            "requires_approval": False,
+        },
+        "guardrails": {"cost_allowed": True},
+        "evidence": [],
+    }
+    state.update(overrides)
+    return state
+
+
+def _streaming_client(calls, text="Ana is a customer"):
+    return SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(
+                create=lambda **kwargs: calls.append(kwargs)
+                or [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=text))])]
+            )
+        )
+    )
+
+
+def test_completed_tool_traversal_records_one_execution_audit(monkeypatch, migrated_db):
+    calls = []
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda *args, **kwargs: {
+            "tool": "customers.search",
+            "status": "completed",
+            "result": [{"id": 1, "name": "Ana"}],
+        },
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: _streaming_client(calls))
+
+    with SessionLocal() as session:
+        first = execute(_tool_loop_state(session=session))
+        execute({**_tool_loop_state(session=session), **first, "on_token": lambda _token: None})
+
+        session.flush()
+        audits = session.scalars(
+            select(AuditLog).where(AuditLog.action == "internal_chat.execution")
+        ).all()
+
+    assert len(audits) == 1
+    assert audits[0].after == {
+        "run_id": "run-tool-loop",
+        "tool": "customers.search",
+        "status": "completed",
+    }
+
+
+def test_memory_read_orm_result_is_readable_tool_evidence(monkeypatch, migrated_db):
+    calls = []
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: _streaming_client(calls))
+
+    with SessionLocal() as session:
+        session.add(
+            Memory(
+                proyecto="default",
+                scope="panel",
+                entity_id="thread:7",
+                tipo=MemoryType.DISCOVERY,
+                titulo="Billing preference",
+                contenido="Customer prefers email receipts",
+                topic_key="billing-preference",
+                embedding=[0.0] * 384,
+            )
+        )
+        session.commit()
+
+        tool_state = _tool_loop_state(
+            session=session,
+            plan={
+                "kind": "tool",
+                "tool": "memory.read",
+                "arguments": {"scope": "panel"},
+                "requires_approval": False,
+            },
+        )
+        first = execute(tool_state)
+        execute({**tool_state, **first, "on_token": lambda _token: None})
+
+    assert first["tool_result"]["result"][0]["titulo"] == "Billing preference"
+    prompt = calls[0]["messages"][-1]["content"]
+    evidence = prompt.split("<tool_evidence>", 1)[1].split("</tool_evidence>", 1)[0]
+    assert "Billing preference" in evidence
+    assert "Customer prefers email receipts" in evidence
+    assert "<... object at 0x...>" not in evidence
+    assert "sqlalchemy" not in evidence.lower()
 
 
 def test_cost_gate_injects_conservative_directive_after_context(monkeypatch):

@@ -62,6 +62,10 @@ def _after_guardrails(state: AssistantState) -> str:
     return "execute_tool" if state.get("plan", {}).get("kind") == "tool" else "respond_stream"
 
 
+def _after_execute(state: AssistantState) -> str:
+    return "respond_stream" if state.get("status") == "completed" else END
+
+
 def _after_cost_gate(state: AssistantState) -> str:
     return "evidence" if state.get("cost_mode") == "blocked" else "plan_llm"
 
@@ -110,7 +114,7 @@ def build_assistant_graph():
     builder.add_edge("sdb_verify", "sdb_deliver")
     builder.add_edge("sdb_deliver", "evidence")
     builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "respond_stream": "respond_stream", END: END})
-    builder.add_edge("execute_tool", "evidence")
+    builder.add_conditional_edges("execute_tool", _after_execute, {"respond_stream": "respond_stream", END: END})
     builder.add_edge("respond_stream", "evidence")
     builder.add_edge("evidence", END)
     return builder.compile()
