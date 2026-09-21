@@ -94,11 +94,15 @@ def test_accent_folded_variants_are_strong(sentence):
 
 # EM-5: ambiguous/risk-adjacent language -> weak (escalate to human), never
 # silently ignored; it is NOT the full emergency protocol.
+#
+# Every marker here describes a PERCEPTION (a smell). Bare "gas" used to be in
+# this list and was removed: it describes a SUBJECT, not a risk, so for a
+# gasfitería it fired on the business's own vocabulary. See
+# odd/tasks/emergency-gas-weak-marker.md.
 @pytest.mark.parametrize(
     "sentence",
     [
         "huele raro el calefont",
-        "no me llega gas al calefont",
         "hay un olor a quemado en el patio",
     ],
 )
@@ -108,15 +112,44 @@ def test_weak_hit_escalates_not_ignored(sentence):
 
 # No false positive on benign text: a water leak is Lumat's normal service
 # work (gasfitería), not a gas emergency; plain commercial messages pass.
+#
+# The gas-service phrasings are the ones bare "gas" used to escalate. They are
+# measured false positives from the real-input run (odd/tasks/kb-answer-fidelity.md,
+# F3): all answerable, none an emergency.
 @pytest.mark.parametrize(
     "sentence",
     [
         "tengo una fuga de agua en el baño",
         "quiero cotizar un calefont de 10 litros",
         "¿en qué horario atienden?",
+        "no me llega gas al calefont",
+        "instalacion cocina a gas",
+        "hacen instalacion de estufa a gas",
+        "cuanto cuesta la mantencion de una estufa a gas",
+        "cuanto cobran por revisar el medidor de gas natural",
     ],
 )
 def test_benign_text_no_hit(sentence):
+    assert classify_emergency(sentence, _pattern()) is None
+
+
+# Known gap, pinned so it stays a decision instead of becoming an accident.
+#
+# Removing bare "gas" narrows EM-5's net: a leak phrased with "gas" and a verb,
+# and neither "fuga" nor "olor", is no longer detected. The realistic phrasings
+# a customer would use for a leak ("olor a gas", "huele a gas", "fuga de gas")
+# are STRONG keywords and still escalate — see EMERGENCY_SENTENCES above. The
+# mitigation for what remains is the panel-configurable strong list (SS-2), so
+# the client can add these without a code change. If this test ever starts
+# failing, the marker list changed and the trade-off must be re-decided.
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "se escapa el gas",
+        "me esta saliendo gas",
+    ],
+)
+def test_leak_phrasings_without_a_strong_keyword_are_not_detected(sentence):
     assert classify_emergency(sentence, _pattern()) is None
 
 
