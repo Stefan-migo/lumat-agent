@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from types import SimpleNamespace
 
 import pytest
 from starlette.testclient import WebSocketDenialResponse
 from starlette.websockets import WebSocket
 
-from app.db import SessionLocal
+from app.db import SessionLocal, engine
 from app.models import Case, Conversation, Customer, ConversationState
 from app.panel.api.deps import get_current_user_json
 from app.panel.api.routes.realtime import panel_websocket, realtime_user
@@ -24,6 +25,29 @@ def _login(client, username: str, password: str) -> None:
         follow_redirects=False,
     )
     assert response.status_code == 200
+
+
+def _finish_websocket(websocket) -> None:
+    """Let the handler end on its own before starlette cancels it.
+
+    `WebSocketTestSession.__enter__` registers `self.close` and then
+    `portal.call(cs.cancel)` in one ExitStack (`starlette/testclient.py`:120,
+    126), so the cancel can reach the ASGI task before it has processed the
+    disconnect. A cancelled task does not complete the teardown of its
+    sync-generator dependencies, which leaves `get_db`'s session holding an
+    open transaction over `conversation_events`. The next test's `clean_db`
+    TRUNCATE then waits on that lock until the ceiling fires.
+
+    It appears only intermittently and only inside the suite — a single
+    WebSocket interaction in a fresh process cleans up on its own — so closing
+    here and pumping the portal until the request's pooled connection is back
+    makes the handler return first, and the cancel lands on a finished task.
+    """
+    websocket.close()
+    portal = websocket.portal
+    deadline = time.monotonic() + 5
+    while engine.pool.checkedout() and time.monotonic() < deadline:
+        portal.call(asyncio.sleep, 0.01)
 
 
 def _seed_conversation() -> int:
@@ -56,6 +80,7 @@ def test_panel_websocket_mount_sends_snapshot_before_live_events(client, make_us
         assert frame["data"]["items"] == frame["data"]["conversations"]
         assert set(frame["data"]["counts"]) == {"all", "human", "emergency", "case", "closed"}
         assert publisher.subscriber_count == 1
+        _finish_websocket(websocket)
 
     assert publisher.subscriber_count == 0
 
@@ -77,6 +102,7 @@ def test_panel_websocket_snapshot_has_rest_equivalent_case_context(client, make_
 
     with client.websocket_connect("/panel/ws") as websocket:
         row = next(row for row in websocket.receive_json()["data"]["items"] if row["id"] == conversation_id)
+        _finish_websocket(websocket)
 
     assert row["case_id"] == case.id
     assert row["emergency"] is True
@@ -90,6 +116,7 @@ def test_admin_panel_websocket_also_receives_snapshot(client, make_user):
 
     with client.websocket_connect("/panel/ws") as websocket:
         assert websocket.receive_json()["type"] == "snapshot"
+        _finish_websocket(websocket)
 
 
 def test_panel_websocket_rejects_missing_session(client):
@@ -219,5 +246,6 @@ def test_published_envelope_reaches_the_attached_client(client, make_user):
             "conversation_id": 7,
             "data": {"n": 1},
         }
+        _finish_websocket(websocket)
 
     assert publisher.subscriber_count == 0

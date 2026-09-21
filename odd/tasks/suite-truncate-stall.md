@@ -1,0 +1,266 @@
+# ODD: suite-truncate-stall
+
+**Branch**: `odd/suite-truncate-stall`
+**Worktree**: `../lumat-agent-odd-suite-truncate-stall`
+**Base**: `8ad0e026` (= `origin/main`, includes PR #272)
+**Seeded from**: the CI evidence gathered while delivering `odd/versioning-release-process` (PR #273)
+**Status**: scoped — not started
+
+## Objective
+
+Make the test suite reliable enough that CI is a trustworthy gate. Today the workflow works and the
+suite is what fails: on the GitHub runner the full suite dies by the 120 s `pytest-timeout` ceiling
+inside `clean_db`'s TRUNCATE, roughly two runs out of three, on code that is not the cause.
+
+The deliverable is not "CI is green once" — it is "the stall is understood at its root and gone".
+
+## Problem (measured, not assumed)
+
+- **Three CI runs on PR #273**, same workflow, near-identical commits: run 1 **failed**, a re-run of
+  the same commit **passed** (`1046 passed, 2 warnings in 84.57s`), the next commit **failed again**.
+  Roughly 2 of 3.
+- **Where:** `pytest-timeout` fires at 120 s with the main thread inside
+  `tests/functional/conftest.py:87` → `clean_db` → `conn.execute(TRUNCATE ...)` → psycopg waiting on
+  the socket. It happens after ~145 tests pass, at the first heavy database use.
+- **It is pre-existing.** `pyproject.toml` documents it: *"the suite stalls intermittently, unrelated
+  to the code under test"* — and that comment is the reason the 120 s ceiling and
+  `timeout_method = "thread"` exist at all. CI did not create the stall; it made it visible.
+- **It presents as a lock wait, not as slowness.** 120 s of zero progress, once. Not a slow machine:
+  the same suite finishes in 85–110 s when it does not stall.
+
+## Refuted hypotheses — do not spend time re-testing these
+
+1. **Missing tmpfs / slow disk.** The runner's `docker create` line includes
+   `--tmpfs /var/lib/postgresql/data`; the option is applied. Disk speed is not the mechanism.
+2. **Small `/dev/shm`** (the classic Postgres-in-Docker trap). It is 64 MB both on the runner and
+   locally, and locally the full suite passes repeatedly against a container created with the very
+   same flags (89 s and 107 s).
+3. **The CI environment contract** (`TEST_DB_PORT`, `TEST_POSTGRES_PASSWORD`, `TEST_ADMIN_DB_URL`).
+   Verified separately and working; without `TEST_ADMIN_DB_URL` the failure is a loud 808-error
+   credential failure, not a hang.
+4. **The `1046` vs `1044` test-count gap.** Explained: `pull_request` checks run the merge with
+   `main`, and `main` gained 2 tests in PR #272. Not a symptom of anything.
+
+## The question to answer
+
+Which connection holds what lock (or otherwise blocks) that the first heavy `clean_db` TRUNCATE waits
+on — and why is it timing-dependent rather than deterministic?
+
+## Approach
+
+1. **Instrument rather than guess.** On a throwaway branch, run the suite with a sampler alongside it
+   that captures `pg_stat_activity` (including `wait_event_type`, `state`, `query`), `pg_locks`, and
+   `pg_blocking_pids()` once per second while pytest runs, and upload the sample as a workflow
+   artifact. The stall is a lock wait, so the blocking session is observable during the freeze; the
+   artifact survives the ephemeral runner, unlike the container.
+2. **Bisect if the sample is inconclusive.** Run directory prefixes (`tests/functional`, then
+   `tests/functional/<file>`…) to find the last test that completes before the block, then inspect
+   what that path leaves open: session-scoped fixtures, connections from `TestClient` lifespan sweeps
+   (`app/main.py` runs four startup sweeps, all of them touching the database), and the SQLAlchemy
+   pool's idle-in-transaction behaviour.
+3. **Fix the root cause in the tests.** Whatever the culprit is, the fix belongs where the leak is.
+
+## Constraints
+
+- **No papering over it.** No retry wrapper around pytest, no silent re-run, no removing the 120 s
+  ceiling or switching `timeout_method`. That ceiling is the diagnosis; hiding a stall converts a
+  visible defect into an invisible one.
+- **Do not buy speed with coverage.** Truncating fewer tables, skipping suites, or shrinking the reset
+  to make the window smaller is not a fix.
+- **Application behaviour stays untouched.** If the root cause turns out to live in app code (for
+  example a startup sweep that leaks a transaction), stop and bring that finding back before changing
+  it — it is a different risk class.
+
+## Out of scope
+
+- The versioning and release work (PR #273) — delivered separately.
+- Making the suite faster for its own sake.
+- CI for `web/` (vitest + playwright); "the suite" here means pytest.
+
+## Acceptance criteria
+
+1. The blocker is identified **with evidence** — the blocking PID/query and the session holding it,
+   captured live — not as another hypothesis.
+2. **N ≥ 5 consecutive full local runs** with zero stalls, counts reported.
+3. **Consecutive green CI runs on the same commit**, not one lucky green.
+4. The 120 s `pytest-timeout` ceiling and `timeout_method = "thread"` remain in place.
+
+## Checks
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+eval "$(infra/test-db.sh env)"
+uv run pytest tests/
+```
+
+`pyproject.toml` sets `addopts = "-q"` — do not add a second `-q`. No linter, type checker, or
+formatter exists; the tests are the verification.
+
+### Reproduced locally, with the mechanism visible (2026-09-21)
+
+Six consecutive full runs against the worktree's own test database:
+
+| Run | Result | Stalled |
+|---|---|---|
+| 1 | `1044 passed, 2 warnings in 114.28s` | no |
+| 2 | `1044 passed, 2 warnings in 141.25s` | no |
+| 3 | killed by the 120 s ceiling | **yes** |
+| 4 | killed by the 120 s ceiling | **yes** |
+| 5 | `1044 passed, 2 warnings in 111.84s` | no |
+| 6 | `1044 passed, 2 warnings in 115.62s` | no |
+
+**2 of 6**, so it reproduces here and is not a runner quirk. This also means the diagnosis does not
+need CI at all, which removes the push dependency from the critical path.
+
+A `pg_stat_activity` sampler running alongside the loop caught the mechanism twice, in both stalls,
+and it is exactly what the timeout stack implied:
+
+```
+state=idle in transaction   wait_event=Client|ClientRead
+query=SELECT conversation_events.id, conversation_events.conversation_id, ...
+
+state=active                wait_event=Lock|relation
+query=TRUNCATE appointment_history, appointments, technician_availability, ...
+```
+
+The first session held its transaction (and the lock the TRUNCATE needed) for roughly two minutes
+until the ceiling fired; the TRUNCATE waited the whole time. So the blocker is **a session left
+`idle in transaction` holding a lock on `conversation_events`** — a table the `clean_db` fixture
+truncates — and the stall is that wait, not slowness.
+
+**Next step:** identify the code path that opens a `SELECT conversation_events...` transaction and
+never commits or closes it (candidates: the startup sweeps that `TestClient`'s lifespan triggers, the
+notification/integration worker, or a generator dependency whose session outlives the test), then fix
+it where the leak is. Re-run the sampler with `pg_blocking_pids()` and `application_name` to name the
+holder with certainty rather than by inference.
+
+## Progress
+
+- [x] Worktree created and provisioned (base `8ad0e026`, `infra/.env` copied, `.opencode` noise removed).
+- [x] Reproduce with live database evidence: 2 of 6 local runs, `idle in transaction` vs blocked
+      `TRUNCATE` on `conversation_events`, captured in `pg_stat_activity`.
+- [x] Identify the leaking code path: a *successful* `/panel/ws` test leaves `get_db`'s session open,
+      and the next test's `clean_db` TRUNCATE waits on it (attribution confirmed below).
+- [x] Fix it in the harness: `_finish_websocket` closes the socket and pumps the portal until the
+      request's pooled connection is back, so the ASGI task finishes before starlette cancels it.
+- [x] Consecutive clean runs: **24** on `tests/functional` and **5** on the full suite.
+- [ ] Green CI on the pushed branch — needs explicit push authorization (not requested yet).
+
+## Correction (2026-09-21, later the same day)
+
+An earlier revision of this section claimed the root cause was located in the panel WebSocket path and
+was committed as such (`6f6a2cf0`). **That claim was overconfident and is downgraded here.** The
+statement is pinned; the mechanism is not.
+
+What still holds — the holder's SQL was captured live, twice, and it matches exactly one place:
+
+- `app/panel/api/routes/realtime.py:41-47` — `_snapshot()`, reached only from the `/panel/ws` handler.
+  (Not `app/services/realtime.py:59 activity_events()`, which adds a `conversation_id` predicate the
+  captured statement does not have.)
+
+What does **not** hold — the mechanism I proposed, and the evidence against it:
+
+- The story was "starlette's `WebSocketTestSession` cancels the ASGI task before it processes the
+  disconnect (`starlette/testclient.py`:120,126), so `get_db`'s teardown never runs". Direct single
+  process probes (denial path, success path, with and without `with TestClient(...)`) all showed the
+  handler finishing cleanly: `publisher.subscriber_count` went 1 -> 0 and the pooled connection went
+  back to idle. No leak.
+- Forcing the condition with the cyclic GC disabled (a throwaway plugin, `gc.disable()` at session
+  start, on the theory that the leak is only hidden by GC collecting the abandoned session) did
+  **not** make it deterministic: `tests/functional/test_api_realtime.py` passed 8/8 with the
+  unmodified code.
+- A full `tests/functional` run (217 tests) with a per-test timestamp plugin plus the 1 Hz sampler
+  produced **zero stalls**. The stall is real but rare in that subset, and the WS file alone is not a
+  reliable trigger.
+
+So `tests/functional/test_api_realtime.py` being "sufficient" was based on two stalls in an early
+loop and does not survive repetition. The holder statement is a strong lead, not a confirmed cause,
+and a fix for it has **not** been applied.
+
+### Then confirmed, with per-test attribution
+
+The campaign described above did capture it: 8 runs of `tests/functional` produced 7 clean runs and
+**1 stall in run 8**, with both ends timestamped. That removes the guesswork.
+
+```
+START 16:13:42.964  test_panel_websocket_mount_sends_snapshot_before_live_events     END 43.160  ok
+START 16:13:43.161  test_panel_websocket_snapshot_has_rest_equivalent_case_context   END 43.548  ok
+START 16:13:43.548  test_admin_panel_websocket_also_receives_snapshot                END 43.782  ok
+START 16:13:43.783  test_panel_websocket_rejects_missing_session                     no END
+```
+
+- The test that **blocks** is the fourth: its `clean_db` TRUNCATE never returns.
+- The test that **leaks** is the third: a *successful* `/panel/ws` test. Its `_snapshot` statement
+  opened a transaction at ~43.5 s and never closed it, so the very next test's TRUNCATE waits on it.
+- The holder's statement in that run is the `_snapshot` SELECT confirmed below, with
+  `xact_start` at 16:13:43.7 — inside that third test's window.
+
+So the earlier claim was right in substance, and the downgrade above was the correct response to
+*insufficient* evidence, not to contrary evidence. What the direct probes proved is narrower than I
+first wrote: the handler does clean up in isolation, so the race needs the suite's context (a rapid
+run of `/panel/ws` tests sharing the module-level engine), not a single WebSocket interaction.
+
+**Rate:** roughly 1 in 8 runs of `tests/functional`, which is why single probes kept missing it.
+
+**Verification campaign:** `/tmp/opencode/stall/campaign.sh` re-run with the harness fix applied.
+
+### Fix and verification (2026-09-21)
+
+The fix is test-side and lives in `tests/functional/test_api_realtime.py`: the `_finish_websocket`
+helper closes the socket and pumps the portal until `engine.pool.checkedout()` drops, so the handler
+returns on its own before `WebSocketTestSession` cancels the ASGI task. Application behaviour is
+untouched, and so are `pyproject.toml`, the 120 s ceiling and `timeout_method`.
+
+Measured, same harness and same machine:
+
+| | Before the fix | After the fix |
+|---|---|---|
+| `tests/functional` | 7 clean, **1 stall** in 8 runs | **24 consecutive clean** |
+| full suite (`pytest tests/`) | not measured this way | **5 consecutive clean**, `1044 passed` each, 100–107 s |
+
+The five full runs used the configured 120 s ceiling (no `--timeout` override); the stall detector is
+the sampler observing a sustained lock wait, independent of the pytest ceiling. An earlier set of
+five runs was discarded and re-run because it had used a stricter 45 s override.
+
+With a base rate near 1 in 8, 24 clean runs leave roughly a 4% chance of having been luck.
+
+**Still open:** CI green. That needs a push, which is a remote operation and has not been requested.
+The rate in CI may also differ from local, so the CI result is the last word — not this table.
+
+**Instrumentation used (throwaway, outside the repo):** `/tmp/opencode/stall/sampler.py`,
+`loop.sh`, `focus.sh`, `probe.py`, `probe_plugin.py`, `campaign.sh`, `nogc_plugin.py`. Nothing in
+`pyproject.toml` or the suite was modified.
+
+### Raw capture (still valid)
+
+A `pg_stat_activity` sampler (1 Hz) ran alongside the suite. pytest has `faulthandler` enabled, so
+`SIGABRT` on the pytest process dumps every thread stack at the instant of the stall. The 120 s
+ceiling is untouched.
+
+**The holder, captured live (same signature both times):**
+
+```
+WAITING pid=19912  wait=Lock|relation  q=TRUNCATE appointment_history, appointments, ...
+HOLDER  pid=19910  state=idle in transaction  xact_age=16.8s
+        q=SELECT conversation_events.id, conversation_events.conversation_id,
+                 conversation_events.event, conversation_events.cause,
+                 conversation_events.actor, conversation_events.created_at
+          FROM conversation_events
+          WHERE conversation_events.event IN ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR)
+          ORDER BY conversation_events.created_at, conversation_events.id
+```
+
+The statement matches exactly one place in the repo: `app/panel/api/routes/realtime.py:41-47`
+(`_snapshot()`), reached only from the `/panel/ws` handler, whose session comes from the
+request-scoped generator dependency `get_db` (`app/panel/deps.py`). That is a **lead**, and the
+correction above records why it is not yet a confirmed cause.
+
+## Notes for the executor
+
+- The stall is **intermittent**: it will not necessarily reproduce on demand. Budget for repeated runs,
+  and prefer capturing evidence while it happens over trying to make it happen. A single clean run
+  proves nothing; neither does a single stall.
+- Anything that needs a push to `Stefan-migo/lumat-agent` is a remote operation: ask the human first,
+  every time. The pushed-artifact idea (a workflow that uploads the sample) needs that authorization.
+- The earlier work unit's records live in `odd/tasks/versioning-release-process.md` on the branch
+  `odd/versioning-release-process` — useful context on the CI environment contract, not a dependency.
