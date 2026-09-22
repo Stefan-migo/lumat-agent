@@ -178,12 +178,14 @@ constraint is that the failure is visible (logged) and does not misinform the cu
 
 ### WU3 — the gates
 
-- [ ] **T4** — RED: an out-of-hours inbound produces the notice and does **not** reach classify/capture;
+- [x] **T4** — RED: an out-of-hours inbound produces the notice and does **not** reach classify/capture;
       a `strong` and a `weak` emergency both still reach their existing nodes; a `"gracias, chau"`
-      produces the farewell; `"gracias, ¿cuánto sale?"` does not.
-- [ ] **T5** — GREEN: the out-of-hours gate node and its routing in `app/chat/graph.py`, positioned per
-      T1; the social-close detector and the farewell reply.
-- [ ] **WU3 commit**
+      produces the farewell; `"gracias, ¿cuánto sale?"` does not. **Done — 3 of 13 integration tests
+      RED. The 10 that passed at RED are the regression guards (emergency, capture, in-hours, empty
+      schedule), which pass trivially while the gate does not yet exist.**
+- [x] **T5** — GREEN: the out-of-hours gate node and its routing in `app/chat/graph.py`, positioned per
+      T1; the social-close detector and the farewell reply. **Done — module `app/chat/nodes/closure_gate.py`.**
+- [x] **WU3 commit** — `5e0e1d6d`
 
 ### WU4 — the panel surface
 
@@ -300,29 +302,52 @@ a typo in a setting; failing open degrades to today's behavior, which is the saf
 level `warning`, matching the convention for a degraded capability used by `kb-retrieval-failure`.
 `app/services/settings.py` currently defines no logger, so the unit adds one.
 
-**P5 — D4: the client gets its own closing detector, narrower than the panel's social set.**
+**P5 — D4: the client gets its own closing detector, and it was corrected by measurement.**
+
 Structural guards mirrored from `_is_conversational_turn` (`app/chat/assistant/nodes.py:528-534`):
 casefold, reject empty, reject longer than 40 characters, reject any `?`, tokenize on Unicode words,
-require **every** token to be allowed. On top of that the client requires **at least one closing token**,
-because the panel's set also exempts greetings and acknowledgements, which are not a goodbye.
+require **every** token to be allowed. Plus one rule the panel does not have: **diacritics are folded**
+(`unicodedata.normalize("NFD", ...)` + `unicodedata.combining`) before tokenizing.
 
-- `CLOSING_WORDS` = {adios, bye, chau, hasta, luego, nos, pronto, vemos}
-- `CLOSING_POLITE` = {gracias, muchas, mucho, ok, bueno, dale, listo, perfecto, genial, excelente, ya, nada, bien}
+`CLOSING_TOKENS` is a **single** set. The two-set split originally pinned here, with a "must contain an
+explicit closing token" requirement, was removed after measurement: the maintainer decided that a bare
+thanks or acknowledgement should also receive the farewell, because today a bare `gracias` or `ok`
+reaches classification, increments an unknown-intent count, and can be answered with the menu
+clarification — the same absurdity this unit exists to remove. With the requirement gone the split had
+no behaviour left, so it was deleted rather than kept as dead structure.
 
-A message is a farewell iff every token is in `CLOSING_WORDS | CLOSING_POLITE` **and** at least one is
-in `CLOSING_WORDS`.
+- `CLOSING_TOKENS` = {adios, bye, chao, chau, hasta, luego, nos, pronto, vemos, gracias, muchas, mucho,
+  ok, bueno, dale, listo, perfecto, genial, excelente, ya, nada, bien}
+
+A message is a farewell iff every token is in `CLOSING_TOKENS`.
 
 The panel module is **not** imported: `app/chat/assistant/nodes.py:5-30` pulls in the assistant
 approval, evidence, markup, tools, audit, KB, LLM and cost modules — a heavy, wrong-direction dependency
 for the customer chat.
 
-Hand-applied against the guards, the expected verdicts are: `chau`, `gracias, chau`, `hasta luego`,
-`nos vemos` -> farewell; `ok gracias` and `muchas gracias` -> **not** (no closing token);
-`gracias, ¿cuánto sale la revisión anual?` and `¿cuánto cuesta?` -> not (contain `?`);
-`chau, pero antes dime los valores` -> not (disallowed tokens); `hola, necesito una visita` -> not.
-**These are hand-applied, not observed.** T4 must re-observe them as RED and must measure the detector
-against real phrasings in both directions, adjusting from that evidence rather than from this list's
-intent — the panel's `_SOCIAL_WORDS` shipped with `buenos` and `chau` missing until it was measured.
+**Why the correction was necessary — the detector was measured, not read.** The first implementation
+missed two real-world forms, both confirmed by running it:
+
+| Input | First implementation | Cause |
+|---|---|---|
+| `chao` | **no** | the common Chilean spelling was not in the set at all |
+| `adiós` | **no** | the correctly accented spelling of a word that *was* in the set — no folding |
+| `¡Adiós!` | **no** | same |
+
+This is the same defect class the panel's `_SOCIAL_WORDS` shipped with (`buenos` and `chau` missing
+until it was measured). Folding diacritics kills the whole class, not just those two cases.
+
+**Observed verdicts after the correction** (run, not reasoned):
+
+```
+FAREWELL  chau, chao, adiós, adios, ¡Adiós!, GRACIAS, CHAO, gracias chau,
+          hasta luego, nos vemos, muchas gracias, ok gracias, gracias, ok,
+          listo, bye, chau!
+no        gracias, ¿cuánto sale la revisión anual?   (contains ?)
+no        chau, pero antes dime los valores          (disallowed tokens)
+no        hola, necesito una visita                  (disallowed tokens)
+no        ¿cuánto cuesta?                            (contains ?)
+```
 
 **P6 — the baseline this unit changes.** A bare `chau` today reaches `classify_intent`, whose declared
 vocabulary has no social or farewell intent: an unclassifiable text records an `unknown_intent` event
@@ -365,6 +390,26 @@ on a naive value silently assumes the system timezone. The production caller pas
 would get a shifted answer. It is declared rather than guarded because the obvious guard — fail open
 plus a warning — would hide a caller error in exactly the way P4 deliberately uses that shape only for
 configuration errors.
+
+**P12 — the closure router reads `state.replies`, which is an accumulator, and that is a declared
+invariant rather than a defended one.** `replies` carries an `add` reducer (`app/chat/state.py:172-173`)
+and six other nodes write it (`receive`, `respond`, `capture`, `handoff`, `emergency`, and this gate).
+`_after_closure_gate` routes `END` when `state.replies` is non-empty, which is correct **only because
+nothing before `closure_gate` in the chain writes it**: `from_db` does not set it (the `cls(...)` at
+`state.py:215-222` does not pass it), and `emergency_gate`, `cost_gate` and `handoff_gate` do not write
+it either. This is unlike the three sibling gates, which each read an explicit marker they themselves
+set (`emergency_hit`, `cost_mode`, `handoff_reason`).
+
+It was left as-is deliberately. Unlike `session=None`, whose failure was a crash, this assumption's
+violation is benign: if an upstream node ever does reply, ending the turn is the right outcome anyway.
+The invariant is declared here so a future change that inserts a replying node before `closure_gate`
+sees it; it is not worth a new state field.
+
+**P13 — the panel's write model is behind the read model until WU4.** `settings_get` builds the
+`messages` section from `SETTINGS_DEFAULTS`, so it now returns **five** keys, while `MessagesBody` in
+`app/panel/api/routes/settings.py:63-67` still accepts exactly **three**. `tests/functional/test_api_kb_settings.py`
+was updated to the new read shape, which makes the inconsistency visible and asserted rather than
+hidden. WU4 closes it by extending the model — the two new keys are readable but not yet writable.
 
 ## Graph check
 
