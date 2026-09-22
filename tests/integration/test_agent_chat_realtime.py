@@ -58,6 +58,10 @@ def test_internal_chat_uses_sse_preview_instead_of_realtime_tokens(client, monke
     _login(client, "stream-admin")
     fake_client = _StreamingChatClient(["A ", "streamed", " answer"])
     monkeypatch.setattr("app.services.llm.openai_client", lambda: fake_client)
+    monkeypatch.setattr(
+        "app.services.kb.retrieve",
+        lambda *args, **kwargs: [{"content": "Grounded panel evidence", "similarity": 0.9}],
+    )
     published = []
 
     async def capture(envelope):
@@ -85,6 +89,10 @@ def test_token_delivery_failure_does_not_change_persisted_post_contract(client, 
     _user("failure-admin", "admin")
     _login(client, "failure-admin")
     monkeypatch.setattr("app.services.llm.openai_client", lambda: _StreamingChatClient(["complete"]))
+    monkeypatch.setattr(
+        "app.services.kb.retrieve",
+        lambda *args, **kwargs: [{"content": "Grounded panel evidence", "similarity": 0.9}],
+    )
 
     async def fail(_envelope):
         raise RuntimeError("subscriber disappeared")

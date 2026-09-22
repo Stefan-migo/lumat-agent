@@ -15,6 +15,7 @@ from app.chat.assistant.markup import ToolCallMarkupSanitizer
 from app.chat.assistant.state import AssistantState, PlannerOutput, SDBTask, estimate_tokens, validate_cortex_session
 from app.chat.assistant.tools.registry import AUTONOMOUS_WRITE_ALLOWLIST, TOOL_REGISTRY, ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
+from app.services import kb
 from app.services import llm
 from app.services.costs import (
     combined_cost_mode,
@@ -32,7 +33,19 @@ from app.models import InternalChatMessage
 logger = logging.getLogger(__name__)
 
 _TOOL_EVIDENCE_LIMIT = 4_000
+_KB_EVIDENCE_LIMIT = 4_000
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
+PANEL_GROUNDING_REFUSAL = (
+    "No encontré evidencia suficiente en la base de conocimiento para responder con seguridad. "
+    "Reformula la consulta o aporta más contexto."
+)
+_SOCIAL_WORDS = frozenset({
+    "adios", "buenas", "buenos", "bye", "chau", "como", "de", "dia", "días", "día",
+    "dias", "estas", "esta", "excelente", "gracias", "hello", "hi", "hola", "hasta",
+    "entendido", "genial", "listo", "luego", "muchas", "mucho", "nada", "noches", "nos",
+    "ok", "okay", "okey", "perfecto", "por", "pronto", "que", "tal", "tardes", "thanks",
+    "todo", "va", "vemos", "ya", "bien", "favor", "dale", "bueno",
+})
 
 
 def _project_slug(state: AssistantState) -> str:
@@ -512,6 +525,15 @@ def _is_autonomous_write(tool_name: str | None, thread_id: object) -> bool:
     return tool_name in AUTONOMOUS_WRITE_ALLOWLIST and type(thread_id) is int and thread_id > 0
 
 
+def _is_conversational_turn(content: str) -> bool:
+    """Allow only short, purely social turns to bypass knowledge grounding."""
+    text = content.strip().casefold()
+    if not text or len(text) > 40 or "?" in text:
+        return False
+    words = re.findall(r"[\wáéíóúüñ]+", text)
+    return bool(words) and all(word in _SOCIAL_WORDS for word in words)
+
+
 def guardrails(state: AssistantState) -> AssistantState:
     plan_data = state.get("plan") or {}
     if state.get("legacy_compat"):
@@ -521,7 +543,8 @@ def guardrails(state: AssistantState) -> AssistantState:
         return {"guardrails": {"whitelisted": False, "arguments_valid": False, "cost_allowed": True, "approval_required": False, "decision": "fallback"}, "status": "responding"}
     tool_name = plan_data.get("tool")
     if plan_data.get("kind") != "tool" or not tool_name:
-        return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": "respond"}, "status": "responding"}
+        decision = "respond" if _is_conversational_turn(state.get("content", "")) else "retrieve_kb"
+        return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": decision}, "status": "responding"}
     from app.services.prompts import load_assistant_config
     config = load_assistant_config()
     whitelisted = tool_name in config.tools_whitelist
@@ -557,6 +580,45 @@ def _render_tool_evidence(state: AssistantState) -> str:
     if len(rendered) <= _TOOL_EVIDENCE_LIMIT:
         return rendered
     return rendered[:_TOOL_EVIDENCE_LIMIT - 1] + "…"
+
+
+def _render_kb_evidence(state: AssistantState) -> str:
+    rendered = "\n".join(
+        f"{index}. {chunk['content'].strip()}"
+        for index, chunk in enumerate(state.get("kb_chunks") or [], 1)
+        if isinstance(chunk, dict) and chunk.get("content", "").strip()
+    )
+    if len(rendered) <= _KB_EVIDENCE_LIMIT:
+        return rendered
+    return rendered[:_KB_EVIDENCE_LIMIT - 1] + "…"
+
+
+def retrieve_kb(state: AssistantState) -> AssistantState:
+    """Retrieve bounded evidence before answering a non-social panel turn."""
+    chunks = kb.retrieve(
+        state.get("session"),
+        state["content"].strip(),
+        top_k=kb.DEFAULT_TOP_K,
+        min_sim=kb.DEFAULT_MIN_SIM,
+        audience=None,
+    )
+    chunks = [chunk for chunk in chunks if isinstance(chunk, dict) and chunk.get("content", "").strip()]
+    if not chunks:
+        return {
+            "guardrails": {**state.get("guardrails", {}), "decision": "grounding_refusal"},
+            "evidence": [make_evidence(
+                tool="kb.retrieve",
+                status="completed",
+                detail="No grounded knowledge-base evidence found",
+            )],
+            "response": PANEL_GROUNDING_REFUSAL,
+            "status": "completed",
+        }
+    return {
+        "kb_chunks": chunks,
+        "guardrails": {**state.get("guardrails", {}), "decision": "respond"},
+        "status": "responding",
+    }
 
 
 def execute(state: AssistantState) -> AssistantState:
@@ -674,6 +736,7 @@ def execute(state: AssistantState) -> AssistantState:
             "available_tools": ", ".join(config.tools_whitelist),
             "tool_statement": tool_statement,
             "tool_evidence": _render_tool_evidence(state),
+            "kb_evidence": _render_kb_evidence(state),
             "context": _context_text(state),
         }.items():
             prompt = prompt.replace("{{" + key + "}}", str(value))

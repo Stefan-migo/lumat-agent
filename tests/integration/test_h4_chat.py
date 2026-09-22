@@ -65,6 +65,10 @@ def test_admin_thread_and_message_are_persisted_and_audited(client, migrated_db,
     _login(client, "chat-admin")
     fake_client = _FakeChatClient()
     monkeypatch.setattr("app.services.llm.openai_client", lambda: fake_client)
+    monkeypatch.setattr(
+        "app.services.kb.retrieve",
+        lambda *args, **kwargs: [{"content": "Grounded panel evidence", "similarity": 0.9}],
+    )
 
     created = client.post("/panel/api/chat/threads", json={})
     assert created.status_code == 201
