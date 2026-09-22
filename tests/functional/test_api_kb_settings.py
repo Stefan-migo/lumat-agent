@@ -838,6 +838,10 @@ def test_settings_update_hours_audited(client, make_user):
             "hours.schedule",
         ),
         (
+            {"timezone": "UTC", "schedule": [{"days": [1, 1], "open": "09:00", "close": "17:00"}]},
+            "hours.schedule",
+        ),
+        (
             {"timezone": "UTC", "schedule": [{"days": [1], "open": "9:00", "close": "17:00"}]},
             "hours.schedule",
         ),

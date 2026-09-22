@@ -141,7 +141,7 @@ def _parse_hours(body: HoursBody) -> tuple[str, list[dict[str, Any]]]:
             or any(isinstance(day, bool) or not isinstance(day, int) or not 1 <= day <= 7 for day in days)
         ):
             raise HTTPException(status_code=400, detail="schedule days must be weekdays from 1 to 7")
-        if seen_days.intersection(days):
+        if len(set(days)) != len(days) or seen_days.intersection(days):
             raise HTTPException(status_code=400, detail="schedule weekdays must not repeat")
         seen_days.update(days)
         if (
