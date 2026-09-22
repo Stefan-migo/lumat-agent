@@ -170,11 +170,11 @@ constraint is that the failure is visible (logged) and does not misinform the cu
 
 ### WU2 — the hours
 
-- [ ] **T2** — RED: the schedule/timezone reader and its validation, including the boundary cases
-      (exactly at opening, exactly at closing, a day with no hours, an invalid stored value).
-- [ ] **T3** — GREEN: `app/services/settings.py` — the `hours.*` defaults and the reader; the pure
-      "is it open at this instant" function, isolated so it is testable without a graph.
-- [ ] **WU2 commit**
+- [x] **T2** — RED: the schedule/timezone reader and its validation, including the boundary cases.
+      **Done — 8 of 11 unit tests RED, all three accessor tests RED, none on an import or fixture error.**
+- [x] **T3** — GREEN: `app/services/settings.py` — the `hours.*` defaults and the reader; the pure
+      `is_open_at` function. **Done.**
+- [x] **WU2 commit**
 
 ### WU3 — the gates
 
@@ -357,6 +357,14 @@ is open, at exactly the closing minute it is closed. Both boundaries are pinned 
 `app/services/settings.py` already owns the `hours.*` keys, and the pure function is a short loop over
 the entries. A new module for it would be a file for ~15 lines. If the implementer finds a better
 existing home, the choice must be justified in the record — not assumed.
+
+**P11 — a declared limitation, not a defended one: a naive `now` is interpreted as the process's local
+time.** `is_open_at` requires an aware `datetime` but does not enforce it, and `datetime.astimezone()`
+on a naive value silently assumes the system timezone. The production caller passes
+`datetime.now(timezone.utc)`, so this is correct in practice; a future caller passing a naive value
+would get a shifted answer. It is declared rather than guarded because the obvious guard — fail open
+plus a warning — would hide a caller error in exactly the way P4 deliberately uses that shape only for
+configuration errors.
 
 ## Graph check
 
