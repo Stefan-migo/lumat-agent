@@ -157,6 +157,16 @@ the UI cannot emit the shape and is not touched.
 
 Closed as documented `wontfix` — see the section above. No code, no test, no spec change.
 
+## Delivery
+
+- Branch `odd/duplicate-weekday-validation` pushed to `origin` after explicit human authorization.
+- PR **#307** — https://github.com/Stefan-migo/lumat-agent/pull/307 — base `main`, exactly one label
+  (`type:bug`), `MERGEABLE`.
+- PR checks: `test` **pass** (2m14s), GitGuardian Security Checks **pass**. Merge is the maintainer's
+  decision and was not taken here.
+
 ## Next step
 
-WU1–WU3 complete and reviewed. Pending: explicit push authorization, then the PR.
+PR #307 is open and green, awaiting merge. After the merge: `bash infra/test-db.sh down` **before**
+`rapso worktree cleanup duplicate-weekday-validation --remote`, then the three-step graph refresh
+(`graphify <root> --update`, `graphify cluster-only <root>`, `graphify label <root> --missing-only`).
