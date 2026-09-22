@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from app.models import InternalChatThread
 from app.services import agent_chat
 
@@ -33,10 +35,90 @@ def test_create_thread_persists_validated_project_and_audits_namespace(monkeypat
 
 def test_thread_project_authorization_uses_thread_column(monkeypatch):
     authorization = object()
-    monkeypatch.setattr(agent_chat.projects, "agent_context", lambda session, proyecto: authorization)
-    thread = InternalChatThread(user_id=1, proyecto="bound-project")
+    calls = []
+
+    def agent_context(session, proyecto):
+        calls.append(proyecto)
+        return authorization
+
+    monkeypatch.setattr(agent_chat.projects, "agent_context", agent_context)
+    thread = InternalChatThread(
+        user_id=1,
+        proyecto="bound-project",
+        assistant_state={"sdb": {"proyecto": "legacy-other"}},
+    )
 
     assert agent_chat._thread_project_authorization(object(), thread) is authorization
+    assert calls == ["bound-project"]
+
+
+def test_create_thread_defaults_to_default_without_project_validation(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        agent_chat.projects,
+        "agent_context",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+    monkeypatch.setattr(agent_chat, "record_audit", lambda *args, **kwargs: None)
+
+    class Session:
+        def add(self, thread):
+            thread.id = 7
+
+        def flush(self):
+            pass
+
+    session = Session()
+    implicit = agent_chat.create_thread(session, SimpleNamespace(id=3, username="admin"))
+    explicit = agent_chat.create_thread(
+        session, SimpleNamespace(id=3, username="admin"), proyecto="default"
+    )
+
+    assert implicit.proyecto == "default"
+    assert explicit.proyecto == "default"
+    assert calls == []
+
+
+def test_create_thread_rejects_unknown_project_before_persistence(monkeypatch):
+    audit_calls = []
+
+    def reject_project(session, proyecto):
+        raise ValueError(f"project {proyecto!r} is not active")
+
+    monkeypatch.setattr(agent_chat.projects, "agent_context", reject_project)
+    monkeypatch.setattr(
+        agent_chat,
+        "record_audit",
+        lambda *args, **kwargs: audit_calls.append((args, kwargs)),
+    )
+
+    class Session:
+        def __init__(self):
+            self.added = []
+
+        def add(self, thread):
+            self.added.append(thread)
+
+        def flush(self):
+            pass
+
+    session = Session()
+    with pytest.raises(ValueError, match="not active"):
+        agent_chat.create_thread(session, SimpleNamespace(id=3, username="admin"), proyecto="unknown")
+
+    assert session.added == []
+    assert audit_calls == []
+
+
+def test_thread_project_authorization_rejects_project_that_no_longer_resolves(monkeypatch):
+    def reject_project(session, proyecto):
+        raise ValueError(f"project {proyecto!r} is not active")
+
+    monkeypatch.setattr(agent_chat.projects, "agent_context", reject_project)
+    thread = InternalChatThread(user_id=1, proyecto="archived-project")
+
+    with pytest.raises(ValueError, match="not active"):
+        agent_chat._thread_project_authorization(object(), thread)
 
 
 def test_agent_turn_derives_project_authorization_from_thread(monkeypatch):
