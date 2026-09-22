@@ -38,29 +38,27 @@ agent/
 `registry.yaml` declares the roster as data (AC-4 data-only): a top-level
 `agent:` block — the orchestrator, **byte-identical to before H2** (AC-4
 invariant, one top-level orchestrator) — plus a `sub_agents:` sibling with five
-sub-agents, each carrying `name/persona/tools_whitelist/kb_scope/memoria_scope/
-model/temperature`:
+  sub-agents, each carrying `name/persona/tools_whitelist/memoria_scope/
+  model/temperature`:
 
-| Sub-agent | Slice-1 runtime | Tools whitelist | kb_scope |
-|-----------|-----------------|-----------------|----------|
-| `research_triage` | ✅ **live** — KB research/triage sub-graph | `kb.retrieve` | `valores`, `postventa` |
-| `retrieval` | data-only (no runtime) | — | — |
-| `customer_records` | data-only (no runtime) | — | — |
-| `human_handoff` | data-only (no runtime) | — | — |
-| `escalation` | data-only (no runtime) | — | — |
+| Sub-agent | Slice-1 runtime | Tools whitelist |
+|-----------|-----------------|-----------------|
+| `research_triage` | ✅ **live** — KB research/triage sub-graph | `kb.retrieve` |
+| `retrieval` | data-only (no runtime) | — |
+| `customer_records` | data-only (no runtime) | — |
+| `human_handoff` | data-only (no runtime) | — |
+| `escalation` | data-only (no runtime) | — |
 
 - **Slice-1 runtime**: only `research_triage` runs. A KB retail intent
   (`valores`/`postventa`) dispatches from the `orchestrate` node to the
-  research sub-graph, which runs `kb.retrieve(scope=<kb_scope>)` (scoped by
-  `source_meta.category`, JSONB — no new table) and reuses the `respond`/
+  research sub-graph, which runs `kb.retrieve` and reuses the `respond`/
   `handoff` nodes. A miss retries ≤1 then hands off (AO-8). The other four
   sub-agents are declared data-only this slice: they have no dispatched runtime.
 - **Reader**: `app/agent_registry.py` reads `registry.yaml` once (cached via
   `get_registry`) and validates it fail-fast at boot (exactly one
-  orchestrator, all seven fields, known tools, numeric temperature). It is NOT
+  orchestrator, all six fields, known tools, numeric temperature). It is NOT
   wired into `prompts.py`/`respond.py` (AC-4 no-runtime-consumer).
-- **No new tables**: the roster lives in `registry.yaml`; scope filtering rides
-  the existing `source_meta.category` JSONB convention.
+- **No new tables**: the roster lives in `registry.yaml`.
 
 ## Editing workflow
 
