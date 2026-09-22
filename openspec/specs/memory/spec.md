@@ -48,7 +48,7 @@ The canonical Tukulpan façade MUST expose upsert, get, list, delete, mark, and 
 
 ### Requirement: MEM-3 — Explicit, Scoped Hybrid Search
 
-The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope.
+The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. An `own` read MUST union the trusted current thread axis with the project-qualified agent axis, while never including other threads' panel rows. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope.
 
 #### Scenario: Explicit search only
 - GIVEN a panel turn enters `assemble_context()`
@@ -63,7 +63,7 @@ The system MUST retain `hybrid_search()` as an explicit, project- and scope/enti
 #### Scenario: Role isolation
 - GIVEN a search by a role without cross-project rights
 - WHEN the search runs
-- THEN panel reads derive `thread:<trusted thread id>` server-side and return only that thread's memories, project-visible agent memories return from any thread in the same project, and customer memories remain client-gated
+- THEN an `own` read derives `thread:<trusted thread id>` server-side and returns that thread's memories unioned with project-visible agent memories from the same project, other threads' panel rows remain invisible, and customer memories remain client-gated
 
 #### Scenario: Empty result
 - GIVEN no memory above the threshold

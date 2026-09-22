@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Annotated, Any, Callable, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel
+from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
@@ -86,8 +86,8 @@ class _MemorySearchBase(BaseModel):
     limit: int = Field(default=5, ge=1, le=10)
 
 
-class _PanelMemoryArgs(_MemoryReadBase):
-    scope: Literal["panel"]
+class _OwnMemoryArgs(_MemoryReadBase):
+    scope: Literal["own"]
     entity_id: None = None
 
 
@@ -96,13 +96,8 @@ class _CustomerMemoryArgs(_MemoryReadBase):
     entity_id: str = Field(min_length=1, max_length=100, pattern=_CUSTOMER_ENTITY_PATTERN)
 
 
-class _AgentMemoryArgs(_MemoryReadBase):
-    scope: Literal["agent"]
-    entity_id: Literal[_AGENT_MEMORY_ENTITY]
-
-
-class _PanelMemorySearchArgs(_MemorySearchBase):
-    scope: Literal["panel"]
+class _OwnMemorySearchArgs(_MemorySearchBase):
+    scope: Literal["own"]
     entity_id: None = None
 
 
@@ -111,27 +106,36 @@ class _CustomerMemorySearchArgs(_MemorySearchBase):
     entity_id: str = Field(min_length=1, max_length=100, pattern=_CUSTOMER_ENTITY_PATTERN)
 
 
-class _AgentMemorySearchArgs(_MemorySearchBase):
-    scope: Literal["agent"]
-    entity_id: Literal[_AGENT_MEMORY_ENTITY]
-
-
 _MemoryRead = Annotated[
-    _PanelMemoryArgs | _CustomerMemoryArgs | _AgentMemoryArgs,
+    _OwnMemoryArgs | _CustomerMemoryArgs,
     Field(discriminator="scope"),
 ]
 _MemorySearch = Annotated[
-    _PanelMemorySearchArgs | _CustomerMemorySearchArgs | _AgentMemorySearchArgs,
+    _OwnMemorySearchArgs | _CustomerMemorySearchArgs,
     Field(discriminator="scope"),
 ]
 
 
 class MemoryArgs(RootModel[_MemoryRead]):
-    """memory.read arguments. Each scope declares its own entity rule in this schema."""
+    """memory.read arguments. Own memory is the default thread/project union."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_scope(cls, value):
+        if isinstance(value, dict) and "scope" not in value:
+            return {**value, "scope": "own"}
+        return value
 
 
 class MemorySearchArgs(RootModel[_MemorySearch]):
-    """memory.search arguments. Each scope declares its own entity rule in this schema."""
+    """memory.search arguments. Own memory is the default thread/project union."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_scope(cls, value):
+        if isinstance(value, dict) and "scope" not in value:
+            return {**value, "scope": "own"}
+        return value
 
 
 class MemoryWriteArgs(BaseModel):
@@ -246,11 +250,18 @@ def _kpis(session, args: KpiArgs):
 
 def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None):
     parsed = args.root
-    entity_id = parsed.entity_id
-    if parsed.scope == "panel":
+    if parsed.scope == "own":
         if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
-            raise ToolValidationError("panel memory read requires a positive trusted thread id")
-        entity_id = memory.thread_memory_entity(trusted_thread_id)
+            raise ToolValidationError("own memory read requires a positive trusted thread id")
+        rows = memory.list_for_entity(
+            session, scope="panel", entity_id=memory.thread_memory_entity(trusted_thread_id)
+        ) + memory.list_for_entity(
+            session, scope="agent", entity_id=_AGENT_MEMORY_ENTITY
+        )
+        if parsed.topic:
+            rows = [row for row in rows if row.topic_key == parsed.topic]
+        return rows[: parsed.limit]
+    entity_id = parsed.entity_id
     rows = memory.list_for_entity(session, scope=parsed.scope, entity_id=entity_id)
     if parsed.topic:
         rows = [row for row in rows if row.topic_key == parsed.topic]
@@ -259,11 +270,28 @@ def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None):
 
 def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | None):
     parsed = args.root
-    entity_id = parsed.entity_id
-    if parsed.scope == "panel":
+    if parsed.scope == "own":
         if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
-            raise ToolValidationError("panel memory search requires a positive trusted thread id")
-        entity_id = memory.thread_memory_entity(trusted_thread_id)
+            raise ToolValidationError("own memory search requires a positive trusted thread id")
+        rows = memory.hybrid_search(
+            session,
+            parsed.query,
+            scope="panel",
+            entity_id=memory.thread_memory_entity(trusted_thread_id),
+            top_k=parsed.limit,
+        ) + memory.hybrid_search(
+            session,
+            parsed.query,
+            scope="agent",
+            entity_id=_AGENT_MEMORY_ENTITY,
+            top_k=parsed.limit,
+        )
+        rows.sort(key=lambda row: row.get("score", 0), reverse=True)
+        return [
+            {**row, "contenido": row.get("contenido", "")[:MEMORY_SEARCH_CONTENT_LIMIT]}
+            for row in rows[: parsed.limit]
+        ]
+    entity_id = parsed.entity_id
     rows = memory.hybrid_search(
         session,
         parsed.query,
