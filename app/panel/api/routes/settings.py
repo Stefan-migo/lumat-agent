@@ -23,7 +23,10 @@ server-side (PDW-API-4): `require_admin_json` -> operador 403; unauthenticated
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -64,6 +67,13 @@ class MessagesBody(BaseModel):
     greeting: str
     cannot_answer: str
     clarification: str
+    farewell: str
+    out_of_hours: str
+
+
+class HoursBody(BaseModel):
+    timezone: Any
+    schedule: Any
 
 
 class LimitsBody(BaseModel):
@@ -107,6 +117,52 @@ def _parse_tone(body: ToneBody) -> str:
     return tone
 
 
+def _parse_hours(body: HoursBody) -> tuple[str, list[dict[str, Any]]]:
+    if not isinstance(body.timezone, str):
+        raise HTTPException(status_code=400, detail="timezone must be a valid IANA timezone")
+    try:
+        ZoneInfo(body.timezone)
+    except (TypeError, ValueError, ZoneInfoNotFoundError):
+        raise HTTPException(status_code=400, detail="timezone must be a valid IANA timezone")
+
+    if not isinstance(body.schedule, list):
+        raise HTTPException(status_code=400, detail="schedule must be a list of objects")
+
+    seen_days: set[int] = set()
+    for entry in body.schedule:
+        if not isinstance(entry, dict):
+            raise HTTPException(status_code=400, detail="schedule must be a list of objects")
+        days = entry.get("days")
+        opening = entry.get("open")
+        closing = entry.get("close")
+        if (
+            not isinstance(days, list)
+            or not days
+            or any(isinstance(day, bool) or not isinstance(day, int) or not 1 <= day <= 7 for day in days)
+        ):
+            raise HTTPException(status_code=400, detail="schedule days must be weekdays from 1 to 7")
+        if seen_days.intersection(days):
+            raise HTTPException(status_code=400, detail="schedule weekdays must not repeat")
+        seen_days.update(days)
+        if (
+            not isinstance(opening, str)
+            or not isinstance(closing, str)
+            or len(opening) != 5
+            or len(closing) != 5
+            or opening[2] != ":"
+            or closing[2] != ":"
+        ):
+            raise HTTPException(status_code=400, detail="schedule times must use HH:MM")
+        try:
+            open_time = datetime.strptime(opening, "%H:%M").time()
+            close_time = datetime.strptime(closing, "%H:%M").time()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="schedule times must use HH:MM")
+        if open_time >= close_time:
+            raise HTTPException(status_code=400, detail="open must be before close")
+    return body.timezone, body.schedule
+
+
 @router.get("/settings")
 def settings_get(
     session: Session = Depends(get_db),
@@ -122,6 +178,10 @@ def settings_get(
         "messages": {
             key: settings_service.get_message(session, key)
             for key in settings_service.MESSAGE_DEFAULTS
+        },
+        "hours": {
+            "timezone": settings_service.get_hours_timezone(session),
+            "schedule": settings_service.get_hours_schedule(session),
         },
         "conversation_limit": settings_service.get_setting(
             session, "cost.conversation_limit", default=1.50
@@ -179,6 +239,19 @@ def settings_messages(
     return {"ok": True}
 
 
+@router.post("/settings/hours")
+def settings_hours(
+    body: HoursBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    timezone_name, schedule = _parse_hours(body)
+    _save(session, "hours.timezone", timezone_name, current)
+    _save(session, "hours.schedule", schedule, current)
+    session.commit()
+    return {"ok": True}
+
+
 @router.post("/settings/limits")
 def settings_limits(
     body: LimitsBody,
@@ -220,7 +293,7 @@ def settings_meta(
 # Catch-all MUST stay registered AFTER the specific {scope,keywords,tone,limits,
 # meta} POST routes above: FastAPI matches routes in registration order, so the
 # literal sections win and anything else is an unknown section (PDW-API-3).
-_KNOWN_SECTIONS = {"scope", "keywords", "tone", "messages", "limits", "meta"}
+_KNOWN_SECTIONS = {"scope", "keywords", "tone", "messages", "hours", "limits", "meta"}
 
 
 @router.post("/settings/{section}")

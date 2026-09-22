@@ -146,5 +146,36 @@ The system MUST persist only the activity vocabulary `classified`, `kb_retrieved
 - WHEN persistence is attempted
 - THEN it is rejected and no unsupported activity enters history
 
+### Requirement: CM-11 — Farewell and Out-of-Hours Closure
+
+The system MUST end a customer turn without running the normal flow when the message is a short purely social closing or thanks formula, and MUST end it without running the normal flow when the message arrives outside the configured business hours. In both cases the reply MUST be the configured message (`messages.farewell` and `messages.out_of_hours`).
+
+Business hours MUST be configurable from the panel as a weekly schedule with an explicit IANA timezone. An absent or unusable schedule MUST leave the normal flow unchanged rather than closing the chat: an empty schedule is the feature's off state, and a schedule or timezone that cannot be read fails open and is logged.
+
+#### Scenario: Farewell
+- GIVEN a customer sends a short purely social closing or thanks message
+- WHEN the turn is handled
+- THEN the configured farewell is the reply, and classification, capture and retrieval do not run
+
+#### Scenario: Outside business hours
+- GIVEN the current time is outside the configured schedule for the conversation's timezone
+- WHEN a customer message arrives
+- THEN the configured out-of-hours notice is the reply, and classification, capture and retrieval do not run
+
+#### Scenario: Emergency precedence
+- GIVEN the current time is outside the configured schedule
+- WHEN the message is a strong or a weak emergency match
+- THEN the existing emergency and escalation paths run unchanged, and the out-of-hours notice is NOT emitted
+
+#### Scenario: Capture in progress
+- GIVEN a structured data capture is in progress for the conversation
+- WHEN a customer message arrives outside business hours or as a closing formula
+- THEN the capture continues and is not replaced by a closure message
+
+#### Scenario: Hours not usable
+- GIVEN the configured schedule is empty, or its schedule or timezone cannot be read
+- WHEN a customer message arrives
+- THEN the normal flow runs unchanged, and an unusable schedule is logged rather than silently closing or silently disabling the chat
+
 ## Boundary
 Emergency flow and human handoff mechanics are specified in `emergency-detection` and `human-handoff`. The acta summary (CM-5) is unchanged; the close handler (CM-9) consumes it, it does not rewrite it. ToolNode memory tools are out of scope until a second agent exists.

@@ -105,12 +105,30 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(toneSelect.value).toBe(settings.tone);
   });
 
-  it("renders the three editable standard messages", () => {
+  it("renders the five editable standard messages", () => {
     const card = (render(<SettingsView />), screen.getByRole("heading", { name: "Mensajes" }).closest(".card") as HTMLElement);
     expect(within(card).getByText(/menú de categorías se agrega automáticamente/i)).toBeInTheDocument();
     expect((within(card).getByLabelText(/saludo/i) as HTMLTextAreaElement).value).toBe(settings.messages.greeting);
     expect((within(card).getByLabelText(/no puede responder/i) as HTMLTextAreaElement).value).toBe(settings.messages.cannot_answer);
     expect((within(card).getByLabelText(/aclaración/i) as HTMLTextAreaElement).value).toBe(settings.messages.clarification);
+    expect((within(card).getByLabelText(/despedida/i) as HTMLTextAreaElement).value).toBe(settings.messages.farewell);
+    expect((within(card).getByLabelText(/fuera de horario/i) as HTMLTextAreaElement).value).toBe(settings.messages.out_of_hours);
+  });
+
+  it("renders the configured hours timezone and schedule", () => {
+    render(<SettingsView />);
+    const card = screen.getByRole("heading", { name: "Horarios de atención" }).closest(".card") as HTMLElement;
+    expect(within(card).getByLabelText("Zona horaria")).toHaveValue(settings.hours.timezone);
+    expect(within(card).getByLabelText("Apertura 1")).toHaveValue(settings.hours.schedule[0].open);
+    expect(within(card).getByLabelText("Cierre 1")).toHaveValue(settings.hours.schedule[0].close);
+    expect(within(card).getByLabelText("Lunes, entrada 1")).toBeChecked();
+  });
+
+  it("prevents duplicate weekdays when adding a schedule entry", () => {
+    render(<SettingsView />);
+    const card = screen.getByRole("heading", { name: "Horarios de atención" }).closest(".card") as HTMLElement;
+    fireEvent.click(within(card).getByRole("button", { name: "Agregar horario" }));
+    expect(within(card).getByLabelText("Lunes, entrada 2")).toBeDisabled();
   });
 
   it("renders spend-limit inputs (conversation + daily) with plain-Spanish effect before them", () => {
@@ -255,6 +273,7 @@ describe("Settings API page", () => {
 
     render(<Settings />);
     const tone = await screen.findByLabelText("Tono");
+    await waitFor(() => expect(tone).toHaveValue(settings.tone));
     fireEvent.change(tone, { target: { value: "directo" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar tono" }));
 
@@ -273,12 +292,45 @@ describe("Settings API page", () => {
     });
     render(<Settings />);
     const greeting = await screen.findByDisplayValue(settings.messages.greeting);
+    const farewell = screen.getByDisplayValue(settings.messages.farewell);
+    const outOfHours = screen.getByDisplayValue(settings.messages.out_of_hours);
     fireEvent.change(greeting, { target: { value: "Hola nuevo" } });
+    fireEvent.change(farewell, { target: { value: "Hasta luego nuevo" } });
+    fireEvent.change(outOfHours, { target: { value: "Estamos cerrados" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar mensajes" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/settings/messages",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ ...settings.messages, greeting: "Hola nuevo" }) }),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ ...settings.messages, greeting: "Hola nuevo", farewell: "Hasta luego nuevo", out_of_hours: "Estamos cerrados" }) }),
     ));
+    fetchMock.mockRestore();
+  });
+
+  it("saves a valid hours change through the hours endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (input === "/panel/api/settings" && !init?.method) return new Response(JSON.stringify(settings), { status: 200 });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+    render(<Settings />);
+    const opening = await screen.findByLabelText("Apertura 1");
+    const card = opening.closest(".card") as HTMLElement;
+    fireEvent.change(within(card).getByLabelText("Zona horaria"), { target: { value: "America/Argentina/Buenos_Aires" } });
+    fireEvent.change(within(card).getByLabelText("Apertura 1"), { target: { value: "08:30" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Guardar horarios" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/settings/hours",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ timezone: "America/Argentina/Buenos_Aires", schedule: settings.hours.schedule.map((entry) => ({ ...entry, open: "08:30" })) }) }),
+    ));
+    fetchMock.mockRestore();
+  });
+
+  it("surfaces the API detail when saving an invalid schedule", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (input === "/panel/api/settings" && !init?.method) return new Response(JSON.stringify(settings), { status: 200 });
+      return new Response(JSON.stringify({ detail: "weekday repeated across entries" }), { status: 400 });
+    });
+    render(<Settings />);
+    fireEvent.click(await screen.findByRole("button", { name: "Guardar horarios" }));
+    expect(await screen.findByText("weekday repeated across entries")).toBeInTheDocument();
     fetchMock.mockRestore();
   });
 

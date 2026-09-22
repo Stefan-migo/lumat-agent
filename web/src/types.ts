@@ -370,6 +370,12 @@ export interface Settings {
     greeting: string;
     cannot_answer: string;
     clarification: string;
+    farewell: string;
+    out_of_hours: string;
+  };
+  hours: {
+    timezone: string;
+    schedule: Array<{ days: number[]; open: string; close: string }>;
   };
   conversation_limit: number;
   daily_limit: number;

@@ -55,6 +55,7 @@ from sqlalchemy.orm import Session
 from app.chat.nodes.capture import capture
 from app.chat.nodes.classify_intent import classify_intent
 from app.chat.nodes.cost_gate import cost_gate
+from app.chat.nodes.closure_gate import closure_gate
 from app.chat.nodes.emergency import emergency
 from app.chat.nodes.emergency_gate import emergency_gate
 from app.chat.nodes.handoff import handoff
@@ -153,7 +154,12 @@ def _after_cost_gate(state: ConversationState) -> str:
 
 def _after_handoff_gate(state: ConversationState) -> str:
     """Deterministic trigger -> handoff node; clear -> normal flow."""
-    return "handoff" if state.handoff_reason else "receive"
+    return "handoff" if state.handoff_reason else "closure_gate"
+
+
+def _after_closure_gate(state: ConversationState) -> str:
+    """End when the closure gate produced a reply; otherwise continue normally."""
+    return END if state.replies else "receive"
 
 
 def _route_path(state: ConversationState) -> str:
@@ -208,6 +214,7 @@ def build_graph():
     builder.add_node("emergency_gate", emergency_gate)
     builder.add_node("cost_gate", cost_gate)
     builder.add_node("handoff_gate", handoff_gate)
+    builder.add_node("closure_gate", closure_gate)
     builder.add_node("receive", receive)
     builder.add_node("classify_intent", classify_intent)
     builder.add_node("orchestrate", orchestrate)
@@ -232,7 +239,12 @@ def build_graph():
     builder.add_conditional_edges(
         "handoff_gate",
         _after_handoff_gate,
-        {"handoff": "handoff", "receive": "receive"},
+        {"handoff": "handoff", "closure_gate": "closure_gate"},
+    )
+    builder.add_conditional_edges(
+        "closure_gate",
+        _after_closure_gate,
+        {END: END, "receive": "receive"},
     )
     builder.add_conditional_edges(
         "receive",

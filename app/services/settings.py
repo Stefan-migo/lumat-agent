@@ -24,12 +24,17 @@ app/services/customers.py / audit.py style).
 
 from __future__ import annotations
 
+import logging
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session
 
 from app.models import Settings
 from app.services.audit import record_audit
+
+logger = logging.getLogger(__name__)
 
 # SS-1: the two legal scope modes per category. Anything else behaves as unset.
 SCOPE_MODES: tuple[str, ...] = ("bot_resolve", "always_escalate")
@@ -57,6 +62,11 @@ MESSAGE_DEFAULTS: dict[str, str] = {
         "No entendí tu mensaje. ¿Puedes elegir una opción del menú? "
         "(Calefont, Caldera, Calefacción, Solicitar visita, Valores, "
         "Postventa/Garantía, Emergencia, Hablar con una persona)"
+    ),
+    "farewell": "¡Gracias por escribirnos! Que tengas buen día.",
+    "out_of_hours": (
+        "Estamos fuera de nuestro horario de atención. Te responderemos cuando "
+        "volvamos a atender."
     ),
 }
 
@@ -147,6 +157,10 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "messages.greeting": MESSAGE_DEFAULTS["greeting"],
     "messages.cannot_answer": MESSAGE_DEFAULTS["cannot_answer"],
     "messages.clarification": MESSAGE_DEFAULTS["clarification"],
+    "messages.farewell": MESSAGE_DEFAULTS["farewell"],
+    "messages.out_of_hours": MESSAGE_DEFAULTS["out_of_hours"],
+    "hours.timezone": "America/Santiago",
+    "hours.schedule": [],
     # AP-8 (T5.5): dashboard KPI time window in days (SQL counts over the
     # last N days). Panel-editable via the generic settings KV surface.
     "kpi.window_days": 7,
@@ -226,6 +240,70 @@ def get_tone(session: Session) -> str:
 def get_tone_directive(session: Session) -> str:
     """SS-5: prompt directive for the effective tone style."""
     return TONE_DIRECTIVES[get_tone(session)]
+
+
+def get_hours_timezone(session: Session) -> str:
+    """Return the configured IANA timezone, or the default when unusable."""
+    timezone_name = get_setting(session, "hours.timezone", default="America/Santiago")
+    return timezone_name if isinstance(timezone_name, str) else "America/Santiago"
+
+
+def get_hours_schedule(session: Session) -> list[dict[str, Any]]:
+    """Return the configured schedule, or the empty feature-off default."""
+    schedule = get_setting(session, "hours.schedule", default=[])
+    return schedule if isinstance(schedule, list) else []
+
+
+def is_open_at(*, schedule: list, timezone_name: str, now: datetime) -> bool:
+    """Evaluate a validated weekly schedule at an aware instant.
+
+    Overnight windows are invalid because write-time validation requires
+    ``open < close``; malformed entries fail open rather than closing chat.
+    """
+    if not schedule:
+        return True
+
+    try:
+        local_now = now.astimezone(ZoneInfo(timezone_name))
+    except (TypeError, ValueError, ZoneInfoNotFoundError) as exc:
+        logger.warning("Unable to resolve hours timezone %r: %s", timezone_name, exc)
+        return True
+
+    parsed_entries: list[tuple[list[int], Any, Any]] = []
+    for entry in schedule:
+        try:
+            if not isinstance(entry, dict):
+                raise ValueError("entry is not an object")
+            days = entry["days"]
+            opening = entry["open"]
+            closing = entry["close"]
+            if (
+                not isinstance(days, list)
+                or not days
+                or any(isinstance(day, bool) or not isinstance(day, int) or not 1 <= day <= 7 for day in days)
+                or not isinstance(opening, str)
+                or not isinstance(closing, str)
+                or len(opening) != 5
+                or len(closing) != 5
+                or opening[2] != ":"
+                or closing[2] != ":"
+            ):
+                raise ValueError("invalid days or HH:MM values")
+            open_time = datetime.strptime(opening, "%H:%M").time()
+            close_time = datetime.strptime(closing, "%H:%M").time()
+            if open_time >= close_time:
+                raise ValueError("open must be before close")
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.warning("Unable to parse hours schedule entry %r: %s", entry, exc)
+            return True
+        parsed_entries.append((days, open_time, close_time))
+
+    weekday = local_now.isoweekday()
+    local_time = local_now.time()
+    return any(
+        weekday in days and opening <= local_time < closing
+        for days, opening, closing in parsed_entries
+    )
 
 
 def get_message(session: Session, key: str, default: str | None = None) -> str:

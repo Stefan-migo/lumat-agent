@@ -241,6 +241,48 @@ def test_invalid_tone_falls_back_to_default():
         assert settings.get_tone(session) == settings.DEFAULT_TONE_STYLE
 
 
+def test_hours_defaults_are_available_without_materializing_rows():
+    with SessionLocal() as session:
+        timezone_reader = getattr(settings, "get_hours_timezone", lambda _: None)
+        schedule_reader = getattr(settings, "get_hours_schedule", lambda _: None)
+        assert timezone_reader(session) == "America/Santiago"
+        assert schedule_reader(session) == []
+    assert _count_settings() == 0
+
+
+def test_hours_readers_return_stored_values():
+    with SessionLocal() as session:
+        settings.set_setting(session, "hours.timezone", "UTC", actor="admin1")
+        settings.set_setting(
+            session,
+            "hours.schedule",
+            [{"days": [1], "open": "09:00", "close": "17:00"}],
+            actor="admin1",
+        )
+        session.commit()
+
+    with SessionLocal() as session:
+        timezone_reader = getattr(settings, "get_hours_timezone", lambda _: None)
+        schedule_reader = getattr(settings, "get_hours_schedule", lambda _: None)
+        assert timezone_reader(session) == "UTC"
+        assert schedule_reader(session) == [
+            {"days": [1], "open": "09:00", "close": "17:00"}
+        ]
+
+
+def test_invalid_stored_hours_values_fall_back_to_defaults():
+    with SessionLocal() as session:
+        settings.set_setting(session, "hours.timezone", 123, actor="admin1")
+        settings.set_setting(session, "hours.schedule", {"days": [1]}, actor="admin1")
+        session.commit()
+
+    with SessionLocal() as session:
+        timezone_reader = getattr(settings, "get_hours_timezone", lambda _: None)
+        schedule_reader = getattr(settings, "get_hours_schedule", lambda _: None)
+        assert timezone_reader(session) == "America/Santiago"
+        assert schedule_reader(session) == []
+
+
 def test_tone_directives_are_exact_and_complete():
     assert settings.TONE_STYLES == ("cercano", "formal", "directo")
     assert settings.TONE_DIRECTIVES == {
@@ -273,7 +315,7 @@ def test_message_override_wins_over_caller_default():
             == "Un asesor te contactará."
         )
         # unset message key still falls back to the caller default
-        assert settings.get_message(session, "farewell", "Chao") == "Chao"
+        assert settings.get_message(session, "unknown_message", "Chao") == "Chao"
 
 
 # ---------------------------------------------------------------------------
