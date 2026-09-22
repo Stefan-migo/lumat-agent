@@ -209,8 +209,8 @@ constraint is that the failure is visible (logged) and does not misinform the cu
 
 - [x] **T10** — Verify: the focused tests, the full Python suite, and the web suite. **Done — see
       "Execution evidence" below.**
-- [ ] **T11** — Record committed, branch pushed, PR open with a single type label. **The merge remains
-      the human's decision.**
+- [x] **T11** — Record committed, branch pushed, **PR #306** open against `main` with the single label
+      `type:feature`; CI green (`test` + GitGuardian). **The merge remains the human's decision.**
 
 ## Verification
 
@@ -554,5 +554,11 @@ case.
 
 ## Next step
 
-T11 — record committed, branch pushed, PR open with a single type label, CI checked. **The merge remains
-the human's decision.**
+The unit is delivered. **PR #306** awaits the human's merge decision. Two follow-ups remain open:
+
+1. The `R3-duplicate-weekday-validation` tightening described above — one condition, plus a test for the
+   within-entry case.
+2. Post-merge cleanup, in this order: `bash infra/test-db.sh down`, then
+   `rapso worktree cleanup out-of-hours-and-farewell --remote`, then the graph refresh at the main root
+   with **both** `graphify <root> --update` **and** `graphify cluster-only <root>` (the update alone does
+   not regenerate `GRAPH_REPORT.md`).
