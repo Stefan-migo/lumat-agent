@@ -38,6 +38,31 @@ The agent MUST use the separate `AssistantState` graph for panel requests and pe
 - WHEN the thread resumes
 - THEN the same frozen plan determines only incomplete work
 
+### Requirement: IAC-14 — Grounded Knowledge Responses
+
+The panel assistant MUST retrieve knowledge-base evidence before answering a non-conversational
+knowledge question, MUST answer only from non-empty retrieved chunks, and MUST return a deterministic
+clarification without an LLM answer when retrieval has no evidence. Short purely social messages MAY
+remain conversational; tool turns MUST retain their existing execution behavior.
+
+#### Scenario: Knowledge question with evidence
+
+- GIVEN a non-conversational panel question
+- WHEN retrieval returns non-empty knowledge-base chunks
+- THEN the responder receives them in a bounded `<kb>` evidence block and answers from that block
+
+#### Scenario: Knowledge question without evidence
+
+- GIVEN a non-conversational panel question
+- WHEN retrieval returns no non-empty chunks
+- THEN the assistant returns the deterministic panel clarification without calling the responder
+
+#### Scenario: Conversational exemption
+
+- GIVEN a short purely social message
+- WHEN the panel assistant handles it
+- THEN it remains conversational and a greeting-prefixed knowledge question is not exempt
+
 ### Requirement: IAC-3 — Panel States
 
 The panel MUST render normal, Cortex active/closed, SDB approval-pending, phase, checkpoint, verification, delivery, blocked, success, and error states without losing persisted messages or recoverable assistant metadata. A blocked result MUST remain a completed internal reply.
