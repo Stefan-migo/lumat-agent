@@ -110,9 +110,15 @@ GIT_SHA="$(sudo -u deploy git rev-parse --short HEAD)"
 sudo -u deploy env GIT_SHA="$GIT_SHA" docker compose --project-name lumat -f infra/docker-compose.yml \
   -f infra/docker-compose.prod.yml config >/tmp/lumat-compose-config.yml
 sudo -u deploy docker build -f infra/nginx/Dockerfile -t lumat-nginx:prod .
-sudo -u deploy docker run --rm lumat-nginx:prod nginx -t
 sudo -u deploy env GIT_SHA="$GIT_SHA" docker compose --project-name lumat -f infra/docker-compose.yml \
   -f infra/docker-compose.prod.yml up -d --build
+# Validate the nginx config INSIDE the compose network. The standalone form
+# (`docker run --rm lumat-nginx:prod nginx -t`) can NEVER pass: the server blocks
+# proxy to the `api` service name, which does not resolve off the compose
+# network, so nginx exits with `host not found in upstream "api"` — a false
+# negative that says nothing about the config.
+sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml exec -T nginx nginx -t
 # Migrate runs automatically inside the api container before uvicorn (compose
 # command chain); re-run it explicitly to prove/refresh idempotence:
 sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
@@ -250,9 +256,10 @@ cd /opt/lumat
 sudo -u deploy git checkout <previous-tag>   # the last known-good tag
 GIT_SHA="$(sudo -u deploy git rev-parse --short HEAD)"
 sudo -u deploy docker build -f infra/nginx/Dockerfile -t lumat-nginx:prod .
-sudo -u deploy docker run --rm lumat-nginx:prod nginx -t
 sudo -u deploy env GIT_SHA="$GIT_SHA" docker compose --project-name lumat -f infra/docker-compose.yml \
   -f infra/docker-compose.prod.yml up -d --build
+sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
+  -f infra/docker-compose.prod.yml exec -T nginx nginx -t
 sudo -u deploy docker compose --project-name lumat -f infra/docker-compose.yml \
   -f infra/docker-compose.prod.yml exec -T api sh -c \
   'DATABASE_URL=postgresql://lumat:$POSTGRES_PASSWORD@db:5432/lumat db/migrate.sh'
@@ -435,3 +442,4 @@ still an open decision and is not part of this runbook.
 | 2026-08-16 | T7.2 — §2.1 deploy flow updated (`--project-name lumat`, containerized migrate/seed via `docker compose exec api`); §2.1.1 rehearsal record (clean-deploy simulation on the local VM, smoke outputs, rehearsal-caught bugs, VPS-only remainder) | dev |
 | 2026-09-21 | CalVer release rule; tag-before-deploy; `GIT_SHA` build stamp; per-deploy release record; spec part-status convention; repaired incident-record references | dev |
 | 2026-09-22 | Catch-up deploy of `v2026.09.2` (`cfbefcbd`) to the VPS: checkout of the tag, `GIT_SHA` stamped build, api + nginx images rebuilt, 11 migrations applied (schema 018 → 029), explicit `db/migrate.sh` re-run proved idempotent, `db/seed.sh` idempotent (4 settings inserted, 14 already present, admin not overwritten), `/health` reports the tag version and the deployed commit, webhook verify handshake echoes the challenge, panel SPA served over TLS. Pre-deploy dump restore-verified. | agent-assisted |
+| 2026-09-22 | Repaired the two continuity mechanisms the deploy pre-flight found dead, on the VPS: root's backup/restore/monitor crontab installed (it had never existed), `monitor.sh` run with `infra/.env` loaded so alerts can actually be sent, and the certbot renewal unit corrected (`--project-name lumat` + `git safe.directory`). Verified: `backup OK` + `restore OK`, monitor exit 0 with all three checks green, unit `result: success`, and `certbot renew --dry-run` reporting `all simulated renewals succeeded` for both SANs. The same defects are fixed in this repo (§2.1, `infra/certbot/`, `infra/monitor.sh`, `docs/hardening.md` §7) so a re-provision cannot reproduce them. | agent-assisted |

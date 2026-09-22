@@ -366,11 +366,15 @@ host path `/var/lib/docker/volumes/…` is root-only; the api *container* still
 runs non-root, this is host-level ops):
 
 ```bash
-sudo crontab -l 2>/dev/null; cat > /tmp/cron <<'EOF'
-0 3 * * * /opt/lumat/infra/backup.sh >> /var/log/lumat-backup.log 2>&1
-0 4 * * 1 /opt/lumat/infra/restore-test.sh >> /var/log/lumat-backup.log 2>&1
-EOF
-sudo crontab /tmp/cron && rm /tmp/cron
+# MERGE into root's crontab. Never `sudo crontab /tmp/cron`, which REPLACES it
+# and wipes every other entry — the same trap §8 documents for the append form.
+sudo crontab -l 2>/dev/null > /tmp/cron.old
+printf '%s\n' \
+  '0 3 * * * /opt/lumat/infra/backup.sh >> /var/log/lumat-backup.log 2>&1' \
+  '0 4 * * 1 /opt/lumat/infra/restore-test.sh >> /var/log/lumat-backup.log 2>&1' \
+  > /tmp/cron
+cat /tmp/cron.old /tmp/cron | awk '!seen[$0]++' | sudo crontab -
+rm -f /tmp/cron /tmp/cron.old
 sudo crontab -l | grep -E 'backup|restore'
 ```
 

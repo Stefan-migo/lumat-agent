@@ -21,6 +21,18 @@ INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$INFRA_DIR")"
 LOG_TAG="[$(date -u +%FT%TZ)]"
 
+# The alert path reads its SMTP credentials from the environment (SH-2: secrets
+# live on the server, never in the repo), and cron starts a job with almost no
+# environment of its own. Load infra/.env when it is there: without this every
+# check can pass while every alert dies on `SMTP_HOST unset`, which is worse
+# than having no monitor at all — a silent monitor is a false sense of safety.
+if [ -f "$INFRA_DIR/.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . "$INFRA_DIR/.env"
+    set +a
+fi
+
 # T7.1: prod no longer mounts `backups` in any service — ensure the volume
 # exists (backup.sh creates it; keeps the freshness check meaningful).
 docker volume create lumat_backups >/dev/null 2>&1 || true
