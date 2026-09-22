@@ -15,6 +15,7 @@ def test_memory_tool_declares_visibility_without_a_write_target():
             "titulo": "Project fact",
             "contenido": "A reusable fact",
             "topic_key": "agent:fact",
+            "tipo": "decision",
             "visibility": "project",
         }
     )
@@ -50,6 +51,7 @@ def test_memory_write_topic_key_still_requires_the_agent_namespace():
                 "titulo": "A fact",
                 "contenido": "A fact",
                 "topic_key": "test",
+                "tipo": "decision",
             }
         )
 
@@ -58,16 +60,31 @@ def test_memory_write_topic_key_still_requires_the_agent_namespace():
             "titulo": "A fact",
             "contenido": "A fact",
             "topic_key": "agent:fact",
+            "tipo": "decision",
         }
     )
 
 
-def test_agent_scope_requires_canonical_entity():
-    assert registry.MemoryArgs.model_validate(
-        {"scope": "agent", "entity_id": tukulpan.agent_memory_entity(tukulpan.WRITABLE_PROYECTO)}
-    )
-    with pytest.raises(ValueError, match="agent:default"):
-        registry.MemoryArgs.model_validate({"scope": "agent", "entity_id": "agent:other"})
+def test_memory_write_requires_type_and_defaults_visibility_to_project():
+    payload = {
+        "titulo": "A fact",
+        "contenido": "A fact",
+        "topic_key": "agent:fact",
+    }
+
+    with pytest.raises(ValueError):
+        registry.MemoryWriteArgs.model_validate(payload)
+
+    args = registry.MemoryWriteArgs.model_validate({**payload, "tipo": "discovery"})
+    assert args.visibility == "project"
+
+
+def test_memory_own_scope_defaults_and_rejects_internal_axes():
+    assert registry.MemoryArgs.model_validate({}).root.scope == "own"
+    assert registry.MemorySearchArgs.model_validate({"query": "fact"}).root.scope == "own"
+    for scope in ("panel", "agent"):
+        with pytest.raises(ValueError):
+            registry.MemoryArgs.model_validate({"scope": scope})
 
 
 def _advertised_scope_variants(schema: dict) -> dict:
@@ -79,11 +96,8 @@ def _advertised_scope_variants(schema: dict) -> dict:
 def test_memory_read_schema_advertises_each_scope_entity_contract():
     variants = _advertised_scope_variants(registry.MemoryArgs.model_json_schema())
 
-    assert set(variants) == {"panel", "customer", "agent"}
-    assert variants["agent"]["properties"]["entity_id"]["const"] == tukulpan.agent_memory_entity(
-        tukulpan.WRITABLE_PROYECTO
-    )
-    assert variants["panel"]["properties"]["entity_id"]["type"] == "null"
+    assert set(variants) == {"own", "customer"}
+    assert variants["own"]["properties"]["entity_id"]["type"] == "null"
     assert variants["customer"]["properties"]["entity_id"]["pattern"] == r"^(?:customer:\d+|\d+)$"
 
 
@@ -92,15 +106,50 @@ def test_planner_catalog_advertises_the_memory_read_scope_contract():
 
     for entry in catalog:
         variants = _advertised_scope_variants(entry["arguments"])
-        assert variants["agent"]["properties"]["entity_id"]["const"] == tukulpan.agent_memory_entity(
-            tukulpan.WRITABLE_PROYECTO
-        )
+        assert set(variants) == {"own", "customer"}
 
 
 def test_planner_prompt_does_not_order_a_rejected_memory_read_shape():
     template = load_assistant_config().prompts["plan"]
 
     assert 'entity_id="thread:' not in template
+
+
+def test_own_memory_read_and_search_union_thread_and_agent_axes(monkeypatch):
+    thread_row = Mock(scope="panel", entity_id="thread:42", topic_key="thread-note")
+    agent_row = Mock(scope="agent", entity_id="agent:default", topic_key="project-note")
+    monkeypatch.setattr(
+        registry.memory,
+        "list_for_entity",
+        lambda _session, *, scope, entity_id: [thread_row] if entity_id == "thread:42" else [agent_row],
+    )
+    assert registry._read_memory(
+        MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42
+    ) == [thread_row, agent_row]
+
+    monkeypatch.setattr(
+        registry.memory,
+        "hybrid_search",
+        lambda _session, _query, *, scope, entity_id, top_k: [
+            {"entity_id": entity_id, "score": 0.8 if scope == "panel" else 0.9}
+        ],
+    )
+    results = registry._search_memory(
+        MagicMock(), registry.MemorySearchArgs.model_validate({"query": "fact"}), trusted_thread_id=42
+    )
+    assert [row["entity_id"] for row in results] == ["agent:default", "thread:42"]
+
+
+def test_own_memory_never_returns_another_threads_panel_row(monkeypatch):
+    other_thread = Mock(scope="panel", entity_id="thread:7", topic_key="other")
+    monkeypatch.setattr(
+        registry.memory,
+        "list_for_entity",
+        lambda _session, *, scope, entity_id: [other_thread] if entity_id == "thread:7" else [],
+    )
+    assert registry._read_memory(
+        MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42
+    ) == []
 
 
 def test_project_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
@@ -116,6 +165,7 @@ def test_project_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
         titulo="Project fact",
         contenido="A reusable fact",
         topic_key="agent:fact",
+        tipo="decision",
         visibility="project",
     )
 

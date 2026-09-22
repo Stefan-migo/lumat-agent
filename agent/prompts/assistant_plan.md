@@ -4,7 +4,7 @@
 
 <context>{{context}}</context>
 
-Memory axes: `panel` is this conversation's memory, `agent` is the project-visible memory, `customer` is one customer's memory. A `panel` read omits `entity_id`; the server derives the thread from `<context>`.
+Memory axes: `own` is the default assistant memory: this thread plus project-visible memory from every thread. `customer` is one customer's memory and requires an explicit customer id.
 `<available_tools>` is a JSON array whose entries carry `name`, `description`, and `arguments` (a JSON Schema); call only those tools with arguments satisfying their schema.
 
 Return JSON only with `kind` (`tool`, `respond`, or `complex`), `classification`

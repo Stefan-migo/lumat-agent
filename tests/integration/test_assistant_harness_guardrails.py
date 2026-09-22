@@ -1,6 +1,7 @@
 """Ordered assistant guardrail contracts for typed tool execution."""
 
 import json
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -203,7 +204,7 @@ def test_memory_read_orm_result_is_readable_tool_evidence(monkeypatch, migrated_
             plan={
                 "kind": "tool",
                 "tool": "memory.read",
-                "arguments": {"scope": "panel"},
+                "arguments": {"scope": "own"},
                 "requires_approval": False,
             },
         )
@@ -407,7 +408,12 @@ def _memory_plan():
     return {
         "kind": "tool",
         "tool": "memory.write",
-        "arguments": {"titulo": "Fact", "contenido": "Panel fact", "topic_key": "agent:fact"},
+        "arguments": {
+            "titulo": "Fact",
+            "contenido": "Project fact",
+            "topic_key": "agent:fact",
+            "tipo": "decision",
+        },
         "requires_approval": False,
     }
 
@@ -438,24 +444,33 @@ def _advertised_memory_read_variants() -> dict:
     return {variant["properties"]["scope"]["const"]: variant for variant in schema["$defs"].values()}
 
 
+def _memory_read_arguments_from_schema(variant: dict) -> dict:
+    properties = variant["properties"]
+    arguments = {"scope": properties["scope"]["const"], "topic": "agent:fact"}
+    entity_schema = properties.get("entity_id")
+    if entity_schema and "pattern" in entity_schema:
+        entity_id = "customer:42"
+        assert re.fullmatch(entity_schema["pattern"], entity_id)
+        arguments["entity_id"] = entity_id
+    return arguments
+
+
 def test_memory_read_plan_derived_from_the_advertised_schema_survives_guardrails():
     variants = _advertised_memory_read_variants()
 
-    panel = guardrails({
+    own = guardrails({
         "thread_id": 7,
-        "plan": _memory_read_plan(scope="panel", topic="agent:fact"),
+        "plan": _memory_read_plan(**_memory_read_arguments_from_schema(variants["own"])),
         "planner": {"valid": True},
     })
-    agent = guardrails({
+    customer = guardrails({
         "thread_id": 7,
-        "plan": _memory_read_plan(
-            scope="agent", entity_id=variants["agent"]["properties"]["entity_id"]["const"]
-        ),
+        "plan": _memory_read_plan(**_memory_read_arguments_from_schema(variants["customer"])),
         "planner": {"valid": True},
     })
 
-    assert panel["status"] == "executing"
-    assert agent["status"] == "executing"
+    assert own["status"] == "executing"
+    assert customer["status"] == "executing"
 
 
 def test_memory_read_still_rejects_an_entity_the_prompt_no_longer_orders():
@@ -490,11 +505,13 @@ def test_execute_forwards_trusted_thread_to_memory_write(migrated_db):
         })
 
         row = session.execute(
-            select(Memory).where(Memory.topic_key == "agent:fact", Memory.entity_id == "thread:7")
+            select(Memory).where(Memory.topic_key == "agent:fact", Memory.entity_id == "agent:default")
         ).scalar_one()
 
     assert result["status"] == "completed"
-    assert row.entity_id == "thread:7"
+    assert row.scope == "agent"
+    assert row.entity_id == "agent:default"
+    assert row.visibility.value == "project"
 
 
 def test_memory_write_is_idempotent_in_db(migrated_db):
@@ -508,7 +525,7 @@ def test_memory_write_is_idempotent_in_db(migrated_db):
         execute({"thread_id": 7, "run_id": "run-memory-second", "plan": second, "session": session, "evidence": []})
 
         rows = session.execute(
-            select(Memory).where(Memory.topic_key == "agent:fact", Memory.entity_id == "thread:7")
+            select(Memory).where(Memory.topic_key == "agent:fact", Memory.entity_id == "agent:default")
         ).scalars().all()
 
     assert len(rows) == 1

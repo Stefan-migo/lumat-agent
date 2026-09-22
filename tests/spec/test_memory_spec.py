@@ -47,7 +47,7 @@ def test_mem10_write_policy_stamps_only_decaying_types(fake_embedder, migrated_d
         session.commit()
 
         for tipo, row in rows.items():
-            if tipo in {MemoryType.SUMMARY, MemoryType.SESSION}:
+            if tipo in {MemoryType.SUMMARY, MemoryType.SESSION, MemoryType.DISCOVERY}:
                 assert row.review_after is not None
                 assert timedelta(days=29, hours=23) < row.review_after - datetime.now(timezone.utc) < timedelta(days=30, minutes=1)
             else:
@@ -771,6 +771,7 @@ def test_mem9_project_visibility_records_provenance_and_cross_thread_read(
             titulo="Reusable fact",
             contenido="A fact for the whole project",
             topic_key="agent:fact",
+            tipo="decision",
             visibility="project",
         )
         result = registry._write_memory(session, args, trusted_thread_id=11)
@@ -794,7 +795,7 @@ def test_mem9_project_visibility_records_provenance_and_cross_thread_read(
         ) == []
 
 
-def test_mem9_thread_visibility_default_remains_episodic(fake_embedder, migrated_db):
+def test_mem9_project_visibility_is_the_write_default(fake_embedder, migrated_db):
     from app.chat.assistant.tools import registry
 
     with SessionLocal() as session:
@@ -802,21 +803,22 @@ def test_mem9_thread_visibility_default_remains_episodic(fake_embedder, migrated
             session,
             registry.MemoryWriteArgs(
                 titulo="Thread fact",
-                contenido="Only for this thread",
-                topic_key="agent:thread-fact",
-            ),
+                 contenido="Only for this thread",
+                 topic_key="agent:thread-fact",
+                 tipo="decision",
+             ),
             trusted_thread_id=12,
         )
         session.commit()
 
         row = tukulpan.get_by_key(
             session,
-            scope="panel",
-            entity_id="thread:12",
+            scope="agent",
+            entity_id="agent:default",
             topic_key="agent:thread-fact",
         )
         assert result["written"] is True
-        assert row.visibility is MemoryVisibility.THREAD
+        assert row.visibility is MemoryVisibility.PROJECT
         assert row.producer is MemoryProducer.AGENT
         assert row.origin_thread_id == "12"
 

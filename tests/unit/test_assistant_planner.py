@@ -218,7 +218,7 @@ def test_plan_llm_includes_whitelisted_tool_catalog_in_prompt(monkeypatch):
     memory_entry = catalog[0]
     assert memory_entry["description"] == "Read scoped memory."
     assert sorted(memory_entry["arguments"]["discriminator"]["mapping"]) == [
-        "agent", "customer", "panel"
+        "customer", "own"
     ]
     assert "project.archive" not in prompt
 

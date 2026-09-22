@@ -48,7 +48,7 @@ The canonical Tukulpan façade MUST expose upsert, get, list, delete, mark, and 
 
 ### Requirement: MEM-3 — Explicit, Scoped Hybrid Search
 
-The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope.
+The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. An `own` read MUST union the trusted current thread axis with the project-qualified agent axis, while never including other threads' panel rows. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope.
 
 #### Scenario: Explicit search only
 - GIVEN a panel turn enters `assemble_context()`
@@ -63,7 +63,7 @@ The system MUST retain `hybrid_search()` as an explicit, project- and scope/enti
 #### Scenario: Role isolation
 - GIVEN a search by a role without cross-project rights
 - WHEN the search runs
-- THEN panel reads derive `thread:<trusted thread id>` server-side and return only that thread's memories, project-visible agent memories return from any thread in the same project, and customer memories remain client-gated
+- THEN an `own` read derives `thread:<trusted thread id>` server-side and returns that thread's memories unioned with project-visible agent memories from the same project, other threads' panel rows remain invisible, and customer memories remain client-gated
 
 #### Scenario: Empty result
 - GIVEN no memory above the threshold
@@ -151,7 +151,7 @@ The memory layer MUST support bounded native SDB artifacts in panel scope using 
 
 The `memories` table MUST record `producer` as `user`, `system`, `agent`, or
 `pipeline`, the nullable `origin_thread_id`, and the declared `visibility` as
-`thread` or `project`. Existing rows MUST use `system` and `thread` as
+`thread` or `project`; agent writes MUST default to `project` visibility. Existing rows MUST use `system` and `thread` as
 conservative backfill values because their true producer is unrecoverable. The
 database MUST enforce `visibility='project'` if and only if `scope='agent'`.
 The agent-axis entity MUST be project-qualified as `entity_id='agent:<project>'`
@@ -174,25 +174,30 @@ than accepting it from the model.
 - WHEN another thread in the same project reads the agent axis
 - THEN the memory is readable
 
-#### Scenario: Thread default remains episodic
+#### Scenario: Project visibility is the write default
 - GIVEN a memory write omits `visibility`
 - WHEN the row is persisted
-- THEN it uses `visibility='thread'`, `scope='panel'`, and the writing thread entity
+- THEN it uses `visibility='project'`, `scope='agent'`, and the project-qualified entity `agent:<project>`
 
 ### Requirement: MEM-10 — Lifecycle Decay
 
-The system MUST assign a 30-day `review_after` instant when it writes a `SUMMARY` or `SESSION` memory, and MUST reset that instant on every write of a decaying row. All other memory types MUST retain `review_after = NULL`. The system MUST evaluate staleness lazily on read, MUST NOT delete or silently filter stale memories, and MUST NOT assign `NEEDS_REVIEW`. `hybrid_search()` MUST include `stale: true` or `stale: false` without changing its filtering or ordering. Customer context injection MUST annotate stale lines as `stale since YYYY-MM-DD`.
+The system MUST assign a 30-day `review_after` instant when it writes a `SUMMARY`, `SESSION`, or `DISCOVERY` memory, and MUST reset that instant on every write of a decaying row. `DECISION`, `PATTERN`, and `PREFERENCE` memory types MUST retain `review_after = NULL`. The system MUST evaluate staleness lazily on read, MUST NOT delete or silently filter stale memories, and MUST NOT assign `NEEDS_REVIEW`. `hybrid_search()` MUST include `stale: true` or `stale: false` without changing its filtering or ordering. Customer context injection MUST annotate stale lines as `stale since YYYY-MM-DD`.
 
 #### Scenario: Decaying writes receive a review date
-- GIVEN a `SUMMARY` or `SESSION` memory is written
+- GIVEN a `SUMMARY`, `SESSION`, or `DISCOVERY` memory is written
 - WHEN the write succeeds
 - THEN `review_after` MUST be set to approximately 30 days after the write instant
 - AND a subsequent write of that row MUST reset `review_after`
 
 #### Scenario: Non-decaying writes remain without a review date
-- GIVEN a memory whose type is not `SUMMARY` or `SESSION` is written
+- GIVEN a `DECISION`, `PATTERN`, or `PREFERENCE` memory is written
 - WHEN the write succeeds, including a duplicate-content fold
 - THEN `review_after` MUST remain `NULL`
+
+#### Scenario: Discovery writes receive a review date
+- GIVEN a `DISCOVERY` memory is written
+- WHEN the write succeeds
+- THEN `review_after` MUST be set to approximately 30 days after the write instant
 
 #### Scenario: Stale search results remain visible and ordered
 - GIVEN a memory has a `review_after` instant in the past
