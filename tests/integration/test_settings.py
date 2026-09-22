@@ -13,8 +13,8 @@ Scenarios mapped from tasks.md T4.1.1/T4.1.2 + specs settings-scope-limits:
   `always_escalate` override, invalid stored mode falls back to default
 - emergency keywords (SS-2): `get_emergency_keywords` -> EM-1 defaults until
   overridden; list round-trips through the KV store
-- tone/messages (SS-5): `get_tone` default warm-professional; `get_message`
-  resolves override-or-caller-default for `messages.<key>`
+- tone/messages (SS-5): validated tone default; `get_message` resolves built-in
+  defaults and overrides for `messages.<key>`
 - defaults never materialize rows; every write is audited
 
 Runs against the migrated pgvector test DB (conftest DATABASE_URL).
@@ -221,7 +221,7 @@ def test_emergency_keywords_override_round_trip():
 
 def test_tone_default_when_unset():
     with SessionLocal() as session:
-        assert settings.get_tone(session) == "warm-professional"
+        assert settings.get_tone(session) == "cercano"
     assert _count_settings() == 0
 
 
@@ -233,11 +233,27 @@ def test_tone_override():
         assert settings.get_tone(session) == "formal"
 
 
-def test_message_uses_caller_default_when_unset():
-    """Content defaults live in the chat nodes; accessor only overrides."""
+def test_invalid_tone_falls_back_to_default():
     with SessionLocal() as session:
-        assert settings.get_message(session, "greeting", "Hola") == "Hola"
-        assert settings.get_message(session, "cannot_answer", "No puedo") == "No puedo"
+        settings.set_setting(session, "tone.style", "warm-professional", actor="admin1")
+        session.commit()
+    with SessionLocal() as session:
+        assert settings.get_tone(session) == settings.DEFAULT_TONE_STYLE
+
+
+def test_tone_directives_are_exact_and_complete():
+    assert settings.TONE_STYLES == ("cercano", "formal", "directo")
+    assert settings.TONE_DIRECTIVES == {
+        "cercano": "Responde con un tono cercano, amable y claro.",
+        "formal": "Responde con un tono formal, profesional y preciso.",
+        "directo": "Responde de forma directa, breve y clara.",
+    }
+
+
+def test_message_uses_builtin_default_when_unset():
+    with SessionLocal() as session:
+        assert settings.get_message(session, "greeting") == settings.MESSAGE_DEFAULTS["greeting"]
+        assert settings.get_message(session, "cannot_answer") == settings.MESSAGE_DEFAULTS["cannot_answer"]
     assert _count_settings() == 0
 
 

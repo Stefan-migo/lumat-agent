@@ -268,7 +268,10 @@ def test_respond_answer_from_kb_persona_and_template(respond_client):
     # AC-3 typed template identical: user == render(prompts/respond.md).
     _rn._answer_from_kb("hola", "chunk uno\nchunk dos", message_id=7)
     call = respond_client.captured[-1]
-    assert call["messages"][0]["content"] == prompts.load("personas/orchestrator.md")
+    assert call["messages"][0]["content"] == (
+        prompts.load("personas/orchestrator.md")
+        + "\nResponde con un tono cercano, amable y claro."
+    )
     assert call["messages"][1]["content"] == prompts.render(
         "prompts/respond.md", kb_text="chunk uno\nchunk dos", user_input="hola"
     )
@@ -281,6 +284,14 @@ def test_respond_answer_from_kb_brief_mode_appends_brief_persona(respond_client)
     assert call["messages"][0]["content"] == (
         prompts.load("personas/orchestrator.md")
         + prompts.load("personas/orchestrator_brief.md")
+        + "\nResponde con un tono cercano, amable y claro."
+    )
+
+
+def test_respond_answer_from_kb_appends_the_tone_directive(respond_client):
+    _rn._answer_from_kb("hola", "chunk", message_id=10)
+    assert respond_client.captured[-1]["messages"][0]["content"].endswith(
+        "Responde con un tono cercano, amable y claro."
     )
 
 
