@@ -53,7 +53,7 @@ installed, and a Compose project name derived from a directory.
 
 | File | Change |
 |---|---|
-| `infra/certbot/lumat-certbot-renew.service` | `--project-name lumat` on both commands; `ExecStart` resolves the SHA with `git -c safe.directory=/opt/lumat`, because the unit runs as root while the checkout belongs to `deploy` (`detected dubious ownership` otherwise). |
+| `infra/certbot/lumat-certbot-renew.service` | `--project-name lumat` on the compose command; `ExecStart` resolves the SHA with `git -c safe.directory=/opt/lumat` (the unit runs as root while the checkout belongs to `deploy` — `detected dubious ownership` otherwise); `ExecStartPost` reloads nginx with a direct `docker exec lumat-nginx-1`, so that step needs neither project-name resolution nor `GIT_SHA` (see the review outcome below). |
 | `infra/certbot/README.md` | The documented commands carry `--project-name lumat` and the `GIT_SHA` export; the dry-run passes `renew` its full command (a bare `renew --dry-run` drops the webroot arguments); troubleshooting row for "renewal exits 0 but the cert keeps aging". |
 | `infra/monitor.sh` | Loads `infra/.env` when present, so the alert path has credentials without depending on how the cron was written. |
 | `docs/ops.md` | §2.1/§2.2 validate nginx **inside** the compose network after `up -d` instead of a standalone `nginx -t` that can never pass; change-log entry. |
@@ -92,6 +92,28 @@ the files above):
 In the repository the change is docs + shell/systemd only: `bash -n infra/monitor.sh` for syntax, and
 a line-by-line diff against the artefacts verified on the host.
 
+## Review outcome (native 4R) and the `ExecStartPost` change
+
+The first candidate was reviewed by the native 4R flow (lineage `review-d3330565ffc2346b`) and closed
+**`escalated`**, not `approved`: the reliability lens raised `R3-certbot-env` (CRITICAL,
+`causal_disposition: unknown`) against `infra/certbot/lumat-certbot-renew.service`, claiming that
+`ExecStartPost` invokes Compose without `GIT_SHA` and could therefore fail, leaving the reload broken.
+
+Measured on the host, the claim does not hold as written. The exact `ExecStartPost` of that candidate
+reported `(code=exited, status=0/SUCCESS)`; the same command run by hand as `deploy` returned 0; and
+the same command **without** `--project-name` is the one that fails on the `${GIT_SHA:?}` guard. The
+discriminator is the project name, which the candidate already passed. The lens cannot execute
+commands — it reasons statically over the frozen patch, which is why its conclusion was plausible
+from the diff and wrong about the behaviour.
+
+The change was made anyway, for the part the measurement does not answer: the **asymmetry was real
+and unexplained** — why should one line need `GIT_SHA` and the other not? — and this step's failure
+path is silent. Nothing alerts on a failed systemd unit, so a broken reload would leave nginx
+serving a certificate that expires with no warning: the same class of silent failure this work unit
+exists to remove. `ExecStartPost` now goes straight to the running container
+(`/usr/bin/docker exec lumat-nginx-1 nginx -s reload`), verified `exit 0` on the host, and no longer
+depends on Compose interpolation at all.
+
 ## Progress
 
 - [x] Root causes identified with host evidence (`chage`, `docker volume ls`, `systemctl show`, the
@@ -99,3 +121,5 @@ a line-by-line diff against the artefacts verified on the host.
 - [x] Server repaired and verified (crontab, unit, monitor, dry-run, cleanup).
 - [x] The same defects corrected in the repository.
 - [x] Verified: `bash -n` on the touched script, and the repo files match the live-verified artefacts.
+- [x] Native 4R review run and resolved: escalated on `R3-certbot-env`, the claim disproved by host
+      execution, and `ExecStartPost` hardened anyway against the silent-failure path it pointed at.

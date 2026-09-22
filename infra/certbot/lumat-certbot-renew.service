@@ -2,7 +2,7 @@
 # LumatAgent certificate renewal — runs the compose `certbot` service
 # (webroot renewal) and reloads nginx so it picks up fresh certs.
 #
-# `--project-name lumat` is REQUIRED on BOTH commands. Without it Compose
+# `--project-name lumat` is REQUIRED on the compose command. Without it Compose
 # derives the project name from the `infra/` directory, so every volume in the
 # file is scoped to a project called `infra` and the renewal operates on
 # `infra_certbot-certs` instead of the `lumat_certbot-certs` volume nginx
@@ -24,4 +24,9 @@ WorkingDirectory=/opt/lumat
 # The certbot service carries `command: renew --webroot -w /var/www/certbot`;
 # `docker compose run` executes it in a fresh container.
 ExecStart=/bin/sh -c 'GIT_SHA=$(git -c safe.directory=/opt/lumat rev-parse --short HEAD) exec /usr/bin/docker compose --project-name lumat --profile certbot -f infra/docker-compose.yml -f infra/docker-compose.prod.yml run --rm certbot'
-ExecStartPost=/usr/bin/docker compose --project-name lumat -f infra/docker-compose.yml -f infra/docker-compose.prod.yml exec -T nginx nginx -s reload
+# The reload goes straight to the running container instead of through Compose:
+# `docker exec` needs neither project-name resolution nor GIT_SHA, so this step
+# cannot be broken by the `${GIT_SHA:?}` interpolation ExecStart requires. The
+# container name is stable because every Compose command pins `--project-name
+# lumat`, which fixes the `lumat-` prefix.
+ExecStartPost=/usr/bin/docker exec lumat-nginx-1 nginx -s reload
