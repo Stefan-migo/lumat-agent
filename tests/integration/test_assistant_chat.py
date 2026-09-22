@@ -470,6 +470,88 @@ def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatc
         assert float(request.cost_llm) == pytest.approx(0.000012)
 
 
+def _scripted_client(planner_outputs):
+    """Fake provider: planner calls consume the scripted outputs; the title call gets plain text."""
+    outputs = list(planner_outputs)
+
+    class Client:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kwargs):
+                    if kwargs.get("stream"):
+                        return iter([
+                            SimpleNamespace(
+                                choices=[SimpleNamespace(delta=SimpleNamespace(content="answer"))], usage=None
+                            ),
+                            SimpleNamespace(choices=[], usage=None),
+                        ])
+                    prompt = kwargs["messages"][-1]["content"]
+                    if "<available_tools>" not in prompt:
+                        return SimpleNamespace(
+                            choices=[SimpleNamespace(message=SimpleNamespace(content="thread title"))], usage=None
+                        )
+                    content = outputs.pop(0)
+                    return SimpleNamespace(
+                        choices=[SimpleNamespace(message=SimpleNamespace(content=content))], usage=None
+                    )
+
+    return Client()
+
+
+def _run_turn(client, thread_id: int, content: str) -> dict:
+    posted = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": content})
+    run_id = posted.json()["message"]["assistant_metadata"]["run_id"]
+    return _wait_for_run(client, thread_id, run_id)
+
+
+def _persisted_planner(thread_id: int) -> dict:
+    with SessionLocal() as session:
+        return dict(session.get(InternalChatThread, thread_id).assistant_state["planner"])
+
+
+def test_a_successful_turn_records_no_failure_diagnostic_from_an_earlier_turn(client, monkeypatch):
+    _user("assistant-stale-planner", "admin")
+    _login(client, "assistant-stale-planner")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    provider = _scripted_client([
+        "this is not json",
+        json.dumps({"kind": "respond", "arguments": {}, "summary": "done", "requires_approval": False}),
+    ])
+    monkeypatch.setattr("app.services.llm.openai_client", lambda: provider)
+
+    _run_turn(client, thread_id, "first")
+    assert "failure" in _persisted_planner(thread_id)
+
+    _run_turn(client, thread_id, "second")
+    planner = _persisted_planner(thread_id)
+
+    assert planner["valid"] is True
+    assert "failure" not in planner
+
+
+def test_planner_arguments_belong_to_the_current_turn_only(client, monkeypatch):
+    _user("assistant-stale-arguments", "admin")
+    _login(client, "assistant-stale-arguments")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    provider = _scripted_client([
+        json.dumps({
+            "kind": "tool", "tool": "customers.search", "arguments": {"query": "ana"},
+            "summary": "first", "requires_approval": False,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "customers.search", "arguments": {"limit": 3},
+            "summary": "second", "requires_approval": False,
+        }),
+    ])
+    monkeypatch.setattr("app.services.llm.openai_client", lambda: provider)
+
+    _run_turn(client, thread_id, "first")
+    _run_turn(client, thread_id, "second")
+
+    assert _persisted_planner(thread_id)["arguments"] == {"limit": 3}
+
+
 def test_stream_disconnect_keeps_known_usage_and_failed_request(client, monkeypatch):
     _user("assistant-disconnect", "admin")
     _login(client, "assistant-disconnect")

@@ -690,13 +690,16 @@ def _run_agent_turn_session(
             "live": {"run_id": run_id, "preview": "".join(preview), "status": "approval_pending" if result.get("status") == "approval_pending" else "completed"},
             "events": _events_for(result, thread.id, run_id),
             "context_meta": context["meta"],
-            "planner": result.get("planner", {}),
             "guardrails": result.get("guardrails", {}),
             "cost_mode": result.get("cost_mode", "normal"),
             "cost_directive": result.get("cost_directive", ""),
             "compaction": compaction,
             **({"cortex_session": result["cortex_session"]} if result.get("cortex_session") else {}),
         })
+        # The planner snapshot belongs to this turn. Merging it kept an earlier turn's failure
+        # diagnostic and arguments alive in a later successful turn, because `plan_llm` omits
+        # `failure` on success and `arguments` is a nested dict the merge recursed into.
+        thread.assistant_state["planner"] = result.get("planner", {})
         if result.get("sdb_phase"):
             persist_sdb_state(
                 session,
