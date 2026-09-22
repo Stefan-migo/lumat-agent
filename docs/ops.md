@@ -403,6 +403,7 @@ than inferred.
 | Deploy tag | Commit | Date | Operator | Smoke (`/health` version + commit, webhook verify, monitor) | Rollback tag | Incidents |
 |------------|--------|------|----------|------------------------------------------------------------|--------------|-----------|
 | `v2026.09.1` | `10165a6d` | 2026-09-08 | not recorded (tag created 2026-09-20) | not recorded | — (first tag) | — |
+| `v2026.09.2` | `cfbefcbd` | 2026-09-22 | agent-assisted SSH as `deploy` (authorized by the owner) | `/health` → `{"status":"ok","version":"2026.09.2","commit":"cfbefcbd"}`; webhook verify echoed the challenge; panel shell + manifest + `sw.js` + a hashed asset → 200; `monitor.sh` → health=OK, webhook_probe=OK, **backup_age=FAIL** (§3) | `v2026.09.1` (`10165a6d`) | Catch-up deploy: 11 migrations applied (schema 018 → 029), explicit re-run proved idempotent, seed idempotent. Pre-deploy dump taken by an alternative route and restore-verified, because §2.1's `backup.sh` cannot run as `deploy` (§3). The `nginx -t` step in §2.1 fails when run standalone and only passes inside the compose network. |
 
 ### 2.10 Spec part-status convention
 
@@ -425,6 +426,7 @@ still an open decision and is not part of this runbook.
 
 | Date | Incident | Resolution | Operator |
 |------|----------|------------|----------|
+| 2026-09-22 | The backup/monitor tooling is non-functional on the VPS. `infra/backup.sh` fails as `deploy` (`Permission denied` writing to the root-owned `lumat_backups` mountpoint), so the volume existed but was empty; `infra/restore-test.sh` cannot read that path either; `infra/monitor.sh` reports `backup_age=FAIL` for the same reason and cannot send alerts (`SMTP_HOST` unset — it does not load `infra/.env`); and no backup/restore/monitor crons are installed (only `lumat-certbot-renew.timer` exists). `lumat-certbot-renew.service` has been failing since 2026-09-21 on its `nginx -s reload` post step; the certificate expires 2026-12-07. | Unresolved. The `v2026.09.2` deploy proceeded only after a pre-deploy dump was taken by an alternative route (docker `pg_dump` piped into a root container writing the `lumat_backups` volume) and restore-verified into a scratch database. The scripts and the crons must be fixed and armed under root before go-live. | agent-assisted |
 
 ### Change log
 
@@ -432,3 +434,4 @@ still an open decision and is not part of this runbook.
 |------|--------|----------|
 | 2026-08-16 | T7.2 — §2.1 deploy flow updated (`--project-name lumat`, containerized migrate/seed via `docker compose exec api`); §2.1.1 rehearsal record (clean-deploy simulation on the local VM, smoke outputs, rehearsal-caught bugs, VPS-only remainder) | dev |
 | 2026-09-21 | CalVer release rule; tag-before-deploy; `GIT_SHA` build stamp; per-deploy release record; spec part-status convention; repaired incident-record references | dev |
+| 2026-09-22 | Catch-up deploy of `v2026.09.2` (`cfbefcbd`) to the VPS: checkout of the tag, `GIT_SHA` stamped build, api + nginx images rebuilt, 11 migrations applied (schema 018 → 029), explicit `db/migrate.sh` re-run proved idempotent, `db/seed.sh` idempotent (4 settings inserted, 14 already present, admin not overwritten), `/health` reports the tag version and the deployed commit, webhook verify handshake echoes the challenge, panel SPA served over TLS. Pre-deploy dump restore-verified. | agent-assisted |
