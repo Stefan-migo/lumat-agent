@@ -141,7 +141,7 @@ def bounded_fallback(reason: str) -> PlannerOutput:
     return PlannerOutput(
         kind="respond",
         arguments={},
-        summary="I could not safely plan that request. Please try again.",
+        summary="No pude planificar esa solicitud de forma segura. Inténtalo nuevamente.",
         requires_approval=False,
     )
 

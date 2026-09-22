@@ -1,5 +1,6 @@
 """IAC-1/2/3 RED contract for the internal agent chat."""
 
+import json
 from types import SimpleNamespace
 
 import psycopg
@@ -41,6 +42,11 @@ class _FakeChatClient:
         self.calls.append(kwargs)
         if self.error:
             raise self.error
+        if not kwargs.get("stream"):
+            # The planner call needs a readable plan, or the turn degrades before any answer streams.
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+                "kind": "respond", "arguments": {}, "summary": "ok", "requires_approval": False,
+            })))])
         parts = self.content.split(" ") if self.content else [""]
         return [
             SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=part + (" " if index < len(parts) - 1 else "")))])
