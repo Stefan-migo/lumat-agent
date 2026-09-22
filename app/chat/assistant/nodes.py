@@ -613,6 +613,19 @@ def execute(state: AssistantState) -> AssistantState:
             }
         if result.get("status") == "error":
             detail = result.get("error", "tool failed")
+            if get_tool(tool_name).read_only:
+                logger.warning("Read-only tool %s failed: %s", tool_name, detail)
+                bounded_result = {
+                    "unavailable": True,
+                    "tool": tool_name,
+                    "degraded_reason": "Read-only tool unavailable",
+                }
+                return {
+                    "tool_result": {**result, "result": bounded_result},
+                    "evidence": [make_evidence(tool=tool_name, status="degraded", detail=bounded_result["degraded_reason"])],
+                    "response": f"Tool {tool_name} unavailable.",
+                    "status": "degraded",
+                }
             return {
                 "tool_result": result,
                 "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],

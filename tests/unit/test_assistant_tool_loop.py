@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from app.chat.assistant.graph import build_assistant_graph
+from app.chat.assistant.graph import _after_execute, build_assistant_graph
 from app.chat.assistant.nodes import execute
 
 
@@ -91,6 +91,76 @@ def test_tool_evidence_is_bounded_and_prompt_statement_is_truthful(monkeypatch):
     assert "Ana" in evidence
     assert "Tool customers.search completed." not in prompt
     assert "already run" in prompt
+
+
+def test_failed_read_only_tool_degrades_without_exposing_raw_error(monkeypatch):
+    raw_error = "internal memory backend secret"
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda *args, **kwargs: {
+            "tool": "memory.read",
+            "status": "error",
+            "read_only": True,
+            "error": raw_error,
+        },
+    )
+
+    result = execute(_tool_state(plan={**_tool_state()["plan"], "tool": "memory.read"}))
+
+    assert result["status"] == "degraded"
+    assert result["tool_result"]["result"] == {
+        "unavailable": True,
+        "tool": "memory.read",
+        "degraded_reason": "Read-only tool unavailable",
+    }
+    assert raw_error not in result.get("response", "")
+    assert raw_error not in result["evidence"][0]["detail"]
+
+
+def test_degraded_tool_routes_to_responder():
+    assert _after_execute({"status": "degraded"}) == "respond_stream"
+
+
+def test_degraded_read_evidence_reaches_responder(monkeypatch):
+    calls = []
+    raw_error = "internal memory backend secret"
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda *args, **kwargs: {
+            "tool": "memory.read",
+            "status": "error",
+            "read_only": True,
+            "error": raw_error,
+        },
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: _streaming_client(calls, "I could not access memory."))
+
+    first = execute(_tool_state(plan={**_tool_state()["plan"], "tool": "memory.read"}))
+    final = execute({**_tool_state(), **first, "on_token": lambda _token: None})
+
+    prompt = calls[0]["messages"][-1]["content"]
+    evidence = prompt.split("<tool_evidence>", 1)[1].split("</tool_evidence>", 1)[0]
+    assert final["response"] == "I could not access memory."
+    assert '"unavailable": true' in evidence
+    assert "memory.read" in evidence
+    assert raw_error not in prompt
+
+
+def test_failed_write_tool_remains_terminal_error(monkeypatch):
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda *args, **kwargs: {
+            "tool": "memory.write",
+            "status": "error",
+            "read_only": False,
+            "error": "write failed",
+        },
+    )
+
+    result = execute(_tool_state(plan={**_tool_state()["plan"], "tool": "memory.write"}))
+
+    assert result["status"] == "error"
+    assert result["response"] == "Tool execution failed: write failed"
 
 
 def test_no_tool_prompt_keeps_non_invoking_statement(monkeypatch):

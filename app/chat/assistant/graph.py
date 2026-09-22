@@ -81,7 +81,7 @@ def _after_guardrails(state: AssistantState) -> str:
 
 
 def _after_execute(state: AssistantState) -> str:
-    return "respond_stream" if state.get("status") == "completed" else END
+    return "respond_stream" if state.get("status") in {"completed", "degraded"} else END
 
 
 def _after_cost_gate(state: AssistantState) -> str:
