@@ -128,35 +128,38 @@ def test_panel_turn_does_not_receive_whatsapp_state(client, monkeypatch):
 
 
 def test_memory_read_rejects_cross_scope_entity_shapes(monkeypatch):
-    seen = {}
+    calls = []
 
     monkeypatch.setattr(
         "app.chat.assistant.tools.registry.memory.list_for_entity",
-        lambda session, **kwargs: seen.update(kwargs) or [],
+        lambda session, **kwargs: calls.append(kwargs) or [],
     )
 
     with pytest.raises(ToolValidationError):
         execute_tool(
             SimpleNamespace(), "memory.read",
-            {"scope": "panel", "entity_id": "customer:42"},
+            {"scope": "own", "entity_id": "customer:42"},
         )
     with pytest.raises(ToolValidationError):
         execute_tool(
             SimpleNamespace(), "memory.read",
-            {"scope": "panel", "entity_id": "thread:999"}, trusted_thread_id=7,
+            {"scope": "own", "entity_id": "thread:999"}, trusted_thread_id=7,
         )
 
-    panel = execute_tool(
-        SimpleNamespace(), "memory.read", {"scope": "panel"}, trusted_thread_id=7
+    own = execute_tool(
+        SimpleNamespace(), "memory.read", {"scope": "own"}, trusted_thread_id=7
     )
-    assert panel["status"] == "completed"
-    assert seen == {"scope": "panel", "entity_id": "thread:7"}
+    assert own["status"] == "completed"
+    assert calls == [
+        {"scope": "panel", "entity_id": "thread:7"},
+        {"scope": "agent", "entity_id": "agent:default"},
+    ]
 
     result = execute_tool(
         SimpleNamespace(), "memory.read", {"scope": "customer", "entity_id": "42"}
     )
     assert result["status"] == "completed"
-    assert seen == {"scope": "customer", "entity_id": "42"}
+    assert calls[-1] == {"scope": "customer", "entity_id": "42"}
 
 
 def test_failed_compaction_is_not_reported_as_successful_completion():
