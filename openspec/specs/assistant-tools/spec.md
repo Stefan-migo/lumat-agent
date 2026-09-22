@@ -67,7 +67,7 @@ The `memory.write` tool MUST accept a declared `visibility` of `thread` or `glob
 #### Scenario: Bounded autonomous write
 - GIVEN an allow-listed `memory.write` call with a positive trusted thread id
 - WHEN the assistant executes it without approval
-- THEN the memory is upserted in the current panel thread and the result reports the written row
+- THEN the memory is upserted on the axis its declared visibility selects, stamped with the trusted origin thread, and the result reports the written row
 
 #### Scenario: Declared global visibility
 - GIVEN an allow-listed `memory.write` call with `visibility="global"`
