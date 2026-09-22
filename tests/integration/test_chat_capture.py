@@ -4,8 +4,10 @@ Scenarios mapped 1:1 from openspec/specs/conversation-manager/spec.md:
 
 - CM-2 "Complete capture": progressive fields persisted (conversation +
   customer record); "Customer skips a field": skip -> unknown, non-blocking
-- CM-4 "In-scope guidance": KB-grounded answer only (<kb> tags, no invented
-  prices); "No reliable answer": KB miss -> cannot-answer + unresolved log
+- CM-4 "In-scope guidance": KB-grounded answer only (<kb> tags, no invented prices).
+  "No reliable answer" is a GUARD, not a reachable path: every intent the classifier
+  declares is routed away from the linear retrieval, so the refusal branch only runs
+  on an undeclared intent. Covered by the two `guard`/`never_reaches` tests below.
 - CM-5 "Summary after flow": summary on completion/escalation stored on
   conversation + case
 - CM-6 "Unresolved question logged": question + context + timestamp stored
@@ -14,13 +16,19 @@ Scenarios mapped 1:1 from openspec/specs/conversation-manager/spec.md:
 Runs the full graph per turn (multi-turn flows). OpenAI mocked via respx.
 """
 
+from dataclasses import replace
+
 import psycopg
 import pytest
 from sqlalchemy import select
 
 from app.chat.graph import run_conversation  # noqa: E402
-from app.chat.nodes.respond import CANNOT_ANSWER_REPLY, list_unresolved_questions  # noqa: E402
-from app.chat.state import get_or_create_conversation  # noqa: E402
+from app.chat.nodes.respond import (  # noqa: E402
+    CANNOT_ANSWER_REPLY,
+    list_unresolved_questions,
+    respond as respond_node,
+)
+from app.chat.state import ConversationState, get_or_create_conversation  # noqa: E402
 from app.db import SessionLocal, session_scope  # noqa: E402
 from app.models import (  # noqa: E402
     Case,
@@ -214,7 +222,14 @@ def test_cm4_kb_grounded_answer_with_kb_tags(mock_openai_chat, fake_embedder):
     assert "15000" not in system  # KB content never in the system prompt
 
 
-def test_cm4_kb_miss_cannot_answer_and_logs_unresolved(mock_openai_chat, fake_embedder):
+def test_triage_kb_miss_hands_off_without_the_cm4_refusal(mock_openai_chat, fake_embedder):
+    """A KB-intent miss escalates through handoff (AO-8), not through CM-4's refusal.
+
+    Renamed from ``test_cm4_kb_miss_cannot_answer_and_logs_unresolved``, which named the
+    requirement whose text it asserts is ABSENT. That name is what made the traceability
+    map claim a CM-4 coverage this test cannot provide, and what led a previous handoff
+    to file the real finding as a defect. See ``odd/tasks/cm4-linear-path-scope.md``.
+    """
     _seed_kb_doc("revision anual 15000", KbVisibility.CUSTOMER)
     conv_id = _start_conversation()
     replies = _turn(conv_id, "cuanto cuesta un grifo de cocina marca x", "wamid.miss0")
@@ -240,6 +255,68 @@ def test_cm4_kb_miss_cannot_answer_and_logs_unresolved(mock_openai_chat, fake_em
         conv = session.get(Conversation, conv_id)
         assert conv.summary is not None
         assert "resumen" in conv.summary.lower()
+
+
+def test_cm4_guard_refuses_an_undeclared_intent_with_no_kb(mock_openai_chat, fake_embedder):
+    """CM-4's refusal is a guard: unreachable for declared intents, still load-bearing.
+
+    Every intent in the classifier's vocabulary is routed away from the linear
+    retrieval (see the companion test below and ``orchestrate._dispatch``). The branch
+    is kept because an intent the vocabulary does NOT declare falls through to it, and
+    without it a KB miss would call ``_answer_from_kb(text, "")`` with an EMPTY ``<kb>``
+    block — the model answering from nothing. That is the hallucination CM-4 exists to
+    prevent, so the guard is not dead code.
+
+    See ``odd/tasks/cm4-linear-path-scope.md``.
+    """
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        session.add(
+            Message(
+                wamid="wamid.cm4guard0",
+                conversation_id=conv_id,
+                direction=MessageDirection.INBOUND,
+                msg_type=MessageType.TEXT,
+                text="una consulta que el vocabulario del clasificador no declara",
+                status=MessageStatus.RECEIVED,
+            )
+        )
+        session.commit()
+        # An intent outside the declared vocabulary: no routing rule claims it, so
+        # `_dispatch` falls through to the linear `respond` path.
+        state = replace(ConversationState.from_db(session, conv_id), intent="garantia_heredada")
+        # No KB document is seeded, so the retrieval misses.
+        result = respond_node(state)
+
+    assert result["replies"] == [CANNOT_ANSWER_REPLY]
+    assert result["escalate"] is True
+    assert result["escalate_reason"] == "kb_miss"
+
+
+def test_unknown_intent_never_reaches_the_cm4_refusal(mock_openai_chat, fake_embedder):
+    """The negative half: no declared intent reaches CM-4's refusal.
+
+    ``unknown`` is the only intent that lands on the linear ``respond`` node, and it
+    returns before the retrieval (``respond.py:121-128``): the CM-1 greeting answers the
+    first turn, and the second attempt escalates through handoff (HH-3). This is why the
+    refusal never fired in production, and why the misnamed triage test below could not
+    be read as evidence that it did.
+    """
+    conv_id = _start_conversation()
+
+    # Turn 1 — no capture/retrieval keyword and no handoff-gate trigger -> `unknown`.
+    # The greeting + menu already answered the turn, so respond adds nothing.
+    replies = _turn(conv_id, "me gustaria saber sobre pintura de interiores", "wamid.cm4lin1")
+    assert CANNOT_ANSWER_REPLY not in replies
+    assert len(replies) == 1
+
+    # Turn 2 — the second unknown attempt escalates (HH-3), still not through CM-4.
+    replies = _turn(conv_id, "sigo sin encontrar lo que busco", "wamid.cm4lin2")
+    assert CANNOT_ANSWER_REPLY not in replies
+    assert replies[-1] == "Un asesor revisará tu caso y te contactará a la brevedad."
+
+    with SessionLocal() as session:
+        assert session.get(Conversation, conv_id).state.value == "human"
 
 
 def test_cm6_no_unresolved_when_kb_hits(mock_openai_chat, fake_embedder):
