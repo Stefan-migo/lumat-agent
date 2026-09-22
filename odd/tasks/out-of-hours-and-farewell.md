@@ -200,14 +200,15 @@ constraint is that the failure is visible (logged) and does not misinform the cu
 
 ### WU5 — spec
 
-- [ ] **T9** — Spec deltas: the closure messages and the out-of-hours behavior, and the emergency
-      exemption as an explicit scenario. Exact target files pinned in T1.
-- [ ] **WU5 commit**
+- [x] **T9** — Spec deltas: the closure messages and the out-of-hours behavior, and the emergency
+      exemption as an explicit scenario. **Done — `CM-11` in `openspec/specs/conversation-manager/spec.md`
+      and `SS-5` extended in `openspec/specs/settings-scope-limits/spec.md`; commit `eadc888e`.**
+- [x] **WU5 commit** — `eadc888e`
 
 ### WU6 — verify and deliver
 
-- [ ] **T10** — Verify: the focused tests, the full Python suite, and the web suite. Record RED and
-      GREEN evidence.
+- [x] **T10** — Verify: the focused tests, the full Python suite, and the web suite. **Done — see
+      "Execution evidence" below.**
 - [ ] **T11** — Record committed, branch pushed, PR open with a single type label. **The merge remains
       the human's decision.**
 
@@ -446,7 +447,77 @@ Preliminary nodes for this unit, from the measurements above:
 `MESSAGE_DEFAULTS / SETTINGS_DEFAULTS / get_message() [app/services/settings.py]`,
 `settings_messages() / _KNOWN_SECTIONS [app/panel/api/routes/settings.py]`, `Settings.tsx`.
 
+## Outcome
+
+Both closure behaviors now exist where the customer actually talks, and neither can swallow an emergency.
+
+- **Out of hours** — a deterministic gate after `handoff_gate` and before `receive` answers with
+  `messages.out_of_hours` and ends the turn. `strong` and `weak` emergencies never reach it, because
+  `emergency_gate` is the graph entry point and diverts them first; a capture in progress is bypassed so
+  a customer mid-flow is not stranded.
+- **Farewell** — a short purely social closing or thanks message answers with `messages.farewell` instead
+  of entering classification. The detector folds diacritics and reads one token set.
+- **Configurable** — Lumat edits both messages and the weekly schedule with its timezone from the panel.
+  The schedule is validated on write; an absent schedule is the feature's off state and an unusable one
+  fails open and is logged, so a typo can never tell customers the business is shut.
+- **Unchanged** — every existing behavior is byte-identical when nothing is configured: the clean miss,
+  the greeting, the emergency protocol, the capture flow, and the other settings sections.
+
+## Execution evidence
+
+### Work-unit commits
+
+Each verified against `git show --stat` so the message cannot overstate the content.
+
+| Commit | Subject | Files |
+|---|---|---|
+| `4e746e5e` | docs(odd): register the out-of-hours-and-farewell unit | 1 |
+| `6eda2f26` | docs(odd): pin the out-of-hours-and-farewell contract | 1 |
+| `a4f659bd` | docs(odd): pin the farewell placement and the hours off state | 1 |
+| `7f24bcc3` | feat(settings): add the configurable business-hours predicate | 3 |
+| `0d0cc7e9` | docs(odd): record the hours predicate and its declared limitation | 1 |
+| `5e0e1d6d` | feat(chat): close a customer turn on a farewell or outside business hours | 7 |
+| `6ff14a4e` | docs(odd): record the closure gate and the measured detector correction | 1 |
+| `f5cd8d4b` | feat(panel): expose the farewell, the out-of-hours notice and the hours | 2 |
+| `bdb68fb8` | docs(odd): record the panel hours API and the closed RED weakness | 1 |
+| `9126662f` | feat(panel): edit the business hours and the two closure messages | 5 |
+| `eadc888e` | docs(spec): record the closure gate and the configurable hours | 2 |
+
+`5e0e1d6d` holds 7 files, above the repo's `<=5` guidance. It is one concern — the gate, its wiring, the
+four tests and the two message registrations all have to land together or the suite is red — and it was
+declared rather than ignored, as the `kb-retrieval-failure` unit did.
+
+### Final verification (frozen candidate)
+
+| Check | Result |
+|---|---|
+| `uv run pytest tests/ --tb=no -p no:warnings` | **1255 passed, 0 failed**, exit 0 |
+| `npm --prefix web run test` | **615 passed** across 79 files, exit 0 |
+| `npm --prefix web run build` (tsc) | exit 0 |
+
+Count reconciliation: Python baseline on `d7a3c3aa` was **1199** (the 1204 recorded by
+`kb-retrieval-failure` minus that unit's own five tests, which live on an unmerged branch). This unit adds
+56. Web baseline was **611**; this unit adds 4.
+
+### Red/green per work unit
+
+| WU | RED | GREEN |
+|---|---|---|
+| WU2 hours | 8 of 11 unit tests and all 3 accessor tests failed on their asserts | 1213 passed |
+| WU3 gate | 3 of 13 integration tests failed; the 10 passing are the regression guards, trivially green while the gate did not exist | 1246 passed, then 1255 after the detector correction |
+| WU4 API | 3 of 54 functional tests failed | 1255 passed |
+| WU4 UI | 6 of 30 tests in the Settings story file failed | 615 web tests passed |
+
+### Declared tooling limitations
+
+- `ruff` is not installed and this project configures no linter, type checker or formatter. Not a
+  regression introduced here.
+- `openspec` CLI is not installed, so the spec deltas were reviewed by diff.
+- Graph Checks ran against the main worktree root: `graphify-out/` is gitignored, so this worktree has no
+  graph, and the code for this area is identical across the two. P7 records what the graph cannot answer
+  here.
+
 ## Next step
 
-T1 — pin the contract: gate placement (D1/D5), the schedule encoding (D2), the unusable-hours behavior
-(D8), and the social-close detector (D4). No source changes before the contract section exists.
+T11 — record committed, branch pushed, PR open with a single type label, CI checked. **The merge remains
+the human's decision.**
