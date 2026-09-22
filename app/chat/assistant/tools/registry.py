@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from itertools import zip_longest
 from typing import Annotated, Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
@@ -253,13 +254,18 @@ def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None):
     if parsed.scope == "own":
         if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
             raise ToolValidationError("own memory read requires a positive trusted thread id")
-        rows = memory.list_for_entity(
+        thread_rows = memory.list_for_entity(
             session, scope="panel", entity_id=memory.thread_memory_entity(trusted_thread_id)
-        ) + memory.list_for_entity(
-            session, scope="agent", entity_id=_AGENT_MEMORY_ENTITY
         )
+        agent_rows = memory.list_for_entity(session, scope="agent", entity_id=_AGENT_MEMORY_ENTITY)
         if parsed.topic:
-            rows = [row for row in rows if row.topic_key == parsed.topic]
+            thread_rows = [row for row in thread_rows if row.topic_key == parsed.topic]
+            agent_rows = [row for row in agent_rows if row.topic_key == parsed.topic]
+        # Interleave both axes before truncating: a thread holding `limit` rows must not hide the
+        # project axis (R3-own-read-limit).
+        rows = [
+            row for pair in zip_longest(thread_rows, agent_rows) for row in pair if row is not None
+        ]
         return rows[: parsed.limit]
     entity_id = parsed.entity_id
     rows = memory.list_for_entity(session, scope=parsed.scope, entity_id=entity_id)

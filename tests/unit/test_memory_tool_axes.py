@@ -152,6 +152,65 @@ def test_own_memory_never_returns_another_threads_panel_row(monkeypatch):
     ) == []
 
 
+def test_own_memory_read_interleaves_both_axes_before_truncating(monkeypatch):
+    thread_rows = [
+        Mock(scope="panel", entity_id="thread:42", topic_key=f"thread-{index}") for index in range(3)
+    ]
+    agent_rows = [
+        Mock(scope="agent", entity_id="agent:default", topic_key=f"project-{index}") for index in range(2)
+    ]
+    monkeypatch.setattr(
+        registry.memory,
+        "list_for_entity",
+        lambda _session, *, scope, entity_id: thread_rows if scope == "panel" else agent_rows,
+    )
+
+    assert registry._read_memory(
+        MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42
+    ) == [thread_rows[0], agent_rows[0], thread_rows[1], agent_rows[1], thread_rows[2]]
+
+
+def test_own_memory_read_never_starves_the_project_axis(monkeypatch):
+    thread_rows = [
+        Mock(scope="panel", entity_id="thread:42", topic_key=f"thread-{index}") for index in range(10)
+    ]
+    agent_row = Mock(scope="agent", entity_id="agent:default", topic_key="project-note")
+    monkeypatch.setattr(
+        registry.memory,
+        "list_for_entity",
+        lambda _session, *, scope, entity_id: thread_rows if scope == "panel" else [agent_row],
+    )
+
+    result = registry._read_memory(
+        MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42
+    )
+
+    assert len(result) == 10
+    assert agent_row in result
+
+
+def test_own_memory_read_topic_filter_still_matches_both_axes(monkeypatch):
+    thread_rows = [
+        Mock(scope="panel", entity_id="thread:42", topic_key="keep"),
+        Mock(scope="panel", entity_id="thread:42", topic_key="drop"),
+    ]
+    agent_rows = [
+        Mock(scope="agent", entity_id="agent:default", topic_key="keep"),
+        Mock(scope="agent", entity_id="agent:default", topic_key="drop"),
+    ]
+    monkeypatch.setattr(
+        registry.memory,
+        "list_for_entity",
+        lambda _session, *, scope, entity_id: thread_rows if scope == "panel" else agent_rows,
+    )
+
+    result = registry._read_memory(
+        MagicMock(), registry.MemoryArgs.model_validate({"topic": "keep"}), trusted_thread_id=42
+    )
+
+    assert [row.topic_key for row in result] == ["keep", "keep"]
+
+
 def test_project_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
     captured = {}
 
