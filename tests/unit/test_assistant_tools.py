@@ -496,8 +496,8 @@ def test_own_memory_read_uses_trusted_thread_and_agent_axes_and_fails_closed(mon
     )
     assert result["status"] == "completed"
     assert calls == [
-        {"scope": "panel", "entity_id": "thread:7"},
-        {"scope": "agent", "entity_id": "agent:default"},
+        {"scope": "panel", "entity_id": "thread:7", "proyecto": "default"},
+        {"scope": "agent", "entity_id": "agent:default", "proyecto": "default"},
     ]
 
     with pytest.raises(ToolValidationError, match="positive trusted thread id"):
@@ -529,8 +529,8 @@ def test_memory_search_uses_own_axes_and_bounds_content(monkeypatch):
     assert result["status"] == "completed"
     assert len(result["result"][0]["contenido"]) == 2_000
     assert [kwargs for _args, kwargs in calls] == [
-        {"scope": "panel", "entity_id": "thread:7", "top_k": 1},
-        {"scope": "agent", "entity_id": "agent:default", "top_k": 1},
+        {"scope": "panel", "entity_id": "thread:7", "proyecto": "default", "top_k": 1},
+        {"scope": "agent", "entity_id": "agent:default", "proyecto": "default", "top_k": 1},
     ]
     with pytest.raises(ToolValidationError):
         execute_tool(SimpleNamespace(), "memory.search", {"query": "x", "scope": "own", "entity_id": "customer:7"})

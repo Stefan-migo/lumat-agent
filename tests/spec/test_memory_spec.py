@@ -9,6 +9,7 @@ injection, close memo, panel).
 
 import psycopg
 import pytest
+from uuid import uuid4
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import inspect
 
@@ -20,6 +21,7 @@ from app.models import (
     MemoryType,
     MemoryVisibility,
     ObservationType,
+    User,
 )
 from app.services import memory, tukulpan  # noqa: F401  (services under test)
 
@@ -763,10 +765,26 @@ def test_mem3_top_k_caps_results(fake_embedder, migrated_db):
 def test_mem9_global_visibility_records_provenance_and_cross_thread_read(
     fake_embedder, migrated_db
 ):
-    """Global visibility uses the canonical project-qualified agent axis."""
+    """Global visibility is isolated to the thread's project namespace."""
     from app.chat.assistant.tools import registry
+    from app.models import InternalChatThread, Project
 
     with SessionLocal() as session:
+        project_a = f"mem9-{uuid4().hex[:8]}-a"
+        project_b = f"mem9-{uuid4().hex[:8]}-b"
+        session.add_all([
+            Project(slug=project_a, name="Project A", purpose="A", purpose_embedding=[0.0] * 384),
+            Project(slug=project_b, name="Project B", purpose="B", purpose_embedding=[0.0] * 384),
+        ])
+        session.flush()
+        user = User(username="memory-spec", password_hash="test")
+        session.add(user)
+        session.flush()
+        thread_a = InternalChatThread(user_id=user.id, proyecto=project_a)
+        thread_a_other = InternalChatThread(user_id=user.id, proyecto=project_a)
+        thread_b = InternalChatThread(user_id=user.id, proyecto=project_b)
+        session.add_all([thread_a, thread_a_other, thread_b])
+        session.flush()
         args = registry.MemoryWriteArgs(
             titulo="Reusable fact",
             contenido="A fact for the whole project",
@@ -774,25 +792,33 @@ def test_mem9_global_visibility_records_provenance_and_cross_thread_read(
             tipo="decision",
             visibility="global",
         )
-        result = registry._write_memory(session, args, trusted_thread_id=11)
+        result = registry._write_memory(
+            session, args, trusted_thread_id=thread_a.id, proyecto=project_a
+        )
         session.commit()
 
         assert result["written"] is True
         row = tukulpan.get_by_key(
             session,
             scope="agent",
-            entity_id="agent:default",
+            entity_id=f"agent:{project_a}",
+            proyecto=project_a,
             topic_key="agent:fact",
         )
         assert row.producer is MemoryProducer.AGENT
-        assert row.origin_thread_id == "11"
+        assert row.origin_thread_id == str(thread_a.id)
         assert row.visibility is MemoryVisibility.GLOBAL
         assert [item.id for item in tukulpan.list_for_entity(
-            session, scope="agent", entity_id="agent:default"
+            session, scope="agent", entity_id=f"agent:{project_a}", proyecto=project_a
         )] == [row.id]
-        assert tukulpan.list_for_entity(
-            session, scope="agent", entity_id="agent:other", proyecto="other"
+        assert registry._read_memory(
+            session, registry.MemoryArgs.model_validate({}), trusted_thread_id=thread_b.id,
+            proyecto=project_b
         ) == []
+        assert [item.id for item in registry._read_memory(
+            session, registry.MemoryArgs.model_validate({}), trusted_thread_id=thread_a_other.id,
+            proyecto=project_a
+        )] == [row.id]
 
 
 def test_mem9_global_visibility_is_the_write_default(fake_embedder, migrated_db):
@@ -807,14 +833,14 @@ def test_mem9_global_visibility_is_the_write_default(fake_embedder, migrated_db)
                  topic_key="agent:thread-fact",
                  tipo="decision",
              ),
-            trusted_thread_id=12,
+            trusted_thread_id=12, proyecto="default",
         )
         session.commit()
 
         row = tukulpan.get_by_key(
             session,
             scope="agent",
-            entity_id="agent:default",
+            entity_id="agent:default", proyecto="default",
             topic_key="agent:thread-fact",
         )
         assert result["written"] is True

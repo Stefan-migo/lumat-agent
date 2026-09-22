@@ -116,8 +116,8 @@ def close_cortex_session(session, thread: InternalChatThread, *, report: str) ->
 
 
 def _thread_project_authorization(session: Session, thread: InternalChatThread):
-    proyecto = ((thread.assistant_state or {}).get("sdb") or {}).get("proyecto", "default")
-    return None if proyecto == "default" else projects.agent_context(session, proyecto)
+    proyecto = thread.proyecto
+    return None if not proyecto or proyecto == "default" else projects.agent_context(session, proyecto)
 
 
 def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, authorization=None) -> dict:
@@ -189,6 +189,7 @@ def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, au
                 approval=approval if not definition.read_only else None,
                 task_binding=binding,
                 whitelist=whitelist, cost_allowed=cost_allowed,
+                proyecto=authorization.slug if authorization is not None else "default",
             )
             result = {
                 "task_id": typed.id, "order": order, "tool": typed.tool,
@@ -497,12 +498,17 @@ def assemble_context(session, thread_id: int, *, messages=None, attachments=None
     }
 
 
-def create_thread(session: Session, user: User) -> InternalChatThread:
-    thread = InternalChatThread(user_id=user.id)
+def create_thread(session: Session, user: User, *, proyecto: str = "default") -> InternalChatThread:
+    if proyecto == "default":
+        bound_project = "default"
+    else:
+        bound_project = projects.agent_context(session, proyecto).slug
+    thread = InternalChatThread(user_id=user.id, proyecto=bound_project)
     session.add(thread)
     session.flush()
     record_audit(session, actor=user.username, action="internal_chat.thread_created",
-                 entity="internal_chat_thread", entity_id=str(thread.id))
+                 entity="internal_chat_thread", entity_id=str(thread.id),
+                 after={"proyecto": bound_project})
     return thread
 
 
@@ -577,7 +583,6 @@ def create_run_message(
     attachment_ids: list[int] | None = None,
     *,
     sdb_requested: bool | None = None,
-    project_authorization: projects._ProjectAuthorization | None = None,
 ) -> InternalChatMessage:
     run_id = uuid4().hex
     message = InternalChatMessage(
@@ -627,9 +632,10 @@ def publish_live(session_factory, thread_id: int, run_id: str, *, stage=None, pr
 
 def _run_agent_turn_session(
     session: Session, thread: InternalChatThread, user: User, message: InternalChatMessage,
-    attachment_ids: list[int], sdb_requested: bool | None, project_authorization=None,
+    attachment_ids: list[int], sdb_requested: bool | None,
 ) -> None:
     run_id = message.assistant_metadata["run_id"]
+    project_authorization = _thread_project_authorization(session, thread)
     try:
         preview: list[str] = []
         token_count = 0
@@ -808,11 +814,10 @@ def run_agent_turn(*, thread_id: int, run_id: str, user_id: int,
 def submit_message(
     session: Session, thread: InternalChatThread, user: User, content: str,
     attachment_ids: list[int] | None = None, *, sdb_requested: bool | None = None,
-    project_authorization=None,
 ) -> InternalChatMessage:
     """Compatibility wrapper retaining the historical synchronous service API."""
-    message = create_run_message(session, thread, user, content, attachment_ids, sdb_requested=sdb_requested, project_authorization=project_authorization)
-    _run_agent_turn_session(session, thread, user, message, attachment_ids or [], sdb_requested, project_authorization)
+    message = create_run_message(session, thread, user, content, attachment_ids, sdb_requested=sdb_requested)
+    _run_agent_turn_session(session, thread, user, message, attachment_ids or [], sdb_requested)
     return message
 
 

@@ -52,6 +52,10 @@ class ChatThreadTitleBody(BaseModel):
     title: str = Field(min_length=1, max_length=255)
 
 
+class ChatThreadBody(BaseModel):
+    proyecto: str | None = Field(default=None, min_length=1, max_length=100)
+
+
 def _planning_thread(session: Session, slug: str, user_id: int) -> InternalChatThread | None:
     threads = session.scalars(select(InternalChatThread).where(InternalChatThread.user_id == user_id)).all()
     return next((thread for thread in threads if ((thread.assistant_state or {}).get("cortex_session") or {}).get("slug") == slug), None)
@@ -63,8 +67,18 @@ def _planning_report(session: Session, thread: InternalChatThread) -> Memory | N
 
 
 @router.post("/chat/threads", status_code=201)
-def new_thread(session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
-    return {"thread": thread_dict(create_thread(session, current)), "messages": []}
+def new_thread(
+    body: ChatThreadBody | None = None,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    try:
+        thread = create_thread(
+            session, current, proyecto=(body.proyecto if body and body.proyecto else "default")
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"thread": thread_dict(thread), "messages": []}
 
 
 @router.get("/chat/threads")

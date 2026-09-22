@@ -254,6 +254,93 @@ def test_migration_030_preserves_existing_project_rows(tmp_path):
             conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} ").format(sql.Identifier(scratch_name)))
 
 
+def test_migration_031_binds_existing_threads_to_default(tmp_path):
+    """Applying 031 to a populated 030 database backfills the default namespace."""
+    admin_parts = conninfo_to_dict(ADMIN_DB_URL)
+    database_name = admin_parts["dbname"]
+    scratch_name = f"{database_name}_mig031_{uuid4().hex}"
+    scratch_url = make_conninfo(**{**admin_parts, "dbname": scratch_name})
+
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+        conn.execute(sql.SQL("CREATE DATABASE {} ").format(sql.Identifier(scratch_name)))
+
+    try:
+        migrations = sorted((REPO_ROOT / "db" / "migrations").glob("*.sql"))
+        migration_env = os.environ.copy()
+        migration_env.update(
+            {
+                "DATABASE_URL": scratch_url,
+                "APP_DB_PASSWORD": "app",
+                "PYTHON": str(REPO_ROOT / ".venv" / "bin" / "python"),
+            }
+        )
+
+        def migrate(runner: Path, label: str) -> None:
+            result = subprocess.run(
+                ["bash", str(runner)],
+                env=migration_env,
+                capture_output=True,
+                text=True,
+                timeout=45,
+            )
+            assert result.returncode == 0, (
+                f"{label} failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+            )
+
+        migrate(
+            _runner_dir(
+                tmp_path / "scaffold",
+                [m for m in migrations if _migration_number(m) <= 30],
+            ),
+            "030 scaffold",
+        )
+
+        with psycopg.connect(scratch_url, autocommit=True) as conn:
+            user_id = conn.execute(
+                "INSERT INTO users (username, password_hash) VALUES ('migration-031', 'test') "
+                "RETURNING id"
+            ).fetchone()[0]
+            thread_id = conn.execute(
+                "INSERT INTO internal_chat_threads (user_id) VALUES (%s) RETURNING id",
+                (user_id,),
+            ).fetchone()[0]
+            before = conn.execute(
+                "SELECT column_name, data_type, character_maximum_length, is_nullable, column_default "
+                "FROM information_schema.columns WHERE table_name = 'internal_chat_threads' "
+                "ORDER BY ordinal_position"
+            ).fetchall()
+
+        migrate(
+            _runner_dir(
+                tmp_path / "final",
+                [m for m in migrations if _migration_number(m) == 31],
+            ),
+            "031 migration",
+        )
+
+        with psycopg.connect(scratch_url, autocommit=True) as conn:
+            assert conn.execute(
+                "SELECT proyecto FROM internal_chat_threads WHERE id = %s", (thread_id,)
+            ).fetchone() == ("default",)
+            project_column = conn.execute(
+                "SELECT data_type, character_maximum_length, is_nullable, column_default "
+                "FROM information_schema.columns WHERE table_name = 'internal_chat_threads' "
+                "AND column_name = 'proyecto'"
+            ).fetchone()
+            assert project_column == (
+                "character varying", 100, "NO", "'default'::character varying"
+            )
+            after = conn.execute(
+                "SELECT column_name, data_type, character_maximum_length, is_nullable, column_default "
+                "FROM information_schema.columns WHERE table_name = 'internal_chat_threads' "
+                "AND column_name <> 'proyecto' ORDER BY ordinal_position"
+            ).fetchall()
+            assert after == before
+    finally:
+        with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+            conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} ").format(sql.Identifier(scratch_name)))
+
+
 def test_schema_migrations_records_version(migrated_db, admin_conn):
     rows = admin_conn.execute(
         "SELECT version FROM schema_migrations ORDER BY version"
@@ -288,6 +375,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("028_memory_dedup",),
         ("029_memory_relation_resolution",),
         ("030_memory_visibility_global",),
+        ("031_internal_chat_thread_project",),
     ]
 
 

@@ -2,7 +2,8 @@
 
 ## Purpose
 
-Give the agent a persistent, domain-aware memory layer over PostgreSQL + pgvector: typed memories per `(proyecto, scope, entity_id)` keyed by `topic_key`, hybrid semantic+FTS recall, typed observations, close-time customer memo, and panel management. Single-agent (`proyecto default`); cross-project and ToolNode out of scope.
+Give the agent a persistent, domain-aware memory layer over PostgreSQL + pgvector: typed memories per `(proyecto, scope, entity_id)` keyed by `topic_key`, hybrid semantic+FTS recall, typed observations, close-time customer memo, and panel management. One agent across project namespaces: an assistant turn is bound to its thread's project, so a memory declared `global` stays inside that project. Cross-project and ToolNode out of scope.
+(Previously: this read "Single-agent (`proyecto default`)", which described the era before a thread carried a project binding. MEM-9, MEM-3 and AT-9 already required the project-qualified agent axis; only the binding on the thread was missing.)
 
 ## Requirements
 

@@ -145,26 +145,28 @@ def test_planner_prompt_does_not_order_a_rejected_memory_read_shape():
 def test_own_memory_read_and_search_union_thread_and_agent_axes(monkeypatch):
     thread_row = Mock(scope="panel", entity_id="thread:42", topic_key="thread-note")
     agent_row = Mock(scope="agent", entity_id="agent:default", topic_key="project-note")
+    list_calls = []
     monkeypatch.setattr(
         registry.memory,
         "list_for_entity",
-        lambda _session, *, scope, entity_id: [thread_row] if entity_id == "thread:42" else [agent_row],
+        lambda _session, *, scope, entity_id, proyecto: list_calls.append((scope, entity_id, proyecto)) or ([thread_row] if entity_id == "thread:42" else [agent_row]),
     )
     assert registry._read_memory(
-        MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42
+        MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42, proyecto="acme"
     ) == [thread_row, agent_row]
+    assert list_calls == [("panel", "thread:42", "acme"), ("agent", "agent:acme", "acme")]
 
     monkeypatch.setattr(
         registry.memory,
         "hybrid_search",
-        lambda _session, _query, *, scope, entity_id, top_k: [
+        lambda _session, _query, *, scope, entity_id, proyecto, top_k: [
             {"entity_id": entity_id, "score": 0.8 if scope == "panel" else 0.9}
         ],
     )
     results = registry._search_memory(
-        MagicMock(), registry.MemorySearchArgs.model_validate({"query": "fact"}), trusted_thread_id=42
+        MagicMock(), registry.MemorySearchArgs.model_validate({"query": "fact"}), trusted_thread_id=42, proyecto="acme"
     )
-    assert [row["entity_id"] for row in results] == ["agent:default", "thread:42"]
+    assert [row["entity_id"] for row in results] == ["agent:acme", "thread:42"]
 
 
 def test_own_memory_never_returns_another_threads_panel_row(monkeypatch):
@@ -172,7 +174,7 @@ def test_own_memory_never_returns_another_threads_panel_row(monkeypatch):
     monkeypatch.setattr(
         registry.memory,
         "list_for_entity",
-        lambda _session, *, scope, entity_id: [other_thread] if entity_id == "thread:7" else [],
+        lambda _session, *, scope, entity_id, proyecto: [other_thread] if entity_id == "thread:7" else [],
     )
     assert registry._read_memory(
         MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42
@@ -189,7 +191,7 @@ def test_own_memory_read_interleaves_both_axes_before_truncating(monkeypatch):
     monkeypatch.setattr(
         registry.memory,
         "list_for_entity",
-        lambda _session, *, scope, entity_id: thread_rows if scope == "panel" else agent_rows,
+        lambda _session, *, scope, entity_id, proyecto: thread_rows if scope == "panel" else agent_rows,
     )
 
     assert registry._read_memory(
@@ -205,7 +207,7 @@ def test_own_memory_read_never_starves_the_project_axis(monkeypatch):
     monkeypatch.setattr(
         registry.memory,
         "list_for_entity",
-        lambda _session, *, scope, entity_id: thread_rows if scope == "panel" else [agent_row],
+        lambda _session, *, scope, entity_id, proyecto: thread_rows if scope == "panel" else [agent_row],
     )
 
     result = registry._read_memory(
@@ -228,7 +230,7 @@ def test_own_memory_read_topic_filter_still_matches_both_axes(monkeypatch):
     monkeypatch.setattr(
         registry.memory,
         "list_for_entity",
-        lambda _session, *, scope, entity_id: thread_rows if scope == "panel" else agent_rows,
+        lambda _session, *, scope, entity_id, proyecto: thread_rows if scope == "panel" else agent_rows,
     )
 
     result = registry._read_memory(
@@ -255,12 +257,14 @@ def test_global_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
         visibility="global",
     )
 
-    result = registry._write_memory(session, args, trusted_thread_id=42)
+    monkeypatch.setattr(registry.projects, "agent_context", lambda _session, slug: Mock(slug=slug))
+    result = registry._write_memory(session, args, trusted_thread_id=42, proyecto="acme")
 
     assert result == {"written": True, "id": 7, "topic_key": "agent:fact"}
     assert captured["scope"] == "agent"
-    assert captured["entity_id"] == tukulpan.agent_memory_entity(tukulpan.WRITABLE_PROYECTO)
-    assert captured["proyecto"] == tukulpan.WRITABLE_PROYECTO
+    assert captured["entity_id"] == tukulpan.agent_memory_entity("acme")
+    assert captured["proyecto"] == "acme"
+    assert captured["authorization"].slug == "acme"
     assert captured["producer"] == tukulpan.MemoryProducer.AGENT
     assert captured["origin_thread_id"] == "42"
     assert captured["visibility"] == "global"

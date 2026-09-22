@@ -656,6 +656,7 @@ def execute(state: AssistantState) -> AssistantState:
                 whitelist=set(config.tools_whitelist),
                 cost_allowed=state.get("guardrails", {}).get("cost_allowed", True),
                 trusted_thread_id=state.get("thread_id"),
+                proyecto=_project_slug(state),
             )
         except (ToolExecutionError, ToolValidationError) as exc:
             detail = str(exc)
