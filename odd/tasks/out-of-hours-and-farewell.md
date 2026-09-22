@@ -189,12 +189,13 @@ constraint is that the failure is visible (logged) and does not misinform the cu
 
 ### WU4 — the panel surface
 
-- [ ] **T6** — RED: the API returns the new `messages` keys and the `hours` section; a malformed
-      `hours.schedule` is rejected with `400`.
-- [ ] **T7** — GREEN: `app/panel/api/routes/settings.py` — the `hours` handler, `_KNOWN_SECTIONS`, and
-      the `messages` handler extended.
+- [x] **T6** — RED: the API returns the new `messages` keys and the `hours` section; a malformed
+      `hours.schedule` is rejected with `400`. **Done — 3 of 54 functional tests RED. Declared weakness,
+      since closed: see "The rejection tests at RED" below.**
+- [x] **T7** — GREEN: `app/panel/api/routes/settings.py` — the `hours` handler, `_KNOWN_SECTIONS`, and
+      the `messages` handler extended. **Done — this closes P13.**
 - [ ] **T8** — RED/GREEN: `web/src/components/pages/Settings.tsx`, `web/src/types.ts`, the stories and
-      the fixtures — the new messages and the hours card.
+      the fixtures — the new messages and the hours card. **Not started; the whole frontend is one task.**
 - [ ] **WU4 commit(s)**
 
 ### WU5 — spec
@@ -216,6 +217,22 @@ constraint is that the failure is visible (logged) and does not misinform the cu
 - `npm --prefix web run test` and `npm --prefix web run build`.
 - The emergency exemption is verified by test, not by reasoning: a `strong` and a `weak` hit during
   out-of-hours hours must both still reach their nodes.
+
+### The rejection tests at RED — a declared weakness, since closed
+
+The six `POST /settings/hours` rejection cases passed at RED, and **not because the validator worked**:
+while the `hours` section did not exist, the catch-all route (`_KNOWN_SECTIONS`) answered every
+`hours` request with `400 unknown section 'hours'`, and nothing was persisted either. Both assertions —
+`status_code == 400` and "the value is not in the database" — were satisfied by the absence of the
+section, so they proved nothing.
+
+That is now closed. The test also asserts
+`"unknown section" not in resp.json()["detail"]`, and the catch-all's detail is
+`f"unknown section {section!r} ({', '.join(sorted(_KNOWN_SECTIONS))})"`
+(`app/panel/api/routes/settings.py`). So the strengthened test **fails** whenever the rejection comes
+from a missing section rather than from the validator — verified by reading that exact source line, not
+assumed. The non-persistence and no-audit-row assertions already made the test non-vacuous in GREEN
+(a route that persisted the value would fail them); this assertion makes its RED meaningful too.
 
 ## Acceptance criteria
 
