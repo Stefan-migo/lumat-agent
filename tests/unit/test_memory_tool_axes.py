@@ -58,6 +58,19 @@ def test_planner_catalog_advertises_the_topic_key_contract():
     assert memory_write["arguments"]["properties"]["topic_key"].get("pattern") == r"^agent:"
 
 
+def test_planner_catalog_description_matches_the_global_write_default():
+    """The planner reads this description to decide how to use the tool.
+
+    `visibility` defaults to `global`, so the advertised description must not
+    claim the write is confined to the current thread (MEM-9 / AT-9).
+    """
+    catalog = json.loads(_planner_tool_catalog(["memory.write"]))
+    description = next(entry for entry in catalog if entry["name"] == "memory.write")["description"]
+
+    assert "global" in description
+    assert "current panel thread" not in description
+
+
 def test_memory_write_topic_key_still_requires_the_agent_namespace():
     with pytest.raises(ValueError):
         registry.MemoryWriteArgs.model_validate(
