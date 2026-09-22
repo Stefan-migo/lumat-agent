@@ -122,44 +122,44 @@ to the old `kb_scope` is historical context, not a claim.
 
 ### WU1 — retire the filter behaviour
 
-- [ ] **T1** — RED: `tests/integration/test_kb.py` — a guard test asserting `kb.retrieve` has no
+- [x] **T1** — RED: `tests/integration/test_kb.py` — a guard test asserting `kb.retrieve` has no
       `scope` parameter. Observe RED (the parameter exists).
-- [ ] **T2** — GREEN: `app/services/kb.py` — delete the `scope` parameter (`:327`), the filter block
+- [x] **T2** — GREEN: `app/services/kb.py` — delete the `scope` parameter (`:327`), the filter block
       (`:356-359`), and the scope paragraph of the docstring (`:341-344`).
-- [ ] **T3** — GREEN: `app/chat/subgraphs/research_triage.py` — delete `_registry_kb_scope()`
+- [x] **T3** — GREEN: `app/chat/subgraphs/research_triage.py` — delete `_registry_kb_scope()`
       (`:56-65`), the `scope = _registry_kb_scope()` binding (`:74`), the `scope=scope` argument
       (`:98`), and the scope lines of the module docstring (`:13`, `:20-21`).
-- [ ] **T4** — GREEN: delete the three AO-7 tests (`test_kb_a7_scoped_retrieve_filters_by_category`,
+- [x] **T4** — GREEN: delete the three AO-7 tests (`test_kb_a7_scoped_retrieve_filters_by_category`,
       `test_kb_a7_scoped_retrieve_excludes_non_matching_category`,
       `test_kb_a7_unscoped_retrieve_unchanged`) and drop the dangling monkeypatch in
       `tests/integration/test_realtime_writers.py:94`.
-- [ ] **WU1 commit** — `refactor(kb): retire the retrieve topic-scope filter`
+- [x] **WU1 commit** — `refactor(kb): retire the retrieve topic-scope filter`
 
 ### WU2 — retire the registry declaration
 
-- [ ] **T5** — RED: `tests/unit/test_agent_registry.py` asserts six required fields and no `kb_scope`
+- [x] **T5** — RED: `tests/unit/test_agent_registry.py` asserts six required fields and no `kb_scope`
       on `SubAgent`; `tests/unit/test_prompts.py` asserts `kb_scope` is absent from the `agent:`
       block. Observe RED.
-- [ ] **T6** — GREEN: `app/agent_registry.py` — delete `kb_scope` from `SUBAGENT_REQUIRED_FIELDS`
+- [x] **T6** — GREEN: `app/agent_registry.py` — delete `kb_scope` from `SUBAGENT_REQUIRED_FIELDS`
       (`:38`), from `SubAgent` (`:54`), `Agent` (`:66`), `Assistant` (`:77`), and from the three
       parse sites (`:119`, `:180`, `:213`).
-- [ ] **T7** — GREEN: `agent/registry.yaml` — delete the 7 `kb_scope: null` entries (`:24`, `:41`,
+- [x] **T7** — GREEN: `agent/registry.yaml` — delete the 7 `kb_scope: null` entries (`:24`, `:41`,
       `:49`, `:57`, `:65`, `:73`, `:105`) and the header block that documents the field
       (`:2-19`, plus the field list at `:29` and the axis note at `:32`).
-- [ ] **T8** — GREEN: `agent/README.md` — drop `kb_scope` from the field list (`:41`) and the table
+- [x] **T8** — GREEN: `agent/README.md` — drop `kb_scope` from the field list (`:41`) and the table
       column (`:44-51`), which also removes the stale `valores, postventa` claim.
-- [ ] **T9** — GREEN: finish the test edits (`tests/unit/test_agent_registry.py:34,53,64` and the
+- [x] **T9** — GREEN: finish the test edits (`tests/unit/test_agent_registry.py:34,53,64` and the
       fixture YAMLs; `tests/unit/test_prompts.py:113`).
-- [ ] **WU2 commit** — `refactor(registry): drop the kb_scope field`
+- [x] **WU2 commit** — `refactor(registry): drop the kb_scope field`
 
 ### WU3 — spec deltas
 
-- [ ] **T10** — `openspec/specs/agent-orchestration/spec.md`: amend AO-1 (seven → six fields; drop
+- [x] **T10** — `openspec/specs/agent-orchestration/spec.md`: amend AO-1 (seven → six fields; drop
       the `kb_scope` mention from the orchestrator-shape clause) and retire AO-7 (Requirement + its
       two scenarios).
-- [ ] **T11** — `openspec/specs/knowledge-base/spec.md`: rewrite KB-5's orthogonality clause so the
+- [x] **T11** — `openspec/specs/knowledge-base/spec.md`: rewrite KB-5's orthogonality clause so the
       audience axis stands alone, without the AO-7 reference.
-- [ ] **WU3 commit** — `docs(specs): retire the AO-7 topic-scope axis`
+- [x] **WU3 commit** — `docs(specs): retire the AO-7 topic-scope axis`
 
 ## Verification
 
@@ -187,3 +187,15 @@ to the old `kb_scope` is historical context, not a claim.
   own unit, not this one.
 - `source_meta` keeps `chunk_index`; if a topic axis is ever needed again, it is a new requirement
   with a production writer, not a restored field.
+
+## Execution evidence
+
+- Graph Check: `graphify query "kb retrieve topic scope registry research triage agent orchestration"`; consulted `retrieve()`, `_kb_check()`, `SubAgent`, `Registry`, `agent_registry.py`, `services/kb.py`, `research_triage.py`, `test_kb.py`, `test_realtime_writers.py`, AO-1, AO-8, and KB-5 graph nodes. Directed paths between the queried endpoints were absent; the area query completed successfully against the base graph.
+- WU1 RED: `eval "$(bash infra/test-db.sh env)"; uv run pytest tests/integration/test_kb.py -k test_kb_retrieve_has_no_scope_parameter` — **1 failed, 18 deselected**; failure showed `scope` in `inspect.signature(kb.retrieve).parameters`.
+- WU1 GREEN: `eval "$(bash infra/test-db.sh env)"; uv run pytest tests/integration/test_kb.py tests/integration/test_realtime_writers.py` — **28 passed**.
+- WU1 commit: `c064b381 refactor(kb): retire the retrieve topic-scope filter`.
+- WU2 RED: `uv run pytest tests/unit/test_agent_registry.py tests/unit/test_prompts.py` — **1 failed, 47 passed**; failure showed `SUBAGENT_REQUIRED_FIELDS` still contained `kb_scope` and seven entries.
+- WU2 GREEN: `uv run pytest tests/unit/test_agent_registry.py tests/unit/test_prompts.py` — **48 passed**.
+- WU2 commit: `19574886 refactor(registry): drop the kb_scope field`.
+- WU3 commit: `5e46008e docs(specs): retire the AO-7 topic-scope axis`.
+- Full suite: `eval "$(bash infra/test-db.sh env)"; uv run pytest tests/` — **1149 passed, 2 warnings** in 145.64s.
