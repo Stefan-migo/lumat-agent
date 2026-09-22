@@ -324,7 +324,6 @@ def retrieve(
     query: str,
     top_k: int = DEFAULT_TOP_K,
     min_sim: float = DEFAULT_MIN_SIM,
-    scope: list[str] | None = None,
     audience: KbVisibility | str | None = KbVisibility.CUSTOMER,
 ) -> list[dict]:
     """Semantic retrieval over the ACTIVE versions of enabled documents.
@@ -338,10 +337,6 @@ def retrieve(
     and is passed only explicitly by internal surfaces (the Lumat assistant and
     the admin probe).
 
-    ``scope`` (AO-7): when provided (e.g. a sub-agent's ``kb_scope``), only
-    chunks whose ``source_meta.category`` (JSONB) is in the scope list are
-    returned. ``scope=None`` returns the unfiltered active-version set —
-    backward compatible with today's behavior.
     """
     query_embedding, _ = embed_texts([query])
     if not query_embedding:
@@ -353,10 +348,6 @@ def retrieve(
         KbChunk.version == KbDocument.active_version,
         distance <= 1 - min_sim,
     ]
-    if scope is not None:
-        if not scope:
-            return []  # empty scope matches nothing by definition
-        filters.append(KbChunk.source_meta["category"].astext.in_(scope))
     if audience is not None:
         filters.append(KbDocument.visibility == KbVisibility(audience))
     rows = session.execute(
