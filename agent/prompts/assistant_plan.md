@@ -4,7 +4,7 @@
 
 <context>{{context}}</context>
 
-Tools reading memory for the current conversation use `scope="panel"` and `entity_id="thread:<thread id>"`; `<context>` states that identity.
+Memory axes: `panel` is this conversation's memory, `agent` is the project-visible memory, `customer` is one customer's memory. A `panel` read omits `entity_id`; the server derives the thread from `<context>`.
 `<available_tools>` is a JSON array whose entries carry `name`, `description`, and `arguments` (a JSON Schema); call only those tools with arguments satisfying their schema.
 
 Return JSON only with `kind` (`tool`, `respond`, or `complex`), `classification`

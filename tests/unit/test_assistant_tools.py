@@ -55,15 +55,15 @@ def test_memory_args_reject_unknown_scope_and_expose_canonical_scope_schema():
     with pytest.raises(ValueError):
         MemoryArgs.model_validate({"scope": "banana", "entity_id": "whatever"})
 
-    assert MemoryArgs.model_json_schema()["properties"]["scope"]["enum"] == [
-        "panel", "customer", "agent"
+    assert sorted(MemoryArgs.model_json_schema()["discriminator"]["mapping"]) == [
+        "agent", "customer", "panel"
     ]
 
 
 def test_memory_scope_entity_is_conditional_and_panel_entity_is_forbidden():
-    assert MemoryArgs.model_validate({"scope": "panel"}).entity_id is None
+    assert MemoryArgs.model_validate({"scope": "panel"}).root.entity_id is None
 
-    with pytest.raises(ValueError, match="derived server-side"):
+    with pytest.raises(ValueError):
         MemoryArgs.model_validate({"scope": "panel", "entity_id": "thread:7"})
     with pytest.raises(ValueError):
         MemoryArgs.model_validate({"scope": "customer"})

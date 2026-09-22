@@ -1,11 +1,18 @@
 """Ordered assistant guardrail contracts for typed tool execution."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
 
 from app.chat.assistant.approval import consume_approval, issue_approval
-from app.chat.assistant.nodes import execute, guardrails, panel_cost_gate, plan_llm
+from app.chat.assistant.nodes import (
+    _planner_tool_catalog,
+    execute,
+    guardrails,
+    panel_cost_gate,
+    plan_llm,
+)
 from app.chat.assistant.tools.registry import ToolValidationError, execute_tool
 from app.db import SessionLocal
 from app.models import AuditLog, Memory, MemoryType
@@ -417,6 +424,50 @@ def test_memory_write_guardrail_requires_approval_without_trusted_thread():
 
     assert result["status"] == "approval_pending"
     assert result["guardrails"]["approval_required"] is True
+
+
+def _memory_read_plan(**arguments):
+    return {"kind": "tool", "tool": "memory.read", "arguments": arguments, "requires_approval": False}
+
+
+def _advertised_memory_read_variants() -> dict:
+    """The per-scope variants the planner can actually read from the catalog."""
+    catalog = json.loads(_planner_tool_catalog(["memory.read"]))
+    schema = next(entry["arguments"] for entry in catalog if entry["name"] == "memory.read")
+    assert "$defs" in schema, "the catalog announces no per-scope variant"
+    return {variant["properties"]["scope"]["const"]: variant for variant in schema["$defs"].values()}
+
+
+def test_memory_read_plan_derived_from_the_advertised_schema_survives_guardrails():
+    variants = _advertised_memory_read_variants()
+
+    panel = guardrails({
+        "thread_id": 7,
+        "plan": _memory_read_plan(scope="panel", topic="agent:fact"),
+        "planner": {"valid": True},
+    })
+    agent = guardrails({
+        "thread_id": 7,
+        "plan": _memory_read_plan(
+            scope="agent", entity_id=variants["agent"]["properties"]["entity_id"]["const"]
+        ),
+        "planner": {"valid": True},
+    })
+
+    assert panel["status"] == "executing"
+    assert agent["status"] == "executing"
+
+
+def test_memory_read_still_rejects_an_entity_the_prompt_no_longer_orders():
+    result = guardrails({
+        "thread_id": 7,
+        "plan": _memory_read_plan(scope="panel", entity_id="thread:7"),
+        "planner": {"valid": True},
+    })
+
+    assert result["guardrails"]["arguments_valid"] is False
+    assert result["guardrails"]["decision"] == "fallback"
+    assert result["status"] == "responding"
 
 
 def test_other_write_guardrail_still_requires_approval_with_trusted_thread():
