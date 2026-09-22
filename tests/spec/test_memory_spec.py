@@ -760,10 +760,10 @@ def test_mem3_top_k_caps_results(fake_embedder, migrated_db):
         assert len(results) <= 5
 
 
-def test_mem9_project_visibility_records_provenance_and_cross_thread_read(
+def test_mem9_global_visibility_records_provenance_and_cross_thread_read(
     fake_embedder, migrated_db
 ):
-    """Project visibility uses the canonical project-qualified agent axis."""
+    """Global visibility uses the canonical project-qualified agent axis."""
     from app.chat.assistant.tools import registry
 
     with SessionLocal() as session:
@@ -772,7 +772,7 @@ def test_mem9_project_visibility_records_provenance_and_cross_thread_read(
             contenido="A fact for the whole project",
             topic_key="agent:fact",
             tipo="decision",
-            visibility="project",
+            visibility="global",
         )
         result = registry._write_memory(session, args, trusted_thread_id=11)
         session.commit()
@@ -786,7 +786,7 @@ def test_mem9_project_visibility_records_provenance_and_cross_thread_read(
         )
         assert row.producer is MemoryProducer.AGENT
         assert row.origin_thread_id == "11"
-        assert row.visibility is MemoryVisibility.PROJECT
+        assert row.visibility is MemoryVisibility.GLOBAL
         assert [item.id for item in tukulpan.list_for_entity(
             session, scope="agent", entity_id="agent:default"
         )] == [row.id]
@@ -795,7 +795,7 @@ def test_mem9_project_visibility_records_provenance_and_cross_thread_read(
         ) == []
 
 
-def test_mem9_project_visibility_is_the_write_default(fake_embedder, migrated_db):
+def test_mem9_global_visibility_is_the_write_default(fake_embedder, migrated_db):
     from app.chat.assistant.tools import registry
 
     with SessionLocal() as session:
@@ -818,16 +818,16 @@ def test_mem9_project_visibility_is_the_write_default(fake_embedder, migrated_db
             topic_key="agent:thread-fact",
         )
         assert result["written"] is True
-        assert row.visibility is MemoryVisibility.PROJECT
+        assert row.visibility is MemoryVisibility.GLOBAL
         assert row.producer is MemoryProducer.AGENT
         assert row.origin_thread_id == "12"
 
 
-def test_mem9_coherence_constraint_rejects_project_panel_row(migrated_db, admin_conn):
+def test_mem9_coherence_constraint_rejects_global_panel_row(migrated_db, admin_conn):
     with pytest.raises(psycopg.errors.CheckViolation):
         admin_conn.execute(
             "INSERT INTO memories "
             "(scope, entity_id, topic_key, titulo, contenido, embedding, visibility) "
-            "VALUES ('panel', 'thread:13', 'invalid', 'Invalid', 'Invalid', %s::vector, 'project')",
+            "VALUES ('panel', 'thread:13', 'invalid', 'Invalid', 'Invalid', %s::vector, 'global')",
             ("[" + ",".join(["0.1"] * 384) + "]",),
         )

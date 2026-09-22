@@ -582,7 +582,7 @@ def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkey
     assert calls[-1]["entity_id"] == "thread:7"
 
 
-def test_memory_write_project_visibility_uses_canonical_agent_axis(monkeypatch):
+def test_memory_write_global_visibility_uses_canonical_agent_axis(monkeypatch):
     class Savepoint:
         def __enter__(self):
             return self
@@ -607,7 +607,7 @@ def test_memory_write_project_visibility_uses_canonical_agent_axis(monkeypatch):
             "contenido": "Reuse this",
             "topic_key": "agent:fact",
             "tipo": "decision",
-            "visibility": "project",
+            "visibility": "global",
         },
         trusted_thread_id=8,
     )

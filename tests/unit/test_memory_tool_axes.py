@@ -16,10 +16,10 @@ def test_memory_tool_declares_visibility_without_a_write_target():
             "contenido": "A reusable fact",
             "topic_key": "agent:fact",
             "tipo": "decision",
-            "visibility": "project",
+            "visibility": "global",
         }
     )
-    assert args.visibility == "project"
+    assert args.visibility == "global"
     with pytest.raises(ValueError):
         registry.MemoryWriteArgs.model_validate(
             {
@@ -27,6 +27,20 @@ def test_memory_tool_declares_visibility_without_a_write_target():
                 "contenido": "A reusable fact",
                 "topic_key": "agent:fact",
                 "scope": "agent",
+            }
+        )
+
+
+def test_memory_write_rejects_the_retired_project_label():
+    """The renamed vocabulary must not keep accepting the old word."""
+    with pytest.raises(ValueError):
+        registry.MemoryWriteArgs.model_validate(
+            {
+                "titulo": "Project fact",
+                "contenido": "A reusable fact",
+                "topic_key": "agent:fact",
+                "tipo": "decision",
+                "visibility": "project",
             }
         )
 
@@ -65,7 +79,7 @@ def test_memory_write_topic_key_still_requires_the_agent_namespace():
     )
 
 
-def test_memory_write_requires_type_and_defaults_visibility_to_project():
+def test_memory_write_requires_type_and_defaults_visibility_to_global():
     payload = {
         "titulo": "A fact",
         "contenido": "A fact",
@@ -76,7 +90,7 @@ def test_memory_write_requires_type_and_defaults_visibility_to_project():
         registry.MemoryWriteArgs.model_validate(payload)
 
     args = registry.MemoryWriteArgs.model_validate({**payload, "tipo": "discovery"})
-    assert args.visibility == "project"
+    assert args.visibility == "global"
 
 
 def test_memory_own_scope_defaults_and_rejects_internal_axes():
@@ -211,7 +225,7 @@ def test_own_memory_read_topic_filter_still_matches_both_axes(monkeypatch):
     assert [row.topic_key for row in result] == ["keep", "keep"]
 
 
-def test_project_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
+def test_global_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
     captured = {}
 
     def fake_upsert(_session, **kwargs):
@@ -225,7 +239,7 @@ def test_project_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
         contenido="A reusable fact",
         topic_key="agent:fact",
         tipo="decision",
-        visibility="project",
+        visibility="global",
     )
 
     result = registry._write_memory(session, args, trusted_thread_id=42)
@@ -236,4 +250,4 @@ def test_project_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
     assert captured["proyecto"] == tukulpan.WRITABLE_PROYECTO
     assert captured["producer"] == tukulpan.MemoryProducer.AGENT
     assert captured["origin_thread_id"] == "42"
-    assert captured["visibility"] == "project"
+    assert captured["visibility"] == "global"
