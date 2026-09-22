@@ -2,6 +2,7 @@
 
 import json
 from types import SimpleNamespace
+from uuid import uuid4
 
 import psycopg
 import pytest
@@ -12,7 +13,7 @@ from _testdb import admin_database_url
 ADMIN_DB_URL = admin_database_url()
 
 from app.db import SessionLocal
-from app.models import AuditLog, InternalChatMessage, InternalChatThread, User
+from app.models import AuditLog, InternalChatMessage, InternalChatThread, Project, User
 from app.services.users import hash_password
 
 
@@ -95,6 +96,30 @@ def test_admin_thread_and_message_are_persisted_and_audited(client, migrated_db,
     assert "Lumat internal executive operator" in fake_client.calls[1]["messages"][0]["content"]
     assert "tools" not in fake_client.calls[1]
     assert "stream" not in fake_client.calls[2]
+
+
+def test_thread_creation_accepts_optional_project_and_rejects_unknown_project(client, migrated_db):
+    _user("chat-project", "admin")
+    _login(client, "chat-project")
+    project_slug = f"chat-{uuid4().hex[:8]}"
+    with SessionLocal() as session:
+        session.add(Project(
+            slug=project_slug, name="Project A", purpose="A", purpose_embedding=[0.0] * 384
+        ))
+        session.commit()
+
+    default_thread = client.post("/panel/api/chat/threads")
+    assert default_thread.status_code == 201
+    assert default_thread.json()["thread"]["proyecto"] == "default"
+
+    project_thread = client.post("/panel/api/chat/threads", json={"proyecto": project_slug})
+    assert project_thread.status_code == 201
+    assert project_thread.json()["thread"]["proyecto"] == project_slug
+
+    rejected = client.post("/panel/api/chat/threads", json={"proyecto": "missing"})
+    assert rejected.status_code == 400
+    with SessionLocal() as session:
+        assert session.query(InternalChatThread).count() == 2
 
 
 def test_operator_cannot_read_or_create_internal_thread(client, migrated_db):
