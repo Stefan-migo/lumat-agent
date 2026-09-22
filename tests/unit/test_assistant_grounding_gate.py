@@ -1,8 +1,9 @@
 from types import SimpleNamespace
 
 import pytest
+from langgraph.graph import END
 
-from app.chat.assistant.graph import _after_guardrails, build_assistant_graph
+from app.chat.assistant.graph import _after_guardrails, _after_retrieve_kb, build_assistant_graph
 from app.chat.assistant import nodes
 from app.chat.assistant.nodes import _is_conversational_turn, guardrails
 
@@ -50,6 +51,71 @@ def test_non_empty_kb_retrieval_reaches_responder_as_bounded_evidence(monkeypatc
     assert calls[0][1] == {"top_k": 5, "min_sim": 0.50, "audience": None}
     assert result["guardrails"]["decision"] == "respond"
     assert _after_guardrails({**_respond_state(), **result}) == "respond_stream"
+
+
+def test_kb_retrieval_failure_reports_degraded_unavailability_without_responder(monkeypatch):
+    responder_calls = []
+
+    def retrieve_failure(*args, **kwargs):
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: responder_calls.append(True))
+    monkeypatch.setattr("app.services.kb.retrieve", retrieve_failure)
+
+    try:
+        result = nodes.retrieve_kb(_respond_state())
+    except Exception as error:
+        result = error
+
+    assert isinstance(result, dict)
+    assert result["response"] != nodes.PANEL_GROUNDING_REFUSAL
+    assert "base de conocimiento" in result["response"].lower()
+    assert any(
+        item["status"] == "degraded" and item["tool"] == "kb.retrieve"
+        for item in result["evidence"]
+    )
+    assert _after_retrieve_kb({**_respond_state(), **result}) == END
+    assert responder_calls == []
+
+
+@pytest.mark.parametrize("content", [None, 5])
+def test_kb_retrieval_filters_non_string_content_without_raising(monkeypatch, content):
+    monkeypatch.setattr(
+        "app.services.kb.retrieve",
+        lambda *args, **kwargs: [{"content": content}],
+    )
+
+    try:
+        result = nodes.retrieve_kb(_respond_state())
+    except Exception as error:
+        result = error
+
+    assert isinstance(result, dict)
+    assert result["response"] == nodes.PANEL_GROUNDING_REFUSAL
+    assert result["status"] == "completed"
+
+
+def test_kb_retrieval_without_session_opens_its_own_scope(monkeypatch):
+    opened_session = object()
+    retrieved_sessions = []
+
+    class SessionScope:
+        def __enter__(self):
+            return opened_session
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+    monkeypatch.setattr("app.chat.assistant.nodes.session_scope", lambda: SessionScope(), raising=False)
+    monkeypatch.setattr(
+        "app.services.kb.retrieve",
+        lambda session, *args, **kwargs: retrieved_sessions.append(session) or [],
+    )
+
+    result = nodes.retrieve_kb(_respond_state(session=None))
+
+    assert result["response"] == nodes.PANEL_GROUNDING_REFUSAL
+    assert retrieved_sessions == [opened_session]
 
 
 def test_short_social_turn_bypasses_grounding():

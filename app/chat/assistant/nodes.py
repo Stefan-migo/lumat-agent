@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from hashlib import sha256
 from pydantic import ValidationError
@@ -15,6 +16,7 @@ from app.chat.assistant.markup import ToolCallMarkupSanitizer
 from app.chat.assistant.state import AssistantState, PlannerOutput, SDBTask, estimate_tokens, validate_cortex_session
 from app.chat.assistant.tools.registry import AUTONOMOUS_WRITE_ALLOWLIST, TOOL_REGISTRY, ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
+from app.db import session_scope
 from app.services import kb
 from app.services import llm
 from app.services.costs import (
@@ -38,6 +40,10 @@ _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
 PANEL_GROUNDING_REFUSAL = (
     "No encontré evidencia suficiente en la base de conocimiento para responder con seguridad. "
     "Reformula la consulta o aporta más contexto."
+)
+PANEL_KB_UNAVAILABLE = (
+    "La base de conocimiento no está disponible para esta consulta. "
+    "No pude consultarla; un operador deberá revisarla."
 )
 _SOCIAL_WORDS = frozenset({
     "adios", "buenas", "buenos", "bye", "chau", "como", "de", "dia", "días", "día",
@@ -595,14 +601,36 @@ def _render_kb_evidence(state: AssistantState) -> str:
 
 def retrieve_kb(state: AssistantState) -> AssistantState:
     """Retrieve bounded evidence before answering a non-social panel turn."""
-    chunks = kb.retrieve(
-        state.get("session"),
-        state["content"].strip(),
-        top_k=kb.DEFAULT_TOP_K,
-        min_sim=kb.DEFAULT_MIN_SIM,
-        audience=None,
-    )
-    chunks = [chunk for chunk in chunks if isinstance(chunk, dict) and chunk.get("content", "").strip()]
+    session = state.get("session")
+    # Hoisted out of the try: only the retrieval itself may degrade. A missing
+    # `content` is a caller error, not a knowledge-base outage, and must not be
+    # disguised as one.
+    query = state["content"].strip()
+    with session_scope() if session is None else nullcontext(session) as session:
+        try:
+            chunks = kb.retrieve(
+                session,
+                query,
+                top_k=kb.DEFAULT_TOP_K,
+                min_sim=kb.DEFAULT_MIN_SIM,
+                audience=None,
+            )
+        except Exception as error:
+            detail = f"Knowledge-base retrieval failed: {error}"
+            logger.warning("Read-only tool kb.retrieve failed: %s", detail)
+            return {
+                "guardrails": {**state.get("guardrails", {}), "decision": "kb_unavailable"},
+                "evidence": [make_evidence(tool="kb.retrieve", status="degraded", detail=detail)],
+                "response": PANEL_KB_UNAVAILABLE,
+                "status": "degraded",
+            }
+        chunks = [
+            chunk
+            for chunk in chunks
+            if isinstance(chunk, dict)
+            and isinstance(chunk.get("content"), str)
+            and chunk["content"].strip()
+        ]
     if not chunks:
         return {
             "guardrails": {**state.get("guardrails", {}), "decision": "grounding_refusal"},
