@@ -140,6 +140,23 @@ the UI cannot emit the shape and is not touched.
 | WU2 | complete | SS-5 now states that a weekday is repeated `within or across entries`. |
 | WU3 | complete | Full suite: `1271 passed, 2 warnings in 132.97s (0:02:12)`; behavior commit `029d1e43`; this register commit is the delivery commit. |
 
+## Native review (RDD)
+
+- Contract `gentle-ai.review-integration/v2`, lineage `review-e4e37075a35fa752`, risk `medium`
+  (4 files / 153 changed lines). One consolidated lens: `review-reliability` (`selected_order` 0).
+  Frozen correction budget: 77 lines.
+- Consent was relayed to the human and granted; it was the only gate in this review.
+- Candidate frozen at `426449a8` (`candidate_tree 7d03da64098c0abd549ebb7c38f5c70367c6b7e9`),
+  base `5ae02c45` (`base_tree d6aa1747c1e1d838d477d00030919a7eb7eff473`).
+- Reviewer result: **0 findings**. Admission closed the review as `approved` and the exact
+  acknowledgement burned the authority (`gentle-ai.review-acknowledged/v1`,
+  `consumed_revision sha256:00b136b593a0fcb42e38858eaef59a05868dc36a991f673dfd1752fb5fa9e3c7`).
+- The review grants no delivery authority: push and PR are separate human decisions.
+
+## Follow-up 2 of handoff #4699
+
+Closed as documented `wontfix` — see the section above. No code, no test, no spec change.
+
 ## Next step
 
-Work units complete; register commit follows this update.
+WU1–WU3 complete and reviewed. Pending: explicit push authorization, then the PR.
