@@ -67,7 +67,22 @@ _COMPLAINT_WORDS = (
     "defectuosa",
     "estafa",
 )
-_COMPLAINT_PHRASES = ("mal servicio", "no me sirve", "no funciona lo que compre")
+_COMPLAINT_PHRASES = (
+    "mal servicio",
+    "no me sirve",
+    "no funciona lo que compre",
+    # Verb-phrase forms of the gap the word list above cannot reach: it carries the NOUNS
+    # (`devolucion`, `estafa`) and the infinitive `devolver`, which a customer filing a
+    # complaint never types — they type `devolvieron`, `devuelvan`, `estafaron`. Added as
+    # PHRASES rather than bare conjugations so the routine status question ("cuando me
+    # devuelven el calefont") stays out of the trigger. Measured: 3 of 4 recall gaps closed,
+    # 0 benign messages caught. See tests/integration/test_handoff.py and
+    # odd/tasks/complaint-trigger-coverage.md.
+    "me estafaron",
+    "me devuelvan la plata",
+    "no me devolvieron",
+    "nadie responde",
+)
 _COMPLAINT_PATTERN = re.compile(
     "|".join(
         [rf"\b{re.escape(w)}\b" for w in _COMPLAINT_WORDS]

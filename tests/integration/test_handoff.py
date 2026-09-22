@@ -201,6 +201,90 @@ def test_gate_complaint_trigger():
     }
 
 
+# Real customer complaint phrasings that MUST fire the trigger.
+#
+# The calibration corpus (`scripts/kb_calibration_corpus.yaml`) contains ZERO real
+# complaint cases, so before this set the trigger's recall had no instrument at all:
+# narrowing the pattern could only ever be measured on the false-positive side. This set
+# is that instrument. See odd/tasks/complaint-trigger-coverage.md.
+_CUSTOMER_COMPLAINT_PHRASINGS = (
+    "quiero hacer un reclamo",
+    "quiero presentar un reclamo por el tecnico que vino",
+    "tengo una queja formal sobre el trabajo",
+    "estoy muy molesto con el servicio",
+    "segunda vez con el mismo problema, estoy enojado",
+    "me quedo mal la instalacion y quiero una devolucion",
+    "el calefont vino defectuoso, exijo un reembolso",
+    "esto es una estafa, no cumplieron nada",
+    "el trabajo no me sirve para nada",
+    # The three below were the measured recall gap: the word list carried the NOUN forms
+    # (`devolucion`, `estafa`) and the infinitive `devolver`, which a customer filing a
+    # complaint never types. Closed with PHRASES rather than bare conjugations, because
+    # `devuelven` also appears in routine status questions — see the precision set below.
+    "me devolvieron el equipo roto y nadie responde",
+    "me estafaron con el presupuesto",
+    "quiero que me devuelvan la plata",
+)
+
+# Deliberately NOT closed. "la boleta vino mal y necesito una correccion" is a
+# billing-correction request rather than a complaint, and HH-3's list ("complaint,
+# warranty, or upset customer") does not obviously cover it. Recorded as an open gap in
+# odd/tasks/complaint-trigger-coverage.md instead of being silently folded in here.
+
+# Benign messages that must stay OUT of the trigger — the precision half of the instrument.
+_BENIGN_MESSAGES_THAT_MUST_NOT_TRIGGER = (
+    "cuando me devuelven el calefont",
+    "me devolvieron el equipo arreglado y quedo bien",
+    "nadie me contesto el mensaje de ayer, cuando vienen",
+    "mi calefont no enciende",
+    "cuanto cuesta la revision anual",
+    "el tecnico puede venir el martes",
+)
+
+
+@pytest.mark.parametrize("text", _CUSTOMER_COMPLAINT_PHRASINGS)
+def test_gate_complaint_recall_across_real_customer_phrasings(text):
+    """HH-3 recall: an upset customer must reach a human, whatever words they choose."""
+    assert handoff_gate(_gate_state(text)) == {"handoff_reason": "complaint"}
+
+
+@pytest.mark.parametrize("text", _BENIGN_MESSAGES_THAT_MUST_NOT_TRIGGER)
+def test_gate_benign_messages_do_not_fire_the_complaint_trigger(text):
+    """HH-3 precision: closing the recall gap must not widen the net.
+
+    The obvious fix was to add the verb conjugations as bare WORDS — and that would have
+    caught "cuando me devuelven el calefont", a routine status question, which is exactly
+    the false positive this unit decided not to chase. The gap was closed with PHRASES
+    instead; this set is what proves the phrasing did not swallow the benign cases. It is
+    the second half of the instrument, not a duplicate of the existing clear-message test.
+    """
+    assert handoff_gate(_gate_state(text)) == {"handoff_reason": None}
+
+
+def test_gate_escalates_a_question_about_complaints_by_design():
+    """The accepted over-escalation, pinned as a decision and not as a bug to fix.
+
+    "cual es el guion para responder un reclamo" is the language of Lumat's OPERATOR
+    script, not of an upset customer: the corpus marks that query `visible_to: internal`
+    and answers it with `guion-interno-reclamos` ("Guion interno para reclamos de
+    operadores"). It is the only one of the 52 corpus queries that fires this trigger.
+
+    Its customer-chat outcome is the SAME handoff either way. With the trigger it escalates
+    on `complaint`; without it, `audience=customer` retrieval finds nothing (the document is
+    internal) and the turn escalates anyway through the triage miss or the CM-4 guard. The
+    escalation is correct — only the reason label differs, and `escalate_reason` is consumed
+    nowhere in `app/panel/` or `web/src/`; it reaches the case bundle and the CM-5 summary.
+
+    So narrowing the pattern would trade that measured cosmetic cost for an UNMEASURABLE
+    recall risk: with zero real complaint cases in the corpus, the only visible effect of
+    narrowing would be this false positive dropping — never the upset customer we stopped
+    escalating. See odd/tasks/complaint-trigger-coverage.md.
+    """
+    assert handoff_gate(_gate_state("cual es el guion para responder un reclamo")) == {
+        "handoff_reason": "complaint"
+    }
+
+
 def test_gate_clear_message_no_trigger():
     """Normal commercial messages pass the gate untouched."""
     assert handoff_gate(_gate_state("mi calefont no enciende")) == {
