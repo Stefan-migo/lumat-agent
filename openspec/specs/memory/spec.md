@@ -63,7 +63,7 @@ The system MUST retain `hybrid_search()` as an explicit, project- and scope/enti
 #### Scenario: Role isolation
 - GIVEN a search by a role without cross-project rights
 - WHEN the search runs
-- THEN an `own` read derives `thread:<trusted thread id>` server-side and returns that thread's memories unioned with project-visible agent memories from the same project, other threads' panel rows remain invisible, and customer memories remain client-gated
+- THEN an `own` read derives `thread:<trusted thread id>` server-side and returns that thread's memories unioned with global-visible agent memories from the same project, other threads' panel rows remain invisible, and customer memories remain client-gated
 
 #### Scenario: Empty result
 - GIVEN no memory above the threshold
@@ -151,33 +151,38 @@ The memory layer MUST support bounded native SDB artifacts in panel scope using 
 
 The `memories` table MUST record `producer` as `user`, `system`, `agent`, or
 `pipeline`, the nullable `origin_thread_id`, and the declared `visibility` as
-`thread` or `project`; agent writes MUST default to `project` visibility. Existing rows MUST use `system` and `thread` as
+`thread` or `global`; agent writes MUST default to `global` visibility. Existing rows MUST use `system` and `thread` as
 conservative backfill values because their true producer is unrecoverable. The
-database MUST enforce `visibility='project'` if and only if `scope='agent'`.
+database MUST enforce `visibility='global'` if and only if `scope='agent'`.
 The agent-axis entity MUST be project-qualified as `entity_id='agent:<project>'`
-so a project-visible memory can never be reached by a read bound to another
-project. The server MUST derive this target from the declared visibility rather
+so a memory declared `global` inside one project can never be reached by a read
+bound to another project. The server MUST derive this target from the declared visibility rather
 than accepting it from the model.
 
+(Previously: the `agent`-scope label was named `project`, which collided with the
+`proyecto` namespace axis that qualifies `entity_id='agent:<project>'`. Renamed to
+`global` by `db/migrations/030_memory_visibility_global.sql`, an in-place catalog
+update with no row rewrite.)
+
 #### Scenario: Provenance and coherent axis
-- GIVEN an agent writes project-visible memory from a trusted thread
+- GIVEN an agent writes global-visible memory from a trusted thread
 - WHEN the row is persisted
-- THEN it records `producer='agent'`, the origin thread, `visibility='project'`, `scope='agent'`, and the project-qualified entity `entity_id='agent:<project>'`
+- THEN it records `producer='agent'`, the origin thread, `visibility='global'`, `scope='agent'`, and the project-qualified entity `entity_id='agent:<project>'`
 
 #### Scenario: Coherence constraint
-- GIVEN a memory row declares `visibility='project'` with `scope='panel'`
+- GIVEN a memory row declares `visibility='global'` with `scope='panel'`
 - WHEN the row is inserted
 - THEN the database rejects it
 
-#### Scenario: Project visibility across threads
-- GIVEN a project-visible agent memory written from one thread
+#### Scenario: Global visibility across threads
+- GIVEN a global-visible agent memory written from one thread
 - WHEN another thread in the same project reads the agent axis
 - THEN the memory is readable
 
-#### Scenario: Project visibility is the write default
+#### Scenario: Global visibility is the write default
 - GIVEN a memory write omits `visibility`
 - WHEN the row is persisted
-- THEN it uses `visibility='project'`, `scope='agent'`, and the project-qualified entity `agent:<project>`
+- THEN it uses `visibility='global'`, `scope='agent'`, and the project-qualified entity `agent:<project>`
 
 ### Requirement: MEM-10 — Lifecycle Decay
 
