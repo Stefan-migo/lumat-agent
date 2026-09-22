@@ -56,19 +56,21 @@ def test_memory_args_reject_unknown_scope_and_expose_canonical_scope_schema():
         MemoryArgs.model_validate({"scope": "banana", "entity_id": "whatever"})
 
     assert sorted(MemoryArgs.model_json_schema()["discriminator"]["mapping"]) == [
-        "agent", "customer", "panel"
+        "customer", "own"
     ]
 
 
-def test_memory_scope_entity_is_conditional_and_panel_entity_is_forbidden():
-    assert MemoryArgs.model_validate({"scope": "panel"}).root.entity_id is None
+def test_memory_scope_entity_is_conditional_and_legacy_axes_are_forbidden():
+    assert MemoryArgs.model_validate({"scope": "own"}).root.entity_id is None
 
     with pytest.raises(ValueError):
-        MemoryArgs.model_validate({"scope": "panel", "entity_id": "thread:7"})
+        MemoryArgs.model_validate({"scope": "own", "entity_id": "thread:7"})
     with pytest.raises(ValueError):
         MemoryArgs.model_validate({"scope": "customer"})
     with pytest.raises(ValueError):
         MemoryArgs.model_validate({"scope": "agent"})
+    with pytest.raises(ValueError):
+        MemoryArgs.model_validate({"scope": "panel"})
 
 
 def test_project_tools_are_typed_bounded_and_classified():
@@ -482,7 +484,7 @@ def test_memory_read_is_bounded_and_uses_memory_service(monkeypatch):
     assert len(result["result"]) == 5
 
 
-def test_panel_memory_read_uses_trusted_thread_and_fails_closed(monkeypatch):
+def test_own_memory_read_uses_trusted_thread_and_agent_axes_and_fails_closed(monkeypatch):
     calls = []
     monkeypatch.setattr(
         "app.chat.assistant.tools.registry.memory.list_for_entity",
@@ -490,20 +492,23 @@ def test_panel_memory_read_uses_trusted_thread_and_fails_closed(monkeypatch):
     )
 
     result = execute_tool(
-        SimpleNamespace(), "memory.read", {"scope": "panel"}, trusted_thread_id=7
+        SimpleNamespace(), "memory.read", {"scope": "own"}, trusted_thread_id=7
     )
     assert result["status"] == "completed"
-    assert calls == [{"scope": "panel", "entity_id": "thread:7"}]
+    assert calls == [
+        {"scope": "panel", "entity_id": "thread:7"},
+        {"scope": "agent", "entity_id": "agent:default"},
+    ]
 
     with pytest.raises(ToolValidationError, match="positive trusted thread id"):
-        execute_tool(SimpleNamespace(), "memory.read", {"scope": "panel"})
+        execute_tool(SimpleNamespace(), "memory.read", {"scope": "own"})
     with pytest.raises(ToolValidationError, match="positive trusted thread id"):
         execute_tool(
-            SimpleNamespace(), "memory.search", {"scope": "panel", "query": "launch"}
+            SimpleNamespace(), "memory.search", {"scope": "own", "query": "launch"}
         )
 
 
-def test_memory_search_is_scoped_and_bounds_content(monkeypatch):
+def test_memory_search_uses_own_axes_and_bounds_content(monkeypatch):
     calls = []
     monkeypatch.setattr(
         "app.chat.assistant.tools.registry.memory.hybrid_search",
@@ -517,18 +522,21 @@ def test_memory_search_is_scoped_and_bounds_content(monkeypatch):
 
     result = execute_tool(
         SimpleNamespace(),
-        "memory.search", {"query": "launch", "scope": "panel", "limit": 1},
+        "memory.search", {"query": "launch", "scope": "own", "limit": 1},
         trusted_thread_id=7,
     )
 
     assert result["status"] == "completed"
     assert len(result["result"][0]["contenido"]) == 2_000
-    assert calls[0][1] == {"scope": "panel", "entity_id": "thread:7", "top_k": 1}
+    assert [kwargs for _args, kwargs in calls] == [
+        {"scope": "panel", "entity_id": "thread:7", "top_k": 1},
+        {"scope": "agent", "entity_id": "agent:default", "top_k": 1},
+    ]
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "memory.search", {"query": "x", "scope": "panel", "entity_id": "customer:7"})
+        execute_tool(SimpleNamespace(), "memory.search", {"query": "x", "scope": "own", "entity_id": "customer:7"})
 
 
-def test_memory_write_is_thread_anchored(monkeypatch):
+def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkeypatch):
     assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write"})
     assert "scope" not in MemoryWriteArgs.model_json_schema()["properties"]
     assert "entity_id" not in MemoryWriteArgs.model_json_schema()["properties"]
@@ -550,14 +558,28 @@ def test_memory_write_is_thread_anchored(monkeypatch):
         lambda session, **kwargs: calls.append(kwargs) or row,
     )
     monkeypatch.setattr("app.chat.assistant.tools.registry.relations.judge_memory_relations", lambda *args: [])
-    args = {"titulo": "Decision", "contenido": "Use the panel", "topic_key": "agent:decision"}
+    args = {
+        "titulo": "Decision",
+        "contenido": "Use the panel",
+        "topic_key": "agent:decision",
+        "tipo": "decision",
+    }
 
     first = execute_tool(session, "memory.write", args, trusted_thread_id=7)
     second = execute_tool(session, "memory.write", args, trusted_thread_id=7)
 
     assert first["result"] == {"written": True, "id": 4, "topic_key": "agent:decision"}
     assert second["result"] == first["result"]
-    assert all(call["scope"] == "panel" and call["entity_id"] == "thread:7" for call in calls)
+    assert all(call["scope"] == "agent" and call["entity_id"] == "agent:default" for call in calls)
+
+    execute_tool(
+        session,
+        "memory.write",
+        {**args, "visibility": "thread"},
+        trusted_thread_id=7,
+    )
+    assert calls[-1]["scope"] == "panel"
+    assert calls[-1]["entity_id"] == "thread:7"
 
 
 def test_memory_write_project_visibility_uses_canonical_agent_axis(monkeypatch):
@@ -584,6 +606,7 @@ def test_memory_write_project_visibility_uses_canonical_agent_axis(monkeypatch):
             "titulo": "Project fact",
             "contenido": "Reuse this",
             "topic_key": "agent:fact",
+            "tipo": "decision",
             "visibility": "project",
         },
         trusted_thread_id=8,
@@ -610,7 +633,12 @@ def test_memory_write_degrades_and_fails_closed_without_trusted_thread(monkeypat
         "app.chat.assistant.tools.registry.memory.upsert",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("embedding unavailable")),
     )
-    args = {"titulo": "Discovery", "contenido": "Fact", "topic_key": "agent:fact"}
+    args = {
+        "titulo": "Discovery",
+        "contenido": "Fact",
+        "topic_key": "agent:fact",
+        "tipo": "discovery",
+    }
     with pytest.raises(ToolValidationError):
         execute_tool(session, "memory.write", args)
 
