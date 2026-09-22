@@ -24,19 +24,12 @@ from app.models import KbVisibility, Message
 from app.services import kb, prompts
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
+from app.services.settings import MESSAGE_DEFAULTS, get_message, get_tone_directive
 
 logger = logging.getLogger(__name__)
 
-CANNOT_ANSWER_REPLY = (
-    "Lo siento, no puedo responder con seguridad a eso. Un asesor de Lumat "
-    "revisará tu consulta y te contactará."
-)
-
-CLARIFICATION_REPLY = (
-    "No entendí tu mensaje. ¿Puedes elegir una opción del menú? "
-    "(Calefont, Caldera, Calefacción, Solicitar visita, Valores, "
-    "Postventa/Garantía, Emergencia, Hablar con una persona)"
-)
+CANNOT_ANSWER_REPLY = MESSAGE_DEFAULTS["cannot_answer"]
+CLARIFICATION_REPLY = MESSAGE_DEFAULTS["clarification"]
 
 
 def _current_text(state: ConversationState) -> str:
@@ -82,9 +75,11 @@ def _answer_from_kb(
     read-only <memory> block beside <kb> when the customer has stored memories.
     """
     client = openai_client()
+    with session_scope() as session:
+        tone_directive = get_tone_directive(session)
     system = prompts.load("personas/orchestrator.md") + (
         prompts.load("personas/orchestrator_brief.md") if brief else ""
-    )
+    ) + f"\n{tone_directive}"
     memory_block = f"\n<memory>{memory_context}</memory>" if memory_context else ""
     response = client.chat.completions.create(
         model=CHAT_MODEL,
@@ -109,7 +104,9 @@ def _answer_from_kb(
             prompt_tokens=response.usage.prompt_tokens,
             completion_tokens=response.usage.completion_tokens,
         )
-    return response.choices[0].message.content or CANNOT_ANSWER_REPLY
+    with session_scope() as session:
+        fallback = get_message(session, "cannot_answer", CANNOT_ANSWER_REPLY)
+    return response.choices[0].message.content or fallback
 
 
 def respond(state: ConversationState) -> dict:
@@ -125,7 +122,9 @@ def respond(state: ConversationState) -> dict:
             # turn; a "no entendí" clarification right after the menu would be
             # redundant noise (the customer has nothing to understand yet).
             return {}
-        return {"replies": [CLARIFICATION_REPLY]}
+        with session_scope() as session:
+            clarification = get_message(session, "clarification", CLARIFICATION_REPLY)
+        return {"replies": [clarification]}
 
     with session_scope() as session:
         chunks = kb.retrieve(
@@ -144,7 +143,7 @@ def respond(state: ConversationState) -> dict:
                 context=f"intent={state.intent}",
             )
             return {
-                "replies": [CANNOT_ANSWER_REPLY],
+                "replies": [get_message(session, "cannot_answer", CANNOT_ANSWER_REPLY)],
                 "escalate": True,
                 "escalate_reason": "kb_miss",
             }

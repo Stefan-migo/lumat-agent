@@ -9,6 +9,8 @@ so the flow resumes from the stored state, never from scratch (CM-1 repeat).
 from __future__ import annotations
 
 from app.chat.state import ConversationState, greeting_with_menu
+from app.db import session_scope
+from app.services.settings import get_message
 
 
 def receive(state: ConversationState) -> dict:
@@ -18,5 +20,7 @@ def receive(state: ConversationState) -> dict:
     reply is produced here; intent/route/capture/respond drive the answer.
     """
     if state.turn <= 1:
-        return {"replies": [greeting_with_menu()]}
+        with session_scope() as session:
+            header = get_message(session, "greeting")
+        return {"replies": [greeting_with_menu(header)]}
     return {}

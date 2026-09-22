@@ -30,6 +30,7 @@ from app.models import (
 from app.services.customers import get_or_create_customer
 from app.services.memory import load_customer_context, close_conversation
 from app.services.realtime import stage_event
+from app.services.settings import MESSAGE_DEFAULTS
 
 # CM-1: the 8-category menu shown on first contact (LumatRequest §1.x).
 MENU_CATEGORIES: list[str] = [
@@ -46,17 +47,14 @@ MENU_CATEGORIES: list[str] = [
 # Context window: last N messages of the conversation (design Data Flow).
 WINDOW_SIZE = 10
 
-# Standard replies (SS-5 will make them configurable in T4.1; constants here).
-GREETING_HEADER = (
-    "Hola, soy el asistente virtual de Lumat, la empresa de gasfitería que te "
-    "atiende. ¿En qué puedo ayudarte? Elige una opción:\n"
-)
+# Standard replies (SS-5 settings source).
+GREETING_HEADER = MESSAGE_DEFAULTS["greeting"]
 
 
-def greeting_with_menu() -> str:
+def greeting_with_menu(header: str = GREETING_HEADER) -> str:
     """The CM-1 first-contact message: greeting + numbered 8-category menu."""
     numbered = "\n".join(f"{i + 1}. {name}" for i, name in enumerate(MENU_CATEGORIES))
-    return GREETING_HEADER + numbered
+    return header + numbered
 
 
 def get_or_create_conversation(session: Session, customer: Customer, phone_e164: str) -> Conversation:
