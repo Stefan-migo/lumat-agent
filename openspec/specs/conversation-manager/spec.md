@@ -68,6 +68,13 @@ The "no reliable answer" refusal is a **defensive guard**. No intent the classif
 - AND the canned refusal is NOT emitted, because the refusal guards the linear path and that path is not taken
 - AND the turn MUST NOT loop (AO-8)
 
+#### Scenario: Knowledge base unavailable
+- GIVEN a customer message that requires knowledge-base retrieval
+- WHEN retrieval itself fails
+- THEN the turn escalates to a human with reason `kb_unavailable` and the outage is logged
+- AND it MUST NOT emit copy claiming nothing was found
+- AND the unresolved-response log MUST NOT be written, because the question was not left unresolved — the knowledge base was unreachable
+
 ### Requirement: CM-5 — Conversation Summary
 
 The system MUST generate a concise summary of each conversation (customer, issue, captured data, classification, outcome) available for the case record, handoff bundle, and panel.
