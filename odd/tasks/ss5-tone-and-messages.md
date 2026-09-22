@@ -84,8 +84,8 @@ over the bot's customer-facing voice.
   `app/panel/api/routes/settings.py`, `openspec/specs/settings-scope-limits/spec.md`,
   `tests/integration/test_settings.py`, `tests/integration/test_ss5_overrides.py` (new),
   `tests/functional/test_api_kb_settings.py`, `tests/unit/test_prompts.py`,
-  `web/src/components/pages/Settings.tsx`, `web/src/types.ts`,
-  `web/src/stories/pages/Settings.stories.tsx`, `web/src/stories/pages/Settings.stories.test.tsx`,
+  `web/src/components/pages/Settings.tsx`, `web/src/components/domain/AppShell.test.tsx`,
+  `web/src/types.ts`, `web/src/stories/pages/Settings.stories.test.tsx`,
   `web/src/stories/pages/_shared/mockData/settings.ts`,
   `web/src/stories/pages/_shared/mockData/settings.test.ts`
 
@@ -136,50 +136,51 @@ effect", which is the mistake the Hito-1 verify report made.
 
 ### WU1 — the standard messages become configuration
 
-- [ ] **T1** — RED: `tests/integration/test_ss5_overrides.py` — with `messages.cannot_answer` set,
+- [x] **T1** — RED: `tests/integration/test_ss5_overrides.py` — with `messages.cannot_answer` set,
       a KB-miss turn replies with the override, not the constant. Run the graph; observe RED.
-- [ ] **T2** — GREEN: `app/services/settings.py` — add `MESSAGE_DEFAULTS` (the three texts, moved
+- [x] **T2** — GREEN: `app/services/settings.py` — add `MESSAGE_DEFAULTS` (the three texts, moved
       verbatim), register `messages.*` in `SETTINGS_DEFAULTS`, and make `get_message` fall back to
       the built-in default when the caller passes none.
-- [ ] **T3** — GREEN: `app/chat/nodes/respond.py` — alias the two constants from `MESSAGE_DEFAULTS`,
+- [x] **T3** — GREEN: `app/chat/nodes/respond.py` — alias the two constants from `MESSAGE_DEFAULTS`,
       resolve the override at `:112`, `:147` and `:128` (the clarification path needs a session).
-- [ ] **T4** — GREEN: `app/chat/state.py` + `app/chat/nodes/receive.py` — `greeting_with_menu(header=...)`
+- [x] **T4** — GREEN: `app/chat/state.py` + `app/chat/nodes/receive.py` — `greeting_with_menu(header=...)`
       and the resolve-and-pass in `receive`.
-- [ ] **WU1 commit** — `feat(settings): make the standard messages configurable (SS-5)`
+- [x] **WU1 commit** — `feat(settings): wire the standard messages and the validated tone (SS-5)`
 
 ### WU2 — the tone becomes a list and reaches the prompt
 
-- [ ] **T5** — RED: `tests/integration/test_settings.py` — `get_tone` returns the default for an
+- [x] **T5** — RED: `tests/integration/test_settings.py` — `get_tone` returns the default for an
       unknown stored value; the directive mapping is exact.
-- [ ] **T6** — GREEN: `app/services/settings.py` — `TONE_STYLES`, `TONE_DIRECTIVES`,
+- [x] **T6** — GREEN: `app/services/settings.py` — `TONE_STYLES`, `TONE_DIRECTIVES`,
       `DEFAULT_TONE_STYLE = "cercano"`, the read-time guard, and `get_tone_directive(session)`.
-- [ ] **T7** — RED/GREEN: `app/chat/nodes/respond.py` — `_answer_from_kb` appends the directive to
+- [x] **T7** — RED/GREEN: `app/chat/nodes/respond.py` — `_answer_from_kb` appends the directive to
       the system message; `tests/unit/test_prompts.py` pins that the directive reaches the prompt.
-- [ ] **WU2 commit** — `feat(settings): replace the free-text tone with a validated list (SS-5)`
+- [x] **WU2 commit** — `test(settings): cover the tone list, its prompt directive, and the message defaults (SS-5)`
 
 ### WU3 — the panel API
 
-- [ ] **T8** — RED: `tests/functional/test_api_kb_settings.py` — GET returns the `messages` section
+- [x] **T8** — RED: `tests/functional/test_api_kb_settings.py` — GET returns the `messages` section
       (and the exact-key assertion is updated); POST `/settings/messages` saves and audits;
       POST `/settings/tone` rejects a value outside `TONE_STYLES` with 400.
-- [ ] **T9** — GREEN: `app/panel/api/routes/settings.py` — the `messages` section (GET + POST),
+- [x] **T9** — GREEN: `app/panel/api/routes/settings.py` — the `messages` section (GET + POST),
       the tone validation, and `_KNOWN_SECTIONS`.
-- [ ] **WU3 commit** — `feat(panel): expose the messages section and validate the tone (SS-5)`
+- [x] **WU3 commit** — `feat(panel): expose the messages section and validate the tone (SS-5)`
 
 ### WU4 — the panel UI
 
-- [ ] **T10** — RED: `Settings.stories.test.tsx` — the tone selector renders the current value and
+- [x] **T10** — RED: `Settings.stories.test.tsx` — the tone selector renders the current value and
       saves a chosen one; the Mensajes card renders the three messages and saves an edit.
-- [ ] **T11** — GREEN: `web/src/types.ts`, `mockData/settings.ts` + its test, `Settings.tsx`
+- [x] **T11** — GREEN: `web/src/types.ts`, `mockData/settings.ts` + its test, `Settings.tsx`
       (tone `Input` → `Select`; new Mensajes card), `Settings.stories.tsx`.
-- [ ] **WU4 commit** — `feat(panel): add the Mensajes card and a tone selector (SS-5)`
+- [x] **WU4 commit** — `feat(panel): add the Mensajes card and a tone selector (SS-5)`
+- [x] **WU4b commit** — `test(panel): cover the Mensajes card, the tone selector, and the settings fixture (SS-5)`
 
 ### WU5 — spec
 
-- [ ] **T12** — `openspec/specs/settings-scope-limits/spec.md` — SS-5 gains the tone list and a
+- [x] **T12** — `openspec/specs/settings-scope-limits/spec.md` — SS-5 gains the tone list and a
       scenario for an out-of-list tone being rejected; the requirement text stays otherwise intact
       (it already covers tone + messages + rules).
-- [ ] **WU5 commit** — `docs(specs): pin the SS-5 tone list and its validation`
+- [x] **WU5 commit** — `docs(specs): pin the SS-5 tone list and its validation`
 
 ## Verification
 
@@ -215,8 +216,84 @@ review budget. Two coherent boundaries:
 
 Recommendation: one PR with `size:exception`, on the same argument as #292.
 
+**Decided**: one PR with `size:exception`, approved by the maintainer before the work started.
+
 ## Follow-ups
 
 - The `messages.<key>` namespace now has exactly three keys. Adding a fourth is a code change (the
   panel section validates against a known-key set), not a free-form KV write — deliberate.
 - `source_meta` and the KB audience are untouched by this unit.
+
+## Execution evidence
+
+### Graph check
+
+- `graphify query "settings tone messages panel"` — consulted `settings`, `Settings()`,
+  `Settings.tsx`, `types.ts`, `apiFetch()`, `postJson()`, and the Settings community.
+- `graphify query "respond clarification cannot answer greeting"` — consulted `respond()`,
+  `_answer_from_kb()`, `greeting_with_menu()`, `receive()`, `session_scope()`, and the
+  `test_prompts.py` community.
+- `graphify path "app/services/settings.py" "app/chat/nodes/respond.py"` and
+  `graphify path "app/panel/api/routes/settings.py" "web/src/components/pages/Settings.tsx"`
+  returned no directed path; the graph reported the relevant nodes in separate communities.
+- `graphify-out/GRAPH_REPORT.md` records graph build `f031721b`, with hubs `db.py`,
+  `types.ts`, `record_audit()`, `Settings.tsx`, and `test_prompts.py`.
+
+### Work-unit verification
+
+- WU1 RED: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_ss5_overrides.py -q`.
+  Real failure: `AssertionError: assert 'No puedo resolverlo desde esta base; te contactaremos.' in
+  ['Hola, soy ...', 'Un asesor revisará tu caso y te contactará a la brevedad.']`.
+- WU1 GREEN: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_ss5_overrides.py tests/integration/test_settings.py tests/unit/test_prompts.py tests/unit/test_kb_fidelity.py -q` — **94 passed**.
+- WU2 focused GREEN: included in the WU1 focused command after adding the tone and prompt assertions — **94 passed**; the directive prompt assertion passed.
+- WU3 focused GREEN: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/functional/test_api_kb_settings.py tests/unit/test_prompts.py -q` — passed as part of the focused run; API GET/messages audit/tone-400 assertions passed.
+- WU4 RED: `npm --prefix web run test -- --run src/stories/pages/Settings.stories.test.tsx` initially failed with `3 failed | 23 passed`; the missing `Mensajes` card and tone selector were the expected failures. The first attempt also reported `vitest: command not found`; `npm --prefix web install` was required because `web/node_modules` was absent.
+- WU4 GREEN: `npm --prefix web run test -- --run src/stories/pages/Settings.stories.test.tsx src/stories/pages/_shared/mockData/settings.test.ts` — **34 passed**; `npm --prefix web run build` — passed.
+- WU5: spec updated and committed; no runtime code.
+
+### Commits
+
+- `88b9d952` — `feat(settings): wire the standard messages and the validated tone (SS-5)`
+- `a15cfd8e` — `test(settings): cover the tone list, its prompt directive, and the message defaults (SS-5)`
+- `60f4b4c1` — `feat(panel): expose the messages section and validate the tone (SS-5)`
+- `87ed56c1` — `feat(panel): add the Mensajes card and a tone selector (SS-5)`
+- `dbe2b177` — `test(panel): cover the Mensajes card, the tone selector, and the settings fixture (SS-5)`
+- `24015224` — `docs(specs): pin the SS-5 tone list and its validation`
+
+### Final verification
+
+- `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` — **1159 passed, 2 warnings**.
+- `npm --prefix web run test` — **79 files / 613 tests passed**.
+- `npm --prefix web run build` — passed (`tsc -b` and Vite build).
+- Re-verified by the orchestrator after the normalization and the `AppShell.test.tsx` fixture fix:
+  Python **1159 passed**, web **79 files / 613 passed**, build passed. `git diff --name-only` shows
+  only the intended paths.
+
+### Deviations
+
+- The graph paths had no directed path, so no graph rebuild was performed, as required by the record.
+- **The commit history was rewritten by the orchestrator.** The writer's original split put the tone
+  source inside the "standard messages" commit and only the tone tests in the "tone" commit, so both
+  subjects lied about their contents. The branch is unpushed, so the six commits above are the
+  honest regroup (each ≤5 files).
+- **The WU2 and WU3 RED were not captured before their source changes.** They were reconstructed
+  post-hoc by checking out the pre-change source and running the same tests: the backend RED is
+  **8 real failures** (both `test_ss5_overrides.py` tests, three `test_settings.py` tests, and three
+  `test_prompts.py` tests) and the panel-API RED is **3 real failures**
+  (`test_settings_get_returns_all_sections_and_snapshot`, `test_settings_update_invalid_tone_400_json`,
+  `test_settings_update_messages_audited`). The evidence is real but obtained after the fact, not
+  observed before — recorded as such rather than presented as a clean TDD cycle.
+- **`web/src/components/domain/AppShell.test.tsx` was not in the original scope.** Its settings
+  fixture was stale — `tone: 'Claro'` (a free-text value the new API can never return) and no
+  `messages` — and its assertion used `findByDisplayValue`, which does not match a native `<select>`.
+  The fixture now mirrors the real API shape and the assertion is `findByLabelText('Tono')` +
+  `toHaveValue`. This is a consequence of the `Input` → `Select` change, not new scope.
+- **The defensive out-of-list `<option>` was removed from the tone `Select`.** D3 makes an invalid
+  stored tone unreachable, so the branch was dead; the test that depended on it was the stale fixture
+  above, now fixed. Removing it also drops the duplicated tone list from the option expression.
+- Indentation normalization in `app/panel/api/routes/settings.py` (docstring),
+  `web/src/stories/pages/_shared/mockData/settings.ts`, and
+  `web/src/stories/pages/Settings.stories.test.tsx`. `Settings.tsx` was deliberately **not** touched:
+  that file already mixed 4- and 5-space indentation before this unit, and the new cards match their
+  neighbours — pre-existing style, not introduced here.
+- The WU1 integration proof temporarily removes `valores` from `RETRIEVAL_INTENTS` so the real graph exercises `respond`'s KB-miss branch; the unmodified research-triage miss path intentionally goes directly to its existing handoff reply.
