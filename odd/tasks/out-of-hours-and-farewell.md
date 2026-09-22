@@ -517,6 +517,41 @@ Count reconciliation: Python baseline on `d7a3c3aa` was **1199** (the 1204 recor
   graph, and the code for this area is identical across the two. P7 records what the graph cannot answer
   here.
 
+## Native review (RDD)
+
+The review switch was on. Lifecycle: selectorless STATUS -> intended-untracked selection (the only
+eligible untracked path was rapso's `.opencode/tools/package-lock.json`, excluded) -> STATUS -> START ->
+consent relayed and granted -> the single lens -> acknowledgement.
+
+| Field | Value |
+|---|---|
+| Lineage | `review-c27eb5d68ca2ebf6` |
+| Risk | medium |
+| Lenses | **one** — `review-reliability` |
+| Changed | 17 files, 1459 lines |
+| Correction budget | 200 |
+| Outcome | **approved** |
+| Authority | **burned** (`gentle-ai.review-acknowledged/v1`) |
+| Consumed revision | `sha256:5c202cfa64673a58741d0b06cb9cd848983a5771d7640e93a80bb6e7745580c3` |
+
+**Non-blocking advisory — `R3-duplicate-weekday-validation`** (WARNING, **deterministic**, introduced),
+`app/panel/api/routes/settings.py:130-131`: the validator rejects a weekday repeated **across** entries
+but accepts one repeated **within** a single entry, so `{"days": [1, 1], ...}` is stored. The check
+intersects only against `seen_days` from previously processed entries, which is empty on the first one.
+The reviewer is right, and confirmed by reading that line: the tests cover repetition across entries,
+not within one.
+
+**Measured impact: none today, and it is a tightening rather than a violation.**
+`is_open_at` evaluates `weekday in days`, which a redundant day does not change, so the stored value
+behaves identically. The pinned invariant (P3) and the SS-5 scenario both say "repeated **across**
+entries", so the implementation matches what was specified; the finding is that the invariant should be
+stronger. The panel UI cannot produce the shape either — the day checkboxes toggle a day in or out.
+
+**Left as separate follow-up work**, per the review's own instruction that this finding is
+non-blocking, opens no correction, and is never a reason to re-run review on this candidate. The
+tightening belongs with the next change to that validator, together with a test for the within-entry
+case.
+
 ## Next step
 
 T11 — record committed, branch pushed, PR open with a single type label, CI checked. **The merge remains
