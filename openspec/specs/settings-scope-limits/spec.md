@@ -76,6 +76,10 @@ The system MUST let the owner adjust the bot's tone, standard messages, and resp
 
 The supported tone styles MUST be `cercano`, `formal`, and `directo`.
 
+The standard messages MUST include, in addition to the greeting, the cannot-answer reply and the clarification, the farewell (`messages.farewell`) and the out-of-hours notice (`messages.out_of_hours`).
+
+The system MUST also let the owner set the business hours through the panel: a weekly schedule of opening and closing times with an explicit IANA timezone. The schedule MUST be validated when written, and an invalid value MUST be rejected rather than stored.
+
 #### Scenario: Message edited
 - GIVEN the owner edits a standard bot message or tone setting
 - WHEN the change is saved
@@ -85,3 +89,13 @@ The supported tone styles MUST be `cercano`, `formal`, and `directo`.
 - GIVEN the owner submits a tone other than `cercano`, `formal`, or `directo`
 - WHEN the change is saved
 - THEN the panel API rejects the request with HTTP 400
+
+#### Scenario: Business hours saved
+- GIVEN the owner submits a weekly schedule and a timezone
+- WHEN the change is saved
+- THEN the panel stores both and the customer chat uses them
+
+#### Scenario: Invalid business hours rejected
+- GIVEN the owner submits a weekday outside 1..7, a weekday repeated across entries, a malformed time, a window whose opening is not before its closing, a schedule that is not a list of entries, or a timezone that cannot be resolved
+- WHEN the change is saved
+- THEN the panel API rejects it with HTTP 400, the value is not stored, and no settings audit entry is written
