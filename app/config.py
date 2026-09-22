@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     # billing). Multilingual model, 384 dims (db/migrations/008_local_embeddings.sql).
     embed_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     embed_dims: int = 384
+    # Preload the ONNX model at boot so no operator turn pays the load (and, on a
+    # cold cache, the download). The suite forces it off: every lifespan start
+    # would otherwise load the real model and poison the `get_embedder` fake.
+    embed_prewarm: bool = True
 
     meta_access_token: str  # Meta Cloud API permanent token
     meta_phone_number_id: str  # WhatsApp Business Phone Number ID

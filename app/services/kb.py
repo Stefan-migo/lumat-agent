@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import csv
 import io
+import threading
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -110,6 +111,7 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
 # ---------------------------------------------------------------------------
 
 _embedder = None
+_embedder_lock = threading.Lock()
 
 
 def get_embedder():
@@ -117,12 +119,17 @@ def get_embedder():
 
     Injectable seam: tests monkeypatch this function with a deterministic fake
     embedder so the ~130MB model is never downloaded by the suite.
+
+    The lock keeps the load single when the boot prewarm and an operator turn
+    race: a second concurrent construction holds a duplicate copy of the model
+    in RAM, which is the cost the prewarm exists to remove.
     """
     global _embedder
-    if _embedder is None:
-        from fastembed import TextEmbedding
+    with _embedder_lock:
+        if _embedder is None:
+            from fastembed import TextEmbedding
 
-        _embedder = TextEmbedding(model_name=EMBED_MODEL)
+            _embedder = TextEmbedding(model_name=EMBED_MODEL)
     return _embedder
 
 
