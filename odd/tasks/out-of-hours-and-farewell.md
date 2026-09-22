@@ -338,6 +338,26 @@ functions returns **no directed path** (`emergency_gate() -> respond()`, `receiv
 therefore not a usable source for this unit's flow topology; `app/chat/graph.py` is, and it was read
 directly. This is a real limitation of the graph for graph-topology work, not a failure of the check.
 
+**P8 — the farewell lives in the same new gate node; `app/chat/nodes/respond.py` is not touched.**
+P1 already places a closure gate before `receive`, and the farewell is the same kind of pre-flow check,
+so both live in that one node. Two consequences, both wanted: the unit does not touch `respond.py`,
+which is already modified by the open PR #303 (`kb-retrieval-failure`) on this repository, so the two
+units do not collide in code; and the capture bypass (P2) applies to the farewell too — a customer
+mid-capture who says "gracias, chau" must not have their half-collected case replaced by a goodbye.
+
+**P9 — an empty schedule is the OFF state, and the daily boundary is half-open.**
+`hours.schedule` defaults to `[]`, and an empty schedule means the feature is **off**: the reader reports
+open, the normal flow runs, and **no warning is logged**, because nothing is misconfigured. This is what
+makes installing the unit behaviour-neutral until Lumat configures hours, and it is deliberately
+distinguishable from P4's unparseable schedule, which does log. The daily interval is
+`open <= local_time < close`, evaluated in `hours.timezone`: at exactly the opening minute the business
+is open, at exactly the closing minute it is closed. Both boundaries are pinned by test.
+
+**P10 — the hours logic stays in `app/services/settings.py`.**
+`app/services/settings.py` already owns the `hours.*` keys, and the pure function is a short loop over
+the entries. A new module for it would be a file for ~15 lines. If the implementer finds a better
+existing home, the choice must be justified in the record — not assumed.
+
 ## Graph check
 
 Run from the main worktree root, because this worktree has no graph (`graphify-out/` is gitignored,
