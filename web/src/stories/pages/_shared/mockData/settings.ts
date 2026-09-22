@@ -19,6 +19,12 @@ export const settings: Settings = {
     greeting: "Hola, soy el asistente virtual de Lumat.",
     cannot_answer: "No puedo responder con seguridad a eso.",
     clarification: "¿Puedes elegir una opción del menú?",
+    farewell: "Gracias por comunicarte con Lumat.",
+    out_of_hours: "En este momento estamos fuera de horario.",
+  },
+  hours: {
+    timezone: "America/Santiago",
+    schedule: [{ days: [1, 2, 3, 4, 5], open: "09:00", close: "18:00" }],
   },
   conversation_limit: 1.5,
   daily_limit: 5.0,

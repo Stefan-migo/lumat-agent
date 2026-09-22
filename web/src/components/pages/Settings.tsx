@@ -15,18 +15,58 @@ import { PushSettings } from "./PushSettings";
 
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
 export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; capabilities?: AssistantCapabilities; }
-const EMPTY_MESSAGES = { greeting: "", cannot_answer: "", clarification: "" };
+const EMPTY_MESSAGES = { greeting: "", cannot_answer: "", clarification: "", farewell: "", out_of_hours: "" };
+const DAYS = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+type HoursData = SettingsData["hours"];
 
-function stateMessage(state: SettingsState) {
+function stateMessage(state: SettingsState, errorDetail?: string | null) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando configuración" />;
   if (state === "denied") return <StateMessage tone="danger" role="alert" title="No tienes permiso para ver este panel" />;
   if (state === "error") return <StateMessage tone="danger" role="alert" title="No pudimos cargar la configuración" />;
   if (state === "saved") return <StateMessage tone="success" role="status" title="Configuración guardada" detail="Los cambios quedaron aplicados." />;
   if (state === "saving") return <StateMessage tone="info" role="status" spinner title="Guardando cambios" detail="Aplicando la configuración seleccionada." />;
   if (state === "validation") return <StateMessage tone="danger" role="alert" title="Sintaxis no válida" detail="Revisa las reglas avanzadas: cada línea debe tener categoría=mode con mode bot_resolve o always_escalate." />;
-  if (state === "server-error") return <StateMessage tone="danger" role="alert" title="No pudimos guardar los cambios" detail="Ocurrió un error del servidor. Reintenta en unos minutos." />;
+  if (state === "server-error") return <StateMessage tone="danger" role="alert" title="No pudimos guardar los cambios" detail={errorDetail || "Ocurrió un error del servidor. Reintenta en unos minutos."} />;
   if (state === "stale") return <StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="La última consulta no pudo completarse. Mostramos la información disponible." />;
   return null;
+}
+
+function HoursEditor({ hours, onChange }: { hours: HoursData; onChange: (hours: HoursData) => void }) {
+  const updateEntry = (index: number, entry: HoursData["schedule"][number]) => {
+    onChange({ ...hours, schedule: hours.schedule.map((current, currentIndex) => currentIndex === index ? entry : current) });
+  };
+  const usedByOtherEntry = (index: number, day: number) => hours.schedule.some((entry, entryIndex) => entryIndex !== index && entry.days.includes(day));
+
+  return <>
+    <Input label="Zona horaria" value={hours.timezone} onChange={(event) => onChange({ ...hours, timezone: event.target.value })} />
+    <p>Define los días y el horario de atención. Cada día puede pertenecer a un solo horario.</p>
+    {hours.schedule.map((entry, index) => <div key={index}>
+      <strong>Horario {index + 1}</strong>
+      <div>
+        {DAYS.map((day, dayIndex) => {
+          const weekday = dayIndex + 1;
+          return <label key={day}>
+            <input
+              type="checkbox"
+              aria-label={`${day}, entrada ${index + 1}`}
+              checked={entry.days.includes(weekday)}
+              disabled={!entry.days.includes(weekday) && usedByOtherEntry(index, weekday)}
+              onChange={() => updateEntry(index, {
+                ...entry,
+                days: entry.days.includes(weekday)
+                  ? entry.days.filter((value) => value !== weekday)
+                  : [...entry.days, weekday].sort((a, b) => a - b),
+              })}
+            /> {day}
+          </label>;
+        })}
+      </div>
+      <Input label={`Apertura ${index + 1}`} type="time" value={entry.open} onChange={(event) => updateEntry(index, { ...entry, open: event.target.value })} />
+      <Input label={`Cierre ${index + 1}`} type="time" value={entry.close} onChange={(event) => updateEntry(index, { ...entry, close: event.target.value })} />
+      <Button variant="tertiary" onClick={() => onChange({ ...hours, schedule: hours.schedule.filter((_, currentIndex) => currentIndex !== index) })}>Eliminar horario</Button>
+    </div>)}
+    <Button variant="tertiary" onClick={() => onChange({ ...hours, schedule: [...hours.schedule, { days: [], open: "09:00", close: "18:00" }] })}>Agregar horario</Button>
+  </>;
 }
 
 export function AssistantCapabilitiesView({ capabilities }: { capabilities: AssistantCapabilities }) {
@@ -69,14 +109,17 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const [keywords, setKeywords] = useState(() => data?.keywords.join("\n") ?? "");
   const [tone, setTone] = useState(() => data?.tone ?? "");
   const [messages, setMessages] = useState(() => data?.messages ?? EMPTY_MESSAGES);
+  const [hours, setHours] = useState<HoursData>(() => data?.hours ?? { timezone: "America/Santiago", schedule: [] });
   const [conversationLimit, setConversationLimit] = useState(() => String(data?.conversation_limit ?? ""));
   const [dailyLimit, setDailyLimit] = useState(() => String(data?.daily_limit ?? ""));
   const [metaCost, setMetaCost] = useState(() => String(data?.meta_cost ?? ""));
   const [saveState, setSaveState] = useState<SettingsState | null>(null);
+  const [saveErrorDetail, setSaveErrorDetail] = useState<string | null>(null);
   const save = async (path: string, body: unknown) => {
     setSaveState("saving");
+    setSaveErrorDetail(null);
     try { await postJson(path, body); setSaveState("saved"); }
-    catch { setSaveState("server-error"); }
+    catch (error) { setSaveErrorDetail(error instanceof Error ? error.message : null); setSaveState("server-error"); }
   };
   const saveScope = () => {
     const rules: Record<string, string> = {};
@@ -111,16 +154,18 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     setKeywords(data.keywords.join("\n"));
     setTone(data.tone);
     setMessages(data.messages ?? EMPTY_MESSAGES);
+    setHours(data.hours ?? { timezone: "America/Santiago", schedule: [] });
     setConversationLimit(String(data.conversation_limit));
     setDailyLimit(String(data.daily_limit));
     setMetaCost(String(data.meta_cost));
   }, [data]);
   if (!data || state === "loading" || state === "error" || state === "denied") return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state)}>{null}</PageFrame>;
-  return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state)}>
+  return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state, saveErrorDetail)}>
     <Card title="Alcance del agente"><p>Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona.</p><details><summary>Sintaxis avanzada · categoría=mode</summary><p>Formato técnico: una regla por línea con categoría=mode, donde mode es bot_resolve o always_escalate. No lo cambies sin conocer el efecto en las respuestas.</p></details><Textarea label="Reglas de alcance" rows={4} value={scope} onChange={(event) => setScope(event.target.value)} /><Button variant="secondary" onClick={saveScope}>Guardar alcance</Button></Card>
     <Card title="Detección de emergencias"><p>Palabras que activan un aviso de emergencia. Se detectan en el próximo mensaje entrante.</p><Textarea label="Palabras clave de emergencia" rows={6} value={keywords} onChange={(event) => setKeywords(event.target.value)} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/keywords", { keywords: keywords.split("\n").map((value) => value.trim()).filter(Boolean) })}>Guardar palabras clave</Button></Card>
      <Card title="Tono"><p>Define cómo suenan las respuestas del agente en cada conversación.</p><Select label="Tono" value={tone} onChange={(event) => setTone(event.target.value)} options={[{ value: "cercano", label: "Cercano" }, { value: "formal", label: "Formal" }, { value: "directo", label: "Directo" }]} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/tone", { tone })}>Guardar tono</Button></Card>
-     <Card title="Mensajes"><p>Personaliza los mensajes estándar. El menú de categorías se agrega automáticamente al saludo.</p><Textarea label="Saludo" rows={3} value={messages.greeting} onChange={(event) => setMessages({ ...messages, greeting: event.target.value })} /><Textarea label="Cuando no puede responder" rows={3} value={messages.cannot_answer} onChange={(event) => setMessages({ ...messages, cannot_answer: event.target.value })} /><Textarea label="Aclaración" rows={3} value={messages.clarification} onChange={(event) => setMessages({ ...messages, clarification: event.target.value })} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/messages", messages)}>Guardar mensajes</Button></Card>
+      <Card title="Mensajes"><p>Personaliza los mensajes estándar. El menú de categorías se agrega automáticamente al saludo.</p><Textarea label="Saludo" rows={3} value={messages.greeting} onChange={(event) => setMessages({ ...messages, greeting: event.target.value })} /><Textarea label="Cuando no puede responder" rows={3} value={messages.cannot_answer} onChange={(event) => setMessages({ ...messages, cannot_answer: event.target.value })} /><Textarea label="Aclaración" rows={3} value={messages.clarification} onChange={(event) => setMessages({ ...messages, clarification: event.target.value })} /><Textarea label="Despedida" rows={3} value={messages.farewell} onChange={(event) => setMessages({ ...messages, farewell: event.target.value })} /><Textarea label="Fuera de horario" rows={3} value={messages.out_of_hours} onChange={(event) => setMessages({ ...messages, out_of_hours: event.target.value })} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/messages", messages)}>Guardar mensajes</Button></Card>
+      <Card title="Horarios de atención"><HoursEditor hours={hours} onChange={setHours} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/hours", hours)}>Guardar horarios</Button></Card>
     <Card title="Límites de gasto"><p>Topes de gasto por conversación y por día. Al 80% el agente se vuelve más conservador; al 100% se detienen las llamadas de pago y la conversación pasa a una persona.</p><Input label="Límite por conversación (USD)" type="number" value={conversationLimit} onChange={(event) => setConversationLimit(event.target.value)} /><Input label="Límite diario (USD)" type="number" value={dailyLimit} onChange={(event) => setDailyLimit(event.target.value)} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/limits", { conversation_limit: Number(conversationLimit), daily_limit: Number(dailyLimit) })}>Guardar límites</Button></Card>
     <Card title="Precio Meta"><p>Costo por mensaje de servicio (USD), vigente desde 2026-10-01.</p><Input label="Costo por mensaje (USD)" type="number" value={metaCost} onChange={(event) => setMetaCost(event.target.value)} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/meta", { service_message_cost: Number(metaCost) })}>Guardar precio</Button></Card>
      <Card title="Gasto actual"><DataTable columns={columns} rows={spendRows} rowKey={(row) => row.label} />{snapshot?.conversation_percent !== null ? <p>Conversación {snapshot?.conversation_percent}% de ${snapshot?.conversation_limit.toFixed(2)}</p> : null}</Card>
