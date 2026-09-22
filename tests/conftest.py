@@ -63,6 +63,8 @@ for _key, _value in TEST_ENV.items():
 
 # Force the test key — the dev shell may export a REAL DEEPSEEK_API_KEY.
 os.environ["DEEPSEEK_API_KEY"] = "sk-test"
+# Force the prewarm off — see the same reasoning as the test key above.
+os.environ["EMBED_PREWARM"] = "false"
 
 from app.chat.nodes.classify_intent import is_injection  # noqa: E402
 from app.config import get_settings  # noqa: E402

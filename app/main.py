@@ -11,6 +11,7 @@ same crash are failed so the operator gets their Retry action back.
 """
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 from functools import partial
 
@@ -26,6 +27,35 @@ from app.webhook.router import router as webhook_router
 from app.ops.sweep import run as run_notification_sweep
 
 logger = logging.getLogger(__name__)
+
+
+def _prewarm_embedder() -> None:
+    """Load the local embedding model before anyone needs it.
+
+    Runs off the boot path on purpose: with a cold fastembed cache this call
+    downloads ~240MB, and boot must not wait minutes for it. Failure is logged
+    and swallowed — an unavailable model degrades the turns that need it, it
+    must not stop the API from serving.
+    """
+    try:
+        from app.services import kb
+
+        kb.get_embedder()
+        logger.info("embedder prewarm complete")
+    except Exception:
+        logger.exception("embedder prewarm failed")
+
+
+def start_embedder_prewarm() -> threading.Thread | None:
+    """Start the embedder prewarm on a daemon thread; None when disabled.
+
+    Daemon so a download in flight never holds up shutdown.
+    """
+    if not get_settings().embed_prewarm:
+        return None
+    thread = threading.Thread(target=_prewarm_embedder, name="embedder-prewarm", daemon=True)
+    thread.start()
+    return thread
 
 
 @asynccontextmanager
@@ -51,6 +81,9 @@ async def lifespan(app: FastAPI):
             sweep()
         except Exception:
             logger.exception("startup sweep %s failed", name)
+    # Prewarm off the boot path: a cold download can take minutes, so it must
+    # not delay or replace the recovery sweeps above.
+    start_embedder_prewarm()
     yield
 
 
