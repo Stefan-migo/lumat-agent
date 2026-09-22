@@ -470,7 +470,7 @@ def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatc
         assert float(request.cost_llm) == pytest.approx(0.000012)
 
 
-def _scripted_client(planner_outputs):
+def _scripted_client(planner_outputs, stream_calls=None):
     """Fake provider: planner calls consume the scripted outputs; the title call gets plain text."""
     outputs = list(planner_outputs)
 
@@ -480,6 +480,8 @@ def _scripted_client(planner_outputs):
                 @staticmethod
                 def create(**kwargs):
                     if kwargs.get("stream"):
+                        if stream_calls is not None:
+                            stream_calls.append(kwargs)
                         return iter([
                             SimpleNamespace(
                                 choices=[SimpleNamespace(delta=SimpleNamespace(content="answer"))], usage=None
@@ -552,6 +554,65 @@ def test_planner_arguments_belong_to_the_current_turn_only(client, monkeypatch):
     assert _persisted_planner(thread_id)["arguments"] == {"limit": 3}
 
 
+_FALLBACK_SUMMARY = "No pude planificar esa solicitud de forma segura. Inténtalo nuevamente."
+
+
+def _agent_answer(settled: dict) -> str:
+    return [item for item in settled["messages"] if item["author"] == "agent"][-1]["content"]
+
+
+def _turn_with_plan(client, monkeypatch, content: str, planner_output: str):
+    _user(f"assistant-failure-{content}", "admin")
+    _login(client, f"assistant-failure-{content}")
+    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    stream_calls: list = []
+    provider = _scripted_client([planner_output], stream_calls=stream_calls)
+    monkeypatch.setattr("app.services.llm.openai_client", lambda: provider)
+    return _run_turn(client, thread_id, content), stream_calls, thread_id
+
+
+def test_a_failed_planner_does_not_reach_the_responder(client, monkeypatch):
+    settled, stream_calls, _ = _turn_with_plan(client, monkeypatch, "plannerfailed", "this is not json")
+
+    assert stream_calls == []
+    assert _agent_answer(settled) == _FALLBACK_SUMMARY
+
+
+def test_a_boundary_rejected_plan_does_not_reach_the_responder(client, monkeypatch):
+    rejected = json.dumps({
+        "kind": "tool", "tool": "customers.search", "arguments": {"limit": 999},
+        "summary": "too many", "requires_approval": False,
+    })
+    settled, stream_calls, _ = _turn_with_plan(client, monkeypatch, "boundaryrejected", rejected)
+
+    assert stream_calls == []
+    assert _agent_answer(settled) == _FALLBACK_SUMMARY
+
+
+def test_a_legitimate_respond_plan_still_reaches_the_responder(client, monkeypatch):
+    respond = json.dumps({
+        "kind": "respond", "arguments": {}, "summary": "te contesto", "requires_approval": False,
+    })
+    settled, stream_calls, _ = _turn_with_plan(client, monkeypatch, "legitrespond", respond)
+
+    assert len(stream_calls) == 1
+    assert _agent_answer(settled) == "answer"
+
+
+def test_a_successful_tool_plan_still_executes_and_responds(client, monkeypatch):
+    tool = json.dumps({
+        "kind": "tool", "tool": "customers.search", "arguments": {"query": "ana"},
+        "summary": "busco", "requires_approval": False,
+    })
+    settled, stream_calls, thread_id = _turn_with_plan(client, monkeypatch, "toolplan", tool)
+
+    assert len(stream_calls) == 1
+    assert _agent_answer(settled) == "answer"
+    with SessionLocal() as session:
+        guardrails_state = session.get(InternalChatThread, thread_id).assistant_state["guardrails"]
+    assert guardrails_state["decision"] == "execute"
+
+
 def test_stream_disconnect_keeps_known_usage_and_failed_request(client, monkeypatch):
     _user("assistant-disconnect", "admin")
     _login(client, "assistant-disconnect")
@@ -564,11 +625,18 @@ def test_stream_disconnect_keeps_known_usage_and_failed_request(client, monkeypa
     )
 
     def disconnecting(**kwargs):
+        # This must not be a generator function: `return planner` inside one yields a generator, so the
+        # planner call would silently fail with `empty_completion` and the test would pass for the wrong
+        # reason. Only the streaming path is lazy.
         if not kwargs.get("stream"):
             return planner
-        yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="partial"))], usage=None)
-        yield SimpleNamespace(choices=[], usage=SimpleNamespace(prompt_tokens=20, completion_tokens=7))
-        raise ConnectionError("stream disconnected")
+
+        def chunks():
+            yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="partial"))], usage=None)
+            yield SimpleNamespace(choices=[], usage=SimpleNamespace(prompt_tokens=20, completion_tokens=7))
+            raise ConnectionError("stream disconnected")
+
+        return chunks()
 
     client_stub = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=disconnecting)))
     monkeypatch.setattr("app.services.llm.openai_client", lambda: client_stub)

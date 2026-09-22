@@ -56,8 +56,26 @@ def _after_cortex_gate(state: AssistantState) -> str:
     return "cortex_turn" if state.get("cortex_route") == "cortex" else "sdb_trigger_gate"
 
 
+# Stages where the model's own output was unusable. A provider or instrumentation failure is not a plan:
+# it keeps its existing path, where the responder is attempted and a second failure leaves the turn
+# recoverable instead of quietly answering with a summary.
+_PLAN_FAILURE_STAGES = frozenset({"extraction", "completion", "parse", "guardrails"})
+
+
+def _is_terminal_plan_failure(state: AssistantState) -> bool:
+    """True when the turn was degraded by an unusable plan rather than by infrastructure failing."""
+    if (state.get("guardrails") or {}).get("decision") != "fallback":
+        return False
+    stage = ((state.get("planner") or {}).get("failure") or {}).get("stage")
+    return stage in _PLAN_FAILURE_STAGES
+
+
 def _after_guardrails(state: AssistantState) -> str:
     if state.get("status") == "approval_pending":
+        return END
+    # A fallback plan is not a plan: it carries `kind: "respond"` only so the turn can end with the
+    # bounded summary. Handing it to the responder would dress the failure as a normal answer.
+    if _is_terminal_plan_failure(state):
         return END
     return "execute_tool" if state.get("plan", {}).get("kind") == "tool" else "respond_stream"
 

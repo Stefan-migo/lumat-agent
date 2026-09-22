@@ -1,5 +1,6 @@
 """IAC-6 / CRT-3 RED contract for internal chat token delivery."""
 
+import json
 from types import SimpleNamespace
 
 import psycopg
@@ -33,6 +34,11 @@ class _StreamingChatClient:
 
     def create(self, **kwargs):
         self.calls.append(kwargs)
+        if not kwargs.get("stream"):
+            # The planner call needs a readable plan, or the turn degrades before any answer streams.
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+                "kind": "respond", "arguments": {}, "summary": "ok", "requires_approval": False,
+            })))])
         return [
             SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=chunk))])
             for chunk in self.chunks

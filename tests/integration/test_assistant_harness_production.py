@@ -86,6 +86,9 @@ def test_malformed_or_unwhitelisted_production_plan_falls_back_without_execution
         assert thread.assistant_state["planner"]["valid"] is False
         assert thread.assistant_state["guardrails"]["decision"] == "fallback"
         assert thread.assistant_state["execution_status"] == "completed"
-    assert len(captured) == 3
-    assert captured[1]["messages"][0]["content"].startswith("You are the Lumat internal executive operator")
-    assert "You are Lumat's internal operations assistant." not in captured[1]["messages"][0]["content"]
+    # The plan is rejected, so the turn ends on the bounded summary: the planner call and the thread
+    # title, and no responder call dressing the failure as an answer.
+    assert len(captured) == 2
+    assert captured[0]["messages"][0]["content"].startswith("You are the Lumat internal executive operator")
+    assert "You are Lumat's internal operations assistant." not in captured[0]["messages"][0]["content"]
+    assert settled["messages"][-1]["content"] == "No pude planificar esa solicitud de forma segura. Inténtalo nuevamente."

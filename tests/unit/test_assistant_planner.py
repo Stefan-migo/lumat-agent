@@ -411,7 +411,7 @@ def test_plan_llm_records_no_failure_for_valid_plan(monkeypatch, caplog):
 def test_invalid_plan_keeps_degraded_user_visible_output():
     state = plan({"content": "unsafe request", "planner_output": {"kind": "tool"}})
 
-    assert state["response"] == "I could not safely plan that request. Please try again."
+    assert state["response"] == "No pude planificar esa solicitud de forma segura. Inténtalo nuevamente."
 
 
 def test_plan_invalid_output_and_guardrail_unsafe_plan_have_distinct_diagnostics(caplog):
