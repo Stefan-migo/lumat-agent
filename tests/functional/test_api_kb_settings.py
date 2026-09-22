@@ -679,7 +679,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     # design #18 shape plus the effective standard messages.
     expected_keys = {
         "scope_rules", "keywords", "tone", "messages",
-        "conversation_limit", "daily_limit", "meta_cost", "snapshot",
+        "conversation_limit", "daily_limit", "meta_cost", "hours", "snapshot",
     }
     assert set(body.keys()) == expected_keys
     # defaults out of the box (SS-1..SS-5 defaults)
@@ -692,6 +692,7 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
         "farewell",
         "out_of_hours",
     }
+    assert body["hours"] == {"timezone": "America/Santiago", "schedule": []}
     assert isinstance(body["keywords"], list) and len(body["keywords"]) > 0
     assert body["conversation_limit"] == 1.50
     assert body["daily_limit"] == 5.00
@@ -772,13 +773,110 @@ def test_settings_update_invalid_tone_400_json(client, make_user):
 def test_settings_update_messages_audited(client, make_user):
     make_user("adm", "adm-pass", role="admin")
     _login(client)
-    value = {"greeting": "Hola editado", "cannot_answer": "No disponible", "clarification": "Aclara"}
+    value = {
+        "greeting": "Hola editado",
+        "cannot_answer": "No disponible",
+        "clarification": "Aclara",
+        "farewell": "Hasta luego",
+        "out_of_hours": "Estamos cerrados",
+    }
     resp = client.post("/panel/api/settings/messages", json=value, follow_redirects=False)
     assert resp.status_code == 200
     with SessionLocal() as session:
-        assert session.get(Settings, "messages.greeting").value == "Hola editado"
-        assert session.get(Settings, "messages.cannot_answer").value == "No disponible"
-    assert _last_audit("settings.change").entity_id == "messages.clarification"
+        for key, expected in value.items():
+            assert session.get(Settings, f"messages.{key}").value == expected
+    with SessionLocal() as session:
+        audits = session.scalars(
+            select(AuditLog).where(AuditLog.action == "settings.change")
+        ).all()
+    assert {audit.entity_id for audit in audits} == {
+        f"messages.{key}" for key in value
+    }
+    assert all(audit.actor == "adm" for audit in audits)
+
+
+def test_settings_update_hours_audited(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    value = {
+        "timezone": "UTC",
+        "schedule": [
+            {"days": [1, 3, 5], "open": "09:00", "close": "17:00"},
+            {"days": [2, 4], "open": "10:00", "close": "18:00"},
+        ],
+    }
+
+    resp = client.post("/panel/api/settings/hours", json=value, follow_redirects=False)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+    with SessionLocal() as session:
+        assert session.get(Settings, "hours.timezone").value == "UTC"
+        assert session.get(Settings, "hours.schedule").value == value["schedule"]
+        audits = session.scalars(
+            select(AuditLog).where(AuditLog.action == "settings.change")
+        ).all()
+    assert {audit.entity_id for audit in audits} == {"hours.timezone", "hours.schedule"}
+    assert all(audit.actor == "adm" for audit in audits)
+
+
+@pytest.mark.parametrize(
+    ("value", "key"),
+    [
+        (
+            {"timezone": "UTC", "schedule": [{"days": [0], "open": "09:00", "close": "17:00"}]},
+            "hours.schedule",
+        ),
+        (
+            {
+                "timezone": "UTC",
+                "schedule": [
+                    {"days": [1], "open": "09:00", "close": "17:00"},
+                    {"days": [1], "open": "10:00", "close": "18:00"},
+                ],
+            },
+            "hours.schedule",
+        ),
+        (
+            {"timezone": "UTC", "schedule": [{"days": [1], "open": "9:00", "close": "17:00"}]},
+            "hours.schedule",
+        ),
+        (
+            {"timezone": "UTC", "schedule": [{"days": [1], "open": "09:60", "close": "17:00"}]},
+            "hours.schedule",
+        ),
+        (
+            {"timezone": "UTC", "schedule": [{"days": [1], "open": "nueve", "close": "17:00"}]},
+            "hours.schedule",
+        ),
+        (
+            {"timezone": "UTC", "schedule": [{"days": [1], "open": "22:00", "close": "02:00"}]},
+            "hours.schedule",
+        ),
+        ({"timezone": "UTC", "schedule": "09:00-17:00"}, "hours.schedule"),
+        (
+            {"timezone": "Not/A_Timezone", "schedule": [{"days": [1], "open": "09:00", "close": "17:00"}]},
+            "hours.timezone",
+        ),
+    ],
+)
+def test_settings_update_hours_rejects_invalid_values_without_persisting(
+    client, make_user, value, key
+):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post("/panel/api/settings/hours", json=value, follow_redirects=False)
+
+    assert resp.status_code == 400
+    assert resp.headers["content-type"].startswith("application/json")
+    # The rejection must come from the section's own validator, not from the
+    # catch-all answering "unknown section". Without this the test would pass
+    # whenever the section is missing, which is exactly how it passed at RED.
+    assert "unknown section" not in resp.json()["detail"]
+    with SessionLocal() as session:
+        assert session.get(Settings, key) is None
+        assert session.scalar(select(AuditLog).where(AuditLog.action == "settings.change")) is None
 
 
 def test_settings_update_limits_audited(client, make_user):
