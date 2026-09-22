@@ -153,8 +153,18 @@ The derived test DB for this worktree, if the full suite becomes necessary:
   worktree — it is gitignored and not provisioned by `rapso worktree create`)
 - Full suite: `TEST_ADMIN_DB_URL="postgresql://lumat:<TEST_POSTGRES_PASSWORD>@localhost:<port>/lumat" uv run pytest -o addopts="" -q`
 
-TDD mode: **not active** for this repo (no strict-TDD capability cache; the ODD flow runs ordinary
-functional verification). Runner: pytest.
+TDD mode: **active** for this repo. `openspec/config.yaml` sets `apply.tdd: true` and
+`testing.strict_tdd: true` (detected `2026-08-12`, runner `pytest`), and the SDD capability cache
+(`sdd-init/lumat`) records `strict_tdd: true`.
+
+**Correction.** This record first asserted that TDD was *"not active for this repo (no strict-TDD
+capability cache)"*. That is **false**: both the config and the capability cache say the opposite.
+The claim was read from both sources on 2026-09-22, while resuming this unit for delivery.
+
+Declared consequence, not hidden: this unit therefore has **no recorded RED-before-implementation**
+step. Its behavioral evidence is the mutation-based teeth check above — three mutations applied, each
+pinned test observed failing, every file restored with its digest confirmed — which is strong but is
+*not* a RED-first cycle. Runner: pytest.
 
 Known pre-existing suite failure, must not be attributed to this change:
 `tests/functional/test_api_dashboard.py::test_today_projection_uses_local_bounds_and_operational_predicates`
@@ -181,6 +191,33 @@ Key nodes: `get_embedder()` `app/services/kb.py:115` (the only load seam), `embe
   ONNX init per code save; harmless, but it is real work happening off nobody's request.
 - **A failed prewarm is silent to the operator.** It is logged; nothing surfaces it in the panel. The
   next embedding turn simply pays the load again (with the lock, serially).
+
+## Native review (RDD)
+
+- Contract `gentle-ai.review-integration/v2`, lineage `review-b6316afbcda58ca3`, risk **high**
+  (6 files / 366 changed lines). Risk reason: `process_boundary` / `shell_process` in
+  `tests/conftest.py`.
+- Four lenses, all admitted and completed: `review-risk` (order 0), `review-resilience` (1),
+  `review-readability` (2), `review-reliability` (3).
+- Result: **0 findings across all four lenses.** Admission closed the review as `approved` and the
+  exact acknowledgement burned the authority (`gentle-ai.review-acknowledged/v1`,
+  `consumed_revision sha256:890d802a17d0c7cb3fc652abb9e72b21185592eeaacb06dbed7f75796017bada`).
+- Frozen correction budget: **183 lines — not used.** No correction was required.
+- Candidate frozen at `c546df87` (`candidate_tree f5e0b39c9d948aa9cd670da1d372e08aa2181105`), base
+  `5ae02c45` (`base_tree d6aa1747c1e1d838d477d00030919a7eb7eff473`).
+- Full suite re-run independently when resuming the unit (not the implementer's number replayed):
+  `1274 passed, 2 warnings in 231.14s`, exit 0, against this worktree's own test DB (port 5606).
+- The review grants no delivery authority: push and PR are separate human decisions.
+
+## Delivery
+
+- Branch `odd/embedder-prewarm` pushed to `origin` after explicit human authorization.
+- PR **#308** — https://github.com/Stefan-migo/lumat-agent/pull/308 — base `main`, exactly one label
+  (`type:feature`), `MERGEABLE`.
+- PR checks: `test` **pass** (1m55s) and GitGuardian Security Checks **pass**.
+- Merge is the maintainer's decision and was **not** taken here.
+- After the merge: `bash infra/test-db.sh down` **before**
+  `rapso worktree cleanup embedder-prewarm --remote`.
 
 ## Recovery
 
