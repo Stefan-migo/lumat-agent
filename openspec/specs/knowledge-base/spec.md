@@ -59,7 +59,7 @@ The system MUST version documents and re-ingest on update, preserving the previo
 
 ### Requirement: KB-5 — Document Audience
 
-The system MUST classify every KB document with an audience of `customer` or `internal`, stored as a `NOT NULL`, database-enforced column on `kb_documents`, defaulting to `internal` (fail-safe). The audience axis MUST remain independent of the AO-7 topic scope (`source_meta.category`): a document MAY be topic-scoped and `internal` at the same time.
+The system MUST classify every KB document with an audience of `customer` or `internal`, stored as a `NOT NULL`, database-enforced column on `kb_documents`, defaulting to `internal` (fail-safe). The audience restriction is enforced on `kb_documents.visibility`.
 
 Customer-facing readers MUST retrieve only `customer` documents; the customer WhatsApp chatbot and its research-triage sub-graph MUST filter to `customer`. Internal readers — the Lumat assistant and the admin retrieval probe — MAY read the whole active corpus.
 
