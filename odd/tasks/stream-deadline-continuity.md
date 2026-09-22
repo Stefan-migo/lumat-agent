@@ -165,8 +165,21 @@ Frontend (from this worktree root):
 Provisioning already done in this worktree: `uv sync --frozen`, `npm ci --prefix web`,
 `cp ../lumat-agent/infra/.env infra/.env` (gitignored), `./infra/test-db.sh up`.
 
-TDD mode: **not active** for this repo (no strict-TDD capability cache; the ODD flow runs ordinary
-functional verification). Runners: pytest, vitest.
+TDD mode: **active** for this repo. `openspec/config.yaml` sets `apply.tdd: true` and
+`testing.strict_tdd: true` (runner `pytest`), and the SDD capability cache (`sdd-init/lumat`) records
+`strict_tdd: true`.
+
+**Correction.** This record first asserted that TDD was *"not active for this repo (no strict-TDD
+capability cache)"*. That is **false**: both the config and the capability cache say the opposite.
+The claim was inherited verbatim from `startup-sweep-isolation.md`, an older record that carries the
+same error, and read back against both sources on 2026-09-22 while preparing this unit for delivery.
+It is the same correction the `embedder-prewarm` record needed, from the same wrong source.
+
+Declared consequence, not hidden: this unit therefore has **no recorded RED-before-implementation**
+step. Its behavioral evidence is the mutation-based teeth check above — four mutations applied by the
+implementer plus one independent mutation applied by the orchestrator, each pinned test observed
+failing, every file restored with its digest confirmed — which is strong but is *not* a RED-first
+cycle. Runners: pytest, vitest.
 
 Known pre-existing suite failure, must not be attributed to this change:
 `tests/functional/test_api_dashboard.py::test_today_projection_uses_local_bounds_and_operational_predicates`
