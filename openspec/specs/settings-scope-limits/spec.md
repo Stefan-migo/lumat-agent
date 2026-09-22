@@ -96,6 +96,6 @@ The system MUST also let the owner set the business hours through the panel: a w
 - THEN the panel stores both and the customer chat uses them
 
 #### Scenario: Invalid business hours rejected
-- GIVEN the owner submits a weekday outside 1..7, a weekday repeated across entries, a malformed time, a window whose opening is not before its closing, a schedule that is not a list of entries, or a timezone that cannot be resolved
+- GIVEN the owner submits a weekday outside 1..7, a weekday repeated within or across entries, a malformed time, a window whose opening is not before its closing, a schedule that is not a list of entries, or a timezone that cannot be resolved
 - WHEN the change is saved
 - THEN the panel API rejects it with HTTP 400, the value is not stored, and no settings audit entry is written
