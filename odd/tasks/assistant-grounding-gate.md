@@ -131,8 +131,9 @@ guardrails
 - [x] **T5** — Spec delta: **IAC-14 — Grounded Knowledge Responses** in
       `openspec/specs/internal-agent-chat/spec.md`, with three scenarios.
 - [x] **T6** — Verify. See "Verification evidence" below.
-- [ ] **T7** — Commit this record and open the PR with one label. **Pending: the human decides push
-      and PR.**
+- [x] **T7** — Record committed (`b0464fc3`), branch pushed, **PR #299** open against `main` with the
+      single label `type:feature`; CI green (`test` + GitGuardian). **The merge remains the human's
+      decision.**
 
 ## Pinned contract (T1)
 
@@ -248,4 +249,6 @@ matching chunk.
 
 ## Next step
 
-T7 — commit this record, then the human decides push and PR.
+Delivery is complete up to the PR: **#299** is open, CI green, reviewed and acknowledged. The merge
+is the human's decision under ordinary repository policy. If the panel assistant starts refusing
+questions it should answer, revisit the declared consequence above first.
