@@ -366,6 +366,11 @@ export interface Settings {
   scope_rules: Record<string, string>;
   keywords: string[];
   tone: string;
+  messages: {
+    greeting: string;
+    cannot_answer: string;
+    clarification: string;
+  };
   conversation_limit: number;
   daily_limit: number;
   meta_cost: number;

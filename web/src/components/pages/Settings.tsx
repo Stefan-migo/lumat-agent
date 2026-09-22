@@ -6,6 +6,7 @@ import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
 import { Input } from "../primitives/Input";
+import { Select } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
 import { DataTable, tabularNum, type Column } from "../shared/DataTable";
 import { PageFrame } from "../shared/PageFrame";
@@ -14,6 +15,7 @@ import { PushSettings } from "./PushSettings";
 
 export type SettingsState = AsyncDataState | "saved" | "saving" | "validation" | "server-error" | "stale";
 export interface SettingsProps { data?: SettingsData | null; state?: SettingsState; onRetry?: () => void; capabilities?: AssistantCapabilities; }
+const EMPTY_MESSAGES = { greeting: "", cannot_answer: "", clarification: "" };
 
 function stateMessage(state: SettingsState) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando configuración" />;
@@ -66,6 +68,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   const [scope, setScope] = useState(() => data ? Object.entries(data.scope_rules).sort(([a], [b]) => a.localeCompare(b)).map(([category, mode]) => `${category}=${mode}`).join("\n") : "");
   const [keywords, setKeywords] = useState(() => data?.keywords.join("\n") ?? "");
   const [tone, setTone] = useState(() => data?.tone ?? "");
+  const [messages, setMessages] = useState(() => data?.messages ?? EMPTY_MESSAGES);
   const [conversationLimit, setConversationLimit] = useState(() => String(data?.conversation_limit ?? ""));
   const [dailyLimit, setDailyLimit] = useState(() => String(data?.daily_limit ?? ""));
   const [metaCost, setMetaCost] = useState(() => String(data?.meta_cost ?? ""));
@@ -107,6 +110,7 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
     setScope(Object.entries(data.scope_rules).sort(([a], [b]) => a.localeCompare(b)).map(([category, mode]) => `${category}=${mode}`).join("\n"));
     setKeywords(data.keywords.join("\n"));
     setTone(data.tone);
+    setMessages(data.messages ?? EMPTY_MESSAGES);
     setConversationLimit(String(data.conversation_limit));
     setDailyLimit(String(data.daily_limit));
     setMetaCost(String(data.meta_cost));
@@ -115,7 +119,8 @@ export function Settings({ data: controlledData, state: controlledState, onRetry
   return <PageFrame title="Configuración" meta="Preferencias globales del asistente" state={stateMessage(state)}>
     <Card title="Alcance del agente"><p>Define en qué categorías el agente responde de forma automática y en cuáles siempre deriva a una persona.</p><details><summary>Sintaxis avanzada · categoría=mode</summary><p>Formato técnico: una regla por línea con categoría=mode, donde mode es bot_resolve o always_escalate. No lo cambies sin conocer el efecto en las respuestas.</p></details><Textarea label="Reglas de alcance" rows={4} value={scope} onChange={(event) => setScope(event.target.value)} /><Button variant="secondary" onClick={saveScope}>Guardar alcance</Button></Card>
     <Card title="Detección de emergencias"><p>Palabras que activan un aviso de emergencia. Se detectan en el próximo mensaje entrante.</p><Textarea label="Palabras clave de emergencia" rows={6} value={keywords} onChange={(event) => setKeywords(event.target.value)} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/keywords", { keywords: keywords.split("\n").map((value) => value.trim()).filter(Boolean) })}>Guardar palabras clave</Button></Card>
-    <Card title="Tono"><p>Define cómo suenan las respuestas del agente en cada conversación.</p><Input label="Tono" value={tone} onChange={(event) => setTone(event.target.value)} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/tone", { tone })}>Guardar tono</Button></Card>
+     <Card title="Tono"><p>Define cómo suenan las respuestas del agente en cada conversación.</p><Select label="Tono" value={tone} onChange={(event) => setTone(event.target.value)} options={[{ value: "cercano", label: "Cercano" }, { value: "formal", label: "Formal" }, { value: "directo", label: "Directo" }]} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/tone", { tone })}>Guardar tono</Button></Card>
+     <Card title="Mensajes"><p>Personaliza los mensajes estándar. El menú de categorías se agrega automáticamente al saludo.</p><Textarea label="Saludo" rows={3} value={messages.greeting} onChange={(event) => setMessages({ ...messages, greeting: event.target.value })} /><Textarea label="Cuando no puede responder" rows={3} value={messages.cannot_answer} onChange={(event) => setMessages({ ...messages, cannot_answer: event.target.value })} /><Textarea label="Aclaración" rows={3} value={messages.clarification} onChange={(event) => setMessages({ ...messages, clarification: event.target.value })} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/messages", messages)}>Guardar mensajes</Button></Card>
     <Card title="Límites de gasto"><p>Topes de gasto por conversación y por día. Al 80% el agente se vuelve más conservador; al 100% se detienen las llamadas de pago y la conversación pasa a una persona.</p><Input label="Límite por conversación (USD)" type="number" value={conversationLimit} onChange={(event) => setConversationLimit(event.target.value)} /><Input label="Límite diario (USD)" type="number" value={dailyLimit} onChange={(event) => setDailyLimit(event.target.value)} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/limits", { conversation_limit: Number(conversationLimit), daily_limit: Number(dailyLimit) })}>Guardar límites</Button></Card>
     <Card title="Precio Meta"><p>Costo por mensaje de servicio (USD), vigente desde 2026-10-01.</p><Input label="Costo por mensaje (USD)" type="number" value={metaCost} onChange={(event) => setMetaCost(event.target.value)} /><Button variant="secondary" onClick={() => void save("/panel/api/settings/meta", { service_message_cost: Number(metaCost) })}>Guardar precio</Button></Card>
      <Card title="Gasto actual"><DataTable columns={columns} rows={spendRows} rowKey={(row) => row.label} />{snapshot?.conversation_percent !== null ? <p>Conversación {snapshot?.conversation_percent}% de ${snapshot?.conversation_limit.toFixed(2)}</p> : null}</Card>

@@ -121,7 +121,7 @@ describe('AppShell (T6.4)', () => {
         '/panel/api/cases': { cases: [], users: [] },
         '/panel/api/conversations': { conversations: [{ id: 9, customer_id: 7, wa_phone: '+56911111111', state: 'active', summary: 'Conversación viva', last_message_at: '2026-08-25', created_at: '2026-08-25', case_id: 4 }] },
         '/panel/api/kb': { docs: [] },
-        '/panel/api/settings': { scope_rules: {}, keywords: [], tone: 'Claro', conversation_limit: 1, daily_limit: 2, meta_cost: 3, snapshot: null },
+        '/panel/api/settings': { scope_rules: {}, keywords: [], tone: 'cercano', messages: { greeting: 'Hola', cannot_answer: 'No disponible', clarification: 'Aclara' }, conversation_limit: 1, daily_limit: 2, meta_cost: 3, snapshot: null },
       };
       const body = bodies[new URL(path, 'http://localhost').pathname] ?? { contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' };
       return new Response(JSON.stringify(body), { status: 200 });
@@ -143,7 +143,7 @@ describe('AppShell (T6.4)', () => {
     await user.click(within(await drawer()).getByRole('button', { name: 'Base de Conocimientos' }));
     expect(await screen.findByText('No hay documentos')).toBeInTheDocument();
     await user.click(within(await drawer()).getByRole('button', { name: 'Configuración' }));
-    expect(await screen.findByDisplayValue('Claro')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Tono')).toHaveValue('cercano');
     expect(container.querySelector('.panel-shell__content')).not.toHaveTextContent('Vista disponible en un batch posterior.');
     fetchMock.mockRestore();
   });

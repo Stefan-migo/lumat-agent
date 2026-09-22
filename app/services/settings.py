@@ -16,9 +16,7 @@ standard messages) and their defaults on top of the generic KV surface:
 - `get_emergency_keywords(session)` — SS-2: the EM-1 keyword list as plain
   strings, ready for T4.2's regex compiler; default list below.
 - `get_tone(session)` / `get_message(session, key, default)` — SS-5: tone style
-  and standard-message overrides. Message content defaults stay in the chat
-  nodes (single source of truth); the accessor only resolves overrides and
-  falls back to the caller-provided default.
+  and standard-message overrides.
 
 All functions take an explicit session; the caller commits and closes (matches
 app/services/customers.py / audit.py style).
@@ -37,8 +35,30 @@ from app.services.audit import record_audit
 SCOPE_MODES: tuple[str, ...] = ("bot_resolve", "always_escalate")
 DEFAULT_SCOPE_MODE = "bot_resolve"
 
-# SS-5: default tone style (LumatRequest §1.12); panel-editable free string.
-DEFAULT_TONE_STYLE = "warm-professional"
+# SS-5: validated tone styles and their prompt directives.
+TONE_STYLES: tuple[str, ...] = ("cercano", "formal", "directo")
+TONE_DIRECTIVES: dict[str, str] = {
+    "cercano": "Responde con un tono cercano, amable y claro.",
+    "formal": "Responde con un tono formal, profesional y preciso.",
+    "directo": "Responde de forma directa, breve y clara.",
+}
+DEFAULT_TONE_STYLE = "cercano"
+
+MESSAGE_DEFAULTS: dict[str, str] = {
+    "greeting": (
+        "Hola, soy el asistente virtual de Lumat, la empresa de gasfitería que te "
+        "atiende. ¿En qué puedo ayudarte? Elige una opción:\n"
+    ),
+    "cannot_answer": (
+        "Lo siento, no puedo responder con seguridad a eso. Un asesor de Lumat "
+        "revisará tu consulta y te contactará."
+    ),
+    "clarification": (
+        "No entendí tu mensaje. ¿Puedes elegir una opción del menú? "
+        "(Calefont, Caldera, Calefacción, Solicitar visita, Valores, "
+        "Postventa/Garantía, Emergencia, Hablar con una persona)"
+    ),
+}
 
 # SS-2 (EM-1): default emergency expressions + obvious Spanish variants.
 # Stored as a plain list[str] — T4.2 compiles the regex from these.
@@ -122,8 +142,11 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "notify.owner_whatsapp": DEFAULT_OWNER_WHATSAPP,
     "notify.smtp_host": DEFAULT_SMTP_HOST,
     "notify.smtp_from": DEFAULT_SMTP_FROM,
-    # SS-5: tone style used by the chat nodes (free string, panel-editable).
+    # SS-5: tone style used by the chat nodes.
     "tone.style": DEFAULT_TONE_STYLE,
+    "messages.greeting": MESSAGE_DEFAULTS["greeting"],
+    "messages.cannot_answer": MESSAGE_DEFAULTS["cannot_answer"],
+    "messages.clarification": MESSAGE_DEFAULTS["clarification"],
     # AP-8 (T5.5): dashboard KPI time window in days (SQL counts over the
     # last N days). Panel-editable via the generic settings KV surface.
     "kpi.window_days": 7,
@@ -195,15 +218,17 @@ def get_emergency_keywords(session: Session) -> list[str]:
 
 
 def get_tone(session: Session) -> str:
-    """SS-5: tone style (`tone.style`), default `warm-professional`."""
-    return get_setting(session, "tone.style", default=DEFAULT_TONE_STYLE)
+    """SS-5: valid tone style; invalid stored values degrade to the default."""
+    tone = get_setting(session, "tone.style", default=DEFAULT_TONE_STYLE)
+    return tone if tone in TONE_STYLES else DEFAULT_TONE_STYLE
 
 
-def get_message(session: Session, key: str, default: str) -> str:
-    """SS-5: override for `messages.<key>`, else the caller-provided default.
+def get_tone_directive(session: Session) -> str:
+    """SS-5: prompt directive for the effective tone style."""
+    return TONE_DIRECTIVES[get_tone(session)]
 
-    Message content defaults live in the chat nodes (GREETING_HEADER,
-    CANNOT_ANSWER_REPLY, ...); callers pass their constant as `default` so the
-    settings module never duplicates node-owned content.
-    """
-    return get_setting(session, f"messages.{key}", default=default)
+
+def get_message(session: Session, key: str, default: str | None = None) -> str:
+    """SS-5: override for `messages.<key>`, else the built-in default."""
+    fallback = MESSAGE_DEFAULTS.get(key, default)
+    return get_setting(session, f"messages.{key}", default=fallback)

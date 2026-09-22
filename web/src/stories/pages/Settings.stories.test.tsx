@@ -36,6 +36,7 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     expect(screen.getByRole("heading", { name: "Tono" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Límites de gasto" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Precio Meta" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mensajes" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Gasto actual" })).toBeInTheDocument();
   });
 
@@ -96,12 +97,20 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     }
   });
 
-  it("renders the tone input with the current tone value and plain-Spanish effect", () => {
+  it("renders the tone selector with the current tone value and plain-Spanish effect", () => {
     render(<SettingsView />);
     const card = screen.getByRole("heading", { name: "Tono" }).closest(".card") as HTMLElement;
     expect(within(card).getByText(/respuestas del agente/i)).toBeInTheDocument();
-    const toneInput = within(card).getByLabelText(/tono/i) as HTMLInputElement;
-    expect(toneInput.value).toBe(settings.tone);
+    const toneSelect = within(card).getByLabelText(/tono/i) as HTMLSelectElement;
+    expect(toneSelect.value).toBe(settings.tone);
+  });
+
+  it("renders the three editable standard messages", () => {
+    const card = (render(<SettingsView />), screen.getByRole("heading", { name: "Mensajes" }).closest(".card") as HTMLElement);
+    expect(within(card).getByText(/menú de categorías se agrega automáticamente/i)).toBeInTheDocument();
+    expect((within(card).getByLabelText(/saludo/i) as HTMLTextAreaElement).value).toBe(settings.messages.greeting);
+    expect((within(card).getByLabelText(/no puede responder/i) as HTMLTextAreaElement).value).toBe(settings.messages.cannot_answer);
+    expect((within(card).getByLabelText(/aclaración/i) as HTMLTextAreaElement).value).toBe(settings.messages.clarification);
   });
 
   it("renders spend-limit inputs (conversation + daily) with plain-Spanish effect before them", () => {
@@ -245,15 +254,31 @@ describe("Settings API page", () => {
     });
 
     render(<Settings />);
-    const tone = await screen.findByDisplayValue(settings.tone);
-    fireEvent.change(tone, { target: { value: "directa y breve" } });
+    const tone = await screen.findByLabelText("Tono");
+    fireEvent.change(tone, { target: { value: "directo" } });
     fireEvent.click(screen.getByRole("button", { name: "Guardar tono" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/settings/tone",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ tone: "directa y breve" }) }),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ tone: "directo" }) }),
     ));
     expect(await screen.findByRole("status")).toHaveTextContent("Configuración guardada");
+    fetchMock.mockRestore();
+  });
+
+  it("saves edited standard messages through the messages endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (input === "/panel/api/settings" && !init?.method) return new Response(JSON.stringify(settings), { status: 200 });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+    render(<Settings />);
+    const greeting = await screen.findByDisplayValue(settings.messages.greeting);
+    fireEvent.change(greeting, { target: { value: "Hola nuevo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar mensajes" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/settings/messages",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ ...settings.messages, greeting: "Hola nuevo" }) }),
+    ));
     fetchMock.mockRestore();
   });
 

@@ -5,12 +5,13 @@ Admin-only JSON wrappers over `app/services/settings.py` + `app/services/costs.p
 upserts the KV row AND audits with the acting admin, SH-5):
 
 - GET /settings -> all sections + spend snapshot (design #18):
-  {"scope_rules", "keywords", "tone", "conversation_limit", "daily_limit",
-  "meta_cost", "snapshot"}
+  {"scope_rules", "keywords", "tone", "messages", "conversation_limit",
+  "daily_limit", "meta_cost", "snapshot"}
 - POST /settings/{section} -> per-section KV upsert + audit (design #19, #18):
   scope  {"rules": {cat: mode}}           -> scope_rules
   keywords {"keywords": [str]}            -> emergency.keywords
   tone   {"tone": str}                    -> tone.style
+  messages {"greeting": str, ...}         -> messages.*
   limits {"conversation_limit": n, "daily_limit": n} (>= 0) -> cost.*
   meta   {"service_message_cost": n}      -> meta_pricing
 
@@ -59,6 +60,12 @@ class ToneBody(BaseModel):
     tone: str
 
 
+class MessagesBody(BaseModel):
+    greeting: str
+    cannot_answer: str
+    clarification: str
+
+
 class LimitsBody(BaseModel):
     conversation_limit: float
     daily_limit: float
@@ -90,6 +97,16 @@ def _parse_scope(body: ScopeBody) -> dict[str, str]:
     return rules
 
 
+def _parse_tone(body: ToneBody) -> str:
+    tone = body.tone.strip()
+    if tone not in settings_service.TONE_STYLES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"tone must be one of {settings_service.TONE_STYLES}",
+        )
+    return tone
+
+
 @router.get("/settings")
 def settings_get(
     session: Session = Depends(get_db),
@@ -102,6 +119,10 @@ def settings_get(
         "scope_rules": scope_rules,
         "keywords": settings_service.get_emergency_keywords(session),
         "tone": settings_service.get_tone(session),
+        "messages": {
+            key: settings_service.get_message(session, key)
+            for key in settings_service.MESSAGE_DEFAULTS
+        },
         "conversation_limit": settings_service.get_setting(
             session, "cost.conversation_limit", default=1.50
         ),
@@ -141,7 +162,19 @@ def settings_tone(
     session: Session = Depends(get_db),
     current: User = Depends(require_admin_json),
 ) -> dict:
-    _save(session, "tone.style", body.tone.strip(), current)
+    _save(session, "tone.style", _parse_tone(body), current)
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/settings/messages")
+def settings_messages(
+    body: MessagesBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    for key, value in body.model_dump().items():
+        _save(session, f"messages.{key}", value, current)
     session.commit()
     return {"ok": True}
 
@@ -187,7 +220,7 @@ def settings_meta(
 # Catch-all MUST stay registered AFTER the specific {scope,keywords,tone,limits,
 # meta} POST routes above: FastAPI matches routes in registration order, so the
 # literal sections win and anything else is an unknown section (PDW-API-3).
-_KNOWN_SECTIONS = {"scope", "keywords", "tone", "limits", "meta"}
+_KNOWN_SECTIONS = {"scope", "keywords", "tone", "messages", "limits", "meta"}
 
 
 @router.post("/settings/{section}")

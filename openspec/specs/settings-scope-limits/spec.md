@@ -74,7 +74,14 @@ The system MUST track message/conversation spend and MUST account for Meta's ser
 
 The system MUST let the owner adjust the bot's tone, standard messages, and response rules through the panel without code changes (LumatRequest §1.12).
 
+The supported tone styles MUST be `cercano`, `formal`, and `directo`.
+
 #### Scenario: Message edited
 - GIVEN the owner edits a standard bot message or tone setting
 - WHEN the change is saved
 - THEN subsequent bot replies use the edited content
+
+#### Scenario: Tone outside the supported list
+- GIVEN the owner submits a tone other than `cercano`, `formal`, or `directo`
+- WHEN the change is saved
+- THEN the panel API rejects the request with HTTP 400
