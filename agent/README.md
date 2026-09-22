@@ -38,8 +38,8 @@ agent/
 `registry.yaml` declares the roster as data (AC-4 data-only): a top-level
 `agent:` block — the orchestrator, **byte-identical to before H2** (AC-4
 invariant, one top-level orchestrator) — plus a `sub_agents:` sibling with five
-  sub-agents, each carrying `name/persona/tools_whitelist/memoria_scope/
-  model/temperature`:
+sub-agents, each carrying `name/persona/tools_whitelist/memoria_scope/
+model/temperature`:
 
 | Sub-agent | Slice-1 runtime | Tools whitelist |
 |-----------|-----------------|-----------------|
