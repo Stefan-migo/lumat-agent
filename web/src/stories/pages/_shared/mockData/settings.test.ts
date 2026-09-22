@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import { settings } from "./settings";
 
 /** Settings serializer keys from GET /settings in app/panel/api/routes/settings.py
- *  (R-PRD-PG-3): {scope_rules, keywords, tone, conversation_limit, daily_limit,
+ *  (R-PRD-PG-3): {scope_rules, keywords, tone, messages, conversation_limit, daily_limit,
  *  meta_cost, snapshot}. */
 const SETTINGS_KEYS = [
   "conversation_limit",
   "daily_limit",
   "keywords",
   "meta_cost",
+  "messages",
   "scope_rules",
   "snapshot",
   "tone",
@@ -55,6 +56,12 @@ describe("Settings mock (settings.ts)", () => {
     expect(settings.conversation_limit).toBeGreaterThan(0);
     expect(settings.daily_limit).toBeGreaterThan(0);
     expect(settings.meta_cost).toBeGreaterThan(0);
+  });
+
+  it("pins the standard message keys", () => {
+    expect(Object.keys(settings.messages).sort()).toEqual([
+      "cannot_answer", "clarification", "greeting",
+    ]);
   });
 
   it("records a valid ISO date in snapshot.date", () => {
