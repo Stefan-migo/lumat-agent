@@ -205,8 +205,8 @@ respond
 - [x] **T5** — Spec deltas: IAC-14 (`openspec/specs/internal-agent-chat/spec.md`) and CM-4
       (`openspec/specs/conversation-manager/spec.md`). **Done — commit `17c859d7`.**
 - [x] **T6** — Verify. **Done — see "Verification evidence" below.**
-- [ ] **T7** — Record committed, branch pushed, PR open against `main` with the single type label.
-      **The merge remains the human's decision.**
+- [x] **T7** — Record committed, branch pushed, **PR #303** open against `main` with the single label
+      `type:bug`. **The merge remains the human's decision.**
 
 ## Pinned contract (T1)
 
@@ -331,6 +331,34 @@ The full suite was re-run green after these corrections.
 - The Graph Check ran against the main worktree root: `graphify-out/` is gitignored, so this worktree
   has no graph, and the code for this area is identical across the two.
 
+## Native review (RDD)
+
+The review switch was on. The lifecycle ran as: selectorless STATUS -> intended-untracked selection
+(the only eligible untracked path was rapso's `.opencode/tools/package-lock.json`, excluded) -> STATUS
+-> START -> consent relayed and granted -> the single lens -> acknowledgement.
+
+| Field | Value |
+|---|---|
+| Lineage | `review-c9b076c297759832` |
+| Risk | medium |
+| Lenses | **one** — `review-reliability` (medium risk selects one; the four-lens plan is for high) |
+| Correction budget | 200 |
+| Outcome | **approved** |
+| Authority | **burned** (`gentle-ai.review-acknowledged/v1`) |
+| Consumed revision | `sha256:594e02e2fc39ce25668a1982e4a1ba721b7827cdd60087ce7428bfbff3876244` |
+
+**Non-blocking advisory — `R3-session-acquisition-failure`** (WARNING, inferential, introduced),
+`app/chat/assistant/nodes.py:608` with `app/chat/nodes/respond.py:131` cited too: the
+`with session_scope()` entry sits outside the `try`, so a failure *acquiring* the session would escape
+without producing the promised degraded response.
+
+**Measured after the review — structurally correct, practically immaterial.** `session_scope()`
+(`app/db.py:26-40`) begins with `SessionLocal()`, which is lazy: SQLAlchemy opens no connection when
+the Session is constructed, only on the first `execute`. A real database outage therefore surfaces at
+`session.execute` inside `kb.retrieve`, i.e. **inside** the `try`, and is caught. The advisory is left
+as separate follow-up work, per the review's own instruction; this candidate's receipt stands and the
+review is not re-run for it.
+
 ## Progress
 
 | Task | Route | Evidence |
@@ -341,7 +369,7 @@ The full suite was re-run green after these corrections.
 | T4 GREEN customer | delegated writer (same session as T2) | commit `d4ad75fe` — 2 files |
 | T5 spec deltas | inline | commit `17c859d7` — 2 files |
 | T6 verify | inline | 1204 passed / 0 failed, exit 0 |
-| T7 record + PR | inline | pending |
+| T7 record + PR | inline | **PR #303**, label `type:bug`, GitGuardian green |
 
 Work-unit commits, each verified against `git show --stat` so the message cannot overstate the content:
 
@@ -352,5 +380,7 @@ Work-unit commits, each verified against `git show --stat` so the message cannot
 
 ## Next step
 
-T7 — push the branch, open the PR against `main` with a single type label, and check CI. The merge
-remains the human's decision.
+The unit is delivered. **PR #303** awaits the human's merge decision. Two follow-ups remain open: the
+`R3-session-acquisition-failure` advisory measured above (immaterial for a real outage, but a genuine
+structural gap), and the second handoff item — farewell / out-of-hours messages — which needs five
+product decisions before its ODD record can be written.
