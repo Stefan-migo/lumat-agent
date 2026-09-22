@@ -172,4 +172,13 @@ the ~400-line budget → strategy `ask-on-risk`, no chain needed, single PR.
 - [x] Approach chosen; the build-hash variant rejected with verified reasons.
 - [x] Worktree created: `../lumat-agent-odd-panel-sw-stale-shell`, branch
       `odd/panel-sw-stale-shell`.
-- [ ] T1–T5 outstanding.
+- [x] T1 — Regression harness fails against the stale cache-first worker with
+      `Expected: "new shell"; Received: "stale shell"`.
+- [x] T2 — Worker fetch policy is network-first for stable panel resources and
+      cache-first only for content-hashed assets.
+- [x] T3 — Dead cache policy exports and inert purge removed; cache-growth
+      ceiling and build-id upgrade path marked with `ponytail:`.
+- [x] T4 — Release smoke checklist documents the single reload for browsers
+      stranded by the old worker.
+- [x] T5 — `npm test` and `npm run build` pass in `web/`; build emits
+      `dist/sw.js`.

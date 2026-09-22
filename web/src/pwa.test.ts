@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { isCacheableAsset, isObsoleteCache, SERVICE_WORKER_PATH, shouldRegisterPwa } from "./pwa";
+import vm from "node:vm";
+import { SERVICE_WORKER_PATH, shouldRegisterPwa } from "./pwa";
 import { parsePanelPath, pathForView } from "./components/domain/panelRoutes";
 
 describe("PWA shell", () => {
@@ -30,31 +31,88 @@ describe("PWA shell", () => {
     expect(shouldRegisterPwa({ protocol: "https:", serviceWorker: true })).toBe(true);
   });
 
-  it("allows only public static assets and never API or session HTML", () => {
-    expect(isCacheableAsset("https://panel.test/panel/app/assets/index-abc123.js")).toBe(true);
-    expect(isCacheableAsset("https://panel.test/panel/app/brand/lumat-mark.png")).toBe(true);
-    expect(isCacheableAsset("https://panel.test/panel/app/manifest.webmanifest")).toBe(true);
-    expect(isCacheableAsset("https://panel.test/panel/api/notifications")).toBe(false);
-    expect(isCacheableAsset("https://panel.test/panel/api")).toBe(false);
-    expect(isCacheableAsset("https://panel.test/panel/app/")).toBe(true);
-    expect(isCacheableAsset("https://panel.test/panel/app/index.html")).toBe(false);
-    expect(isCacheableAsset("https://panel.test/panel/app/assets/app.js", "POST")).toBe(false);
-  });
-
-  it("replaces older shell versions without deleting the active cache", () => {
-    expect(isObsoleteCache("lumat-shell-v0", "lumat-shell-v1")).toBe(true);
-    expect(isObsoleteCache("lumat-shell-v1", "lumat-shell-v1")).toBe(false);
-    expect(isObsoleteCache("other-cache", "lumat-shell-v1")).toBe(false);
-  });
-
-  it("registers the worker with the production subtree and scopes its cache", () => {
+  it("exercises the worker cache policy", async () => {
     expect(SERVICE_WORKER_PATH).toBe("/panel/app/sw.js");
-    const worker = readFileSync("public/sw.js", "utf8");
-    const registration = readFileSync("src/pwa.ts", "utf8");
-    expect(worker).toContain('const SHELL_URL = "/panel/app/"');
-    expect(registration).toContain('scope: "/panel/app/"');
-    expect(worker).toContain('url.pathname.startsWith("/panel/app/assets/")');
-    expect(worker).toContain('url.pathname.startsWith("/panel/api/")');
+    const listeners = new Map<string, (event: any) => void>();
+    const entries = new Map<string, Response>();
+    let fetchCalls = 0;
+    let fetchImpl: (request: Request) => Promise<Response> = async () => new Response("network");
+    const keyFor = (request: Request | string) => new URL(typeof request === "string" ? request : request.url, "https://panel.test").href;
+    const fetch = (request: Request | string) => {
+      fetchCalls += 1;
+      return fetchImpl(typeof request === "string" ? new Request(`https://panel.test${request}`) : request);
+    };
+    const cache = {
+      match: async (request: Request | string) => entries.get(keyFor(request))?.clone(),
+      put: async (request: Request | string, response: Response) => {
+        entries.set(keyFor(request), response.clone());
+      },
+      add: async (url: string) => {
+        const response = await fetch(url);
+        if (response.ok) await cache.put(url, response);
+      },
+    };
+    const caches = {
+      open: async () => cache,
+      keys: async () => ["lumat-shell-v1"],
+      delete: async () => true,
+    };
+    const self = {
+      addEventListener: (type: string, handler: (event: any) => void) => listeners.set(type, handler),
+      skipWaiting: async () => {},
+      clients: { claim: async () => {} },
+    };
+    vm.runInNewContext(readFileSync("public/sw.js", "utf8"), {
+      self,
+      caches,
+      fetch,
+      URL,
+      Request,
+      Response,
+      console,
+    });
+
+    const installPromises: Promise<unknown>[] = [];
+    listeners.get("install")?.({ waitUntil: (promise: Promise<unknown>) => installPromises.push(promise) });
+    await Promise.all(installPromises);
+
+    const dispatch = async (url: string, method = "GET") => {
+      let responsePromise: Promise<Response> | undefined;
+      listeners.get("fetch")?.({
+        request: new Request(`https://panel.test${url}`, { method }),
+        respondWith: (promise: Promise<Response>) => { responsePromise = promise; },
+      });
+      return responsePromise ? responsePromise.then((response) => response.text()) : undefined;
+    };
+    const setNetworkBody = (body: string) => {
+      fetchImpl = async () => new Response(body);
+    };
+
+    await cache.put("https://panel.test/panel/app/", new Response("stale shell"));
+    setNetworkBody("new shell");
+    expect(await dispatch("/panel/app/")).toBe("new shell");
+
+    setNetworkBody("newer shell");
+    await dispatch("/panel/app/");
+    fetchImpl = async () => { throw new Error("offline"); };
+    expect(await dispatch("/panel/app/")).toBe("newer shell");
+
+    await cache.put("https://panel.test/panel/app/assets/index-abc123.js", new Response("cached asset"));
+    const callsBeforeAsset = fetchCalls;
+    expect(await dispatch("/panel/app/assets/index-abc123.js")).toBe("cached asset");
+    expect(fetchCalls).toBe(callsBeforeAsset);
+
+    for (const url of ["/panel/app/brand/lumat-mark.png", "/panel/app/manifest.webmanifest"]) {
+      await cache.put(`https://panel.test${url}`, new Response("stale resource"));
+      setNetworkBody("live resource");
+      expect(await dispatch(url)).toBe("live resource");
+    }
+
+    for (const url of ["/panel/api/notifications", "/panel/api"]) {
+      expect(await dispatch(url)).toBeUndefined();
+    }
+    expect(await dispatch("/panel/app/index.html")).toBeUndefined();
+    expect(await dispatch("/panel/app/", "POST")).toBeUndefined();
   });
 
   it("preserves the nine page destinations and compatibility page contracts", () => {
