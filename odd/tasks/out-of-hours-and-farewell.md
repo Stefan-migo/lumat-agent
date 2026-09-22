@@ -163,10 +163,10 @@ constraint is that the failure is visible (logged) and does not misinform the cu
 
 ### WU1 — pin the contract
 
-- [ ] **T1** — Pin: the exact gate placement (D1, D5), the `hours.schedule` encoding and its validation
+- [x] **T1** — Pin: the exact gate placement (D1, D5), the `hours.schedule` encoding and its validation
       rule (D2), the unparseable-hours behavior (D8), and the client's social-close detector against
-      real phrasings (D4). Route: inline + one delegated measurement pass. Deliverable: the pinned
-      contract section appended to this record, before any source change.
+      real phrasings (D4). Route: inline + one delegated measurement pass. **Done — see "Pinned
+      contract (T1)" below.** No source change was made.
 
 ### WU2 — the hours
 
@@ -240,13 +240,115 @@ Above the 400-line review budget, so a delivery strategy decision is required be
 - **Two chained PRs**: hours + gates + spec first (the behavior), then the panel surface (the editing).
   The first PR leaves the feature configurable only in the database.
 
-Recommendation: **one PR with `size:exception`**, on SS-5's argument. **Not yet decided** — to be
-confirmed by the maintainer before apply, per the delivery-strategy rule.
+Recommendation: **one PR with `size:exception`**, on SS-5's argument.
+
+**Decided**: one PR with `size:exception`, approved by the maintainer before the work started.
+
+## Pinned contract (T1)
+
+Measured on `d7a3c3aa`, read from the source, not recited.
+
+**The router functions** (`app/chat/graph.py`):
+
+| Router | Line | Logic |
+|---|---|---|
+| `_flow_start` | `:131-137` | `_pending` in `state.captured` -> `capture`; otherwise `classify_intent` |
+| `_after_emergency_gate` | `:139-145` | `strong` -> `emergency`; `weak` -> `handoff`; otherwise `cost_gate` |
+| `_after_cost_gate` | `:148-152` | `blocked` -> `handoff`; otherwise `handoff_gate` |
+| `_after_handoff_gate` | `:154-157` | truthy `handoff_reason` -> `handoff`; otherwise `receive` |
+| `_route_path` | `:159-161` | `state.next_step` or `respond` |
+| `_after_capture` | `:163-166` | `next_step == "summary"` -> `summary`; otherwise `END` |
+| `_after_respond` | `:168-170` | `escalate` -> `handoff`; otherwise `END` |
+
+**P1 — Gate placement: after `handoff_gate`, before `receive`, with an explicit `_pending` bypass (P2).**
+
+Two insertion points were rejected on measured consequence:
+
+- *After `emergency_gate`, before `cost_gate`*: `cost_gate` reads cost state and can audit or alert the
+  owner (`app/chat/nodes/cost_gate.py:33-64`), so out-of-hours messages would silently stop being
+  cost-audited.
+- *After `cost_gate`, before `handoff_gate`*: `handoff_gate` is a pure reader with no DB side effect
+  (`app/chat/nodes/handoff_gate.py:95-116`), so a 02:00 complaint would stop escalating to a human.
+
+Inserting after `handoff_gate` preserves **all three** existing gates — emergency, cost and handoff — and
+adds exactly one new behavior. It also sits before `receive`, so the first-contact greeting, `capture`
+and `classify_intent` are all skipped for a closed message.
+
+**P2 — D5: a capture in progress wins.** Capture progress persists in `Conversation.captured_data`
+(`app/chat/nodes/capture.py:81-85`) and is rebuilt into state by `from_db`
+(`app/chat/state.py:178-223`), so a new message genuinely can arrive mid-capture, and `_flow_start`
+reads `_pending` for exactly that reason (`graph.py:131-137`). The gate therefore returns the notice
+**only when no capture is pending**: a customer already mid-flow is not stranded, and a half-collected
+case is not abandoned. This is the bypass the chosen insertion point requires.
+
+**P3 — D2: the schedule is a validated list of entries.**
+`hours.timezone` (string, default `America/Santiago`) and `hours.schedule` (a list). Each entry is
+`{"days": [1..7], "open": "HH:MM", "close": "HH:MM"}` with ISO weekdays. Validated on write and
+rejected with `400`: weekdays in `1..7`, **no weekday repeated across entries**, `HH:MM` well formed,
+`open < close`. Precedent for a structured stored value already exists — `emergency.keywords` is a
+stored `list[str]` (`app/services/settings.py:211-217`) and `scope_rules` a validated dict (`:199-208`).
+
+Rejected: a single `open`/`close` pair — it cannot express a different Saturday, so the bot would lie
+for a whole day, which is the failure class this session exists to remove. A hand-rolled string DSL was
+rejected too: more code and more bug surface than a Pydantic list, for a worse UI.
+
+**P4 — D8: unusable hours fail OPEN and are logged.** An unparseable stored schedule, or a timezone
+`ZoneInfo` cannot resolve, makes the reader report **open** — precisely the pre-feature behavior — and
+log a warning. Failing closed would have the bot telling real customers the business is shut because of
+a typo in a setting; failing open degrades to today's behavior, which is the safe direction. Precedent:
+`get_tone` returns the default for an unusable stored value (`app/services/settings.py:220-223`). Log
+level `warning`, matching the convention for a degraded capability used by `kb-retrieval-failure`.
+`app/services/settings.py` currently defines no logger, so the unit adds one.
+
+**P5 — D4: the client gets its own closing detector, narrower than the panel's social set.**
+Structural guards mirrored from `_is_conversational_turn` (`app/chat/assistant/nodes.py:528-534`):
+casefold, reject empty, reject longer than 40 characters, reject any `?`, tokenize on Unicode words,
+require **every** token to be allowed. On top of that the client requires **at least one closing token**,
+because the panel's set also exempts greetings and acknowledgements, which are not a goodbye.
+
+- `CLOSING_WORDS` = {adios, bye, chau, hasta, luego, nos, pronto, vemos}
+- `CLOSING_POLITE` = {gracias, muchas, mucho, ok, bueno, dale, listo, perfecto, genial, excelente, ya, nada, bien}
+
+A message is a farewell iff every token is in `CLOSING_WORDS | CLOSING_POLITE` **and** at least one is
+in `CLOSING_WORDS`.
+
+The panel module is **not** imported: `app/chat/assistant/nodes.py:5-30` pulls in the assistant
+approval, evidence, markup, tools, audit, KB, LLM and cost modules — a heavy, wrong-direction dependency
+for the customer chat.
+
+Hand-applied against the guards, the expected verdicts are: `chau`, `gracias, chau`, `hasta luego`,
+`nos vemos` -> farewell; `ok gracias` and `muchas gracias` -> **not** (no closing token);
+`gracias, ¿cuánto sale la revisión anual?` and `¿cuánto cuesta?` -> not (contain `?`);
+`chau, pero antes dime los valores` -> not (disallowed tokens); `hola, necesito una visita` -> not.
+**These are hand-applied, not observed.** T4 must re-observe them as RED and must measure the detector
+against real phrasings in both directions, adjusting from that evidence rather than from this list's
+intent — the panel's `_SOCIAL_WORDS` shipped with `buenos` and `chau` missing until it was measured.
+
+**P6 — the baseline this unit changes.** A bare `chau` today reaches `classify_intent`, whose declared
+vocabulary has no social or farewell intent: an unclassifiable text records an `unknown_intent` event
+and increments a persisted count (`app/chat/nodes/classify_intent.py:186-201`), and orchestration sends a
+first unknown to `respond` (`app/chat/nodes/orchestrate.py:92-94`), where a later turn answers with the
+clarification. So a goodbye currently consumes an unknown-intent increment and can be answered with a
+clarification — or, on another path, with the knowledge-base-miss refusal.
+
+**P7 — a graph-check limitation, recorded rather than hidden.** `graphify path` between graph node
+functions returns **no directed path** (`emergency_gate() -> respond()`, `receive() -> orchestrate()`,
+`settings_messages() -> SETTINGS_DEFAULTS`). LangGraph wires nodes as `add_node` /
+`add_conditional_edges` **strings**, so the node relationships are data, not call edges. The graph is
+therefore not a usable source for this unit's flow topology; `app/chat/graph.py` is, and it was read
+directly. This is a real limitation of the graph for graph-topology work, not a failure of the check.
 
 ## Graph check
 
-To be recorded per task. This worktree has no graph (`graphify-out/` is gitignored, `.gitignore:24`), so
-queries run against the main worktree root, whose code for this area is identical.
+Run from the main worktree root, because this worktree has no graph (`graphify-out/` is gitignored,
+`.gitignore:24`) and the code for this area is identical there.
+
+- `graphify query "customer chat gate routing emergency out of hours business hours"` — 506 nodes; the
+  relevant hits were `emergency() [app/chat/nodes/emergency.py:69]`, the conversation pipeline
+  hyperedge (`GRAPH_REPORT.md:708-711`), and `chat.py [app/panel/api/routes/chat.py]`.
+- `graphify path "emergency_gate()" "respond()"`, `"receive()" "orchestrate()"`, and
+  `"settings_messages()" "SETTINGS_DEFAULTS"` — **no directed path** in all three. See P7: LangGraph
+  wires nodes as strings, so the flow topology is not in the graph.
 
 Preliminary nodes for this unit, from the measurements above:
 `emergency_gate() [app/chat/nodes/emergency_gate.py]`, `build_graph() [app/chat/graph.py]`,
