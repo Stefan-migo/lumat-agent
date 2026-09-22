@@ -925,6 +925,10 @@ def stream_events(session_factory, thread_id: int, run_id: str, *, timeout=300.0
             if done:
                 return
             time.sleep(interval)
+        # Falling out of the loop means the deadline elapsed with the run still
+        # unsettled: the stream is ending, the run is not. This transport-only
+        # marker lets clients distinguish the deadline from a finished turn.
+        yield {"type": "timeout", "thread_id": thread_id, "run_id": run_id}
 
     return poll()
 
@@ -955,6 +959,10 @@ async def stream_events_async(session_factory, thread_id: int, run_id: str, *, t
         if done:
             return
         await asyncio.sleep(interval)
+    # Falling out of the loop means the deadline elapsed with the run still
+    # unsettled: the stream is ending, the run is not. This transport-only
+    # marker lets clients distinguish the deadline from a finished turn.
+    yield {"type": "timeout", "thread_id": thread_id, "run_id": run_id}
 
 
 def approve_plan(session: Session, thread: InternalChatThread, user: User, run_id: str, token: str, *, reject: bool = False) -> InternalChatMessage | None:

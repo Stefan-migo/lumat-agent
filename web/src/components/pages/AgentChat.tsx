@@ -149,6 +149,17 @@ const THINKING_LABELS: Record<string, string> = {
   approval_pending: "Esperando aprobación…",
 };
 
+const RUN_WATCH_INTERVAL_MS = 3_000;
+const RUN_WATCH_TIMEOUT_MS = 30 * 60 * 1_000;
+
+const runStillProcessing = (result: InternalChatResponse, run: string) =>
+  (result.messages ?? []).some(
+    (message) =>
+      message.author === "admin" &&
+      message.assistant_metadata?.run_id === run &&
+      message.status === "processing",
+  );
+
 function relativeTime(value: string | null | undefined): string {
   if (!value) return "Sin fecha";
   const days = Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
@@ -359,6 +370,8 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
   const [renameTarget, setRenameTarget] = useState<InternalChatThreadSummary | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InternalChatThreadSummary | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
+  const watchCancelledRef = useRef(false);
+  const watchedRunRef = useRef<string | null>(null);
 
   const loadThread = (result: InternalChatResponse, preserveArtifacts = false) => {
     const state = result.thread.assistant_state;
@@ -429,6 +442,17 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
       .finally(() => setCapabilitiesLoading(false));
   }, [contextOpen]);
 
+  // Reset on setup, not only on cleanup: StrictMode mounts, unmounts and
+  // remounts every effect in dev, so a ref that is only ever set to `true`
+  // stays `true` and the run watch below dies on its first tick — in dev only,
+  // which is exactly where the panel is exercised.
+  useEffect(() => {
+    watchCancelledRef.current = false;
+    return () => {
+      watchCancelledRef.current = true;
+    };
+  }, []);
+
   const [settledStream, setSettledStream] = useState("");
 
   useEffect(() => {
@@ -454,10 +478,32 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
     if (event.type === "error") setError(event.error ?? "El stream del asistente falló");
   };
 
+  const watchRunToSettle = async (id: number, run: string) => {
+    if (watchedRunRef.current === run) return;
+    watchedRunRef.current = run;
+    try {
+      const deadline = Date.now() + RUN_WATCH_TIMEOUT_MS;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, RUN_WATCH_INTERVAL_MS));
+        if (watchCancelledRef.current || watchedRunRef.current !== run) return;
+        const snapshot = await getChatThread(id);
+        if (!runStillProcessing(snapshot, run)) return;
+      }
+      setRecoverable(true);
+    } finally {
+      if (watchedRunRef.current === run) watchedRunRef.current = null;
+    }
+  };
+
   const openStream = async (id: number, run: string) => {
     setRunId(run);
+    let gaveUp = false;
     try {
-      await streamChatEvents(id, run, handleEvent);
+      await streamChatEvents(id, run, (event) => {
+        if (event.type === "timeout") gaveUp = true;
+        handleEvent(event);
+      });
+      if (gaveUp) await watchRunToSettle(id, run);
       const persisted = await getChatThread(id);
        loadThread(persisted, true);
       setStream("");
