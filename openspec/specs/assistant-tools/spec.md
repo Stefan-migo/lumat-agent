@@ -177,3 +177,17 @@ The assistant boundary MUST preserve bounded failure results from write validati
 - GIVEN a typed write handler raises
 - WHEN SDB records the outcome
 - THEN it returns bounded failure evidence and no successful completion
+
+### Requirement: AT-10 — Read Failure Truthfulness
+
+The assistant boundary MUST degrade the turn when a read-only tool fails, preserve bounded failure evidence for the responder, and MUST NOT expose the raw exception as the answer. (Seams: `app/chat/assistant/nodes.py:614-622`, `app/chat/assistant/graph.py:83-84`; unit and integration tests MUST assert responder continuation and bounded evidence.)
+
+#### Scenario: Memory read failure
+- GIVEN `memory.read` fails with an internal exception
+- WHEN the assistant executes the tool
+- THEN the turn is marked degraded, continues to the responder, and the raw exception never becomes the answer
+
+#### Scenario: Memory search failure
+- GIVEN `memory.search` fails with an internal exception
+- WHEN the assistant executes the tool
+- THEN the turn is marked degraded, continues to the responder, and the raw exception never becomes the answer
