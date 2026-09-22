@@ -145,24 +145,25 @@ the ~400-line budget → strategy `ask-on-risk`, no chain needed, single PR.
 
 ## Tasks
 
-- [ ] **T1 — Reproduce the defect in a test (RED).** Add a fake service-worker
-      environment to `web/src/pwa.test.ts`: a capture of `self.addEventListener`,
-      a minimal `CacheStorage`/`Cache`, a stubbed `fetch`, and the worker source
-      loaded from `public/sw.js`. Assert that with a stale shell already cached
-      and the network serving a new shell, a navigation request returns the
-      **new** shell. Must fail against the current worker.
-- [ ] **T2 — Fix the fetch policy (GREEN).** In `web/public/sw.js`, keep
-      `cache-first` only for `/panel/app/assets/**`; serve the shell,
-      `/panel/app/brand/**` and `manifest.webmanifest` network-first with a cache
-      fallback. Keep `/panel/api/**` and `*.html` out of the cache entirely.
-- [ ] **T3 — Delete the dead policy code.** Remove the inert `activate` purge
-      from `sw.js` and the production-dead `isCacheableAsset` / `isObsoleteCache`
-      from `pwa.ts`; drop their now-meaningless assertions. Add a `ponytail:`
-      marker in `sw.js` naming the asset-cache growth ceiling and its upgrade
-      path (version the cache name once a build id reaches the panel image).
-- [ ] **T4 — Document the one-reload consequence** in `docs/ops.md` §2.1.2.
-- [ ] **T5 — Verify.** `npm test` and `npm run build` in `web/`, plus the
-      Ponytail post-write pass over the diff. Record the observed results here.
+- [x] **T1 — Reproduce the defect in a test (RED).** `web/src/pwa.test.ts` now
+      loads `public/sw.js` into a `node:vm` sandbox with a capturing
+      `self.addEventListener`, an in-memory `CacheStorage`/`Cache`, and a
+      controlled `fetch`, then dispatches real fetch events. Observed RED against
+      the unmodified worker: `Expected: "new shell"; Received: "stale shell"`.
+- [x] **T2 — Fix the fetch policy (GREEN).** `web/public/sw.js` is `cache-first`
+      only for `/panel/app/assets/**`; the shell, `/panel/app/brand/**` and
+      `manifest.webmanifest` are network-first with a cache fallback;
+      `/panel/api**`, `*.html` and non-GET are not intercepted.
+- [x] **T3 — Delete the dead policy code.** The inert `activate` purge is gone
+      from `sw.js` (only `clients.claim()` remains) and the production-dead
+      `isCacheableAsset` / `isObsoleteCache` are gone from `pwa.ts`. The
+      asset-cache growth ceiling and its build-id upgrade path are marked with a
+      `ponytail:` comment in `sw.js`.
+- [x] **T4 — Document the one-reload consequence** in `docs/ops.md` §2.1.2.
+- [x] **T5 — Verify.** `npm test` → 79 files / 611 tests passed (parent spot
+      check, re-run independently); `npm run build` → succeeded and emitted
+      `dist/sw.js` carrying the new policy. Ponytail found nothing removable
+      without changing authorized behaviour.
 
 ## Progress
 
@@ -182,3 +183,9 @@ the ~400-line budget → strategy `ask-on-risk`, no chain needed, single PR.
       stranded by the old worker.
 - [x] T5 — `npm test` and `npm run build` pass in `web/`; build emits
       `dist/sw.js`.
+- [x] Spec check (`openspec/specs/pwa-shell/spec.md`, PWA-2): the worker caches
+      only the shell and public static assets, never `/panel/api*`, and now
+      genuinely satisfies "MUST allow a new shell version to replace an old one" —
+      the previous cache-first shell violated that clause in production. The
+      offline scenario still holds through the network-first fallback. No spec text
+      change is needed; the implementation was the side that had diverged.
