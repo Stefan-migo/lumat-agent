@@ -1,6 +1,19 @@
 [Unit]
 # LumatAgent certificate renewal — runs the compose `certbot` service
 # (webroot renewal) and reloads nginx so it picks up fresh certs.
+#
+# `--project-name lumat` is REQUIRED on BOTH commands. Without it Compose
+# derives the project name from the `infra/` directory, so every volume in the
+# file is scoped to a project called `infra` and the renewal operates on
+# `infra_certbot-certs` instead of the `lumat_certbot-certs` volume nginx
+# mounts. That failure is SILENT: `renew` finds no lineage, exits 0, and the
+# certificate nginx actually serves is never renewed until it expires.
+#
+# ExecStart also has to resolve GIT_SHA, because `infra/docker-compose.prod.yml`
+# guards `services.api.build.args.GIT_SHA` with `${GIT_SHA:?}` and `compose run`
+# interpolates the whole file even for a service that does not build. The unit
+# runs as root while the checkout belongs to `deploy`, so git refuses to read
+# HEAD (`detected dubious ownership`) unless `-c safe.directory` names the path.
 Description=LumatAgent Let's Encrypt certificate renewal (compose certbot)
 After=docker.service
 Requires=docker.service
@@ -10,5 +23,5 @@ Type=oneshot
 WorkingDirectory=/opt/lumat
 # The certbot service carries `command: renew --webroot -w /var/www/certbot`;
 # `docker compose run` executes it in a fresh container.
-ExecStart=/usr/bin/docker compose --profile certbot -f infra/docker-compose.yml -f infra/docker-compose.prod.yml run --rm certbot
-ExecStartPost=/usr/bin/docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml exec -T nginx nginx -s reload
+ExecStart=/bin/sh -c 'GIT_SHA=$(git -c safe.directory=/opt/lumat rev-parse --short HEAD) exec /usr/bin/docker compose --project-name lumat --profile certbot -f infra/docker-compose.yml -f infra/docker-compose.prod.yml run --rm certbot'
+ExecStartPost=/usr/bin/docker compose --project-name lumat -f infra/docker-compose.yml -f infra/docker-compose.prod.yml exec -T nginx nginx -s reload
