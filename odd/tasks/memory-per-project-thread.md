@@ -93,6 +93,8 @@ The only non-default slug anywhere in production code is a test fixture
   (`openspec/specs/memory/spec.md:51`); a separate advisory, not this unit.
 - `assistant_state.sdb.proyecto` keeps being written as the SDB run's mirror; it stops being the
   authority. No change to its shape.
+- `persist_sdb_state`'s from-`authorization` behavior. MEM-8 requires the seam to accept an explicit
+  `proyecto`; only the caller's derivation changes.
 - `db/migrate.sh`, and the memory service layer beyond the thread binding.
 
 ## Authorized scope
@@ -125,6 +127,11 @@ The only non-default slug anywhere in production code is a test fixture
   stay backwards compatible for existing callers.
 - The tool handlers MUST NOT accept the project from the model; it is bound server-side. An
   unrecognised argument MUST still be rejected by the argument models.
+- `persist_sdb_state` MUST keep accepting `authorization` and deriving `proyecto` from it (MEM-8).
+  The thread binding applies at its callers, never inside the seam.
+- `_run_agent_turn_session` and `submit_message` take `project_authorization` and no caller supplies
+  a non-`None` value (production enters through `run_agent_turn`, `app/services/agent_chat.py:775-790`).
+  The thread becomes the single source; a caller-supplied namespace MUST NOT silently override it.
 - One concern, `≤5` files per commit.
 - `pyproject.toml` sets `addopts = "-q"`; use `-o addopts=""` when the count matters. The per-test
   timeout is 120s.
@@ -163,6 +170,24 @@ archived after the thread was bound, the write is rejected rather than persisted
 **D6 — the agent entity is resolved per call.** `_AGENT_MEMORY_ENTITY`
 (`app/chat/assistant/tools/registry.py:33`) is a module constant frozen at import from
 `WRITABLE_PROYECTO`; it becomes `memory.agent_memory_entity(proyecto)` at each call site.
+
+**D7 — the SDB seam keeps its explicit namespace; the caller is what binds it to the thread.**
+MEM-8 (`openspec/specs/memory/spec.md:130-133`) requires every seam to accept an explicit `proyecto`
+and SDB to pass authorized namespaces through. That contract is untouched: `persist_sdb_state` keeps
+deriving `proyecto` from the `authorization` it is handed, so
+`test_project_aware_sdb_persistence_uses_authorized_namespace`
+(`tests/integration/test_sdb_persistence.py:260-286`) stays valid as the seam's own unit proof.
+What changes is the caller: `_run_sdb_tasks` derives its capability from the thread
+(`_thread_project_authorization`), so a run can never name a namespace different from its thread's.
+The seam stays parameterized; the product cannot diverge.
+
+**No backfill of `assistant_state.sdb.proyecto`, and this is provable, not assumed.** Its only writer
+is `persist_sdb_state`, and its only production callers pass `_thread_project_authorization(thread)`
+(`app/services/agent_chat.py:997`, `:1149`), which returns the declared namespace and `None` when it
+is `'default'`. Starting from `'default'` that is a fixed point: `None` in, `'default'` out, forever.
+No production thread can hold a non-default `sdb.proyecto`, so the column needs no reconciliation
+pass and the column is the sole authority. The writer MUST confirm this with a query against the dev
+database before relying on it.
 
 Rejected: adding a project argument to `memory.write`/`memory.read` so the model chooses — it
 contradicts AT-9 and MEM-9, which require the server to derive the target.
