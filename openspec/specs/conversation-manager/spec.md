@@ -48,15 +48,25 @@ The system MUST classify the intent of each message and classify the case by ser
 
 The system MUST only provide low-risk, Lumat-approved guidance: safe preliminary checks, requests for photos of screen/manometer/installation, and statements that a visit is needed when information is insufficient. It MUST NOT confirm definitive diagnoses, instruct dangerous interventions, or invent prices/diagnostics/guarantees/availability.
 
+The "no reliable answer" refusal is a **defensive guard**. No intent the classifier is allowed to emit routes to it: every declared intent is dispatched elsewhere — capture, research triage, or handoff (CM-3, AO-3). The guard exists so that an intent outside the declared vocabulary still refuses rather than answering from an empty knowledge base.
+
 #### Scenario: In-scope guidance
 - GIVEN a customer describes a simple symptom within the KB
 - WHEN the bot answers from authorized content
 - THEN it gives approved safe steps and never a definitive diagnosis
 
-#### Scenario: No reliable answer
-- GIVEN the bot lacks an authorized answer
-- WHEN the query is out of scope or unknown
-- THEN it states it cannot answer reliably, logs the unresolved response, and follows configured escalation rules
+#### Scenario: No reliable answer (guard — undeclared intent only)
+- GIVEN a query whose classified intent falls outside the classifier's declared vocabulary
+- WHEN retrieval returns no chunk above the threshold
+- THEN it states it cannot answer reliably, logs the unresolved response, and escalates to a human
+- AND it MUST NOT answer from an empty knowledge base
+
+#### Scenario: A KB intent that misses escalates through handoff
+- GIVEN a retrieval intent (`valores`, `postventa`, `consulta`) whose scoped retrieval misses
+- WHEN the bounded retry is exhausted
+- THEN the turn escalates to a human with the handoff message, and the unresolved response is logged
+- AND the canned refusal is NOT emitted, because the refusal guards the linear path and that path is not taken
+- AND the turn MUST NOT loop (AO-8)
 
 ### Requirement: CM-5 — Conversation Summary
 
