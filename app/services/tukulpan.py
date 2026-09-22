@@ -24,7 +24,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, literal_column, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Concrete thresholds (design "fines de detalle fino")
 # ---------------------------------------------------------------------------
-MEM_MIN_SIM = 0.55          # fused score gate for hybrid_search
+MEM_MIN_SIM = 0.50          # dense-channel admission gate; a lexical full-text match also admits
 REL_MIN_SIM = 0.85          # cosine pair gate for suggest_relations (S3+)
 FTS_BOOST = 0.3             # fused = vector + 0.3 * fts (vector dominates)
 DEFAULT_TOP_K = 5
@@ -619,8 +619,18 @@ def hybrid_search(
     Two-phase recall that stays bounded on high-cardinality entities (R4-002):
     1. candidate pre-filter by vector cosine distance using the HNSW index
        (proyecto/scope/entity_id scoped, `candidate_factor * top_k` rows);
-    2. fused score = vector_sim + FTS_BOOST * fts_sim computed per candidate,
-       threshold-filtered and re-ranked in memory, capped at `top_k`.
+    2. admission per channel -- `vector_sim >= min_sim` OR a Spanish full-text
+       match of the query's terms -- then merged ranking by fused score
+       (`vector_sim + FTS_BOOST * strict_word_similarity`), capped at `top_k`.
+
+    The two channels are admitted separately because they fail in opposite
+    directions, measured against the real embedder: a terse keyword query has a
+    diluted dense cosine (0.15-0.47) and needs the lexical channel, while an
+    unrelated natural query reaches 0.42 dense and needs a high gate. No single
+    fused threshold separates both. The lexical channel is token-based Spanish
+    full text so content length cannot dilute it, and it folds accents and
+    stems (`calefon` matches `calefón`), which whole-string trigram similarity
+    does not.
 
     No out-of-scope fallback (design + MEM-3 Empty result).
     """
@@ -634,15 +644,18 @@ def hybrid_search(
 
     distance = Memory.embedding.cosine_distance(vec)
     vector_sim = 1 - distance
-    fts_sim = func.similarity(Memory.contenido, query)
-    fused = vector_sim + FTS_BOOST * fts_sim
+    lexical_match = func.to_tsvector(literal_column("'spanish'"), Memory.contenido).op(
+        "@@"
+    )(func.plainto_tsquery(literal_column("'spanish'"), query))
+    word_sim = func.strict_word_similarity(query, Memory.contenido)
+    fused = vector_sim + FTS_BOOST * word_sim
 
     candidates = session.execute(
         select(
             Memory,
             fused.label("fused"),
             vector_sim.label("vector_sim"),
-            fts_sim.label("fts_sim"),
+            lexical_match.label("lexical_match"),
         )
         .where(
             Memory.proyecto == proyecto,
@@ -655,9 +668,9 @@ def hybrid_search(
     ).all()
 
     ranked = [
-        (m, float(fused_score), float(vs), float(fts))
-        for m, fused_score, vs, fts in candidates
-        if float(fused_score) >= min_sim
+        (m, float(fused_score))
+        for m, fused_score, vs, lexical in candidates
+        if float(vs) >= min_sim or bool(lexical)
     ]
     ranked.sort(key=lambda item: item[1], reverse=True)
 
@@ -684,7 +697,7 @@ def hybrid_search(
             "stale": _is_stale(m.review_after),
             "score": round(float(score), 4),
         }
-        for m, score, _, _ in ranked[:top_k]
+        for m, score in ranked[:top_k]
     ]
 
 

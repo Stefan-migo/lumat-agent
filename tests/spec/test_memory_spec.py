@@ -651,6 +651,64 @@ def test_mem3_threshold_recall_and_order(fake_embedder, migrated_db):
         assert topics[0] == "close1", f"expected close1 first, got {topics}"
 
 
+def test_mem3_literal_phrase_recall_with_flat_dense_channel(flat_embedder, migrated_db):
+    """A literal keyword buried in a long memory is recalled (MEM-3).
+
+    Scenario: Literal phrase recall. The dense channel is deliberately
+    uninformative here: the real embedder dilutes a short query against a long
+    content (measured ~0.18 cosine for exactly this pair). Recall must come
+    from the lexical channel, so whole-string trigram similarity -- diluted by
+    content length -- cannot carry it.
+    """
+    with SessionLocal() as session:
+        memory.upsert(
+            session,
+            scope="agent",
+            entity_id="agent:default",
+            topic_key="agent:keyword",
+            tipo=MemoryType.DISCOVERY,
+            titulo="Palabra clave",
+            contenido=(
+                "El administrador pidió guardar una memoria con la palabra clave "
+                "«perro» en este hilo del panel, para recuperarla más adelante."
+            ),
+            visibility=MemoryVisibility.GLOBAL,
+        )
+        session.commit()
+
+        results = memory.hybrid_search(
+            session, "perro", scope="agent", entity_id="agent:default"
+        )
+
+    assert [r["topic_key"] for r in results] == ["agent:keyword"]
+
+
+def test_mem3_literal_phrase_recall_matches_accent_variants(flat_embedder, migrated_db):
+    """The lexical channel folds accents, so an unaccented query still recalls.
+
+    Scenario: Literal phrase recall. `calefón` is core domain vocabulary and is
+    routinely written without its accent.
+    """
+    with SessionLocal() as session:
+        memory.upsert(
+            session,
+            scope="agent",
+            entity_id="agent:default",
+            topic_key="agent:calefon",
+            tipo=MemoryType.DISCOVERY,
+            titulo="Falla de encendido",
+            contenido="La clienta reportó que el calefón no enciende por las mañanas.",
+            visibility=MemoryVisibility.GLOBAL,
+        )
+        session.commit()
+
+        results = memory.hybrid_search(
+            session, "calefon", scope="agent", entity_id="agent:default"
+        )
+
+    assert [r["topic_key"] for r in results] == ["agent:calefon"]
+
+
 def test_mem3_role_isolation(fake_embedder, migrated_db):
     """Search returns only the given scope/entity's memories (MEM-3).
 
