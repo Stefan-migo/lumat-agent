@@ -676,15 +676,16 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
 
     assert resp.status_code == 200
     body = resp.json()
-    # design #18 shape: scope_rules / keywords / tone / limits / meta_cost / snapshot
+    # design #18 shape plus the effective standard messages.
     expected_keys = {
-        "scope_rules", "keywords", "tone",
+        "scope_rules", "keywords", "tone", "messages",
         "conversation_limit", "daily_limit", "meta_cost", "snapshot",
     }
     assert set(body.keys()) == expected_keys
     # defaults out of the box (SS-1..SS-5 defaults)
     assert body["scope_rules"] == {}
-    assert body["tone"] == "warm-professional"
+    assert body["tone"] == "cercano"
+    assert set(body["messages"]) == {"greeting", "cannot_answer", "clarification"}
     assert isinstance(body["keywords"], list) and len(body["keywords"]) > 0
     assert body["conversation_limit"] == 1.50
     assert body["daily_limit"] == 5.00
@@ -742,16 +743,36 @@ def test_settings_update_tone_audited(client, make_user):
     _login(client)
 
     resp = client.post(
-        "/panel/api/settings/tone", json={"tone": "casual"}, follow_redirects=False
+        "/panel/api/settings/tone", json={"tone": "formal"}, follow_redirects=False
     )
 
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
     with SessionLocal() as session:
-        assert session.get(Settings, "tone.style").value == "casual"
+        assert session.get(Settings, "tone.style").value == "formal"
     audit = _last_audit("settings.change")
     assert audit is not None and audit.actor == "adm"
     assert audit.entity_id == "tone.style"
+
+
+def test_settings_update_invalid_tone_400_json(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    resp = client.post("/panel/api/settings/tone", json={"tone": "casual"}, follow_redirects=False)
+    assert resp.status_code == 400
+    assert _last_audit("settings.change") is None
+
+
+def test_settings_update_messages_audited(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    value = {"greeting": "Hola editado", "cannot_answer": "No disponible", "clarification": "Aclara"}
+    resp = client.post("/panel/api/settings/messages", json=value, follow_redirects=False)
+    assert resp.status_code == 200
+    with SessionLocal() as session:
+        assert session.get(Settings, "messages.greeting").value == "Hola editado"
+        assert session.get(Settings, "messages.cannot_answer").value == "No disponible"
+    assert _last_audit("settings.change").entity_id == "messages.clarification"
 
 
 def test_settings_update_limits_audited(client, make_user):
