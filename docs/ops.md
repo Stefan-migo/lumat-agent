@@ -159,6 +159,9 @@ put credentials or session cookies in the repository or shell history.
   returns the SPA shell rather than a 404.
 - [ ] In browser DevTools Network, confirm the shell, manifest, worker, brand
   icons, and at least one hashed `/panel/app/assets/` file return `200`.
+- [ ] After deploying this worker fix, reload once (or clear site data) in any
+  browser stranded by the old worker; the page that would re-register the
+  worker is the page that never renders, and the fixed worker then stays current.
 - [ ] Confirm the browser offers PWA installation over HTTPS; install it and
   load the previously visited `/panel/app/` shell once with the network
   disabled. The offline shell must load, while authenticated `/panel/api/`
