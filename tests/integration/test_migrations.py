@@ -16,14 +16,21 @@ and creates the least-privilege `app` role itself; tests connect as `app` via
 TEST_APP_DB_URL to verify grants.
 """
 
+import filecmp
 import os
+import shutil
+import subprocess
+from pathlib import Path
 
 import psycopg
 import pytest
+from psycopg import sql
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from _testdb import admin_database_url, database_url, libpq_database_url  # noqa: E402
 from tests.integration.conftest import run_migrate  # noqa: E402
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
 ADMIN_DB_URL = admin_database_url()
 APP_URL = os.environ.get("TEST_APP_DB_URL") or libpq_database_url(database_url())
 
@@ -101,6 +108,122 @@ def test_migrate_applies_cleanly_twice(migrated_db):
     assert second.returncode == 0, second.stderr
     # second run must skip (not re-apply) the initial migration
     assert "skip 001_init" in second.stdout
+
+
+def test_migration_030_preserves_existing_project_rows(tmp_path):
+    """Applying 030 to a real 029 database preserves and renames existing rows."""
+    admin_parts = conninfo_to_dict(ADMIN_DB_URL)
+    database_name = admin_parts["dbname"]
+    scratch_name = f"{database_name}_mig030"
+    scratch_url = make_conninfo(**{**admin_parts, "dbname": scratch_name})
+
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+        conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} ").format(sql.Identifier(scratch_name)))
+        conn.execute(sql.SQL("CREATE DATABASE {} ").format(sql.Identifier(scratch_name)))
+
+    try:
+        runner_copy = tmp_path / "migrate.sh"
+        original_runner = REPO_ROOT / "db" / "migrate.sh"
+        shutil.copy2(original_runner, runner_copy)
+        assert filecmp.cmp(original_runner, runner_copy, shallow=False)
+
+        migrations_dir = tmp_path / "migrations"
+        migrations_dir.mkdir()
+        for migration in (REPO_ROOT / "db" / "migrations").glob("*.sql"):
+            if int(migration.stem.split("_", 1)[0]) < 30:
+                (migrations_dir / migration.name).symlink_to(migration)
+
+        migration_env = os.environ.copy()
+        migration_env.update(
+            {
+                "DATABASE_URL": scratch_url,
+                "APP_DB_PASSWORD": "app",
+                "PYTHON": str(REPO_ROOT / ".venv" / "bin" / "python"),
+            }
+        )
+        scaffold = subprocess.run(
+            ["bash", str(runner_copy)],
+            env=migration_env,
+            capture_output=True,
+            text=True,
+        )
+        assert scaffold.returncode == 0, (
+            f"029 scaffold failed:\nstdout={scaffold.stdout}\nstderr={scaffold.stderr}"
+        )
+
+        with psycopg.connect(scratch_url, autocommit=True) as conn:
+            labels = conn.execute(
+                "SELECT enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
+                "WHERE t.typname = 'memory_visibility' ORDER BY enumsortorder"
+            ).fetchall()
+            assert labels == [("thread",), ("project",)]
+            assert conn.execute(
+                "SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
+                "WHERE t.typname = 'memory_visibility' AND enumlabel = 'global'"
+            ).fetchone() is None
+            assert conn.execute(
+                "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
+            ).fetchone() == ("029_memory_relation_resolution",)
+
+            embedding = "[" + ",".join("0.1" for _ in range(384)) + "]"
+            agent_id = conn.execute(
+                "INSERT INTO memories (scope, entity_id, titulo, contenido, embedding, visibility) "
+                "VALUES ('agent', 'agent:default', 'agent row', 'pre-030', %s::vector, 'project') "
+                "RETURNING id",
+                (embedding,),
+            ).fetchone()[0]
+            panel_id = conn.execute(
+                "INSERT INTO memories (scope, entity_id, titulo, contenido, embedding) "
+                "VALUES ('panel', 'thread:1', 'panel row', 'pre-030', %s::vector) RETURNING id",
+                (embedding,),
+            ).fetchone()[0]
+            assert conn.execute("SELECT count(*) FROM memories").fetchone() == (2,)
+
+        migration = subprocess.run(
+            ["bash", str(original_runner)],
+            env=migration_env,
+            capture_output=True,
+            text=True,
+        )
+        assert migration.returncode == 0, (
+            f"030 migration failed:\nstdout={migration.stdout}\nstderr={migration.stderr}"
+        )
+
+        with psycopg.connect(scratch_url, autocommit=True) as conn:
+            labels = conn.execute(
+                "SELECT enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid "
+                "WHERE t.typname = 'memory_visibility' ORDER BY enumsortorder"
+            ).fetchall()
+            assert labels == [("thread",), ("global",)]
+            assert conn.execute("SELECT count(*) FROM memories").fetchone() == (2,)
+            assert conn.execute(
+                "SELECT visibility FROM memories WHERE id = %s", (agent_id,)
+            ).fetchone() == ("global",)
+            assert conn.execute(
+                "SELECT visibility FROM memories WHERE id = %s", (panel_id,)
+            ).fetchone() == ("thread",)
+
+            constraint = conn.execute(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                "WHERE conname = 'memories_visibility_scope_coherence'"
+            ).fetchone()[0]
+            assert "(visibility = 'global'::memory_visibility)" in constraint
+            assert "((scope)::text = 'agent'::text)" in constraint
+
+            assert conn.execute(
+                "SELECT column_default FROM information_schema.columns "
+                "WHERE table_name = 'memories' AND column_name = 'visibility'"
+            ).fetchone() == ("'thread'::memory_visibility",)
+
+            with pytest.raises(psycopg.Error):
+                conn.execute(
+                    "INSERT INTO memories (scope, entity_id, titulo, contenido, embedding, visibility) "
+                    "VALUES ('panel', 'thread:global-rejected', 'rejected', '030', %s::vector, 'global')",
+                    (embedding,),
+                )
+    finally:
+        with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+            conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} ").format(sql.Identifier(scratch_name)))
 
 
 def test_schema_migrations_records_version(migrated_db, admin_conn):
