@@ -593,6 +593,10 @@ def test_a_legitimate_respond_plan_still_reaches_the_responder(client, monkeypat
     respond = json.dumps({
         "kind": "respond", "arguments": {}, "summary": "te contesto", "requires_approval": False,
     })
+    monkeypatch.setattr(
+        "app.services.kb.retrieve",
+        lambda *args, **kwargs: [{"content": "Grounded panel evidence", "similarity": 0.9}],
+    )
     settled, stream_calls, _ = _turn_with_plan(client, monkeypatch, "legitrespond", respond)
 
     assert len(stream_calls) == 1

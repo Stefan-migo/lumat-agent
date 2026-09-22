@@ -17,6 +17,7 @@ def test_assistant_state_adds_only_optional_harness_contract_keys():
         "guardrails",
         "compaction",
         "extension_hooks",
+        "kb_chunks",
     }
 
 

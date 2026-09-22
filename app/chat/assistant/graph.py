@@ -13,6 +13,7 @@ from app.chat.assistant.nodes import (
     guardrails,
     panel_cost_gate,
     plan_llm,
+    retrieve_kb,
     sdb_approve,
     sdb_clarify,
     sdb_deliver,
@@ -77,7 +78,16 @@ def _after_guardrails(state: AssistantState) -> str:
     # bounded summary. Handing it to the responder would dress the failure as a normal answer.
     if _is_terminal_plan_failure(state):
         return END
+    decision = (state.get("guardrails") or {}).get("decision")
+    if decision == "grounding_refusal":
+        return END
+    if decision == "retrieve_kb":
+        return "retrieve_kb"
     return "execute_tool" if state.get("plan", {}).get("kind") == "tool" else "respond_stream"
+
+
+def _after_retrieve_kb(state: AssistantState) -> str:
+    return END if (state.get("guardrails") or {}).get("decision") == "grounding_refusal" else "respond_stream"
 
 
 def _after_execute(state: AssistantState) -> str:
@@ -108,6 +118,7 @@ def build_assistant_graph():
     builder.add_node("sdb_verify", sdb_verify)
     builder.add_node("sdb_deliver", sdb_deliver)
     builder.add_node("guardrails", guardrails)
+    builder.add_node("retrieve_kb", retrieve_kb)
     builder.add_node("execute_tool", execute)
     builder.add_node("respond_stream", execute)
     builder.add_node("evidence", collect_evidence)
@@ -131,7 +142,8 @@ def build_assistant_graph():
     builder.add_edge("sdb_execute", "sdb_verify")
     builder.add_edge("sdb_verify", "sdb_deliver")
     builder.add_edge("sdb_deliver", "evidence")
-    builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "respond_stream": "respond_stream", END: END})
+    builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "retrieve_kb": "retrieve_kb", "respond_stream": "respond_stream", END: END})
+    builder.add_conditional_edges("retrieve_kb", _after_retrieve_kb, {"respond_stream": "respond_stream", END: END})
     builder.add_conditional_edges("execute_tool", _after_execute, {"respond_stream": "respond_stream", END: END})
     builder.add_edge("respond_stream", "evidence")
     builder.add_edge("evidence", END)

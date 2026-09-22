@@ -15,6 +15,7 @@ ASSISTANT_STATE_KEYS = {
     "guardrails",
     "compaction",
     "extension_hooks",
+    "kb_chunks",
 }
 
 
@@ -175,6 +176,7 @@ class AssistantState(TypedDict, total=False):
     guardrails: dict
     compaction: dict
     extension_hooks: dict
+    kb_chunks: list[dict]
     cortex_session: dict
     legacy_compat: bool
     cost_mode: Literal["normal", "conservative", "blocked"]
