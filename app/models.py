@@ -149,7 +149,7 @@ class MemoryProducer(str, enum.Enum):
 
 class MemoryVisibility(str, enum.Enum):
     THREAD = "thread"
-    PROJECT = "project"
+    GLOBAL = "global"
 
 
 class AppointmentStatus(str, enum.Enum):

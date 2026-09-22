@@ -101,7 +101,7 @@ SDB_CHECKPOINT_LIMIT = 4 * 1024
 def agent_memory_entity(proyecto: str) -> str:
     """Canonical agent-axis entity for one project namespace.
 
-    The project is part of the entity so a project-visible memory cannot be
+    The project is part of the entity so a global-visible memory cannot be
     reached by a read bound to a different project, even when the writable
     namespace widens.
     """
@@ -120,7 +120,7 @@ def visibility_target(
     value = visibility.value if isinstance(visibility, MemoryVisibility) else visibility
     if value == MemoryVisibility.THREAD.value:
         return "panel", thread_memory_entity(thread_id)
-    if value == MemoryVisibility.PROJECT.value:
+    if value == MemoryVisibility.GLOBAL.value:
         return AGENT_SCOPE, agent_memory_entity(proyecto)
     raise ValueError(f"unknown memory visibility: {visibility!r}")
 
