@@ -110,11 +110,36 @@ def test_migrate_applies_cleanly_twice(migrated_db):
     assert "skip 001_init" in second.stdout
 
 
+def _migration_number(migration: Path) -> int:
+    return int(migration.stem.split("_", 1)[0])
+
+
+def _runner_dir(root: Path, migrations: list[Path]) -> Path:
+    """A directory holding the real migrate.sh (byte-identical) beside the given migrations.
+
+    The runner anchors its migration directory to its own location (`db/migrate.sh:21`), so a
+    byte-identical copy beside a chosen subset is the only way to reach a schema below the latest
+    one without touching the runner or the migrations themselves.
+    """
+    original = REPO_ROOT / "db" / "migrate.sh"
+    runner = root / "migrate.sh"
+    root.mkdir()
+    shutil.copy2(original, runner)
+    assert filecmp.cmp(original, runner, shallow=False)
+    directory = root / "migrations"
+    directory.mkdir()
+    for migration in migrations:
+        (directory / migration.name).symlink_to(migration)
+    return runner
+
+
 def test_migration_030_preserves_existing_project_rows(tmp_path):
     """Applying 030 to a real 029 database preserves and renames existing rows."""
     admin_parts = conninfo_to_dict(ADMIN_DB_URL)
     database_name = admin_parts["dbname"]
-    scratch_name = f"{database_name}_mig030"
+    # Unique per run: a predictable name plus DROP DATABASE IF EXISTS could destroy an unrelated
+    # database, and two concurrent runs would drop each other's scratch schema mid-test.
+    scratch_name = f"{database_name}_mig030_{os.getpid()}"
     scratch_url = make_conninfo(**{**admin_parts, "dbname": scratch_name})
 
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
@@ -122,17 +147,8 @@ def test_migration_030_preserves_existing_project_rows(tmp_path):
         conn.execute(sql.SQL("CREATE DATABASE {} ").format(sql.Identifier(scratch_name)))
 
     try:
-        runner_copy = tmp_path / "migrate.sh"
-        original_runner = REPO_ROOT / "db" / "migrate.sh"
-        shutil.copy2(original_runner, runner_copy)
-        assert filecmp.cmp(original_runner, runner_copy, shallow=False)
-
-        migrations_dir = tmp_path / "migrations"
-        migrations_dir.mkdir()
-        for migration in (REPO_ROOT / "db" / "migrations").glob("*.sql"):
-            if int(migration.stem.split("_", 1)[0]) < 30:
-                (migrations_dir / migration.name).symlink_to(migration)
-
+        target = 30
+        migrations = sorted((REPO_ROOT / "db" / "migrations").glob("*.sql"))
         migration_env = os.environ.copy()
         migration_env.update(
             {
@@ -141,14 +157,25 @@ def test_migration_030_preserves_existing_project_rows(tmp_path):
                 "PYTHON": str(REPO_ROOT / ".venv" / "bin" / "python"),
             }
         )
-        scaffold = subprocess.run(
-            ["bash", str(runner_copy)],
-            env=migration_env,
-            capture_output=True,
-            text=True,
-        )
-        assert scaffold.returncode == 0, (
-            f"029 scaffold failed:\nstdout={scaffold.stdout}\nstderr={scaffold.stderr}"
+
+        def migrate(runner: Path, label: str) -> None:
+            result = subprocess.run(
+                ["bash", str(runner)],
+                env=migration_env,
+                capture_output=True,
+                text=True,
+                timeout=45,
+            )
+            assert result.returncode == 0, (
+                f"{label} failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+            )
+
+        migrate(
+            _runner_dir(
+                tmp_path / "scaffold",
+                [m for m in migrations if _migration_number(m) < target],
+            ),
+            "029 scaffold",
         )
 
         with psycopg.connect(scratch_url, autocommit=True) as conn:
@@ -179,14 +206,14 @@ def test_migration_030_preserves_existing_project_rows(tmp_path):
             ).fetchone()[0]
             assert conn.execute("SELECT count(*) FROM memories").fetchone() == (2,)
 
-        migration = subprocess.run(
-            ["bash", str(original_runner)],
-            env=migration_env,
-            capture_output=True,
-            text=True,
-        )
-        assert migration.returncode == 0, (
-            f"030 migration failed:\nstdout={migration.stdout}\nstderr={migration.stderr}"
+        # Only 030 travels in this directory, so a later migration can never be applied here and
+        # change this test's outcome.
+        migrate(
+            _runner_dir(
+                tmp_path / "final",
+                [m for m in migrations if _migration_number(m) == target],
+            ),
+            "030 migration",
         )
 
         with psycopg.connect(scratch_url, autocommit=True) as conn:
