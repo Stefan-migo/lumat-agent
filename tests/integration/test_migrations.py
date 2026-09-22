@@ -136,6 +136,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("027_kb_visibility",),
         ("028_memory_dedup",),
         ("029_memory_relation_resolution",),
+        ("030_memory_visibility_global",),
     ]
 
 
@@ -354,7 +355,7 @@ def test_memory_provenance_schema(migrated_db, admin_conn):
     for typname, label in rows:
         by_type.setdefault(typname, []).append(label)
     assert by_type["memory_producer"] == ["user", "system", "agent", "pipeline"]
-    assert by_type["memory_visibility"] == ["thread", "project"]
+    assert by_type["memory_visibility"] == ["thread", "global"]
 
     columns = admin_conn.execute(
         "SELECT column_name, column_default, is_nullable, udt_name "

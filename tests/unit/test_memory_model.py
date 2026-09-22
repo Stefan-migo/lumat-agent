@@ -7,7 +7,9 @@ def test_memory_provenance_model_shape():
     assert [member.value for member in models.MemoryProducer] == [
         "user", "system", "agent", "pipeline"
     ]
-    assert [member.value for member in models.MemoryVisibility] == ["thread", "project"]
+    assert [member.value for member in models.MemoryVisibility] == ["thread", "global"]
+    assert models.MemoryVisibility.GLOBAL.value == "global"
+    assert not hasattr(models.MemoryVisibility, "PROJECT")
     assert models.Memory.__table__.c.producer.type.name == "memory_producer"
     assert models.Memory.__table__.c.origin_thread_id.type.length == 100
     assert models.Memory.__table__.c.visibility.type.name == "memory_visibility"

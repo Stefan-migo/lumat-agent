@@ -62,15 +62,15 @@ The `memory.read` and `memory.search` tools MUST accept only `scope="panel"`, `s
 
 ### Requirement: AT-9 — Autonomous Thread Memory Write
 
-The `memory.write` tool MUST accept a declared `visibility` of `thread` or `project`, defaulting to `thread`. It MUST accept no model-supplied scope or entity identifier: the server derives `thread` as `scope="panel"`, `entity_id="thread:<trusted thread id>"`, and `project` as `scope="agent"`, `entity_id="agent:<project>"`, with the project bound server-side. The server MUST stamp `producer="agent"` and the trusted origin thread. It MUST require an `agent:` topic namespace, use nested-savepoint upsert semantics, and return a degraded result rather than raising on persistence failure. Only `memory.write` may skip approval, and only with a positive trusted thread id; every other write MUST retain exact approval.
+The `memory.write` tool MUST accept a declared `visibility` of `thread` or `global`, defaulting to `global`. It MUST accept no model-supplied scope or entity identifier: the server derives `thread` as `scope="panel"`, `entity_id="thread:<trusted thread id>"`, and `global` as `scope="agent"`, `entity_id="agent:<project>"`, with the project bound server-side. The server MUST stamp `producer="agent"` and the trusted origin thread. It MUST require an `agent:` topic namespace, use nested-savepoint upsert semantics, and return a degraded result rather than raising on persistence failure. Only `memory.write` may skip approval, and only with a positive trusted thread id; every other write MUST retain exact approval.
 
 #### Scenario: Bounded autonomous write
 - GIVEN an allow-listed `memory.write` call with a positive trusted thread id
 - WHEN the assistant executes it without approval
 - THEN the memory is upserted in the current panel thread and the result reports the written row
 
-#### Scenario: Declared project visibility
-- GIVEN an allow-listed `memory.write` call with `visibility="project"`
+#### Scenario: Declared global visibility
+- GIVEN an allow-listed `memory.write` call with `visibility="global"`
 - WHEN the assistant executes it with a positive trusted thread id
 - THEN the memory is stored on the canonical agent axis with agent provenance and the trusted origin thread
 

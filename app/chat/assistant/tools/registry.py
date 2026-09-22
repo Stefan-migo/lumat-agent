@@ -145,7 +145,7 @@ class MemoryWriteArgs(BaseModel):
     contenido: str = Field(min_length=1, max_length=2000)
     topic_key: str = Field(min_length=1, max_length=200, pattern=r"^agent:")
     tipo: Literal["decision", "discovery", "pattern", "preference"]
-    visibility: Literal["thread", "project"] = "project"
+    visibility: Literal["thread", "global"] = "global"
 
 
 class WebSearchArgs(BaseModel):

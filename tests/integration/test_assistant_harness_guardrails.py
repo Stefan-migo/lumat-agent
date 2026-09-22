@@ -511,7 +511,7 @@ def test_execute_forwards_trusted_thread_to_memory_write(migrated_db):
     assert result["status"] == "completed"
     assert row.scope == "agent"
     assert row.entity_id == "agent:default"
-    assert row.visibility.value == "project"
+    assert row.visibility.value == "global"
 
 
 def test_memory_write_is_idempotent_in_db(migrated_db):
