@@ -608,7 +608,7 @@ def test_api_memory_surfaces_on_ficha_e2e(client, make_user):
             tipo=MemoryType.DISCOVERY,
             titulo="Project fact",
             contenido="Agent-wide fact",
-            visibility=MemoryVisibility.PROJECT,
+            visibility=MemoryVisibility.GLOBAL,
             producer=MemoryProducer.AGENT,
             origin_thread_id=str(conversation.id),
         )
