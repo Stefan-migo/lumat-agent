@@ -194,25 +194,55 @@ respond
 
 ## Checklist
 
-- [ ] **T1** — Pin the mirrored contract. Route: inline (2 files, read to decide). Read and pin:
-      `PANEL_GROUNDING_REFUSAL` (`nodes.py:38-41`), the #298 degraded pattern (`:676-690`),
-      `collect_evidence` (`:807-826`), and on the customer side the exact `CANNOT_ANSWER_REPLY` copy,
-      the escalation/handoff message, and the `kb_miss` block (`respond.py:129-150`). Decide from that
-      reading whether the customer outage needs a new string or an existing escalation string is
-      already honest.
-- [ ] **T2** — RED. Route: delegated writer. Minimum cases: (a) panel `kb.retrieve` raises -> not the
-      clarification, evidence `degraded`; (b) `{"content": None}` and `{"content": 5}` -> no raise;
-      (c) `retrieve_kb` with `session=None` -> own scope; (d) customer `kb.retrieve` raises ->
-      escalation with a reason other than `kb_miss`. Observe RED before writing implementation.
-- [ ] **T3** — GREEN, panel (`nodes.py`, `graph.py` routing, `state.py` if needed). Route: delegated
-      writer (same writer as T2).
-- [ ] **T4** — GREEN, customer chat (`respond.py`). Route: delegated writer (same writer as T2/T3).
-- [ ] **T5** — Spec deltas: IAC-14 (`openspec/specs/internal-agent-chat/spec.md:41-53`, a failure
-      scenario) and CM-4 (`openspec/specs/conversation-manager/spec.md:47-79`, the KB-unavailable
-      escalation).
-- [ ] **T6** — Verify. Full suite + the focused tests. See "Verification evidence" below.
+- [x] **T1** — Pin the mirrored contract. Route: inline (2 files, read to decide). **Done — see
+      "Pinned contract" below.**
+- [x] **T2** — RED. Route: delegated writer. **Done — 5 tests, observed RED before any implementation
+      change** (4 panel + 1 customer; `app/` untouched, verified by an empty `git diff -- app/`).
+- [x] **T3** — GREEN, panel (`nodes.py`, `graph.py` routing). Route: delegated writer (same writer as
+      T2). **Done.**
+- [x] **T4** — GREEN, customer chat (`respond.py`). Route: delegated writer (same writer as T2/T3).
+      **Done.**
+- [x] **T5** — Spec deltas: IAC-14 (`openspec/specs/internal-agent-chat/spec.md`) and CM-4
+      (`openspec/specs/conversation-manager/spec.md`). **Done — commit `17c859d7`.**
+- [x] **T6** — Verify. **Done — see "Verification evidence" below.**
 - [ ] **T7** — Record committed, branch pushed, PR open against `main` with the single type label.
       **The merge remains the human's decision.**
+
+## Pinned contract (T1)
+
+Read directly from the pinned base, not recited.
+
+**Panel — `app/chat/assistant/nodes.py`**
+
+- `PANEL_GROUNDING_REFUSAL` (`:38-41`) is a module constant, **not** a `messages.<key>` setting. The
+  new failure copy is the same shape.
+- The #298 degraded pattern (`:676-690`) is the precedent for a failed read-only capability:
+  `logger.warning`, `{"unavailable": True, "degraded_reason": ...}`, `make_evidence(status="degraded")`,
+  `status="degraded"`.
+- `collect_evidence` (`:807-826`) propagates `degraded` to the final status at `:825`.
+- `make_evidence` (`app/chat/assistant/evidence.py:6-7`) returns a plain dict and **does not validate
+  `status`**.
+- `_after_retrieve_kb` (`graph.py:89-90`) routes refusal to `END`, otherwise `respond_stream`. A
+  degraded return has no `kb_chunks`, so it **must** get its own routing to `END` — falling through to
+  `respond_stream` would answer ungrounded and violate IAC-14.
+
+**Customer — `app/chat/nodes/respond.py`**
+
+- `CANNOT_ANSWER_REPLY = MESSAGE_DEFAULTS["cannot_answer"]` (`:31`), resolved through
+  `get_message(session, "cannot_answer", CANNOT_ANSWER_REPLY)` — a **client-editable setting**
+  (`app/services/settings.py:47-61`, declared at `:146-149`).
+- Measured copy: *"Lo siento, no puedo responder con seguridad a eso. Un asesor de Lumat revisará tu
+  consulta y te contactará."* It does **not** claim the KB was searched and found empty — an earlier
+  justification in this session claimed otherwise and was imprecise.
+- **Decision, corrected by that measurement:** the failure still gets its **own constant**, because
+  `messages.cannot_answer` is client-editable and its honesty would otherwise be coupled to a future
+  edit. Consistency with the panel also argues for a dedicated string.
+- `escalate_reason` is free-form metadata: `handoff.py:43-45` returns it, `cases.py:91` and
+  `prompts.py:91` render it. **Nothing branches on the literal `kb_miss`**, so a new reason is safe.
+- `graph.py:170` routes `"handoff" if state.escalate else END` — the escalation path already exists.
+- `log_unresolved` (`:39-48`) sets `payload.unresolved = True`; `list_unresolved_questions`
+  (`:51-57`) queries it for the CM-6 KB-improvement review. A **KB outage must not** call it: the
+  question was not unresolved, the KB was unreachable. Log it instead.
 
 ## Graph nodes/edges consulted
 
@@ -235,16 +265,92 @@ touch `app/chat/`, so the relevant subgraph is current).
 
 ## Outcome
 
-_(filled at close)_
+Both chat paths now distinguish "the knowledge base had nothing" from "the knowledge base could not be
+consulted", and neither disguises the second as the first.
+
+- **Panel** — a failing `kb.retrieve` returns `PANEL_KB_UNAVAILABLE` with `degraded` evidence and routes
+  to `END`; the clarification stays reserved for a clean miss. A present-but-non-string chunk `content`
+  is filtered instead of raising, and `retrieve_kb` opens its own `session_scope()` when it receives
+  none, so the latent `session=None` trap is repaired rather than masked.
+- **Customer** — a failing `kb.retrieve` returns `KB_UNAVAILABLE_REPLY` and escalates with reason
+  `kb_unavailable`. It does not reuse the client-editable `cannot_answer` copy, and it does not write
+  the CM-6 unresolved flag, which would have recorded a reachable question as unanswerable. The
+  logger keeps the traceback, because this path has no evidence entry and the log is the only record.
+
+Nothing pre-existing changed behavior: the clean miss on both paths, the conversational exemption, the
+emergency gate, and the tool-turn path are untouched.
 
 ## Verification evidence
 
-_(filled at close)_
+Strict TDD, RED observed before implementation, then GREEN. The full suite was run before freezing —
+not just the subset this unit touches.
+
+**RED (before any `app/` change).** `git diff --stat -- app/` was empty. Five new tests, each failing on
+its assertion — none on an import, fixture, or symbol error:
+
+| Test | RED evidence |
+|---|---|
+| `test_kb_retrieval_failure_reports_degraded_unavailability_without_responder` | `isinstance(RuntimeError('database unavailable'), dict)` was False — the node returned the raised exception |
+| `test_kb_retrieval_filters_non_string_content_without_raising[None]` | `AttributeError: 'NoneType' object has no attribute 'strip'` |
+| `test_kb_retrieval_filters_non_string_content_without_raising[5]` | `AttributeError: 'int' object has no attribute 'strip'` |
+| `test_kb_retrieval_without_session_opens_its_own_scope` | `assert [None] == [<opened session>]` |
+| `test_kb_retrieval_failure_escalates_without_logging_unresolved` | `isinstance(RuntimeError('database unavailable'), dict)` was False |
+
+Focused unit file at RED: 34 collected, 30 passed, 4 failed. Full suite at RED: 1204 collected,
+1199 passed, 5 failed.
+
+**GREEN (frozen candidate).** `uv run pytest tests/ --tb=no -p no:warnings` ->
+**1204 passed, 0 failed, exit 0.**
+
+**Count reconciliation.** The handoff recorded 1194 passing for the previous unit. PR #301 added
+`tests/integration/test_migrations.py` (5 tests) -> baseline 1199; this unit adds 5 -> 1204. No
+pre-existing test broke at any point.
+
+**Regression guards, unchanged and passing.**
+- `test_empty_kb_retrieval_returns_deterministic_clarification_without_responder` — clean miss, panel.
+- `test_cannot_answer_override_is_used_on_a_kb_miss` — clean miss, customer, with the
+  `messages.cannot_answer` override still applied.
+
+**Parent corrections applied after the writer's GREEN and before freeze.** The writer's implementation
+passed every test but carried three defects of the exact kind this unit exists to remove:
+1. `state["content"].strip()` sat **inside** the `try`, so a caller error (a missing `content`) would
+   have been caught and reported as a knowledge-base outage. The query is now resolved before the `try`.
+2. `logger.warning("Read-only tool %s failed: %s", "kb.retrieve", detail)` passed a literal through a
+   placeholder; replaced with a literal message.
+3. The customer path used `logger.warning`, discarding the traceback. Unlike the panel it records no
+   evidence entry, so the log is the only record of the outage: now `logger.exception`, with a comment
+   stating why it deliberately diverges from the panel's level.
+
+The full suite was re-run green after these corrections.
+
+**Declared tooling limitations.**
+- `ruff` is not installed and this project has no linter, type checker, or formatter (recorded by
+  `sdd-init`), so the "lint + typecheck" half of the project's check list cannot be run. Not a
+  regression introduced here.
+- `openspec` CLI is not installed; the spec deltas were reviewed by diff.
+- The Graph Check ran against the main worktree root: `graphify-out/` is gitignored, so this worktree
+  has no graph, and the code for this area is identical across the two.
 
 ## Progress
 
-_(filled task by task, with the work-unit commit identity as evidence)_
+| Task | Route | Evidence |
+|---|---|---|
+| T1 pin the contract | inline (2 files, read to decide) | "Pinned contract (T1)" above |
+| T2 RED | delegated writer | 5 failing tests; `git diff -- app/` empty |
+| T3 GREEN panel | delegated writer (same session as T2) | commit `feb09698` — 3 files |
+| T4 GREEN customer | delegated writer (same session as T2) | commit `d4ad75fe` — 2 files |
+| T5 spec deltas | inline | commit `17c859d7` — 2 files |
+| T6 verify | inline | 1204 passed / 0 failed, exit 0 |
+| T7 record + PR | inline | pending |
+
+Work-unit commits, each verified against `git show --stat` so the message cannot overstate the content:
+
+- `a949995c` — `docs(odd): register the kb-retrieval-failure unit` (1 file)
+- `feb09698` — `fix(assistant): degrade an unavailable knowledge base instead of faking a miss` (3 files)
+- `d4ad75fe` — `fix(chat): escalate an unavailable knowledge base instead of dropping the reply` (2 files)
+- `17c859d7` — `docs(spec): record the knowledge-base-unavailable outcome` (2 files)
 
 ## Next step
 
-T1 — pin the mirrored contract by reading both call sites, then T2 RED.
+T7 — push the branch, open the PR against `main` with a single type label, and check CI. The merge
+remains the human's decision.
