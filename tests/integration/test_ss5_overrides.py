@@ -77,6 +77,39 @@ def test_cannot_answer_override_is_used_on_a_kb_miss(mock_openai_chat, monkeypat
     assert all("Lo siento, no puedo responder con seguridad" not in reply for reply in replies)
 
 
+def test_kb_retrieval_failure_escalates_without_logging_unresolved(monkeypatch, migrated_db):
+    from app.services.settings import MESSAGE_DEFAULTS
+
+    unresolved_calls = []
+    monkeypatch.setattr(
+        "app.services.kb.retrieve",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("database unavailable")),
+    )
+    monkeypatch.setattr(
+        "app.chat.nodes.respond.log_unresolved",
+        lambda *args, **kwargs: unresolved_calls.append((args, kwargs)),
+    )
+    state = ConversationState(
+        customer_id=1,
+        conversation_id=1,
+        phone="+56912345678",
+        turn=2,
+        intent="consulta",
+        window=[{"id": 1, "text": "¿Cuánto cuesta la revisión anual?"}],
+    )
+
+    try:
+        result = respond(state)
+    except Exception as error:
+        result = error
+
+    assert isinstance(result, dict)
+    assert result["replies"][0] != MESSAGE_DEFAULTS["cannot_answer"]
+    assert result["escalate"] is True
+    assert result["escalate_reason"] != "kb_miss"
+    assert unresolved_calls == []
+
+
 def test_greeting_and_clarification_overrides_keep_the_menu_and_path_shape():
     with SessionLocal() as session:
         settings.set_setting(session, "messages.greeting", "Hola editado:\n", actor="test")

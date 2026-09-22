@@ -87,7 +87,7 @@ def _after_guardrails(state: AssistantState) -> str:
 
 
 def _after_retrieve_kb(state: AssistantState) -> str:
-    return END if (state.get("guardrails") or {}).get("decision") == "grounding_refusal" else "respond_stream"
+    return END if (state.get("guardrails") or {}).get("decision") in {"grounding_refusal", "kb_unavailable"} else "respond_stream"
 
 
 def _after_execute(state: AssistantState) -> str:

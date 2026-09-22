@@ -45,6 +45,9 @@ knowledge question, MUST answer only from non-empty retrieved chunks, and MUST r
 clarification without an LLM answer when retrieval has no evidence. Short purely social messages MAY
 remain conversational; tool turns MUST retain their existing execution behavior.
 
+When retrieval itself fails, the assistant MUST report the knowledge base as unavailable with degraded
+evidence and MUST NOT return the clarification: a failure is not an absence of evidence.
+
 #### Scenario: Knowledge question with evidence
 
 - GIVEN a non-conversational panel question
@@ -56,6 +59,13 @@ remain conversational; tool turns MUST retain their existing execution behavior.
 - GIVEN a non-conversational panel question
 - WHEN retrieval returns no non-empty chunks
 - THEN the assistant returns the deterministic panel clarification without calling the responder
+
+#### Scenario: Knowledge base unavailable
+
+- GIVEN a non-conversational panel question
+- WHEN knowledge-base retrieval fails
+- THEN the assistant returns the knowledge-base-unavailable message with `degraded` evidence and does not call the responder
+- AND it MUST NOT return the clarification reserved for an empty retrieval
 
 #### Scenario: Conversational exemption
 

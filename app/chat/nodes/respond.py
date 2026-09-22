@@ -29,6 +29,10 @@ from app.services.settings import MESSAGE_DEFAULTS, get_message, get_tone_direct
 logger = logging.getLogger(__name__)
 
 CANNOT_ANSWER_REPLY = MESSAGE_DEFAULTS["cannot_answer"]
+KB_UNAVAILABLE_REPLY = (
+    "La base de conocimiento no está disponible en este momento. "
+    "Un asesor de Lumat revisará tu consulta y te contactará."
+)
 CLARIFICATION_REPLY = MESSAGE_DEFAULTS["clarification"]
 
 
@@ -127,14 +131,24 @@ def respond(state: ConversationState) -> dict:
         return {"replies": [clarification]}
 
     with session_scope() as session:
-        chunks = kb.retrieve(
-            session,
-            text,
-            top_k=kb.DEFAULT_TOP_K,
-            min_sim=kb.DEFAULT_MIN_SIM,
-            # Customer chat may use customer-audience documents only.
-            audience=KbVisibility.CUSTOMER,
-        )
+        try:
+            chunks = kb.retrieve(
+                session,
+                text,
+                top_k=kb.DEFAULT_TOP_K,
+                min_sim=kb.DEFAULT_MIN_SIM,
+                # Customer chat may use customer-audience documents only.
+                audience=KbVisibility.CUSTOMER,
+            )
+        except Exception as error:
+            # Unlike the panel this path records no evidence entry, so the log is
+            # the only record of the outage: keep the traceback.
+            logger.exception("Knowledge-base retrieval failed: %s", error)
+            return {
+                "replies": [KB_UNAVAILABLE_REPLY],
+                "escalate": True,
+                "escalate_reason": "kb_unavailable",
+            }
         if not chunks:
             # CM-4: cannot answer reliably + CM-6 log + default escalation.
             log_unresolved(
