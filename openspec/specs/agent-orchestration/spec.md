@@ -8,11 +8,11 @@ Supervise sub-agent dispatch for Lumat's WhatsApp assistant. Deterministic gates
 
 ### Requirement: AO-1 — Registry Declares Multi-Agent Roster
 
-The system MUST declare five sub-agents in `agent/registry.yaml` (research/triage, KB retrieval, customer records, handoff, escalation/emergency), each with `name`, `persona`, `tools_whitelist`, `kb_scope`, `memoria_scope`, `model`, `temperature`. The `orchestrator` entry shape MUST NOT change (AC-4 invariant preserved).
+The system MUST declare five sub-agents in `agent/registry.yaml` (research/triage, KB retrieval, customer records, handoff, escalation/emergency), each with `name`, `persona`, `tools_whitelist`, `memoria_scope`, `model`, `temperature`. The `orchestrator` entry shape MUST NOT change (AC-4 invariant preserved).
 
 #### Scenario: Full roster declared
 - GIVEN `registry.yaml` parses at boot
-- THEN five sub-agents exist with all seven fields
+- THEN five sub-agents exist with all six fields
 - AND the `orchestrator` entry resolves exactly as before
 
 #### Scenario: Slice-1 identifiable
@@ -91,21 +91,6 @@ The system MUST gate each sub-agent's service calls against its `tools_whitelist
 #### Scenario: Denied call blocked
 - GIVEN a sub-agent calls a non-whitelisted service
 - THEN it is rejected with a log
-
-### Requirement: AO-7 — KB/Memory Scoping via Filter
-
-Chunks carry `source_meta.category` (JSONB convention, no schema change): documents ingested with a category store `source_meta: {"category": "..."}`. `kb.retrieve(..., scope=...)` SHOULD filter chunks to those whose `source_meta.category` is in the scope list; `scope=None` returns the unfiltered active-version set (backward compatible). A sub-agent with `kb_scope: [valores, postventa]` (e.g. research_triage) may only retrieve chunks whose category is in that list. Memory stays customer-scoped (unchanged).
-
-The `scope` filter is the TOPIC axis only. Document audience (`customer` | `internal`, see KB-5) is a separate orthogonal axis enforced on `kb_documents.visibility`, and audience MUST NOT be folded into `source_meta.category`.
-
-#### Scenario: Scoped retrieve
-- GIVEN a sub-agent with `kb_scope`
-- WHEN it calls `kb.retrieve(scope=kb_scope)`
-- THEN results contain only chunks whose `source_meta.category` is in the scope list
-
-#### Scenario: Unscoped retrieve unchanged
-- GIVEN `kb.retrieve` called with `scope=None`
-- THEN results equal today's active-version retrieval (no filtering)
 
 ### Requirement: AO-8 — Handoff Bounded Retry
 

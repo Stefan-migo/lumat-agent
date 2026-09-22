@@ -1,44 +1,21 @@
 # registry.yaml — declarative agent registry and assistant runtime config.
-# How far `kb_scope` is actually wired, so nobody has to re-derive it:
-# NOTHING consumes it today. No entry declares a non-null scope, so
-# `kb.retrieve(scope=...)` (AO-7, app/services/kb.py) has no production caller and
-# the topical filter never engages. `research_triage` used to be the one wired
-# entry; its scope was removed because `source_meta.category` is written by no
-# production path (the panel upload calls `ingest_document` with no `source_meta`,
-# app/panel/api/routes/kb.py), so the filter silently returned zero chunks for every
-# document a client could upload and every price or warranty question escalated to a
-# human. See odd/tasks/kb-triage-scope.md.
-# On `agent:` and `assistant:` the field is parsed and held but never consumed, and
-# it is optional there — the loader requires only
-# name/persona/skills/tools_whitelist/model (app/agent_registry.py).
-# `null` is the intended "no restriction" declaration (`scope=None` returns the
-# unfiltered active-version set), so a non-null value on `agent:` or `assistant:`
-# is a no-op until something reads it. The field stays declared because the
-# `agent:` shape is frozen (AC-4) and its presence is asserted in
-# tests/unit/test_prompts.py; this is deliberate scope, not pending work.
 agent:
   name: orchestrator
   persona: personas/orchestrator.md
   skills: [sdb, emergency, handoff, capture]
   tools_whitelist: []
-  kb_scope: null
   memoria_scope: null
   model: deepseek-chat
 # H2 multi-agent roster (AO-1). The `agent:` block above is IN TACT (AC-4);
-# `sub_agents:` is a NEW sibling key. Each sub-agent declares all seven fields:
-# name / persona / tools_whitelist / kb_scope / memoria_scope / model /
+# `sub_agents:` is a NEW sibling key. Each sub-agent declares all six fields:
+# name / persona / tools_whitelist / memoria_scope / model /
 # temperature. Only research_triage has runtime wiring in slice 1; the other
 # four are data-only (declared, no runtime behavior).
-# `kb_scope` is the TOPIC axis, not the document-audience gate (KB-5), which is
-# enforced on `kb_documents.visibility` and is not declared per agent.
 sub_agents:
   research_triage:
     name: kb-research-triage
     persona: personas/research_triage.md
     tools_whitelist: ["kb.retrieve"]
-    # null = no topical restriction. See the header note: `source_meta.category` is
-    # written by nothing, so any non-null value here silently empties retrieval.
-    kb_scope: null
     memoria_scope: "customer"
     model: deepseek-chat
     temperature: 0
@@ -46,7 +23,6 @@ sub_agents:
     name: kb-retrieval
     persona: personas/retrieval.md
     tools_whitelist: ["kb.retrieve"]
-    kb_scope: null
     memoria_scope: "customer"
     model: deepseek-chat
     temperature: 0
@@ -54,7 +30,6 @@ sub_agents:
     name: customer-records
     persona: personas/customer_records.md
     tools_whitelist: []
-    kb_scope: null
     memoria_scope: "customer"
     model: deepseek-chat
     temperature: 0
@@ -62,7 +37,6 @@ sub_agents:
     name: human-handoff
     persona: personas/human_handoff.md
     tools_whitelist: []
-    kb_scope: null
     memoria_scope: "customer"
     model: deepseek-chat
     temperature: 0
@@ -70,7 +44,6 @@ sub_agents:
     name: escalation
     persona: personas/escalation.md
     tools_whitelist: []
-    kb_scope: null
     memoria_scope: "customer"
     model: deepseek-chat
     temperature: 0
@@ -102,7 +75,6 @@ assistant:
     - project.rename
     - project.archive
     - project.merge
-  kb_scope: null
   memoria_scope: panel
   model: deepseek-chat
   sdb_classification:

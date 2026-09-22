@@ -29,10 +29,20 @@ def _load(repo_root):
 
 # --- AO-1: full multi-agent roster ------------------------------------------
 
-def test_loads_full_roster_with_seven_fields_each(repo_root):
+def test_loads_full_roster_with_six_fields_each(repo_root):
     # Full roster: orchestrator + five sub-agents, each sub-agent carrying all
-    # seven fields (name/persona/tools_whitelist/kb_scope/memoria_scope/model/
+    # six fields (name/persona/tools_whitelist/memoria_scope/model/
     # temperature). The orchestrator entry resolves exactly as before (AC-4).
+    from app.agent_registry import SUBAGENT_REQUIRED_FIELDS
+
+    assert SUBAGENT_REQUIRED_FIELDS == (
+        "name",
+        "persona",
+        "tools_whitelist",
+        "memoria_scope",
+        "model",
+        "temperature",
+    )
     reg = _load(repo_root)
     assert reg.orchestrator.name == "orchestrator"
     assert reg.orchestrator.persona == "personas/orchestrator.md"
@@ -50,18 +60,13 @@ def test_loads_full_roster_with_seven_fields_each(repo_root):
         assert isinstance(sub.name, str) and sub.name
         assert isinstance(sub.persona, str) and sub.persona
         assert isinstance(sub.tools_whitelist, tuple) or isinstance(sub.tools_whitelist, list)
-        assert isinstance(sub.kb_scope, (tuple, list, type(None)))
+        assert not hasattr(sub, "kb_scope")
         assert isinstance(sub.memoria_scope, str)
         assert isinstance(sub.model, str) and sub.model
         assert isinstance(sub.temperature, float)
 
     assert reg.sub_agents["research_triage"].name == "kb-research-triage"
     assert tuple(reg.sub_agents["research_triage"].tools_whitelist) == ("kb.retrieve",)
-    # null, not ["valores", "postventa"]: the scope filtered on
-    # `source_meta.category`, which no production path writes, so it emptied
-    # retrieval for every document a client could upload. See
-    # odd/tasks/kb-triage-scope.md.
-    assert reg.sub_agents["research_triage"].kb_scope is None
     assert reg.sub_agents["research_triage"].memoria_scope == "customer"
     assert reg.sub_agents["research_triage"].model == "deepseek-chat"
     assert reg.sub_agents["research_triage"].temperature == 0
@@ -105,7 +110,6 @@ def test_missing_required_field_rejected(repo_root, tmp_path):
                     "persona": "personas/orchestrator.md",
                     "skills": ["sdb"],
                     "tools_whitelist": [],
-                    "kb_scope": None,
                     "memoria_scope": None,
                     "model": "deepseek-chat",
                 },
@@ -114,7 +118,6 @@ def test_missing_required_field_rejected(repo_root, tmp_path):
                         "name": "kb-research-triage",
                         "persona": "personas/research_triage.md",
                         "tools_whitelist": ["kb.retrieve"],
-                        "kb_scope": ["valores", "postventa"],
                         "memoria_scope": "customer",
                         "model": "deepseek-chat",
                         # "temperature" deliberately omitted
@@ -144,7 +147,6 @@ def test_unknown_tools_whitelist_rejected(repo_root, tmp_path):
                     "persona": "personas/orchestrator.md",
                     "skills": ["sdb"],
                     "tools_whitelist": [],
-                    "kb_scope": None,
                     "memoria_scope": None,
                     "model": "deepseek-chat",
                 },
@@ -153,7 +155,6 @@ def test_unknown_tools_whitelist_rejected(repo_root, tmp_path):
                         "name": "kb-research-triage",
                         "persona": "personas/research_triage.md",
                         "tools_whitelist": ["kb.some_future_tool"],
-                        "kb_scope": ["valores"],
                         "memoria_scope": "customer",
                         "model": "deepseek-chat",
                         "temperature": 0,
@@ -183,7 +184,6 @@ def test_invalid_temperature_rejected(repo_root, tmp_path):
                     "persona": "personas/orchestrator.md",
                     "skills": ["sdb"],
                     "tools_whitelist": [],
-                    "kb_scope": None,
                     "memoria_scope": None,
                     "model": "deepseek-chat",
                 },
@@ -192,7 +192,6 @@ def test_invalid_temperature_rejected(repo_root, tmp_path):
                         "name": "kb-research-triage",
                         "persona": "personas/research_triage.md",
                         "tools_whitelist": ["kb.retrieve"],
-                        "kb_scope": ["valores"],
                         "memoria_scope": "customer",
                         "model": "deepseek-chat",
                         "temperature": "hot",

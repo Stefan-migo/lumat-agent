@@ -18,6 +18,7 @@ text -> 0.0: retrieval threshold behavior is fully exercised.
 """
 
 import hashlib
+import inspect
 from pathlib import Path
 from runpy import run_path
 
@@ -418,86 +419,12 @@ def test_kb4_restore_previous_version_flip_no_reembed(fake_embedder):
 
 
 # ---------------------------------------------------------------------------
-# AO-7 — retrieve(scope): additive filter on source_meta.category (JSONB)
+# Topic-scope retirement guard
 # ---------------------------------------------------------------------------
 
 
-def test_kb_a7_scoped_retrieve_filters_by_category(fake_embedder):
-    # Two documents with distinct source_meta.category. Querying the 'valores'
-    # content with scope=["valores"] returns only the categoria 'valores' chunk,
-    # never the 'postventa' one (which is not in scope).
-    valores_text = "el precio de la revision anual del calefont es 15000 pesos"
-    postventa_text = "la garantia cubre la cobertura del equipo por dos anios"
-    with SessionLocal() as session:
-        kb.ingest_document(
-            session,
-            title="Valores",
-            fmt=DocumentFormat.MD,
-            content=valores_text.encode(),
-            source_meta={"category": "valores"},
-        )
-        kb.ingest_document(
-            session,
-            title="Postventa",
-            fmt=DocumentFormat.MD,
-            content=postventa_text.encode(),
-            source_meta={"category": "postventa"},
-        )
-        session.commit()
-
-    with SessionLocal() as session:
-        scoped = kb.retrieve(session, valores_text, scope=["valores"], audience=None)
-    assert len(scoped) == 1
-    assert scoped[0]["source_meta"]["category"] == "valores"
-
-
-def test_kb_a7_scoped_retrieve_excludes_non_matching_category(fake_embedder):
-    # The query matches the 'valores' document, but scope=["postventa"] excludes
-    # it: the filter must return empty, proving category exclusion genuinely
-    # happened (the query alone would have hit the valores document).
-    valores_text = "el precio de la revision anual del calefont es 15000 pesos"
-    postventa_text = "la garantia cubre la cobertura del equipo por dos anios"
-    with SessionLocal() as session:
-        kb.ingest_document(
-            session,
-            title="Valores",
-            fmt=DocumentFormat.MD,
-            content=valores_text.encode(),
-            source_meta={"category": "valores"},
-        )
-        kb.ingest_document(
-            session,
-            title="Postventa",
-            fmt=DocumentFormat.MD,
-            content=postventa_text.encode(),
-            source_meta={"category": "postventa"},
-        )
-        session.commit()
-
-    with SessionLocal() as session:
-        scoped = kb.retrieve(session, valores_text, scope=["postventa"], audience=None)
-    assert scoped == []  # the matching chunk is filtered out by scope
-
-
-def test_kb_a7_unscoped_retrieve_unchanged(fake_embedder):
-    # scope=None (default) returns the unfiltered active-version set — a
-    # categorised document still matches even though scope is omitted; backward
-    # compatible with today's retrieval (no accidental filtering).
-    valores_text = "el precio de la revision anual del calefont es 15000 pesos"
-    with SessionLocal() as session:
-        kb.ingest_document(
-            session,
-            title="Valores",
-            fmt=DocumentFormat.MD,
-            content=valores_text.encode(),
-            source_meta={"category": "valores"},
-        )
-        session.commit()
-
-    with SessionLocal() as session:
-        results = kb.retrieve(session, valores_text, audience=None)
-    assert len(results) == 1
-    assert results[0]["source_meta"]["category"] == "valores"
+def test_kb_retrieve_has_no_scope_parameter():
+    assert "scope" not in inspect.signature(kb.retrieve).parameters
 
 
 # ---------------------------------------------------------------------------

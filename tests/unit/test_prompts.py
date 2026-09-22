@@ -110,7 +110,7 @@ def test_registry_declares_exactly_one_orchestrator(repo_root):
     assert agent["persona"] == "personas/orchestrator.md"
     assert set(agent["skills"]) == {"sdb", "emergency", "handoff", "capture"}
     assert isinstance(agent["tools_whitelist"], list)
-    for key in ("kb_scope", "memoria_scope"):
+    for key in ("memoria_scope",):
         assert key in agent
     assert agent.get("model")
 

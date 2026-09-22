@@ -1,4 +1,4 @@
-"""research_triage sub-graph (H2 router, slice-1; AO-5/AO-7/AO-8).
+"""research_triage sub-graph (H2 router, slice-1; AO-5/AO-8).
 
 Thin sub-graph wrapping the vetted KB nodes for KB retail intents
 (valores/postventa, RETRIEVAL_INTENTS). Entered by the parent graph after the
@@ -10,15 +10,13 @@ call per turn, AO-10).
 Flow:
 
     START -> kb_check
-        kb_check: scoped kb.retrieve(scope=kb_scope)   # AO-7
+        kb_check: kb.retrieve
             hit    -> respond  (reused, unchanged)
             miss   -> retry(<=1, triage_retry) -> kb_check # AO-8 bounded
             miss++ -> handoff (reused, unchanged)
 
 Reuse contract:
 - ``respond`` and ``handoff`` are the EXISTING nodes, invoked unchanged.
-- The scope is injected here (design line 70): the sub-agent's ``kb_scope`` is
-  read from the registry and passed to ``kb.retrieve(scope=...)``.
 - AO-6 whitelist: before the service call the sub-agent's ``tools_whitelist``
   is checked for ``kb.retrieve`` (assert-in-dispatch); a non-whitelisted call
   is logged and handed off.
@@ -53,25 +51,12 @@ def _current_text(state: ConversationState) -> str:
     return state.window[-1]["text"] if state.window else ""
 
 
-def _registry_kb_scope() -> list[str] | None:
-    """kb_scope of the research_triage sub-agent from the cached registry (AO-7)."""
-    try:
-        sub = get_registry().sub_agents.get(RESEARCH_TRIAGE)
-    except RegistryError:
-        # A broken registry already fails boot (AO-2); fall back to no scope
-        # rather than crashing the turn.
-        logger.exception("registry error while reading research_triage scope")
-        return None
-    return list(sub.kb_scope) if sub is not None and sub.kb_scope else None
-
-
 def _kb_check(state: ConversationState) -> dict:
-    """Scoped retrieval guard: hit -> respond; miss -> bounded retry -> handoff.
+    """Retrieval guard: hit -> respond; miss -> bounded retry -> handoff.
 
     Also enforces the AO-6 whitelist before the service call: ``kb.retrieve``
     must be within the sub-agent's ``tools_whitelist``, else log + handoff.
     """
-    scope = _registry_kb_scope()
     whitelist = _sub_whitelist()
     if not is_tool_whitelisted(whitelist, _RETRIEVE_TOOL):
         logger.warning(
@@ -95,7 +80,6 @@ def _kb_check(state: ConversationState) -> dict:
             text,
             top_k=kb.DEFAULT_TOP_K,
             min_sim=kb.DEFAULT_MIN_SIM,
-            scope=scope,
             # This subgraph is part of the customer-facing chat surface.
             audience=KbVisibility.CUSTOMER,
         )

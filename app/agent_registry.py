@@ -1,7 +1,7 @@
 """Read-only startup registry reader for the multi-agent roster (H2 router).
 
 AO-2 / D2: the registry is data-only; this module loads `agent/registry.yaml`
-at boot and validates it, but does NOT enforce tools, KB scope, or memory scope
+at boot and validates it, but does NOT enforce tools or memory scope
 beyond data declaration. It is deliberately NOT wired into
 `app/services/prompts.py` or `app/chat/nodes/respond.py` (AC-4 / D2) so the
 no-runtime-consumer invariant stays intact.
@@ -9,7 +9,7 @@ no-runtime-consumer invariant stays intact.
 Fail-fast contract (design D5 / AO-2):
 - exactly one top-level `agent:` key with ``name == "orchestrator"`` (AC-4)
 - a `sub_agents:` sibling mapping agent keys -> sub-agent declarations
-- every sub-agent carries all seven required fields
+- every sub-agent carries all six required fields
 - every `tools_whitelist` entry is within the slice-1 known-tools set, which
   grows in later slices (currently ``["kb.retrieve"]``)
 - `temperature` is numeric
@@ -30,12 +30,11 @@ from app.chat.assistant.tools.registry import TOOL_REGISTRY
 # The assistant tool registry is the source of truth for declared capabilities.
 KNOWN_TOOLS = tuple(TOOL_REGISTRY)
 
-# All seven fields every sub-agent must declare (AO-1).
+# All six fields every sub-agent must declare (AO-1).
 SUBAGENT_REQUIRED_FIELDS = (
     "name",
     "persona",
     "tools_whitelist",
-    "kb_scope",
     "memoria_scope",
     "model",
     "temperature",
@@ -51,7 +50,6 @@ class SubAgent:
     name: str
     persona: str
     tools_whitelist: tuple[str, ...]
-    kb_scope: tuple[str, ...] | None
     memoria_scope: str
     model: str
     temperature: float
@@ -63,7 +61,6 @@ class Agent:
     persona: str
     skills: tuple[str, ...]
     tools_whitelist: tuple[str, ...]
-    kb_scope: tuple[str, ...] | None
     memoria_scope: str | None
     model: str
 
@@ -74,7 +71,6 @@ class Assistant:
     persona: str
     prompts: dict[str, str]
     tools_whitelist: tuple[str, ...]
-    kb_scope: tuple[str, ...] | None
     memoria_scope: str | None
     model: str
     skills: tuple[str, ...]
@@ -116,7 +112,6 @@ def _build_agent(root: dict, where: str) -> Agent:
         persona=root["persona"],
         skills=_coerce_str_list(root["skills"], what=f"{where}.skills"),
         tools_whitelist=_coerce_str_list(root["tools_whitelist"], what=f"{where}.tools_whitelist"),
-        kb_scope=_coerce_optional_str_list(root.get("kb_scope"), what=f"{where}.kb_scope"),
         memoria_scope=root.get("memoria_scope"),
         model=root["model"],
     )
@@ -177,7 +172,6 @@ def _build_assistant(root: dict, agent_dir: Path) -> Assistant:
         persona=persona,
         prompts=resolved_prompts,
         tools_whitelist=tools,
-        kb_scope=_coerce_optional_str_list(root.get("kb_scope"), what=f"{where}.kb_scope"),
         memoria_scope=root.get("memoria_scope"),
         model=root["model"],
         skills=_coerce_str_list(root.get("skills", []), what=f"{where}.skills"),
@@ -210,7 +204,6 @@ def _build_subagent(key: str, root: dict) -> SubAgent:
         name=root["name"],
         persona=root["persona"],
         tools_whitelist=tools,
-        kb_scope=_coerce_optional_str_list(root["kb_scope"], what=f"{where}.kb_scope"),
         memoria_scope=root["memoria_scope"],
         model=root["model"],
         temperature=float(temperature),
