@@ -315,7 +315,7 @@ def test_message_override_wins_over_caller_default():
             == "Un asesor te contactará."
         )
         # unset message key still falls back to the caller default
-        assert settings.get_message(session, "farewell", "Chao") == "Chao"
+        assert settings.get_message(session, "unknown_message", "Chao") == "Chao"
 
 
 # ---------------------------------------------------------------------------

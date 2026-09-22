@@ -63,6 +63,11 @@ MESSAGE_DEFAULTS: dict[str, str] = {
         "(Calefont, Caldera, Calefacción, Solicitar visita, Valores, "
         "Postventa/Garantía, Emergencia, Hablar con una persona)"
     ),
+    "farewell": "¡Gracias por escribirnos! Que tengas buen día.",
+    "out_of_hours": (
+        "Estamos fuera de nuestro horario de atención. Te responderemos cuando "
+        "volvamos a atender."
+    ),
 }
 
 # SS-2 (EM-1): default emergency expressions + obvious Spanish variants.
@@ -152,6 +157,8 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "messages.greeting": MESSAGE_DEFAULTS["greeting"],
     "messages.cannot_answer": MESSAGE_DEFAULTS["cannot_answer"],
     "messages.clarification": MESSAGE_DEFAULTS["clarification"],
+    "messages.farewell": MESSAGE_DEFAULTS["farewell"],
+    "messages.out_of_hours": MESSAGE_DEFAULTS["out_of_hours"],
     "hours.timezone": "America/Santiago",
     "hours.schedule": [],
     # AP-8 (T5.5): dashboard KPI time window in days (SQL counts over the

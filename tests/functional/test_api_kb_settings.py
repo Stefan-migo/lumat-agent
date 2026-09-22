@@ -685,7 +685,13 @@ def test_settings_get_returns_all_sections_and_snapshot(client, make_user):
     # defaults out of the box (SS-1..SS-5 defaults)
     assert body["scope_rules"] == {}
     assert body["tone"] == "cercano"
-    assert set(body["messages"]) == {"greeting", "cannot_answer", "clarification"}
+    assert set(body["messages"]) == {
+        "greeting",
+        "cannot_answer",
+        "clarification",
+        "farewell",
+        "out_of_hours",
+    }
     assert isinstance(body["keywords"], list) and len(body["keywords"]) > 0
     assert body["conversation_limit"] == 1.50
     assert body["daily_limit"] == 5.00
