@@ -21,6 +21,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from uuid import uuid4
 
 import psycopg
 import pytest
@@ -137,13 +138,13 @@ def test_migration_030_preserves_existing_project_rows(tmp_path):
     """Applying 030 to a real 029 database preserves and renames existing rows."""
     admin_parts = conninfo_to_dict(ADMIN_DB_URL)
     database_name = admin_parts["dbname"]
-    # Unique per run: a predictable name plus DROP DATABASE IF EXISTS could destroy an unrelated
-    # database, and two concurrent runs would drop each other's scratch schema mid-test.
-    scratch_name = f"{database_name}_mig030_{os.getpid()}"
+    # Unpredictable per run, and never pre-dropped: DROP DATABASE IF EXISTS against a guessable name
+    # could destroy a database this test never created. The name is dropped only after the test has
+    # created it.
+    scratch_name = f"{database_name}_mig030_{uuid4().hex}"
     scratch_url = make_conninfo(**{**admin_parts, "dbname": scratch_name})
 
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
-        conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} ").format(sql.Identifier(scratch_name)))
         conn.execute(sql.SQL("CREATE DATABASE {} ").format(sql.Identifier(scratch_name)))
 
     try:
