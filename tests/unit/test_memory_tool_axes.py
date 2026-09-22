@@ -15,6 +15,7 @@ def test_memory_tool_declares_visibility_without_a_write_target():
             "titulo": "Project fact",
             "contenido": "A reusable fact",
             "topic_key": "agent:fact",
+            "tipo": "decision",
             "visibility": "project",
         }
     )
@@ -50,6 +51,7 @@ def test_memory_write_topic_key_still_requires_the_agent_namespace():
                 "titulo": "A fact",
                 "contenido": "A fact",
                 "topic_key": "test",
+                "tipo": "decision",
             }
         )
 
@@ -58,8 +60,23 @@ def test_memory_write_topic_key_still_requires_the_agent_namespace():
             "titulo": "A fact",
             "contenido": "A fact",
             "topic_key": "agent:fact",
+            "tipo": "decision",
         }
     )
+
+
+def test_memory_write_requires_type_and_defaults_visibility_to_project():
+    payload = {
+        "titulo": "A fact",
+        "contenido": "A fact",
+        "topic_key": "agent:fact",
+    }
+
+    with pytest.raises(ValueError):
+        registry.MemoryWriteArgs.model_validate(payload)
+
+    args = registry.MemoryWriteArgs.model_validate({**payload, "tipo": "discovery"})
+    assert args.visibility == "project"
 
 
 def test_agent_scope_requires_canonical_entity():
@@ -116,6 +133,7 @@ def test_project_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
         titulo="Project fact",
         contenido="A reusable fact",
         topic_key="agent:fact",
+        tipo="decision",
         visibility="project",
     )
 

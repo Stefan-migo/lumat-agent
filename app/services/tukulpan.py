@@ -58,7 +58,7 @@ DEFAULT_TOP_K = 5
 WRITABLE_PROYECTO = "default"
 AGENT_SCOPE = "agent"
 MEMORY_DECAY_DAYS = 30
-DECAYING_TYPES = frozenset({MemoryType.SUMMARY, MemoryType.SESSION})
+DECAYING_TYPES = frozenset({MemoryType.SUMMARY, MemoryType.SESSION, MemoryType.DISCOVERY})
 
 __all__ = [
     "DEFAULT_TOP_K",
