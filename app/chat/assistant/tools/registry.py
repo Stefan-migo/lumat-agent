@@ -28,9 +28,7 @@ SDB_WRITE_ALLOWLIST = frozenset({
 })
 AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write"})
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
-# The canonical agent axis and the customer id shape are contract values the planner cannot derive
-# from prose. They are declared once, as the constraints the read models both advertise and enforce.
-_AGENT_MEMORY_ENTITY = memory.agent_memory_entity(memory.WRITABLE_PROYECTO)
+# The customer id shape is a contract value the planner cannot derive from prose.
 _CUSTOMER_ENTITY_PATTERN = r"^(?:customer:\d+|\d+)$"
 
 
@@ -249,15 +247,17 @@ def _kpis(session, args: KpiArgs):
     return dashboard.compute_kpis(session, args.window_days)
 
 
-def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None):
+def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, proyecto: str = "default"):
     parsed = args.root
     if parsed.scope == "own":
         if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
             raise ToolValidationError("own memory read requires a positive trusted thread id")
         thread_rows = memory.list_for_entity(
-            session, scope="panel", entity_id=memory.thread_memory_entity(trusted_thread_id)
+            session, scope="panel", entity_id=memory.thread_memory_entity(trusted_thread_id), proyecto=proyecto
         )
-        agent_rows = memory.list_for_entity(session, scope="agent", entity_id=_AGENT_MEMORY_ENTITY)
+        agent_rows = memory.list_for_entity(
+            session, scope="agent", entity_id=memory.agent_memory_entity(proyecto), proyecto=proyecto
+        )
         if parsed.topic:
             thread_rows = [row for row in thread_rows if row.topic_key == parsed.topic]
             agent_rows = [row for row in agent_rows if row.topic_key == parsed.topic]
@@ -274,7 +274,7 @@ def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None):
     return rows[: parsed.limit]
 
 
-def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | None):
+def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | None, proyecto: str = "default"):
     parsed = args.root
     if parsed.scope == "own":
         if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
@@ -284,12 +284,14 @@ def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | 
             parsed.query,
             scope="panel",
             entity_id=memory.thread_memory_entity(trusted_thread_id),
+            proyecto=proyecto,
             top_k=parsed.limit,
         ) + memory.hybrid_search(
             session,
             parsed.query,
             scope="agent",
-            entity_id=_AGENT_MEMORY_ENTITY,
+            entity_id=memory.agent_memory_entity(proyecto),
+            proyecto=proyecto,
             top_k=parsed.limit,
         )
         rows.sort(key=lambda row: row.get("score", 0), reverse=True)
@@ -311,13 +313,13 @@ def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | 
     ]
 
 
-def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int):
+def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int, proyecto: str = "default"):
     key = args.topic_key
-    proyecto = memory.WRITABLE_PROYECTO
-    scope, entity_id = memory.visibility_target(
-        args.visibility, thread_id=trusted_thread_id, proyecto=proyecto
-    )
     try:
+        authorization = None if proyecto == memory.WRITABLE_PROYECTO else projects.agent_context(session, proyecto)
+        scope, entity_id = memory.visibility_target(
+            args.visibility, thread_id=trusted_thread_id, proyecto=proyecto
+        )
         with session.begin_nested():
             row = memory.upsert(
                 session,
@@ -331,6 +333,7 @@ def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int):
                 producer=memory.MemoryProducer.AGENT,
                 origin_thread_id=str(trusted_thread_id),
                 visibility=args.visibility,
+                authorization=authorization,
             )
             relations.judge_memory_relations(session, row)
         return {"written": True, "id": row.id, "topic_key": key}
@@ -430,6 +433,7 @@ def execute_tool(
     whitelist: set[str] | frozenset[str] | None = None,
     cost_allowed: bool = True,
     trusted_thread_id: int | None = None,
+    proyecto: str = "default",
 ) -> dict:
     definition = get_tool(name)
     if whitelist is not None and name not in whitelist:
@@ -489,9 +493,17 @@ def execute_tool(
         elif name == "project.create":
             result = _plain(definition.handler(session, parsed, _approval=project_approval))
         elif name == "memory.write":
-            result = _plain(definition.handler(session, parsed, trusted_thread_id=trusted_thread_id))
+            result = _plain(
+                definition.handler(
+                    session, parsed, trusted_thread_id=trusted_thread_id, proyecto=proyecto
+                )
+            )
         elif name in {"memory.read", "memory.search"}:
-            result = _plain(definition.handler(session, parsed, trusted_thread_id=trusted_thread_id))
+            result = _plain(
+                definition.handler(
+                    session, parsed, trusted_thread_id=trusted_thread_id, proyecto=proyecto
+                )
+            )
         else:
             result = _plain(definition.handler(session, parsed))
     except SearchFailure as exc:

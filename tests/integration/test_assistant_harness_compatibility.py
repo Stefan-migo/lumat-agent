@@ -151,8 +151,8 @@ def test_memory_read_rejects_cross_scope_entity_shapes(monkeypatch):
     )
     assert own["status"] == "completed"
     assert calls == [
-        {"scope": "panel", "entity_id": "thread:7"},
-        {"scope": "agent", "entity_id": "agent:default"},
+        {"scope": "panel", "entity_id": "thread:7", "proyecto": "default"},
+        {"scope": "agent", "entity_id": "agent:default", "proyecto": "default"},
     ]
 
     result = execute_tool(
