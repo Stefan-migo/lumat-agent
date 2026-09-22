@@ -49,7 +49,7 @@ The canonical Tukulpan façade MUST expose upsert, get, list, delete, mark, and 
 
 ### Requirement: MEM-3 — Explicit, Scoped Hybrid Search
 
-The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. An `own` read MUST union the trusted current thread axis with the project-qualified agent axis, while never including other threads' panel rows. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope.
+The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. An `own` read MUST union the trusted current thread axis with the project-qualified agent axis, while never including other threads' panel rows. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope. Admission MUST be per channel: a row qualifies when its dense cosine similarity clears the configured gate OR when a Spanish full-text match of the query's terms holds within its content, and the qualifying rows MUST be ranked by the fused score. The lexical channel MUST tolerate accent variants of the query's terms.
 
 #### Scenario: Explicit search only
 - GIVEN a panel turn enters `assemble_context()`
@@ -59,7 +59,17 @@ The system MUST retain `hybrid_search()` as an explicit, project- and scope/enti
 #### Scenario: Threshold recall
 - GIVEN memories where one is semantically close to the query
 - WHEN a scoped hybrid search runs
-- THEN only results above the threshold return, ranked by fused score
+- THEN only results that clear the dense gate or match the query's terms lexically return, ranked by fused score
+
+#### Scenario: Literal phrase recall
+- GIVEN a memory whose content carries a literal keyword among unrelated text
+- WHEN a scoped hybrid search runs with that keyword
+- THEN the memory returns even when its dense cosine does not clear the dense gate
+
+#### Scenario: Accent-insensitive lexical match
+- GIVEN a memory whose content carries a keyword with an accent
+- WHEN a scoped hybrid search runs with the unaccented form of that keyword
+- THEN the memory returns
 
 #### Scenario: Role isolation
 - GIVEN a search by a role without cross-project rights
@@ -67,7 +77,7 @@ The system MUST retain `hybrid_search()` as an explicit, project- and scope/enti
 - THEN an `own` read derives `thread:<trusted thread id>` server-side and returns that thread's memories unioned with global-visible agent memories from the same project, other threads' panel rows remain invisible, and customer memories remain client-gated
 
 #### Scenario: Empty result
-- GIVEN no memory above the threshold
+- GIVEN no memory clears the dense gate and none matches the query's terms
 - WHEN hybrid search runs
 - THEN an empty set returns with no out-of-scope fallback
 

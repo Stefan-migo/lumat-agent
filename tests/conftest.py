@@ -278,6 +278,37 @@ def fake_embedder(monkeypatch):
     monkeypatch.setattr(kb_service, "get_embedder", lambda: _FakeEmbedder())
 
 
+def flat_embedding(text: str) -> list[float]:
+    """One unit vector per distinct text, so distinct texts are orthogonal.
+
+    Models the real embedder's dilution on long content: a short query and a
+    long memory sit at ~0 cosine, so dense similarity carries no signal between
+    them.
+    """
+    vec = [0.0] * EMBED_DIMS
+    bucket = int.from_bytes(hashlib.sha256(text.encode()).digest()[:4], "big") % EMBED_DIMS
+    vec[bucket] = 1.0
+    return vec
+
+
+@pytest.fixture
+def flat_embedder(monkeypatch):
+    """An uninformative dense channel (no signal between distinct texts).
+
+    `fake_embedder` scores related texts near 1.0 (shared char trigrams), which
+    is the inverse of the real model, where a short query against a long memory
+    is not dense-similar. Under this fixture recall can only come from the
+    lexical channel, so it exercises the memory retrieval path honestly.
+    """
+    from app.services import kb as kb_service
+
+    class _FlatEmbedder:
+        def embed(self, texts):
+            return (flat_embedding(t) for t in texts)
+
+    monkeypatch.setattr(kb_service, "get_embedder", lambda: _FlatEmbedder())
+
+
 @pytest.fixture
 def mock_meta_send():
     """Intercept the Meta Cloud API outbound text send."""
