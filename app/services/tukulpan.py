@@ -603,10 +603,11 @@ def update(
         row.titulo = titulo
     if tipo is not None:
         row.tipo = tipo
-    if content_changed:
-        row.contenido = contenido
-        row.embedding = _embed([contenido])[0]
-        row.normalized_hash = _normalized_hash(contenido)
+    if tipo is not None or content_changed:
+        if content_changed:
+            row.contenido = contenido
+            row.embedding = _embed([contenido])[0]
+            row.normalized_hash = _normalized_hash(contenido)
         row.review_after = _review_after(row.tipo)
     session.flush()
     return row
