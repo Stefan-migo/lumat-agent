@@ -119,8 +119,13 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
 - Strategy: `ask-on-risk` (default). Forecast at planning: **~840 authored changed lines**
   (T1 ~120, T2 ~30, T3 ~200, T4 ~40, T5 ~80, T6 ~60, T7 ~250, T8 ~60) → **over the 400-line review
   budget, so chained PRs are required** unless the maintainer accepts `size:exception`.
-  Chain strategy: **not chosen yet** (must be `stacked-to-main` or `feature-branch-chain`).
-- Work-unit commits on this branch, tests and docs with their behavior, Conventional Commits.
+  Chain strategy: **`stacked-to-main`** (human decision). Slices, each targeting `main`:
+  1. `odd/tukulpan-memory-closure` — T1 + T8 (done).
+  2. `odd/tukulpan-memory-pinning`, stacked on slice 1 — T2 + T3 + T4 + T5.
+  3. `odd/tukulpan-memory-surface`, stacked on slice 2 — T6 + T7.
+  Each slice's diff reduces to its own work once its predecessor merges. Resolve the `chained-pr`
+  skill by registry name before planning or creating any PR.
+- Work-unit commits, tests and docs with their behavior, Conventional Commits.
 - Push, PR and merge stay human decisions.
 
 ## Progress
