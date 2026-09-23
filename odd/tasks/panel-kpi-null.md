@@ -96,10 +96,10 @@ stays nullable), `web/src/types.ts` (the type is already correct), any new depen
 
 ## Tasks
 
-- [ ] **T1** — RED (backend): extend `tests/functional/test_api_dashboard.py` with a case whose
+- [x] **T1** — RED (backend): extend `tests/functional/test_api_dashboard.py` with a case whose
   `service` is `NULL` and assert the KPI publishes a named bucket with the right count. Follow the
   file's existing seed/fixture shape. Watch it fail on `[null, 1]`.
-- [ ] **T2** — GREEN (backend): `func.coalesce(Case.service, "sin clasificar")` in the select and the
+- [x] **T2** — GREEN (backend): `func.coalesce(Case.service, "sin clasificar")` in the select and the
   `group_by` of `app/services/dashboard.py`. T1 passes; no other KPI value changes.
 - [ ] **T3** — RED (frontend): extend `web/src/components/pages/Dashboard.test.tsx` with a `motivos`
   payload containing `null` (via the D3 cast) and assert the panel still renders. Watch it fail.
@@ -137,6 +137,10 @@ stays nullable), `web/src/types.ts` (the type is already correct), any new depen
   `services/dashboard.py`, `Dashboard.tsx`, `Case` (`app/models.py:334`), `serializers.py` and
   `test_api_dashboard.py`; `graphify path "compute_kpis" "motivoAccent"` returns no directed path (the
   provider/consumer edge runs through the HTTP boundary, which the graph does not model).
+- T1 RED: `eval "$(./infra/test-db.sh env)" && uv run pytest tests/functional/test_api_dashboard.py` —
+  failed at `test_kpis_names_null_service_bucket`: expected `["sin clasificar", 1]`, observed `[[null, 1]]`.
+- T2 GREEN: `eval "$(./infra/test-db.sh env)" && uv run pytest tests/functional/test_api_dashboard.py` —
+  `22 passed`.
 
 ## Recovery
 
