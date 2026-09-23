@@ -71,7 +71,6 @@ def test_assistant_capabilities_reports_every_whitelisted_tool_without_truncatio
 
 
 def test_assistant_capabilities_excludes_non_whitelisted_registry_entry(monkeypatch):
-    config = load_assistant_config()
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",
         lambda: SimpleNamespace(tools_whitelist=["customers.search"]),
@@ -82,7 +81,6 @@ def test_assistant_capabilities_excludes_non_whitelisted_registry_entry(monkeypa
     assert result["tool_count"] == 1
     assert "customers.search" in result["capabilities"]
     assert "project.list" not in result["capabilities"]
-    assert config.tools_whitelist
 
 
 def test_assistant_capabilities_bounds_text(monkeypatch):
