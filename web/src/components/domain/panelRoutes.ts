@@ -7,6 +7,7 @@ export type PanelRoute = {
   conversationId?: number;
   automationRuleId?: number;
   projectSlug?: string;
+  threadId?: number;
   planningSessionSlug?: string;
 };
 
@@ -56,6 +57,12 @@ export function pathForRoute(route: PanelRoute): string {
   }
   if (route.view === 'projects' && route.projectSlug) return `${base}/${encodeURIComponent(route.projectSlug)}`;
   if (route.view === 'planning-sessions' && route.planningSessionSlug) return `${base}/${encodeURIComponent(route.planningSessionSlug)}`;
+  if (route.view === 'chat' && (route.projectSlug || route.threadId !== undefined)) {
+    const params = new URLSearchParams();
+    if (route.projectSlug) params.set('proyecto', route.projectSlug);
+    if (route.threadId !== undefined) params.set('thread_id', String(route.threadId));
+    return `${base}?${params.toString()}`;
+  }
   return base;
 }
 
@@ -74,6 +81,7 @@ function positiveId(value: string): number | null {
 }
 
 export function parsePanelPath(pathname: string): PanelRoute {
+  const query = new URLSearchParams(pathname.split('?')[1]?.split('#')[0] ?? '');
   let segments: string[];
   try {
     segments = pathname.split(/[?#]/, 1)[0].split('/').filter(Boolean).map((segment) => decodeURIComponent(segment));
@@ -85,7 +93,15 @@ export function parsePanelPath(pathname: string): PanelRoute {
 
   const view = segments[2] as PanelView;
   if (!panelViews.has(view)) return fallback();
-  if (segments.length === 3) return view === 'cases' ? { view: 'conversations', conversationTab: 'cases' } : { view };
+  if (segments.length === 3) {
+    if (view === 'cases') return { view: 'conversations', conversationTab: 'cases' };
+    if (view === 'chat') {
+      const projectSlug = query.get('proyecto') || undefined;
+      const threadId = query.get('thread_id') ? positiveId(query.get('thread_id')!) : null;
+      return { view, ...(projectSlug ? { projectSlug } : {}), ...(threadId ? { threadId } : {}) };
+    }
+    return { view };
+  }
   if (segments.length !== 4) return fallback();
 
   const id = positiveId(segments[3]);
