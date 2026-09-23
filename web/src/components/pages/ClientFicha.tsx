@@ -163,10 +163,10 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
       actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a clientes</Button>}
       state={stateMessage(state)}
     >
-      <div className="client-ficha">
-        <section className="client-ficha__rail" aria-label="Resumen del cliente">
+      <div className="detail-region">
+        <section className="detail-region__rail" aria-label="Resumen del cliente">
           <Card title="Identidad">
-            <dl className="client-ficha__facts">
+            <dl className="detail-region__facts">
               <div><dt>Teléfono</dt><dd>{customer.phone_e164 ?? "—"}</dd></div>
               <div><dt>Correo</dt><dd>{customer.email ?? "—"}</dd></div>
               <div><dt>Comuna</dt><dd>{customer.comuna ?? "—"}</dd></div>
@@ -199,7 +199,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           </Card>
         </section>
 
-        <div className="client-ficha__main">
+        <div className="detail-region__main">
           <Card title="Memo del cliente">
             <p>{data.memo || "Todavía no hay memo para este cliente."}</p>
           </Card>

@@ -59,6 +59,9 @@ describe("ClientFicha page grammar", () => {
     expect(screen.getByRole("main")).toHaveTextContent("Ficha: Marcela Fuentes");
     expect(screen.getByText("+56912345678 · Estado: Contactado")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Resumen del cliente" })).toBeInTheDocument();
+    expect(screen.getByRole("main").querySelector(".detail-region")).toBeInTheDocument();
+    expect(screen.getByRole("main").querySelector(".detail-region__rail")).toBeInTheDocument();
+    expect(screen.getByRole("main").querySelector(".detail-region__main")).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Inspector operacional" })).not.toBeInTheDocument();
   });
 
@@ -229,8 +232,8 @@ describe("ClientFicha slice 2 — product register", () => {
   it("composes the ficha into a summary rail plus a main region, with no conversation component", () => {
     const { container } = render(<ClientFicha data={ficha} memories={memories} />);
 
-    expect(container.querySelector(".client-ficha__rail")).not.toBeNull();
-    expect(container.querySelector(".client-ficha__main")).not.toBeNull();
+    expect(container.querySelector(".detail-region__rail")).not.toBeNull();
+    expect(container.querySelector(".detail-region__main")).not.toBeNull();
     expect(container.querySelector(".ai-agent-grammar__bubble, .assistant-chat__conversation")).toBeNull();
   });
 
