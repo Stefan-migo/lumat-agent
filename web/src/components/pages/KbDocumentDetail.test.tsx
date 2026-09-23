@@ -74,4 +74,46 @@ describe("KB document detail route", () => {
     rerender(<KbDocumentDetail documentId={document.id} data={null} state="error" />);
     expect(screen.getByRole("alert")).toHaveTextContent("No pudimos cargar el documento");
   });
+
+  it("edits content as a new version from the detail", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      if (init?.method === "POST") return new Response(JSON.stringify({ ok: true, doc: document }), { status: 200 });
+      return new Response(JSON.stringify({ ...document, content: "Contenido existente" }), { status: 200 });
+    });
+    render(<KbDocumentDetail data={document} state="ready" />);
+    await user.click(screen.getByText("Editar contenido"));
+    expect(await screen.findByDisplayValue("Contenido existente")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /guardar/i }));
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith(`/kb/${document.id}/edit`))).toBe(true);
+    fetchMock.mockRestore();
+  });
+
+  it("restores a selected version and changes audience from the detail", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ ...document, content: "Contenido" }), { status: 200 }));
+    render(<KbDocumentDetail data={document} state="ready" />);
+    await user.selectOptions(screen.getByLabelText("Restaurar"), "1");
+    await user.click(screen.getByRole("button", { name: "Restaurar" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.selectOptions(screen.getByLabelText("Audiencia"), "internal");
+    await user.click(screen.getByRole("button", { name: "Cambiar audiencia" }));
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes(`/kb/${document.id}/restore`))).toBe(true);
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes(`/kb/${document.id}/visibility`))).toBe(true);
+    fetchMock.mockRestore();
+  });
+
+  it("keeps mutation feedback safe and disables controls while saving", async () => {
+    const user = userEvent.setup();
+    let resolve!: (response: Response) => void;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise((next) => { resolve = next; }));
+    render(<KbDocumentDetail data={document} state="ready" />);
+    await user.click(screen.getByRole("button", { name: "Deshabilitar" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    expect(screen.getByRole("button", { name: "Deshabilitar" })).toBeDisabled();
+    resolve(new Response(JSON.stringify({ detail: "admin role required" }), { status: 403 }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permiso para modificar la base de conocimientos");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("admin role required");
+    fetchMock.mockRestore();
+  });
 });
