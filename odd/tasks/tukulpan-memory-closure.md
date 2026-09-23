@@ -70,22 +70,27 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   `assistant-tools/spec.md:210-222`; shared dispatch branch `registry.py:586-591`).
   Status: **accepted** (`02768888`). Parameterized over `memory.read`/`memory.search`; asserts the
   bounded payload and that the raw error is in neither response nor evidence.
-- [ ] **T3 — tukulpan unit test gaps** (audit item 6, part 1)
+- [x] **T3 — tukulpan unit test gaps** (audit item 6, part 1)
   Pin, without changing source: `_embed()` retry/backoff (`tukulpan.py:142-160`), service-level
   `update()` missing-ID and embedding failure (`tukulpan.py:589-613`), `_bounded_json()`
   truncation edge that still yields valid JSON (`tukulpan.py:445-455`), `write_recap()` with
   empty `source_message_ids` and bounded `source_tokens` (`tukulpan.py:498-537`), and
   `_write_memory` not leaking raw `str(exc)` as `degraded_reason`
   (`odd/tasks/read-failure-truthfulness.md:197-203`).
-  Status: **partial** (`c204880b`) — 4 of 5 pinned and accepted
-  (`_embed` retries/backoff/final log, `update()` missing-ID + embedding failure,
-  `_bounded_json` byte bound with valid JSON, `write_recap` empty sources + token bounds).
-  The fifth cannot be pinned honestly: `_write_memory` (`registry.py:382`, same shape at
-  `:416` update, `:426` delete, and `tukulpan.py:537` recap) returns the raw `str(exc)` as
-  `degraded_reason`, while the read path sanitizes it (`nodes.py:712`). That leak is
-  **deliberate and documented as remaining backlog** (`read-failure-truthfulness.md`, "Remaining
-  backlog"), and the recap variant is already pinned as expected behavior by a pre-existing spec
-  test (`tests/spec/test_memory_spec.py:638`, present at base). Open human decision.
+  Status: **accepted** (`c204880b`, `16f57d1d`, `6d21725b`). Five of five pinned. Four were pinning
+  only (`_embed` retries/backoff/final log, `update()` missing-ID + embedding failure,
+  `_bounded_json` byte bound with valid JSON, `write_recap` empty sources + token bounds). The
+  fifth became a real fix by human decision: `_write_memory` and its siblings returned the raw
+  `str(exc)` as `degraded_reason` (`registry.py:382`, `:416` update, `:426` delete, and
+  `tukulpan.py:537` recap) — a documented deferral (`read-failure-truthfulness.md`, "Remaining
+  backlog") whose recap variant was pinned as expected by a pre-existing spec test. Now each site
+  returns an operation-specific bounded reason ("Memory write/update/delete/recap unavailable")
+  and the raw detail goes to the server log, matching the read path's contract
+  (`nodes.py:712`). The deferral note in that doc was closed with a single line, not rewritten.
+  Evidence: `tests/unit + tests/spec` exit 0. The writer reported two failures in
+  `tests/integration/test_assistant_harness_session.py` (thread creation) that it could not
+  attribute; the parent re-run is **green (11 passed, exit 0)**, so it is recorded as an
+  unreproduced signal, not as a candidate-caused failure.
 - [ ] **T4 — relations duplicate candidate IDs** (audit item 6, part 2)
   Pin `relations._parse_verdicts()` with duplicated candidate IDs (`app/services/relations.py:61-94`),
   style `tests/spec/test_memory_relations_spec.py:158-195`.
@@ -148,15 +153,23 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   `scope=own` (it was ordering a call validation rejects, which silently lost the recap after a
   compaction), AT-8's scenarios describe the real contract, and the digest bound is asserted on
   the real ORM path.
+- **T2 accepted** (`02768888`): AT-10's `memory.search` degradation is now pinned alongside
+  `memory.read`, with the raw error asserted absent from response and evidence.
+- **T3 accepted** (`c204880b`, `16f57d1d`, `6d21725b`): four contracts pinned; the fifth turned
+  into a real fix — the write path no longer returns raw `str(exc)` as `degraded_reason`.
 - Verification of record for T1+T8: `tests/unit + tests/spec + tests/integration/test_assistant_harness_guardrails.py`
   → exit 0, tree clean.
-- Authored lines on the branch so far: **300** (adds+dels, task doc included).
-- Decisions taken by the human: T1 = extend `memory.read`; T8 = align everything to `own`/`customer`.
+- Authored lines: **501** on the branch against base (slice 1 ≈ 308, slice 2 = 193), task doc
+  included.
+- Decisions taken by the human: T1 = extend `memory.read`; T8 = align everything to `own`/`customer`;
+  T3.5 = sanitize the write path's `degraded_reason` family; delivery = `stacked-to-main`.
 - Re-validated context: audit #4769 still holds at base `a2092b92`; the audit's "hardcoded 22
   tools" claim is stale (current whitelist: 21 entries, `agent/registry.yaml:59-79`).
-- The audit missed T8; verifying T1's candidate found it instead of trusting it.
+- Findings the audit did not have: T8 (the planner prompt ordering an invalid scope) and T3.5's
+  real severity (a documented deferral, not a missing test). Both came from verifying the
+  candidate instead of trusting the doc.
 
 ## Next step
 
-T2/T3/T4/T5 (mechanical pinning, no open decisions), then resolve the T6/T7 open decisions.
-Chained-PR strategy still unchosen.
+T4 + T5 (mechanical pinning, no open decisions) close slice 2, then resolve the T6/T7 open
+decisions for slice 3.
