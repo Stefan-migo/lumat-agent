@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -30,7 +31,9 @@ from app.chat.assistant.state import SDBTask
 from app.chat.assistant.approval import consume_approval, issue_approval, validate_execution
 from app.services.projects import ProjectCandidate, ProjectResult
 from app.services import tukulpan as memory
-from app.chat.assistant.tools.search import DuckDuckGoSearch, SearchFailure
+from app.chat.assistant.tools.search import BraveSearch, DuckDuckGoSearch, SearchFailure
+import httpx
+import respx
 
 
 def test_registry_exposes_typed_bounded_tools():
@@ -491,19 +494,92 @@ def test_write_handler_failure_is_preserved_as_error_evidence(monkeypatch):
     assert result["evidence"]["status"] == "error"
 
 
-def test_web_search_is_bounded_and_failures_are_empty():
-    html = "<html><body>" + "".join(
-        f'<a class="result__a" href="https://example.test/{n}">{"x" * 2000}</a>'
-        for n in range(8)
-    ) + "</body></html>"
+@respx.mock
+def test_web_search_returns_bounded_provider_neutral_evidence():
+    route = respx.get("https://api.search.brave.com/res/v1/web/search").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "web": {
+                    "results": [
+                        {
+                            "title": "T" * 2_000,
+                            "url": "https://example.test/result",
+                            "description": "S" * 2_000,
+                        }
+                        for _ in range(8)
+                    ]
+                }
+            },
+        )
+    )
 
-    class Client:
-        def get(self, _url):
-            return type("Response", (), {"text": html, "raise_for_status": lambda self: None})()
+    results = BraveSearch(api_key="test-key").search("safe query", limit=99)
 
-    results = DuckDuckGoSearch(Client()).search("safe query", limit=99)
+    assert route.called
     assert len(results) == 5
-    assert all(len(result["title"]) <= 1000 for result in results)
+    assert set(results[0]) == {"title", "url", "snippet"}
+    assert len(results[0]["title"]) <= 100
+    assert len(results[0]["snippet"]) <= 200
+    assert len(json.dumps(results)) < 4_000
+
+
+@pytest.mark.parametrize("status", [401, 403, 429, 500, 503])
+@respx.mock
+def test_web_search_provider_failures_are_explicit(status):
+    respx.get("https://api.search.brave.com/res/v1/web/search").respond(status)
+
+    with pytest.raises(SearchFailure):
+        BraveSearch(api_key="test-key").search("safe query")
+
+
+@respx.mock
+def test_web_search_challenge_timeout_and_malformed_payload_are_failures():
+    respx.get("https://api.search.brave.com/res/v1/web/search").respond(
+        202, content=b"<html><body>challenge</body></html>"
+    )
+    with pytest.raises(SearchFailure):
+        BraveSearch(api_key="test-key").search("safe query")
+
+    respx.get("https://api.search.brave.com/res/v1/web/search").respond(
+        200, content=b"not json"
+    )
+    with pytest.raises(SearchFailure):
+        BraveSearch(api_key="test-key").search("safe query")
+
+    respx.get("https://api.search.brave.com/res/v1/web/search").respond(200, json={"web": {}})
+    with pytest.raises(SearchFailure):
+        BraveSearch(api_key="test-key").search("safe query")
+
+
+@respx.mock
+def test_web_search_timeout_is_explicit():
+    respx.get("https://api.search.brave.com/res/v1/web/search").mock(
+        side_effect=httpx.ReadTimeout("timed out")
+    )
+
+    with pytest.raises(SearchFailure):
+        BraveSearch(api_key="test-key").search("safe query")
+
+
+@respx.mock
+def test_web_search_empty_results_are_the_only_empty_success():
+    route = respx.get("https://api.search.brave.com/res/v1/web/search").respond(
+        200, json={"web": {"results": []}}
+    )
+
+    assert BraveSearch(api_key="test-key").search("safe query") == []
+    assert route.calls[0].request.headers["X-Subscription-Token"] == "test-key"
+
+
+def test_web_search_missing_api_key_fails_fast(monkeypatch):
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.search.get_settings",
+        lambda: SimpleNamespace(brave_search_api_key=" "),
+    )
+
+    with pytest.raises(SearchFailure, match="BRAVE_SEARCH_API_KEY"):
+        BraveSearch().search("safe query")
 
 
 def test_conversations_and_appointments_use_service_seams(monkeypatch):
