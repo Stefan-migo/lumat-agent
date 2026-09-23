@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ClientFicha } from "../../components/pages/ClientFicha";
-import { ClientFichaView, NoMemo } from "./ClientFicha.stories";
+import { ClientFichaView, NoMemo, ClientFichaCalendarFailure, ClientFichaLoading, ClientFichaError, ClientFichaDenied } from "./ClientFicha.stories";
 import { clients } from "./_shared/mockData/clients";
-import type { CustomerState } from "../../types";
+import type { ClientFichaResponse } from "../../types";
 
 const customer = clients[0];
-const fichaResponse = {
+const fichaResponse: ClientFichaResponse = {
   customer,
   history: {
     conversations: [], cases: [], messages: [], appointments: [], visit_history: [
@@ -17,7 +17,7 @@ const fichaResponse = {
   },
   notes: [],
   memo: "Acta de cierre de Marcela",
-  states: ["nuevo", "activo", "inactivo", "bloqueado"] as CustomerState[],
+  states: ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"],
 };
 const failedCalendarAppointment = {
   id: 4,
@@ -96,7 +96,10 @@ describe("ClientFicha page", () => {
       history: { ...fichaResponse.history, appointments: [failedCalendarAppointment] },
     }} memories={[]} onRetryCalendar={onRetryCalendar} />);
     expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
-    expect(screen.getAllByText(/Agendada/)).toHaveLength(2);
+    // The approved appointment label is "Reservada" (DS StatusBadge table); the visit
+    // lifecycle line keeps its own "Agendada"/"Cancelada" wording.
+    expect(screen.getByText("Reservada")).toBeInTheDocument();
+    expect(screen.getByText(/Agendada/)).toBeInTheDocument();
     expect(screen.getByText(/Cancelada/)).toBeInTheDocument();
     expect(screen.getByText("Historial de visitas ordenado cronológicamente")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toContainElement(screen.getByRole("heading", { name: "No se pudo sincronizar el calendario" }));
@@ -107,5 +110,44 @@ describe("ClientFicha page", () => {
       credentials: "include",
       headers: { "Content-Type": "application/json" },
     });
+  });
+});
+
+describe("ClientFicha state matrix stories", () => {
+  it("renders the calendar-sync failure with its retry control", () => {
+    render(<ClientFichaCalendarFailure />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("No se pudo sincronizar el calendario");
+    expect(screen.getByRole("button", { name: "Reintentar calendario" })).toBeInTheDocument();
+  });
+
+  it("renders the loading state without a payload and without a request", () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    render(<ClientFichaLoading />);
+
+    expect(screen.getByRole("heading", { name: "Cargando ficha" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^Ficha:/ })).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the last payload readable under a failed read", () => {
+    render(<ClientFichaError />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("No pudimos cargar la ficha");
+    expect(screen.getByRole("heading", { name: `Ficha: ${customer.name}` })).toBeInTheDocument();
+  });
+
+  it("renders the denied state", () => {
+    render(<ClientFichaDenied />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("No tienes permiso para ver este panel");
+  });
+
+  it("composes the two regions and the shared data surfaces", () => {
+    const { container } = render(<ClientFichaView />);
+
+    expect(container.querySelector(".client-ficha__rail")).not.toBeNull();
+    expect(container.querySelector(".client-ficha__main")).not.toBeNull();
+    expect(container.querySelectorAll(".data-region").length).toBeGreaterThan(0);
   });
 });

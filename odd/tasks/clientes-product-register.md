@@ -189,7 +189,32 @@ away from tables (the physiology axis is preserved, not renegotiated).
   in the frontend, with the `DESIGN_SYSTEM.md` label table corrected to match. No
   backend change and no enum change; the alternative (translating server-side to a
   four-state vocabulary) would alter the customer lifecycle and lose information.
-- **D9 — Tone assignment follows the design system's domain-state hierarchy.**
+- **D9 — The back control follows the sibling detail-page convention.**
+  `ProjectsPage`, `PlanningSessions` and `AutomationRuleDetailPage` all render a
+  secondary `Button` that returns through history. The ficha gets
+  `Volver a clientes` in the `PageFrame` actions with `window.history.back()`, so
+  one pattern covers every detail view. The alternative — an `onBack` prop wired
+  from `AppShell` — was rejected because it would have reached outside this unit
+  for no behavioural gain.
+- **D10 — The ficha is two regions: a summary rail and a main region.** Owner
+  decision (T17). The rail holds identity plus the state control and sticks while
+  the history scrolls; the main region holds memo, memories, notes and history.
+  Below the 1024px reference the rail collapses into the column order, so the
+  surface stays usable on a phone.
+- **D11 — Appointment status labels come from the approved tone map.** The hand
+  rolled `cancelled ? "Cancelada" : "Agendada"` was replaced by
+  `appointmentStatusLabel`, whose approved label for a booking is `Reservada`
+  (`DESIGN_SYSTEM.md` StatusBadge table). The visit-lifecycle line keeps its own
+  "Agendada"/"Cancelada" wording, which describes an event rather than a status.
+- **D12 — `.data-region` is now proven substrate.** The ficha puts the history
+  tables on the same shared surface as the list, so the contract has a second and
+  third consumer and stops being page-local. Its CSS comment was updated
+  accordingly.
+- **D13 — No card-on-card.** The history region is deliberately not a `Card`: its
+  tables already sit on `.data-region`, and the empty case of `DataTable` renders
+  its own `.empty-state` surface. The wrapper applies the surface class only when
+  there are rows, so two surfaces never nest.
+- **D14 — Tone assignment follows the design system's domain-state hierarchy.**
   `nuevo`, `pendiente` and `en_evaluacion` are `warning` (they need attention
   now); `finalizado` is `success` (a confirmed outcome); `contactado`, `agendado`,
   `cancelado` and `postventa` are `neutral` (routine). `agendado` is neutral
@@ -289,26 +314,35 @@ validated a vocabulary the API cannot produce.
 
 ### Slice 2 — ClientFicha (ships in PR 2)
 
-- [ ] **T10** — RED/GREEN: the four raw `<button>`s become `Button`, the raw
-  `<select>` becomes `Select`, the raw `<textarea>` becomes `Textarea`
-  (`DS-GRAMMAR-3`).
-- [ ] **T11** — RED/GREEN: the `customer_memo` badge no longer exposes a backend
-  identifier; the memo region carries a user-facing label.
-- [ ] **T12** — RED/GREEN: the identity region renders a label/value structure
-  instead of six bare `<p>` elements.
-- [ ] **T13** — RED/GREEN: save feedback appears at the locus of the action that
-  caused it, not in the `PageFrame` state slot; one save action per independently
-  persisted group.
-- [ ] **T14** — RED/GREEN: the `Historial` card is decomposed into named regions;
-  visits render as a real list, and dates render through the Chilean locale
-  instead of a raw `slice(0, 16)` of an ISO string.
-- [ ] **T15** — RED/GREEN: the appearance axis reaches the ficha chrome as in T8;
-  the data layer stays control-room and no conversation component appears.
-- [ ] **T16** — stories: `ClientFicha.stories.tsx` covers the state matrix,
-  including calendar-sync failure and retry.
-- [ ] **T17** — resolve the ficha layout question (single column of grouped
-  sections vs a two-region detail layout with a summary rail) before changing the
-  page skeleton, and record the choice in this file.
+- [x] **T10** — RED/GREEN: the four raw `<button>`s became `Button`, the raw
+  `<select>` became `Select`, the raw `<textarea>` became `Textarea`
+  (`DS-GRAMMAR-3`). Asserted structurally: `select`/`textarea` must carry
+  `field__control` and `button:not(.btn)` must be empty.
+- [x] **T11** — RED/GREEN: the `customer_memo` badge is gone; the memo block is
+  titled "Memo del cliente" and no raw backend identifier remains on the surface.
+- [x] **T12** — RED/GREEN: the identity facts render as a labelled `<dl>`
+  (Teléfono, Correo, Comuna, Dirección, Consentimiento, Cliente desde) instead of
+  six bare `<p>` elements.
+- [x] **T13** — RED/GREEN: state and note feedback each render beside the control
+  that caused them, and the `PageFrame` banner no longer carries action feedback.
+  That needed the shared feedback slot split into `stateFeedback` and
+  `noteFeedback`.
+- [x] **T14** — RED/GREEN: the history is a named region of four sub-regions
+  (Visitas, Conversaciones, Casos, Mensajes) instead of one card, visits are a
+  real list, and every history date renders through `Intl` in `es-CL` instead of a
+  raw `slice(0, 16)`.
+- [x] **T15** — RED/GREEN: the appearance axis reaches the ficha — the summary
+  rail and the main region compose, the history tables sit on the shared
+  `.data-region` surface, and no conversation component appears.
+- [x] **T16** — stories: the ficha now has a real state matrix (`Default`,
+  `NoMemoState`, `CalendarSyncFailure`, `Loading`, `ErrorState`, `Denied`). This
+  required an optional controlled `state` prop, because the matrix was not
+  expressible with `data` alone; a controlled state also disables the fetch, which
+  follows the `CasesList`/`TechnicianAgenda`/`Settings` pattern.
+- [x] **T17** — RESOLVED by the owner: **two regions with a summary rail.** The
+  rail carries identity and the state control; the main region carries memo,
+  memories, notes and history. It collapses to a single column below the 1024px
+  reference breakpoint, and the rail sticks while the history scrolls.
 
 ## Acceptance criteria
 
@@ -333,6 +367,8 @@ validated a vocabulary the API cannot produce.
     `cd web && npm run build` pass.
 11. Rows-per-screen on the Clientes table does not regress against base
     `64972a26`.
+12. The ficha offers an explicit back control, the identity facts are labelled, and
+    save feedback appears beside the control that caused it.
 
 ## Checks
 
@@ -405,7 +441,17 @@ validated a vocabulary the API cannot produce.
   `tsc -b --noEmit` exit 0. One commit, `63344a6a`: a typed union cannot be applied
   partially without leaving the tree non-compiling, so the type, its maps, the
   design-system table and every consumer fixture move together (11 files).
-- [ ] Slice 2.
+- [x] T10–T17 — the ficha rebuilt as a summary rail plus a main region. RED
+  observed for all nine new cases (primitives, raw identifier, labelled facts,
+  feedback at the locus, named history regions, locale dates, two regions, back
+  control, history.back), then GREEN. Commit `ecb52fea`.
+- [x] Slice 2 verification of record: `npm run test` → **80 files, 665 tests, all
+  passing**; `npx tsc -b --noEmit` → exit 0; `npm run build` → exit 0;
+  `npm run build-storybook` → exit 0, preview built in 13s.
+- [x] Slice 2 complete (T10–T17).
+- [x] Unit complete: both slices plus the contract amendment and the state
+  vocabulary migration. Remaining work is delivery (PR) and the owner's visual
+  acceptance.
 
 ## Size
 
@@ -438,11 +484,10 @@ whether to accept the size or slice PR 1 differently.
   the primitive, which would also serve `ConversationsList` and `KbList`. Not done
   here: it changes a primitive shared by surfaces this unit is not authorized to
   touch.
-- **`.data-region` has one consumer.** `DS-GRAMMAR-2` forces every style into the
-  shared stylesheet, so it lives in `primitives.css`; but `D3` says a piece is not
-  substrate until a second consumer is named. It is therefore marked in the CSS
-  comment as unproven for generalisation. Candidates to name it against:
-  `AgendaPage` and `AutomationRulesPage` tables.
+- **`.data-region` is no longer page-local (resolved).** `DS-GRAMMAR-2` forces
+  every style into the shared stylesheet, and `D3` withheld the substrate claim
+  while only the list used it. The ficha now puts its history tables on the same
+  surface, so the contract has real consumers and the claim holds (`D12`).
 - **Ficha layout (T17).** The ficha today is five stacked blocks, one of which
   (`Historial`) carries four unrelated regions. Whether it becomes a single column
   of grouped sections or a two-region layout with a summary rail is a product
