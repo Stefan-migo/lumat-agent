@@ -146,6 +146,28 @@ Key nodes: `Production compose override` (`infra/docker-compose.prod.yml`),
 `test_compose_declares_db_media_backups_volumes()` (`tests/integration/test_infra.py:91`),
 `uvicorn api Service` (`infra/docker-compose.yml`), `get_embedder()` (`app/services/kb.py`).
 
+## Delivery
+
+- Branch `odd/prod-embedder-cache` pushed to `origin` after explicit human authorization.
+- PR **#317** — https://github.com/Stefan-migo/lumat-agent/pull/317 — base `main`, exactly one
+  label (`type:bug`), `MERGEABLE`. No `Closes #N`: this repository has no PR-validation workflow
+  (`.github/workflows/` holds only `tests.yml`) and no open issues, which is the same note the
+  previous three PRs carry.
+- Merge and deploy are the maintainer's decisions. **T4 remains open.**
+
+### Not verified here (declared)
+
+- **No native RDD review.** `gentle-ai review mode status` → `off (decided by clone_local)`, a
+  pre-existing explicit decision, so no receipt covers these bytes. `review assess
+  --committed-only` reports `risk: high` (`process_boundary` / `shell_process` on the compose
+  file), which is why an independent read-only verifier was used instead. Its single WARNING —
+  the first version of the test could pass for a read-only or foreign mount — is answered by
+  `b72c2674`.
+- **The production outcome is unobservable here.** Only after deploy can a real inbound message
+  be seen reaching `processed` instead of `failed`.
+- **`DEEPSEEK_API_KEY` remains invalid**, and it is still a blocker after this fix: the turn
+  would fail with a 401 during classification. Separate credential, separate owner.
+
 ## Recovery
 
 Interrupted? Read this file plus the Engram mirror `odd/prod-embedder-cache/tasks`, reconcile
