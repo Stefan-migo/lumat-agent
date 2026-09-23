@@ -9,7 +9,10 @@ import {
   customerStateLabel,
   customerStateTone,
   directionLabel,
+  kbOperationLabel,
+  kbOperationTone,
   kbStatusLabel,
+  kbStatusTone,
 } from "./toneMaps";
 
 const VALID_TONES: BadgeTone[] = ["neutral", "success", "warning", "danger"];
@@ -172,8 +175,10 @@ describe("approved Spanish labels (DS-UI-LABELS)", () => {
     ["conversationLabel", conversationLabel, ["bot", "human", "closed", "pending", "escalated"]],
     // Documented Case.status values
     ["caseStatusLabel", caseStatusLabel, ["abierto", "en_evaluacion", "escalado", "cerrado"]],
-    // Documented KB activity states (activo/deshabilitado/procesando/error)
-    ["kbStatusLabel", kbStatusLabel, ["activo", "deshabilitado", "procesando", "error"]],
+    // Persisted KB document status values
+    ["kbStatusLabel", kbStatusLabel, ["activo", "deshabilitado"]],
+    // Page-owned KB operation lifecycle values
+    ["kbOperationLabel", kbOperationLabel, ["procesando", "error"]],
   ];
 
   for (const [name, label, keys] of domains) {
@@ -217,11 +222,24 @@ describe("approved Spanish labels (DS-UI-LABELS)", () => {
     expect(caseStatusLabel("cerrado")).toBe("Cerrado");
   });
 
-  it("matches the approved LABELS table for KB activity states", () => {
+  it("matches the approved LABELS table for KB document statuses", () => {
     expect(kbStatusLabel("activo")).toBe("Activo");
     expect(kbStatusLabel("deshabilitado")).toBe("Deshabilitado");
-    expect(kbStatusLabel("procesando")).toBe("Procesando");
-    expect(kbStatusLabel("error")).toBe("Error");
+    expect(kbStatusLabel("procesando")).toBe("procesando");
+    expect(kbStatusLabel("error")).toBe("error");
+  });
+
+  it("keeps KB operation lifecycle labels separate from document status", () => {
+    expect(kbOperationLabel("procesando")).toBe("Procesando");
+    expect(kbOperationLabel("error")).toBe("Error");
+    expect(kbOperationLabel("activo")).toBe("activo");
+  });
+
+  it("maps both KB status planes to approved tones", () => {
+    expect(kbStatusTone("activo")).toBe("success");
+    expect(kbStatusTone("deshabilitado")).toBe("neutral");
+    expect(kbOperationTone("procesando")).toBe("warning");
+    expect(kbOperationTone("error")).toBe("danger");
   });
 
   it("matches the approved LABELS table for message directions", () => {
