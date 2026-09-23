@@ -75,7 +75,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   return (
     <PageFrame
       title="Clientes"
-      meta={data ? `${data.length} clientes` : undefined}
+      meta={data ? `${data.length} ${data.length === 1 ? "cliente" : "clientes"}` : undefined}
       actions={
         <>
           <SearchInput aria-label="Buscar clientes" onSearch={(next) => { setQuery(next); setQueryVersion((current) => current + 1); }} />

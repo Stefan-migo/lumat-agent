@@ -79,6 +79,13 @@ describe("ClientesList", () => {
     expect(screen.getByText("3 clientes")).toBeInTheDocument();
   });
 
+  // T3 — the singular form. Today the meta renders "1 clientes".
+  it("reports the count in the singular for one record", () => {
+    render(<ClientesList data={[customers[0]]} state="ready" />);
+
+    expect(screen.getByText("1 cliente")).toBeInTheDocument();
+  });
+
   it("shows the loading status without rendering a table", () => {
     render(<ClientesList data={null} state="loading" />);
 
