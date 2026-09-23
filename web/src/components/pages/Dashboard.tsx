@@ -44,9 +44,16 @@ const MOTIVO_ACCENTS = [
   "color-mix(in srgb, var(--brand-cyan) 55%, var(--primary-900))",
 ] as const;
 
-function motivoAccent(motivo: string): string {
+const MOTIVO_FALLBACK = "sin clasificar";
+
+function motivoLabel(motivo: string | null): string {
+  return motivo ?? MOTIVO_FALLBACK;
+}
+
+function motivoAccent(motivo: string | null): string {
+  const label = motivoLabel(motivo);
   let hash = 0;
-  for (let i = 0; i < motivo.length; i += 1) hash = (hash * 31 + motivo.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < label.length; i += 1) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
   return MOTIVO_ACCENTS[hash % MOTIVO_ACCENTS.length];
 }
 
@@ -214,9 +221,10 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
           </div>
           <div className="dashboard__motivos">
             <div className="dashboard__chart__head"><Icon name="tag" size={16} /><h3>Motivos</h3></div>
-            <div className="dashboard__chips">{motivos.length ? motivos.map(([motivo, count]) => (
-              <span className="dashboard__chip" key={motivo} style={{ "--mot-accent": motivoAccent(motivo) } as CSSProperties}>{motivo} · {count}</span>
-            )) : <span className="dashboard__empty"><Icon name="tag" size={16} /><span>No hay registros</span></span>}</div>
+            <div className="dashboard__chips">{motivos.length ? motivos.map(([motivo, count]) => {
+              const label = motivoLabel(motivo);
+              return <span className="dashboard__chip" key={label} style={{ "--mot-accent": motivoAccent(motivo) } as CSSProperties}>{label} · {count}</span>;
+            }) : <span className="dashboard__empty"><Icon name="tag" size={16} /><span>No hay registros</span></span>}</div>
           </div>
         </div>
       </section>

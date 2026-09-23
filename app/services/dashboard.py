@@ -42,11 +42,12 @@ def compute_kpis(session, window_days: int) -> dict:
             Message.created_at >= start,
         )
     )
+    service_label = func.coalesce(Case.service, "sin clasificar")
     motivos = session.execute(
-        select(Case.service, func.count().label("n"))
+        select(service_label, func.count().label("n"))
         .where(Case.created_at >= start)
-        .group_by(Case.service)
-        .order_by(func.count().desc(), Case.service)
+        .group_by(service_label)
+        .order_by(func.count().desc(), service_label)
     ).all()
     derived = session.scalar(
         select(func.count()).select_from(Case).where(Case.escalated_at >= start)

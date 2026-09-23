@@ -196,6 +196,40 @@ def test_kpis_returns_exact_seeded_values(client, make_user):
     )
 
 
+def test_kpis_names_null_service_bucket(client, make_user):
+    """A case without a service is published in a named motivos bucket."""
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56911112222", name="Ana")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(
+            customer_id=customer.id, wa_phone=customer.phone_e164, state=ConversationState.BOT
+        )
+        session.add(conversation)
+        session.flush()
+        session.add(
+            Case(
+                conversation_id=conversation.id,
+                customer_id=customer.id,
+                service=None,
+                status="abierto",
+                created_at=now,
+            )
+        )
+        session.commit()
+
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.get("/panel/api/kpis", follow_redirects=False)
+
+    assert response.status_code == 200
+    motivos = response.json()["motivos"]
+    assert ["sin clasificar", 1] in motivos
+    assert all(service is not None for service, _ in motivos)
+
+
 def test_kpis_empty_db_returns_zeros(client, make_user):
     """No data at all -> zero counts and an empty motivos breakdown."""
     make_user("oper", "oper-pass", role="operador")
