@@ -261,15 +261,58 @@ Hand the branch to the human for the 1366×768 visual gate.
 
 - [x] Session closed with ODD handoff (`ready-for-odd/`)
 - [x] Worktree created and `npm ci` run
-- [ ] T0: this doc committed on the branch
-- [ ] Slice 1 (T1–T3)
+- [x] T0: this doc committed on the branch (`8f194da9`)
+- [x] Slice 1 (T1–T3)
 - [ ] Slice 2 (T4)
 - [ ] Slice 3 (T5–T9)
 
 ## Verification evidence
 
-_(filled per task as RED/GREEN are observed)_
+### Slice 1 (T1–T3)
+
+Commits: `c039b968` (T1), `fa34f8cc` (T2), `7a872d35` (T3), plus correction
+`4bf8bd10`. Weight: 47 insertions / 17 deletions across 6 files under `web/`.
+
+RED/GREEN observed: T1 `1 failed, 8 passed` → `9 passed` (missing `visibility` in
+the shape assertion). T2 `5 failed, 36 passed` → `41 passed` (missing lifecycle
+exports; document status still exposed operation states). T3 `1 failed, 41 passed`
+→ `42 passed` (row lacked the two-plane contract).
+
+Parent readback found two real defects in `fa34f8cc` and they were corrected:
+
+1. **Behavioural regression.** `procesando` mapped to `warning`. Verified against
+   the repo: `warning` means "stale data" (`CasesList.tsx:117`,
+   `ConversationThread.tsx:92`, `Settings.tsx:30`, `ClientesList.tsx:50`) and every
+   in-flight state is `info` + spinner. KB processing was `info` before the change.
+   Now `info`.
+2. **Unnecessary complexity.** The overload pair and `?? "neutral"` fallback in
+   `kbOperationTone` existed only because the operation map was typed `BadgeTone`
+   (`Badge.tsx:4`, no `info`) while feeding `StateMessage`
+   (`StateMessage.tsx:1`, no `neutral`). Now a total `Record<"procesando" |
+   "error", StateTone>` with no accessor, no overload, no fallback.
+
+Also relaxed: the design-system assertion matched one exact markdown sentence from
+an unrelated test file (a maintenance trap); it now asserts the semantic claim.
+
+Not dead code: `KB_OPERATION_LABELS` has no rendering consumer, but
+`DS-UI-LABELS` (`openspec/specs/panel-design-system/spec.md:454-468`) is a MUST that
+`toneMaps` map KB states to approved labels including `Procesando`/`Error`, with a
+test as the expected verifier. Kept deliberately.
+
+Parent re-ran every slice check on the corrected candidate:
+
+- `npm run test`: **80 files / 668 tests passed**
+- `npx tsc -b --noEmit`: passed
+- `npm run build`: passed (pre-existing chunk-size warning only)
+- `npm run build-storybook`: passed (pre-existing warnings only)
+
+Assessment for the writer's diff (`8f194da9..4bf8bd10`): `medium`, 6 paths,
+`under_budget`. RDD is `off` for this clone, so no native review lifecycle runs;
+the medium tier is covered by the writer's self-verification plus the parent
+readback and the four re-run checks above.
 
 ## Next step
 
-T0: commit this doc, then start slice 1 at T1 with an observed RED.
+Slice 2 (T4): the disable MUST violation, standalone and small. RED must mount the
+real path (`<KbList />` bare, as `AppShell.tsx:119` does), click `Deshabilitar`,
+and assert the confirmation names the clicked document with no mutation yet.
