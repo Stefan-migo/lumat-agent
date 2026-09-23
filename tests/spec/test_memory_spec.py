@@ -873,7 +873,7 @@ def test_mem9_global_visibility_records_provenance_and_cross_thread_read(
             session, registry.MemoryArgs.model_validate({}), trusted_thread_id=thread_b.id,
             proyecto=project_b
         ) == []
-        assert [item.id for item in registry._read_memory(
+        assert [item["id"] for item in registry._read_memory(
             session, registry.MemoryArgs.model_validate({}), trusted_thread_id=thread_a_other.id,
             proyecto=project_a
         )] == [row.id]

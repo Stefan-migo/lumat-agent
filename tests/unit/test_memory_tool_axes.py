@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -143,17 +144,24 @@ def test_planner_prompt_does_not_order_a_rejected_memory_read_shape():
 
 
 def test_own_memory_read_and_search_union_thread_and_agent_axes(monkeypatch):
-    thread_row = Mock(scope="panel", entity_id="thread:42", topic_key="thread-note")
-    agent_row = Mock(scope="agent", entity_id="agent:default", topic_key="project-note")
+    thread_row = Mock(
+        id=1, scope="panel", entity_id="thread:42", topic_key="thread-note", titulo="", tipo="decision",
+        contenido="", created_at=None, updated_at=None,
+    )
+    agent_row = Mock(
+        id=2, scope="agent", entity_id="agent:default", topic_key="project-note", titulo="", tipo="decision",
+        contenido="", created_at=None, updated_at=None,
+    )
     list_calls = []
     monkeypatch.setattr(
         registry.memory,
         "list_for_entity",
         lambda _session, *, scope, entity_id, proyecto: list_calls.append((scope, entity_id, proyecto)) or ([thread_row] if entity_id == "thread:42" else [agent_row]),
     )
-    assert registry._read_memory(
+    result = registry._read_memory(
         MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42, proyecto="acme"
-    ) == [thread_row, agent_row]
+    )
+    assert [row["topic_key"] for row in result] == ["thread-note", "project-note"]
     assert list_calls == [("panel", "thread:42", "acme"), ("agent", "agent:acme", "acme")]
 
     monkeypatch.setattr(
@@ -183,10 +191,12 @@ def test_own_memory_never_returns_another_threads_panel_row(monkeypatch):
 
 def test_own_memory_read_interleaves_both_axes_before_truncating(monkeypatch):
     thread_rows = [
-        Mock(scope="panel", entity_id="thread:42", topic_key=f"thread-{index}") for index in range(3)
+        Mock(id=index, scope="panel", entity_id="thread:42", topic_key=f"thread-{index}", titulo="", tipo="decision", contenido="", created_at=None, updated_at=None)
+        for index in range(3)
     ]
     agent_rows = [
-        Mock(scope="agent", entity_id="agent:default", topic_key=f"project-{index}") for index in range(2)
+        Mock(id=index, scope="agent", entity_id="agent:default", topic_key=f"project-{index}", titulo="", tipo="decision", contenido="", created_at=None, updated_at=None)
+        for index in range(2)
     ]
     monkeypatch.setattr(
         registry.memory,
@@ -194,16 +204,58 @@ def test_own_memory_read_interleaves_both_axes_before_truncating(monkeypatch):
         lambda _session, *, scope, entity_id, proyecto: thread_rows if scope == "panel" else agent_rows,
     )
 
-    assert registry._read_memory(
+    result = registry._read_memory(
         MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42
-    ) == [thread_rows[0], agent_rows[0], thread_rows[1], agent_rows[1], thread_rows[2]]
+    )
+    assert [row["topic_key"] for row in result] == [
+        "thread-0", "project-0", "thread-1", "project-1", "thread-2"
+    ]
+
+
+def test_own_memory_read_returns_bounded_digest_with_stable_shape(monkeypatch):
+    digest_limit = registry.MEMORY_READ_DIGEST_CONTENT_LIMIT
+    row = SimpleNamespace(
+        id=7,
+        scope="panel",
+        entity_id="thread:42",
+        topic_key="thread-note",
+        titulo="Thread note",
+        tipo="decision",
+        contenido="x" * (digest_limit + 1),
+        created_at=None,
+        updated_at=None,
+    )
+    monkeypatch.setattr(
+        registry.memory,
+        "list_for_entity",
+        lambda _session, *, entity_id, **kwargs: [row] if entity_id == "thread:42" else [],
+    )
+
+    result = registry._read_memory(
+        MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42, proyecto="acme"
+    )
+
+    assert result == [
+        {
+            "id": 7,
+            "scope": "panel",
+            "entity_id": "thread:42",
+            "topic_key": "thread-note",
+            "titulo": "Thread note",
+            "tipo": "decision",
+            "contenido": "x" * digest_limit,
+            "created_at": None,
+            "updated_at": None,
+        }
+    ]
 
 
 def test_own_memory_read_never_starves_the_project_axis(monkeypatch):
     thread_rows = [
-        Mock(scope="panel", entity_id="thread:42", topic_key=f"thread-{index}") for index in range(10)
+        Mock(id=index, scope="panel", entity_id="thread:42", topic_key=f"thread-{index}", titulo="", tipo="decision", contenido="", created_at=None, updated_at=None)
+        for index in range(10)
     ]
-    agent_row = Mock(scope="agent", entity_id="agent:default", topic_key="project-note")
+    agent_row = Mock(id=99, scope="agent", entity_id="agent:default", topic_key="project-note", titulo="", tipo="decision", contenido="", created_at=None, updated_at=None)
     monkeypatch.setattr(
         registry.memory,
         "list_for_entity",
@@ -215,17 +267,17 @@ def test_own_memory_read_never_starves_the_project_axis(monkeypatch):
     )
 
     assert len(result) == 10
-    assert agent_row in result
+    assert any(row["topic_key"] == "project-note" for row in result)
 
 
 def test_own_memory_read_topic_filter_still_matches_both_axes(monkeypatch):
     thread_rows = [
-        Mock(scope="panel", entity_id="thread:42", topic_key="keep"),
-        Mock(scope="panel", entity_id="thread:42", topic_key="drop"),
+        Mock(id=1, scope="panel", entity_id="thread:42", topic_key="keep", titulo="", tipo="decision", contenido="", created_at=None, updated_at=None),
+        Mock(id=2, scope="panel", entity_id="thread:42", topic_key="drop", titulo="", tipo="decision", contenido="", created_at=None, updated_at=None),
     ]
     agent_rows = [
-        Mock(scope="agent", entity_id="agent:default", topic_key="keep"),
-        Mock(scope="agent", entity_id="agent:default", topic_key="drop"),
+        Mock(id=3, scope="agent", entity_id="agent:default", topic_key="keep", titulo="", tipo="decision", contenido="", created_at=None, updated_at=None),
+        Mock(id=4, scope="agent", entity_id="agent:default", topic_key="drop", titulo="", tipo="decision", contenido="", created_at=None, updated_at=None),
     ]
     monkeypatch.setattr(
         registry.memory,
@@ -237,7 +289,7 @@ def test_own_memory_read_topic_filter_still_matches_both_axes(monkeypatch):
         MagicMock(), registry.MemoryArgs.model_validate({"topic": "keep"}), trusted_thread_id=42
     )
 
-    assert [row.topic_key for row in result] == ["keep", "keep"]
+    assert [row["topic_key"] for row in result] == ["keep", "keep"]
 
 
 def test_global_write_maps_axis_and_stamps_agent_provenance(monkeypatch):

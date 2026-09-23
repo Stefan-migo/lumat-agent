@@ -28,6 +28,9 @@ SDB_WRITE_ALLOWLIST = frozenset({
 })
 AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete"})
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
+# Own reads are a compact recall digest, so legacy rows cannot expose unbounded
+# content; 500 characters keeps enough context for the assistant without adding a config knob.
+MEMORY_READ_DIGEST_CONTENT_LIMIT = 500
 # The customer id shape is a contract value the planner cannot derive from prose.
 _CUSTOMER_ENTITY_PATTERN = r"^(?:customer:\d+|\d+)$"
 
@@ -289,7 +292,20 @@ def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, pr
         rows = [
             row for pair in zip_longest(thread_rows, agent_rows) for row in pair if row is not None
         ]
-        return rows[: parsed.limit]
+        return [
+            {
+                "id": row.id,
+                "scope": row.scope,
+                "entity_id": row.entity_id,
+                "topic_key": row.topic_key,
+                "titulo": row.titulo,
+                "tipo": row.tipo,
+                "contenido": row.contenido[:MEMORY_READ_DIGEST_CONTENT_LIMIT],
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+            }
+            for row in rows[: parsed.limit]
+        ]
     entity_id = parsed.entity_id
     rows = memory.list_for_entity(session, scope=parsed.scope, entity_id=entity_id)
     if parsed.topic:
