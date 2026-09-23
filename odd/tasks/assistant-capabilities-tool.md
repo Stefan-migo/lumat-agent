@@ -291,11 +291,28 @@ before the symbol exists. No behavioural RED is claimed because none was observe
 - 2026-09-23 — T1-T5 by the delegated writer: `9443de8d` (RED), `b739900f` (tool + whitelist),
   `4909882a` (persona, AT-12, this document), `c285052e` and `e507a173` (bound coverage and cleanup).
   Full suite green. Writer reported `partial` for the count discrepancy rather than papering over it.
+- 2026-09-23 — orchestrator correction: whitelist position moved to last (prompt order is whitelist order),
+  and this document's 21 -> 22 claim corrected to 19 -> 20. Full suite re-run: **1282 passed**.
+- 2026-09-23 — native review executed: lineage `review-cceb220da065c897`, risk medium, one lens
+  (`review-reliability`), 0 corrections of a 200-line budget, outcome **approved** and acknowledged;
+  authority burned. One advisory finding, left as deferred debt.
+- 2026-09-23 — delivered: branch pushed, **PR #312** open against `main`, label `type:feature`, CI green.
 
 ## Next step
 
-Delivery is not taken. Nothing pushed, no PR. Commit, push and PR are the human's decisions under
-ordinary repository policy.
+**Delivered.** The branch is pushed and **PR #312** is open against `main` with the single label
+`type:feature`; CI green (`test` 1m57s, GitGuardian pass). The native review is approved and its authority
+is burned (lineage `review-cceb220da065c897`, risk medium, one consolidated lens). The merge remains the
+human's decision under ordinary repository policy.
+
+The review's advisory finding is **not** fixed here and is recorded as deferred debt, to be resolved
+together with the sibling finding from `odd/memory-correction-tools` in one follow-up unit
+(Engram topic `debt/r3-warnings-memory-and-capabilities`):
+
+- `R3-capability-text-truncation` (`app/chat/assistant/tools/registry.py:391`) — `tool_count` can
+  disagree with a truncated capability text.
+- `R3-stale-review-schedule` (sibling branch) — changing only a memory's `tipo` does not recompute
+  `review_after`.
 
 ## Graph nodes/edges consulted
 
