@@ -28,7 +28,7 @@ The assistant MUST expose the existing typed, exact-argument tools over domain s
 
 ### Requirement: AT-8 — Scoped Memory Contract
 
-The `memory.read` and `memory.search` tools MUST accept only `scope="panel"`, `scope="customer"`, or `scope="agent"`. A panel conversation read MUST omit `entity_id`; the server MUST derive `entity_id="thread:<trusted thread id>"` and reject any model-supplied entity. A customer read MUST use `entity_id="customer:<customer id>"` or a legacy numeric customer id, and an agent read MUST use the canonical project-scoped agent entity `entity_id="agent:<project>"`. `memory.search` MUST bound each returned `contenido` field before it becomes tool evidence.
+The `memory.read` and `memory.search` tools MUST accept only the public `scope="own"` or `scope="customer"` contracts. An own read MUST omit `entity_id`; the server MUST derive the trusted current thread axis and project-qualified agent axis, reject any model-supplied entity, preserve their interleave order, and return a digest whose `contenido` is bounded to 500 characters. A customer read MUST use `entity_id="customer:<customer id>"` or a legacy numeric customer id and MUST retain its full projection. `memory.search` MUST bound each returned `contenido` field before it becomes tool evidence.
 
 #### Scenario: Valid scoped memory read
 - GIVEN a memory read with a closed-domain scope and its matching entity identifier, or a panel read without `entity_id`
@@ -49,6 +49,16 @@ The `memory.read` and `memory.search` tools MUST accept only `scope="panel"`, `s
 - GIVEN a valid memory search with a matching scope and entity identifier
 - WHEN the assistant executes it
 - THEN ranked results are returned only for that entity and each `contenido` field is truncated to the fixed tool bound
+
+#### Scenario: Bounded own memory digest
+- GIVEN an own memory read with a positive trusted thread id and a requested limit
+- WHEN the assistant executes it
+- THEN the trusted thread and project axes are interleaved before the limit is applied, each item includes its identifying metadata, and `contenido` is truncated to at most 500 characters
+
+#### Scenario: Full entity-scoped memory projection
+- GIVEN a valid customer memory read with an entity identifier
+- WHEN the assistant executes it
+- THEN the result retains the existing full memory projection without the own-read digest bound
 
 #### Scenario: Search entity mismatch
 - GIVEN a panel memory search whose model-supplied entity identifier is present
