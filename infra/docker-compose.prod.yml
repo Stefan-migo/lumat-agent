@@ -39,9 +39,18 @@ services:
     # No host ports in prod — nginx proxies 80/443 (SH-2 internal networking).
     ports: !reset []
     # Replace the dev bind mounts/venv volume: code + venv are baked into the
-    # image; only WhatsApp media stays writable (SH-2).
+    # image; only WhatsApp media and the embedder cache stay writable (SH-2).
     volumes: !override
       - media:/app/media
+      # odd/prod-embedder-cache: the image filesystem is read-only, so the local
+      # embedding model needs a writable, durable home. This one covers hf_hub's
+      # HF_HOME (its xet transport writes there) and fastembed's own cache.
+      - embed-cache:/home/appuser/.cache
+    # Neither cache path contains "tmp" on purpose: fastembed's decompress_to_cache
+    # rmtree's any cache_dir with "tmp" in it (model_management.py:315-316).
+    environment:
+      HF_HOME: /home/appuser/.cache/huggingface
+      FASTEMBED_CACHE_PATH: /home/appuser/.cache/fastembed
     networks:
       - internal
       - default
@@ -125,3 +134,4 @@ networks:
 volumes:
   certbot-certs:
   certbot-webroot:
+  embed-cache:

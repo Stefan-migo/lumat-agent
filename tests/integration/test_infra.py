@@ -113,6 +113,51 @@ def test_prod_api_build_wires_deployed_identity():
     assert "COPY pyproject.toml ./" in dockerfile
 
 
+def test_prod_api_service_has_a_writable_embedder_cache():
+    """odd/prod-embedder-cache: the prod api runs read_only, so the local embedding
+    model needs an explicit writable cache. `volumes: !override` silently drops
+    anything the base compose declares, which is how prod lost it in the first place.
+    """
+    compose_text = PROD_COMPOSE.read_text().replace("!reset", "").replace("!override", "")
+    compose = yaml.safe_load(compose_text)
+    api = compose["services"]["api"]
+
+    mounts = [str(m) for m in api.get("volumes", [])]
+    cache_mount = next((m for m in mounts if "/home/appuser/.cache" in m), None)
+    assert cache_mount is not None, (
+        f"prod api must mount a writable embedder cache, got: {mounts}"
+    )
+    # Source and writability matter, not just the path: `other:/home/appuser/.cache:ro`
+    # satisfies a substring check and still fails exactly like the original bug.
+    assert cache_mount.startswith("embed-cache:/home/appuser/.cache"), (
+        f"the cache mount must come from the embed-cache volume, got: {cache_mount}"
+    )
+    assert ":ro" not in cache_mount, f"the cache mount must be writable, got: {cache_mount}"
+    assert "embed-cache" in compose.get("volumes", {}), (
+        "compose must declare the embed-cache volume"
+    )
+
+    env = api.get("environment", {})
+    assert env.get("HF_HOME") == "/home/appuser/.cache/huggingface", (
+        "prod api must point HF_HOME at the mounted volume (hf_hub's xet cache lives there)"
+    )
+    assert env.get("FASTEMBED_CACHE_PATH") == "/home/appuser/.cache/fastembed", (
+        "prod api must point FASTEMBED_CACHE_PATH at the mounted volume"
+    )
+    # fastembed's decompress_to_cache rmtree's any cache_dir containing "tmp"
+    # (model_management.py:315-316), so neither path may live under /tmp.
+    for name in ("HF_HOME", "FASTEMBED_CACHE_PATH"):
+        assert "tmp" not in env[name], f"{name} must not live under a 'tmp' path"
+
+    dockerfile = DOCKERFILE.read_text()
+    assert "/home/appuser/.cache" in dockerfile, (
+        "Dockerfile must pre-create the cache dir so the named volume is appuser-writable"
+    )
+
+    assert api.get("read_only") is True, "the read-only hardening must stay"
+    assert not api.get("ports"), "prod api must not publish host ports"
+
+
 def test_env_example_exists_and_has_required_names():
     assert ENV_EXAMPLE.exists(), "infra/.env.example missing"
     content = ENV_EXAMPLE.read_text()
