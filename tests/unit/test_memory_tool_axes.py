@@ -222,6 +222,8 @@ def test_own_memory_read_returns_bounded_digest_with_stable_shape(monkeypatch):
         titulo="Thread note",
         tipo="decision",
         contenido="x" * (digest_limit + 1),
+        last_seen_at=None,
+        review_after=None,
         created_at=None,
         updated_at=None,
     )
@@ -244,6 +246,8 @@ def test_own_memory_read_returns_bounded_digest_with_stable_shape(monkeypatch):
             "titulo": "Thread note",
             "tipo": "decision",
             "contenido": "x" * digest_limit,
+            "last_seen_at": None,
+            "review_after": None,
             "created_at": None,
             "updated_at": None,
         }

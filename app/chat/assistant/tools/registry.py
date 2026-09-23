@@ -301,6 +301,8 @@ def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, pr
                 "titulo": row.titulo,
                 "tipo": row.tipo,
                 "contenido": row.contenido[:MEMORY_READ_DIGEST_CONTENT_LIMIT],
+                "last_seen_at": row.last_seen_at,
+                "review_after": row.review_after,
                 "created_at": row.created_at,
                 "updated_at": row.updated_at,
             }
