@@ -155,6 +155,22 @@ def index_text(doc: CalibrationDoc, index_title: bool) -> str:
     return f"{doc.title}\n\n{doc.content}"
 
 
+def make_chunker(chunk_text_fn: Callable[..., list[str]], chunk_size: int, overlap: int):
+    """Return a `chunk_text(text)` bound to an explicit size/overlap.
+
+    Production binds chunk_size/overlap at function-definition time
+    (`app/services/kb.py:95`) and `_store_chunks` calls `chunk_text(doc.content)`
+    with no arguments, so assigning `kb.CHUNK_SIZE` has no effect (Layer-1 F8).
+    `_store_chunks` resolves `chunk_text` from the module namespace at call time,
+    so replacing `kb.chunk_text` before ingest is the whole seam. Nothing outside
+    this harness is touched.
+    """
+    def _chunk(text: str) -> list[str]:
+        return chunk_text_fn(text, chunk_size=chunk_size, overlap=overlap)
+
+    return _chunk
+
+
 def load_corpus(path: Path | str = CORPUS_PATH) -> Corpus:
     """Read and validate the labeled corpus. Raises ValueError on any violation."""
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
@@ -634,6 +650,8 @@ def run(
     corpus_path: Path,
     modes: list[str | None],
     index_title: bool = False,
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
 ) -> dict:
     _ensure_environment()
 
@@ -641,6 +659,17 @@ def run(
     from app.services import kb
 
     corpus = load_corpus(corpus_path)
+    original_chunk_text = kb.chunk_text
+    effective_size = kb.CHUNK_SIZE if chunk_size is None else chunk_size
+    effective_overlap = kb.CHUNK_OVERLAP if chunk_overlap is None else chunk_overlap
+    if effective_size <= effective_overlap:
+        raise SystemExit(
+            f"chunk_size ({effective_size}) must be greater than "
+            f"chunk_overlap ({effective_overlap})"
+        )
+    overridden = chunk_size is not None or chunk_overlap is not None
+    if overridden:
+        kb.chunk_text = make_chunker(original_chunk_text, effective_size, effective_overlap)
 
     if model and model != kb.EMBED_MODEL:
         from fastembed import TextEmbedding
@@ -686,7 +715,12 @@ def run(
             "queries": len(corpus.queries),
         },
         "model": model_metadata(kb.EMBED_MODEL),
-        "chunking": {"chunk_size": kb.CHUNK_SIZE, "chunk_overlap": kb.CHUNK_OVERLAP, "chunks": chunks},
+        "chunking": {
+            "chunk_size": effective_size,
+            "chunk_overlap": effective_overlap,
+            "chunks": chunks,
+            "overridden": overridden,
+        },
         "index_title": index_title,
         "production_threshold": kb.DEFAULT_MIN_SIM,
         "runs": runs,
@@ -762,6 +796,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="embed the title as its own block before the content (measurement axis; production embeds content only)",
     )
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=None,
+        help="override chunk size for this harness only; production is untouched",
+    )
+    parser.add_argument(
+        "--chunk-overlap",
+        type=int,
+        default=None,
+        help="override chunk overlap for this harness only; production is untouched",
+    )
     args = parser.parse_args(argv)
 
     modes: list[str | None] = {
@@ -770,7 +816,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         "customer": ["customer"],
     }[args.audience]
 
-    report = run(args.json, args.model, args.corpus, modes, index_title=args.index_title)
+    report = run(
+        args.json,
+        args.model,
+        args.corpus,
+        modes,
+        index_title=args.index_title,
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
+    )
     _print_report(report)
     if args.json:
         print(f"\njson: {args.json}")
