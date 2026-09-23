@@ -302,6 +302,30 @@ def test_index_text_prepends_the_title_as_its_own_block_when_the_axis_is_on():
     assert doc.content in text
 
 
+def test_make_chunker_forwards_explicit_values_as_keywords():
+    calls = []
+
+    def fake_chunker(text, *, chunk_size, overlap):
+        calls.append((text, chunk_size, overlap))
+        return ["split result"]
+
+    chunker = cal.make_chunker(fake_chunker, chunk_size=120, overlap=12)
+    assert calls == []
+    assert chunker("source text") == ["split result"]
+    assert calls == [("source text", 120, 12)]
+
+
+def test_make_chunker_does_not_call_splitter_at_construction():
+    calls = []
+
+    def fake_chunker(*args, **kwargs):
+        calls.append((args, kwargs))
+        return []
+
+    cal.make_chunker(fake_chunker, chunk_size=120, overlap=12)
+    assert calls == []
+
+
 # ---------------------------------------------------------------------------
 # Scoring core — accept predicates. Synthetic scores, known expected answer.
 # ---------------------------------------------------------------------------
