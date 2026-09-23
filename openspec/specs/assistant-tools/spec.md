@@ -220,3 +220,27 @@ The assistant boundary MUST degrade the turn when a read-only tool fails, preser
 - GIVEN `memory.search` fails with an internal exception
 - WHEN the assistant executes the tool
 - THEN the turn is marked degraded, continues to the responder, and the raw exception never becomes the answer
+
+### Requirement: AT-12 — Declared Assistant Capability Inventory
+
+The assistant MUST expose `assistant.capabilities` as a read-only tool with no arguments. It MUST report every tool in the assistant's validated whitelist exactly once using the registry description and read/write classification. Its result MUST preserve the exact tool count and bound the newline-joined capability text to the handler-owned text limit without relying on the generic item limit. Registry tools absent from the whitelist MUST NOT appear. Capability answers MUST use only this tool result, and business questions MUST remain subject to the bounded knowledge-base grounding rule.
+
+#### Scenario: Complete inventory is not item-truncated
+- GIVEN the assistant whitelist contains more entries than the generic item bound
+- WHEN `assistant.capabilities` executes
+- THEN the result reports the exact whitelist length and one capability line for every whitelisted tool
+
+#### Scenario: Non-whitelisted registry entry is excluded
+- GIVEN a tool exists in `TOOL_REGISTRY` but is absent from the assistant whitelist
+- WHEN `assistant.capabilities` executes
+- THEN that tool is absent from the capability text
+
+#### Scenario: Capability inventory is read-only
+- GIVEN a valid plan for `assistant.capabilities`
+- WHEN guardrails evaluate the plan
+- THEN execution proceeds without approval and performs no write
+
+#### Scenario: Business grounding remains unchanged
+- GIVEN a business question without sufficient bounded `<kb>` evidence
+- WHEN the assistant evaluates the question
+- THEN it retains the existing knowledge-base grounding refusal rather than using the capability inventory

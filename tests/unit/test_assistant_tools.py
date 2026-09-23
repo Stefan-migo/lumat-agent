@@ -5,6 +5,9 @@ import pytest
 
 from app.chat.assistant.tools.registry import (
     AUTONOMOUS_WRITE_ALLOWLIST,
+    CAPABILITIES_TEXT_LIMIT,
+    MAX_ITEMS,
+    CapabilitiesArgs,
     MemoryArgs,
     MemoryDeleteArgs,
     MemorySearchArgs,
@@ -17,10 +20,13 @@ from app.chat.assistant.tools.registry import (
     RuleArgs,
     ToolValidationError,
     TOOL_REGISTRY,
+    ToolDefinition,
+    _assistant_capabilities,
     execute_tool,
     get_tool,
     tool_schemas,
 )
+from app.services.prompts import load_assistant_config
 from app.chat.assistant.state import SDBTask
 from app.chat.assistant.approval import consume_approval, issue_approval, validate_execution
 from app.services.projects import ProjectCandidate, ProjectResult
@@ -34,6 +40,73 @@ def test_registry_exposes_typed_bounded_tools():
     assert schemas["customers.search"]["type"] == "object"
     assert get_tool("customers.search").read_only is True
     assert get_tool("automation.create_rule").read_only is False
+
+
+def test_capabilities_args_forbids_fields():
+    with pytest.raises(ValueError):
+        CapabilitiesArgs.model_validate({"unexpected": True})
+
+
+def test_assistant_capabilities_reports_every_whitelisted_tool_without_truncation(monkeypatch):
+    whitelist = [*load_assistant_config().tools_whitelist, "assistant.test-extra"]
+    monkeypatch.setitem(
+        TOOL_REGISTRY,
+        "assistant.test-extra",
+        ToolDefinition(
+            "assistant.test-extra",
+            CapabilitiesArgs,
+            True,
+            lambda _session, _args: {},
+            "Test-only capability.",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(tools_whitelist=whitelist),
+    )
+    result = _assistant_capabilities(SimpleNamespace(), CapabilitiesArgs())
+    names = [line.split(" — ", 1)[0] for line in result["capabilities"].splitlines()]
+
+    assert result["tool_count"] == len(whitelist)
+    assert result["tool_count"] > MAX_ITEMS
+    assert names == whitelist
+    assert len(names) == len(whitelist)
+
+
+def test_assistant_capabilities_excludes_non_whitelisted_registry_entry(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(tools_whitelist=["customers.search"]),
+    )
+
+    result = _assistant_capabilities(SimpleNamespace(), CapabilitiesArgs())
+
+    assert result["tool_count"] == 1
+    assert "customers.search" in result["capabilities"]
+    assert "project.list" not in result["capabilities"]
+
+
+def test_assistant_capabilities_bounds_text(monkeypatch):
+    original = TOOL_REGISTRY["customers.search"]
+    monkeypatch.setitem(
+        TOOL_REGISTRY,
+        "customers.search",
+        ToolDefinition(
+            original.name,
+            original.args_model,
+            original.read_only,
+            original.handler,
+            "x" * (CAPABILITIES_TEXT_LIMIT + 100),
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(tools_whitelist=["customers.search"]),
+    )
+
+    result = _assistant_capabilities(SimpleNamespace(), CapabilitiesArgs())
+
+    assert len(result["capabilities"]) == CAPABILITIES_TEXT_LIMIT
 
 
 def test_memory_kpis_is_not_a_registered_tool():

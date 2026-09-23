@@ -77,6 +77,7 @@ assistant:
     - project.rename
     - project.archive
     - project.merge
+    - assistant.capabilities
   memoria_scope: panel
   model: deepseek-chat
   sdb_classification:
