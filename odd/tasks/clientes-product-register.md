@@ -224,19 +224,31 @@ away from tables (the physiology axis is preserved, not renegotiated).
   criterion 11.
 - [x] **T5** — RED/GREEN: the `Reintentar` control is the `Button` primitive
   (`variant="secondary"`). `grep -c "<button" ClientesList.tsx` → 0.
-- [ ] **T6** — RED/GREEN: search and export move into a region-bound toolbar tied
-  to the list it controls, replacing the page-header action cluster. Second
-  consumer named before promotion: `ConversationsList`, `KbList`.
-- [ ] **T7** — RED/GREEN: filtered-empty is distinguishable from empty, and
-  filtered-empty offers the recovery action (clear the search). Second consumer
-  named: `ConversationsList`, `KbList`.
-- [ ] **T8** — RED/GREEN: apply the appearance axis. The list chrome — header,
-  region hierarchy, filter treatment, status presentation — reads as the same
-  product as the assistant, while the data layer stays a control-room
-  `DataTable`. This is the amended `DS-GRAMMAR-1` scenario, and it is the
-  acceptance evidence for the delta itself.
-- [ ] **T9** — stories: `ClientesList.stories.tsx` covers the register's state
-  matrix at the 640/1024/1280 viewports; its test stays green.
+- [x] **T6** — RED/GREEN: search and export moved into a region-bound `.toolbar`
+  inside the content, replacing the page-header action cluster. No new class was
+  invented: `.toolbar` was added to the existing selector group that already
+  carries `.ai-agent-grammar__filters` and `.conversations-queue__toolbar`, so the
+  contract is shared with two proven consumers from the start.
+- [x] **T7** — RED/GREEN: filtered-empty is distinguishable from empty and offers
+  recovery. The state is derived from the applied query, checked before the empty
+  branch, and the recovery clears both the query and the scroll of results. The
+  reset remounts the search control (keyed), because `SearchInput` owns its own
+  text and cannot be cleared programmatically — see the open item.
+- [x] **T8** — RED/GREEN: the appearance axis landed as a named region
+  (`role="region"` "Listado de clientes") wrapping the toolbar and the data
+  surface, plus the shared `.data-region` surface for the table (border, radius,
+  elevation, no padding). `.empty-state` was deliberately left outside that
+  surface: it is already a bordered elevated block and nesting would be
+  card-on-card, which `DESIGN_SYSTEM.md` forbids. This is the acceptance evidence
+  for the amended `DS-GRAMMAR-1`, and it is asserted twice: the region and surface
+  compose, and no conversation component appears on the dense surface.
+- [x] **T9** — stories: added `Denied` and `FilteredEmpty` (the latter needed the
+  new controlled `query` prop, because the state depends on the search round-trip
+  and cannot be expressed with `data`/`state` alone — the same pattern
+  `CasesList`, `TechnicianAgenda` and `Settings` already use). Story test extended
+  with the two story cases and three appearance-axis assertions. Viewport
+  presets (640/1024/1280) are global Storybook configuration per `DS-STORY-7`, so
+  they are not duplicated per story.
 
 ### Slice 2 — ClientFicha (ships in PR 2)
 
@@ -336,16 +348,60 @@ away from tables (the physiology axis is preserved, not renegotiated).
   `cd web && npm run test` → **80 files, 638 tests, all passing**, 57.67s. Baseline
   was 79 files / 625 tests; the delta is `ClientesList.test.tsx`. No other page
   regressed from the new `.table__link` rule.
-- [ ] Slice 1 remaining: T6 (toolbar), T7 (filtered-empty), T8 (appearance axis),
-  T9 (stories).
+- [x] T6 — RED/GREEN: `.toolbar` generalised from the existing selector group;
+  RED observed (no `.toolbar` node), then GREEN. Commit `90472b85`.
+- [x] T7 — RED/GREEN: filtered-empty + recovery. RED observed (`Sin resultados`
+  absent), then GREEN, including the assertion that the field is actually cleared.
+  Commit `cbdf31c9`.
+- [x] T8 — RED/GREEN: named region + `.data-region`. RED observed (no region
+  role), then GREEN. Commit `e1dafbeb`.
+- [x] T9 — RED/GREEN: controlled `query` prop + `Denied`/`FilteredEmpty` stories +
+  story assertions. RED observed (`Sin resultados` absent for the controlled
+  query), then GREEN. Commit `8c04c4b2`.
+- [x] Slice 1 verification of record: `cd web && npm run test` → **80 files, 648
+  tests, all passing**; `npx tsc -b --noEmit` → exit 0; `npm run build` → exit 0
+  (pre-existing >500 kB chunk warning unchanged); `npm run build-storybook` →
+  exit 0, preview built in 15s.
+- [x] Slice 1 complete (T0–T9).
 - [ ] Slice 2.
+
+## Size
+
+`64972a26..HEAD` under `web/`: **422 changed lines** (396 added, 26 deleted).
+Breakdown: `ClientesList.test.tsx` 253 (a test file that did not exist before this
+unit), `ClientesList.tsx` 64, `primitives.css` 25, `DESIGN_SYSTEM.md` 22, stories
+58. Production is roughly 111 lines; the rest is tests and stories. Non-`web/`
+artifacts add 519 lines (`odd/tasks/clientes-product-register.md` 365, the
+`panel-grammar-global` change 154).
+
+422 is marginally over the ~400 review-focus budget, and the total including the
+planning and spec artifacts is well over it. The dominant term is the new test
+file, which pays existing coverage debt rather than adding behaviour. Splitting
+the amendment out of PR 1 was already considered and rejected in D2; splitting the
+test file from the code it covers would defeat strict TDD. The maintainer decides
+whether to accept the size or slice PR 1 differently.
 
 ## Open item
 
+- **`SearchInput` cannot be cleared programmatically.** The primitive owns its own
+  text and exposes only a debounced `onSearch`, so the filtered-empty recovery has
+  to remount it with a `key`. The honest fix is an optional controlled `value` on
+  the primitive, which would also serve `ConversationsList` and `KbList`. Not done
+  here: it changes a primitive shared by surfaces this unit is not authorized to
+  touch.
+- **`.data-region` has one consumer.** `DS-GRAMMAR-2` forces every style into the
+  shared stylesheet, so it lives in `primitives.css`; but `D3` says a piece is not
+  substrate until a second consumer is named. It is therefore marked in the CSS
+  comment as unproven for generalisation. Candidates to name it against:
+  `AgendaPage` and `AutomationRulesPage` tables.
 - **Ficha layout (T17).** The ficha today is five stacked blocks, one of which
   (`Historial`) carries four unrelated regions. Whether it becomes a single column
   of grouped sections or a two-region layout with a summary rail is a product
   decision, unresolved at the session close and deferred to the start of slice 2.
+- **Density (acceptance 11) is argued structurally, not measured.** The additions
+  are a border, radius, elevation and a moved toolbar; no padding, height or font
+  change was introduced on rows or cells, so rows-per-screen cannot regress. The
+  visual confirmation at 1366×768 is the owner's, and it is the gate before slice 2.
 
 ## Recovery
 
