@@ -58,6 +58,9 @@ def _pattern():
 EMERGENCY_SENTENCES = [
     ("olor a gas", "siento olor a gas en la cocina"),
     ("huele a gas", "huele a gas en el calefont"),
+    # The first person of the same perception: third person escalated, first did not.
+    ("huelo gas", "huelo gas en la cocina que hago"),
+    ("huelo a gas", "huelo a gas"),
     ("fuga", "hay una fuga de gas en el calefont"),
     ("fuga de gas", "hay una fuga de gas en el calefont"),
     ("humo", "sale humo del calefont"),
@@ -76,6 +79,14 @@ EMERGENCY_SENTENCES = [
 def test_strong_hit_each_default_keyword(keyword, sentence):
     # each configured keyword is a direct emergency phrase (EM-1)
     assert classify_emergency(sentence, _pattern()) == "strong", keyword
+
+
+def test_negated_first_person_gas_smell_is_still_strong():
+    # D4: negation-aware detection is out of scope. The keyword is literal, so
+    # "no huelo gas" escalates too. On the safety path the existing bias is the
+    # correct one: escalate a harmless message rather than miss a real leak.
+    # This is pre-existing for "huele a gas"; the first person inherits it.
+    assert classify_emergency("no huelo gas, era el vecino", _pattern()) == "strong"
 
 
 @pytest.mark.parametrize(

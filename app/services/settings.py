@@ -75,6 +75,8 @@ MESSAGE_DEFAULTS: dict[str, str] = {
 DEFAULT_EMERGENCY_KEYWORDS: list[str] = [
     "olor a gas",
     "huele a gas",  # variant
+    "huelo gas",  # first person: the third person escalated, the first did not
+    "huelo a gas",  # variant
     "fuga",
     "fuga de gas",  # variant
     "humo",
