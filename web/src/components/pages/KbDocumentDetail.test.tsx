@@ -4,11 +4,23 @@ import userEvent from "@testing-library/user-event";
 import { AppShell } from "../domain/AppShell";
 import { parsePanelPath, pathForRoute } from "../domain/panelRoutes";
 import { KbDocumentDetail } from "./KbDocumentDetail";
-import { docs } from "../../stories/pages/_shared/mockData/kb";
 import type { KbDocument, User } from "../../types";
 
 const admin: User = { username: "ana", role: "admin" };
-const document = { ...docs[0], content: "Contenido del documento." } satisfies KbDocument;
+const document = {
+  id: 1,
+  title: "Manual de atencion al cliente",
+  format: "pdf",
+  version: 3,
+  active_version: 2,
+  active: true,
+  visibility: "customer",
+  provider: "OpenRouter",
+  model: "deepseek-chat",
+  cost_meta: 0.000412,
+  created_at: "2026-07-10T14:02:00-04:00",
+  content: "Contenido del documento.",
+} satisfies KbDocument;
 
 beforeEach(() => {
   window.history.replaceState({}, "", "/panel/app/kb/1");
