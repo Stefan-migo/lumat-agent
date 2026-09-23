@@ -717,6 +717,28 @@ def test_memory_service_update_reembeds_only_changed_content(monkeypatch):
     assert row.normalized_hash == memory._normalized_hash("New content")
 
 
+def test_memory_service_update_rejects_missing_id():
+    session = SimpleNamespace(get=lambda _model, _id: None)
+
+    with pytest.raises(ValueError, match="memory 1 not found"):
+        memory.update(session, 1, titulo="Missing")
+
+
+def test_memory_service_update_propagates_embedding_failure(monkeypatch):
+    row = SimpleNamespace(
+        contenido="Old", titulo="Old title", tipo=memory.MemoryType.DECISION,
+        embedding=[0.0], normalized_hash="old", review_after=None,
+    )
+    session = SimpleNamespace(get=lambda _model, _id: row, flush=lambda: None)
+    monkeypatch.setattr(
+        "app.services.tukulpan._embed",
+        lambda _texts: (_ for _ in ()).throw(RuntimeError("embedder unavailable")),
+    )
+
+    with pytest.raises(RuntimeError, match="embedder unavailable"):
+        memory.update(session, 1, contenido="New content")
+
+
 def test_memory_service_update_recomputes_review_after_when_tipo_becomes_decaying():
     row = SimpleNamespace(
         contenido="Content", titulo="Title", tipo=memory.MemoryType.DECISION,

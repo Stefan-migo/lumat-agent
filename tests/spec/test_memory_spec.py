@@ -596,6 +596,37 @@ def test_mem7_recap_has_bounded_schema_and_idempotent_key(fake_embedder, migrate
         assert session.query(Memory).filter_by(topic_key="assistant-recap:7:5").count() == 1
 
 
+@pytest.mark.parametrize(
+    ("source_message_ids", "source_tokens", "expected_ids", "expected_tokens"),
+    [([], 0, [], 0), ([4], 2_000, [4], 2_000), ([5], 2_001, [5], 2_000)],
+)
+def test_mem7_recap_handles_empty_sources_and_bounds_source_tokens(
+    fake_embedder, migrated_db, source_message_ids, source_tokens, expected_ids, expected_tokens
+):
+    with SessionLocal() as session:
+        result = tukulpan.write_recap(
+            session,
+            thread_id=7,
+            source_message_ids=source_message_ids,
+            recap="A bounded recap",
+            source_tokens=source_tokens,
+            truncated=False,
+        )
+        session.commit()
+
+        row = tukulpan.get_by_key(
+            session,
+            scope="panel",
+            entity_id="thread:7",
+            topic_key=f"assistant-recap:7:{source_message_ids[-1] if source_message_ids else 'empty'}",
+        )
+        payload = __import__("json").loads(row.contenido)
+
+        assert result["written"] is True
+        assert payload["source_message_ids"] == expected_ids
+        assert payload["source_tokens"] == expected_tokens
+
+
 def test_mem7_recap_failure_returns_degraded_evidence_and_keeps_session_usable(monkeypatch, migrated_db):
     monkeypatch.setattr(tukulpan, "_embed", lambda texts: (_ for _ in ()).throw(RuntimeError("embed offline")))
     with SessionLocal() as session:
