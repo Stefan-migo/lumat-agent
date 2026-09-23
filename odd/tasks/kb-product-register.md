@@ -96,17 +96,30 @@ consumers (`ClientesList.tsx:101`, `ClientFicha.tsx:230`).
   primary region; upload is demoted to a secondary affordance; a document gains
   its own region (metadata, versions, audience, actions); the retrieval probe
   becomes a tool region. Reuse the proven `ClientFicha` two-region pattern.
+- **D6 — The document's own region is a drill-down view (owner's call,
+  2026-09-23).** `AppShell.tsx:114` already renders three drill-downs the same way
+  (`clients` + `clientId` → `ClientFicha`; `conversations` + `conversationId` →
+  `ConversationThread`; `automation-rules` + `automationRuleId` →
+  `AutomationRuleDetailPage`), and the handoff §4.4 requires one back-control
+  pattern for every detail view. So KB adds a fourth: `kb` + `kbDocId` →
+  `KbDocumentDetail` (identity rail + operations main, with the back control).
+  This authorizes `AppShell.tsx` and `panelRoutes.ts` and a new page component.
+  Rejected: an inline region on the same page — smaller, but a pattern the panel
+  does not have and with no back control, because it is not a view.
 
 ## Authorized scope
 
 - `web/src/components/pages/KbList.tsx`
+- **`web/src/components/pages/KbDocumentDetail.tsx` (new) and its test**
+- **`web/src/components/domain/AppShell.tsx` and `web/src/components/domain/panelRoutes.ts`**
+  (the KB drill-down route only)
+- **`web/src/stories/pages/KbDocumentDetail.stories.tsx` (new) and its test**
 - the KB section of `web/src/components/primitives/primitives.css`
 - `web/src/components/shared/toneMaps.ts`
 - `web/src/stories/pages/KbList.stories.tsx` and its test
-- `web/src/_shared/mockData/kb.ts` and its test
-- `web/src/types.ts` (only if the plane split requires it)
+- `web/src/stories/pages/_shared/mockData/kb.ts` and its test
+- `web/src/types.ts` (only if the plane split or the detail fetch requires it)
 - `web/DESIGN_SYSTEM.md` (KB status row amendment only)
-- `web/src/components/primitives/primitives.css` (shared disclosure appearance only)
 
 **No backend change. No new dependency. No new token without a repeated
 consumer.** Preexisting token values are not touched (`DS-TKN-2` is additive).
@@ -162,7 +175,12 @@ real number and recommend `size:exception`.
 | 0 | — | This task doc, committed before the first source change | inline |
 | 1 | PR 1 | T1–T3: contract honesty (never design on an untrue contract) | delegated writer |
 | 2 | PR 2 | T4: the disable MUST violation, standalone and small | delegated writer |
-| 3 | PR 3 | T5–T8: workspace recomposition | delegated writer |
+| 3 | PR 3 | T5–T7: the document surface (drill-down, per D6) | delegated writer |
+| 4 | PR 4 | T8–T10: the corpus and completeness | delegated writer |
+
+Slice 3 grows the unit's authorized scope (D6): it touches `AppShell.tsx`,
+`panelRoutes.ts` and adds `KbDocumentDetail.tsx`. PR 2 is stacked on PR 1; PR 3 is
+stacked on PR 2; PR 4 on PR 3. Retarget each to `main` as its parent merges.
 
 ## Tasks
 
@@ -203,45 +221,82 @@ through a prop production ignores.
 Files: `web/src/components/pages/KbList.tsx`, stories + test.
 Graph nodes: `KbList()`, `AppShell.tsx`, `useAsyncData`.
 
-### T5 — Shared styled disclosure (slice 3)
+## Slice 3 — the document surface (T5–T7)
 
-RED: a test asserting the disclosure renders the shared appearance class and no
-browser-default marker contract is relied on.
-GREEN: add the appearance class to the shared tokenized stylesheet and adopt it in
-KB. Do not restyle the other three consumers (see Non-goals).
-Files: `web/src/components/primitives/primitives.css`, `web/src/components/pages/KbList.tsx`.
+Drill-down, per D6. Read `ClientFicha.tsx` (the two-region rail + main, the
+responsive collapse) and `AutomationRuleDetailPage` (the route-driven drill-down
+shape) before writing. Reuse those patterns; invent nothing.
 
-### T6 — Adopt `.data-region`; trim duplicated `.kb*` (slice 3)
+### T5 — The route and the skeleton
+
+Route: `panelRoutes.ts` gains the KB document id for the `kb` view, mirroring how
+`clientId` and `automationRuleId` are carried. `AppShell.tsx` gains the branch:
+`view === 'kb'` renders `KbDocumentDetail` when the id is present, `KbList`
+otherwise, and `KbList` gains `onOpenDocument`.
+
+`KbDocumentDetail` renders through `PageFrame` with the back control in
+`PageFrame actions` — `Button variant="secondary"` with `window.history.back()`,
+exactly as `ClientFicha.tsx:160-165`.
+
+RED: a test that the document route renders the detail and the back control, and
+that `KbList` without an id still renders the list.
+
+### T6 — The two regions, and the operations move in
+
+Rail: the document's identity facts, labelled — title, format, active version and
+version count, status, audience, provider/model, cost, created_at. Main: the
+document's operations.
+
+Move the operations out of the row's `DocActions` and into the main region:
+content editing behind the disclosure, version restore, audience change, and
+disable — carrying the page-owned confirmation (D2/T4) with it. The content comes
+from `GET /kb/{id}` (`getKbDocument`), which already returns it.
+
+The disclosure must use the shared styled appearance class (T5 in the old plan),
+which removes the browser-default `<summary>` marker. Add that class to the
+tokenized stylesheet and adopt it here. Do not restyle the other three consumers
+(see Non-goals).
+
+RED: the detail renders the identity rail, and each operation still works from its
+new locus — including that disable still confirms and still names the document.
+
+### T7 — The list links to the document
+
+Rows stop carrying an action cell. The document's title becomes the row's link
+using the existing shared `.table__link` contract (`primitives.css:292-294`), which
+already has three consumers, and opens the detail.
+
+RED: the list no longer offers inline document operations, and the row link
+navigates to the document.
+
+## Slice 4 — the corpus and completeness (T8–T10)
+
+### T8 — Adopt `.data-region`; trim duplicated `.kb*`
 
 RED: a test asserting the documents table is wrapped in `.data-region` and that no
 `.kb*` selector duplicates shared structure.
 GREEN: wrap the populated table in `.data-region`; delete the `.kb*` layout rules
 that duplicate `.data-region`/shared structure; keep the pieces with no shared
 equivalent (technical metadata block, search affordance).
-Files: `web/src/components/pages/KbList.tsx`, `web/src/components/primitives/primitives.css`.
+Files: `web/src/components/pages/KbList.tsx`, `primitives.css`.
 
-### T7 — Recompose as a document-first workspace (slice 3)
+### T9 — Documents-first recomposition
 
-GREEN: documents become the primary region; upload is demoted to a secondary
-affordance; a document gains its own region (metadata, versions, audience,
-actions) instead of the row-crammed disclosure; the retrieval probe becomes a tool
-region. Reuse the `ClientFicha` two-region pattern
-(`ClientFicha.tsx:166-202`, `primitives.css:307-325`, responsive collapse at
-`:377-383`). No card-on-card.
-Files: `web/src/components/pages/KbList.tsx`, `primitives.css`, stories + test.
+GREEN: the documents become the primary region; the upload is demoted to a
+secondary affordance instead of the card that currently sits above the collection;
+the retrieval probe becomes a tool region. No card-on-card — and a populated
+`DataTable` already renders its own surface, so the table must not be wrapped in
+another one.
+Files: `web/src/components/pages/KbList.tsx`, `primitives.css`.
 
-### T8 — Upload validation feedback (slice 3)
+### T10 — Upload validation feedback and the full state matrix
 
 GREEN: `DESIGN_SYSTEM.md:333` requires format, size, processing, failure and
 retry. Add the visible size constraint, the processing/failure feedback and the
-upload-specific retry at the upload locus.
-Files: `web/src/components/pages/KbList.tsx`.
-
-### T9 — Full state matrix and visual acceptance (slice 3)
-
-GREEN: loading / empty / denied / error / processing / success all render from the
-page's own states (D2), with stories driving data rather than a workflow prop.
-Hand the branch to the human for the 1366×768 visual gate.
+upload-specific retry at the upload locus. Then make loading / empty / denied /
+error / processing / success all render from the page's own states, with stories
+driving data rather than a workflow prop, and hand the branch to the human for the
+1366×768 visual gate.
 
 ## Acceptance criteria
 
@@ -262,9 +317,10 @@ Hand the branch to the human for the 1366×768 visual gate.
 - [x] Session closed with ODD handoff (`ready-for-odd/`)
 - [x] Worktree created and `npm ci` run
 - [x] T0: this doc committed on the branch (`8f194da9`)
-- [x] Slice 1 (T1–T3)
-- [x] Slice 2 (T4)
-- [ ] Slice 3 (T5–T9)
+- [x] Slice 1 (T1–T3) — merged to `main` as `a937f81e` (PR #328)
+- [x] Slice 2 (T4) — PR #330, open, retargeted to `main`, CI green
+- [ ] Slice 3 (T5–T7)
+- [ ] Slice 4 (T8–T10)
 
 ## Verification evidence
 
