@@ -116,9 +116,9 @@ consumers (`ClientesList.tsx:101`, `ClientFicha.tsx:230`).
 - **`web/src/stories/pages/KbDocumentDetail.stories.tsx` (new) and its test**
 - **`web/src/components/pages/ClientFicha.tsx` and `ClientFicha.test.tsx`** — only to
   promote the two-region grid to a neutral shared contract. The KB detail needs the
-   same `.detail-region` grid; borrowing `.client-ficha*` would make the names lie and
-   couple two unrelated pages, which is exactly what this repo refused to do when it
-   created the neutral `.data-region` instead of borrowing a page class.
+  same `.detail-region` grid; borrowing `.client-ficha*` would make the names lie and
+  couple two unrelated pages, which is exactly what this repo refused to do when it
+  created the neutral `.data-region` instead of borrowing a page class.
 - the KB section of `web/src/components/primitives/primitives.css`
 - `web/src/components/shared/toneMaps.ts`
 - `web/src/stories/pages/KbList.stories.tsx` and its test
@@ -324,7 +324,7 @@ driving data rather than a workflow prop, and hand the branch to the human for t
 - [x] T0: this doc committed on the branch (`8f194da9`)
 - [x] Slice 1 (T1–T3) — merged to `main` as `a937f81e` (PR #328)
 - [x] Slice 2 (T4) — PR #330, open, retargeted to `main`, CI green
-- [ ] Slice 3 (T5–T7)
+- [x] Slice 3 (T5–T7) — PR 3, open, CI green
 - [ ] Slice 4 (T8–T10)
 
 ## Verification evidence
@@ -371,12 +371,6 @@ Assessment for the writer's diff (`8f194da9..4bf8bd10`): `medium`, 6 paths,
 `under_budget`. RDD is `off` for this clone, so no native review lifecycle runs;
 the medium tier is covered by the writer's self-verification plus the parent
 readback and the four re-run checks above.
-
-## Next step
-
-Slice 2 (T4): the disable MUST violation, standalone and small. RED must mount the
-real path (`<KbList />` bare, as `AppShell.tsx:119` does), click `Deshabilitar`,
-and assert the confirmation names the clicked document with no mutation yet.
 
 ### Slice 2 (T4) — branch `odd/kb-disable-confirmation`
 
@@ -425,8 +419,66 @@ so the branch is unaffected; recorded here so the deviation is visible.
 (`git diff --stat 9b83e27f..a94a98b4 -- web/` is empty), so there is no conflict with
 this work; PR #328 reported `MERGEABLE` / `CLEAN` against the moved base.
 
+### Slice 3 (T5–T7) — branch `odd/kb-document-surface`
+
+Commits: `d7f0e1f8` (route), `70c0d6ef` (operations move), `66b1d1a0` (list link),
+`b6d767bc` (test ownership), plus the correction `163eaa41` and `12d7bf69`.
+
+The document now has its own surface: `panelRoutes.ts` carries the KB document id,
+`AppShell.tsx` renders `KbDocumentDetail` on the drill-down, the detail renders an
+identity rail plus an operations main (content editor behind a styled disclosure,
+version restore, audience, disable with its page-owned confirmation), and the list rows
+link to it through the shared `.table__link` instead of carrying an action cell.
+
+Parent readback found four defects the writer did not, and they were corrected:
+
+1. **The KB detail borrowed the client ficha's classes.** `.client-ficha`,
+   `__rail`, `__facts`, `__main` were used by `KbDocumentDetail.tsx`, so the names lied
+   and the two unrelated pages were coupled — the same move this repo refused when it
+   created the neutral `.data-region` instead of borrowing a page class. Promoted to
+   `.detail-region`, with both consumers updated.
+2. **Two assertions were lost, not moved.** The slice-2 overlap regression test
+   (`keeps only the latest confirmation open when workflows overlap`) was dropped, and
+   the document-status triangulation was weakened to a tautological ternary
+   (`first.active ? "activo" : "deshabilitado"`) that cannot fail for the other value.
+   Both restored.
+3. **Dead CSS plus a silently dropped copy block.** The `kb-actions__technical` block
+   left the list and never arrived at the detail, leaving five rules with zero
+   consumers. Deleted, and the provider/model identity facts are now asserted in the
+   detail's test. The copy removal is deliberate: the rail shows them as labelled facts.
+4. **`const document = …` shadowed the DOM global**, which is why the edit path needed
+   `globalThis.document.getElementById`. Renamed, and the repeated status ternary became
+   the `docStatus()` helper.
+
+Parent re-ran the checks on the corrected candidate:
+
+- `npm run test`: **81 files / 662 tests passed**
+- `npx tsc -b --noEmit`: passed
+
+Writer-reported, not re-run by the parent: `npm run build` passed,
+`npm run build-storybook` passed.
+
+**Review size: 1041 changed lines (524 added, 517 deleted)** — over the ~400 budget, and
+presented honestly rather than compressed:
+
+| Side | Changed lines |
+|---|---|
+| Production source (`KbDocumentDetail.tsx`, `AppShell.tsx`, `panelRoutes.ts`, `KbList.tsx`, `primitives.css`, `ClientFicha.tsx`) | 301 |
+| Tests and stories | 740 |
+
+The test side dominates because 415 lines were deleted from `KbList.stories.test.tsx` and
+re-homed in `KbDocumentDetail.test.tsx` (176) and its stories (32): the operations moved,
+so their tests moved with them. One honest cut pass was attempted and no cohesive split
+exists — separating the tests would orphan them from the code they cover, and separating
+the list link from the detail would leave the operations duplicated in two places. The
+number is reported as-is.
+
+Process note: the slice-3 writer also ran an `graphify` refresh early (twice). Verified
+that it wrote only inside the unit worktree and left the main worktree's graph
+untouched.
+
 ## Next step
 
-Slice 3 (T5–T9): the workspace recomposition. Start at T5 with the shared styled
-disclosure, then T6 (`.data-region`), T7 (document-first composition), T8 (upload
-validation feedback), T9 (full state matrix).
+Slice 4 (T8–T10): the corpus and completeness — `.data-region` on the documents table,
+the `.kb*` trim, the documents-first recomposition with the upload demoted, the retrieval
+probe as a tool region, upload validation feedback, and the full state matrix.
