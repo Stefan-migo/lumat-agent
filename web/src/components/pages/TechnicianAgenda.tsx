@@ -96,7 +96,7 @@ function AppointmentCard({ row }: { row: TechnicianAppointment }) {
       <p className="technician-agenda__service">{row.service}</p>
       <strong>{row.customer.name ?? 'Cliente sin nombre'}</strong>
       {mapQuery
-        ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}>{row.customer.address ?? 'Dirección no registrada'}</a>
+        ? <Button variant="secondary" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}>{row.customer.address ?? 'Dirección no registrada'}</Button>
         : <span>Dirección no registrada</span>}
       <span>{row.customer.comuna ?? 'Comuna no registrada'}</span>
       {row.customer.phone

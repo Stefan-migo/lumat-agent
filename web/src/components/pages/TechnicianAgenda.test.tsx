@@ -241,6 +241,7 @@ describe('technician surface — visit safety and location', () => {
       'href',
       `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Los Alerces 42, Ñuñoa')}`,
     );
+    expect(address).toHaveClass('btn', 'btn--secondary');
   });
 
   it('does not link a comuna when the street address is missing', async () => {
