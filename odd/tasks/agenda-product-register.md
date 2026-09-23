@@ -233,6 +233,22 @@ is not in this unit's scope.
   smallest change that fixes the observable defect, and slice 2 extracts the
   agenda-shaped contract at the moment both surfaces consume it. Ordering is a
   correctness rule here, not a packaging preference.
+- **D14 — The technician surface's local grammar is deliberate, not debt.**
+  `odd/tasks/technician-surface.md` already raised that surface — 748 changed lines
+  under `web/`, D1–D7 and T1–T10 — and the 13 `.technician-agenda__*` selectors are
+  its documented output, not an accident: the card idiom was chosen after measuring
+  that a `--border-strong` stroke lands at 2.84:1 on `--brand-bg`, the slot leads
+  the card by decision (D4), the call control hugs its own label (T3), the recovery
+  control sits under its alert (T7), and the class was made real (T8). T12 is
+  therefore **not** "reduce the 13 selectors": each one is audited against the
+  promotion rule, and the page-specific remainder keeps its ownership with its
+  rationale recorded.
+- **D15 — The card's unlabelled facts are re-examined, not converted.** The ficha's
+  six bare `<p>` elements were ambiguous because a desktop identity block carries no
+  reading order. The technician card's order was decided instead of inherited
+  (`technician-surface` D4/T4: *when*, then *what*, then *who*, then *where*, then
+  how to call). A label is added only where a value is genuinely ambiguous without
+  one, and no label is added that repeats its value or fights a 390px phone width.
 
 ## Tasks
 
@@ -303,15 +319,18 @@ is not in this unit's scope.
 - [ ] **T10** — RED/GREEN: the address link uses the shared link contract and no
   longer inherits the browser default colour. RED observed (no class on the
   anchor).
-- [ ] **T11** — RED/GREEN: the technician card's facts carry label/value structure
-  where it fits the phone width (address, comuna, phone, service); no label is
-  added that merely repeats its value.
-- [ ] **T12** — RED/GREEN: the 13 page-owned selectors are reduced by the D10
-  test, with the count before and after recorded and each promotion naming its
-  second consumer; the page-specific remainder stays page-owned and keeps its
-  tokens.
-- [ ] **T13** — stories: extend the technician story matrix for whatever
-  T9–T12 changed, with its assertions.
+- [ ] **T11** — RED/GREEN: only the card facts that are genuinely ambiguous without
+  a label gain structure (D15). If the audit finds none, close the task with the
+  recorded verdict and no code change: the card's reading order is a decision from
+  `technician-surface` and inventing labels would churn it.
+- [ ] **T12** — RED/GREEN: audit all 13 `.technician-agenda__*` selectors against
+  the promotion rule (D3, D10, D14) and record the verdict for each. Promote at most
+  what both a slice needs and a named second consumer actually uses — the operator
+  surface renders the same `StateMessage` plus recovery-control shape, so that
+  layout is the single candidate named here. Everything page-specific stays
+  page-owned and keeps its tokens. Record the selector count before and after.
+- [ ] **T13** — stories: extend the technician story matrix only for what T9–T12
+  actually changed, with assertions. Invent no story for a state that did not move.
 - [ ] **T14** — Slice 2 verification of record: the same four commands.
 
 ## Acceptance criteria
@@ -488,6 +507,16 @@ is not in this unit's scope.
 - `cd web && npm run build-storybook` — passed: Storybook `8.6.18` built the
   preview. Storybook reported its existing `eval` and large-chunk warnings.
 
+### Slice 2 re-scoped before implementation
+
+- T11 and T12 were rewritten after reading `odd/tasks/technician-surface.md`. The
+  earlier framing — "the 13 page-owned selectors go to the shared register" — was
+  wrong. That surface already had its own design pass, with decisions backed by
+  measurement, and the selectors are its documented output (D14). T12 is now an
+  audit that applies the promotion rule per selector, and T11 requires evidence of
+  real ambiguity before a single label is added (D15). This is the same correction
+  the Clientes/KB handoff warned about: re-diagnose, never transfer conclusions.
+
 ## Size
 
 Slice 1 (`9b83e27f..HEAD` under `web/`) changed **134 lines** (110 added, 24
@@ -525,6 +554,12 @@ figures above.
   contract work is undecided.
 - **`AutomationRulesPage.tsx:24`** still renders its drill-down link on the
   browser default colour (inherited; out of scope).
+- **The two Agenda surfaces render their section headings differently.** The
+  technician's section titles are uppercase and muted
+  (`.technician-agenda__section-title`); the operator's `Hoy` and `Próximas` are
+  plain `h2`. Each treatment was deliberate inside its own unit, so unifying them is
+  a design decision for the owner rather than an obvious cleanup — recorded here for
+  the visual review.
 - **The row-local sync-failure detail rides inside the status pill.**
   `AgendaPage.tsx` renders the API message appended to the badge
   (`title: detail`), so a long server message will stretch the actions cell. It is
