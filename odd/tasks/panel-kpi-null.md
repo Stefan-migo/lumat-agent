@@ -149,6 +149,14 @@ surfaces; folding them into this unit would be a scope change only the human can
   console warning, not a crash). A real service carrying that literal means the same thing, and
   disambiguating it needs a sentinel or a reserved representation — representation churn with no
   observable behaviour change. Both risks are accepted.
+- **F3 — the living spec has no scenario for a case without a service.** Spec check (Step 4) against
+  `openspec/specs/`: `admin-panel/spec.md:95` (AP-8) requires the panel to show motivos and every KPI's
+  colored accent, `advanced-dashboards/spec.md:31` (AD-2) requires motivos as one-line chips, and
+  `panel-app/spec.md:129` requires the one-line chips with a colored top accent. This change conforms to
+  all three — the chips, their accents and the five KPIs are untouched, and the accent can now resolve
+  where it previously threw. But none of those requirements has a scenario for a *case with no service*,
+  which is exactly why nothing caught this before production. Recording the gap; editing a living spec
+  is an SDD change of its own and needs human authorization, so it is not done here.
 
 ## Progress
 
