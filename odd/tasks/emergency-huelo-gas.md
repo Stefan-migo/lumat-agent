@@ -125,15 +125,17 @@ a test so it stays visible.
 
 ### WU1 — the first-person gas smell escalates
 
-- [ ] **T1** — RED: `tests/integration/test_emergency.py` — add
+- [x] **T1** — RED: `tests/integration/test_emergency.py` — add
       `("huelo gas", "huelo gas en la cocina que hago")` and `("huelo a gas", "huelo a gas")` to
-      `EMERGENCY_SENTENCES`; run the emergency suite and observe exactly the two new failures.
-- [ ] **T2** — GREEN: `app/services/settings.py` — add the two phrases to `DEFAULT_EMERGENCY_KEYWORDS`
+      `EMERGENCY_SENTENCES`, plus the D4 negation assertion; run the emergency suite and observe
+      exactly the three new failures.
+- [x] **T2** — GREEN: `app/services/settings.py` — add the two phrases to `DEFAULT_EMERGENCY_KEYWORDS`
       (and its comment).
-- [ ] **T3** — GREEN: re-run the focused set and the full suite; confirm the pinned residual gap
+- [x] **T3** — GREEN: re-run the focused set and the full suite; confirm the pinned residual gap
       (`"se escapa el gas"`, `"me esta saliendo gas"`) is still `None`.
-- [ ] **WU1 commit** — the test and the source together, one work unit.
-- [ ] **T4** — the record: `odd/tasks/emergency-huelo-gas.md` (committed before the source change).
+- [x] **WU1 commit** — the test and the source together, one work unit (`b4a87254`).
+- [x] **T4** — the record: `odd/tasks/emergency-huelo-gas.md` (`5516fc95`, committed before the
+      source change).
 
 ## Verification
 
@@ -160,9 +162,56 @@ a test so it stays visible.
 Estimated well under 100 changed lines across 3 files: 2 lines of source, 2 test rows, and this
 record. Comfortably inside the 400-line review budget — no chain, no exception. One PR.
 
+**Result**: +2 lines in `app/services/settings.py`, +11 in `tests/integration/test_emergency.py`
+(the two `EMERGENCY_SENTENCES` rows with their comment, and the D4 negation test), plus this record.
+
 ## Execution evidence
 
-(to be filled during implementation)
+### RED (observed before the source change)
+
+`eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_emergency.py -q`
+
+Three failures, all new, all `assert None == 'strong'`:
+
+- `test_strong_hit_each_default_keyword[huelo gas-huelo gas en la cocina que hago]`
+- `test_strong_hit_each_default_keyword[huelo a gas-huelo a gas]`
+- `test_negated_first_person_gas_smell_is_still_strong`
+
+The pre-existing tests passed at RED, so the three failures are exactly the new coverage.
+
+### GREEN
+
+- Focused: `uv run pytest tests/integration/test_emergency.py tests/integration/test_settings.py -q`
+  — pass.
+- Full suite: `uv run pytest tests/ -p no:warnings` — **1302 passed in 137.98s**, exit 0.
+- Classifier evidence after the change (`compile_keywords(DEFAULT_EMERGENCY_KEYWORDS)`):
+
+| message | result |
+|---|---|
+| `huelo gas en la cocina que hago` | **strong** |
+| `huelo a gas` | **strong** |
+| `huele a gas` | strong (unchanged) |
+| `se escapa el gas` | `None` (pinned gap, unchanged) |
+| `me esta saliendo gas` | `None` (pinned gap, unchanged) |
+| `no huelo gas, era el vecino` | strong (D4 boundary, pinned) |
+
+- `git diff --name-only` → `app/services/settings.py`, `tests/integration/test_emergency.py`.
+- `git diff --check` → no whitespace errors.
+
+### Commits
+
+- `5516fc95` — `docs(odd): open the emergency-huelo-gas record`
+- `b4a87254` — `fix(emergency): escalate the first-person gas-smell phrasings (EM-1)`
+
+### Deviations
+
+- **The D4 negation test is an extra assertion** beyond the two `EMERGENCY_SENTENCES` rows. It was
+  written into the RED (it also failed before the source change) and exists to keep D4's boundary
+  visible, which is what D4 promises. It is not new scope: it changes no source behaviour.
+- **No spec delta** (D3), reasoning recorded above.
+- **No RDD review for this unit**: `gentle-ai review mode status` reports
+  `off (decided by clone_local)`. Delivery follows ordinary repository policy. Recorded so the
+  absence is a fact, not an omission.
 
 ## Graph check (Step 1 of the 5-Step Gate)
 
