@@ -110,8 +110,8 @@ describe('AgendaPage', () => {
 
     render(<AgendaPage data={[appointment()]} state="ready" />);
     await user.click(screen.getByRole('button', { name: 'Cancelar visita' }));
-    expect(screen.getByRole('dialog', { name: 'Cancelar visita' })).toBeInTheDocument();
-    expect(screen.getByRole('dialog')).toHaveTextContent('La visita no podrá volver a reservarse');
+    expect(screen.getByRole('dialog', { name: 'Cancelar visita de Camila Soto — Mantención' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toHaveTextContent('La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.');
     expect(screen.getByLabelText('Motivo de cancelación')).toHaveClass('field__control');
     await user.type(screen.getByLabelText('Motivo de cancelación'), 'Cliente avisó');
     await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }));

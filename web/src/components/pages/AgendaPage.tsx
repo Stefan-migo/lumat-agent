@@ -117,8 +117,8 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
 
   return <PageFrame title="Agenda" meta={data ? `${appointments.length} ${appointments.length === 1 ? "visita" : "visitas"}` : undefined} state={stateMessage(state, retry)}>
     {state === "loading" || state === "error" || state === "denied" ? null : data?.length === 0 || state === "empty" ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : <section aria-label="Registro de agenda">{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</section>}
-    <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title="Cancelar visita">
-      <p>La visita no podrá volver a reservarse después de cancelarla.</p>
+    <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title={cancelTarget ? `Cancelar visita de ${cancelTarget.customer_name ?? "cliente"} — ${cancelTarget.service}` : "Cancelar visita"}>
+      <p>La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.</p>
       <Textarea id="cancel-reason" label="Motivo de cancelación" value={reason} onChange={(event) => setReason(event.target.value)} />
       {cancelTarget && cancelFeedback?.id === cancelTarget.id && cancelFeedback.tone === "danger" ? <StateMessage tone="danger" role="alert" title={cancelFeedback.title} detail={cancelFeedback.detail} /> : null}
       <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void cancel()}>Confirmar cancelación</Button>
