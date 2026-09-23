@@ -476,6 +476,18 @@ is not in this unit's scope.
   open-confirmation play interaction and asserting its dialog. Commit
   `59869eb9`.
 
+### Correction pass verification record
+
+- `cd web && npm run test` — passed: `Test Files 80 passed (80)`, `Tests 671
+  passed (671)`. Existing React `act(...)` and jsdom navigation warnings were
+  emitted; no test failed.
+- `cd web && npx tsc -b --noEmit` — passed with no output.
+- `cd web && npm run build` — passed: Vite transformed `332 modules` and
+  emitted the production bundle. Vite reported the pre-existing large-chunk
+  warning.
+- `cd web && npm run build-storybook` — passed: Storybook `8.6.18` built the
+  preview. Storybook reported its existing `eval` and large-chunk warnings.
+
 ## Size
 
 To be recorded at the end of each slice: changed lines under `web/`
