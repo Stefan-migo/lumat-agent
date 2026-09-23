@@ -213,7 +213,7 @@ def test_own_memory_read_interleaves_both_axes_before_truncating(monkeypatch):
 
 
 def test_own_memory_read_returns_bounded_digest_with_stable_shape(monkeypatch):
-    digest_limit = registry.MEMORY_READ_DIGEST_CONTENT_LIMIT
+    assert registry.MEMORY_READ_DIGEST_CONTENT_LIMIT == 500
     row = SimpleNamespace(
         id=7,
         scope="panel",
@@ -221,7 +221,7 @@ def test_own_memory_read_returns_bounded_digest_with_stable_shape(monkeypatch):
         topic_key="thread-note",
         titulo="Thread note",
         tipo="decision",
-        contenido="x" * (digest_limit + 1),
+        contenido="x" * 501,
         last_seen_at=None,
         review_after=None,
         created_at=None,
@@ -245,7 +245,7 @@ def test_own_memory_read_returns_bounded_digest_with_stable_shape(monkeypatch):
             "topic_key": "thread-note",
             "titulo": "Thread note",
             "tipo": "decision",
-            "contenido": "x" * digest_limit,
+            "contenido": "x" * 500,
             "last_seen_at": None,
             "review_after": None,
             "created_at": None,
