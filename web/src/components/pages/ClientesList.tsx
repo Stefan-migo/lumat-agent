@@ -63,6 +63,9 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   // The query drives the fetch through the hook's own refresh key, so an emptied search
   // refetches the unfiltered list instead of keeping the previous filtered result.
   const [queryVersion, setQueryVersion] = useState(0);
+  // Remounting the debounced input is the only way to clear it: the primitive owns its own
+  // text, so resetting our query state alone would leave the stale term on screen.
+  const [searchResetKey, setSearchResetKey] = useState(0);
   const fetchClients = useCallback(
     () => apiFetch<{ clients: Customer[] }>(`/panel/api/clients${query ? `?q=${encodeURIComponent(query)}` : ""}`).then((response) => response.clients),
     [query],
@@ -71,6 +74,12 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const data = controlledData === undefined ? fetched.data : controlledData;
   const state = controlledState ?? fetched.state;
   const retry = onRetry ?? fetched.retry;
+  const filtered = query.trim().length > 0;
+  const clearSearch = () => {
+    setQuery("");
+    setQueryVersion((current) => current + 1);
+    setSearchResetKey((current) => current + 1);
+  };
 
   return (
     <PageFrame
@@ -79,12 +88,17 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       state={stateMessage(state, retry)}
     >
       <div className="toolbar">
-        <SearchInput aria-label="Buscar clientes" onSearch={(next) => { setQuery(next); setQueryVersion((current) => current + 1); }} />
+        <SearchInput key={searchResetKey} aria-label="Buscar clientes" onSearch={(next) => { setQuery(next); setQueryVersion((current) => current + 1); }} />
         <Button variant="secondary" href="/panel/export/clients.csv">Exportar clientes CSV</Button>
         <Button variant="secondary" href="/panel/export/cases.csv">Exportar casos CSV</Button>
       </div>
       {state === "loading" ? null : data && data.length > 0 ? (
         <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} />
+      ) : filtered ? (
+        <div>
+          <EmptyState title="Sin resultados" description="Ajusta tu búsqueda o límpiala para ver todo el listado." />
+          <Button variant="secondary" onClick={clearSearch}>Limpiar búsqueda</Button>
+        </div>
       ) : state === "empty" || (state === "ready" && data?.length === 0) ? (
         <EmptyState title="No hay registros" description="Ajusta tu búsqueda o agrega nuevos clientes." />
       ) : null}

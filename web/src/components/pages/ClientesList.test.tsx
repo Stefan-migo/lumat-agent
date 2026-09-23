@@ -104,6 +104,27 @@ describe("ClientesList", () => {
     expect(screen.getByText("No hay registros")).toBeInTheDocument();
   });
 
+  // T7 — a filtered-to-zero result is distinguishable from an empty list, offers recovery,
+  // and the recovery actually clears the search field.
+  it("distinguishes a filtered-empty result and offers the search recovery", async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiFetch).mockImplementation(async (path: string) =>
+      String(path).includes("q=") ? { clients: [] } : { clients: customers },
+    );
+
+    render(<ClientesList />);
+    expect(await screen.findByText("Marcela Fuentes")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Buscar clientes"), "zzz");
+    expect(await screen.findByText("Sin resultados")).toBeInTheDocument();
+    expect(screen.queryByText("No hay registros")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Limpiar búsqueda" }));
+
+    await waitFor(() => expect(screen.getByText("Marcela Fuentes")).toBeInTheDocument());
+    expect(screen.getByLabelText("Buscar clientes")).toHaveValue("");
+  });
+
   it("renders the stale, partial-error and denied states", () => {
     const { unmount } = render(<ClientesList data={customers} state="stale" />);
     expect(screen.getByRole("heading", { name: "Datos posiblemente desactualizados" })).toBeInTheDocument();
