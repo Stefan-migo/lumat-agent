@@ -3,7 +3,7 @@
 **Branch**: `odd/r3-deferred-warnings`
 **Worktree**: `../lumat-agent-odd-r3-deferred-warnings`
 **Base**: `959e93a4` (= `main` at branch time)
-**Status**: in progress
+**Status**: complete — native review approved (lineage `review-ec730c06ffe3d86e`)
 
 ## Objective
 
@@ -97,18 +97,18 @@ and this unit adds it as a real assertion rather than merely avoiding a break.
 
 ## Checklist
 
-- [ ] **T1 — RED, W1**: add a test asserting that changing only `tipo` recomputes `review_after`
+- [x] **T1 — RED, W1**: add a test asserting that changing only `tipo` recomputes `review_after`
       (non-decaying → decaying sets it; decaying → non-decaying clears it). Observe it fail.
-- [ ] **T2 — GREEN, W1**: change the predicate in `update()` to `tipo is not None or content_changed`.
-- [ ] **T3 — Guard, W1**: add a test asserting a title-only change does **not** touch `review_after`.
+- [x] **T2 — GREEN, W1**: change the predicate in `update()` to `tipo is not None or content_changed`.
+- [x] **T3 — Guard, W1**: add a test asserting a title-only change does **not** touch `review_after`.
       This invariant has no coverage today (see correction above).
-- [ ] **T4 — RED/GREEN, W2**: delete `CAPABILITIES_TEXT_LIMIT` and the slice in `_assistant_capabilities`;
+- [x] **T4 — RED/GREEN, W2**: delete `CAPABILITIES_TEXT_LIMIT` and the slice in `_assistant_capabilities`;
       delete `test_assistant_capabilities_bounds_text` and the now-unused import; keep
       `test_assistant_capabilities_reports_every_whitelisted_tool_without_truncation` green.
-- [ ] **T5 — Spec**: update AT-12 wording in `openspec/specs/assistant-tools/spec.md` so it no longer
+- [x] **T5 — Spec**: update AT-12 wording in `openspec/specs/assistant-tools/spec.md` so it no longer
       claims a handler-owned text limit; assert completeness + exact count instead.
-- [ ] **T6 — Verify**: full suite green on a real test DB.
-- [ ] **T7 — RDD**: assess the branch and follow the returned transition.
+- [x] **T6 — Verify**: full suite green on a real test DB.
+- [x] **T7 — RDD**: assess the branch and follow the returned transition.
 
 ## Acceptance criteria
 
@@ -122,8 +122,21 @@ and this unit adds it as a real assertion rather than merely avoiding a break.
 
 ## Verification evidence
 
-- (pending) T1 RED output, final full-suite run, RDD assess transition.
+- **RED (T1)**: `test_memory_service_update_recomputes_review_after_when_tipo_becomes_decaying` failed with
+  `AssertionError: assert None is not None`; `..._clears_review_after_when_tipo_becomes_non_decaying`
+  failed because the stale `review_after` survived. Observed before the predicate change.
+- **GREEN (T6)**: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` — 1297 passed, 2 warnings.
+  Re-run by the parent after the doc commit: exit 0.
+- **Commits**: `e726abfb fix(memory): recompute review schedule when type changes`,
+  `ba300b91 fix(assistant): keep capability inventory complete`,
+  `0e671cd7 docs(odd): record r3-deferred-warnings work unit`.
+- **RDD (T7)**: candidate 5 files / 204 lines, tier `medium`, one lens `review-reliability`,
+  correction budget 102. Result: **approved with zero findings**; authority burned via
+  `review acknowledge-approved` (lineage `review-ec730c06ffe3d86e`, consumed revision
+  `sha256:38ec480b99ef6efdc1f1e3fb5e740d906b999d141ce8dbce0bf2204b2a282949`).
+- **Graph Check**: nodes listed under "Resolved execution config" were consulted before editing.
 
 ## Next step
 
-Implement T1 → T5, then run the full suite and the RDD assessment.
+Open the PR for `odd/r3-deferred-warnings` when the human asks. W3 and the `package-lock.json` hygiene
+remain separate decisions and were not touched.
