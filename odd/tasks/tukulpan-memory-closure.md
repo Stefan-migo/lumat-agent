@@ -91,13 +91,18 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   `tests/integration/test_assistant_harness_session.py` (thread creation) that it could not
   attribute; the parent re-run is **green (11 passed, exit 0)**, so it is recorded as an
   unreproduced signal, not as a candidate-caused failure.
-- [ ] **T4 — relations duplicate candidate IDs** (audit item 6, part 2)
+- [x] **T4 — relations duplicate candidate IDs** (audit item 6, part 2)
   Pin `relations._parse_verdicts()` with duplicated candidate IDs (`app/services/relations.py:61-94`),
   style `tests/spec/test_memory_relations_spec.py:158-195`.
-- [ ] **T5 — pin the declared two-writer ceiling** (audit item 3)
+  Status: **accepted** (`189a2b1d`). Pinned: a duplicated `candidate_id` is rejected
+  deterministically (`ValueError("invalid verdict value")`) and no relation is attributed.
+- [x] **T5 — pin the declared two-writer ceiling** (audit item 3)
   Pin, do not "fix": `tukulpan.py:340-341` declares two concurrent writers as the ceiling. Add an
   integration test in the style of `tests/integration/test_memory_write_conflict.py` proving a
   third writer re-raises instead of silently half-applying.
+  Status: **accepted** (`fc2af216`). Deterministic event choreography (no sleeps) forces the third
+  writer to lose both bounded attempts and re-raise `IntegrityError`, with only the second
+  writer's row persisted. Parent re-ran it three times consecutively: exit 0 each.
 - [ ] **T6 — project authorization inside the turn failure boundary** (audit item 5)
   `_thread_project_authorization()` runs before the turn's `try` (`agent_chat.py:633-640`), so its
   failure escapes the turn handler (`agent_chat.py:749-773`) and lands in the outer wrapper
@@ -157,8 +162,12 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   `memory.read`, with the raw error asserted absent from response and evidence.
 - **T3 accepted** (`c204880b`, `16f57d1d`, `6d21725b`): four contracts pinned; the fifth turned
   into a real fix — the write path no longer returns raw `str(exc)` as `degraded_reason`.
+- **T4 accepted** (`189a2b1d`) and **T5 accepted** (`fc2af216`): slice 2 (pinning) is complete.
 - Verification of record for T1+T8: `tests/unit + tests/spec + tests/integration/test_assistant_harness_guardrails.py`
   → exit 0, tree clean.
+- Slice 2 verification of record: `tests/unit + tests/spec` and
+  `tests/integration/test_memory_write_conflict.py` → exit 0, the concurrency test re-run three
+  times consecutively (exit 0 each), tree clean.
 - Authored lines: **501** on the branch against base (slice 1 ≈ 308, slice 2 = 193), task doc
   included.
 - Decisions taken by the human: T1 = extend `memory.read`; T8 = align everything to `own`/`customer`;
