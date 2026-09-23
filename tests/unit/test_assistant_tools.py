@@ -5,7 +5,6 @@ import pytest
 
 from app.chat.assistant.tools.registry import (
     AUTONOMOUS_WRITE_ALLOWLIST,
-    CAPABILITIES_TEXT_LIMIT,
     MAX_ITEMS,
     CapabilitiesArgs,
     MemoryArgs,
@@ -84,29 +83,6 @@ def test_assistant_capabilities_excludes_non_whitelisted_registry_entry(monkeypa
     assert result["tool_count"] == 1
     assert "customers.search" in result["capabilities"]
     assert "project.list" not in result["capabilities"]
-
-
-def test_assistant_capabilities_bounds_text(monkeypatch):
-    original = TOOL_REGISTRY["customers.search"]
-    monkeypatch.setitem(
-        TOOL_REGISTRY,
-        "customers.search",
-        ToolDefinition(
-            original.name,
-            original.args_model,
-            original.read_only,
-            original.handler,
-            "x" * (CAPABILITIES_TEXT_LIMIT + 100),
-        ),
-    )
-    monkeypatch.setattr(
-        "app.services.prompts.load_assistant_config",
-        lambda: SimpleNamespace(tools_whitelist=["customers.search"]),
-    )
-
-    result = _assistant_capabilities(SimpleNamespace(), CapabilitiesArgs())
-
-    assert len(result["capabilities"]) == CAPABILITIES_TEXT_LIMIT
 
 
 def test_memory_kpis_is_not_a_registered_tool():

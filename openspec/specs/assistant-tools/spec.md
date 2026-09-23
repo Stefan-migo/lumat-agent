@@ -223,7 +223,7 @@ The assistant boundary MUST degrade the turn when a read-only tool fails, preser
 
 ### Requirement: AT-12 — Declared Assistant Capability Inventory
 
-The assistant MUST expose `assistant.capabilities` as a read-only tool with no arguments. It MUST report every tool in the assistant's validated whitelist exactly once using the registry description and read/write classification. Its result MUST preserve the exact tool count and bound the newline-joined capability text to the handler-owned text limit without relying on the generic item limit. Registry tools absent from the whitelist MUST NOT appear. Capability answers MUST use only this tool result, and business questions MUST remain subject to the bounded knowledge-base grounding rule.
+The assistant MUST expose `assistant.capabilities` as a read-only tool with no arguments. It MUST report every tool in the assistant's validated whitelist exactly once using the registry description and read/write classification. Its result MUST preserve the exact whitelist count and include one capability line for every whitelisted tool, without relying on the generic item limit. Registry tools absent from the whitelist MUST NOT appear. Capability answers MUST use only this tool result, and business questions MUST remain subject to the bounded knowledge-base grounding rule.
 
 #### Scenario: Complete inventory is not item-truncated
 - GIVEN the assistant whitelist contains more entries than the generic item bound
