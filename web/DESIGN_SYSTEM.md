@@ -395,7 +395,7 @@ Use a dot or icon only as reinforcement. The visible label is mandatory.
 | Customer | `Nuevo`, `Contactado`, `Pendiente`, `Agendado`, `En evaluación`, `Finalizado`, `Cancelado`, `Postventa` | These are the eight real `customer_state` domain values, serialised raw by `to_customer_dict()`. `Agendado` and `Cancelado` are routine, not success or failure. Only states that need attention now carry the warning tone |
 | Case | `Abierto`, `En evaluación`, `Escalado`, `Cerrado` | Escalated is attention/danger; closed is not automatically success |
 | Appointment | `Reservada`, `Cancelada`, `Completada`, `No asistió` | A booking has not happened yet, so it is routine, not success; only `Completada` is a positive outcome, and `No asistió` is danger |
-| KB document | `Activo`, `Deshabilitado`, `Procesando`, `Error` | Pair processing/error with next action |
+| KB document | `Activo`, `Deshabilitado` (persisted) | Operation lifecycle: `Procesando`, `Error` (transient, page-level, paired with a next action) |
 | Reply window | `Respuesta disponible`, `Fuera de ventana` | Keep adjacent to composer |
 
 ### Data table

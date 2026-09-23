@@ -12,7 +12,7 @@ import { DataTable, tabularNum, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
-import { kbStatusLabel } from "../shared/toneMaps";
+import { KB_OPERATION_TONES, kbStatusLabel, kbStatusTone } from "../shared/toneMaps";
 
 export type KbListState = AsyncDataState | "processing" | "disable-confirmation";
 export interface KbListProps { data?: DocsResponse | null; state?: KbListState; onRetry?: () => void; }
@@ -85,7 +85,7 @@ const columns: Column<Doc>[] = [
   { key: "title", header: "Título", render: (doc) => doc.title },
   { key: "format", header: "Formato", render: (doc) => doc.format },
   { key: "version", header: "Versión", render: (doc) => `${doc.version} (activa: ${doc.active_version})` },
-  { key: "status", header: "Estado", render: (doc) => <Badge tone={doc.active ? "success" : "neutral"}>{kbStatusLabel(docStatus(doc))}</Badge> },
+  { key: "status", header: "Estado", render: (doc) => <Badge tone={kbStatusTone(docStatus(doc))}>{kbStatusLabel(docStatus(doc))}</Badge> },
   { key: "visibility", header: "Audiencia", render: (doc) => <Badge tone={doc.visibility === "customer" ? "success" : "neutral"}>{AUDIENCE_LABEL[doc.visibility]}</Badge> },
   { key: "cost", header: "Costo", render: (doc) => doc.cost_meta !== null ? tabularNum(`$${doc.cost_meta.toFixed(6)}`) : "—" },
 ];
@@ -101,8 +101,8 @@ const searchColumns: Column<KbSearchResult>[] = [
 function stateMessage(state: KbListState, storyError: boolean) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando base de conocimientos" />;
   if (state === "denied") return <StateMessage tone="danger" role="alert" title="No tienes permiso para ver este panel" />;
-  if (state === "error") return <StateMessage tone="danger" role="alert" title={storyError ? "No pudimos procesar el documento" : "No pudimos cargar la base de conocimientos"} />;
-  if (state === "processing") return <StateMessage tone="info" role="status" spinner title="Procesando documento" detail="Revisando el formato, tamaño y contenido. Verifica el estado en unos momentos." />;
+  if (state === "error") return <StateMessage tone={KB_OPERATION_TONES.error} role="alert" title={storyError ? "No pudimos procesar el documento" : "No pudimos cargar la base de conocimientos"} />;
+  if (state === "processing") return <StateMessage tone={KB_OPERATION_TONES.procesando} role="status" spinner title="Procesando documento" detail="Revisando el formato, tamaño y contenido. Verifica el estado en unos momentos." />;
   return null;
 }
 

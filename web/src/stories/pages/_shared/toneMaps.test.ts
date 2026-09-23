@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { BadgeTone } from "../../../components/primitives/Badge";
 import {
@@ -9,7 +10,10 @@ import {
   customerStateLabel,
   customerStateTone,
   directionLabel,
+  KB_OPERATION_LABELS,
+  KB_OPERATION_TONES,
   kbStatusLabel,
+  kbStatusTone,
 } from "./toneMaps";
 
 const VALID_TONES: BadgeTone[] = ["neutral", "success", "warning", "danger"];
@@ -172,8 +176,9 @@ describe("approved Spanish labels (DS-UI-LABELS)", () => {
     ["conversationLabel", conversationLabel, ["bot", "human", "closed", "pending", "escalated"]],
     // Documented Case.status values
     ["caseStatusLabel", caseStatusLabel, ["abierto", "en_evaluacion", "escalado", "cerrado"]],
-    // Documented KB activity states (activo/deshabilitado/procesando/error)
-    ["kbStatusLabel", kbStatusLabel, ["activo", "deshabilitado", "procesando", "error"]],
+    // Persisted KB document status values
+    ["kbStatusLabel", kbStatusLabel, ["activo", "deshabilitado"]],
+    // Page-owned KB operation lifecycle values
   ];
 
   for (const [name, label, keys] of domains) {
@@ -217,15 +222,40 @@ describe("approved Spanish labels (DS-UI-LABELS)", () => {
     expect(caseStatusLabel("cerrado")).toBe("Cerrado");
   });
 
-  it("matches the approved LABELS table for KB activity states", () => {
+  it("matches the approved LABELS table for KB document statuses", () => {
     expect(kbStatusLabel("activo")).toBe("Activo");
     expect(kbStatusLabel("deshabilitado")).toBe("Deshabilitado");
-    expect(kbStatusLabel("procesando")).toBe("Procesando");
-    expect(kbStatusLabel("error")).toBe("Error");
+    expect(kbStatusLabel("procesando")).toBe("procesando");
+    expect(kbStatusLabel("error")).toBe("error");
+  });
+
+  it("keeps KB operation lifecycle labels separate from document status", () => {
+    expect(KB_OPERATION_LABELS).toEqual({ procesando: "Procesando", error: "Error" });
+    expect(KB_OPERATION_LABELS).not.toHaveProperty("activo");
+  });
+
+  it("maps both KB status planes to approved tones", () => {
+    expect(kbStatusTone("activo")).toBe("success");
+    expect(kbStatusTone("deshabilitado")).toBe("neutral");
+    expect(KB_OPERATION_TONES).toEqual({ procesando: "info", error: "danger" });
   });
 
   it("matches the approved LABELS table for message directions", () => {
     expect(directionLabel("inbound")).toBe("Entrante");
     expect(directionLabel("outbound")).toBe("Saliente");
+  });
+});
+
+describe("KB status contract (DESIGN_SYSTEM.md)", () => {
+  it("documents persisted document status separately from transient operation lifecycle", () => {
+    const designSystem = readFileSync("DESIGN_SYSTEM.md", "utf8");
+    const kbRow = designSystem.split("\n").find((line) => line.startsWith("| KB document |"));
+    expect(kbRow).toBeDefined();
+    expect(kbRow).toContain("Activo");
+    expect(kbRow).toContain("Deshabilitado");
+    expect(kbRow).toContain("Procesando");
+    expect(kbRow).toContain("Error");
+    expect(kbRow).toContain("persisted");
+    expect(kbRow).toContain("transient");
   });
 });

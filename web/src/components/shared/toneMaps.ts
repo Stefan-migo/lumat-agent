@@ -1,4 +1,5 @@
 import type { BadgeTone } from "../primitives/Badge";
+import type { StateTone } from "./StateMessage";
 
 const CASE_STATUS_TONES: Record<string, BadgeTone> = { abierto: "neutral", en_evaluacion: "warning", escalado: "danger", cerrado: "success" };
 // Customer states are the real domain enum `customer_state`, emitted raw by
@@ -28,7 +29,10 @@ const CUSTOMER_STATE_LABELS: Record<string, string> = {
   postventa: "Postventa",
 };
 const CASE_STATUS_LABELS: Record<string, string> = { abierto: "Abierto", en_evaluacion: "En evaluación", escalado: "Escalado", cerrado: "Cerrado" };
-const KB_STATUS_LABELS: Record<string, string> = { activo: "Activo", deshabilitado: "Deshabilitado", procesando: "Procesando", error: "Error" };
+const KB_STATUS_TONES: Record<string, BadgeTone> = { activo: "success", deshabilitado: "neutral" };
+const KB_STATUS_LABELS: Record<string, string> = { activo: "Activo", deshabilitado: "Deshabilitado" };
+export const KB_OPERATION_TONES: Record<"procesando" | "error", StateTone> = { procesando: "info", error: "danger" };
+export const KB_OPERATION_LABELS: Record<"procesando" | "error", string> = { procesando: "Procesando", error: "Error" };
 const DIRECTION_LABELS: Record<string, string> = { inbound: "Entrante", outbound: "Saliente" };
 const APPOINTMENT_STATUS_TONES: Record<string, BadgeTone> = { booked: "neutral", cancelled: "neutral", completed: "success", no_show: "danger" };
 const APPOINTMENT_STATUS_LABELS: Record<string, string> = { booked: "Reservada", cancelled: "Cancelada", completed: "Completada", no_show: "No asistió" };
@@ -50,6 +54,7 @@ export function customerStateTone(state: string): BadgeTone { return CUSTOMER_ST
 export function conversationLabel(state: string): string { return CONVERSATION_LABELS[state] ?? state; }
 export function customerStateLabel(state: string): string { return CUSTOMER_STATE_LABELS[state] ?? state; }
 export function caseStatusLabel(status: string): string { return CASE_STATUS_LABELS[status] ?? status; }
+export function kbStatusTone(status: string): BadgeTone { return KB_STATUS_TONES[status] ?? "neutral"; }
 export function kbStatusLabel(state: string): string { return KB_STATUS_LABELS[state] ?? state; }
 export function directionLabel(direction: string): string { return DIRECTION_LABELS[direction] ?? direction; }
 export function appointmentStatusTone(status: string): BadgeTone { return APPOINTMENT_STATUS_TONES[status] ?? "neutral"; }
