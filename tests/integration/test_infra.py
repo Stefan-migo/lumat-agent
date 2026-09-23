@@ -113,6 +113,36 @@ def test_prod_api_build_wires_deployed_identity():
     assert "COPY pyproject.toml ./" in dockerfile
 
 
+def test_prod_api_service_has_a_writable_embedder_cache():
+    """odd/prod-embedder-cache: the prod api runs read_only, so the local embedding
+    model needs an explicit writable cache. `volumes: !override` silently drops
+    anything the base compose declares, which is how prod lost it in the first place.
+    """
+    compose_text = PROD_COMPOSE.read_text().replace("!reset", "").replace("!override", "")
+    compose = yaml.safe_load(compose_text)
+    api = compose["services"]["api"]
+
+    mounts = api.get("volumes", [])
+    assert any("/home/appuser/.cache" in str(m) for m in mounts), (
+        f"prod api must mount a writable embedder cache, got: {mounts}"
+    )
+    assert "embed-cache" in compose.get("volumes", {}), (
+        "compose must declare the embed-cache volume"
+    )
+
+    env = api.get("environment", {})
+    assert "HF_HOME" in env, "prod api must set HF_HOME for the hf_hub/xet cache"
+    assert "FASTEMBED_CACHE_PATH" in env, "prod api must set FASTEMBED_CACHE_PATH"
+
+    dockerfile = DOCKERFILE.read_text()
+    assert "/home/appuser/.cache" in dockerfile, (
+        "Dockerfile must pre-create the cache dir so the named volume is appuser-writable"
+    )
+
+    assert api.get("read_only") is True, "the read-only hardening must stay"
+    assert not api.get("ports"), "prod api must not publish host ports"
+
+
 def test_env_example_exists_and_has_required_names():
     assert ENV_EXAMPLE.exists(), "infra/.env.example missing"
     content = ENV_EXAMPLE.read_text()

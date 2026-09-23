@@ -30,10 +30,11 @@ COPY --from=build /app/.venv /app/.venv
 COPY pyproject.toml ./
 COPY app/ app/
 COPY db/ db/
-# Pre-create the media dir with appuser ownership so a fresh named volume at
-# /app/media inherits writable perms (SH-2: media/ is the only writable path;
-# without this, docker seeds the volume as root and media downloads fail).
-RUN mkdir -p /app/media && chown -R appuser:appuser /app
+# Pre-create the writable mount points with appuser ownership so a fresh named
+# volume at either path inherits writable perms: /app/media (SH-2 — WhatsApp
+# media) and /home/appuser/.cache (odd/prod-embedder-cache — the local embedding
+# model cache). Without this, docker seeds the volume as root and writes fail.
+RUN mkdir -p /app/media /home/appuser/.cache && chown -R appuser:appuser /app /home/appuser
 USER appuser
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
