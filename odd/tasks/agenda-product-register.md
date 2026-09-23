@@ -192,7 +192,10 @@ is not in this unit's scope.
   24h slot in the appointment's own zone, a long day heading, a comparable
   `YYYY-MM-DD` day key, and a reader-clock freshness stamp. The
   `dateStyle`/`timeStyle` timestamps elsewhere in the panel are a different role
-  and are explicitly out of scope.
+  and are explicitly out of scope. The promotion rule (D3) applies **per role**: a
+  role enters the shared module when two consumers use it today; a role with a
+  single consumer stays local until a second one exists, and which roles moved is
+  recorded rather than assumed.
 - **D5 — Both surfaces read an agenda slot the same way: 24 hours.** The
   technician's rationale (`:23-24`) is not surface-specific — an agenda slot must
   be unambiguous, and a meridiem repeated across a range is noise. One contract,
