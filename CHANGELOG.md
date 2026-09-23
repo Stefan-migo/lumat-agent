@@ -6,6 +6,38 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.09.3] - 2026-09-23
+
+This release carries the operational fix that lets the bot answer at all in
+production, plus a batch of chat, memory, assistant and panel corrections
+merged since `v2026.09.2`.
+
+### Added
+
+- The assistant's declared capability inventory is exposed as a tool, so the operator can see what the agent can actually do.
+- Autonomous memory correction tools, under the existing audit trail.
+- Agent memory is scoped to the chat thread's project namespace, keeping unrelated projects out of a thread's recall.
+- Panel knowledge answers are gated on retrieved evidence instead of being answered without a source.
+- A customer turn closes on a farewell or outside business hours instead of running on.
+- The panel keeps watching a run whose stream gave up, so a long turn no longer looks abandoned.
+- The local embedder is prewarmed off the boot path, so no operator turn pays the model load.
+
+### Changed
+
+- The retrieval chunking axis is now measurable with the calibration harness, and it was measured: production stays at the shipped 500/50, because smaller chunks are strictly worse. No production behavior change.
+- The opencode tools lockfile is tracked, which stops it from reappearing as untracked noise in every new worktree.
+
+### Fixed
+
+- **Production can now write the embedding model cache.** The prod compose override replaced the api volume list and silently lost the fastembed cache mount, so the first real inbound message failed with `Read-only file system` and was marked `failed`. The container now has a writable, durable cache volume, pinned by a regression test.
+- The deterministic emergency gate escalates first-person gas-smell phrasings ("huelo gas"), which previously fell through to commercial classification.
+- Panel assistant reads no longer end the turn when a read-only tool fails; they degrade instead.
+- An unavailable knowledge base is reported honestly on both chat paths.
+- Memory recall admits literal phrases per channel, and a memory's review schedule is recomputed when its type changes.
+- Duplicate weekdays within a schedule entry are rejected.
+- The panel shell is served network-first, so a deploy can no longer strand a browser on a stale service worker.
+- The VPS backup, monitor and certificate-renewal tooling was repaired: it could not write the backups volume, could not send alerts, and had no crons installed.
+
 ## [2026.09.2] - 2026-09-22
 
 This catch-up release contains the product changes merged since `v2026.09.1`,
