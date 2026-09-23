@@ -6,6 +6,14 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.09.4] - 2026-09-23
+
+This release carries the correction for the admin panel's blank screen, and nothing else.
+
+### Fixed
+
+- **A case without a service no longer blanks the admin panel.** An escalated case is created with `Case.service` unset, the KPI aggregate published that `NULL` raw, and the panel's motive chip then called `.length` on it inside render; with no error boundary in the SPA, one unclassified case blanked the whole panel. The aggregate now buckets it as `sin clasificar`, and the chip tolerates a null motive as a second line of defence. A latent defect uncovered by the first real production data, not a regression of `v2026.09.3`.
+
 ## [2026.09.3] - 2026-09-23
 
 This release carries the operational fix that lets the bot answer at all in
