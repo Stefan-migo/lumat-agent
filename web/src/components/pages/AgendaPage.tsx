@@ -111,12 +111,12 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const section = (title: string, rows: AgendaAppointment[]) => (
     <section className="agenda-page__section" aria-labelledby={`agenda-${title.toLowerCase()}`}>
       <h2 id={`agenda-${title.toLowerCase()}`}>{title}</h2>
-      {rows.length > 0 ? <div className="agenda-page__table-wrap"><DataTable columns={columns} rows={rows} emptyMessage="No hay visitas" rowKey={(row) => String(row.id)} actions={actions} actionsHeader="Acciones" /></div> : null}
+      {rows.length > 0 ? <div className="agenda-page__table-wrap"><div className="data-region"><DataTable columns={columns} rows={rows} emptyMessage="No hay visitas" rowKey={(row) => String(row.id)} actions={actions} actionsHeader="Acciones" /></div></div> : null}
     </section>
   );
 
   return <PageFrame title="Agenda" meta={data ? `${appointments.length} ${appointments.length === 1 ? "visita" : "visitas"}` : undefined} state={stateMessage(state, retry)}>
-    {state === "loading" || state === "error" || state === "denied" ? null : data?.length === 0 || state === "empty" ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : <>{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</>}
+    {state === "loading" || state === "error" || state === "denied" ? null : data?.length === 0 || state === "empty" ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : <section aria-label="Registro de agenda">{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</section>}
     <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title="Cancelar visita">
       <p>La visita no podrá volver a reservarse después de cancelarla.</p>
       <Textarea id="cancel-reason" label="Motivo de cancelación" value={reason} onChange={(event) => setReason(event.target.value)} />

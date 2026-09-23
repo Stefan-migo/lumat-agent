@@ -86,6 +86,15 @@ describe('AgendaPage', () => {
     expect(today).not.toHaveTextContent('No hay visitas');
   });
 
+  it('names the register region and surfaces only non-empty tables', () => {
+    const { rerender } = render(<AgendaPage data={[appointment(), appointment({ id: 2, local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
+    expect(screen.getByRole('region', { name: 'Registro de agenda' })).toBeInTheDocument();
+    expect(document.querySelectorAll('.data-region')).toHaveLength(2);
+
+    rerender(<AgendaPage data={[appointment({ local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
+    expect(document.querySelectorAll('.data-region')).toHaveLength(1);
+  });
+
   it('shows a labelled empty state and keeps the table wrapper mobile-safe', () => {
     const { container } = render(<AgendaPage data={[]} state="empty" />);
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
