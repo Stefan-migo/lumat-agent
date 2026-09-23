@@ -96,11 +96,11 @@ function AppointmentCard({ row }: { row: TechnicianAppointment }) {
       <p className="technician-agenda__service">{row.service}</p>
       <strong>{row.customer.name ?? 'Cliente sin nombre'}</strong>
       {mapQuery
-        ? <Button variant="secondary" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}>{row.customer.address ?? 'Dirección no registrada'}</Button>
+         ? <Button className="technician-agenda__field-control" variant="secondary" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}>{row.customer.address ?? 'Dirección no registrada'}</Button>
         : <span>Dirección no registrada</span>}
       <span>{row.customer.comuna ?? 'Comuna no registrada'}</span>
       {row.customer.phone
-        ? <Button className="technician-agenda__call" variant="secondary" href={`tel:${row.customer.phone}`}>{row.customer.phone}</Button>
+         ? <Button className="technician-agenda__field-control" variant="secondary" href={`tel:${row.customer.phone}`}>{row.customer.phone}</Button>
         : <span>Teléfono no registrado</span>}
       {row.case_summary ? <p>{row.case_summary}</p> : null}
     </article>

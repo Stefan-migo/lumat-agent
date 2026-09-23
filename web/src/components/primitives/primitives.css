@@ -1568,9 +1568,9 @@
 .technician-agenda__safety {
   justify-self: start;
 }
-/* The item is a grid, so children stretch by default. The call control must hug
-   its own label: a full-width 990px "phone number" button is not a phone number. */
-.technician-agenda__call {
+/* The item is a grid, so children stretch by default. Field controls hug their
+   own labels: a full-width 990px "phone number" button is not a phone number. */
+.technician-agenda__field-control {
   justify-self: start;
 }
 
