@@ -6,6 +6,34 @@ and this project uses CalVer in the `YYYY.MM.N` format.
 
 ## [Unreleased]
 
+## [2026.09.5] - 2026-09-23
+
+This release carries the operational fix that lets the assistant answer at all in production,
+plus the retrieval-calibration harness correction merged since `v2026.09.4`.
+
+### Fixed
+
+- **The production image now ships the assistant's declarative configuration.** The prod
+  `Dockerfile` copied `app/` and `db/` but never `agent/`, so `app/agent_registry.py:223`
+  resolved `/app/agent/registry.yaml` to nothing and `load_registry()` raised
+  `registry file not found` on the first assistant turn: the panel answered with the raw error
+  and the turn produced no reply. The failure was never at boot — `build_graph()` runs per
+  message (`app/chat/graph.py:300`), so the container started, `/health` returned 200 and the
+  webhook handshake passed while every turn failed. `prompts.load()` degrades silently to its
+  literal `FALLBACKS` when a file is missing (`app/services/prompts.py:113-120`), so a fix that
+  shipped only `registry.yaml` would have left production on the hardcoded fallback personas and
+  prompts without a word; the whole tree is shipped now. The prod image has never contained
+  `agent/`, so `v2026.09.1` through `v2026.09.4` fail identically on this path: **there is no
+  known-good tag to roll back to.** A regression test asserts the image copies every repo-root
+  path the runtime resolves.
+- **The retrieval-calibration harness restores the module state it overrides.** `run()` replaced
+  `kb.chunk_text` (via `--chunk-size` / `--chunk-overlap`) and `kb.EMBED_MODEL` / `kb._embedder`
+  (via `--model`) for the duration of a measurement and never put them back, so a second
+  programmatic `run()` without overrides reported the defaults while still using the previous
+  call's values. An `override_kb(...)` context manager restores all three on every exit path,
+  including an exception mid-run, and the report is built inside the scope so it keeps recording
+  what was actually measured. The documented CLI use, one `run()` per process, was never affected.
+
 ## [2026.09.4] - 2026-09-23
 
 This release carries the correction for the admin panel's blank screen, and nothing else.
