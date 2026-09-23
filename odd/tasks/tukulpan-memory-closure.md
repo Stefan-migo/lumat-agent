@@ -106,15 +106,20 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
 - [ ] **T6 — project authorization inside the turn failure boundary** (audit item 5)
   `_thread_project_authorization()` runs before the turn's `try` (`agent_chat.py:633-640`), so its
   failure escapes the turn handler (`agent_chat.py:749-773`) and lands in the outer wrapper
-  (`agent_chat.py:781-810`). Move it inside the protected boundary or catch it and write the same
-  bounded failure metadata. **Open decision**: same user-visible failure as an ordinary turn, or a
-  distinct authorization diagnostic.
+  (  `agent_chat.py:781-810`). Move it inside the protected boundary or catch it and write the same
+  bounded failure metadata. **Decision (resolved from evidence, not asked)**: the same turn error
+  path handles it. The recorded review advisory (Engram 4614, review of `memory-per-project-thread`)
+  states exactly that what is missing is "that the turn's own error path handles it and publishes the
+  live push"; a distinct authorization diagnostic would be new surface with no requirement behind it.
+  No new error classification: the fix is to bring the resolution inside the boundary.
 - [ ] **T7 — panel entry point: open a conversation bound to a project** (audit item 4)
   Threads already carry `proyecto` (migration 031) and the API accepts it
   (`app/panel/api/routes/chat.py:55-81`), but the UI never binds it: `createChatThread()` posts
   `{}` (`web/src/api.ts:102-108`, `AgentChat.tsx:535-545`) and the project page only shows SDB
-  artifacts (`ProjectsPage.tsx:13-30`). **Open decision**: where the entry point lives and whether
-  the project binding is URL-addressable.
+  artifacts (`ProjectsPage.tsx:13-30`). **Decision (human)**: the entry point is URL-addressable.
+  The project page navigates to `/panel/app/chat?proyecto=<slug>`, `AgentChat` reads that query
+  parameter and creates or reuses the thread bound to that project, reusing the deep-link pattern the
+  page already has for `threadId`.
 
 - [x] **T8 — align the public memory scope contract across spec, prose and prompt** (found by
   T1's independent verification; human decided to close it inside this unit)
