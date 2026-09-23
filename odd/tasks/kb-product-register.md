@@ -116,9 +116,9 @@ consumers (`ClientesList.tsx:101`, `ClientFicha.tsx:230`).
 - **`web/src/stories/pages/KbDocumentDetail.stories.tsx` (new) and its test**
 - **`web/src/components/pages/ClientFicha.tsx` and `ClientFicha.test.tsx`** — only to
   promote the two-region grid to a neutral shared contract. The KB detail needs the
-  same grid; borrowing `.client-ficha*` would make the names lie and couple two
-  unrelated pages, which is exactly what this repo refused to do when it created the
-  neutral `.data-region` instead of borrowing a page class.
+   same `.detail-region` grid; borrowing `.client-ficha*` would make the names lie and
+   couple two unrelated pages, which is exactly what this repo refused to do when it
+   created the neutral `.data-region` instead of borrowing a page class.
 - the KB section of `web/src/components/primitives/primitives.css`
 - `web/src/components/shared/toneMaps.ts`
 - `web/src/stories/pages/KbList.stories.tsx` and its test

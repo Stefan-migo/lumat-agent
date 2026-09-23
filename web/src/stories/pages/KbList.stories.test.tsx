@@ -21,11 +21,34 @@ describe("KbList page", () => {
     const table = screen.getByRole("table");
     const first = docs[0];
     const row = within(table).getByText(`#${first.id}`).closest("tr") as HTMLElement;
+    for (const header of ["#", "Título", "Formato", "Versión", "Estado", "Audiencia", "Costo"]) {
+      expect(within(table).getByRole("columnheader", { name: header })).toBeInTheDocument();
+    }
+    expect(within(row).getByText(first.title)).toBeInTheDocument();
     expect(within(row).getByText(first.format)).toBeInTheDocument();
     expect(within(row).getByText(`${first.version} (activa: ${first.active_version})`)).toBeInTheDocument();
     expect(within(row).getByText(kbStatusLabel(first.active ? "activo" : "deshabilitado"))).toBeInTheDocument();
     expect(within(row).getByText("$0.000412")).toBeInTheDocument();
     expect(within(row).getByText("Cliente y Lumat")).toBeInTheDocument();
+  });
+
+  it("renders an approved Spanish status label per document (triangulation across activo/deshabilitado)", () => {
+    render(<KbListView />);
+    const table = screen.getByRole("table");
+    const inactive = docs.find((doc) => !doc.active)!;
+    const inactiveRow = within(table).getByText(`#${inactive.id}`).closest("tr") as HTMLElement;
+    const inactiveBadge = within(inactiveRow)
+      .getAllByText(kbStatusLabel("deshabilitado"))
+      .find((element) => element.getAttribute("data-tone") === "neutral");
+    expect(inactiveBadge, "the inactive badge should render the approved label").toBeDefined();
+    expect(within(inactiveRow).getByText("Interno (solo Lumat)")).toBeInTheDocument();
+
+    const active = docs.find((doc) => doc.active)!;
+    const activeRow = within(table).getByText(`#${active.id}`).closest("tr") as HTMLElement;
+    const activeBadge = within(activeRow)
+      .getAllByText(kbStatusLabel("activo"))
+      .find((element) => element.getAttribute("data-tone") === "success");
+    expect(activeBadge, "the active badge should render the approved label").toBeDefined();
   });
 
   it("links each document title to its detail without inline operation controls", async () => {
@@ -101,14 +124,40 @@ describe("KbList search panel", () => {
   it("renders loading, ready, empty, generic error and denied search states", async () => {
     const user = userEvent.setup();
     const results = [{ document_id: 1, title: docs[0].title, version: 3, chunk_index: 0, content: "Respuesta", source_meta: null, similarity: 0.9 }];
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ results }), { status: 200 }));
-    render(<KbList />);
-    const searchCard = await openSearch();
-    await user.click(within(searchCard).getByRole("button", { name: "Buscar" }));
-    expect(await within(searchCard).findByText("1 resultados ordenados por similitud.")).toBeInTheDocument();
-    expect(within(searchCard).getByText("Respuesta")).toBeInTheDocument();
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const runSearch = async (response: Response, assertion: (searchCard: HTMLElement) => Promise<void>) => {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
+      fetchMock.mockResolvedValueOnce(response);
+      const view = render(<KbList />);
+      const searchCard = await openSearch();
+      await user.click(within(searchCard).getByRole("button", { name: "Buscar" }));
+      await assertion(searchCard);
+      view.unmount();
+    };
+
+    await runSearch(new Response(JSON.stringify({ results }), { status: 200 }), async (searchCard) => {
+      expect(await within(searchCard).findByText("1 resultados ordenados por similitud.")).toBeInTheDocument();
+      expect(within(searchCard).getByText("Respuesta")).toBeInTheDocument();
+    });
+    await runSearch(new Response(JSON.stringify({ results: [] }), { status: 200 }), async (searchCard) => {
+      expect(await within(searchCard).findByText("No encontramos resultados")).toBeInTheDocument();
+    });
+    await runSearch(new Response(JSON.stringify({ detail: "search failed" }), { status: 500 }), async (searchCard) => {
+      expect(await within(searchCard).findByRole("alert")).toHaveTextContent("No pudimos realizar la búsqueda");
+    });
+    await runSearch(new Response(JSON.stringify({ detail: "search forbidden" }), { status: 403 }), async (searchCard) => {
+      expect(await within(searchCard).findByRole("alert")).toHaveTextContent("No tienes permiso para buscar en la base de conocimientos");
+    });
+
+    let resolveSearch!: (response: Response) => void;
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
+    fetchMock.mockReturnValueOnce(new Promise((resolve) => { resolveSearch = resolve; }));
+    const loadingView = render(<KbList />);
+    const loadingCard = await openSearch();
+    await user.click(within(loadingCard).getByRole("button", { name: "Buscar" }));
+    expect(await within(loadingCard).findByRole("status")).toHaveTextContent("Buscando en la base de conocimientos");
+    resolveSearch(new Response(JSON.stringify({ results: [] }), { status: 200 }));
+    loadingView.unmount();
     fetchMock.mockRestore();
   });
 });
@@ -138,13 +187,17 @@ describe("KbList API page", () => {
     render(<KbList />);
     await screen.findByText(docs[0].title);
     const addCard = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
+    expect(within(addCard).getByLabelText("Audiencia")).toHaveValue("internal");
+    await user.selectOptions(within(addCard).getByLabelText("Audiencia"), "customer");
     await user.type(within(addCard).getByLabelText("Título"), "Guide");
     await user.upload(within(addCard).getByLabelText(/archivo/i), new File(["# Content"], "guide.md", { type: "text/markdown" }));
     await user.click(within(addCard).getByRole("button", { name: "Agregar" }));
     const request = fetchMock.mock.calls[1][1] as RequestInit;
     expect(request.method).toBe("POST");
     expect(request.body).toBeInstanceOf(FormData);
-    expect((request.body as FormData).get("visibility")).toBe("internal");
+    expect((request.body as FormData).get("title")).toBe("Guide");
+    expect((request.body as FormData).get("file")).toBeInstanceOf(File);
+    expect((request.body as FormData).get("visibility")).toBe("customer");
     expect((request.headers as Record<string, string> | undefined)?.["Content-Type"]).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
     fetchMock.mockRestore();

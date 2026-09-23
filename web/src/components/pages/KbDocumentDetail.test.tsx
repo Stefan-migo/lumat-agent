@@ -55,14 +55,17 @@ describe("KB document detail route", () => {
     render(<KbDocumentDetail data={document} state="ready" />);
 
     const surface = screen.getByRole("heading", { name: document.title }).closest("main") as HTMLElement;
-    const rail = surface.querySelector(".client-ficha__rail") as HTMLElement;
-    expect(surface.querySelector(".client-ficha__rail")).toBeInTheDocument();
-    expect(surface.querySelector(".client-ficha__main")).toBeInTheDocument();
+    const rail = surface.querySelector(".detail-region__rail") as HTMLElement;
+    expect(surface.querySelector(".detail-region")).toBeInTheDocument();
+    expect(surface.querySelector(".detail-region__rail")).toBeInTheDocument();
+    expect(surface.querySelector(".detail-region__main")).toBeInTheDocument();
     expect(within(rail).getByText("Título")).toBeInTheDocument();
     expect(within(rail).getByText(document.title)).toBeInTheDocument();
     for (const label of ["Formato", "Versión activa", "Cantidad de versiones", "Estado", "Audiencia", "Proveedor", "Modelo", "Costo", "Creado"]) {
       expect(within(rail).getByText(label)).toBeInTheDocument();
     }
+    expect(within(rail).getByText(document.provider)).toBeInTheDocument();
+    expect(within(rail).getByText(document.model)).toBeInTheDocument();
   });
 
   it("keeps disable confirmation page-owned and names the document", async () => {
@@ -76,6 +79,27 @@ describe("KB document detail route", () => {
     expect(alert).toHaveTextContent(document.title);
     expect(alert).toHaveTextContent(/el agente dejará de responder/i);
     expect(screen.getByRole("button", { name: "Confirmar" })).toBeInTheDocument();
+  });
+
+  it("keeps only the latest confirmation open when workflows overlap", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...document, active: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...document, active: false }), { status: 200 }));
+    render(<KbDocumentDetail data={document} state="ready" />);
+
+    await user.selectOptions(screen.getByLabelText("Restaurar"), "1");
+    await user.click(screen.getByRole("button", { name: "Restaurar" }));
+    await user.click(screen.getByRole("button", { name: "Deshabilitar" }));
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Confirmar" })).toHaveLength(1);
+    expect(screen.getByRole("alert")).toHaveTextContent("Confirma la desactivación");
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith(`/kb/${document.id}/disable`))).toBe(true);
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith(`/kb/${document.id}/restore`))).toBe(false);
+    fetchMock.mockRestore();
   });
 
   it("renders the detail fetch states", () => {
@@ -107,11 +131,32 @@ describe("KB document detail route", () => {
     render(<KbDocumentDetail data={document} state="ready" />);
     await user.selectOptions(screen.getByLabelText("Restaurar"), "1");
     await user.click(screen.getByRole("button", { name: "Restaurar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/reabrirá como Interno \(solo Lumat\)/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/dejará de usarlo para responder a clientes/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/marques como Cliente y Lumat/i);
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
     await user.selectOptions(screen.getByLabelText("Audiencia"), "internal");
     await user.click(screen.getByRole("button", { name: "Cambiar audiencia" }));
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes(`/kb/${document.id}/restore`))).toBe(true);
-    expect(fetchMock.mock.calls.some(([input]) => String(input).includes(`/kb/${document.id}/visibility`))).toBe(true);
+    const visibilityCall = fetchMock.mock.calls.find(([input]) => String(input).includes(`/kb/${document.id}/visibility`));
+    expect(visibilityCall).toBeDefined();
+    expect(JSON.parse(visibilityCall?.[1]?.body as string)).toEqual({ visibility: "internal" });
+    fetchMock.mockRestore();
+  });
+
+  it.each([400, 422])("maps %i validation failures to safe actionable feedback", async (status) => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      if (init?.method === "POST") return new Response(JSON.stringify({ detail: "database secret" }), { status });
+      return new Response(JSON.stringify({ ...document, content: "Contenido existente" }), { status: 200 });
+    });
+    render(<KbDocumentDetail data={document} state="ready" />);
+    await user.click(screen.getByText("Editar contenido"));
+    await screen.findByDisplayValue("Contenido existente");
+    await user.click(screen.getByRole("button", { name: /guardar/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Revisa los campos e inténtalo nuevamente.");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("database secret");
     fetchMock.mockRestore();
   });
 

@@ -30,6 +30,10 @@ type Mutation = "edit" | "disable" | "restore" | "visibility";
 type Confirmation = { kind: "disable"; doc: KbDocument } | { kind: "restore"; doc: KbDocument; version: number };
 type Feedback = { tone: "success" | "danger"; title: string };
 
+function docStatus(doc: KbDocument): "activo" | "deshabilitado" {
+  return doc.active ? "activo" : "deshabilitado";
+}
+
 const AUDIENCE_LABEL: Record<KbVisibility, string> = {
   customer: "Cliente y Lumat",
   internal: "Interno (solo Lumat)",
@@ -52,7 +56,7 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
     return getKbDocument(documentId);
   }, [documentId]);
   const fetched = useAsyncData(fetchDocument, documentId !== undefined && controlledData === undefined);
-  const document = controlledData ?? fetched.data;
+  const doc = controlledData ?? fetched.data;
   const state = controlledState ?? (controlledData !== undefined ? "ready" : fetched.state);
   const retry = onRetry ?? fetched.retry;
   const [refreshed, setRefreshed] = useState<KbDocument | null>(null);
@@ -61,9 +65,9 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [content, setContent] = useState<string | null>(null);
   const [contentState, setContentState] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [visibility, setVisibility] = useState<KbVisibility>(document?.visibility ?? "internal");
+  const [visibility, setVisibility] = useState<KbVisibility>(doc?.visibility ?? "internal");
   const [restoreVersion, setRestoreVersion] = useState(1);
-  const current = refreshed ?? document;
+  const current = refreshed ?? doc;
   useEffect(() => {
     if (!current) return;
     setVisibility(current.visibility);
@@ -100,22 +104,22 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
     }
   };
 
-  if (!document) {
+  if (!doc) {
     return <PageFrame title="Documento de base de conocimientos" actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a documentos</Button>} state={stateMessage(state)}>{state === "error" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}</PageFrame>;
   }
 
   if (!current) return null;
 
   return <PageFrame title={current.title} actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a documentos</Button>} state={stateMessage(state)}>
-    <div className="client-ficha">
-      <section className="client-ficha__rail" aria-label="Identidad del documento">
+    <div className="detail-region">
+      <section className="detail-region__rail" aria-label="Identidad del documento">
         <Card title="Identidad">
-          <dl className="client-ficha__facts">
+          <dl className="detail-region__facts">
             <div><dt>Título</dt><dd>{current.title}</dd></div>
             <div><dt>Formato</dt><dd>{current.format}</dd></div>
             <div><dt>Versión activa</dt><dd>v{current.active_version}</dd></div>
             <div><dt>Cantidad de versiones</dt><dd>{current.version}</dd></div>
-            <div><dt>Estado</dt><dd><Badge tone={kbStatusTone(current.active ? "activo" : "deshabilitado")}>{kbStatusLabel(current.active ? "activo" : "deshabilitado")}</Badge></dd></div>
+            <div><dt>Estado</dt><dd><Badge tone={kbStatusTone(docStatus(current))}>{kbStatusLabel(docStatus(current))}</Badge></dd></div>
             <div><dt>Audiencia</dt><dd>{AUDIENCE_LABEL[current.visibility]}</dd></div>
             <div><dt>Proveedor</dt><dd>{current.provider ?? "—"}</dd></div>
             <div><dt>Modelo</dt><dd>{current.model ?? "—"}</dd></div>
@@ -125,7 +129,7 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
         </Card>
       </section>
 
-      <div className="client-ficha__main">
+      <div className="detail-region__main">
         {feedback ? <StateMessage tone={feedback.tone} role="alert" title={feedback.title} /> : null}
         <Card title="Operaciones">
           <details onToggle={(event) => { if (event.currentTarget.open && contentState === "idle") void loadContent(); }}>
@@ -135,7 +139,7 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
               {contentState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando contenido" /> : null}
               {contentState === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar el contenido" detail="Reintenta antes de guardar para evitar reemplazar el texto almacenado." /> : null}
               <Textarea label="Contenido" rows={5} value={content ?? ""} onChange={(event) => setContent(event.target.value)} disabled={contentState !== "ready" || busy !== null} id={`kb-content-${current.id}`} />
-              <Button variant="secondary" disabled={busy !== null || contentState !== "ready"} onClick={() => void mutate("edit", () => editKbDocument(current.id, { title: (globalThis.document.getElementById(`kb-title-${current.id}`) as HTMLInputElement).value, content: content ?? "" }))}>Guardar (nueva versión)</Button>
+              <Button variant="secondary" disabled={busy !== null || contentState !== "ready"} onClick={() => void mutate("edit", () => editKbDocument(current.id, { title: (document.getElementById(`kb-title-${current.id}`) as HTMLInputElement).value, content: content ?? "" }))}>Guardar (nueva versión)</Button>
             </div>
           </details>
 
