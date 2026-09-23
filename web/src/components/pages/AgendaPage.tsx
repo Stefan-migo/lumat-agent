@@ -38,7 +38,7 @@ function stateMessage(state: AgendaPageState, retry: () => void) {
 }
 
 const columns: Column<AgendaAppointment>[] = [
-  { key: "time", header: "Hora", render: (row) => new Intl.DateTimeFormat("es-CL", { timeZone: row.timezone, hour: "2-digit", minute: "2-digit" }).format(new Date(row.starts_at)) },
+  { key: "time", header: "Hora", render: (row) => new Intl.DateTimeFormat("es-CL", { timeZone: row.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(row.starts_at)) },
   { key: "service", header: "Servicio", render: (row) => row.service },
   { key: "customer", header: "Cliente", render: (row) => row.customer_name ?? "—" },
   { key: "technician", header: "Técnico", render: (row) => row.technician_name ?? "—" },

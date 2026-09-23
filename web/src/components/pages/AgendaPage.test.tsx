@@ -71,6 +71,12 @@ describe('AgendaPage', () => {
     expect(screen.getByText('2 visitas')).toBeInTheDocument();
   });
 
+  it('renders appointment slots in 24-hour time', () => {
+    render(<AgendaPage data={[appointment({ starts_at: '2026-09-05T18:00:00+00:00' })]} state="ready" />);
+    expect(screen.getByText('14:00')).toBeInTheDocument();
+    expect(screen.queryByText(/a\. m\.|p\. m\./i)).not.toBeInTheDocument();
+  });
+
   it('shows a labelled empty state and keeps the table wrapper mobile-safe', () => {
     const { container } = render(<AgendaPage data={[]} state="empty" />);
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
