@@ -35,8 +35,8 @@ function requestDates(timezone: string) {
 function stateMessage(state: AgendaPageState, retry: () => void) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando agenda" />;
   if (state === "denied") return <StateMessage tone="danger" role="alert" title="No tienes permiso para ver la agenda" />;
-  if (state === "stale") return <div><StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="La agenda muestra la última información disponible." /><button type="button" onClick={retry}>Reintentar</button></div>;
-  if (state === "error") return <div><StateMessage tone="danger" role="alert" title="No pudimos cargar la agenda" detail="Reintenta para recuperar las visitas." /><button type="button" onClick={retry}>Reintentar</button></div>;
+  if (state === "stale") return <div><StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="La agenda muestra la última información disponible." /><Button variant="secondary" onClick={retry}>Reintentar</Button></div>;
+  if (state === "error") return <div><StateMessage tone="danger" role="alert" title="No pudimos cargar la agenda" detail="Reintenta para recuperar las visitas." /><Button variant="secondary" onClick={retry}>Reintentar</Button></div>;
   return null;
 }
 
