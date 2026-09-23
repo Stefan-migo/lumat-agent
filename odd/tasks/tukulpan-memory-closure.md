@@ -180,5 +180,7 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
 
 ## Next step
 
-T4 + T5 (mechanical pinning, no open decisions) close slice 2, then resolve the T6/T7 open
-decisions for slice 3.
+Slice 1 (T1+T8) and slice 2 (T2/T3/T4/T5) are complete and verified; both await push/PR
+authorization. Slice 3 needs two human decisions first: T6 (is a project-resolution failure the
+same user-visible failure as an ordinary turn, or a distinct authorization signal?) and T7 (where
+does the project-page conversation entry point live, and is the project binding URL-addressable?).
