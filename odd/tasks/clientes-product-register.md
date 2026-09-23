@@ -184,6 +184,18 @@ away from tables (the physiology axis is preserved, not renegotiated).
 - **D7 — Delivery is chained, not one PR.** PR 1 carries the amendment plus slice
   1; PR 2 carries slice 2, `stacked-to-main`. The amendment is roughly 60 lines
   across three files and does not change the slice budget materially.
+- **D8 — The customer state vocabulary is the real domain enum.** Confirmed by the
+  owner: the eight `customer_state` values become the approved vocabulary, mapped
+  in the frontend, with the `DESIGN_SYSTEM.md` label table corrected to match. No
+  backend change and no enum change; the alternative (translating server-side to a
+  four-state vocabulary) would alter the customer lifecycle and lose information.
+- **D9 — Tone assignment follows the design system's domain-state hierarchy.**
+  `nuevo`, `pendiente` and `en_evaluacion` are `warning` (they need attention
+  now); `finalizado` is `success` (a confirmed outcome); `contactado`, `agendado`,
+  `cancelado` and `postventa` are `neutral` (routine). `agendado` is neutral
+  because a booking has not happened yet, and `cancelado` is neutral because a
+  cancellation is routine rather than a failure — both precedents already exist
+  for appointments in `DESIGN_SYSTEM.md`.
 
 ## Tasks
 
@@ -249,6 +261,31 @@ away from tables (the physiology axis is preserved, not renegotiated).
   with the two story cases and three appearance-axis assertions. Viewport
   presets (640/1024/1280) are global Storybook configuration per `DS-STORY-7`, so
   they are not duplicated per story.
+
+### Slice 1b — customer state vocabulary (ships in PR 1)
+
+Found while seeding dev data for the visual review, not planned at the session
+close. The panel API serialises `customer.state.value` raw, so the surface receives
+the eight `customer_state` domain values; the frontend contract knew four, only one
+of which existed in the domain. Seven of eight real states rendered as raw
+snake_case labels with a neutral tone, and every fixture and test in the path
+validated a vocabulary the API cannot produce.
+
+- [x] **TV1** — RED: rewrite the tone-map and mock data tests against the real
+  domain enum. Observed 5 failures printing the raw values (`'neutral'`,
+  `'contactado'`) — the defect reproducing itself in the assertions.
+- [x] **TV2** — GREEN: `CustomerState` becomes the eight domain values;
+  `toneMaps.ts` gains labels and tones for all eight; the `DESIGN_SYSTEM.md`
+  StatusBadge Customer row is corrected (it documented the four fictional states).
+- [x] **TV3** — Migrate every consumer fixture that held the fiction:
+  `mockData/clients.ts` (now eight clients, one per state), `toneMaps.test.ts`,
+  `mockData/clients.test.ts`, `ClientFicha.test.tsx`, `ClientesList.test.tsx`,
+  `ClientesList.stories.test.tsx`, `ClientFicha.stories.tsx`, and
+  `PanelLinks.test.tsx`. The last two are outside the original authorized list:
+  changing the typed union breaks any consumer holding the fiction, so omitting
+  them would have left the tree non-compiling.
+- [x] **TV4** — Verification: `npm run test` → **80 files, 651 tests, all
+  passing**; `npx tsc -b --noEmit` → exit 0.
 
 ### Slice 2 — ClientFicha (ships in PR 2)
 
@@ -363,6 +400,11 @@ away from tables (the physiology axis is preserved, not renegotiated).
   (pre-existing >500 kB chunk warning unchanged); `npm run build-storybook` →
   exit 0, preview built in 15s.
 - [x] Slice 1 complete (T0–T9).
+- [x] TV1–TV4 — customer state vocabulary migrated to the real domain enum.
+  RED observed (5 failures printing raw values), then GREEN: 80 files / 651 tests,
+  `tsc -b --noEmit` exit 0. One commit, `63344a6a`: a typed union cannot be applied
+  partially without leaving the tree non-compiling, so the type, its maps, the
+  design-system table and every consumer fixture move together (11 files).
 - [ ] Slice 2.
 
 ## Size
@@ -383,6 +425,13 @@ whether to accept the size or slice PR 1 differently.
 
 ## Open item
 
+- **The `danger` tone is now unused in the customer vocabulary.** The domain has no
+  blocked or at-risk customer state, and `DESIGN_SYSTEM.md` previously documented
+  `Bloqueado` as the danger case for customers — a state that does not exist in the
+  database. Either the design system's customer model is wrong or the domain is
+  missing a state; that is a product question, not an implementation one. The
+  raw-value fallback in `customerStateLabel`/`Tone` remains as a safety net for any
+  value the map does not know.
 - **`SearchInput` cannot be cleared programmatically.** The primitive owns its own
   text and exposes only a debounced `onSearch`, so the filtered-empty recovery has
   to remount it with a `key`. The honest fix is an optional controlled `value` on
