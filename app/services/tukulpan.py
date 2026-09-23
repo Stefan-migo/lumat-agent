@@ -534,7 +534,7 @@ def write_recap(
         return {"written": True, "id": row.id, "topic_key": key}
     except Exception as exc:
         logger.warning("panel recap degraded for thread %s: %s", thread_id, exc)
-        return {"written": False, "degraded_reason": str(exc), "topic_key": key}
+        return {"written": False, "degraded_reason": "Memory recap unavailable", "topic_key": key}
 
 
 def get_by_key(

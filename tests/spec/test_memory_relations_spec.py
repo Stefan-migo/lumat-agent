@@ -175,6 +175,30 @@ def test_mem11_bad_judge_response_writes_no_relation(
         assert session.get(Memory, current.id) is not None
 
 
+def test_mem11_duplicate_candidate_id_is_rejected_deterministically():
+    content = json.dumps(
+        {
+            "verdicts": [
+                {
+                    "candidate_id": 1,
+                    "relation": "conflicts",
+                    "confidence": 0.91,
+                    "reason": "First verdict.",
+                },
+                {
+                    "candidate_id": 1,
+                    "relation": "related",
+                    "confidence": 0.80,
+                    "reason": "Duplicate verdict.",
+                },
+            ]
+        }
+    )
+
+    with pytest.raises(ValueError, match="invalid verdict value"):
+        relations._parse_verdicts(content, {1, 2})
+
+
 def test_mem11_judge_failure_logs_and_writes_no_relation(
     fake_embedder, migrated_db, monkeypatch, caplog
 ):

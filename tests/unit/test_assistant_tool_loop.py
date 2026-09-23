@@ -2,6 +2,8 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 from app.chat.assistant.graph import _after_execute, build_assistant_graph
 from app.chat.assistant.nodes import execute
 
@@ -93,24 +95,25 @@ def test_tool_evidence_is_bounded_and_prompt_statement_is_truthful(monkeypatch):
     assert "already run" in prompt
 
 
-def test_failed_read_only_tool_degrades_without_exposing_raw_error(monkeypatch):
+@pytest.mark.parametrize("tool_name", ["memory.read", "memory.search"])
+def test_failed_read_only_tool_degrades_without_exposing_raw_error(monkeypatch, tool_name):
     raw_error = "internal memory backend secret"
     monkeypatch.setattr(
         "app.chat.assistant.nodes.execute_tool",
         lambda *args, **kwargs: {
-            "tool": "memory.read",
+            "tool": tool_name,
             "status": "error",
             "read_only": True,
             "error": raw_error,
         },
     )
 
-    result = execute(_tool_state(plan={**_tool_state()["plan"], "tool": "memory.read"}))
+    result = execute(_tool_state(plan={**_tool_state()["plan"], "tool": tool_name}))
 
     assert result["status"] == "degraded"
     assert result["tool_result"]["result"] == {
         "unavailable": True,
-        "tool": "memory.read",
+        "tool": tool_name,
         "degraded_reason": "Read-only tool unavailable",
     }
     assert raw_error not in result.get("response", "")
