@@ -147,25 +147,25 @@ The chain probe of the DB (see "Production evidence") confirms the model can obt
 
 ## Tasks
 
-- [ ] **T1 — RED.** Write the failing tests first: args validation (empty patch, unknown field,
+- [x] **T1 — RED.** Write the failing tests first: args validation (empty patch, unknown field,
   `topic_key`/`scope`/`entity_id` rejected), the ownership matrix (own thread row accepted, own agent row
   accepted, another thread's row rejected, customer row rejected, system/recap row rejected, foreign
   `proyecto` rejected), in-place update with re-embed, delete, allowlist membership, and node-level
   autonomy for both names with and without a trusted thread.
   *Check:* the new tests fail on the base for the right reason (unknown tool / missing behaviour), and
-  the RED output is recorded verbatim.
-- [ ] **T2 — GREEN.** `tukulpan.update()`, the two args models, the guard, the two handlers, the
+  the RED output is recorded verbatim. **See the RED limitation under "Verification evidence".**
+- [x] **T2 — GREEN.** `tukulpan.update()`, the two args models, the guard, the two handlers, the
   registry entries, the allowlist extension, the `execute_tool()` routing.
   *Check:* the RED tests pass; `memory.write` behaviour is unchanged.
-- [ ] **T3 — Persona and whitelist.** `agent/personas/assistant.md` names all three autonomous tools;
+- [x] **T3 — Persona and whitelist.** `agent/personas/assistant.md` names all three autonomous tools;
   `agent/registry.yaml` carries both new names.
   *Check:* the harness assertion that every whitelisted tool name appears in the prompt passes.
-- [ ] **T4 — Spec.** `AT-11` in `openspec/specs/assistant-tools/spec.md`, in the same
+- [x] **T4 — Spec.** `AT-11` in `openspec/specs/assistant-tools/spec.md`, in the same
   `### Requirement: AT-N — Title` + `#### Scenario:` GIVEN/WHEN/THEN shape, RFC 2119 keywords.
   *Check:* scenarios cover the ownership guard, the rejection of a non-owned row, the empty patch, and
   that every other write stays approval-gated.
-- [ ] **T5 — Full suite.** Targeted suites green, then the whole suite green.
-  *Check:* the full command below, with its real pass count recorded.
+- [x] **T5 — Full suite.** Targeted suites green, then the whole suite green.
+  *Check:* the full command below, with its real pass count recorded. **`1290 passed, 2 warnings`.**
 
 ## Constraints
 
@@ -183,9 +183,14 @@ The chain probe of the DB (see "Production evidence") confirms the model can obt
 
 - `uv run pytest tests/unit/test_assistant_tools.py tests/unit/test_agent_registry.py` — focused contract.
 - `uv run pytest tests/integration/test_assistant_harness_guardrails.py tests/functional/test_api_assistant_capabilities.py`
-- Full suite: `TEST_ADMIN_DB_URL=postgresql://lumat:lumat@localhost:5432/lumat uv run pytest tests/`
-  (~8-9 minutes; use an explicit long timeout). Without the admin URL the setup fails with
-  `InsufficientPrivilege: permission denied to alter role` — an environment gap, not a code bug.
+- Full suite: two steps, because this worktree derives its own DB port and the port is not `5432`:
+  ```
+  cp ../lumat-agent/infra/.env infra/.env     # test-db.sh reads the db-test superuser password
+  bash infra/test-db.sh up                    # derived port + compose project for this worktree
+  eval "$(bash infra/test-db.sh env)" && uv run pytest tests/    # exports DATABASE_URL + TEST_ADMIN_DB_URL
+  ```
+  ~2 minutes; pass an explicit long timeout to the shell. Without the derived URLs the suite errors
+  (not fails) on connection: an environment gap, not a code bug.
 - The repo has no linter, typechecker, pre-commit or hooks. The tests are the verification.
 
 ## Acceptance criteria
@@ -214,6 +219,56 @@ The trigger is real usage, read from the running panel DB (`infra-db-1`, `lumat`
 The chain is what the unit depends on: `memory.read` returns `id`, `memory.write` returns `id`, and
 nothing can act on that `id` afterwards. That last gap is the unit.
 
+## Verification evidence
+
+Environment first: this worktree had no `infra/.env`, so `infra/test-db.sh` refused to derive anything
+and the delegated writer's full-suite run errored on connection (`2 failed, 396 passed, 892 errors` — the
+892 errors were `db-test` connection failures on a port that was never up, not code failures). Resolved
+by following the script's own instruction: `cp ../lumat-agent/infra/.env infra/.env`, then
+`bash infra/test-db.sh up`, which derived port **5736** and compose project
+`lumat-test-lumat-agent-odd-memory-correction-tools`.
+
+- **Focused (delegated writer):**
+  `uv run pytest tests/unit/test_assistant_tools.py tests/unit/test_agent_registry.py` -> `68 passed in 0.60s`.
+- **Full suite (orchestrator, after the correction):** `1290 passed, 2 warnings in 119.75s`.
+  Both warnings are pre-existing at the base (never-awaited `_publish_all`; the fastembed mean-pooling
+  notice at `app/services/kb.py:132`).
+- The registry-derived assertions (`tests/unit/test_agent_registry.py`,
+  `tests/functional/test_api_assistant_capabilities.py`) needed **no** edit: both derive their sets from
+  `TOOL_REGISTRY`, so the 19 -> 21 change propagated by construction.
+- The DB-backed integration tests genuinely ran (not skipped) and cover both new tools end to end:
+  `test_execute_forwards_trusted_thread_to_memory_correction` inserts an agent row, dispatches through
+  `execute()`, and asserts the row was updated in place or is gone.
+
+### RED limitation (declared, not hidden)
+
+The observed RED was **import-level**, not behavioral:
+
+```
+ImportError: cannot import name 'MemoryDeleteArgs'
+```
+
+For a brand-new public API that is the honest floor — the test module cannot execute at all before the
+symbols exist. It is **not** the behavioral RED this project's strict-TDD convention asks for. The
+ownership-matrix tests are written so they *would* fail behaviorally against a guard that accepted a
+non-owned row, but that state could only be observed after the symbols existed. No behavioral RED is
+claimed here because none was observed.
+
+### Corrections applied during the unit
+
+1. **Persona regression, caught by the full suite only.** `agent/personas/assistant.md` was rewritten to
+   name the three autonomous tools, which dropped the exact phrase `already authorized and runs without
+   asking` pinned by the pre-existing `tests/unit/test_assistant_config.py:28`. The scoped correction
+   keeps the widening **and** the pinned phrase instead of editing the pre-existing contract test:
+
+   > ... except `memory.write`, `memory.update`, or `memory.delete` on this panel thread. **Each is
+   > already authorized and runs without asking**, because it only touches the assistant's own
+   > `agent:`-namespaced memories on either the current thread axis or the project axis.
+
+   Re-run after the correction: full suite green. Same lesson the sibling unit `assistant-grounding-gate`
+   recorded — a green scoped subset is not evidence that the branch is green, and here the assertion lived
+   in a suite the writer never ran.
+
 ## Progress
 
 - 2026-09-22 — reconnaissance complete. Three holes named, three design rejections recorded.
@@ -226,6 +281,9 @@ nothing can act on that `id` afterwards. That last gap is the unit.
   ownership guard, trusted-thread dispatch, and autonomous allowlist. `_is_autonomous_write()` was verified
   generic and unchanged.
 - 2026-09-22 — T3/T4 completed: whitelist, persona clause, stale 21-tool comment, and AT-11 were updated.
+- 2026-09-22 — environment gap resolved by the orchestrator (`cp ../lumat-agent/infra/.env infra/.env`,
+  `bash infra/test-db.sh up` -> port 5736) and the full suite run. One scoped correction: the persona
+  phrase pinned by `tests/unit/test_assistant_config.py:28` was restored. **Full suite green: 1290 passed.**
 
 ## Graph nodes/edges consulted
 
@@ -245,4 +303,5 @@ nothing can act on that `id` afterwards. That last gap is the unit.
 
 ## Next step
 
-- T5: Start the test database and rerun the blocked integration and full-suite commands.
+Delivery is not taken. The branch `odd/memory-correction-tools` is local: nothing pushed, no PR. Commit,
+push and PR remain the human's decisions under ordinary repository policy.
