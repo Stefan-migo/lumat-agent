@@ -17,6 +17,7 @@ This document defines how Lumat should look, read, and behave across the current
 | Topic | Decision |
 |---|---|
 | Design mode | Calm service control room; operational workspace plus dense dashboard patterns |
+| Grammar scope | Agent-app appearance across the whole panel; control-room physiology inside dense content primitives (tables, KPIs, badges) |
 | Primary authority | Deep forest `--primary-800`; not logo lime |
 | Brand expression | Cyan for information, lime for recognition/selection, graphite for grounding |
 | Typography | Existing system-ui stack; no font dependency |
@@ -74,6 +75,27 @@ Every core flow follows the same sequence:
 5. Confirm success or provide a recoverable failure path.
 
 Motion and decoration never compete with this sequence.
+
+### Grammar scope — two axes
+
+The agent-app appearance applies to the whole panel; dense content keeps
+control-room physiology. Both axes are binding, and neither may be traded for the
+other.
+
+- **Appearance axis — every surface.** Shell chrome, page regions, visual
+  hierarchy, disclosure, status presentation, and interaction affordances follow
+  one grammar across the panel. A dense page must read as the same product as the
+  assistant, not as a separate legacy tool. No surface is left on browser-default
+  control styling.
+- **Physiology axis — dense content.** `DataTable`, KPI, `Badge`, filter, and
+  state primitives remain the data-presentation layer for operational pages.
+  Conversation-specific components — bubbles, composer shell, thread rail,
+  inspector — are never imposed on dense pages.
+
+This restates the direction decided on 2026-09-04 ("appearance of agent app,
+physiology of control room") and corrects a drift introduced by the
+`panel-ai-agent-grammar` delta, which had restricted the appearance axis to
+conversation surfaces. The governing requirement is `DS-GRAMMAR-1`.
 
 ### Platform-first interaction policy
 
