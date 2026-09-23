@@ -50,7 +50,7 @@ function stateMessage(state: ClientesListState, retry: () => void) {
     return (
       <div>
         <StateMessage tone="danger" role="alert" title="No pudimos cargar los clientes" detail="Reintenta para recuperar el listado." />
-        <button type="button" onClick={retry}>Reintentar</button>
+        <Button variant="secondary" onClick={retry}>Reintentar</Button>
       </div>
     );
   }

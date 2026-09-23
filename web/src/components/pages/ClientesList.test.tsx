@@ -129,6 +129,13 @@ describe("ClientesList", () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
+  // T5 — the recovery control is the panel primitive, not a raw <button>.
+  it("uses the Button primitive for the recovery control", () => {
+    render(<ClientesList data={null} state="fatal-error" onRetry={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "Reintentar" })).toHaveClass("btn");
+  });
+
   it("exposes the search and the two export controls", () => {
     render(<ClientesList data={customers} state="ready" />);
 
