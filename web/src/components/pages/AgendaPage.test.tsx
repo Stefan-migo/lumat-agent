@@ -77,6 +77,14 @@ describe('AgendaPage', () => {
     expect(screen.queryByText(/a\. m\.|p\. m\./i)).not.toBeInTheDocument();
   });
 
+  it('does not render an empty surface for a section without rows', () => {
+    render(<AgendaPage data={[appointment({ local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
+    const today = screen.getByRole('heading', { name: 'Hoy', level: 2 }).closest('section');
+    expect(today).not.toBeNull();
+    expect(today?.querySelector('.empty-state')).not.toBeInTheDocument();
+    expect(today).not.toHaveTextContent('No hay visitas');
+  });
+
   it('shows a labelled empty state and keeps the table wrapper mobile-safe', () => {
     const { container } = render(<AgendaPage data={[]} state="empty" />);
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();

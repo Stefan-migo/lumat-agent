@@ -103,7 +103,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const section = (title: string, rows: AgendaAppointment[]) => (
     <section className="agenda-page__section" aria-labelledby={`agenda-${title.toLowerCase()}`}>
       <h2 id={`agenda-${title.toLowerCase()}`}>{title}</h2>
-      <div className="agenda-page__table-wrap"><DataTable columns={columns} rows={rows} emptyMessage="No hay visitas" rowKey={(row) => String(row.id)} actions={actions} actionsHeader="Acciones" /></div>
+      {rows.length > 0 ? <div className="agenda-page__table-wrap"><DataTable columns={columns} rows={rows} emptyMessage="No hay visitas" rowKey={(row) => String(row.id)} actions={actions} actionsHeader="Acciones" /></div> : null}
     </section>
   );
 
