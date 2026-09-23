@@ -56,6 +56,7 @@ assistant:
     respond: prompts/assistant_respond.md
     classify: prompts/assistant_classify.md
   tools_whitelist:
+    - assistant.capabilities
     - customers.search
     - customers.list
     - conversations.search

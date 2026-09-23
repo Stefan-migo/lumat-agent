@@ -19,6 +19,7 @@ from app.chat.assistant.tools.search import SearchFailure
 from app.services import automation, cases, customers, kb, projects, relations, scheduling, tukulpan as memory
 
 MAX_ITEMS = 20
+CAPABILITIES_TEXT_LIMIT = 4_000
 SDB_WRITE_ALLOWLIST = frozenset({
     "automation.create_rule",
     "project.create",
@@ -50,6 +51,10 @@ class QueryArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str | None = Field(default=None, max_length=200)
     limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
+
+
+class CapabilitiesArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 class AppointmentArgs(BaseModel):
@@ -373,6 +378,21 @@ def _project_merge(session, args: ProjectMergeArgs):
     return projects.merge(session, args.source, args.target)
 
 
+def _assistant_capabilities(_session, _args: CapabilitiesArgs):
+    from app.services.prompts import load_assistant_config
+
+    whitelist = load_assistant_config().tools_whitelist
+    lines = []
+    for name in whitelist:
+        definition = TOOL_REGISTRY[name]
+        access = "read-only" if definition.read_only else "write"
+        lines.append(f"{name} — {definition.description} ({access})")
+    return {
+        "tool_count": len(whitelist),
+        "capabilities": "\n".join(lines)[:CAPABILITIES_TEXT_LIMIT],
+    }
+
+
 @dataclass(frozen=True)
 class ToolDefinition:
     name: str
@@ -390,6 +410,7 @@ class ToolDefinition:
 
 
 TOOL_REGISTRY: dict[str, ToolDefinition] = {
+    "assistant.capabilities": ToolDefinition("assistant.capabilities", CapabilitiesArgs, True, _assistant_capabilities, "List the assistant's own available tools and their purpose."),
     "customers.search": ToolDefinition("customers.search", SearchArgs, True, _search_customers, "Search customer records."),
     "customers.list": ToolDefinition("customers.list", SearchArgs, True, _search_customers, "List customer records."),
     "conversations.search": ToolDefinition("conversations.search", QueryArgs, True, _search_conversations, "Search panel conversations."),
