@@ -166,8 +166,8 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
      **310 changed lines**.
   2. `odd/tukulpan-memory-pinning`, stacked on slice 1 — T2 + T3 + T4 + T5 — **PR #322**
      (base #321), 10 commits (`02768888..bcc3928f`), **374 changed lines**.
-  3. `odd/tukulpan-memory-surface`, stacked on slice 2 — T6 + T7 — 5 commits (`2e89f1e9..69440b0e`),
-     **~330 changed lines** — PR not opened yet (awaiting push authorization).
+  3. `odd/tukulpan-memory-surface`, stacked on slice 2 — T6 + T7 — **PR #324** (base #322), 7 commits
+     (`7d071f73..06547cbf`), **293 changed lines**.
   Each slice's diff reduces to its own work once its predecessor merges.
 - Pre-push verification of record: `uv run --frozen pytest tests/` → exit 0 (1304 tests), tree clean.
 - Work-unit commits, tests and docs with their behavior, Conventional Commits.
