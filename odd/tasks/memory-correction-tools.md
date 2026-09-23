@@ -284,6 +284,10 @@ claimed here because none was observed.
 - 2026-09-22 — environment gap resolved by the orchestrator (`cp ../lumat-agent/infra/.env infra/.env`,
   `bash infra/test-db.sh up` -> port 5736) and the full suite run. One scoped correction: the persona
   phrase pinned by `tests/unit/test_assistant_config.py:28` was restored. **Full suite green: 1290 passed.**
+- 2026-09-23 — native review executed: lineage `review-5a2dfdba926ac888`, risk medium, one lens
+  (`review-reliability`), 0 corrections of a 200-line budget, outcome **approved** and acknowledged;
+  authority burned. One advisory finding, left as deferred debt.
+- 2026-09-23 — delivered: branch pushed, **PR #311** open against `main`, label `type:feature`, CI green.
 
 ## Graph nodes/edges consulted
 
@@ -303,5 +307,16 @@ claimed here because none was observed.
 
 ## Next step
 
-Delivery is not taken. The branch `odd/memory-correction-tools` is local: nothing pushed, no PR. Commit,
-push and PR remain the human's decisions under ordinary repository policy.
+**Delivered.** The branch is pushed and **PR #311** is open against `main` with the single label
+`type:feature`; CI green (`test` 2m11s, GitGuardian pass). The native review is approved and its authority
+is burned (lineage `review-5a2dfdba926ac888`, risk medium, one consolidated lens). The merge remains the
+human's decision under ordinary repository policy.
+
+The review's advisory finding is **not** fixed here and is recorded as deferred debt, to be resolved
+together with the sibling finding from `odd/assistant-capabilities-tool` in one follow-up unit
+(Engram topic `debt/r3-warnings-memory-and-capabilities`):
+
+- `R3-stale-review-schedule` (`app/services/tukulpan.py:601-602`) — changing only `tipo` does not
+  recompute `review_after`.
+- `R3-capability-text-truncation` (sibling branch) — `tool_count` can disagree with a truncated
+  capability text.
