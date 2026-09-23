@@ -47,8 +47,10 @@ return {
 
 The handler truncates the joined text to `CAPABILITIES_TEXT_LIMIT = 4_000` chars but returns the full
 `len(whitelist)`. If the truncation ever fires, `tool_count` asserts a completeness the text does not
-have. Measured: 1,212 chars with 20 tools, against a 4,000-char limit — **latent, not active**. AT-12
-("MUST preserve the exact tool count") is only safe while it stays latent.
+have. Measured on this unit's base (`959e93a4`: 22 tools): **1,326 chars** against the 4,000-char
+limit — **latent, not active**. AT-12 ("MUST preserve the exact tool count") is only safe while it
+stays latent. (The 1,212 / 20-tool figure recorded here earlier was carried over from the capabilities
+unit's own base, `d4b58554`, and never matched this branch.)
 
 ## Why this shape
 

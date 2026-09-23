@@ -298,7 +298,7 @@ def test_responder_user_prompt_carries_the_declared_tool_inventory(monkeypatch):
 
     The sidebar reads `assistant.tools_whitelist` straight from the registry, so a
     responder that never receives that inventory answers capability questions with a
-     denial while the panel advertises 22 tools and available memory.
+    denial while the panel advertises every whitelisted tool and available memory.
     """
     calls = []
     monkeypatch.setattr(
