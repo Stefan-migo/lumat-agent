@@ -14,6 +14,7 @@ const DOC_KEYS = [
   "provider",
   "title",
   "version",
+  "visibility",
 ].sort();
 
 const DOC_FORMATS = ["pdf", "md", "csv"];

@@ -73,9 +73,3 @@ export const docs: Doc[] = [
     created_at: "2026-08-02T10:15:00-04:00",
   },
 ];
-
-// Keep the legacy serializer-shape assertion focused on its original keys while
-// exposing the new audience field to consumers through normal property access.
-for (const doc of docs) {
-  Object.defineProperty(doc, "visibility", { enumerable: false, value: doc.visibility, writable: true });
-}
