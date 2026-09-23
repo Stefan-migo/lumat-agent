@@ -1506,13 +1506,14 @@
   display: grid;
   gap: var(--space-4);
 }
-/* Recovery control sits under the alert, not attached to it. The alert keeps the
-   full width; only the button hugs its own label. */
-.technician-agenda__error {
+/* Agenda recovery controls sit under the alert, not attached to it. The alert
+   keeps the full width; only the button hugs its own label. Both Agenda pages
+   consume this shared recovery composition. */
+.agenda-recovery {
   display: grid;
   gap: var(--space-3);
 }
-.technician-agenda__error .btn {
+.agenda-recovery .btn {
   justify-self: start;
 }
 .technician-agenda__section-title {

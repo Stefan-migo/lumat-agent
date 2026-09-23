@@ -48,9 +48,11 @@ describe('AgendaPage', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('No tienes permiso');
     rerender(<AgendaPage state="error" data={null} onRetry={retry} />);
     expect(screen.getByRole('alert')).toHaveTextContent('No pudimos cargar la agenda');
+    expect(screen.getByRole('alert').parentElement).toHaveClass('agenda-recovery');
     expect(screen.getByRole('button', { name: 'Reintentar' })).toHaveClass('btn');
     rerender(<AgendaPage state="stale" data={[appointment()]} onRetry={retry} />);
     expect(screen.getByRole('status')).toHaveTextContent('desactualizados');
+    expect(screen.getByRole('status').parentElement).toHaveClass('agenda-recovery');
     expect(screen.getByRole('button', { name: 'Reintentar' })).toHaveClass('btn');
   });
 

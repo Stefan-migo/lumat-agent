@@ -266,6 +266,7 @@ describe('technician surface — controls come from the panel primitives', () =>
     renderSurface();
 
     expect(await screen.findByRole('button', { name: 'Reintentar' })).toHaveClass('btn');
+    expect(screen.getByRole('alert').parentElement).toHaveClass('agenda-recovery');
     expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toHaveClass('btn');
   });
 });
