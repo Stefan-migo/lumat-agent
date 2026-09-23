@@ -131,21 +131,75 @@ describe("AgentChat", () => {
 
   it("creates a project-bound thread from the project deep link", async () => {
     window.history.pushState({}, "", "/panel/app/chat?proyecto=ops");
+    const onThreadOpened = vi.fn((id: number) => {
+      window.history.replaceState({}, "", `/panel/app/chat?thread_id=${id}`);
+    });
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (String(input) === "/panel/api/chat/threads") {
         expect(init?.method).toBe("POST");
         expect(JSON.parse(String(init?.body))).toEqual({ proyecto: "ops" });
-        return jsonResponse({ thread: makeThread(), messages: [] }, 201);
+        return jsonResponse({ thread: { ...makeThread(7), proyecto: "ops" }, messages: [] }, 201);
       }
       return jsonResponse({ threads: [] });
     });
 
-    render(<AgentChat />);
+    render(<AgentChat onThreadOpened={onThreadOpened} />);
 
     await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    expect(onThreadOpened).toHaveBeenCalledWith(7);
+    expect(window.location.search).toBe("?thread_id=7");
     expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/chat/threads",
       expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("does not create a second thread after following the created thread URL", async () => {
+    window.history.pushState({}, "", "/panel/app/chat?proyecto=ops");
+    let creates = 0;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input) === "/panel/api/chat/threads" && init?.method === "POST") {
+        creates += 1;
+        return jsonResponse({ thread: { ...makeThread(7), proyecto: "ops" }, messages: [] }, 201);
+      }
+      if (String(input) === "/panel/api/chat/threads/7") {
+        return jsonResponse({ thread: { ...makeThread(7), proyecto: "ops" }, messages: [] });
+      }
+      return jsonResponse({ threads: [] });
+    });
+
+    const first = render(
+      <AgentChat
+        onThreadOpened={(id) => window.history.replaceState({}, "", `/panel/app/chat?thread_id=${id}`)}
+      />,
+    );
+    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    first.unmount();
+    render(<AgentChat />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/panel/api/chat/threads/7", expect.anything()));
+    expect(creates).toBe(1);
+  });
+
+  it("keeps the project binding when Nuevo chat is pressed from a project thread", async () => {
+    window.history.pushState({}, "", "/panel/app/chat?thread_id=4");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input) === "/panel/api/chat/threads" && init?.method === "POST") {
+        expect(JSON.parse(String(init?.body))).toEqual({ proyecto: "ops" });
+        return jsonResponse({ thread: { ...makeThread(5), proyecto: "ops" }, messages: [] }, 201);
+      }
+      return jsonResponse({ thread: { ...makeThread(4), proyecto: "ops" }, messages: [] });
+    });
+
+    render(<AgentChat />);
+    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    fireEvent.click(screen.getByRole("button", { name: "Nuevo chat" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/panel/api/chat/threads",
+        expect.objectContaining({ method: "POST" }),
+      ),
     );
   });
 

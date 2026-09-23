@@ -328,9 +328,10 @@ function AgentActivity({
 export interface AgentChatProps {
   threadId?: number;
   sectionTabs?: ReactNode;
+  onThreadOpened?: (id: number) => void;
 }
 
-export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
+export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatProps = {}) {
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
@@ -408,7 +409,10 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
         : Promise.resolve(null);
     void request
       .then((result) => {
-        if (result) loadThread(result);
+        if (result) {
+          loadThread(result);
+          if (!requestedId && requestedProject) onThreadOpened?.(result.thread.id);
+        }
       })
       .catch((reason: unknown) =>
         setError(reason instanceof ApiError ? reason.detail : "No pudimos abrir el chat"),
@@ -541,7 +545,9 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
     setError(null);
     setLoading(true);
     try {
-      loadThread(await createChatThread(requestedProject));
+      const result = await createChatThread(thread?.proyecto ?? requestedProject);
+      loadThread(result);
+      onThreadOpened?.(result.thread.id);
     } catch (reason: unknown) {
       setError(reason instanceof ApiError ? reason.detail : "No pudimos crear el chat");
     } finally {
