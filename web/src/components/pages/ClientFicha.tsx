@@ -4,12 +4,17 @@ import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse, VisitHistoryEvent } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
 import { Badge } from "../primitives/Badge";
+import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
+import { Select } from "../primitives/Select";
+import { Textarea } from "../primitives/Textarea";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import {
+  appointmentStatusLabel,
+  appointmentStatusTone,
   caseStatusLabel,
   caseStatusTone,
   conversationLabel,
@@ -18,15 +23,25 @@ import {
   directionLabel,
 } from "../shared/toneMaps";
 
+const DATE_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short" });
+const DATE_TIME_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" });
+
+const formatDate = (value: string | null | undefined) => (value ? DATE_FORMAT.format(new Date(value)) : "—");
+const formatDateTime = (value: string | null | undefined) => (value ? DATE_TIME_FORMAT.format(new Date(value)) : "—");
+
 export interface ClientFichaProps {
   customerId?: number;
   data?: ClientFichaResponse;
   memories?: Memory[];
   isSaving?: boolean;
   onRetryCalendar?: (appointmentId: number) => void;
+  /** Controlled read state, so the state matrix is renderable in stories and tests
+   *  without a request. A controlled state also disables the fetch. */
+  state?: FichaState;
 }
 
 type FichaState = AsyncDataState | "fatal-error";
+type Feedback = { tone: "success" | "danger"; title: string; detail?: string };
 
 function stateMessage(state: FichaState) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando ficha" />;
@@ -37,13 +52,26 @@ function stateMessage(state: FichaState) {
   return null;
 }
 
-export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, isSaving = false, onRetryCalendar }: ClientFichaProps) {
+/** Feedback belongs beside the control that caused it, not in the page banner. */
+function LocalFeedback({ feedback }: { feedback: Feedback | null }) {
+  if (!feedback) return null;
+  return <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.title} detail={feedback.detail} />;
+}
+
+/** A data surface only when there is data: an empty DataTable already renders its own
+ *  `.empty-state` surface, and nesting the two would be card-on-card. */
+function surfaceClass(rowCount: number) {
+  return rowCount > 0 ? "data-region" : undefined;
+}
+
+export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, isSaving = false, onRetryCalendar, state: controlledState }: ClientFichaProps) {
   const [retryingCalendarId, setRetryingCalendarId] = useState<number | null>(null);
   const [refreshed, setRefreshed] = useState<{ ficha: ClientFichaResponse; memories: Memory[]; pendingRelations: MemoryRelation[] } | null>(null);
   const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
   const [note, setNote] = useState("");
   const [mutation, setMutation] = useState<"state" | "note" | null>(null);
-  const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; title: string; detail?: string } | null>(null);
+  const [stateFeedback, setStateFeedback] = useState<Feedback | null>(null);
+  const [noteFeedback, setNoteFeedback] = useState<Feedback | null>(null);
   const fetchFicha = useCallback(async () => {
     if (customerId === undefined) throw new Error("customer id is required");
     const [ficha, memoryResponse, pendingResponse] = await Promise.all([
@@ -53,11 +81,11 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     ]);
     return { ficha, memories: memoryResponse.memories, pendingRelations: pendingResponse.relations };
   }, [customerId]);
-  const fetched = useAsyncData(fetchFicha, controlledData === undefined);
+  const fetched = useAsyncData(fetchFicha, controlledData === undefined && controlledState === undefined);
   const data = refreshed?.ficha ?? controlledData ?? fetched.data?.ficha;
   const memories = refreshed?.memories ?? controlledMemories ?? fetched.data?.memories ?? [];
   const pendingRelations = refreshed?.pendingRelations ?? fetched.data?.pendingRelations ?? [];
-  const state: FichaState = controlledData ? "ready" : fetched.state;
+  const state: FichaState = controlledState ?? (controlledData ? "ready" : fetched.state);
 
   if (!data) {
     return <PageFrame title="Ficha de cliente" state={stateMessage(state)}><EmptyState title="Cargando ficha" /></PageFrame>;
@@ -87,19 +115,19 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   };
   const saveState = async () => {
     if (customerId === undefined || !selectedState || mutation) return;
-    setMutation("state"); setFeedback(null);
-    try { await changeClientState(customerId, selectedState); await refresh(); setFeedback({ tone: "success", title: "Estado guardado" }); }
-    catch (error) { setFeedback({ tone: "danger", ...safeError(error, "estado") }); }
+    setMutation("state"); setStateFeedback(null);
+    try { await changeClientState(customerId, selectedState); await refresh(); setStateFeedback({ tone: "success", title: "Estado guardado" }); }
+    catch (error) { setStateFeedback({ tone: "danger", ...safeError(error, "estado") }); }
     finally { setMutation(null); }
   };
   const saveNote = async () => {
     if (customerId === undefined || !note.trim() || mutation) {
-      if (!note.trim()) setFeedback({ tone: "danger", title: "La nota no puede estar vacía" });
+      if (!note.trim()) setNoteFeedback({ tone: "danger", title: "La nota no puede estar vacía" });
       return;
     }
-    setMutation("note"); setFeedback(null);
-    try { await addClientNote(customerId, note.trim()); await refresh(); setNote(""); setFeedback({ tone: "success", title: "Nota agregada" }); }
-    catch (error) { setFeedback({ tone: "danger", ...safeError(error, "nota") }); }
+    setMutation("note"); setNoteFeedback(null);
+    try { await addClientNote(customerId, note.trim()); await refresh(); setNote(""); setNoteFeedback({ tone: "success", title: "Nota agregada" }); }
+    catch (error) { setNoteFeedback({ tone: "danger", ...safeError(error, "nota") }); }
     finally { setMutation(null); }
   };
   const resolveRelation = async (relationId: number, relation: MemoryRelationKind) => {
@@ -111,7 +139,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     { key: "id", header: "#", render: (row) => `#${row.id}` },
     { key: "state", header: "Estado", render: (row) => conversationLabel(row.state) },
     { key: "summary", header: "Resumen", render: (row) => row.summary ?? "—" },
-    { key: "created", header: "Creada", render: (row) => row.created_at?.slice(0, 10) ?? "—" },
+    { key: "created", header: "Creada", render: (row) => formatDate(row.created_at) },
   ];
   const caseColumns: Column<(typeof history.cases)[number]>[] = [
     { key: "id", header: "#", render: (row) => `#${row.id}` },
@@ -125,68 +153,130 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     { key: "direction", header: "Dirección", render: (row) => directionLabel(row.direction) },
     { key: "msg_type", header: "Tipo", render: (row) => row.msg_type },
     { key: "text", header: "Mensaje", render: (row) => `${row.text ?? "—"}${row.media_url ? " 📎" : ""}` },
-    { key: "created", header: "Fecha", render: (row) => row.created_at?.slice(0, 10) ?? "—" },
+    { key: "created", header: "Fecha", render: (row) => formatDate(row.created_at) },
   ];
 
   return (
     <PageFrame
       title={`Ficha: ${customer.name ?? customer.phone_e164 ?? "—"}`}
       meta={`${customer.phone_e164 ?? "—"} · Estado: ${customerStateLabel(customer.state)}`}
-      state={<>{stateMessage(state)}{feedback ? <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.title} detail={feedback.detail} /> : null}</>}
+      actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a clientes</Button>}
+      state={stateMessage(state)}
     >
-      <section aria-label="Resumen del cliente">
-        <Card>
-          <p>{customer.phone_e164 ?? "—"}</p>
-          <Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge>
-          <label htmlFor="client-state">Estado del cliente</label>
-          <select id="client-state" value={selectedState ?? customer.state} disabled={mutation !== null || customerId === undefined} onChange={(event) => setSelectedState(event.target.value as CustomerState)}>
-            {(data.states ?? []).map((option) => <option key={option} value={option}>{customerStateLabel(option)}</option>)}
-          </select>
-          <button type="button" disabled={mutation !== null || customerId === undefined || !selectedState || selectedState === customer.state} onClick={() => void saveState()}>{mutation === "state" ? "Guardando…" : "Guardar estado"}</button>
-          <p>Consentimiento: {customer.consent_status ? "Sí" : "No"}</p>
-          {customer.email ? <p>{customer.email}</p> : null}
-          {customer.comuna ? <p>{customer.comuna}</p> : null}
-          {customer.address ? <p>{customer.address}</p> : null}
-          <p>Creado: {customer.created_at?.slice(0, 10) ?? "—"}</p>
-        </Card>
-      </section>
+      <div className="client-ficha">
+        <section className="client-ficha__rail" aria-label="Resumen del cliente">
+          <Card title="Identidad">
+            <dl className="client-ficha__facts">
+              <div><dt>Teléfono</dt><dd>{customer.phone_e164 ?? "—"}</dd></div>
+              <div><dt>Correo</dt><dd>{customer.email ?? "—"}</dd></div>
+              <div><dt>Comuna</dt><dd>{customer.comuna ?? "—"}</dd></div>
+              <div><dt>Dirección</dt><dd>{customer.address ?? "—"}</dd></div>
+              <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
+              <div><dt>Cliente desde</dt><dd>{formatDate(customer.created_at)}</dd></div>
+            </dl>
+            <div><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div>
+          </Card>
 
-      <Card title="Memo del cliente">
-        <p>{data.memo || "Todavía no hay memo para este cliente."}</p>
-        <Badge tone="neutral">customer_memo</Badge>
-      </Card>
+          <Card title="Estado">
+            <div className="client-ficha__state-control">
+              <Select
+                id="client-state"
+                label="Estado del cliente"
+                value={selectedState ?? customer.state}
+                options={(data.states ?? []).map((option) => ({ value: option, label: customerStateLabel(option) }))}
+                disabled={mutation !== null || customerId === undefined}
+                onChange={(event) => setSelectedState(event.target.value as CustomerState)}
+              />
+              <Button
+                disabled={mutation !== null || customerId === undefined || !selectedState || selectedState === customer.state}
+                onClick={() => void saveState()}
+              >
+                {mutation === "state" ? "Guardando…" : "Guardar estado"}
+              </Button>
+              <LocalFeedback feedback={stateFeedback} />
+              {isSaving ? <p role="status">Guardando estado…</p> : null}
+            </div>
+          </Card>
+        </section>
 
-      <ClientMemories memories={memories} customerName={customer.name} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} />
+        <div className="client-ficha__main">
+          <Card title="Memo del cliente">
+            <p>{data.memo || "Todavía no hay memo para este cliente."}</p>
+          </Card>
 
-      <Card title="Notas">
-        {data.notes.length ? data.notes.map((note) => <p key={note.id}>{note.author ?? "—"} · {note.note}</p>) : <EmptyState title="No hay notas" />}
-        <label htmlFor="new-note">Nueva nota</label>
-        <textarea id="new-note" value={note} disabled={mutation !== null || customerId === undefined} onChange={(event) => setNote(event.target.value)} />
-        <button type="button" disabled={mutation !== null || customerId === undefined} onClick={() => void saveNote()}>{mutation === "note" ? "Guardando…" : "Agregar nota"}</button>
-      </Card>
+          <ClientMemories memories={memories} customerName={customer.name} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} />
 
-      <Card title="Historial">
-        <h3>Visitas</h3>
-        <p>Historial de visitas ordenado cronológicamente</p>
-        {appointments.length ? appointments.map((appointment: Appointment) => (
-          <div key={appointment.id}>
-            <p>{appointment.service} · {appointment.starts_at.slice(0, 16)} · {appointment.status === "cancelled" ? "Cancelada" : "Agendada"}</p>
-            {appointment.calendar_error ? (
-              <StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`} />
-            ) : null}
-            {appointment.calendar_error ? <button type="button" disabled={retryingCalendarId === appointment.id} onClick={() => void retryCalendar(appointment.id)}>Reintentar calendario</button> : null}
-          </div>
-        )) : <EmptyState title="No hay visitas" />}
-        {visitHistory.length ? <ol aria-label="Ciclo de vida de visitas">{visitHistory.map((event: VisitHistoryEvent) => <li key={event.id}>{event.created_at?.slice(0, 16) ?? "—"} · {event.action === "cancelled" ? "Cancelada" : "Agendada"} · {event.actor}</li>)}</ol> : null}
-        <h3>Conversaciones</h3>
-        <DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row) => String(row.id)} />
-        <h3>Casos</h3>
-        <DataTable columns={caseColumns} rows={history.cases} rowKey={(row) => String(row.id)} />
-        <h3>Mensajes</h3>
-        <DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} />
-      </Card>
+          <Card title="Notas">
+            {data.notes.length ? data.notes.map((entry) => <p key={entry.id}>{entry.author ?? "—"} · {entry.note}</p>) : <EmptyState title="No hay notas" />}
+            <Textarea
+              id="new-note"
+              label="Nueva nota"
+              value={note}
+              disabled={mutation !== null || customerId === undefined}
+              onChange={(event) => setNote(event.target.value)}
+            />
+            <Button disabled={mutation !== null || customerId === undefined} onClick={() => void saveNote()}>
+              {mutation === "note" ? "Guardando…" : "Agregar nota"}
+            </Button>
+            <LocalFeedback feedback={noteFeedback} />
+          </Card>
 
-      {isSaving ? <p role="status">Guardando estado…</p> : null}
+          <section aria-label="Historial">
+            <h2>Historial</h2>
+            <section aria-labelledby="ficha-visits-heading" className="client-ficha__history-block">
+              <h3 id="ficha-visits-heading">Visitas</h3>
+              <p>Historial de visitas ordenado cronológicamente</p>
+              {appointments.length ? (
+                <ul className="client-ficha__visits data-region">
+                  {appointments.map((appointment: Appointment) => (
+                    <li key={appointment.id}>
+                      <span>{appointment.service}</span>
+                      <span>{formatDateTime(appointment.starts_at)}</span>
+                      <Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge>
+                      {appointment.calendar_error ? (
+                        <>
+                          <StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`} />
+                          <Button variant="secondary" disabled={retryingCalendarId === appointment.id} onClick={() => void retryCalendar(appointment.id)}>
+                            Reintentar calendario
+                          </Button>
+                        </>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : <EmptyState title="No hay visitas" />}
+              {visitHistory.length ? (
+                <ol aria-label="Ciclo de vida de visitas">
+                  {visitHistory.map((event: VisitHistoryEvent) => (
+                    <li key={event.id}>{formatDateTime(event.created_at)} · {event.action === "cancelled" ? "Cancelada" : "Agendada"} · {event.actor}</li>
+                  ))}
+                </ol>
+              ) : null}
+            </section>
+
+            <section aria-labelledby="ficha-conversations-heading" className="client-ficha__history-block">
+              <h3 id="ficha-conversations-heading">Conversaciones</h3>
+              <div className={surfaceClass(history.conversations.length)}>
+                <DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row) => String(row.id)} />
+              </div>
+            </section>
+
+            <section aria-labelledby="ficha-cases-heading" className="client-ficha__history-block">
+              <h3 id="ficha-cases-heading">Casos</h3>
+              <div className={surfaceClass(history.cases.length)}>
+                <DataTable columns={caseColumns} rows={history.cases} rowKey={(row) => String(row.id)} />
+              </div>
+            </section>
+
+            <section aria-labelledby="ficha-messages-heading" className="client-ficha__history-block">
+              <h3 id="ficha-messages-heading">Mensajes</h3>
+              <div className={surfaceClass(history.messages.length)}>
+                <DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} />
+              </div>
+            </section>
+          </section>
+        </div>
+      </div>
     </PageFrame>
   );
 }

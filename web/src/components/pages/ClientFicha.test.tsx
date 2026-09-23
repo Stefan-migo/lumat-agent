@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError, apiFetch, addClientNote, changeClientState, resolveMemoryRelation } from "../../api";
 import { ClientFicha } from "./ClientFicha";
@@ -155,5 +155,99 @@ describe("ClientFicha page grammar", () => {
 
     expect(addClientNote).not.toHaveBeenCalled();
     expect(screen.getByText("La nota no puede estar vacía")).toBeInTheDocument();
+  });
+});
+
+describe("ClientFicha slice 2 — product register", () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.restoreAllMocks());
+
+  // T10 — the panel primitives, not raw native controls.
+  it("uses the panel primitives for its controls instead of raw elements", () => {
+    const { container } = render(<ClientFicha data={ficha} memories={memories} />);
+
+    expect(container.querySelector("select")).toHaveClass("field__control");
+    expect(container.querySelector("textarea")).toHaveClass("field__control");
+    expect(container.querySelectorAll("button:not(.btn)")).toHaveLength(0);
+  });
+
+  // T11 — no raw backend identifier on the surface.
+  it("does not expose the raw memory type identifier", () => {
+    render(<ClientFicha data={ficha} memories={memories} />);
+
+    expect(screen.queryByText("customer_memo")).not.toBeInTheDocument();
+  });
+
+  // T12 — labelled identity facts instead of bare paragraphs.
+  it("renders the identity facts as labelled values", () => {
+    render(<ClientFicha data={ficha} memories={memories} />);
+
+    const summary = screen.getByRole("region", { name: "Resumen del cliente" });
+    expect(within(summary).getByText("Teléfono")).toBeInTheDocument();
+    expect(within(summary).getByText("+56912345678")).toBeInTheDocument();
+    expect(within(summary).getByText("Comuna")).toBeInTheDocument();
+    expect(within(summary).getByText("Ñuñoa")).toBeInTheDocument();
+    expect(within(summary).getByText("Consentimiento")).toBeInTheDocument();
+  });
+
+  // T13 — feedback at the locus of the action.
+  it("shows save feedback beside the control that caused it, not in the page banner", async () => {
+    const user = userEvent.setup();
+    vi.mocked(changeClientState).mockResolvedValue({ ok: true, state: "pendiente" });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    const { container } = render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.selectOptions(screen.getByLabelText("Estado del cliente"), "pendiente");
+    await user.click(screen.getByRole("button", { name: "Guardar estado" }));
+
+    const control = container.querySelector(".client-ficha__state-control");
+    expect(control).not.toBeNull();
+    expect(await within(control as HTMLElement).findByText("Estado guardado")).toBeInTheDocument();
+    // The page banner must not carry action feedback.
+    expect(container.querySelector(".page-frame__banner")?.textContent ?? "").not.toContain("Estado guardado");
+  });
+
+  // T14 — history decomposed into named regions with Chilean-locale dates.
+  it("splits the history into named regions instead of one card", () => {
+    render(<ClientFicha data={ficha} memories={memories} />);
+
+    expect(screen.getByRole("region", { name: "Visitas" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Conversaciones" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Casos" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Mensajes" })).toBeInTheDocument();
+  });
+
+  it("formats history dates in the Chilean locale instead of slicing the ISO string", () => {
+    render(<ClientFicha data={ficha} memories={memories} />);
+
+    // The raw ISO slice is gone; what remains is the `es-CL` short shape (dd-mm-yy here).
+    expect(screen.queryByText("2026-07-15")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/\d{2}-\d{2}-\d{2}/).length).toBeGreaterThan(0);
+  });
+
+  // T15 — the layout decision: two regions with a summary rail.
+  it("composes the ficha into a summary rail plus a main region, with no conversation component", () => {
+    const { container } = render(<ClientFicha data={ficha} memories={memories} />);
+
+    expect(container.querySelector(".client-ficha__rail")).not.toBeNull();
+    expect(container.querySelector(".client-ficha__main")).not.toBeNull();
+    expect(container.querySelector(".ai-agent-grammar__bubble, .assistant-chat__conversation")).toBeNull();
+  });
+
+  // New requirement from the owner's review: the ficha had no way back.
+  it("offers an explicit back control to the clients list", () => {
+    render(<ClientFicha data={ficha} memories={memories} />);
+
+    expect(screen.getByRole("button", { name: "Volver a clientes" })).toBeInTheDocument();
+  });
+
+  it("returns through history when the back control is used", async () => {
+    const user = userEvent.setup();
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    render(<ClientFicha data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("button", { name: "Volver a clientes" }));
+
+    expect(back).toHaveBeenCalledTimes(1);
   });
 });
