@@ -151,6 +151,70 @@ def _streaming_client(calls, text="Ana is a customer"):
     )
 
 
+def test_web_search_snippets_are_grounded_and_cited(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda *args, **kwargs: {
+            "tool": "web.search",
+            "status": "completed",
+            "result": [
+                {
+                    "title": "Boiler maintenance guidance",
+                    "url": "https://example.test/boiler",
+                    "snippet": "Annual maintenance reduces breakdown risk.",
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: _streaming_client(calls, text="Annual maintenance reduces breakdown risk. https://example.test/boiler"),
+    )
+
+    state = _tool_loop_state(
+        content="What does the web say about boiler maintenance?",
+        plan={
+            "kind": "tool",
+            "tool": "web.search",
+            "arguments": {"query": "boiler maintenance"},
+            "requires_approval": False,
+        },
+    )
+    first = execute(state)
+    execute({**state, **first, "on_token": lambda _token: None})
+
+    prompt = calls[0]["messages"][-1]["content"]
+    assert "Annual maintenance reduces breakdown risk." in prompt
+    assert "https://example.test/boiler" in prompt
+
+
+def test_web_search_failure_is_visible_instead_of_empty_evidence(monkeypatch):
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda *args, **kwargs: {
+            "tool": "web.search",
+            "status": "error",
+            "error": "search provider timed out",
+            "evidence": {"tool": "web.search", "status": "error"},
+        },
+    )
+
+    result = execute(_tool_loop_state(
+        content="Search the web for boiler maintenance.",
+        plan={
+            "kind": "tool",
+            "tool": "web.search",
+            "arguments": {"query": "boiler maintenance"},
+            "requires_approval": False,
+        },
+    ))
+
+    assert result["status"] == "degraded"
+    assert result["tool_result"]["status"] == "error"
+    assert result["tool_result"]["evidence"]["status"] == "error"
+
+
 def test_completed_tool_traversal_records_one_execution_audit(monkeypatch, migrated_db):
     calls = []
     monkeypatch.setattr(

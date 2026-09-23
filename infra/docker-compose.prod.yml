@@ -51,6 +51,7 @@ services:
     environment:
       HF_HOME: /home/appuser/.cache/huggingface
       FASTEMBED_CACHE_PATH: /home/appuser/.cache/fastembed
+      BRAVE_SEARCH_API_KEY: ${BRAVE_SEARCH_API_KEY:-}
     networks:
       - internal
       - default

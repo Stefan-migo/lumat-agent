@@ -149,7 +149,10 @@ The automation creation tool MUST be classified as a write, MUST execute only af
 
 ### Requirement: AT-3 — Bounded Web Evidence
 
-Web search MUST use one bounded adapter interface over `httpx` and return source evidence. Tavily and other external integrations MUST NOT be required by this capability.
+Web search MUST use one bounded adapter interface over `httpx` and return source evidence. The provider MUST
+be configurable, return bounded textual content with each source reference, and fail loudly for provider
+failures rather than representing them as empty results. The adapter seam MUST remain provider-neutral so
+another provider can replace the configured integration without changing the tool contract.
 
 #### Scenario: Search result
 - GIVEN an authorized read plan containing a web query
