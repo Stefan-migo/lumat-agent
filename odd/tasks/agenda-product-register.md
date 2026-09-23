@@ -490,13 +490,16 @@ is not in this unit's scope.
 
 ## Size
 
-To be recorded at the end of each slice: changed lines under `web/`
-(added/deleted), the dominant terms, and whether the slice fits the ~400
-review-line budget.
+Slice 1 (`9b83e27f..HEAD` under `web/`) changed **134 lines** (110 added, 24
+deleted) across 5 files: `AgendaPage.test.tsx` 51, `AgendaPage.tsx` 43,
+`AgendaPage.stories.test.tsx` 22, `AgendaPage.stories.tsx` 9, `DESIGN_SYSTEM.md`
+9. Production code is 43 of those lines; the rest is tests, stories and the
+page-architecture section. It fits the ~400 review-line budget with room for the
+technician slice.
 
-Slice 1 changed `90` lines under `web/` (`72` added, `18` deleted), dominated
-by Agenda state tests and local feedback/section composition. It fits the ~400
-review-line budget.
+An earlier revision of this section recorded 90 lines (72 added, 18 deleted); that
+number was measured before the C1–C3 correction pass and is superseded by the
+figures above.
 
 ## Open items
 
@@ -522,6 +525,14 @@ review-line budget.
   contract work is undecided.
 - **`AutomationRulesPage.tsx:24`** still renders its drill-down link on the
   browser default colour (inherited; out of scope).
+- **The row-local sync-failure detail rides inside the status pill.**
+  `AgendaPage.tsx` renders the API message appended to the badge
+  (`title: detail`), so a long server message will stretch the actions cell. It is
+  compact and honest in the common case, and where a failure detail belongs is a
+  design decision rather than an obvious fix, so it is reported here instead of
+  being churned through another correction pass — a simpler form that changes the
+  design is a finding, not an edit. The owner's visual review is what decides
+  whether it needs a different home.
 - **Density (acceptance 12) is argued structurally, not measured**, and the
   owner's visual confirmation at 1366×768 is the gate between slices.
 
