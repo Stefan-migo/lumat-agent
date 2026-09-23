@@ -94,6 +94,35 @@ The `memory.write` tool MUST accept a declared `visibility` of `thread` or `glob
 - WHEN execution is requested without consumed exact approval
 - THEN the tool rejects the call before mutation
 
+### Requirement: AT-11 — Autonomous Agent Memory Correction
+
+The assistant MUST expose `memory.update` and `memory.delete` as autonomous writes alongside `memory.write`, requiring a positive trusted thread id and permitting only agent-authored `agent:` memories on the current thread or project axis; every other write MUST retain exact approval, and rejected targets MUST NOT be mutated.
+
+#### Scenario: Owned row updates without approval
+- GIVEN an agent-authored `agent:` memory on the trusted panel thread or canonical project axis
+- WHEN the assistant executes `memory.update` with a non-empty patch and no approval
+- THEN the owned row is updated in place without an approval step
+
+#### Scenario: Non-owned row is rejected without mutation
+- GIVEN a customer memory, system recap, another thread's row, or a row in a foreign `proyecto`
+- WHEN the assistant executes `memory.update` or `memory.delete`
+- THEN dispatch raises a validation error and the row remains unchanged
+
+#### Scenario: Empty update patch is rejected
+- GIVEN a `memory.update` payload containing only a positive memory id
+- WHEN the assistant validates the arguments
+- THEN validation rejects the payload before service execution
+
+#### Scenario: Owned row deletion
+- GIVEN an agent-authored `agent:` memory on an allowed axis
+- WHEN the assistant executes `memory.delete` without approval
+- THEN the owned row is removed
+
+#### Scenario: Other writes remain approval-gated
+- GIVEN any write tool other than `memory.write`, `memory.update`, or `memory.delete`
+- WHEN execution is requested without exact approval
+- THEN the tool rejects the call before mutation
+
 ### Requirement: AT-2 — Confirmed Automation Write
 
 The automation creation tool MUST be classified as a write, MUST execute only after exact approval, and MUST use the existing automation service in the same transaction. It MUST return the created rule and preserve existing history and worker semantics.

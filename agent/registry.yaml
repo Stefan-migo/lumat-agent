@@ -66,6 +66,8 @@ assistant:
     - memory.read
     - memory.search
     - memory.write
+    - memory.update
+    - memory.delete
     - dashboard.summary
     - web.search
     - automation.create_rule

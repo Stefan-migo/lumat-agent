@@ -16,7 +16,7 @@ from app.chat.assistant.nodes import (
 )
 from app.chat.assistant.tools.registry import ToolValidationError, execute_tool
 from app.db import SessionLocal
-from app.models import AuditLog, Memory, MemoryType
+from app.models import AuditLog, Memory, MemoryProducer, MemoryType, MemoryVisibility
 from app.services.prompts import load_assistant_config
 from sqlalchemy import select
 
@@ -448,6 +448,18 @@ def test_memory_write_guardrail_requires_approval_without_trusted_thread():
     assert result["guardrails"]["approval_required"] is True
 
 
+@pytest.mark.parametrize("tool", ["memory.update", "memory.delete"])
+def test_memory_correction_guardrail_matches_memory_write_autonomy(tool):
+    plan = {
+        "kind": "tool",
+        "tool": tool,
+        "arguments": {"id": 4, "titulo": "Fixed"} if tool.endswith("update") else {"id": 4},
+        "requires_approval": False,
+    }
+    assert guardrails({"thread_id": 7, "plan": plan, "planner": {"valid": True}})["status"] == "executing"
+    assert guardrails({"plan": plan, "planner": {"valid": True}})["status"] == "approval_pending"
+
+
 def _memory_read_plan(**arguments):
     return {"kind": "tool", "tool": "memory.read", "arguments": arguments, "requires_approval": False}
 
@@ -528,6 +540,41 @@ def test_execute_forwards_trusted_thread_to_memory_write(migrated_db):
     assert row.scope == "agent"
     assert row.entity_id == "agent:default"
     assert row.visibility.value == "global"
+
+
+@pytest.mark.parametrize("tool", ["memory.update", "memory.delete"])
+def test_execute_forwards_trusted_thread_to_memory_correction(migrated_db, tool):
+    with SessionLocal() as session:
+        row = Memory(
+            proyecto="default",
+            scope="agent",
+            entity_id="agent:default",
+            tipo=MemoryType.DISCOVERY,
+            titulo="Original",
+            contenido="Original content",
+            topic_key=f"agent:correction-{tool.rsplit('.', 1)[-1]}",
+            embedding=[0.0] * 384,
+            producer=MemoryProducer.AGENT,
+            visibility=MemoryVisibility.GLOBAL,
+        )
+        session.add(row)
+        session.flush()
+        memory_id = row.id
+        result = execute({
+            "thread_id": 7,
+            "run_id": "run-memory-correction",
+            "plan": {
+                "kind": "tool",
+                "tool": tool,
+                "arguments": {"id": memory_id, "titulo": "Fixed"} if tool.endswith("update") else {"id": memory_id},
+                "requires_approval": False,
+            },
+            "session": session,
+            "evidence": [],
+        })
+        assert result["status"] == "completed"
+        assert result["tool_result"]["result"]["id"] == memory_id
+        assert session.get(Memory, memory_id) is None if tool.endswith("delete") else session.get(Memory, memory_id).titulo == "Fixed"
 
 
 def test_memory_write_is_idempotent_in_db(migrated_db):
