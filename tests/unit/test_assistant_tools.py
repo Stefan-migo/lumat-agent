@@ -6,7 +6,9 @@ import pytest
 from app.chat.assistant.tools.registry import (
     AUTONOMOUS_WRITE_ALLOWLIST,
     MemoryArgs,
+    MemoryDeleteArgs,
     MemorySearchArgs,
+    MemoryUpdateArgs,
     MemoryWriteArgs,
     ProjectArchiveArgs,
     ProjectCreateArgs,
@@ -22,6 +24,7 @@ from app.chat.assistant.tools.registry import (
 from app.chat.assistant.state import SDBTask
 from app.chat.assistant.approval import consume_approval, issue_approval, validate_execution
 from app.services.projects import ProjectCandidate, ProjectResult
+from app.services import tukulpan as memory
 from app.chat.assistant.tools.search import DuckDuckGoSearch, SearchFailure
 
 
@@ -537,7 +540,7 @@ def test_memory_search_uses_own_axes_and_bounds_content(monkeypatch):
 
 
 def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkeypatch):
-    assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write"})
+    assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write", "memory.update", "memory.delete"})
     assert "scope" not in MemoryWriteArgs.model_json_schema()["properties"]
     assert "entity_id" not in MemoryWriteArgs.model_json_schema()["properties"]
     with pytest.raises(ValueError):
@@ -580,6 +583,89 @@ def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkey
     )
     assert calls[-1]["scope"] == "panel"
     assert calls[-1]["entity_id"] == "thread:7"
+
+
+def test_memory_correction_args_are_bounded_and_require_a_patch():
+    assert MemoryUpdateArgs.model_json_schema()["properties"].keys() == {
+        "id", "titulo", "contenido", "tipo"
+    }
+    assert MemoryDeleteArgs.model_json_schema()["properties"].keys() == {"id"}
+    with pytest.raises(ValueError):
+        MemoryUpdateArgs.model_validate({"id": 1})
+    with pytest.raises(ValueError):
+        MemoryUpdateArgs.model_validate({"id": 1, "scope": "agent", "titulo": "x"})
+    with pytest.raises(ValueError):
+        MemoryDeleteArgs.model_validate({"id": 0})
+    with pytest.raises(ValueError):
+        MemoryDeleteArgs.model_validate({"id": 1, "topic_key": "agent:x"})
+
+
+@pytest.mark.parametrize(
+    "row_kwargs",
+    [
+        {"proyecto": "default", "producer": memory.MemoryProducer.AGENT, "topic_key": "agent:x", "scope": "panel", "entity_id": "thread:8"},
+        {"proyecto": "default", "producer": memory.MemoryProducer.AGENT, "topic_key": "agent:x", "scope": "agent", "entity_id": "agent:default"},
+    ],
+)
+def test_memory_correction_owned_axes_are_accepted(monkeypatch, row_kwargs):
+    from app.chat.assistant.tools.registry import _owned_agent_memory_or_raise
+
+    row = SimpleNamespace(id=4, **row_kwargs)
+    session = SimpleNamespace(get=lambda _model, _id: row)
+    assert _owned_agent_memory_or_raise(session, 4, trusted_thread_id=8, proyecto="default") is row
+
+
+@pytest.mark.parametrize(
+    "row_kwargs",
+    [
+        {"proyecto": "default", "producer": memory.MemoryProducer.USER, "topic_key": "agent:x", "scope": "agent", "entity_id": "agent:default"},
+        {"proyecto": "default", "producer": memory.MemoryProducer.SYSTEM, "topic_key": "system:x", "scope": "agent", "entity_id": "agent:default"},
+        {"proyecto": "default", "producer": memory.MemoryProducer.AGENT, "topic_key": "agent:x", "scope": "panel", "entity_id": "thread:9"},
+        {"proyecto": "other", "producer": memory.MemoryProducer.AGENT, "topic_key": "agent:x", "scope": "agent", "entity_id": "agent:other"},
+    ],
+)
+def test_memory_correction_rejects_rows_outside_agent_ownership(row_kwargs):
+    from app.chat.assistant.tools.registry import _owned_agent_memory_or_raise
+
+    row = SimpleNamespace(id=4, **row_kwargs)
+    session = SimpleNamespace(get=lambda _model, _id: row)
+    with pytest.raises(ToolValidationError):
+        _owned_agent_memory_or_raise(session, 4, trusted_thread_id=8, proyecto="default")
+
+
+def test_memory_correction_update_and_delete_are_autonomous(monkeypatch):
+    assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write", "memory.update", "memory.delete"})
+    row = SimpleNamespace(id=4, proyecto="default", producer=memory.MemoryProducer.AGENT, topic_key="agent:x", scope="agent", entity_id="agent:default")
+
+    class Savepoint:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    session = SimpleNamespace(begin_nested=lambda: Savepoint(), get=lambda _model, _id: row)
+    monkeypatch.setattr("app.chat.assistant.tools.registry.memory.update", lambda *_args, **_kwargs: row)
+    monkeypatch.setattr("app.chat.assistant.tools.registry.memory.delete", lambda *_args, **_kwargs: row)
+    assert execute_tool(session, "memory.update", {"id": 4, "titulo": "Fixed"}, trusted_thread_id=8)["result"] == {"updated": True, "id": 4}
+    assert execute_tool(session, "memory.delete", {"id": 4}, trusted_thread_id=8)["result"] == {"deleted": True, "id": 4}
+
+
+def test_memory_service_update_reembeds_only_changed_content(monkeypatch):
+    row = SimpleNamespace(
+        contenido="Old", titulo="Old title", tipo=memory.MemoryType.DECISION,
+        embedding=[0.0], normalized_hash="old", review_after=None,
+    )
+    session = SimpleNamespace(get=lambda _model, _id: row, flush=lambda: None)
+    embedded = []
+    monkeypatch.setattr("app.services.tukulpan._embed", lambda texts: embedded.append(texts) or [[1.0]])
+
+    memory.update(session, 1, titulo="New title")
+    assert embedded == []
+    memory.update(session, 1, contenido="New content")
+    assert embedded == [["New content"]]
+    assert row.embedding == [1.0]
+    assert row.normalized_hash == memory._normalized_hash("New content")
 
 
 def test_memory_write_global_visibility_uses_canonical_agent_axis(monkeypatch):

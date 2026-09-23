@@ -26,7 +26,7 @@ SDB_WRITE_ALLOWLIST = frozenset({
     "project.archive",
     "project.merge",
 })
-AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write"})
+AUTONOMOUS_WRITE_ALLOWLIST = frozenset({"memory.write", "memory.update", "memory.delete"})
 MEMORY_SEARCH_CONTENT_LIMIT = 2_000
 # The customer id shape is a contract value the planner cannot derive from prose.
 _CUSTOMER_ENTITY_PATTERN = r"^(?:customer:\d+|\d+)$"
@@ -144,6 +144,25 @@ class MemoryWriteArgs(BaseModel):
     topic_key: str = Field(min_length=1, max_length=200, pattern=r"^agent:")
     tipo: Literal["decision", "discovery", "pattern", "preference"]
     visibility: Literal["thread", "global"] = "global"
+
+
+class MemoryUpdateArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: int = Field(gt=0)
+    titulo: str | None = Field(default=None, min_length=1, max_length=200)
+    contenido: str | None = Field(default=None, min_length=1, max_length=2000)
+    tipo: Literal["decision", "discovery", "pattern", "preference"] | None = None
+
+    @model_validator(mode="after")
+    def require_patch(self):
+        if self.titulo is None and self.contenido is None and self.tipo is None:
+            raise ValueError("memory.update requires at least one field")
+        return self
+
+
+class MemoryDeleteArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: int = Field(gt=0)
 
 
 class WebSearchArgs(BaseModel):
@@ -341,6 +360,50 @@ def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int, pro
         return {"written": False, "degraded_reason": str(exc), "topic_key": key}
 
 
+def _owned_agent_memory_or_raise(session, memory_id: int, *, trusted_thread_id: int, proyecto: str):
+    row = session.get(memory.Memory, memory_id)
+    if row is None:
+        raise ToolValidationError(f"memory {memory_id} is not owned by the assistant")
+    owned_axes = {
+        ("panel", memory.thread_memory_entity(trusted_thread_id)),
+        ("agent", memory.agent_memory_entity(proyecto)),
+    }
+    if (
+        row.proyecto != proyecto
+        or row.producer is not memory.MemoryProducer.AGENT
+        or not row.topic_key.startswith("agent:")
+        or (row.scope, row.entity_id) not in owned_axes
+    ):
+        raise ToolValidationError(f"memory {memory_id} is not owned by the assistant")
+    return row
+
+
+def _update_memory(session, args: MemoryUpdateArgs, *, trusted_thread_id: int, proyecto: str = "default"):
+    _owned_agent_memory_or_raise(session, args.id, trusted_thread_id=trusted_thread_id, proyecto=proyecto)
+    try:
+        with session.begin_nested():
+            row = memory.update(
+                session,
+                args.id,
+                titulo=args.titulo,
+                contenido=args.contenido,
+                tipo=memory.MemoryType(args.tipo) if args.tipo is not None else None,
+            )
+        return {"updated": True, "id": row.id}
+    except Exception as exc:
+        return {"updated": False, "degraded_reason": str(exc)}
+
+
+def _delete_memory(session, args: MemoryDeleteArgs, *, trusted_thread_id: int, proyecto: str = "default"):
+    _owned_agent_memory_or_raise(session, args.id, trusted_thread_id=trusted_thread_id, proyecto=proyecto)
+    try:
+        with session.begin_nested():
+            row = memory.delete(session, args.id)
+        return {"deleted": True, "id": row.id}
+    except Exception as exc:
+        return {"deleted": False, "degraded_reason": str(exc)}
+
+
 def _create_rule(session, args: RuleArgs):
     return automation.create_rule(session, args.model_dump(), actor="assistant", executor_origin=True)
 
@@ -400,6 +463,8 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory, "Read scoped memory."),
     "memory.search": ToolDefinition("memory.search", MemorySearchArgs, True, _search_memory, "Search scoped memory."),
     "memory.write": ToolDefinition("memory.write", MemoryWriteArgs, False, _write_memory, "Write memory; global across threads by default."),
+    "memory.update": ToolDefinition("memory.update", MemoryUpdateArgs, False, _update_memory, "Update an agent-authored memory."),
+    "memory.delete": ToolDefinition("memory.delete", MemoryDeleteArgs, False, _delete_memory, "Delete an agent-authored memory."),
     "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis, "Read the operational dashboard summary."),
     "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter."),
     "automation.create_rule": ToolDefinition("automation.create_rule", RuleArgs, False, _create_rule, "Create an automation after approval."),
@@ -492,7 +557,7 @@ def execute_tool(
             result = _plain(definition.handler(session, parsed, _approval=project_approval))
         elif name == "project.create":
             result = _plain(definition.handler(session, parsed, _approval=project_approval))
-        elif name == "memory.write":
+        elif name in {"memory.write", "memory.update", "memory.delete"}:
             result = _plain(
                 definition.handler(
                     session, parsed, trusted_thread_id=trusted_thread_id, proyecto=proyecto
