@@ -15,7 +15,7 @@ import { StateMessage } from "../shared/StateMessage";
 import { KB_OPERATION_TONES, kbStatusLabel, kbStatusTone } from "../shared/toneMaps";
 
 export type KbListState = AsyncDataState | "processing";
-export interface KbListProps { data?: DocsResponse | null; state?: KbListState; onRetry?: () => void; }
+export interface KbListProps { data?: DocsResponse | null; state?: KbListState; onRetry?: () => void; onOpenDocument?: (id: number) => void; }
 
 // `customer` means the customer channel may ground on the document AND Lumat may still read it —
 // never client-only. The label says who reads it, symmetrically with `internal`.
