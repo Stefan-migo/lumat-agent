@@ -22,7 +22,7 @@ describe("panel production links", () => {
   });
 
   it("uses clean route paths for customer drill-down links", () => {
-    render(<ClientesList data={[{ id: 7, name: "Cliente vivo", phone_e164: "+56911111111", email: null, comuna: null, address: null, state: "activo", consent_status: true, consent_at: null, created_at: "2026-08-25" }]} state="ready" />);
+    render(<ClientesList data={[{ id: 7, name: "Cliente vivo", phone_e164: "+56911111111", email: null, comuna: null, address: null, state: "contactado", consent_status: true, consent_at: null, created_at: "2026-08-25" }]} state="ready" />);
     expect(screen.getByRole("link", { name: "Cliente vivo" })).toHaveAttribute("href", "/panel/app/clients/7");
   });
 
@@ -35,7 +35,7 @@ describe("panel production links", () => {
 
   it("keeps case customer links on the same route seam", () => {
     const onOpenClient = vi.fn();
-    render(<CasesList data={{ cases: [{ id: 3, conversation_id: 9, customer_id: 7, created_at: "2026-08-25", service: "Gas", priority: "alta", status: "abierto", emergency: false, responsible_id: null, summary: "Needs visit", escalated_at: null, closed_at: null, acknowledged_at: null, ack_by: null, customer: { id: 7, name: "Cliente vivo", phone_e164: "+56911111111", email: null, comuna: null, address: null, state: "activo", consent_status: true, consent_at: null, created_at: "2026-08-25" } }], users: [] }} state="ready" onOpenClient={onOpenClient} />);
+    render(<CasesList data={{ cases: [{ id: 3, conversation_id: 9, customer_id: 7, created_at: "2026-08-25", service: "Gas", priority: "alta", status: "abierto", emergency: false, responsible_id: null, summary: "Needs visit", escalated_at: null, closed_at: null, acknowledged_at: null, ack_by: null, customer: { id: 7, name: "Cliente vivo", phone_e164: "+56911111111", email: null, comuna: null, address: null, state: "contactado", consent_status: true, consent_at: null, created_at: "2026-08-25" } }], users: [] }} state="ready" onOpenClient={onOpenClient} />);
     const link = screen.getByRole("link", { name: "Cliente vivo" });
     expect(link).toHaveAttribute("href", "/panel/app/clients/7");
     link.click();

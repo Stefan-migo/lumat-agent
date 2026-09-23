@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { apiFetch } from "../../api";
 import type { Customer } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -19,6 +19,9 @@ export interface ClientesListProps {
   state?: ClientesListState;
   onRetry?: () => void;
   onOpenClient?: (id: number) => void;
+  /** Controlled applied search term. Needed to render the filtered-empty state, which depends
+   *  on the query round-trip and cannot be expressed with `data`/`state` alone. */
+  query?: string;
 }
 
 const columns = (onOpenClient?: (id: number) => void): Column<Customer>[] => [
@@ -26,7 +29,7 @@ const columns = (onOpenClient?: (id: number) => void): Column<Customer>[] => [
     key: "name",
     header: "Cliente",
     render: (customer) => (
-      <a href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined} style={{ color: "var(--primary-700)" }}>
+      <a className="table__link" href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>
         {customer.name ?? "—"}
       </a>
     ),
@@ -50,7 +53,7 @@ function stateMessage(state: ClientesListState, retry: () => void) {
     return (
       <div>
         <StateMessage tone="danger" role="alert" title="No pudimos cargar los clientes" detail="Reintenta para recuperar el listado." />
-        <button type="button" onClick={retry}>Reintentar</button>
+        <Button variant="secondary" onClick={retry}>Reintentar</Button>
       </div>
     );
   }
@@ -58,38 +61,55 @@ function stateMessage(state: ClientesListState, retry: () => void) {
   return null;
 }
 
-export function ClientesList({ data: controlledData, state: controlledState, onRetry, onOpenClient }: ClientesListProps) {
-  const [query, setQuery] = useState("");
+export function ClientesList({ data: controlledData, state: controlledState, onRetry, onOpenClient, query: controlledQuery }: ClientesListProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const query = controlledQuery ?? searchTerm;
+  // The query drives the fetch through the hook's own refresh key, so an emptied search
+  // refetches the unfiltered list instead of keeping the previous filtered result.
+  const [queryVersion, setQueryVersion] = useState(0);
+  // Remounting the debounced input is the only way to clear it: the primitive owns its own
+  // text, so resetting our query state alone would leave the stale term on screen.
+  const [searchResetKey, setSearchResetKey] = useState(0);
   const fetchClients = useCallback(
     () => apiFetch<{ clients: Customer[] }>(`/panel/api/clients${query ? `?q=${encodeURIComponent(query)}` : ""}`).then((response) => response.clients),
     [query],
   );
-  const fetched = useAsyncData(fetchClients, controlledData === undefined);
-  useEffect(() => {
-    if (controlledData === undefined && query) fetched.retry();
-  }, [controlledData, query]);
+  const fetched = useAsyncData(fetchClients, controlledData === undefined, queryVersion);
   const data = controlledData === undefined ? fetched.data : controlledData;
   const state = controlledState ?? fetched.state;
   const retry = onRetry ?? fetched.retry;
+  const filtered = query.trim().length > 0;
+  const clearSearch = () => {
+    setSearchTerm("");
+    setQueryVersion((current) => current + 1);
+    setSearchResetKey((current) => current + 1);
+  };
 
   return (
     <PageFrame
       title="Clientes"
-      meta={data ? `${data.length} clientes` : undefined}
-      actions={
-        <>
-          <SearchInput aria-label="Buscar clientes" onSearch={setQuery} />
-          <Button variant="secondary" href="/panel/export/clients.csv">Exportar clientes CSV</Button>
-          <Button variant="secondary" href="/panel/export/cases.csv">Exportar casos CSV</Button>
-        </>
-      }
+      meta={data ? `${data.length} ${data.length === 1 ? "cliente" : "clientes"}` : undefined}
       state={stateMessage(state, retry)}
     >
-      {state === "loading" ? null : data && data.length > 0 ? (
-        <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} />
-      ) : state === "empty" || (state === "ready" && data?.length === 0) ? (
-        <EmptyState title="No hay registros" description="Ajusta tu búsqueda o agrega nuevos clientes." />
-      ) : null}
+      <section aria-label="Listado de clientes">
+        <div className="toolbar">
+          <SearchInput key={searchResetKey} aria-label="Buscar clientes" onSearch={(next) => { setSearchTerm(next); setQueryVersion((current) => current + 1); }} />
+          <Button variant="secondary" href="/panel/export/clients.csv">Exportar clientes CSV</Button>
+          <Button variant="secondary" href="/panel/export/cases.csv">Exportar casos CSV</Button>
+        </div>
+        {state === "loading" ? null : data && data.length > 0 ? (
+          <div className="data-region">
+            <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} />
+          </div>
+        ) : filtered ? (
+          <div>
+            <EmptyState title="Sin resultados" description="Ajusta tu búsqueda o límpiala para ver todo el listado." />
+            <Button variant="secondary" onClick={clearSearch}>Limpiar búsqueda</Button>
+          </div>
+        ) : state === "empty" || (state === "ready" && data?.length === 0) ? (
+          <EmptyState title="No hay registros" description="Ajusta tu búsqueda o agrega nuevos clientes." />
+        ) : null}
+      </section>
     </PageFrame>
   );
 }

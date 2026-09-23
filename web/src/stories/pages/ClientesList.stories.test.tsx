@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { clients as customers } from "./_shared/mockData/clients";
 import { customerStateLabel, customerStateTone } from "./_shared/toneMaps";
-import { ClientesListView, ClientesListEmpty } from "./ClientesList.stories";
+import { ClientesListView, ClientesListEmpty, ClientesListFilteredEmpty } from "./ClientesList.stories";
 import { ClientesList } from "../../components/pages/ClientesList";
 
 describe("ClientesList page story (R-PRD-PG-6)", () => {
@@ -87,11 +87,11 @@ describe("ClientesList page story (R-PRD-PG-6)", () => {
   it("renders each customer's approved Spanish state label (triangulation)", () => {
     render(<ClientesListView />);
     const table = screen.getByRole("table");
-    // Cover a different state than the first row (e.g. bloqueado → "Bloqueado")
-    const blocked = customers.find((c) => c.state === "bloqueado")!;
-    const row = within(table).getByRole("link", { name: blocked.name! }).closest("tr")!;
-    const badge = within(row).getByText(customerStateLabel(blocked.state));
-    expect(badge.getAttribute("data-tone")).toBe(customerStateTone(blocked.state));
+    // Cover a different state than the first row (e.g. en_evaluacion → "En evaluación")
+    const evaluating = customers.find((c) => c.state === "en_evaluacion")!;
+    const row = within(table).getByRole("link", { name: evaluating.name! }).closest("tr")!;
+    const badge = within(row).getByText(customerStateLabel(evaluating.state));
+    expect(badge.getAttribute("data-tone")).toBe(customerStateTone(evaluating.state));
   });
 
   it("renders a stale-data banner pairing status role with a visible label", () => {
@@ -129,6 +129,49 @@ describe("ClientesList Empty story", () => {
   it("renders the empty state with the approved Spanish message", () => {
     render(<ClientesListEmpty />);
     expect(screen.getByText("No hay registros")).toBeInTheDocument();
+  });
+});
+
+describe("ClientesList Denied and FilteredEmpty stories", () => {
+  it("renders the denied banner pairing alert role with a visible label", () => {
+    render(<ClientesListView state="denied" />);
+    const banner = screen.getByRole("alert");
+    expect(within(banner).getByText("No tienes permiso para ver este panel")).toBeInTheDocument();
+  });
+
+  it("renders the filtered-empty state with its recovery action, distinct from the empty state", () => {
+    render(<ClientesListFilteredEmpty />);
+
+    expect(screen.getByText("Sin resultados")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Limpiar búsqueda" })).toBeInTheDocument();
+    expect(screen.queryByText("No hay registros")).not.toBeInTheDocument();
+  });
+});
+
+describe("ClientesList appearance axis (amended DS-GRAMMAR-1)", () => {
+  it("composes the list into a named region with the shared toolbar and data surface", () => {
+    const { container } = render(<ClientesListView />);
+
+    expect(screen.getByRole("region", { name: "Listado de clientes" })).toBeInTheDocument();
+    expect(container.querySelector(".toolbar")).not.toBeNull();
+    expect(container.querySelector(".data-region")).not.toBeNull();
+  });
+
+  it("styles the drill-down link through the shared table link contract", () => {
+    render(<ClientesListView />);
+
+    const link = screen.getByRole("link", { name: customers[0].name! });
+    expect(link).toHaveClass("table__link");
+    expect(link).not.toHaveAttribute("style");
+  });
+
+  it("keeps the dense data layer tabular with no conversation component", () => {
+    const { container } = render(<ClientesListView />);
+
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(
+      container.querySelector(".ai-agent-grammar__bubble, .assistant-chat__conversation, .ai-agent-grammar__composer"),
+    ).toBeNull();
   });
 });
 

@@ -284,6 +284,25 @@
 .table tbody tr:hover {
   background: var(--corp-surface-hover);
 }
+/* Row-level drill-down links. The accessible link colour is a contract, not a
+   call-site decision, and it is density-neutral on purpose: colour only, no control
+   padding, so a dense row does not grow to the 40px control target that
+   `.btn--tertiary` carries. Second consumers: CasesList (two cells) and
+   AutomationRulesPage (currently on the UA link colour). */
+.table__link {
+  color: var(--primary-700);
+}
+/* The composed surface a data table sits on: border, radius and elevation only — no padding,
+   so the rows per screen do not change and the table keeps its own cell rhythm. It wraps the
+   table only, never an `.empty-state`, which is already a surface of its own (no card-on-card).
+   Second consumer to be named before this generalises beyond Clientes. */
+.data-region {
+  border: 1px solid var(--corp-border);
+  border-radius: var(--radius-md);
+  background: var(--brand-bg-elevated);
+  box-shadow: var(--shadow-1);
+  overflow-x: auto;
+}
 /* Tabs (CORP-TABS-1): underline accent marks the active tab; inactive tabs use
    --corp-muted; panel content inherits --corp-text. */
 .tabs {
@@ -1691,13 +1710,15 @@
 
 /* ---- Conversations queue and production workspace ---- */
 .ai-agent-grammar__filters,
-.conversations-queue__toolbar {
+.conversations-queue__toolbar,
+.toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
 }
-.ai-agent-grammar__filters .search-input { flex: 1; min-width: 0; }
+.ai-agent-grammar__filters .search-input,
+.toolbar .search-input { flex: 1; min-width: 0; }
 .conversations-queue {
   display: grid;
   gap: var(--space-3);

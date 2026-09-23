@@ -52,7 +52,7 @@ export interface LoginResponse {
   role: Role;
 }
 
-export type CustomerState = 'nuevo' | 'activo' | 'inactivo' | 'bloqueado';
+export type CustomerState = 'nuevo' | 'contactado' | 'pendiente' | 'agendado' | 'en_evaluacion' | 'finalizado' | 'cancelado' | 'postventa';
 
 export interface Customer {
   id: number;

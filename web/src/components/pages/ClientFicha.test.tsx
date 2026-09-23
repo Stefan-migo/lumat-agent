@@ -18,7 +18,7 @@ const ficha: ClientFichaResponse = {
     email: "marcela@example.com",
     comuna: "Ñuñoa",
     address: "Av. Italia 123",
-    state: "activo",
+    state: "contactado",
     consent_status: true,
     consent_at: null,
     created_at: "2026-07-15T12:00:00Z",
@@ -32,7 +32,7 @@ const ficha: ClientFichaResponse = {
   },
   notes: [{ id: 4, customer_id: 7, note: "Confirmar por WhatsApp", author: "operador", created_at: null }],
   memo: "Prefiere contacto por la tarde.",
-  states: ["nuevo", "activo", "inactivo", "bloqueado"],
+  states: ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"],
 };
 
 const memories: Memory[] = [{
@@ -57,7 +57,7 @@ describe("ClientFicha page grammar", () => {
     render(<ClientFicha data={ficha} memories={memories} />);
 
     expect(screen.getByRole("main")).toHaveTextContent("Ficha: Marcela Fuentes");
-    expect(screen.getByText("+56912345678 · Estado: Activo")).toBeInTheDocument();
+    expect(screen.getByText("+56912345678 · Estado: Contactado")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Resumen del cliente" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Inspector operacional" })).not.toBeInTheDocument();
   });
@@ -70,7 +70,7 @@ describe("ClientFicha page grammar", () => {
     expect(screen.getByRole("heading", { name: "Notas" })).toBeInTheDocument();
     expect(screen.getAllByText("Prefiere contacto por la tarde.")).toHaveLength(2);
     expect(screen.getByText("operador · Confirmar por WhatsApp")).toBeInTheDocument();
-    expect(screen.getAllByText("Activo").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Contactado").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("table")).toHaveLength(4);
     expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Conversaciones" })).toBeInTheDocument();
@@ -80,17 +80,17 @@ describe("ClientFicha page grammar", () => {
 
   it("posts state changes and notes, then refreshes ficha and memories", async () => {
     const user = userEvent.setup();
-    vi.mocked(changeClientState).mockResolvedValue({ ok: true, state: "inactivo" });
+    vi.mocked(changeClientState).mockResolvedValue({ ok: true, state: "pendiente" });
     vi.mocked(addClientNote).mockResolvedValue({ ok: true, note: ficha.notes[0] });
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
-    await user.selectOptions(screen.getByLabelText("Estado del cliente"), "inactivo");
+    await user.selectOptions(screen.getByLabelText("Estado del cliente"), "pendiente");
     await user.click(screen.getByRole("button", { name: "Guardar estado" }));
     await user.type(screen.getByLabelText("Nueva nota"), "Llamar mañana");
     await user.click(screen.getByRole("button", { name: "Agregar nota" }));
 
-    expect(changeClientState).toHaveBeenCalledWith(7, "inactivo");
+    expect(changeClientState).toHaveBeenCalledWith(7, "pendiente");
     expect(addClientNote).toHaveBeenCalledWith(7, "Llamar mañana");
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7");
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7/memories");
@@ -137,7 +137,7 @@ describe("ClientFicha page grammar", () => {
     vi.mocked(changeClientState).mockReturnValue(new Promise((_, nextReject) => { reject = nextReject; }));
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
-    await user.selectOptions(screen.getByLabelText("Estado del cliente"), "inactivo");
+    await user.selectOptions(screen.getByLabelText("Estado del cliente"), "pendiente");
     const save = screen.getByRole("button", { name: "Guardar estado" });
     await user.click(save);
     expect(save).toBeDisabled();
