@@ -98,10 +98,23 @@ Functionally, inside the rebuilt container, against the mounted cache:
 Applying the fix to the running dev stack, and re-measuring, is what produced those numbers.
 
 TDD mode: **active** for this repo (`openspec/config.yaml`: `apply.tdd: true`,
-`testing.strict_tdd: true`). It does not bite here, and that is a fact about this change rather than
-an exemption: the diff is compose configuration and a documentation line — there is no application
-code, hence no RED-first cycle to run and no test to write. The verification above is configuration
-resolution and observed latency, which is the applicable evidence for this unit.
+`testing.strict_tdd: true`).
+
+**Correction.** This record first asserted that no test applied here — *"the diff is compose
+configuration and a documentation line, hence no RED-first cycle to run and no test to write"*. That
+is **false**. `tests/integration/test_infra.py` reads this repository's infra files, and
+`test_env_example_has_no_real_secrets` rejects every `.env.example` key whose value is empty. The
+first version of `EMBED_CACHE_DIR=` had an empty value and **failed that test in CI** (`1 failed,
+1274 passed`); the local suite was never run against that commit, which is the process failure, not a
+gap in the tests.
+
+The claim is left visible rather than quietly edited, because the mistake is instructive: "this
+change has no code" is not the same as "no test covers this file". A repository can test its own
+configuration.
+
+Declared consequence: this unit still has **no RED-first cycle**. Its evidence is the configuration
+resolution and the observed latency above, plus the full suite re-run after the correction —
+**1271 passed, 2 warnings in 132.95 s** — and CI on the final tip.
 
 ## Process note, declared
 
