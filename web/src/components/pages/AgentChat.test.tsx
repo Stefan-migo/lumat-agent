@@ -183,9 +183,10 @@ describe("AgentChat", () => {
 
   it("keeps the project binding when Nuevo chat is pressed from a project thread", async () => {
     window.history.pushState({}, "", "/panel/app/chat?thread_id=4");
+    let createdPayload: unknown;
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       if (String(input) === "/panel/api/chat/threads" && init?.method === "POST") {
-        expect(JSON.parse(String(init?.body))).toEqual({ proyecto: "ops" });
+        createdPayload = JSON.parse(String(init.body));
         return jsonResponse({ thread: { ...makeThread(5), proyecto: "ops" }, messages: [] }, 201);
       }
       return jsonResponse({ thread: { ...makeThread(4), proyecto: "ops" }, messages: [] });
@@ -201,6 +202,7 @@ describe("AgentChat", () => {
         expect.objectContaining({ method: "POST" }),
       ),
     );
+    expect(createdPayload).toEqual({ proyecto: "ops" });
   });
 
   it("renders history with Spanish grouping and no raw status", async () => {
