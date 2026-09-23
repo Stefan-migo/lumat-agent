@@ -136,6 +136,17 @@ describe("ClientesList", () => {
     expect(screen.getByRole("button", { name: "Reintentar" })).toHaveClass("btn");
   });
 
+  // T6 — the filter and export controls belong to the region they control, not to the page header.
+  it("binds the search and the exports to a toolbar inside the list content", () => {
+    const { container } = render(<ClientesList data={customers} state="ready" />);
+
+    const toolbar = container.querySelector(".toolbar");
+    expect(toolbar).not.toBeNull();
+    expect(toolbar).toContainElement(screen.getByLabelText("Buscar clientes"));
+    expect(toolbar).toContainElement(screen.getByText("Exportar clientes CSV"));
+    expect(toolbar).toContainElement(screen.getByText("Exportar casos CSV"));
+  });
+
   it("exposes the search and the two export controls", () => {
     render(<ClientesList data={customers} state="ready" />);
 

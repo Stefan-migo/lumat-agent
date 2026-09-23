@@ -76,15 +76,13 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
     <PageFrame
       title="Clientes"
       meta={data ? `${data.length} ${data.length === 1 ? "cliente" : "clientes"}` : undefined}
-      actions={
-        <>
-          <SearchInput aria-label="Buscar clientes" onSearch={(next) => { setQuery(next); setQueryVersion((current) => current + 1); }} />
-          <Button variant="secondary" href="/panel/export/clients.csv">Exportar clientes CSV</Button>
-          <Button variant="secondary" href="/panel/export/cases.csv">Exportar casos CSV</Button>
-        </>
-      }
       state={stateMessage(state, retry)}
     >
+      <div className="toolbar">
+        <SearchInput aria-label="Buscar clientes" onSearch={(next) => { setQuery(next); setQueryVersion((current) => current + 1); }} />
+        <Button variant="secondary" href="/panel/export/clients.csv">Exportar clientes CSV</Button>
+        <Button variant="secondary" href="/panel/export/cases.csv">Exportar casos CSV</Button>
+      </div>
       {state === "loading" ? null : data && data.length > 0 ? (
         <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} />
       ) : state === "empty" || (state === "ready" && data?.length === 0) ? (

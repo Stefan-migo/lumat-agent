@@ -1699,13 +1699,15 @@
 
 /* ---- Conversations queue and production workspace ---- */
 .ai-agent-grammar__filters,
-.conversations-queue__toolbar {
+.conversations-queue__toolbar,
+.toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
 }
-.ai-agent-grammar__filters .search-input { flex: 1; min-width: 0; }
+.ai-agent-grammar__filters .search-input,
+.toolbar .search-input { flex: 1; min-width: 0; }
 .conversations-queue {
   display: grid;
   gap: var(--space-3);
