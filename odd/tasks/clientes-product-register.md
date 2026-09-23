@@ -3,16 +3,41 @@
 ## Objective
 
 Raise the Clientes surface (`ClientesList` + `ClientFicha`) to the panel's product
-register, and extract on demand the reusable substrate it forces into existence.
-This is the pilot for the panel-wide design-debt plan: it must prove the register
-and produce the first shared pieces, not merely look better.
+register — the **first dense surface to apply the agent-app appearance under the
+amended `DS-GRAMMAR-1`** — and extract on demand the reusable substrate it forces
+into existence. This is the pilot for the panel-wide design-debt plan: it must
+prove the register and produce the first shared pieces, not merely look better.
+
+This unit also carries the contract amendment it depends on, so the spec change
+ships with its first real consumer.
 
 ## Problem
 
 Verified against the code at base `64972a26`. Every claim is evidence, not
 impression.
 
-**The user's report was half right, and the half that was right is this surface.**
+### The contract drifted from the product decision
+
+The owner decided on 2026-09-04: *"Gramática AI-agent global: apariencia de app de
+agente en **toda la app**, fisiología de control room en primitivas de contenido
+denso."* The `panel-ai-agent-grammar` change declared that same capability as
+*"appearance of agent app, physiology of control room"* — and then wrote a delta
+that kept the physiology half and dropped the app-wide appearance half.
+
+The result is live at `openspec/specs/panel-design-system/spec.md:742`
+(`DS-GRAMMAR-1`): only the conversation surfaces expose the grammar, and dense
+pages `MUST retain` control-room primitives. That is the spec the panel was built
+against, and it is why the panel reads as two products — an agent application for
+conversations, an unstyled admin tool everywhere else.
+
+The amendment is `openspec/changes/panel-grammar-global/`. `panel-app` needs no
+delta: the duplicate clause lived in the former `PNL-APP-12`, which
+`panel-conversaciones-redesign` replaced with `PNL-APP-12 — Conversation Workspace
+Context` and no dense-page clause (verified: the live spec contains no `dense` or
+`control-room` match).
+
+### The user's report was half right, and the half that was right is this surface
+
 The shared primitives are not unstyled HTML — they carry tokens, classes and full
 interaction states. The "plain HTML" reading comes from `ClientFicha`, which
 barely uses them.
@@ -50,7 +75,7 @@ barely uses them.
   messages) and three nested `DataTable`s under `<h3>` headings.
 - The identity region renders six bare `<p>` elements with no label/value
   structure (lines 139-150).
-- `Cliente` has **no page-specific CSS at all**: `primitives.css` contains zero
+- Clientes has **no page-specific CSS at all**: `primitives.css` contains zero
   `.clientes` / `.ficha` selectors. The surface is driven entirely by generic
   classes, which is why it reads as unattributed default layout.
 
@@ -68,19 +93,20 @@ barely uses them.
 
 ## Scope
 
-**In:** `web/src/components/pages/ClientesList.tsx`,
+**In:** `openspec/changes/panel-grammar-global/**`, `web/DESIGN_SYSTEM.md` (the
+two-axis clause), `web/src/components/pages/ClientesList.tsx`,
 `web/src/components/pages/ClientFicha.tsx`, new
 `web/src/components/pages/ClientesList.test.tsx`,
 `web/src/components/pages/ClientFicha.test.tsx`, the Clientes stories and their
-tests, the shared pieces slice 1 and slice 2 promote under
+tests, the shared pieces the slices promote under
 `web/src/components/shared/`, and the Clientes section of
 `web/src/components/primitives/primitives.css`.
 
 **Out:** any change to `tokens.css` values; the assistant surface
 (`AgentChat.tsx`, `AssistantTabs.tsx`, `ConversationThread.tsx`),
 `AppShell.tsx` and `ProjectsPage.tsx`; the backend and the panel API; any new
-dependency; any other page surface; `DESIGN_SYSTEM.md` (the addendum is a
-separate follow-up).
+dependency; any other page surface; and any conversion of dense data presentation
+away from tables (the physiology axis is preserved, not renegotiated).
 
 ## Authorized scope
 
@@ -88,7 +114,10 @@ separate follow-up).
 - Branch: `odd/clientes-product-register`
 - Base: `64972a26`
 - Files: `odd/tasks/clientes-product-register.md`,
-  `web/src/components/pages/ClientesList.tsx`,
+  `openspec/changes/panel-grammar-global/proposal.md`,
+  `openspec/changes/panel-grammar-global/tasks.md`,
+  `openspec/changes/panel-grammar-global/specs/panel-design-system/spec.md`,
+  `web/DESIGN_SYSTEM.md`, `web/src/components/pages/ClientesList.tsx`,
   `web/src/components/pages/ClientFicha.tsx`,
   `web/src/components/pages/ClientesList.test.tsx` (new),
   `web/src/components/pages/ClientFicha.test.tsx`,
@@ -103,10 +132,12 @@ separate follow-up).
   The configured runner is pytest; this is a frontend-only change, so the
   applicable runner is Vitest via `cd web && npm run test`. Observe RED before
   each source change; never invent RED evidence.
-- **`DS-GRAMMAR-1` binds this surface.** Dense pages `MUST retain control-room
-  DataTable, KPI, Badge, filter, and state primitives`. This pilot keeps those
-  primitives and improves them; it does not adopt the agent-app grammar here.
-  See D1.
+- **`DS-GRAMMAR-1` as amended by this unit** is the target contract. Until the
+  delta lands, the live requirement forbids this work; that is exactly why the
+  amendment ships in the same PR.
+- **The physiology axis is binding.** Dense pages keep `DataTable`, KPI, `Badge`,
+  filter and state primitives as their data layer. Bubbles, composer shell, thread
+  rail and inspector are barred from them.
 - **`DS-GRAMMAR-2` / `DS-UI-PRIMS`** — styles live in the tokenized stylesheet
   boundary, resolve through `var(--*)`, add no dependency, and contain no
   hard-coded colour. No component may inject `<style>`.
@@ -125,50 +156,57 @@ separate follow-up).
 
 ## Decisions
 
-- **D1 — This pilot does not require an OpenSpec delta.** `DS-GRAMMAR-1` states
-  that `ClientesList` and `ClientFicha` `MUST retain control-room DataTable, KPI,
-  Badge, filter, and state primitives`, while only the conversation surfaces
-  expose the agent-app grammar. The session's decision "one product register"
-  is therefore read as *shared composition, hierarchy and affordance quality*,
-  not as *adopting the agent grammar on dense pages*. Under that reading this
-  change is spec-compliant: it keeps `DataTable`, `Badge`, `StateMessage` and
-  `EmptyState`, and raises their composition. If the intent was instead to give
-  dense pages the agent grammar, `DS-GRAMMAR-1` must be amended first and this
-  unit becomes a spec change.
-- **D2 — The substrate promotion rule is a constraint, not a preference.** A
-  piece moves to `shared/` only when a slice needs it AND a second consumer
-  elsewhere can be named here. Production components live in `src/components/`
-  from day one; Storybook is a viewer, not staging (2026-09-14 correction).
-- **D3 — The two real defects are fixed in slice 1, not deferred.** The
+- **D1 — The single-register decision means two axes, and the spec is amended to
+  say so.** Confirmed by the owner: the agent-app appearance applies to the whole
+  panel; dense content keeps control-room physiology. This is the 2026-09-04
+  decision restored, not a new direction. It requires the `DS-GRAMMAR-1`
+  amendment; it does not require converting tables into another presentation.
+- **D2 — The amendment ships inside slice 1, not as a standalone spec-only unit.**
+  Revised from the initial plan. Evidence: the only live blocker is a single
+  requirement (`panel-app` needs no delta), and every archived OpenSpec change in
+  this repository pairs its delta with an implementation and an apply/verify
+  record. A contract change with no consumer would be abstract ceremony; a
+  contract change reviewed together with its first real use is not.
+- **D3 — The substrate promotion rule is a constraint, not a preference.** A piece
+  moves to `shared/` only when a slice needs it AND a second consumer elsewhere
+  can be named here. Production components live in `src/components/` from day one;
+  Storybook is a viewer, not staging (2026-09-14 correction).
+- **D4 — The two real defects are fixed in slice 1, not deferred.** The
   search-clear bug and the singular count are observable wrong behaviour on this
   surface; a redesign that leaves them is cosmetic.
-- **D4 — `ClientesList` gets a component test before it changes.** Strict TDD has
+- **D5 — `ClientesList` gets a component test before it changes.** Strict TDD has
   nowhere to observe RED today, and the state model (loading, empty,
   filtered-empty, stale, partial-error, fatal-error, denied) is exactly what the
   redesign must not regress.
-- **D5 — No `tokens.css` change in slice 1.** If a repeated semantic role is
-  proven by two consumers and no existing token carries it, it is added
-  additively per `DS-TKN-2`; otherwise the existing roles are reused. The default
-  is reuse.
-- **D6 — Delivery is chained, not one PR.** The forecast across both slices
-  exceeds the 400-line review-focus budget, so slice 1 and slice 2 ship as
-  separate PRs, `stacked-to-main`.
+- **D6 — No `tokens.css` change in slice 1.** If a repeated semantic role is
+  proven by two consumers and no existing token carries it, it is added additively
+  per `DS-TKN-2`; otherwise the existing roles are reused. The default is reuse.
+- **D7 — Delivery is chained, not one PR.** PR 1 carries the amendment plus slice
+  1; PR 2 carries slice 2, `stacked-to-main`. The amendment is roughly 60 lines
+  across three files and does not change the slice budget materially.
 
 ## Tasks
 
-### Slice 1 — Clientes list
+### Slice 1 — contract amendment (ships in PR 1)
+
+- [ ] **T0** — Write `openspec/changes/panel-grammar-global/` (proposal, delta for
+  `DS-GRAMMAR-1`, tasks). Done; kept here as the record of the contract change.
+- [ ] **T0b** — State the two axes in `web/DESIGN_SYSTEM.md`: the "Direction at a
+  glance" row and the "Grammar scope — two axes" subsection. Done.
+
+### Slice 1 — Clientes list (ships in PR 1)
 
 - [ ] **T1** — RED first: create `ClientesList.test.tsx` covering the existing
   state model (loading, ready with rows, empty, filtered-empty, stale,
   partial-error, fatal-error with retry, denied) and the drill-down link. GREEN
-  against the unmodified component; this task changes no source.
+  against the unmodified component; this task changes no source (D5).
 - [ ] **T2** — RED/GREEN: clearing the search resets the list. Going from a
-  non-empty query back to `""` must trigger a fresh unfiltered fetch (D3).
+  non-empty query back to `""` must trigger a fresh unfiltered fetch (D4).
 - [ ] **T3** — RED/GREEN: the count is correct in singular and plural (`1
-  cliente` / `N clientes`) (D3).
+  cliente` / `N clientes`) (D4).
 - [ ] **T4** — RED/GREEN: the drill-down link no longer carries an inline style;
   the accessible link treatment is a shared contract with its second consumer
-  named (candidates: `CasesList`, `AutomationRulesPage`) (D2).
+  named (candidates: `CasesList`, `AutomationRulesPage`) (D3).
 - [ ] **T5** — RED/GREEN: the `Reintentar` control is the `Button` primitive, not
   a raw `<button>`. No raw `<button>` remains in `ClientesList`.
 - [ ] **T6** — RED/GREEN: search and export move into a region-bound toolbar tied
@@ -177,27 +215,34 @@ separate follow-up).
 - [ ] **T7** — RED/GREEN: filtered-empty is distinguishable from empty, and
   filtered-empty offers the recovery action (clear the search). Second consumer
   named: `ConversationsList`, `KbList`.
-- [ ] **T8** — stories: `ClientesList.stories.tsx` covers the register's state
+- [ ] **T8** — RED/GREEN: apply the appearance axis. The list chrome — header,
+  region hierarchy, filter treatment, status presentation — reads as the same
+  product as the assistant, while the data layer stays a control-room
+  `DataTable`. This is the amended `DS-GRAMMAR-1` scenario, and it is the
+  acceptance evidence for the delta itself.
+- [ ] **T9** — stories: `ClientesList.stories.tsx` covers the register's state
   matrix at the 640/1024/1280 viewports; its test stays green.
 
-### Slice 2 — ClientFicha
+### Slice 2 — ClientFicha (ships in PR 2)
 
-- [ ] **T9** — RED/GREEN: the four raw `<button>`s become `Button`, the raw
+- [ ] **T10** — RED/GREEN: the four raw `<button>`s become `Button`, the raw
   `<select>` becomes `Select`, the raw `<textarea>` becomes `Textarea`
   (`DS-GRAMMAR-3`).
-- [ ] **T10** — RED/GREEN: the `customer_memo` badge no longer exposes a backend
+- [ ] **T11** — RED/GREEN: the `customer_memo` badge no longer exposes a backend
   identifier; the memo region carries a user-facing label.
-- [ ] **T11** — RED/GREEN: the identity region renders a label/value structure
+- [ ] **T12** — RED/GREEN: the identity region renders a label/value structure
   instead of six bare `<p>` elements.
-- [ ] **T12** — RED/GREEN: save feedback appears at the locus of the action that
+- [ ] **T13** — RED/GREEN: save feedback appears at the locus of the action that
   caused it, not in the `PageFrame` state slot; one save action per independently
   persisted group.
-- [ ] **T13** — RED/GREEN: the `Historial` card is decomposed into named regions;
+- [ ] **T14** — RED/GREEN: the `Historial` card is decomposed into named regions;
   visits render as a real list, and dates render through the Chilean locale
   instead of a raw `slice(0, 16)` of an ISO string.
-- [ ] **T14** — stories: `ClientFicha.stories.tsx` covers the state matrix,
+- [ ] **T15** — RED/GREEN: the appearance axis reaches the ficha chrome as in T8;
+  the data layer stays control-room and no conversation component appears.
+- [ ] **T16** — stories: `ClientFicha.stories.tsx` covers the state matrix,
   including calendar-sync failure and retry.
-- [ ] **T15** — resolve the ficha layout question (single column of grouped
+- [ ] **T17** — resolve the ficha layout question (single column of grouped
   sections vs a two-region detail layout with a summary rail) before changing the
   page skeleton, and record the choice in this file.
 
@@ -205,26 +250,32 @@ separate follow-up).
 
 1. No raw `<button>`, `<select>` or `<textarea>` remains on either Clientes
    surface; the panel's primitives are used (`DS-GRAMMAR-3`).
-2. No inline `style={{}}` visual decision remains in the shared pieces this pilot
+2. No bubble, composer shell, thread rail or inspector is rendered on either
+   Clientes surface, and the data presentation stays tabular (amended
+   `DS-GRAMMAR-1`, physiology axis).
+3. The appearance axis is verifiable: the Clientes chrome resolves through the
+   same tokens and shared appearance contracts as the conversation surfaces, with
+   no element left on browser-default control styling (amended `DS-GRAMMAR-1`).
+4. No inline `style={{}}` visual decision remains in the shared pieces this pilot
    touches.
-3. No raw backend identifier is rendered in the product UI.
-4. The search-clear bug and the singular count are fixed with tests that fail
+5. No raw backend identifier is rendered in the product UI.
+6. The search-clear bug and the singular count are fixed with tests that fail
    before the fix.
-5. Filtered-empty is distinguishable from empty and offers recovery.
-6. No hard-coded colour value is introduced; no new dependency is added; every
+7. Filtered-empty is distinguishable from empty and offers recovery.
+8. No hard-coded colour value is introduced; no new dependency is added; every
    pre-existing token keeps its exact value (`DS-TKN-2`).
-7. Only the authorized files change.
-8. `cd web && npm run test`, `cd web && npx tsc -b --noEmit` and
-   `cd web && npm run build` pass.
-9. Rows-per-screen on the Clientes table does not regress against base
-   `64972a26`.
+9. Only the authorized files change.
+10. `cd web && npm run test`, `cd web && npx tsc -b --noEmit` and
+    `cd web && npm run build` pass.
+11. Rows-per-screen on the Clientes table does not regress against base
+    `64972a26`.
 
 ## Checks
 
 - `cd web && npm run test`
 - `cd web && npx tsc -b --noEmit`
 - `cd web && npm run build`
-- `cd web && npm run build-storybook` (after the stories in T8/T14)
+- `cd web && npm run build-storybook` (after the stories in T9/T16)
 - density comparison against base `64972a26` at 1366×768
 - `git status --short` / `git diff --check`
 
@@ -235,12 +286,17 @@ separate follow-up).
   provisioned, and `npm ci` completed in `web/`.
 - [x] Baseline established on the untouched worktree:
   `cd web && npm run test` → **79 files, 625 tests, all passing**, 54.47s.
+- [x] Contract drift verified against the 2026-09-04 decision, the
+  `panel-ai-agent-grammar` proposal, and the live specs; `panel-app` confirmed to
+  need no delta.
+- [x] Amendment written: `openspec/changes/panel-grammar-global/` (proposal,
+  `DS-GRAMMAR-1` delta, tasks) and the two-axis clause in `web/DESIGN_SYSTEM.md`.
 - [ ] Slice 1.
 - [ ] Slice 2.
 
 ## Open item
 
-- **Ficha layout (T15).** The ficha today is five stacked blocks, one of which
+- **Ficha layout (T17).** The ficha today is five stacked blocks, one of which
   (`Historial`) carries four unrelated regions. Whether it becomes a single column
   of grouped sections or a two-region layout with a summary rail is a product
   decision, unresolved at the session close and deferred to the start of slice 2.
@@ -252,10 +308,12 @@ separate follow-up).
 - Dev server for this worktree: `cd web && npm run dev -- --host 127.0.0.1 --port
   5176` with `VITE_API_TARGET` pointed at the running API. (`5174` and `5175` are
   taken by other worktrees.)
+- Archive the OpenSpec change after PR 1 merges, syncing the delta into
+  `openspec/specs/panel-design-system/spec.md`.
 - On resume: read this file and reconcile the checkbox state against `git log`
   before continuing. `main` moved during this session — the `tukulpan-memory`
   slices (PRs #321, #322, #324) merged into `64972a26`, which is this unit's base;
   rebase only if `main` moves again.
 - Session of record:
-  `.rapsodia-code/sessions/ready-for-odd/2026-09-23-frontend-design-foundation/`
+  `.rapsodia-code/sessions/archived/2026-09-23-frontend-design-foundation/`
   (`session.md` + `report.md`).
