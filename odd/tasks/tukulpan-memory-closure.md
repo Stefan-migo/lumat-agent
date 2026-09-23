@@ -48,7 +48,7 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
 
 ## Tasks
 
-- [ ] **T1 — query-less recall: bounded digest in `memory.read`** (audit item 1)
+- [x] **T1 — query-less recall: bounded digest in `memory.read`** (audit item 1)
   Decision taken: **extend the existing read path**, not a new tool and not optional `query`.
   When `scope`/`entity_id` are absent, the own-axes read returns a digest: the existing
   interleave order preserved, plus a bounded per-item projection (bounded `contenido` and the
@@ -58,11 +58,11 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   `memory/spec.md:50-82` (MEM-3).
   Checks: unit test for the digest bound + a test that the digest shape is stable at `limit`;
   AT-8 and MEM-3 amended; existing own-read tests still green.
-  Status: code + tests + spec clauses committed (`3f243d18`, `52149dce`, `243d0cbb`,
-  `c35c67c0`); acceptance blocked on T8, which resolves the AT-8 contradiction this change
-  exposed. Independent verification: mutation check proved the digest test load-bearing; ORM
-  projection verified against `app/models.py:480-520` and `contenido` is `NOT NULL`
-  (`app/models.py:490`, `db/migrations/009_memory.sql:28`).
+  Status: **accepted**. Code + tests + spec clauses committed (`3f243d18`, `52149dce`,
+  `243d0cbb`, `c35c67c0`). Independent verification: mutation check proved the digest test
+  load-bearing; ORM projection verified against `app/models.py:480-520` (`contenido` is
+  `NOT NULL`, `app/models.py:490`, `db/migrations/009_memory.sql:28`); no consumer depends on the
+  untruncated own read. Acceptance evidence: `tests/unit + tests/spec + guardrails` green.
 - [ ] **T2 — AT-10: pin `memory.search` failure degradation** (audit item 2)
   `tests/unit/test_assistant_tool_loop.py:96` only exercises `memory.read`. Parameterize (or add
   a sibling test) for `"memory.search"` and assert status `degraded`, the responder continuation,
@@ -95,7 +95,7 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   artifacts (`ProjectsPage.tsx:13-30`). **Open decision**: where the entry point lives and whether
   the project binding is URL-addressable.
 
-- [ ] **T8 — align the public memory scope contract across spec, prose and prompt** (found by
+- [x] **T8 — align the public memory scope contract across spec, prose and prompt** (found by
   T1's independent verification; human decided to close it inside this unit)
   The code contract is `scope="own" | "customer"` (`registry.py:95-101`, discriminated union);
   the server derives the panel and agent axes internally. Three artifacts still describe
@@ -125,17 +125,22 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
 
 ## Progress
 
-- Worktree + record created. No task accepted yet.
-- T1: code, tests and spec clauses committed (`3f243d18`, `52149dce`, `243d0cbb`, `c35c67c0`).
-  Independent verification passed on code, consumers and ORM projection, and produced the T8
-  finding. Blocked on T8 before acceptance.
-- Decisions taken by the human: T1 = extend `memory.read` (not a new tool, not optional `query`);
-  T8 = align everything to `own`/`customer` inside this unit.
+- Worktree + record created.
+- **T1 accepted** (`3f243d18`, `52149dce`, `243d0cbb`, `c35c67c0`): owned digest bounded to 500
+  characters, interleave preserved, entity-scoped reads untouched, AT-8/MEM-3 amended.
+- **T8 accepted** (`4d742ad5`, `bea3a589`, `ac2c8464`): the compaction prompt now uses the real
+  `scope=own` (it was ordering a call validation rejects, which silently lost the recap after a
+  compaction), AT-8's scenarios describe the real contract, and the digest bound is asserted on
+  the real ORM path.
+- Verification of record for T1+T8: `tests/unit + tests/spec + tests/integration/test_assistant_harness_guardrails.py`
+  → exit 0, tree clean.
+- Authored lines on the branch so far: **300** (adds+dels, task doc included).
+- Decisions taken by the human: T1 = extend `memory.read`; T8 = align everything to `own`/`customer`.
 - Re-validated context: audit #4769 still holds at base `a2092b92`; the audit's "hardcoded 22
   tools" claim is stale (current whitelist: 21 entries, `agent/registry.yaml:59-79`).
-- The audit missed T8; it was found by verifying T1's candidate instead of trusting it.
+- The audit missed T8; verifying T1's candidate found it instead of trusting it.
 
 ## Next step
 
-T8 (unblocks T1's acceptance), then T2/T3/T4/T5 (mechanical pinning), then resolve the T6/T7
-open decisions. Chained-PR strategy still unchosen.
+T2/T3/T4/T5 (mechanical pinning, no open decisions), then resolve the T6/T7 open decisions.
+Chained-PR strategy still unchosen.
