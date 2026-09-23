@@ -343,7 +343,8 @@ is not in this unit's scope.
 
 - [x] **C4** — The new address control must obey the card's own composition rule.
   `.technician-agenda__item` is a grid, so its children stretch by default; the
-  phone control hugs its label through `.technician-agenda__call`, for a reason the
+  phone control hugs its label through `.technician-agenda__call` (renamed by C4
+  to `.technician-agenda__field-control`), for a reason the
   surface wrote down: *a full-width 990px "phone number" button is not a phone
   number*. The address control shipped with no composition class, so it stretches
   the full card width while its sibling does not — one control contradicting a rule
@@ -658,12 +659,17 @@ An earlier revision of this section recorded 90 lines (72 added, 18 deleted); th
 number was measured before the C1–C3 correction pass and is superseded by the
 figures above.
 
-Slice 2 (`3143bc9b..HEAD` under `web/`) changed **35 lines** (21 added, 14
-deleted) across 6 files: `AgendaPage.test.tsx` 2, `AgendaPage.tsx` 4,
-`TechnicianAgenda.test.tsx` 5, `TechnicianAgenda.tsx` 6,
-`primitives.css` 15, and `TechnicianAgenda.stories.test.tsx` 3. Production code
-is 25 of those lines; the rest is tests. The count is from `git diff --numstat`,
-not an estimate.
+Slice 2 (`774901f3..HEAD` under `web/`) changed **100 lines** (60 added, 40
+deleted) across 8 files: `TechnicianAgenda.tsx` 37, `agendaTime.ts` 16 (new),
+`primitives.css` 15, `agendaTime.test.ts` 12 (new), `AgendaPage.tsx` 11,
+`TechnicianAgenda.test.tsx` 4, `TechnicianAgenda.stories.test.tsx` 3 and
+`AgendaPage.test.tsx` 2. Production code is 79 of those lines; the rest is tests.
+The count is from `git diff --numstat`, not an estimate.
+
+An earlier revision of this section recorded 35 lines (21 added, 14 deleted)
+across 6 files. That range started at `3143bc9b`, so it missed the T9 and T10
+commits that landed before it, and it omitted the new shared module and its test.
+The figures above supersede it.
 
 ## Open items
 
