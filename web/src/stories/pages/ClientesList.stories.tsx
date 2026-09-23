@@ -16,6 +16,12 @@ export function ClientesListEmpty() {
   return <ClientesList data={[]} state="empty" />;
 }
 
+/** Clientes list filtered to zero results. Needs the controlled `query` because the state is
+ *  derived from the applied search round-trip, not from `data`/`state` alone. Exported for tests. */
+export function ClientesListFilteredEmpty() {
+  return <ClientesList data={[]} state="empty" query="zzz" />;
+}
+
 /** Clientes list loading state. */
 function ClientesListLoading() {
   return <ClientesListView state="loading" />;
@@ -35,7 +41,7 @@ const meta = {
       },
     },
   },
-  excludeStories: ["ClientesListView", "ClientesListEmpty"],
+  excludeStories: ["ClientesListView", "ClientesListEmpty", "ClientesListFilteredEmpty"],
 } satisfies Meta;
 
 export default meta;
@@ -48,6 +54,7 @@ export const Default: Story = {
 export const Stale: Story = { render: () => <ClientesListView state="stale" /> };
 export const PartialError: Story = { render: () => <ClientesListView state="partial-error" /> };
 export const FatalError: Story = { render: () => <ClientesListView state="fatal-error" /> };
+export const Denied: Story = { render: () => <ClientesListView state="denied" /> };
 
 export const Loading: Story = {
   render: () => <ClientesListLoading />,
@@ -55,4 +62,8 @@ export const Loading: Story = {
 
 export const Empty: Story = {
   render: () => <ClientesListEmpty />,
+};
+
+export const FilteredEmpty: Story = {
+  render: () => <ClientesListFilteredEmpty />,
 };

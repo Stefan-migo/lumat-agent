@@ -141,6 +141,15 @@ describe("ClientesList", () => {
     expect(container.querySelector(".ai-agent-grammar__bubble, .assistant-chat__conversation, .ai-agent-grammar__composer")).toBeNull();
   });
 
+  // T9 — the story contract must be able to render the filtered-empty state, which depends on
+  // the applied query round-trip and therefore cannot be expressed with data/state alone.
+  it("renders the filtered-empty state for a controlled query", () => {
+    render(<ClientesList data={[]} state="empty" query="zzz" />);
+
+    expect(screen.getByText("Sin resultados")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Limpiar búsqueda" })).toBeInTheDocument();
+  });
+
   it("renders the stale, partial-error and denied states", () => {
     const { unmount } = render(<ClientesList data={customers} state="stale" />);
     expect(screen.getByRole("heading", { name: "Datos posiblemente desactualizados" })).toBeInTheDocument();

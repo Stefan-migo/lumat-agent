@@ -19,6 +19,9 @@ export interface ClientesListProps {
   state?: ClientesListState;
   onRetry?: () => void;
   onOpenClient?: (id: number) => void;
+  /** Controlled applied search term. Needed to render the filtered-empty state, which depends
+   *  on the query round-trip and cannot be expressed with `data`/`state` alone. */
+  query?: string;
 }
 
 const columns = (onOpenClient?: (id: number) => void): Column<Customer>[] => [
@@ -58,8 +61,9 @@ function stateMessage(state: ClientesListState, retry: () => void) {
   return null;
 }
 
-export function ClientesList({ data: controlledData, state: controlledState, onRetry, onOpenClient }: ClientesListProps) {
-  const [query, setQuery] = useState("");
+export function ClientesList({ data: controlledData, state: controlledState, onRetry, onOpenClient, query: controlledQuery }: ClientesListProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const query = controlledQuery ?? searchTerm;
   // The query drives the fetch through the hook's own refresh key, so an emptied search
   // refetches the unfiltered list instead of keeping the previous filtered result.
   const [queryVersion, setQueryVersion] = useState(0);
@@ -76,7 +80,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const retry = onRetry ?? fetched.retry;
   const filtered = query.trim().length > 0;
   const clearSearch = () => {
-    setQuery("");
+    setSearchTerm("");
     setQueryVersion((current) => current + 1);
     setSearchResetKey((current) => current + 1);
   };
@@ -89,7 +93,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
     >
       <section aria-label="Listado de clientes">
         <div className="toolbar">
-          <SearchInput key={searchResetKey} aria-label="Buscar clientes" onSearch={(next) => { setQuery(next); setQueryVersion((current) => current + 1); }} />
+          <SearchInput key={searchResetKey} aria-label="Buscar clientes" onSearch={(next) => { setSearchTerm(next); setQueryVersion((current) => current + 1); }} />
           <Button variant="secondary" href="/panel/export/clients.csv">Exportar clientes CSV</Button>
           <Button variant="secondary" href="/panel/export/cases.csv">Exportar casos CSV</Button>
         </div>
