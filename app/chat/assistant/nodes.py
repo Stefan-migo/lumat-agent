@@ -261,7 +261,7 @@ def _context_text(state: AssistantState) -> str:
     elif compaction.get("rotated"):
         text.append(
             "History recap saved: earlier messages in this thread were compacted into a recap "
-            "stored as thread memory. Pull it with memory.read with scope=panel and no entity_id "
+            "stored as thread memory. Pull it with memory.read with scope=own and no entity_id "
             "before claiming to remember earlier turns."
         )
     return "\n".join(text)
