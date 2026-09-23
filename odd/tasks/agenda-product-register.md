@@ -316,10 +316,10 @@ is not in this unit's scope.
 
 ### Slice 2 — technician agenda (ships in PR 2)
 
-- [ ] **T9** — RED/GREEN: the agenda-shaped time contract is extracted from the
+- [x] **T9** — RED/GREEN: the agenda-shaped time contract is extracted from the
   technician's four local helpers and **both** surfaces consume it (D4, D13) — the
   second consumer is real at the moment of extraction, not promised.
-- [ ] **T10** — RED/GREEN: the address link uses the shared link contract and no
+- [x] **T10** — RED/GREEN: the address link uses the shared link contract and no
   longer inherits the browser default colour. RED observed (no class on the
   anchor).
 - [ ] **T11** — RED/GREEN: only the card facts that are genuinely ambiguous without
@@ -395,6 +395,34 @@ is not in this unit's scope.
 - [x] T0–T8. T0 commit `05ff620f`; T1 `dea88fcf`; T2 `a7008a46`; T3
   `b164fe3e`; T4 `bf712125`; T5 `4647c19e`; T6 `c6a14141`; T7
   `890fae2d`; T8 documentation commit `a3aa7750`.
+
+### Slice 2 implementation evidence
+
+- [x] T9 Graph nodes/edges: `TechnicianAgenda()` → `Button()` and the
+  `TechnicianAgenda.tsx` / `AgendaPage.tsx` / `agendaTime.ts` communities were
+  consulted. The shared module exports `formatAgendaSlot()` and `agendaDayKey()`.
+  The 24-hour slot role moved because both Agenda surfaces render it. The
+  comparable local-day-key role moved because both surfaces use it for date
+  calculations. The long day heading and reader-clock freshness stamp stayed in
+  `TechnicianAgenda.tsx`: each has one consumer today, so D3 does not permit
+  promotion. RED was the module test's real unresolved import: `Failed to resolve
+  import "./agendaTime" ... Does the file exist?` GREEN was the focused run's
+  `3 Test Files passed (3)`, `33 Tests passed (33)` after both surfaces were
+  wired. Commit `a99ee513`. The existing technician test file remained unmodified.
+  The cross-surface same-slot assertion is a guard, not a RED: it passed once the
+  shared module was wired and is not presented as a test-first failure.
+- [x] T10 Graph nodes/edge: `TechnicianAgenda()` → `Button()` was consulted, with
+  `Button.tsx`, `TechnicianAgenda.test.tsx`, and the technician card styles in
+  `primitives.css` as the affected contract. RED was the updated address test:
+  `19 tests | 1 failed`, receiving no classes where `btn btn--secondary` was
+  expected. GREEN was `TechnicianAgenda.test.tsx`: `1 Test File passed (1)`,
+  `19 Tests passed (19)`. The chosen contract is `Button variant="secondary"
+  href`; it matches D3's precedent for the phone action, so the address is a
+  real tokenized control at 390px without new CSS. `.table__link` was rejected
+  because its comment documents an in-table drill-down, density-neutral role and
+  its consumers are tables, not an external card action. The existing address
+  test gained only the class assertion because the rendered contract genuinely
+  changed. Missing addresses remain plain text. Commit `739bdb5f`.
 
 ### Slice 1 implementation evidence
 
