@@ -161,5 +161,6 @@ describe('AgendaPage', () => {
     await user.click(screen.getByRole('button', { name: 'Reintentar calendario' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Calendario no disponible');
     expect(screen.getByRole('row', { name: /Mantención/ })).toHaveTextContent('Calendario no disponible');
+    expect(screen.getByRole('alert').querySelector('h2')).not.toBeInTheDocument();
   });
 });

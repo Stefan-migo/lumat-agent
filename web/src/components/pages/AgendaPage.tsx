@@ -105,8 +105,8 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const actions = (row: AgendaAppointment) => <>
     {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setCancelTarget(row); setCancelFeedback(null); }}>Cancelar visita</Button> : null}
     {row.sync.status === "pending" || row.sync.status === "failed" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void retrySync(row.id)} aria-label="Reintentar calendario">Reintentar calendario</Button> : null}
-    {cancelFeedback?.id === row.id && cancelFeedback.tone === "success" ? <StateMessage tone="success" role="status" title={cancelFeedback.title} detail={cancelFeedback.detail} /> : null}
-    {syncFeedback?.id === row.id ? <StateMessage tone={syncFeedback.tone} role={syncFeedback.tone === "danger" ? "alert" : "status"} title={syncFeedback.title} detail={syncFeedback.detail} /> : null}
+    {cancelFeedback?.id === row.id && cancelFeedback.tone === "success" ? <span role="status"><Badge tone="success">{cancelFeedback.title}</Badge></span> : null}
+    {syncFeedback?.id === row.id ? <span role={syncFeedback.tone === "danger" ? "alert" : "status"}><Badge tone={syncFeedback.tone}>{syncFeedback.title}{syncFeedback.detail ? `: ${syncFeedback.detail}` : null}</Badge></span> : null}
   </>;
   const section = (title: string, rows: AgendaAppointment[]) => (
     <section className="agenda-page__section" aria-labelledby={`agenda-${title.toLowerCase()}`}>
