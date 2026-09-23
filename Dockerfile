@@ -29,6 +29,10 @@ RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser
 COPY --from=build /app/.venv /app/.venv
 COPY pyproject.toml ./
 COPY app/ app/
+# agent/ is runtime config, not build noise: app/agent_registry.py resolves
+# `../agent/registry.yaml` and app/services/prompts.py resolves `../agent` at
+# runtime. Without it the registry load raises and prompts silently fall back.
+COPY agent/ agent/
 COPY db/ db/
 # Pre-create the writable mount points with appuser ownership so a fresh named
 # volume at either path inherits writable perms: /app/media (SH-2 — WhatsApp
