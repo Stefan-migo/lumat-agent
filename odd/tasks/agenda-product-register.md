@@ -227,6 +227,12 @@ is not in this unit's scope.
   form. This unit adds the assertions missing today — the rendered slot, the
   count, the section-empty case, the feedback locus — and each one fails before
   its fix.
+- **D13 — The clock divergence is fixed in slice 1; the shared contract is
+  extracted in slice 2.** A module under `shared/` with a single consumer is
+  exactly what D3 refuses, so slice 1 pins the operator's hour cycle with the
+  smallest change that fixes the observable defect, and slice 2 extracts the
+  agenda-shaped contract at the moment both surfaces consume it. Ordering is a
+  correctness rule here, not a packaging preference.
 
 ## Tasks
 
@@ -238,9 +244,10 @@ is not in this unit's scope.
   must never offer.
 - [ ] **T1** — RED/GREEN: `1 visitas`. The count renders singular and plural
   correctly. RED observed before the fix.
-- [ ] **T2** — RED/GREEN: the operator slot renders 24 hours through the shared
-  contract this unit introduces, matching the technician surface. Asserted on a
-  row with a known `timezone` and `starts_at`; RED observed as a meridiem-bearing
+- [ ] **T2** — RED/GREEN: the operator slot renders 24 hours, matching the
+  technician surface. Minimal targeted change — pin the hour cycle (D13); the
+  shared contract is extracted in T9, where a second consumer exists. Asserted on
+  a row with a known `timezone` and `starts_at`; RED observed as a meridiem-bearing
   slot before the fix.
 - [ ] **T3** — RED/GREEN: a section with no rows renders no nested `.empty-state`
   and no "No hay visitas" copy; page-empty and section-empty are distinct. RED
@@ -264,9 +271,9 @@ is not in this unit's scope.
 
 ### Slice 2 — technician agenda (ships in PR 2)
 
-- [ ] **T9** — RED/GREEN: the technician's four local formatters are replaced by
-  the shared contract (same output, second consumer proven). RED observed against
-  a deliberate divergence before the extraction.
+- [ ] **T9** — RED/GREEN: the agenda-shaped time contract is extracted from the
+  technician's four local helpers and **both** surfaces consume it (D4, D13) — the
+  second consumer is real at the moment of extraction, not promised.
 - [ ] **T10** — RED/GREEN: the address link uses the shared link contract and no
   longer inherits the browser default colour. RED observed (no class on the
   anchor).
@@ -334,6 +341,9 @@ is not in this unit's scope.
   `retryCalendarSync()` / `fetchTechnicianAgenda()` (`api.ts`), and
   `AgendaAppointment` (`types.ts:440`). Communities: `AgendaPage.tsx`,
   `TechnicianAgenda.tsx`, `shared/toneMaps.ts`, `scheduling.py`, `types.ts`.
+- [x] Doc amended before T0: D13 and the slice ordering for the time contract —
+  the observable divergence is fixed in slice 1, and the shared module lands in
+  slice 2 with its real second consumer.
 - [ ] T0–T8.
 
 ## Size
