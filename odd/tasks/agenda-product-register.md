@@ -252,7 +252,7 @@ is not in this unit's scope.
 - [x] **T3** — RED/GREEN: a section with no rows renders no nested `.empty-state`
   and no "No hay visitas" copy; page-empty and section-empty are distinct. RED
   observed.
-- [ ] **T4** — REOPENED by independent verification. The `Textarea`, the
+- [x] **T4** — REOPENED by independent verification. The `Textarea`, the
   dialog-local cancellation failure and the row-local sync failure landed
   (`bf712125`), but two parts do not hold: the row-locus feedback is a
   `StateMessage` panel inside a table cell, and the confirmation copy states a
@@ -272,7 +272,7 @@ is not in this unit's scope.
 
 ### Slice 1 — correction pass (opened by independent verification)
 
-- [ ] **C1** — The row-locus outcome must stay dense. A `StateMessage` is a panel:
+- [x] **C1** — The row-locus outcome must stay dense. A `StateMessage` is a panel:
   it emits a `<section>` carrying an `<h2>` and its own tinted surface
   (`StateMessage.tsx:22-26`), so inside the actions `<td>` it adds a heading
   landmark per row and inflates row height — against the dense-table contract
@@ -281,14 +281,14 @@ is not in this unit's scope.
   remains correct for the page-level states it already serves. Do **not** add a new
   CSS class or token: if nothing existing fits, stop and report the finding rather
   than inventing substrate with a single consumer (D3).
-- [ ] **C2** — The destructive confirmation names the affected visit and states a
+- [x] **C2** — The destructive confirmation names the affected visit and states a
   truthful consequence. `DESIGN_SYSTEM.md:437` requires a confirmation to name the
   affected customer/entity, and the current copy claims the visit can never be
   rebooked — a guarantee AG-UI-1/AG-UI-3 do not establish: they forbid the panel
   from offering rebooking, not the domain from ever holding that appointment again.
   The `### Agenda` section also gains the consequence clause its `### Clientes`
   sibling already carries (`DESIGN_SYSTEM.md:307`).
-- [ ] **C3** — The story matrix must represent what it claims. `CancelConfirmation`
+- [x] **C3** — The story matrix must represent what it claims. `CancelConfirmation`
   is the plain data story and never opens the dialog
   (`AgendaPage.stories.tsx`), and the copy assertion tests a substring loose enough
   to pass on weakened copy (`AgendaPage.test.tsx`). Either the story represents the
@@ -453,6 +453,28 @@ is not in this unit's scope.
 - The verifier could not execute commands in its read-only interface, so its
   command claims were not reproduced by it; the two parent spot checks above and
   the writer's T8 record are the executed evidence.
+
+### Correction pass evidence
+
+- C1 Graph nodes/edges: `AgendaPage()` → `Badge.tsx` (import edge), with
+  `StateMessage()` consulted as the rejected row-local contract. RED:
+  `expected document not to contain element, found <h2 ...>
+  No se pudo sincronizar el calendario</h2>` in the row alert. GREEN: focused
+  AgendaPage test passed after replacing row outcomes with role-announced
+  `Badge` elements. Commit `ba754904`.
+- C2 Graph nodes/edge: `AgendaPage()` → `Dialog.tsx` (import edge), with
+  `AgendaPage.test.tsx` consulted for the accessible-name assertion. RED:
+  `Unable to find an accessible element with the role "dialog" and name
+  "Cancelar visita de Camila Soto — Mantención"`; the dialog was still named
+  `Cancelar visita`. GREEN: focused AgendaPage test passed with the named
+  customer/service and exact panel-scoped consequence copy. Commit `9faa84c4`.
+- C3 Graph nodes/edges: `CancelConfirmation` → `AgendaPage.tsx` (import edge)
+  and `AgendaPage.stories.test.tsx` → `AgendaPage.tsx` through the story.
+  RED: `expected undefined to be defined` for `CancelConfirmation.play`;
+  the same run also exposed the stale story assertions for the old dialog name
+  and consequence copy. GREEN: Storybook matrix passed 9/9 after adding the
+  open-confirmation play interaction and asserting its dialog. Commit
+  `59869eb9`.
 
 ## Size
 
