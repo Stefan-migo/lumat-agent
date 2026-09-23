@@ -284,6 +284,14 @@
 .table tbody tr:hover {
   background: var(--corp-surface-hover);
 }
+/* Row-level drill-down links. The accessible link colour is a contract, not a
+   call-site decision, and it is density-neutral on purpose: colour only, no control
+   padding, so a dense row does not grow to the 40px control target that
+   `.btn--tertiary` carries. Second consumers: CasesList (two cells) and
+   AutomationRulesPage (currently on the UA link colour). */
+.table__link {
+  color: var(--primary-700);
+}
 /* Tabs (CORP-TABS-1): underline accent marks the active tab; inactive tabs use
    --corp-muted; panel content inherits --corp-text. */
 .tabs {

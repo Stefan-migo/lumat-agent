@@ -149,6 +149,15 @@ describe("ClientesList", () => {
     expect(onOpenClient).toHaveBeenCalledWith(1);
   });
 
+  // T4 — the accessible link colour is a shared contract, not an inline call-site style.
+  it("styles the drill-down link through the shared table link contract", () => {
+    render(<ClientesList data={customers} state="ready" />);
+
+    const link = screen.getByRole("link", { name: "Marcela Fuentes" });
+    expect(link).toHaveClass("table__link");
+    expect(link).not.toHaveAttribute("style");
+  });
+
   it("fetches the list on mount through the panel API", async () => {
     vi.mocked(apiFetch).mockResolvedValue({ clients: customers });
 

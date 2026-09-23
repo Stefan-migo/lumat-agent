@@ -26,7 +26,7 @@ const columns = (onOpenClient?: (id: number) => void): Column<Customer>[] => [
     key: "name",
     header: "Cliente",
     render: (customer) => (
-      <a href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined} style={{ color: "var(--primary-700)" }}>
+      <a className="table__link" href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>
         {customer.name ?? "—"}
       </a>
     ),
