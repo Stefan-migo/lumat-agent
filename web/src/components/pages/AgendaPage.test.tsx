@@ -63,6 +63,14 @@ describe('AgendaPage', () => {
     expect(screen.getByText('Mantención')).toBeInTheDocument();
   });
 
+  it('uses singular and plural visit counts', () => {
+    const { rerender } = render(<AgendaPage data={[appointment()]} state="ready" />);
+    expect(screen.getByText('1 visita')).toBeInTheDocument();
+
+    rerender(<AgendaPage data={[appointment(), appointment({ id: 2 })]} state="ready" />);
+    expect(screen.getByText('2 visitas')).toBeInTheDocument();
+  });
+
   it('shows a labelled empty state and keeps the table wrapper mobile-safe', () => {
     const { container } = render(<AgendaPage data={[]} state="empty" />);
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
