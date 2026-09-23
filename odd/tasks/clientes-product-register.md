@@ -202,15 +202,28 @@ away from tables (the physiology axis is preserved, not renegotiated).
   against the unmodified component; this task changes no source (D5). Done:
   9 tests, all passing against the untouched component. The singular count and
   the shared empty/filtered-empty behaviour are deliberately not blessed.
-- [ ] **T2** — RED/GREEN: clearing the search resets the list. Going from a
-  non-empty query back to `""` must trigger a fresh unfiltered fetch (D4).
-- [ ] **T3** — RED/GREEN: the count is correct in singular and plural (`1
-  cliente` / `N clientes`) (D4).
-- [ ] **T4** — RED/GREEN: the drill-down link no longer carries an inline style;
-  the accessible link treatment is a shared contract with its second consumer
-  named (candidates: `CasesList`, `AutomationRulesPage`) (D3).
-- [ ] **T5** — RED/GREEN: the `Reintentar` control is the `Button` primitive, not
-  a raw `<button>`. No raw `<button>` remains in `ClientesList`.
+- [x] **T2** — RED/GREEN: clearing the search resets the list. Going from a
+  non-empty query back to `""` now triggers a fresh unfiltered fetch (D4). RED
+  observed: after clearing, the table kept the single filtered row and
+  `Pedro Soto` never returned. Fix: the query drives the fetch through the hook's
+  own `refreshKey` instead of the old `useEffect` + `retry()` guard — the effect
+  was deleted, so the change is net-negative in code and cannot double-fetch on
+  mount.
+- [x] **T3** — RED/GREEN: the count is correct in singular and plural (`1
+  cliente` / `N clientes`) (D4). Fixed inline, following the existing repo
+  convention (`ConversationsList`, `TechnicianAgenda`, `AgentChat` all inline the
+  same ternary). No helper was invented for a single call site; the repeated
+  pattern is a candidate for the substrate layer once it is touched again.
+- [x] **T4** — RED/GREEN: the drill-down link no longer carries an inline style.
+  The accessible link treatment is now the shared `.table__link` rule in
+  `primitives.css`. Second consumer proven, not assumed: `CasesList.tsx:106` and
+  `:148` carried the identical inline style, and `AutomationRulesPage.tsx:24`
+  renders the same drill-down link on the UA default colour (`primitives.css` had
+  no anchor rule at all). `.btn--tertiary` was rejected for this role: its contract
+  is a 40px control and would have grown every dense row, breaking acceptance
+  criterion 11.
+- [x] **T5** — RED/GREEN: the `Reintentar` control is the `Button` primitive
+  (`variant="secondary"`). `grep -c "<button" ClientesList.tsx` → 0.
 - [ ] **T6** — RED/GREEN: search and export move into a region-bound toolbar tied
   to the list it controls, replacing the page-header action cluster. Second
   consumer named before promotion: `ConversationsList`, `KbList`.
@@ -308,7 +321,23 @@ away from tables (the physiology axis is preserved, not renegotiated).
   Verified GREEN against the untouched component: `npx vitest run
   src/components/pages/ClientesList.test.tsx` → 9/9 passing; `npx tsc -b --noEmit`
   → exit 0.
-- [ ] Slice 1.
+- [x] T2 — RED/GREEN: clearing the search resets the list. RED observed (the table
+  kept the filtered row), then GREEN via the hook's `refreshKey`. Commit
+  `81ab2c32`.
+- [x] T3 — RED/GREEN: singular count. RED observed (`1 clientes`), then GREEN.
+  Commit `7c9fb607`.
+- [x] T4 — RED/GREEN: the `.table__link` shared contract replaces the inline style.
+  RED observed (no class, inline `style` attribute present), then GREEN. Commit
+  `9d839dd5`.
+- [x] T5 — RED/GREEN: the `Button` primitive for the recovery control. RED observed
+  (control had no `.btn` class), then GREEN; `grep -c "<button"` → 0. Commit
+  `d79e27ff`.
+- [x] Full suite after T2–T5, including the shared stylesheet change:
+  `cd web && npm run test` → **80 files, 638 tests, all passing**, 57.67s. Baseline
+  was 79 files / 625 tests; the delta is `ClientesList.test.tsx`. No other page
+  regressed from the new `.table__link` rule.
+- [ ] Slice 1 remaining: T6 (toolbar), T7 (filtered-empty), T8 (appearance axis),
+  T9 (stories).
 - [ ] Slice 2.
 
 ## Open item
