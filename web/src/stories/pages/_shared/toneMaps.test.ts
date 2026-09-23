@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { BadgeTone } from "../../../components/primitives/Badge";
 import {
@@ -245,5 +246,12 @@ describe("approved Spanish labels (DS-UI-LABELS)", () => {
   it("matches the approved LABELS table for message directions", () => {
     expect(directionLabel("inbound")).toBe("Entrante");
     expect(directionLabel("outbound")).toBe("Saliente");
+  });
+});
+
+describe("KB status contract (DESIGN_SYSTEM.md)", () => {
+  it("documents persisted document status separately from transient operation lifecycle", () => {
+    const designSystem = readFileSync("DESIGN_SYSTEM.md", "utf8");
+    expect(designSystem).toContain("| KB document | `Activo`, `Deshabilitado` (persisted) | Operation lifecycle: `Procesando`, `Error` (transient, page-level, paired with a next action) |");
   });
 });
