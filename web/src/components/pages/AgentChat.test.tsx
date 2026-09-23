@@ -51,7 +51,10 @@ describe("command center tier metadata", () => {
 });
 
 describe("AgentChat", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.history.replaceState({}, "", "/");
+  });
 
   it("opens empty without creating a thread", async () => {
     const fetchMock = vi
@@ -104,6 +107,45 @@ describe("AgentChat", () => {
     expect(fetchMock).not.toHaveBeenCalledWith(
       "/panel/api/chat/threads",
       expect.anything(),
+    );
+  });
+
+  it("keeps the existing thread deep link working from the URL", async () => {
+    window.history.pushState({}, "", "/panel/app/chat?thread_id=9");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ thread: makeThread(9), messages: [] }));
+
+    render(<AgentChat />);
+
+    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads/9",
+      expect.anything(),
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/panel/api/chat/threads",
+      expect.anything(),
+    );
+  });
+
+  it("creates a project-bound thread from the project deep link", async () => {
+    window.history.pushState({}, "", "/panel/app/chat?proyecto=ops");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input) === "/panel/api/chat/threads") {
+        expect(init?.method).toBe("POST");
+        expect(JSON.parse(String(init?.body))).toEqual({ proyecto: "ops" });
+        return jsonResponse({ thread: makeThread(), messages: [] }, 201);
+      }
+      return jsonResponse({ threads: [] });
+    });
+
+    render(<AgentChat />);
+
+    await screen.findByRole("heading", { name: "¿En qué podemos ayudarte?" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/panel/api/chat/threads",
+      expect.objectContaining({ method: "POST" }),
     );
   });
 
