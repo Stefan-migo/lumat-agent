@@ -63,11 +63,13 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   load-bearing; ORM projection verified against `app/models.py:480-520` (`contenido` is
   `NOT NULL`, `app/models.py:490`, `db/migrations/009_memory.sql:28`); no consumer depends on the
   untruncated own read. Acceptance evidence: `tests/unit + tests/spec + guardrails` green.
-- [ ] **T2 — AT-10: pin `memory.search` failure degradation** (audit item 2)
+- [x] **T2 — AT-10: pin `memory.search` failure degradation** (audit item 2)
   `tests/unit/test_assistant_tool_loop.py:96` only exercises `memory.read`. Parameterize (or add
   a sibling test) for `"memory.search"` and assert status `degraded`, the responder continuation,
   and that the raw exception is absent from the response and evidence (AT-10,
   `assistant-tools/spec.md:210-222`; shared dispatch branch `registry.py:586-591`).
+  Status: **accepted** (`02768888`). Parameterized over `memory.read`/`memory.search`; asserts the
+  bounded payload and that the raw error is in neither response nor evidence.
 - [ ] **T3 — tukulpan unit test gaps** (audit item 6, part 1)
   Pin, without changing source: `_embed()` retry/backoff (`tukulpan.py:142-160`), service-level
   `update()` missing-ID and embedding failure (`tukulpan.py:589-613`), `_bounded_json()`
@@ -75,6 +77,15 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   empty `source_message_ids` and bounded `source_tokens` (`tukulpan.py:498-537`), and
   `_write_memory` not leaking raw `str(exc)` as `degraded_reason`
   (`odd/tasks/read-failure-truthfulness.md:197-203`).
+  Status: **partial** (`c204880b`) — 4 of 5 pinned and accepted
+  (`_embed` retries/backoff/final log, `update()` missing-ID + embedding failure,
+  `_bounded_json` byte bound with valid JSON, `write_recap` empty sources + token bounds).
+  The fifth cannot be pinned honestly: `_write_memory` (`registry.py:382`, same shape at
+  `:416` update, `:426` delete, and `tukulpan.py:537` recap) returns the raw `str(exc)` as
+  `degraded_reason`, while the read path sanitizes it (`nodes.py:712`). That leak is
+  **deliberate and documented as remaining backlog** (`read-failure-truthfulness.md`, "Remaining
+  backlog"), and the recap variant is already pinned as expected behavior by a pre-existing spec
+  test (`tests/spec/test_memory_spec.py:638`, present at base). Open human decision.
 - [ ] **T4 — relations duplicate candidate IDs** (audit item 6, part 2)
   Pin `relations._parse_verdicts()` with duplicated candidate IDs (`app/services/relations.py:61-94`),
   style `tests/spec/test_memory_relations_spec.py:158-195`.
