@@ -170,6 +170,28 @@ describe("KbList page story (T5.2 / S6 DS-UI-COPY/STATES/LABELS)", () => {
     fetchMock.mockRestore();
   });
 
+  it("keeps only the latest confirmation open when workflows overlap", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, doc: docs[1] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
+
+    render(<KbList data={{ docs }} />);
+    const table = screen.getByRole("table");
+    const restoreRow = within(table).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
+    const disableRow = within(table).getByText(`#${docs[1].id}`).closest("tr") as HTMLElement;
+    await user.click(within(restoreRow).getByRole("button", { name: "Restaurar" }));
+    await user.click(within(disableRow).getByRole("button", { name: "Deshabilitar" }));
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Confirmar" })).toHaveLength(1);
+    expect(screen.getByRole("alert")).toHaveTextContent(docs[1].title);
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`/panel/api/kb/${docs[1].id}/disable`);
+    fetchMock.mockRestore();
+  });
+
   it("preselects internal audience and sends the selected audience when uploading", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.spyOn(globalThis, "fetch")
