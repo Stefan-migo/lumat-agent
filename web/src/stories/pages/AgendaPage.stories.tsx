@@ -81,7 +81,13 @@ export const SectionEmpty: Story = { args: { data: [DATA[2]], state: "ready", wi
 export const Error: Story = { args: { data: null, state: "error", width: 1280 } };
 export const Forbidden: Story = { args: { data: null, state: "denied", width: 1280 } };
 export const Stale: Story = { args: { data: DATA, state: "stale", width: 1280 } };
-export const CancelConfirmation: Story = { args: { data: DATA, state: "ready", width: 1280 } };
+export const CancelConfirmation: Story = {
+  args: { data: DATA, state: "ready", width: 1280 },
+  play: async ({ canvasElement }) => {
+    const button = Array.from(canvasElement.querySelectorAll("button")).find((item) => item.textContent === "Cancelar visita");
+    button?.click();
+  },
+};
 export const SyncFailure: Story = {
   args: { data: [DATA[0]], state: "ready", width: 640 },
   parameters: { viewport: { defaultViewport: "bp-sm" } },

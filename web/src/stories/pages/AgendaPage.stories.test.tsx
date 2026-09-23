@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { cancelAppointment, listAppointments, retryCalendarSync } from "../../api";
 import {
@@ -59,8 +59,8 @@ describe("AgendaPage Storybook state matrix", () => {
     render(<AgendaPageStory data={Data.args?.data} state="ready" />);
 
     await user.click(screen.getByRole("button", { name: "Cancelar visita" }));
-    expect(screen.getByRole("dialog", { name: "Cancelar visita" })).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toHaveTextContent("La visita no podrá volver a reservarse");
+    expect(screen.getByRole("dialog", { name: "Cancelar visita de Camila Soto — Mantención de calefón" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent("La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.");
     await user.click(screen.getByRole("button", { name: "Confirmar cancelación" }));
     await waitFor(() => expect(cancelAppointment).toHaveBeenCalled());
 
@@ -68,6 +68,12 @@ describe("AgendaPage Storybook state matrix", () => {
     retry.focus();
     await user.keyboard("{Enter}");
     await waitFor(() => expect(retryCalendarSync).toHaveBeenCalled());
+
+    const { container: confirmationContainer } = render(<AgendaPageStory data={Data.args?.data} state="ready" />);
+    await act(async () => {
+      await CancelConfirmation.play?.({ canvasElement: confirmationContainer } as Parameters<NonNullable<typeof CancelConfirmation.play>>[0]);
+    });
+    expect(screen.getAllByRole("dialog", { name: "Cancelar visita de Camila Soto — Mantención de calefón" })).toHaveLength(1);
   });
 
   it("covers a populated page with an empty Hoy section", () => {
@@ -82,7 +88,7 @@ describe("AgendaPage Storybook state matrix", () => {
     expect(KeyboardActions).toBeDefined();
     expect(Mobile.parameters?.viewport).toEqual({ defaultViewport: "mobile-compact" });
     expect(SyncFailure.parameters?.viewport).toEqual({ defaultViewport: "bp-sm" });
-    expect(CancelConfirmation).toBeDefined();
+    expect(CancelConfirmation.play).toBeDefined();
 
     render(<AgendaPageStory data={Data.args?.data} state="ready" />);
     expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
