@@ -1,5 +1,6 @@
+import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AgentChat, COMMAND_CENTER_BREAKPOINTS, commandCenterTier } from "./AgentChat";
 
 const makeThread = (id = 4) => ({
@@ -345,6 +346,190 @@ describe("AgentChat", () => {
     expect(composer).toBeDisabled();
     closeStream();
     await waitFor(() => expect(composer).toBeEnabled());
+  });
+
+  it("keeps watching after a timeout until the persisted run settles", async () => {
+    vi.useFakeTimers();
+    try {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              `data: ${JSON.stringify({
+                type: "timeout",
+                thread_id: 4,
+                run_id: "run-timeout",
+              })}\n\n`,
+            ),
+          );
+          controller.close();
+        },
+      });
+      const fetchMock = vi.spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+        .mockResolvedValueOnce(jsonResponse({
+          message: {
+            id: 2,
+            author: "admin",
+            content: "Hello",
+            status: "processing",
+            assistant_metadata: { run_id: "run-timeout" },
+          },
+        }, 201))
+        .mockResolvedValueOnce(new Response(stream, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }))
+        .mockResolvedValueOnce(jsonResponse({
+          thread: makeThread(),
+          messages: [{
+            id: 2,
+            author: "admin",
+            content: "Hello",
+            status: "processing",
+            assistant_metadata: { run_id: "run-timeout" },
+          }],
+        }))
+        .mockResolvedValueOnce(jsonResponse({
+          thread: makeThread(),
+          messages: [{ id: 3, author: "agent", content: "Persisted answer", status: "processed", assistant_metadata: { run_id: "run-timeout" } }],
+        }))
+        .mockResolvedValueOnce(jsonResponse({
+          thread: makeThread(),
+          messages: [{ id: 3, author: "agent", content: "Persisted answer", status: "processed", assistant_metadata: { run_id: "run-timeout" } }],
+        }));
+
+      render(<AgentChat threadId={4} />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const composer = screen.getByRole("textbox", { name: /mensaje/i });
+      fireEvent.change(composer, { target: { value: "Hello" } });
+      fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(composer).toBeDisabled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000);
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(3_000);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText("Persisted answer")).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledTimes(6);
+      expect(screen.getAllByText("Persisted answer")).toHaveLength(1);
+      expect(composer).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not poll after a normally closed stream", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ thread: makeThread(), messages: [] }))
+      .mockResolvedValueOnce(jsonResponse({
+        message: {
+          id: 2,
+          author: "admin",
+          content: "Hello",
+          status: "processing",
+          assistant_metadata: { run_id: "run-normal" },
+        },
+      }, 201))
+      .mockResolvedValueOnce(sseResponse([]))
+      .mockResolvedValueOnce(jsonResponse({
+        thread: makeThread(),
+        messages: [{ id: 3, author: "agent", content: "Normal answer", status: "processed" }],
+      }));
+
+    render(<AgentChat threadId={4} />);
+    const composer = await screen.findByRole("textbox", { name: /mensaje/i });
+    fireEvent.change(composer, { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+
+    await waitFor(() => expect(screen.getByText("Normal answer")).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(composer).toBeEnabled();
+  });
+
+  it("keeps watching after a timeout under StrictMode", async () => {
+    vi.useFakeTimers();
+    try {
+      let streamServed = false;
+      let threadReadsAfterStream = 0;
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+        const url = typeof input === "string" ? input : String((input as Request).url);
+        const method = (init?.method ?? "GET").toUpperCase();
+        if (url.includes("/stream")) {
+          streamServed = true;
+          return sseResponse([{ type: "timeout", thread_id: 4, run_id: "run-strict" }]);
+        }
+        if (method === "POST" && url.includes("/messages")) {
+          return jsonResponse({
+            message: {
+              id: 2,
+              author: "admin",
+              content: "Hello",
+              status: "processing",
+              assistant_metadata: { run_id: "run-strict" },
+            },
+          }, 201);
+        }
+        if (streamServed) {
+          threadReadsAfterStream += 1;
+          if (threadReadsAfterStream === 1) {
+            return jsonResponse({
+              thread: makeThread(),
+              messages: [{
+                id: 2,
+                author: "admin",
+                content: "Hello",
+                status: "processing",
+                assistant_metadata: { run_id: "run-strict" },
+              }],
+            });
+          }
+          return jsonResponse({
+            thread: makeThread(),
+            messages: [{
+              id: 3,
+              author: "agent",
+              content: "Persisted answer",
+              status: "processed",
+              assistant_metadata: { run_id: "run-strict" },
+            }],
+          });
+        }
+        return jsonResponse({ thread: makeThread(), messages: [] });
+      });
+
+      render(
+        <StrictMode>
+          <AgentChat threadId={4} />
+        </StrictMode>,
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const composer = screen.getByRole("textbox", { name: /mensaje/i });
+      fireEvent.change(composer, { target: { value: "Hello" } });
+      fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000);
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(3_000);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText("Persisted answer")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("switches a settled stream from literal text to markdown", async () => {

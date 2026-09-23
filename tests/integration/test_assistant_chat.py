@@ -994,9 +994,48 @@ def test_stream_events_async_polls_without_blocking_the_event_loop():
 
     events, ticks = asyncio.run(collect())
 
-    assert [event["type"] for event in events] == ["status"] + ["response"] * polls
+    assert [event["type"] for event in events] == ["status"] + ["response"] * polls + ["timeout"]
     assert polls >= 3
     assert ticks >= 10
+    assert events[-1] == {"type": "timeout", "thread_id": 1, "run_id": "run-live"}
+    assert sum(event["type"] == "timeout" for event in events) == 1
+    assert "status" not in events[-1]
+
+
+def test_stream_events_async_does_not_timeout_terminal_run():
+    class Session:
+        def get(self, model, thread_id):
+            return SimpleNamespace(assistant_state={"events": [], "live": {
+                "run_id": "run-done", "stage": "completed", "preview": "done", "status": "completed",
+            }})
+
+        def close(self):
+            pass
+
+    async def collect():
+        return [
+            event
+            async for event in stream_events_async(lambda: Session(), 1, "run-done", timeout=0.01, interval=0)
+        ]
+
+    events = asyncio.run(collect())
+
+    assert all(event["type"] != "timeout" for event in events)
+
+
+def test_stream_events_emits_timeout_for_a_non_terminal_run():
+    class Session:
+        def get(self, model, thread_id):
+            return SimpleNamespace(assistant_state={"events": [], "live": {
+                "run_id": "run-sync", "stage": "streaming", "preview": "partial", "status": "processing",
+            }})
+
+        def close(self):
+            pass
+
+    events = list(stream_events(lambda: Session(), 1, "run-sync", timeout=0.01, interval=0))
+
+    assert events[-1] == {"type": "timeout", "thread_id": 1, "run_id": "run-sync"}
 
 
 def test_open_assistant_stream_releases_its_pooled_connection(client):
