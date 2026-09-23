@@ -226,10 +226,12 @@ _CUSTOMER_COMPLAINT_PHRASINGS = (
     "quiero que me devuelvan la plata",
 )
 
-# Deliberately NOT closed. "la boleta vino mal y necesito una correccion" is a
-# billing-correction request rather than a complaint, and HH-3's list ("complaint,
-# warranty, or upset customer") does not obviously cover it. Recorded as an open gap in
-# odd/tasks/complaint-trigger-coverage.md instead of being silently folded in here.
+# Decided NOT to be part of the trigger (2026-09-23, unit complaint-gap-non-goal).
+# "la boleta vino mal y necesito una correccion" is a billing-correction request rather than a
+# complaint, and HH-3's list ("complaint, warranty, or upset customer") does not cover it. It is
+# not silently missing: the turn-1 menu offers "Postventa/Garantia" and any retrieval miss
+# escalates on turn 1, so the customer still reaches a human. Folding it in here would label a
+# billing request `complaint`. See odd/tasks/complaint-gap-non-goal.md.
 
 # Benign messages that must stay OUT of the trigger — the precision half of the instrument.
 _BENIGN_MESSAGES_THAT_MUST_NOT_TRIGGER = (
