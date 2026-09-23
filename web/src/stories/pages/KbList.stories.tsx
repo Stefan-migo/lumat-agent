@@ -29,5 +29,11 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = { render: () => <KbListView /> };
 export const Processing: Story = { render: () => <KbListView state="processing" /> };
 export const Error: Story = { render: () => <KbListView state="error" /> };
-export const DisableConfirmation: Story = { render: () => <KbListView state="disable-confirmation" /> };
+export const DisableConfirmation: Story = {
+  render: () => <KbListView />,
+  play: async ({ canvasElement }) => {
+    const button = Array.from(canvasElement.querySelectorAll("button")).find((item) => item.textContent === "Deshabilitar");
+    button?.click();
+  },
+};
 export const Empty: Story = { render: () => <KbListEmpty /> };

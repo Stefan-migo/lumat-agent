@@ -137,13 +137,37 @@ describe("KbList page story (T5.2 / S6 DS-UI-COPY/STATES/LABELS)", () => {
     expect(within(versionedRow).getByRole("button", { name: "Restaurar" })).toBeInTheDocument();
   });
 
-  it("renders the disable-confirmation state naming the document and its agent-answer impact (DS-UI-STATES)", () => {
-    render(<KbListView state="disable-confirmation" />);
-    const activeDoc = docs.find((d) => d.active)!;
-    const alert = screen.getByRole("alert");
+  it("confirms disabling the clicked document before sending the mutation", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
+    const clickedDoc = docs[1];
+
+    render(<KbList />);
+    await screen.findByText(clickedDoc.title);
+    const row = within(screen.getByRole("table")).getByText(`#${clickedDoc.id}`).closest("tr") as HTMLElement;
+    await user.click(within(row).getByRole("button", { name: "Deshabilitar" }));
+
+    const alert = await screen.findByRole("alert");
     expect(within(alert).getByText("Confirma la desactivación")).toBeInTheDocument();
-    expect(within(alert).getByText(new RegExp(activeDoc.title))).toBeInTheDocument();
+    expect(within(alert).getByText(new RegExp(clickedDoc.title))).toBeInTheDocument();
     expect(within(alert).getByText(/el agente dejará de responder/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, doc: clickedDoc }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
+    await user.click(within(row).getByRole("button", { name: "Deshabilitar" }));
+    await user.click(await screen.findByRole("button", { name: "Confirmar" }));
+    await screen.findByText("Cambios guardados");
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[1][0]).toBe(`/panel/api/kb/${clickedDoc.id}/disable`);
+    expect(fetchMock.mock.calls[1][1]?.method).toBe("POST");
+    fetchMock.mockRestore();
   });
 
   it("preselects internal audience and sends the selected audience when uploading", async () => {
@@ -379,6 +403,8 @@ describe("KbList API page", () => {
     await within(row).findByDisplayValue("Contenido existente");
     await user.click(within(row).getByRole("button", { name: /guardar/i }));
     await user.click(within(row).getByRole("button", { name: "Deshabilitar" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await screen.findByText("Cambios guardados");
     const restoreRow = within(screen.getByRole("table")).getByText(`#${docs.find((doc) => doc.version > 1)!.id}`).closest("tr") as HTMLElement;
     await user.click(within(restoreRow).getByRole("button", { name: "Restaurar" }));
 
@@ -444,6 +470,7 @@ describe("KbList API page", () => {
     render(<KbList data={{ docs }} />);
     const row = within(screen.getByRole("table")).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
     await user.click(within(row).getByRole("button", { name: "Deshabilitar" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permiso para modificar la base de conocimientos");
     expect(screen.getByRole("alert")).not.toHaveTextContent("admin role required");
     fetchMock.mockRestore();
@@ -457,6 +484,7 @@ describe("KbList API page", () => {
     const row = within(screen.getByRole("table")).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
     const disable = within(row).getByRole("button", { name: "Deshabilitar" });
     await user.click(disable);
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
     expect(disable).toBeDisabled();
     resolve(new Response(JSON.stringify({ ok: true, doc: docs[0] }), { status: 200 }));
     fetchMock.mockRestore();

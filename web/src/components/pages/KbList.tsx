@@ -14,7 +14,7 @@ import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { KB_OPERATION_TONES, kbStatusLabel, kbStatusTone } from "../shared/toneMaps";
 
-export type KbListState = AsyncDataState | "processing" | "disable-confirmation";
+export type KbListState = AsyncDataState | "processing";
 export interface KbListProps { data?: DocsResponse | null; state?: KbListState; onRetry?: () => void; }
 
 // `customer` means the customer channel may ground on the document AND Lumat may still read it —
@@ -152,6 +152,7 @@ export function KbList({ data: controlledData, state: controlledState, onRetry }
   const [file, setFile] = useState<File | null>(null);
   const [visibility, setVisibility] = useState<KbVisibility>("internal");
   const [restoreConfirmation, setRestoreConfirmation] = useState<{ doc: Doc; version: number } | null>(null);
+  const [disableConfirmation, setDisableConfirmation] = useState<Doc | null>(null);
   const data = refreshed ?? controlledData ?? fetched.data;
   const state = controlledState ?? (controlledData !== undefined ? "ready" : fetched.state);
   const docs = data?.docs ?? [];
@@ -168,11 +169,11 @@ export function KbList({ data: controlledData, state: controlledState, onRetry }
     {feedback ? <StateMessage tone={feedback.tone} role="alert" title={feedback.title} /> : null}
     {showWorkspace ? <>
        <Card title="Agregar documento"><div className="kb-upload__fields"><Input label="Título" placeholder="Título del documento" value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy !== null} /><Input label="Archivo (pdf / md / txt / csv)" type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} disabled={busy !== null} /><Select label="Audiencia" value={visibility} options={AUDIENCE_OPTIONS} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} /><p className="kb-search__hint">Un documento interno nunca se usa para responder a clientes.</p><Button disabled={busy !== null} onClick={() => file && mutate("upload", () => uploadKbDocument(title, file, visibility))}>Agregar</Button></div></Card>
-       {docs.length === 0 ? <EmptyState title="No hay documentos" description="Sube el primer documento para comenzar." /> : <DataTable columns={columns} rows={docs} rowKey={(doc) => String(doc.id)} actions={(doc) => <DocActions doc={doc} busy={busy} onEdit={(nextTitle, content) => mutate("edit", () => editKbDocument(doc.id, { title: nextTitle, content }))} onDisable={() => mutate("disable", () => disableKbDocument(doc.id))} onVisibility={(nextVisibility) => mutate("visibility", () => setKbVisibility(doc.id, nextVisibility))} onRestore={(version) => setRestoreConfirmation({ doc, version })} />} />}
+       {docs.length === 0 ? <EmptyState title="No hay documentos" description="Sube el primer documento para comenzar." /> : <DataTable columns={columns} rows={docs} rowKey={(doc) => String(doc.id)} actions={(doc) => <DocActions doc={doc} busy={busy} onEdit={(nextTitle, content) => mutate("edit", () => editKbDocument(doc.id, { title: nextTitle, content }))} onDisable={() => setDisableConfirmation(doc)} onVisibility={(nextVisibility) => mutate("visibility", () => setKbVisibility(doc.id, nextVisibility))} onRestore={(version) => setRestoreConfirmation({ doc, version })} />} />}
       <SearchPanel />
      </> : null}
      {restoreConfirmation ? <><StateMessage tone="warning" role="alert" title="Confirma la restauración" detail={`El documento se reabrirá como Interno (solo Lumat). El asistente dejará de usarlo para responder a clientes hasta que lo marques como Cliente y Lumat nuevamente.`} /><div className="kb-actions__restore-confirmation"><Button onClick={() => { const pending = restoreConfirmation; setRestoreConfirmation(null); void mutate("restore", () => restoreKbDocument(pending.doc.id, pending.version)); }}>Confirmar</Button><Button variant="secondary" onClick={() => setRestoreConfirmation(null)}>Cancelar</Button></div></> : null}
-    {controlledState === "disable-confirmation" ? <StateMessage tone="warning" role="alert" title="Confirma la desactivación" detail={`Al deshabilitar «${docs.find((doc) => doc.active)?.title ?? "este documento"}», el agente dejará de responder con él. Puedes volver a activarlo cuando quieras.`} /> : null}
+     {disableConfirmation ? <><StateMessage tone="warning" role="alert" title="Confirma la desactivación" detail={`Al deshabilitar «${disableConfirmation.title}», el agente dejará de responder con él. Puedes volver a activarlo cuando quieras.`} /><div className="kb-actions__restore-confirmation"><Button onClick={() => { const pending = disableConfirmation; setDisableConfirmation(null); void mutate("disable", () => disableKbDocument(pending.id)); }}>Confirmar</Button><Button variant="secondary" onClick={() => setDisableConfirmation(null)}>Cancelar</Button></div></> : null}
     {state === "error" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}
   </PageFrame>;
 }
