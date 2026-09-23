@@ -252,10 +252,11 @@ is not in this unit's scope.
 - [x] **T3** — RED/GREEN: a section with no rows renders no nested `.empty-state`
   and no "No hay visitas" copy; page-empty and section-empty are distinct. RED
   observed.
-- [x] **T4** — RED/GREEN: the cancellation `Dialog` uses `Textarea`, states the
-  consequence of cancelling, and renders its success/failure at the locus; the
-  sync-retry failure renders at the row. RED observed (no `.field__control`,
-  feedback only in the page banner).
+- [ ] **T4** — REOPENED by independent verification. The `Textarea`, the
+  dialog-local cancellation failure and the row-local sync failure landed
+  (`bf712125`), but two parts do not hold: the row-locus feedback is a
+  `StateMessage` panel inside a table cell, and the confirmation copy states a
+  product guarantee the specs do not establish. Closed by C1–C3.
 - [x] **T5** — RED/GREEN: the retry controls in the stale and error states are
   `Button`. `grep -c "<button" AgendaPage.tsx` → 0.
 - [x] **T6** — RED/GREEN: the operator surface gets the named region and the
@@ -268,6 +269,31 @@ is not in this unit's scope.
   sync-failure/retry), plus their story assertions.
 - [x] **T8** — Slice 1 verification of record: `npm run test`,
   `npx tsc -b --noEmit`, `npm run build`, `npm run build-storybook`.
+
+### Slice 1 — correction pass (opened by independent verification)
+
+- [ ] **C1** — The row-locus outcome must stay dense. A `StateMessage` is a panel:
+  it emits a `<section>` carrying an `<h2>` and its own tinted surface
+  (`StateMessage.tsx:22-26`), so inside the actions `<td>` it adds a heading
+  landmark per row and inflates row height — against the dense-table contract
+  (`DESIGN_SYSTEM.md:409-416`) and acceptance criterion 12. Replace it with a
+  compact outcome built only from contracts that already exist; `StateMessage`
+  remains correct for the page-level states it already serves. Do **not** add a new
+  CSS class or token: if nothing existing fits, stop and report the finding rather
+  than inventing substrate with a single consumer (D3).
+- [ ] **C2** — The destructive confirmation names the affected visit and states a
+  truthful consequence. `DESIGN_SYSTEM.md:437` requires a confirmation to name the
+  affected customer/entity, and the current copy claims the visit can never be
+  rebooked — a guarantee AG-UI-1/AG-UI-3 do not establish: they forbid the panel
+  from offering rebooking, not the domain from ever holding that appointment again.
+  The `### Agenda` section also gains the consequence clause its `### Clientes`
+  sibling already carries (`DESIGN_SYSTEM.md:307`).
+- [ ] **C3** — The story matrix must represent what it claims. `CancelConfirmation`
+  is the plain data story and never opens the dialog
+  (`AgendaPage.stories.tsx`), and the copy assertion tests a substring loose enough
+  to pass on weakened copy (`AgendaPage.test.tsx`). Either the story represents the
+  open confirmation or it stops claiming to, and the assertion pins the copy it
+  means to protect.
 
 ### Slice 2 — technician agenda (ships in PR 2)
 
@@ -401,6 +427,32 @@ is not in this unit's scope.
 - `cd web && npm run build-storybook` — passed: Storybook `8.6.18` built the
   preview and emitted `storybook-static`. Storybook reported its existing
   `eval` and large-chunk warnings.
+
+### Slice 1 independent verification (FAIL → correction pass)
+
+- Tier: `gentle-ai review assess --base-ref 9b83e27f` → `risk: medium`
+  (`executable_change` on `AgendaPage.test.tsx`; 6 paths, 563 changed lines,
+  `slice_budget_reached`). Receipt-driven development is **off** for this clone
+  (`review mode status`: global on, clone-local off), so this ran as the ODD
+  verification gate, not a native review, and no review lifecycle was opened. The
+  runtime profile is a flash model, so the tier was biased up one step and an
+  independent verifier was run in addition to the writer's self-verification.
+- Parent spot check (re-run, not trusted): `npx vitest run
+  src/components/pages/AgendaPage.test.tsx` → 12/12 passing;
+  `npx tsc -b --noEmit` → exit 0.
+- One independent read-only verifier reviewed the diff against this document and
+  returned **FAIL**. Accepted findings, now C1–C3: the `StateMessage` panel inside
+  the actions cell; the confirmation's unestablished product guarantee and its
+  missing affected-entity name (`DESIGN_SYSTEM.md:437`); the `CancelConfirmation`
+  story that never opens the dialog, plus the loose substring assertion.
+- Confirmed correct and kept: T1, T2, T3, T5, T6; the state matrix, the badges and
+  the truly-empty page state are not regressed.
+- Rejected as out of scope: the verifier flagged the technician address link
+  (`TechnicianAgenda.tsx:115-117`) against acceptance 3. That is T10 — slice 2 —
+  and is expected to be open until PR 2 lands.
+- The verifier could not execute commands in its read-only interface, so its
+  command claims were not reproduced by it; the two parent spot checks above and
+  the writer's T8 record are the executed evidence.
 
 ## Size
 
