@@ -76,6 +76,13 @@ describe('panel routes', () => {
     expect(pathForRoute({ view: 'planning-sessions', planningSessionSlug: 'budget-review-8' })).toBe('/panel/app/planning-sessions/budget-review-8');
   });
 
+  it('keeps project and thread chat deep links URL-addressable', () => {
+    expect(pathForRoute({ view: 'chat', projectSlug: 'ops' })).toBe('/panel/app/chat?proyecto=ops');
+    expect(parsePanelPath('/panel/app/chat?proyecto=ops')).toEqual({ view: 'chat', projectSlug: 'ops' });
+    expect(pathForRoute({ view: 'chat', threadId: 4 })).toBe('/panel/app/chat?thread_id=4');
+    expect(parsePanelPath('/panel/app/chat?thread_id=4')).toEqual({ view: 'chat', threadId: 4 });
+  });
+
   it('falls back to dashboard for malformed automation rule IDs', () => {
     expect(parsePanelPath('/panel/app/automation-rules/0')).toEqual({ view: 'dashboard' });
     expect(parsePanelPath('/panel/app/automation-rules/not-an-id')).toEqual({ view: 'dashboard' });

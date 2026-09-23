@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.models import InternalChatThread
+from app.models import InternalChatThread, User
 from app.services import agent_chat
 
 
@@ -119,6 +119,70 @@ def test_thread_project_authorization_rejects_project_that_no_longer_resolves(mo
 
     with pytest.raises(ValueError, match="not active"):
         agent_chat._thread_project_authorization(object(), thread)
+
+
+def test_agent_turn_authorization_failure_uses_turn_failure_path_and_publishes(monkeypatch):
+    thread = SimpleNamespace(
+        id=1,
+        proyecto="archived-project",
+        assistant_state={},
+        current_plan=None,
+        active_run_id=None,
+    )
+    user = SimpleNamespace(id=2, username="admin", role=SimpleNamespace(value="admin"))
+    message = SimpleNamespace(
+        id=3,
+        thread_id=1,
+        content="hello",
+        status="received",
+        error=None,
+        completed_at=None,
+        assistant_metadata={"run_id": "run-1"},
+    )
+
+    class Session:
+        def get(self, model, identifier):
+            return {InternalChatThread: thread, User: user}.get(model)
+
+        def scalar(self, _query):
+            return message
+
+        def flush(self):
+            pass
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    publishes = []
+    monkeypatch.setattr(agent_chat, "_session_factory", lambda: (lambda: Session()))
+    monkeypatch.setattr(
+        agent_chat,
+        "_thread_project_authorization",
+        lambda *_args: (_ for _ in ()).throw(ValueError("project is not active")),
+    )
+    monkeypatch.setattr(agent_chat, "publish_live", lambda *args, **kwargs: publishes.append((args, kwargs)))
+    monkeypatch.setattr(agent_chat, "record_audit", lambda *args, **kwargs: None)
+
+    agent_chat.run_agent_turn(
+        thread_id=thread.id,
+        run_id="run-1",
+        user_id=user.id,
+        attachment_ids=[],
+        sdb_requested=None,
+    )
+
+    assert message.status == "failed"
+    assert message.error == "El agente no pudo procesar este mensaje. Reinténtalo."
+    assert thread.assistant_state["stage"] == "failed"
+    assert thread.assistant_state["execution_status"] == "failed"
+    assert thread.assistant_state["live"]["status"] == "failed"
+    assert publishes[-1][1] == {"status": "failed", "preview": None}
 
 
 def test_agent_turn_derives_project_authorization_from_thread(monkeypatch):

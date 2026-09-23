@@ -103,18 +103,39 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   Status: **accepted** (`fc2af216`). Deterministic event choreography (no sleeps) forces the third
   writer to lose both bounded attempts and re-raise `IntegrityError`, with only the second
   writer's row persisted. Parent re-ran it three times consecutively: exit 0 each.
-- [ ] **T6 — project authorization inside the turn failure boundary** (audit item 5)
+- [x] **T6 — project authorization inside the turn failure boundary** (audit item 5)
   `_thread_project_authorization()` runs before the turn's `try` (`agent_chat.py:633-640`), so its
   failure escapes the turn handler (`agent_chat.py:749-773`) and lands in the outer wrapper
-  (`agent_chat.py:781-810`). Move it inside the protected boundary or catch it and write the same
-  bounded failure metadata. **Open decision**: same user-visible failure as an ordinary turn, or a
-  distinct authorization diagnostic.
-- [ ] **T7 — panel entry point: open a conversation bound to a project** (audit item 4)
+  (  `agent_chat.py:781-810`). Move it inside the protected boundary or catch it and write the same
+  bounded failure metadata. **Decision (resolved from evidence, not asked)**: the same turn error
+  path handles it. The recorded review advisory (Engram 4614, review of `memory-per-project-thread`)
+  states exactly that what is missing is "that the turn's own error path handles it and publishes the
+  live push"; a distinct authorization diagnostic would be new surface with no requirement behind it.
+  No new error classification: the fix is to bring the resolution inside the boundary.
+  Status: **accepted** (`2e89f1e9`). The two-line move plus a regression test. The parent proved RED
+  with the source reverted (`message.error` was `None`, so the test does distinguish the turn's own
+  failure path from the outer wrapper) and GREEN with it in place; `tests/integration/test_h4_chat.py`
+  and `tests/unit + tests/spec` are green.
+- [x] **T7 — panel entry point: open a conversation bound to a project** (audit item 4)
   Threads already carry `proyecto` (migration 031) and the API accepts it
   (`app/panel/api/routes/chat.py:55-81`), but the UI never binds it: `createChatThread()` posts
   `{}` (`web/src/api.ts:102-108`, `AgentChat.tsx:535-545`) and the project page only shows SDB
-  artifacts (`ProjectsPage.tsx:13-30`). **Open decision**: where the entry point lives and whether
-  the project binding is URL-addressable.
+  artifacts (`ProjectsPage.tsx:13-30`). **Decision (human)**: the entry point is URL-addressable.
+  The project page navigates to `/panel/app/chat?proyecto=<slug>`, `AgentChat` reads that query
+  parameter and creates or reuses the thread bound to that project, reusing the deep-link pattern the
+  page already has for `threadId`.
+  Status: **accepted** (`5ec28106`, `5ab0f7bb`, `0f9f09bc`, `69440b0e`). `ProjectsPage` gained the
+  "Abrir asistente" action, `panelRoutes` parses and preserves the chat query parameters, and
+  `AgentChat` creates the bound thread from `proyecto`.
+  Reuse vs create: **create**, because thread summaries do not expose `proyecto` and reuse would have
+  meant stretching that response contract; the limitation is recorded here instead of being paid for
+  with a wider API change.
+  Parent-verification correction (one scoped pass): the first version created the thread from
+  `?proyecto=` but never rewrote the URL, so every refresh created another thread — which defeats the
+  addressable property. Now `AppShell` passes `onThreadOpened` and the URL becomes the thread's
+  `?thread_id=` deep link; "Nuevo chat" keeps the binding via `thread?.proyecto`. RED proven by
+  reverting the source (3 tests fail without the fix). Evidence: web suite 79 files / 625 tests,
+  `tsc -b --noEmit` and `npm run build` exit 0, full Python suite exit 0.
 
 - [x] **T8 — align the public memory scope contract across spec, prose and prompt** (found by
   T1's independent verification; human decided to close it inside this unit)
@@ -145,7 +166,8 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
      **310 changed lines**.
   2. `odd/tukulpan-memory-pinning`, stacked on slice 1 — T2 + T3 + T4 + T5 — **PR #322**
      (base #321), 10 commits (`02768888..bcc3928f`), **374 changed lines**.
-  3. `odd/tukulpan-memory-surface`, stacked on slice 2 — T6 + T7 — not opened.
+  3. `odd/tukulpan-memory-surface`, stacked on slice 2 — T6 + T7 — **PR #324** (base #322), 7 commits
+     (`7d071f73..06547cbf`), **293 changed lines**.
   Each slice's diff reduces to its own work once its predecessor merges.
 - Pre-push verification of record: `uv run --frozen pytest tests/` → exit 0 (1304 tests), tree clean.
 - Work-unit commits, tests and docs with their behavior, Conventional Commits.
@@ -182,7 +204,6 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
 
 ## Next step
 
-Slice 1 (T1+T8) and slice 2 (T2/T3/T4/T5) are complete and verified; both await push/PR
-authorization. Slice 3 needs two human decisions first: T6 (is a project-resolution failure the
-same user-visible failure as an ordinary turn, or a distinct authorization signal?) and T7 (where
-does the project-page conversation entry point live, and is the project binding URL-addressable?).
+All eight tasks are implemented and accepted. PR #321 and PR #322 are open with CI green; slice 3
+is committed on `odd/tukulpan-memory-surface` and awaits push/PR authorization. Nothing in the
+audit's five pendings or six test gaps is left open.

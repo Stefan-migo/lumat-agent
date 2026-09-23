@@ -10,14 +10,14 @@ import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { memoryStatusLabel, memoryStatusTone, memoryTypeLabel, memoryTypeTone, projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 
-export function ProjectsPage({ projectSlug, onOpenProject, data, state, sectionTabs }: { projectSlug?: string; onOpenProject?: (slug: string) => void; data?: ProjectsResponse; state?: AsyncDataState; sectionTabs?: ReactNode }) {
+export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, state, sectionTabs }: { projectSlug?: string; onOpenProject?: (slug: string) => void; onOpenChat?: (slug: string) => void; data?: ProjectsResponse; state?: AsyncDataState; sectionTabs?: ReactNode }) {
   const load = useCallback(() => listProjects(), []);
   const fetched = useAsyncData(load, data === undefined);
   const detailLoad = useCallback(() => getProject(projectSlug!), [projectSlug]);
   const detail = useAsyncData(detailLoad, projectSlug !== undefined);
   if (projectSlug) {
     const body = detail.data as ProjectDetailResponse | null;
-    return <PageFrame title={body?.project.name ?? "Proyecto"} meta={body ? <span>{body.project.purpose} · <Badge tone={projectStatusTone(body.project.status)}>{projectStatusLabel(body.project.status)}</Badge></span> : undefined} actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a proyectos</Button>} state={detail.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando proyecto" /> : detail.state === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar el proyecto" /> : undefined}>
+    return <PageFrame title={body?.project.name ?? "Proyecto"} meta={body ? <span>{body.project.purpose} · <Badge tone={projectStatusTone(body.project.status)}>{projectStatusLabel(body.project.status)}</Badge></span> : undefined} actions={<><Button variant="secondary" onClick={() => onOpenChat?.(body?.project.slug ?? projectSlug!)}>Abrir asistente</Button><Button variant="secondary" onClick={() => window.history.back()}>Volver a proyectos</Button></>} state={detail.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando proyecto" /> : detail.state === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar el proyecto" /> : undefined}>
       {sectionTabs}
       {body && Object.keys(body.artifacts).length === 0 ? <EmptyState title="No hay artefactos SDB" description="Este proyecto todavía no tiene artefactos de asistente." /> : body ? Object.entries(body.artifacts).map(([entity, artifacts], index) => <section aria-labelledby={`entity-${index}`} key={entity}><h2 id={`entity-${index}`}>{entity}</h2><DataTable rows={artifacts} rowKey={(artifact) => String(artifact.id)} emptyMessage="No hay artefactos para esta entidad" columns={[{ key: "title", header: "Título", render: (artifact) => artifact.titulo }, { key: "content", header: "Contenido", render: (artifact) => artifact.contenido }, { key: "type", header: "Tipo", render: (artifact) => <Badge tone={memoryTypeTone(artifact.tipo)}>{memoryTypeLabel(artifact.tipo)}</Badge> }, { key: "status", header: "Estado", render: (artifact) => <Badge tone={memoryStatusTone(artifact.status)}>{memoryStatusLabel(artifact.status)}</Badge> }]} /></section>) : null}
     </PageFrame>;

@@ -328,9 +328,11 @@ function AgentActivity({
 export interface AgentChatProps {
   threadId?: number;
   sectionTabs?: ReactNode;
+  onThreadOpened?: (id: number) => void;
 }
 
-export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
+export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatProps = {}) {
+  const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
     (Number(new URLSearchParams(globalThis.location.search).get("thread_id")) || undefined);
@@ -400,17 +402,24 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
       );
 
   useEffect(() => {
-    const request = requestedId ? getChatThread(requestedId) : Promise.resolve(null);
+    const request = requestedId
+      ? getChatThread(requestedId)
+      : requestedProject
+        ? createChatThread(requestedProject)
+        : Promise.resolve(null);
     void request
       .then((result) => {
-        if (result) loadThread(result);
+        if (result) {
+          loadThread(result);
+          if (!requestedId && requestedProject) onThreadOpened?.(result.thread.id);
+        }
       })
       .catch((reason: unknown) =>
         setError(reason instanceof ApiError ? reason.detail : "No pudimos abrir el chat"),
       )
       .finally(() => setLoading(false));
-    if (!requestedId) void refreshThreads();
-  }, [requestedId]);
+    if (!requestedId && !requestedProject) void refreshThreads();
+  }, [requestedId, requestedProject]);
 
   useEffect(() => {
     if (!thread) return;
@@ -536,7 +545,9 @@ export function AgentChat({ threadId, sectionTabs }: AgentChatProps = {}) {
     setError(null);
     setLoading(true);
     try {
-      loadThread(await createChatThread());
+      const result = await createChatThread(thread?.proyecto ?? requestedProject);
+      loadThread(result);
+      onThreadOpened?.(result.thread.id);
     } catch (reason: unknown) {
       setError(reason instanceof ApiError ? reason.detail : "No pudimos crear el chat");
     } finally {

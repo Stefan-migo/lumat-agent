@@ -38,4 +38,14 @@ describe("projects panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Volver a proyectos" }));
     expect(back).toHaveBeenCalled();
   });
+
+  it("offers a project-bound assistant entry point", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null }, artifacts: {} }), { status: 200 }));
+    const onOpenChat = vi.fn();
+    render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} onOpenChat={onOpenChat} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /abrir asistente/i }));
+
+    expect(onOpenChat).toHaveBeenCalledWith("ops");
+  });
 });

@@ -635,8 +635,8 @@ def _run_agent_turn_session(
     attachment_ids: list[int], sdb_requested: bool | None,
 ) -> None:
     run_id = message.assistant_metadata["run_id"]
-    project_authorization = _thread_project_authorization(session, thread)
     try:
+        project_authorization = _thread_project_authorization(session, thread)
         preview: list[str] = []
         token_count = 0
         last_flush = time.monotonic()
