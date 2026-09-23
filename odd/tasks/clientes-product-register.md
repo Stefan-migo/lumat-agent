@@ -196,10 +196,12 @@ away from tables (the physiology axis is preserved, not renegotiated).
 
 ### Slice 1 — Clientes list (ships in PR 1)
 
-- [ ] **T1** — RED first: create `ClientesList.test.tsx` covering the existing
+- [x] **T1** — RED first: create `ClientesList.test.tsx` covering the existing
   state model (loading, ready with rows, empty, filtered-empty, stale,
   partial-error, fatal-error with retry, denied) and the drill-down link. GREEN
-  against the unmodified component; this task changes no source (D5).
+  against the unmodified component; this task changes no source (D5). Done:
+  9 tests, all passing against the untouched component. The singular count and
+  the shared empty/filtered-empty behaviour are deliberately not blessed.
 - [ ] **T2** — RED/GREEN: clearing the search resets the list. Going from a
   non-empty query back to `""` must trigger a fresh unfiltered fetch (D4).
 - [ ] **T3** — RED/GREEN: the count is correct in singular and plural (`1
@@ -291,6 +293,21 @@ away from tables (the physiology axis is preserved, not renegotiated).
   need no delta.
 - [x] Amendment written: `openspec/changes/panel-grammar-global/` (proposal,
   `DS-GRAMMAR-1` delta, tasks) and the two-axis clause in `web/DESIGN_SYSTEM.md`.
+- [x] Graph Check (Step 1) for the Clientes area: `graphify query "ClientesList
+  ClientFicha DataTable StateMessage clientes page components"`. Nodes consulted:
+  `ClientesList()` (`pages/ClientesList.tsx:61`), `DataTable()`
+  (`shared/DataTable.tsx:32`), `ClientFicha()` (`pages/ClientFicha.tsx:40`),
+  `PageFrame()`, `StateMessage()`, `ClientMemories.tsx`, `useAsyncData()`,
+  `shared/toneMaps.ts`, `apiFetch()`. Communities: `ClientFicha.tsx`,
+  `Settings.tsx`, `AutomationRulesPage.tsx`, `useAsyncData`. Signal: `DataTable`,
+  `PageFrame` and `StateMessage` sit in communities driven by other pages
+  (`Settings`, `AutomationRulesPage`), which is graph-level support for promoting
+  them as shared pieces with real second consumers.
+- [x] T1 — `ClientesList.test.tsx` created with 9 tests covering the state model,
+  the drill-down link, the export controls and the uncontrolled mount fetch.
+  Verified GREEN against the untouched component: `npx vitest run
+  src/components/pages/ClientesList.test.tsx` → 9/9 passing; `npx tsc -b --noEmit`
+  → exit 0.
 - [ ] Slice 1.
 - [ ] Slice 2.
 
