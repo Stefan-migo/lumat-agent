@@ -169,6 +169,10 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   3. `odd/tukulpan-memory-surface`, stacked on slice 2 — T6 + T7 — **PR #324** (base #322), 7 commits
      (`7d071f73..06547cbf`), **293 changed lines**.
   Each slice's diff reduces to its own work once its predecessor merges.
+- Delivery outcome: all three merged to `main`, each verified by CI on its merge commit — #321 →
+  `a0faf548`, #322 → `09adcffa`, #324 → `64972a26` (current `main`). The test database was brought
+  down, the worktree and the three remote and local branches were removed, and the knowledge graph
+  was refreshed from `64972a26` (7479 nodes, 15566 edges, 695 communities).
 - Pre-push verification of record: `uv run --frozen pytest tests/` → exit 0 (1304 tests), tree clean.
 - Work-unit commits, tests and docs with their behavior, Conventional Commits.
 - Push, PR and merge stay human decisions.
@@ -204,6 +208,9 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
 
 ## Next step
 
-All eight tasks are implemented and accepted. PR #321 and PR #322 are open with CI green; slice 3
-is committed on `odd/tukulpan-memory-surface` and awaits push/PR authorization. Nothing in the
-audit's five pendings or six test gaps is left open.
+None. All eight tasks are delivered: the three stacked PRs merged to `main` with CI green on each
+merge commit, and nothing in the audit's five pendings or six test gaps is left open.
+
+Deliberately not done, and why: `rapso close` was not run because its cleanup step could reach
+another session's active `odd/*` worktree, and the local branch `odd/prod-image-agent-dir` (a
+different unit, its PR #320 already merged) was left untouched.
