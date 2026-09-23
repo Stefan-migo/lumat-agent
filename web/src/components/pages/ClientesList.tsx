@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { apiFetch } from "../../api";
 import type { Customer } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -60,14 +60,14 @@ function stateMessage(state: ClientesListState, retry: () => void) {
 
 export function ClientesList({ data: controlledData, state: controlledState, onRetry, onOpenClient }: ClientesListProps) {
   const [query, setQuery] = useState("");
+  // The query drives the fetch through the hook's own refresh key, so an emptied search
+  // refetches the unfiltered list instead of keeping the previous filtered result.
+  const [queryVersion, setQueryVersion] = useState(0);
   const fetchClients = useCallback(
     () => apiFetch<{ clients: Customer[] }>(`/panel/api/clients${query ? `?q=${encodeURIComponent(query)}` : ""}`).then((response) => response.clients),
     [query],
   );
-  const fetched = useAsyncData(fetchClients, controlledData === undefined);
-  useEffect(() => {
-    if (controlledData === undefined && query) fetched.retry();
-  }, [controlledData, query]);
+  const fetched = useAsyncData(fetchClients, controlledData === undefined, queryVersion);
   const data = controlledData === undefined ? fetched.data : controlledData;
   const state = controlledState ?? fetched.state;
   const retry = onRetry ?? fetched.retry;
@@ -78,7 +78,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       meta={data ? `${data.length} clientes` : undefined}
       actions={
         <>
-          <SearchInput aria-label="Buscar clientes" onSearch={setQuery} />
+          <SearchInput aria-label="Buscar clientes" onSearch={(next) => { setQuery(next); setQueryVersion((current) => current + 1); }} />
           <Button variant="secondary" href="/panel/export/clients.csv">Exportar clientes CSV</Button>
           <Button variant="secondary" href="/panel/export/cases.csv">Exportar casos CSV</Button>
         </>

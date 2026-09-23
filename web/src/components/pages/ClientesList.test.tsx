@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { apiFetch } from "../../api";
 import { ClientesList } from "./ClientesList";
@@ -149,5 +149,25 @@ describe("ClientesList", () => {
 
     expect(await screen.findByText("Marcela Fuentes")).toBeInTheDocument();
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients");
+  });
+
+  // T2 — clearing the search must return to the unfiltered list. Today the refetch only
+  // fires for a non-empty query, so a cleared search leaves the filtered result on screen.
+  it("resets the list when the search is cleared", async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiFetch).mockImplementation(async (path: string) =>
+      String(path).includes("q=marcela") ? { clients: [customers[0]] } : { clients: customers },
+    );
+
+    render(<ClientesList />);
+    expect(await screen.findByText("Pedro Soto")).toBeInTheDocument();
+
+    const search = screen.getByLabelText("Buscar clientes");
+    await user.type(search, "marcela");
+    await waitFor(() => expect(screen.queryByText("Pedro Soto")).not.toBeInTheDocument());
+
+    await user.clear(search);
+    await waitFor(() => expect(screen.getByText("Pedro Soto")).toBeInTheDocument());
+    expect(apiFetch).toHaveBeenLastCalledWith("/panel/api/clients");
   });
 });
