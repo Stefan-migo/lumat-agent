@@ -648,7 +648,14 @@ is not in this unit's scope.
 
 ## Size
 
-Slice 1 (`9b83e27f..HEAD` under `web/`) changed **134 lines** (110 added, 24
+Unit total (`9b83e27f..HEAD`, authoritative): **228 changed lines under `web/`**
+(167 added, 61 deleted) across 11 files. This is the number the review budget
+applies to, and the whole unit sits well inside the ~400-line budget. The
+per-slice figures below are each measured at their own range boundary; because a
+line changed in both slices is counted inside each range and once in the union,
+the two ranges need not sum to the total.
+
+Slice 1 (`9b83e27f..774901f3` under `web/`) changed **134 lines** (110 added, 24
 deleted) across 5 files: `AgendaPage.test.tsx` 51, `AgendaPage.tsx` 43,
 `AgendaPage.stories.test.tsx` 22, `AgendaPage.stories.tsx` 9, `DESIGN_SYSTEM.md`
 9. Production code is 43 of those lines; the rest is tests, stories and the
