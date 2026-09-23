@@ -23,6 +23,22 @@ class SearchFailure(RuntimeError):
     """The provider failed; an empty result is reserved for a valid no-hit response."""
 
 
+class _TextSanitizer(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+
+def _sanitize_text(value: str) -> str:
+    parser = _TextSanitizer()
+    parser.feed(value)
+    parser.close()
+    return " ".join("".join(parser.parts).split())
+
+
 class BraveSearch:
     """Brave Search provider behind the provider-neutral search seam."""
 
@@ -73,9 +89,9 @@ class BraveSearch:
                     raise SearchFailure("search provider returned an unsafe result URL")
                 results.append(
                     {
-                        "title": " ".join(title.split())[:MAX_TITLE_LENGTH],
+                        "title": _sanitize_text(title)[:MAX_TITLE_LENGTH],
                         "url": url[:MAX_URL_LENGTH],
-                        "snippet": " ".join(snippet.split())[:MAX_SNIPPET_LENGTH],
+                        "snippet": _sanitize_text(snippet)[:MAX_SNIPPET_LENGTH],
                     }
                 )
             if len(json.dumps(results, ensure_ascii=False)) >= 4_000:

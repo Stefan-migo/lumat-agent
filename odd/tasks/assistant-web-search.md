@@ -193,6 +193,9 @@ by loosening this one.
 - [x] **T6 — Spec.** AT-3 amended with the reasoning and the evidence above, in the file's existing shape.
 - [x] **T7 — Regression.** Full suite green; `test_web_search_is_bounded_and_failures_are_empty` replaced
   by tests asserting the **new** contract.
+- [x] **T8 — Live markup sanitization.** Real Brave responses include HTML highlight tags in `title` and
+   `description`; sanitize both fields with the standard-library `HTMLParser` before applying the existing
+   whitespace collapse and bounds. Decode common HTML entities without adding a dependency.
 
 ## Constraints
 
@@ -253,6 +256,9 @@ as a separate evidence row, honestly marked if it could not be run.
 - 2026-09-23 — This record created before the first source change.
 - 2026-09-23 — T1–T7 implemented: Brave adapter, explicit failure states, bounded snippets, configuration,
   evidence instructions, harness coverage, and AT-3 amendment.
+- 2026-09-23 — Live Brave verification confirmed HTTP 200 `web.results` list responses, a 1,859-character
+  five-result payload, and an end-to-end grounded graph turn with cited markdown URLs. It also exposed
+  `<strong>` markup in snippets, so T8 added standard-library sanitization for titles and snippets.
 
 ## Verification evidence
 
@@ -326,8 +332,33 @@ $ git diff --check
 (no output)
 ```
 
-Live Brave verification: **NOT RUN** — `BRAVE_SEARCH_API_KEY` is absent or remains a placeholder in
-`infra/.env`; all provider behavior was verified with `respx` mocks.
+Initial implementation live verification: **NOT RUN** — the key was absent or remained a placeholder in
+`infra/.env`; adapter behavior was verified with `respx` mocks. T8 live evidence is recorded below.
+
+### T8 RED/GREEN
+
+```text
+$ uv run pytest tests/unit/test_assistant_tools.py -q
+..................................F...................................   [100%]
+__________ test_web_search_sanitizes_html_and_entities_in_text_fields __________
+E       AssertionError: assert "<" not in result["title"]
+E       AssertionError: assert '<' not in '<em>Calefon... &amp; Chile'
+
+$ uv run pytest tests/unit/test_assistant_tools.py -q
+......................................................................   [100%]
+```
+
+The implementation uses the standard-library `HTMLParser` already present in this module because
+`convert_charrefs=True` removes tags through `handle_data` and decodes entities without a dependency.
+
+### Live Brave provider evidence
+
+| Observation | Result |
+|---|---|
+| Real provider response shape | HTTP 200; `web.results` was a list in every observed response. The missing-`web` risk was not confirmed. No zero-result response was forced; the observed shape is compatible with `web.results: []`, so the current empty-result path is correct. |
+| Real result bounds | Five results; serialized payload was 1,859 characters, below the 4,000-character evidence budget. |
+| Real graph turn | `run_assistant`, session-less, live provider: planner selected `kind=tool`, `tool=web.search`; guardrails executed it; tool status was `completed`; final response was grounded in snippets and cited source URLs as markdown links. |
+| T8 defect | Brave `description` contained `<strong>entre $90.000 y $280.000</strong>` and HTML entities; raw markup could leak into tool evidence and markdown output. |
 
 ## Graph nodes consulted (Graph Check, Step 1)
 
@@ -347,5 +378,5 @@ Live Brave verification: **NOT RUN** — `BRAVE_SEARCH_API_KEY` is absent or rem
 
 ## Next step
 
-T1–T7 are complete in this worktree. Delivery (push, PR, merge) is the human's decision under ordinary
+T1–T8 are complete in this worktree. Delivery (push, PR, merge) is the human's decision under ordinary
 repository policy.

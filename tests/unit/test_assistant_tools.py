@@ -524,6 +524,33 @@ def test_web_search_returns_bounded_provider_neutral_evidence():
     assert len(json.dumps(results)) < 4_000
 
 
+@respx.mock
+def test_web_search_sanitizes_html_and_entities_in_text_fields():
+    respx.get("https://api.search.brave.com/res/v1/web/search").respond(
+        200,
+        json={
+            "web": {
+                "results": [
+                    {
+                        "title": "<em>Calefont</em> &amp; Chile",
+                        "url": "https://example.test/result",
+                        "description": "<strong>entre $90.000 y $280.000</strong> &amp; más",
+                    }
+                ]
+            }
+        },
+    )
+
+    result = BraveSearch(api_key="test-key").search("safe query")[0]
+
+    assert "<" not in result["title"]
+    assert ">" not in result["title"]
+    assert "<" not in result["snippet"]
+    assert ">" not in result["snippet"]
+    assert result["title"] == "Calefont & Chile"
+    assert result["snippet"] == "entre $90.000 y $280.000 & más"
+
+
 @pytest.mark.parametrize("status", [401, 403, 429, 500, 503])
 @respx.mock
 def test_web_search_provider_failures_are_explicit(status):
