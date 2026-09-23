@@ -28,20 +28,20 @@ The assistant MUST expose the existing typed, exact-argument tools over domain s
 
 ### Requirement: AT-8 — Scoped Memory Contract
 
-The `memory.read` and `memory.search` tools MUST accept only `scope="panel"`, `scope="customer"`, or `scope="agent"`. A panel conversation read MUST omit `entity_id`; the server MUST derive `entity_id="thread:<trusted thread id>"` and reject any model-supplied entity. A customer read MUST use `entity_id="customer:<customer id>"` or a legacy numeric customer id, and an agent read MUST use the canonical project-scoped agent entity `entity_id="agent:<project>"`. `memory.search` MUST bound each returned `contenido` field before it becomes tool evidence.
+The `memory.read` and `memory.search` tools MUST accept only the public `scope="own"` or `scope="customer"` contracts. An own read MUST omit `entity_id`; the server MUST derive the trusted current thread axis and project-qualified agent axis, reject any model-supplied entity, preserve their interleave order, and return a digest whose `contenido` is bounded to 500 characters. A customer read MUST use `entity_id="customer:<customer id>"` or a legacy numeric customer id and MUST retain its full projection. `memory.search` MUST bound each returned `contenido` field before it becomes tool evidence.
 
 #### Scenario: Valid scoped memory read
-- GIVEN a memory read with a closed-domain scope and its matching entity identifier, or a panel read without `entity_id`
+- GIVEN an own memory read without `entity_id`, or a customer read with a matching customer entity identifier
 - WHEN the assistant validates the arguments
 - THEN validation accepts the read for execution
 
-#### Scenario: Panel read binding
-- GIVEN a panel `memory.read` or `memory.search` with a positive trusted thread id
+#### Scenario: Own read server-side binding
+- GIVEN an own `memory.read` or `memory.search` with a positive trusted thread id
 - WHEN the assistant executes it
-- THEN the server reads only `thread:<trusted thread id>` and rejects any model-supplied `entity_id`
+- THEN the server derives the trusted `thread:<trusted thread id>` axis and project-qualified `agent:<project>` axis, and rejects any model-supplied `entity_id`
 
-#### Scenario: Unknown memory scope
-- GIVEN a memory read with a scope outside `panel` or `customer`
+#### Scenario: Unknown public memory scope
+- GIVEN a memory read with a scope outside `own` or `customer`
 - WHEN the assistant validates the arguments
 - THEN validation rejects the arguments before service execution
 
@@ -50,15 +50,25 @@ The `memory.read` and `memory.search` tools MUST accept only `scope="panel"`, `s
 - WHEN the assistant executes it
 - THEN ranked results are returned only for that entity and each `contenido` field is truncated to the fixed tool bound
 
-#### Scenario: Search entity mismatch
-- GIVEN a panel memory search whose model-supplied entity identifier is present
+#### Scenario: Bounded own memory digest
+- GIVEN an own memory read with a positive trusted thread id and a requested limit
+- WHEN the assistant executes it
+- THEN the trusted thread and project axes are interleaved before the limit is applied, each item includes its identifying metadata, and `contenido` is truncated to at most 500 characters
+
+#### Scenario: Full entity-scoped memory projection
+- GIVEN a valid customer memory read with an entity identifier
+- WHEN the assistant executes it
+- THEN the result retains the existing full memory projection without the own-read digest bound
+
+#### Scenario: Own search entity rejection
+- GIVEN an own memory search whose model-supplied entity identifier is present
 - WHEN the assistant validates the arguments
 - THEN validation rejects the search before service execution
 
-#### Scenario: Canonical agent scope
-- GIVEN an agent memory read with an entity other than the canonical project-scoped `agent:<project>` entity
+#### Scenario: Server-derived project axis
+- GIVEN an own memory read or search
 - WHEN the assistant validates the arguments
-- THEN validation rejects the read before service execution
+- THEN the public contract exposes no agent scope or entity argument, and the server derives the canonical project-qualified `agent:<project>` axis
 
 ### Requirement: AT-9 — Autonomous Thread Memory Write
 

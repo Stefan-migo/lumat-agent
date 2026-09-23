@@ -873,10 +873,12 @@ def test_mem9_global_visibility_records_provenance_and_cross_thread_read(
             session, registry.MemoryArgs.model_validate({}), trusted_thread_id=thread_b.id,
             proyecto=project_b
         ) == []
-        assert [item.id for item in registry._read_memory(
+        digest = registry._read_memory(
             session, registry.MemoryArgs.model_validate({}), trusted_thread_id=thread_a_other.id,
             proyecto=project_a
-        )] == [row.id]
+        )
+        assert [item["id"] for item in digest] == [row.id]
+        assert len(digest[0]["contenido"]) <= 500
 
 
 def test_mem9_global_visibility_is_the_write_default(fake_embedder, migrated_db):

@@ -49,7 +49,7 @@ The canonical Tukulpan façade MUST expose upsert, get, list, delete, mark, and 
 
 ### Requirement: MEM-3 — Explicit, Scoped Hybrid Search
 
-The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. An `own` read MUST union the trusted current thread axis with the project-qualified agent axis, while never including other threads' panel rows. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope. Admission MUST be per channel: a row qualifies when its dense cosine similarity clears the configured gate OR when a Spanish full-text match of the query's terms holds within its content, and the qualifying rows MUST be ranked by the fused score. The lexical channel MUST tolerate accent variants of the query's terms.
+The system MUST retain `hybrid_search()` as an explicit, project- and scope/entity-filtered operation. An `own` read MUST union the trusted current thread axis with the project-qualified agent axis, while never including other threads' panel rows. The own read MUST preserve that axis interleave before applying its limit and MUST return a bounded digest with `contenido` limited to 500 characters plus identifying metadata. Entity-scoped reads MUST retain their existing full projection. Panel context assembly MUST NOT invoke it or automatically load memory rows; memory reads MUST occur through explicit `memory.read` tool calls, and WhatsApp reads MUST retain customer scope. Admission MUST be per channel: a row qualifies when its dense cosine similarity clears the configured gate OR when a Spanish full-text match of the query's terms holds within its content, and the qualifying rows MUST be ranked by the fused score. The lexical channel MUST tolerate accent variants of the query's terms.
 
 #### Scenario: Explicit search only
 - GIVEN a panel turn enters `assemble_context()`
@@ -75,6 +75,11 @@ The system MUST retain `hybrid_search()` as an explicit, project- and scope/enti
 - GIVEN a search by a role without cross-project rights
 - WHEN the search runs
 - THEN an `own` read derives `thread:<trusted thread id>` server-side and returns that thread's memories unioned with global-visible agent memories from the same project, other threads' panel rows remain invisible, and customer memories remain client-gated
+
+#### Scenario: Bounded query-less recall
+- GIVEN an own read with memories on both trusted axes
+- WHEN the read is executed
+- THEN rows are interleaved across both axes before the limit, and every returned `contenido` is at most 500 characters while scope, entity, topic, and available timing metadata remain present
 
 #### Scenario: Empty result
 - GIVEN no memory clears the dense gate and none matches the query's terms
