@@ -154,10 +154,23 @@ so adding the conjugations as words would create precisely the kind of false pos
 not to chase. Adding **phrases** instead ("me estafaron", "me devuelvan la plata", "no me devolvieron",
 "nadie responde") targets the complaint constructions without catching the status question.
 
-**Status: resolved.** The human chose to close the gap with phrases. Measured outcome: **3 of the 4
-gaps closed, 0 benign messages caught**, and the corpus result is unchanged at 1 of 52. The fourth
-("la boleta vino mal y necesito una correccion") stays open on purpose — it is a billing-correction
-request rather than a complaint, and HH-3's list does not obviously cover it.
+**Status: resolved.** El humano eligió cerrar el hueco con frases. Resultado medido: **3 de los 4
+huecos cerrados, 0 mensajes benignos atrapados**, y el resultado del corpus sin cambios en 1 de 52.
+
+El cuarto ("la boleta vino mal y necesito una correccion") quedó **decidido como no-objetivo el
+2026-09-23** (unidad `complaint-gap-non-goal`, Engram #4793). Es un pedido de corrección de
+facturación, no una queja, y la lista de HH-3 ("complaint, warranty, or upset customer") no lo cubre.
+Dos motivos medidos para no plegarlo al trigger:
+
+- El vocabulario del clasificador (`agent/personas/classify.md`) no tiene concepto de facturación —
+  `postventa` es "garantías, devoluciones y cobertura de trabajos ya hechos" — así que el mensaje
+  probablemente cae en `unknown`, donde `respond` no agrega nada en el turno 1 y el turno escala recién
+  al segundo `unknown`: el cliente llega igual al humano, a lo sumo un mensaje después.
+- El cliente tampoco queda varado: el menú del turno 1 ofrece "Postventa/Garantía", y cualquier intent
+  con retrieval miss escala en el turno 1 con `escalate_reason: kb_miss`.
+
+Agregar la frase escalaría de inmediato, pero etiquetaría un pedido de facturación como `complaint`, y
+la diferencia de resultado nunca se midió. Ver `odd/tasks/complaint-gap-non-goal.md`.
 
 ## Tasks
 
