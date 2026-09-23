@@ -12,6 +12,7 @@ import {
   KeyboardActions,
   Loading,
   Mobile,
+  SectionEmpty,
   Stale,
   SyncFailure,
 } from "./AgendaPage.stories";
@@ -59,6 +60,7 @@ describe("AgendaPage Storybook state matrix", () => {
 
     await user.click(screen.getByRole("button", { name: "Cancelar visita" }));
     expect(screen.getByRole("dialog", { name: "Cancelar visita" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent("La visita no podrá volver a reservarse");
     await user.click(screen.getByRole("button", { name: "Confirmar cancelación" }));
     await waitFor(() => expect(cancelAppointment).toHaveBeenCalled());
 
@@ -66,6 +68,14 @@ describe("AgendaPage Storybook state matrix", () => {
     retry.focus();
     await user.keyboard("{Enter}");
     await waitFor(() => expect(retryCalendarSync).toHaveBeenCalled());
+  });
+
+  it("covers a populated page with an empty Hoy section", () => {
+    render(<AgendaPageStory {...(SectionEmpty.args ?? {})} />);
+    const today = screen.getByRole("heading", { name: "Hoy", level: 2 }).closest("section");
+    expect(today).not.toBeNull();
+    expect(today).not.toHaveTextContent("No hay visitas");
+    expect(screen.getByText("Instalación de cocina")).toBeInTheDocument();
   });
 
   it("exposes keyboard and narrow viewport stories without inventing controls", () => {
