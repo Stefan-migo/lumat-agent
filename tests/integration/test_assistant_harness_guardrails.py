@@ -298,7 +298,7 @@ def test_responder_user_prompt_carries_the_declared_tool_inventory(monkeypatch):
 
     The sidebar reads `assistant.tools_whitelist` straight from the registry, so a
     responder that never receives that inventory answers capability questions with a
-    denial while the panel advertises 19 tools and available memory.
+     denial while the panel advertises 22 tools and available memory.
     """
     calls = []
     monkeypatch.setattr(
@@ -420,6 +420,22 @@ def _memory_plan():
 
 def test_memory_write_guardrail_is_autonomous_for_trusted_thread():
     result = guardrails({"thread_id": 7, "plan": _memory_plan(), "planner": {"valid": True}})
+
+    assert result["status"] == "executing"
+    assert result["guardrails"]["approval_required"] is False
+
+
+def test_assistant_capabilities_guardrail_is_read_only_without_approval():
+    result = guardrails({
+        "thread_id": 7,
+        "plan": {
+            "kind": "tool",
+            "tool": "assistant.capabilities",
+            "arguments": {},
+            "requires_approval": False,
+        },
+        "planner": {"valid": True},
+    })
 
     assert result["status"] == "executing"
     assert result["guardrails"]["approval_required"] is False
