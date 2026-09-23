@@ -201,3 +201,4 @@ candidate.
 `backlog/memory-cross-thread-followups`. Not covered here: the raw `str(exc)` that `_write_memory`
 still returns as `degraded_reason`, and `web.search` / `kb.retrieve` keep their own error
 classification (they now degrade through the same read-only branch, which is intended).
+Closed in this unit (`16f57d1d`): `_write_memory` and its sibling write paths now sanitize raw exception details in `degraded_reason`.
