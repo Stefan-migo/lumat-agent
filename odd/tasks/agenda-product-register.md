@@ -346,7 +346,7 @@ is not in this unit's scope.
   slice 2 with its real second consumer.
 - [x] T0–T8. T0 commit `05ff620f`; T1 `dea88fcf`; T2 `a7008a46`; T3
   `b164fe3e`; T4 `bf712125`; T5 `4647c19e`; T6 `c6a14141`; T7
-  `890fae2d`; T8 documentation commit recorded below.
+  `890fae2d`; T8 documentation commit `a3aa7750`.
 
 ### Slice 1 implementation evidence
 
