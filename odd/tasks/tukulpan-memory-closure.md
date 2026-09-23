@@ -42,7 +42,8 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   instead of faking RED. T7 follows test-first on the web suite (`npm run test`).
 - Do not weaken existing behavior to make a test pass. The own-axes interleave of `memory.read`
   (`registry.py:278-292`, unit `memory-own-read-limit`) is protected: preserve it.
-- Smallest honest change per item (ponytail). No new tool, no new table, no new dependency.
+- T1 reuses the existing read path because the human decided it (see T1). No new persisted
+  schema or new dependency without an explicit human decision.
 - Spec deltas only where behavior actually changes (T1). Pinning tests do not need spec text.
 
 ## Tasks
