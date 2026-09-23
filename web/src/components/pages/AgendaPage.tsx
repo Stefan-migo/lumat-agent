@@ -10,6 +10,7 @@ import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
+import { agendaDayKey, formatAgendaSlot } from "../shared/agendaTime";
 import { appointmentStatusLabel, appointmentStatusTone, appointmentSyncLabel, appointmentSyncTone } from "../shared/toneMaps";
 
 export type AgendaPageState = AsyncDataState | "stale";
@@ -26,7 +27,7 @@ type ActionFeedback = { id: number; tone: "success" | "danger"; title: string; d
 function localDate(value: string) { return value.slice(0, 10); }
 
 function requestDates(timezone: string) {
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
+  const today = agendaDayKey(new Date().toISOString(), timezone);
   const end = new Date(`${today}T12:00:00Z`);
   end.setUTCDate(end.getUTCDate() + 30);
   return { from: today, to: end.toISOString().slice(0, 10) };
@@ -41,7 +42,7 @@ function stateMessage(state: AgendaPageState, retry: () => void) {
 }
 
 const columns: Column<AgendaAppointment>[] = [
-  { key: "time", header: "Hora", render: (row) => new Intl.DateTimeFormat("es-CL", { timeZone: row.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(row.starts_at)) },
+  { key: "time", header: "Hora", render: (row) => formatAgendaSlot(row.starts_at, row.timezone) },
   { key: "service", header: "Servicio", render: (row) => row.service },
   { key: "customer", header: "Cliente", render: (row) => row.customer_name ?? "—" },
   { key: "technician", header: "Técnico", render: (row) => row.technician_name ?? "—" },
@@ -63,7 +64,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const data = updatedData ?? (controlledData === undefined ? fetched.data : controlledData);
   const state = controlledState ?? fetched.state;
   const retry = onRetry ?? fetched.retry;
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
+  const today = agendaDayKey(new Date().toISOString(), timezone);
   const appointments = data ?? [];
   const refreshAgenda = async () => {
     const dates = requestDates(timezone);
