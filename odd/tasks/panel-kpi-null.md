@@ -128,12 +128,34 @@ stays nullable), `web/src/types.ts` (the type is already correct), any new depen
 - `cd web && npm run build`
 - `git status --short` / `git diff --check`
 
+## Follow-ups (recorded, NOT in scope)
+
+Found by the independent verifier over the delivered diff, deliberately not fixed here. They are the
+same latent class — a nullable `Case.service` reaching a consumer that assumes a string — on different
+surfaces; folding them into this unit would be a scope change only the human can authorize.
+
+- **F1 — two other endpoints still publish a nullable `service`.** `app/panel/api/serializers.py:151-168`
+  (`to_case_dict`) and `:252-260` (today's cases) emit the raw column, while `web/src/types.ts:228-236`
+  and `:295-311` declare it as a non-null `string`. Today the consumers degrade quietly instead of
+  crashing: `web/src/components/pages/ClientFicha.tsx:116-122` and
+  `web/src/components/pages/ConversationThread.tsx:46-50` render the value directly, so a null shows as
+  a blank field. It is a contract mismatch, not the white screen — and it is one unguarded `.length`
+  away from being this same bug again.
+- **F2 — no `ErrorBoundary` in the SPA.** Confirmed by search: no `componentDidCatch`, no
+  `ErrorBoundary`, no `errorElement` anywhere under `web/src`. Any future render-time throw blanks the
+  whole panel exactly as this one did. This is D4, restated as a finding so it cannot rot.
+- **N1 — accepted, not fixed.** The null bucket now shares the label `sin clasificar` with any real
+  service literally named that: the two rows would merge into one bucket and share a React `key` (a
+  console warning, not a crash). A real service carrying that literal means the same thing, and
+  disambiguating it needs a sentinel or a reserved representation — representation churn with no
+  observable behaviour change. Both risks are accepted.
+
 ## Progress
 
-- [ ] Created this ODD record before the first source change.
-- [ ] Worktree created (`rapso worktree create panel-kpi-null --yes`); `uv sync --frozen` and
+- [x] Created this ODD record before the first source change.
+- [x] Worktree created (`rapso worktree create panel-kpi-null --yes`); `uv sync --frozen` and
   `cp ../lumat-agent/infra/.env infra/.env` done.
-- [ ] Graph Check (Step 1): `graphify query "panel dashboard KPI motivos case service"` returned
+- [x] Graph Check (Step 1): `graphify query "panel dashboard KPI motivos case service"` returned
   `services/dashboard.py`, `Dashboard.tsx`, `Case` (`app/models.py:334`), `serializers.py` and
   `test_api_dashboard.py`; `graphify path "compute_kpis" "motivoAccent"` returns no directed path (the
   provider/consumer edge runs through the HTTP boundary, which the graph does not model).
@@ -153,6 +175,20 @@ stays nullable), `web/src/types.ts` (the type is already correct), any new depen
 - T5 verification: `cd web && npx tsc -b --noEmit` — passed with no output.
 - T5 verification: `cd web && npm run build` — passed; Vite transformed 332 modules and emitted the
   production bundle, with the existing chunk-size warning.
+- Independent verification (read-only `explore` agent, fresh context, over the diff against
+  `77961c29`): confirmed the coalesce removes the null without changing any other KPI, that both new
+  tests genuinely fail pre-fix, that the guard covers every `motivo` use in the component, and that no
+  other file in the diff is outside the authorized list. It reported `blocked` on execution — no shell
+  in its sandbox — so its numbers are read-only claims, not observed runs. It produced F1, F2 and N1.
+- Parent re-run of the deciding evidence, after reverting the stray `uv.lock`: `uv run --frozen pytest
+  tests/` → exit 0 with **1304 tests and no failure marker in the progress output** (this environment
+  did not print pytest's trailing summary line when stdout was redirected, so the count is read from
+  the progress rows — 18×72+8 — and the zero exit code). `cd web && npm run test` → **79 files, 619
+  passed**. `npx tsc -b --noEmit` → exit 0. Focused spot check: 22 backend tests, 7 frontend tests.
+- Corrected writer artifact: the first `uv run pytest` (without `--frozen`) rewrote `uv.lock`
+  (`lumatagent` 2026.9.2 → 2026.9.3), because `pyproject.toml` was bumped at `77961c29` without a lock
+  refresh. It was reported as a pre-existing change; it was not — `main`'s tree is clean. Reverted, and
+  every later run uses `uv run --frozen`.
 
 ## Recovery
 
