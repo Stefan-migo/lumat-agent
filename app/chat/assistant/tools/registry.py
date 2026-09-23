@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from itertools import zip_longest
+import logging
 from typing import Annotated, Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
@@ -17,6 +18,8 @@ from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
 from app.services import automation, cases, customers, kb, projects, relations, scheduling, tukulpan as memory
+
+logger = logging.getLogger(__name__)
 
 MAX_ITEMS = 20
 SDB_WRITE_ALLOWLIST = frozenset({
@@ -379,7 +382,8 @@ def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int, pro
             relations.judge_memory_relations(session, row)
         return {"written": True, "id": row.id, "topic_key": key}
     except Exception as exc:
-        return {"written": False, "degraded_reason": str(exc), "topic_key": key}
+        logger.warning("assistant memory write degraded: %s", exc)
+        return {"written": False, "degraded_reason": "Memory write unavailable", "topic_key": key}
 
 
 def _owned_agent_memory_or_raise(session, memory_id: int, *, trusted_thread_id: int, proyecto: str):
@@ -413,7 +417,8 @@ def _update_memory(session, args: MemoryUpdateArgs, *, trusted_thread_id: int, p
             )
         return {"updated": True, "id": row.id}
     except Exception as exc:
-        return {"updated": False, "degraded_reason": str(exc)}
+        logger.warning("assistant memory update degraded: %s", exc)
+        return {"updated": False, "degraded_reason": "Memory update unavailable"}
 
 
 def _delete_memory(session, args: MemoryDeleteArgs, *, trusted_thread_id: int, proyecto: str = "default"):
@@ -423,7 +428,8 @@ def _delete_memory(session, args: MemoryDeleteArgs, *, trusted_thread_id: int, p
             row = memory.delete(session, args.id)
         return {"deleted": True, "id": row.id}
     except Exception as exc:
-        return {"deleted": False, "degraded_reason": str(exc)}
+        logger.warning("assistant memory delete degraded: %s", exc)
+        return {"deleted": False, "degraded_reason": "Memory delete unavailable"}
 
 
 def _create_rule(session, args: RuleArgs):

@@ -838,7 +838,70 @@ def test_memory_write_degrades_and_fails_closed_without_trusted_thread(monkeypat
 
     result = execute_tool(session, "memory.write", args, trusted_thread_id=7)
     assert result["result"]["written"] is False
-    assert result["result"]["degraded_reason"] == "embedding unavailable"
+    assert result["result"]["degraded_reason"] == "Memory write unavailable"
+    assert "embedding unavailable" not in result["result"]["degraded_reason"]
+
+
+def test_memory_update_degradation_does_not_leak_raw_exception(monkeypatch):
+    from app.chat.assistant.tools.registry import _update_memory
+
+    class Savepoint:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    raw_error = "private update backend details"
+    row = SimpleNamespace(
+        id=4, proyecto="default", producer=memory.MemoryProducer.AGENT,
+        topic_key="agent:fact", scope="agent", entity_id="agent:default",
+    )
+    session = SimpleNamespace(begin_nested=lambda: Savepoint(), get=lambda _model, _id: row)
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.memory.update",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError(raw_error)),
+    )
+
+    result = _update_memory(
+        session,
+        MemoryUpdateArgs(id=4, titulo="Updated"),
+        trusted_thread_id=7,
+    )
+
+    assert result == {"updated": False, "degraded_reason": "Memory update unavailable"}
+    assert raw_error not in result["degraded_reason"]
+
+
+def test_memory_delete_degradation_does_not_leak_raw_exception(monkeypatch):
+    from app.chat.assistant.tools.registry import _delete_memory
+
+    class Savepoint:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    raw_error = "private delete backend details"
+    row = SimpleNamespace(
+        id=4, proyecto="default", producer=memory.MemoryProducer.AGENT,
+        topic_key="agent:fact", scope="agent", entity_id="agent:default",
+    )
+    session = SimpleNamespace(begin_nested=lambda: Savepoint(), get=lambda _model, _id: row)
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.memory.delete",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError(raw_error)),
+    )
+
+    result = _delete_memory(
+        session,
+        MemoryDeleteArgs(id=4),
+        trusted_thread_id=7,
+    )
+
+    assert result == {"deleted": False, "degraded_reason": "Memory delete unavailable"}
+    assert raw_error not in result["degraded_reason"]
 
 
 def test_websearch_failure_is_error_evidence(monkeypatch):

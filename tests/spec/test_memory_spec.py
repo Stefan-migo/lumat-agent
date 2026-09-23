@@ -635,7 +635,8 @@ def test_mem7_recap_failure_returns_degraded_evidence_and_keeps_session_usable(m
             source_tokens=2, truncated=False,
         )
         assert result["written"] is False
-        assert "embed offline" in result["degraded_reason"]
+        assert result["degraded_reason"] == "Memory recap unavailable"
+        assert "embed offline" not in result["degraded_reason"]
         session.execute(__import__("sqlalchemy").text("SELECT 1"))
 
 
