@@ -53,6 +53,7 @@ import argparse
 import json
 import os
 import sys
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
@@ -169,6 +170,27 @@ def make_chunker(chunk_text_fn: Callable[..., list[str]], chunk_size: int, overl
         return chunk_text_fn(text, chunk_size=chunk_size, overlap=overlap)
 
     return _chunk
+
+
+@contextmanager
+def override_kb(kb, *, model=None, chunk_size=None, overlap=None):
+    """Temporarily override chunking and/or the embedder on the `kb` module."""
+    original_chunk_text = kb.chunk_text
+    original_model = kb.EMBED_MODEL
+    original_embedder = kb._embedder
+    try:
+        if chunk_size is not None or overlap is not None:
+            kb.chunk_text = make_chunker(original_chunk_text, chunk_size, overlap)
+        if model and model != original_model:
+            from fastembed import TextEmbedding
+
+            kb.EMBED_MODEL = model
+            kb._embedder = TextEmbedding(model_name=model)
+        yield
+    finally:
+        kb.chunk_text = original_chunk_text
+        kb.EMBED_MODEL = original_model
+        kb._embedder = original_embedder
 
 
 def load_corpus(path: Path | str = CORPUS_PATH) -> Corpus:
@@ -659,7 +681,6 @@ def run(
     from app.services import kb
 
     corpus = load_corpus(corpus_path)
-    original_chunk_text = kb.chunk_text
     effective_size = kb.CHUNK_SIZE if chunk_size is None else chunk_size
     effective_overlap = kb.CHUNK_OVERLAP if chunk_overlap is None else chunk_overlap
     if effective_size <= effective_overlap:
@@ -668,63 +689,60 @@ def run(
             f"chunk_overlap ({effective_overlap})"
         )
     overridden = chunk_size is not None or chunk_overlap is not None
-    if overridden:
-        kb.chunk_text = make_chunker(original_chunk_text, effective_size, effective_overlap)
+    with override_kb(
+        kb,
+        model=model,
+        chunk_size=effective_size if overridden else None,
+        overlap=effective_overlap if overridden else None,
+    ):
+        with SessionLocal() as session:
+            chunks = ingest_corpus(session, corpus, index_title=index_title)
 
-    if model and model != kb.EMBED_MODEL:
-        from fastembed import TextEmbedding
+            runs: dict[str, dict] = {}
+            for audience in modes:
+                label = "unscoped" if audience is None else str(audience)
+                outcomes = build_outcomes(
+                    corpus, retrieve_full_ranking(session, corpus, audience), audience
+                )
+                runs[label] = {
+                    "audience": audience,
+                    "summary": summarize(outcomes),
+                    "rules": compare_rules(outcomes),
+                    "per_query": [
+                        {
+                            "id": o.query_id,
+                            "class": o.query_class,
+                            "should_hit": o.should_hit,
+                            "top1": (o.scores[0][1] if o.scores else None),
+                            "accepted_at_production_threshold": accept_absolute(
+                                o.scores, kb.DEFAULT_MIN_SIM
+                            ),
+                            "best_relevant_rank": rank_of_best_relevant(o),
+                            "top": [
+                                {"doc": d, "score": round(s, 4)} for d, s in o.scores[:5]
+                            ],
+                        }
+                        for o in outcomes
+                    ],
+                }
 
-        kb.EMBED_MODEL = model
-        kb._embedder = TextEmbedding(model_name=model)
-
-    with SessionLocal() as session:
-        chunks = ingest_corpus(session, corpus, index_title=index_title)
-
-        runs: dict[str, dict] = {}
-        for audience in modes:
-            label = "unscoped" if audience is None else str(audience)
-            outcomes = build_outcomes(
-                corpus, retrieve_full_ranking(session, corpus, audience), audience
-            )
-            runs[label] = {
-                "audience": audience,
-                "summary": summarize(outcomes),
-                "rules": compare_rules(outcomes),
-                "per_query": [
-                    {
-                        "id": o.query_id,
-                        "class": o.query_class,
-                        "should_hit": o.should_hit,
-                        "top1": (o.scores[0][1] if o.scores else None),
-                        "accepted_at_production_threshold": accept_absolute(
-                            o.scores, kb.DEFAULT_MIN_SIM
-                        ),
-                        "best_relevant_rank": rank_of_best_relevant(o),
-                        "top": [
-                            {"doc": d, "score": round(s, 4)} for d, s in o.scores[:5]
-                        ],
-                    }
-                    for o in outcomes
-                ],
-            }
-
-    report = {
-        "corpus": {
-            "path": str(corpus_path),
-            "documents": len(corpus.docs),
-            "queries": len(corpus.queries),
-        },
-        "model": model_metadata(kb.EMBED_MODEL),
-        "chunking": {
-            "chunk_size": effective_size,
-            "chunk_overlap": effective_overlap,
-            "chunks": chunks,
-            "overridden": overridden,
-        },
-        "index_title": index_title,
-        "production_threshold": kb.DEFAULT_MIN_SIM,
-        "runs": runs,
-    }
+        report = {
+            "corpus": {
+                "path": str(corpus_path),
+                "documents": len(corpus.docs),
+                "queries": len(corpus.queries),
+            },
+            "model": model_metadata(kb.EMBED_MODEL),
+            "chunking": {
+                "chunk_size": effective_size,
+                "chunk_overlap": effective_overlap,
+                "chunks": chunks,
+                "overridden": overridden,
+            },
+            "index_title": index_title,
+            "production_threshold": kb.DEFAULT_MIN_SIM,
+            "runs": runs,
+        }
     if json_path:
         json_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     return report

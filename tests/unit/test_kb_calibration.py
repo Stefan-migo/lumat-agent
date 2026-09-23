@@ -15,6 +15,7 @@ Nothing here touches the database, the network, or `fastembed`.
 """
 
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -324,6 +325,83 @@ def test_make_chunker_does_not_call_splitter_at_construction():
 
     cal.make_chunker(fake_chunker, chunk_size=120, overlap=12)
     assert calls == []
+
+
+def test_override_kb_restores_chunker_after_normal_exit():
+    calls = []
+
+    def chunk_text(text, *, chunk_size=400, overlap=40):
+        calls.append((text, chunk_size, overlap))
+        return []
+
+    fake = types.SimpleNamespace(chunk_text=chunk_text, EMBED_MODEL="old", _embedder="embedder")
+    original = fake.chunk_text
+
+    with cal.override_kb(fake, chunk_size=120, overlap=12):
+        assert fake.chunk_text is not original
+        fake.chunk_text("text")
+
+    assert calls == [("text", 120, 12)]
+    assert fake.chunk_text is original
+
+
+def test_override_kb_restores_all_attributes_after_exception(monkeypatch):
+    fake_fastembed = types.SimpleNamespace(TextEmbedding=lambda model_name: f"fake:{model_name}")
+    monkeypatch.setitem(sys.modules, "fastembed", fake_fastembed)
+
+    def chunk_text(text, *, chunk_size=400, overlap=40):
+        return []
+
+    fake = types.SimpleNamespace(chunk_text=chunk_text, EMBED_MODEL="old", _embedder="embedder")
+    originals = (fake.chunk_text, fake.EMBED_MODEL, fake._embedder)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        with cal.override_kb(fake, model="new", chunk_size=120, overlap=12):
+            assert fake.EMBED_MODEL == "new"
+            assert fake._embedder == "fake:new"
+            assert fake.chunk_text is not originals[0]
+            raise RuntimeError("boom")
+
+    assert (fake.chunk_text, fake.EMBED_MODEL, fake._embedder) == originals
+    assert fake.chunk_text is originals[0]
+    assert fake.EMBED_MODEL is originals[1]
+    assert fake._embedder is originals[2]
+
+
+def test_override_kb_is_a_no_op_without_overrides():
+    """Calling without overrides mutates nothing; restoration is tested elsewhere."""
+    def chunk_text(text, *, chunk_size=400, overlap=40):
+        return []
+
+    fake = types.SimpleNamespace(chunk_text=chunk_text, EMBED_MODEL="old", _embedder="embedder")
+    originals = (fake.chunk_text, fake.EMBED_MODEL, fake._embedder)
+
+    with cal.override_kb(fake):
+        assert (fake.chunk_text, fake.EMBED_MODEL, fake._embedder) == originals
+
+    assert (fake.chunk_text, fake.EMBED_MODEL, fake._embedder) == originals
+    assert fake.chunk_text is originals[0]
+    assert fake.EMBED_MODEL is originals[1]
+    assert fake._embedder is originals[2]
+
+
+def test_override_kb_overrides_and_restores_embedder(monkeypatch):
+    fake_fastembed = types.SimpleNamespace(TextEmbedding=lambda model_name: f"fake:{model_name}")
+    monkeypatch.setitem(sys.modules, "fastembed", fake_fastembed)
+
+    def chunk_text(text, *, chunk_size=400, overlap=40):
+        return []
+
+    fake = types.SimpleNamespace(chunk_text=chunk_text, EMBED_MODEL="old", _embedder="embedder")
+    originals = (fake.EMBED_MODEL, fake._embedder)
+
+    with cal.override_kb(fake, model="new"):
+        assert fake.EMBED_MODEL == "new"
+        assert fake._embedder == "fake:new"
+
+    assert (fake.EMBED_MODEL, fake._embedder) == originals
+    with cal.override_kb(fake, model=None):
+        assert (fake.EMBED_MODEL, fake._embedder) == originals
 
 
 # ---------------------------------------------------------------------------
