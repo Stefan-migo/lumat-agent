@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     chat_model: str = "deepseek-chat"
     assistant_chat_provider: str = "openrouter"
     assistant_chat_model: str = "google/gemini-2.5-flash"
+    brave_search_api_key: str | None = None
     assistant_attachment_max_bytes: int = 5 * 1024 * 1024
     assistant_attachment_max_count: int = 10
     assistant_attachment_max_context_chars: int = 20_000
