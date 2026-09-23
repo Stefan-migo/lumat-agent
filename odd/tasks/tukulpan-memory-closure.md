@@ -141,11 +141,13 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   (T1 ~120, T2 ~30, T3 ~200, T4 ~40, T5 ~80, T6 ~60, T7 ~250, T8 ~60) → **over the 400-line review
   budget, so chained PRs are required** unless the maintainer accepts `size:exception`.
   Chain strategy: **`stacked-to-main`** (human decision). Slices, each targeting `main`:
-  1. `odd/tukulpan-memory-closure` — T1 + T8 (done).
-  2. `odd/tukulpan-memory-pinning`, stacked on slice 1 — T2 + T3 + T4 + T5.
-  3. `odd/tukulpan-memory-surface`, stacked on slice 2 — T6 + T7.
-  Each slice's diff reduces to its own work once its predecessor merges. Resolve the `chained-pr`
-  skill by registry name before planning or creating any PR.
+  1. `odd/tukulpan-memory-closure` — T1 + T8 — **PR #321**, 12 commits (`90f43348..16f9b57f`),
+     **310 changed lines**.
+  2. `odd/tukulpan-memory-pinning`, stacked on slice 1 — T2 + T3 + T4 + T5 — **PR #322**
+     (base #321), 10 commits (`02768888..bcc3928f`), **374 changed lines**.
+  3. `odd/tukulpan-memory-surface`, stacked on slice 2 — T6 + T7 — not opened.
+  Each slice's diff reduces to its own work once its predecessor merges.
+- Pre-push verification of record: `uv run --frozen pytest tests/` → exit 0 (1304 tests), tree clean.
 - Work-unit commits, tests and docs with their behavior, Conventional Commits.
 - Push, PR and merge stay human decisions.
 
