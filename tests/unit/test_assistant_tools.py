@@ -44,8 +44,23 @@ def test_capabilities_args_forbids_fields():
         CapabilitiesArgs.model_validate({"unexpected": True})
 
 
-def test_assistant_capabilities_reports_every_whitelisted_tool_without_truncation():
-    whitelist = load_assistant_config().tools_whitelist
+def test_assistant_capabilities_reports_every_whitelisted_tool_without_truncation(monkeypatch):
+    whitelist = [*load_assistant_config().tools_whitelist, "assistant.test-extra"]
+    monkeypatch.setitem(
+        TOOL_REGISTRY,
+        "assistant.test-extra",
+        ToolDefinition(
+            "assistant.test-extra",
+            CapabilitiesArgs,
+            True,
+            lambda _session, _args: {},
+            "Test-only capability.",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(tools_whitelist=whitelist),
+    )
     result = _assistant_capabilities(SimpleNamespace(), CapabilitiesArgs())
     names = [line.split(" — ", 1)[0] for line in result["capabilities"].splitlines()]
 
