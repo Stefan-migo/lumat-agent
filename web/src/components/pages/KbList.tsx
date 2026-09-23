@@ -12,7 +12,7 @@ import { DataTable, tabularNum, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
-import { kbOperationLabel, kbOperationTone, kbStatusLabel, kbStatusTone } from "../shared/toneMaps";
+import { KB_OPERATION_TONES, kbStatusLabel, kbStatusTone } from "../shared/toneMaps";
 
 export type KbListState = AsyncDataState | "processing" | "disable-confirmation";
 export interface KbListProps { data?: DocsResponse | null; state?: KbListState; onRetry?: () => void; }
@@ -101,8 +101,8 @@ const searchColumns: Column<KbSearchResult>[] = [
 function stateMessage(state: KbListState, storyError: boolean) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando base de conocimientos" />;
   if (state === "denied") return <StateMessage tone="danger" role="alert" title="No tienes permiso para ver este panel" />;
-  if (state === "error") return <StateMessage tone={kbOperationTone("error")} role="alert" title={storyError ? "No pudimos procesar el documento" : "No pudimos cargar la base de conocimientos"} />;
-  if (state === "processing") return <StateMessage tone={kbOperationTone("procesando")} role="status" spinner title={`${kbOperationLabel("procesando")} documento`} detail="Revisando el formato, tamaño y contenido. Verifica el estado en unos momentos." />;
+  if (state === "error") return <StateMessage tone={KB_OPERATION_TONES.error} role="alert" title={storyError ? "No pudimos procesar el documento" : "No pudimos cargar la base de conocimientos"} />;
+  if (state === "processing") return <StateMessage tone={KB_OPERATION_TONES.procesando} role="status" spinner title="Procesando documento" detail="Revisando el formato, tamaño y contenido. Verifica el estado en unos momentos." />;
   return null;
 }
 

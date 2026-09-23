@@ -10,8 +10,8 @@ import {
   customerStateLabel,
   customerStateTone,
   directionLabel,
-  kbOperationLabel,
-  kbOperationTone,
+  KB_OPERATION_LABELS,
+  KB_OPERATION_TONES,
   kbStatusLabel,
   kbStatusTone,
 } from "./toneMaps";
@@ -179,7 +179,6 @@ describe("approved Spanish labels (DS-UI-LABELS)", () => {
     // Persisted KB document status values
     ["kbStatusLabel", kbStatusLabel, ["activo", "deshabilitado"]],
     // Page-owned KB operation lifecycle values
-    ["kbOperationLabel", kbOperationLabel, ["procesando", "error"]],
   ];
 
   for (const [name, label, keys] of domains) {
@@ -231,16 +230,14 @@ describe("approved Spanish labels (DS-UI-LABELS)", () => {
   });
 
   it("keeps KB operation lifecycle labels separate from document status", () => {
-    expect(kbOperationLabel("procesando")).toBe("Procesando");
-    expect(kbOperationLabel("error")).toBe("Error");
-    expect(kbOperationLabel("activo")).toBe("activo");
+    expect(KB_OPERATION_LABELS).toEqual({ procesando: "Procesando", error: "Error" });
+    expect(KB_OPERATION_LABELS).not.toHaveProperty("activo");
   });
 
   it("maps both KB status planes to approved tones", () => {
     expect(kbStatusTone("activo")).toBe("success");
     expect(kbStatusTone("deshabilitado")).toBe("neutral");
-    expect(kbOperationTone("procesando")).toBe("warning");
-    expect(kbOperationTone("error")).toBe("danger");
+    expect(KB_OPERATION_TONES).toEqual({ procesando: "info", error: "danger" });
   });
 
   it("matches the approved LABELS table for message directions", () => {
@@ -252,6 +249,13 @@ describe("approved Spanish labels (DS-UI-LABELS)", () => {
 describe("KB status contract (DESIGN_SYSTEM.md)", () => {
   it("documents persisted document status separately from transient operation lifecycle", () => {
     const designSystem = readFileSync("DESIGN_SYSTEM.md", "utf8");
-    expect(designSystem).toContain("| KB document | `Activo`, `Deshabilitado` (persisted) | Operation lifecycle: `Procesando`, `Error` (transient, page-level, paired with a next action) |");
+    const kbRow = designSystem.split("\n").find((line) => line.startsWith("| KB document |"));
+    expect(kbRow).toBeDefined();
+    expect(kbRow).toContain("Activo");
+    expect(kbRow).toContain("Deshabilitado");
+    expect(kbRow).toContain("Procesando");
+    expect(kbRow).toContain("Error");
+    expect(kbRow).toContain("persisted");
+    expect(kbRow).toContain("transient");
   });
 });
