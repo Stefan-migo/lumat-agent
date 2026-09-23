@@ -48,6 +48,14 @@ describe("Dashboard operational surface", () => {
     expect(screen.queryByText("Automatizaciones")).not.toBeInTheDocument();
   });
 
+  it("renders a readable fallback when the API sends a null motivo", () => {
+    // The API shipped this shape in production despite the published string type.
+    const motivos = [["calefont", 3], [null, 1]] as unknown as [string, number][];
+    render(<Dashboard data={{ ...data, motivos }} state="ready" role="admin" />);
+
+    expect(screen.getByText("sin clasificar · 1")).toBeInTheDocument();
+  });
+
   it.each([
     ["loading", "Cargando indicadores"],
     ["empty", "Aún no hay actividad en esta ventana"],

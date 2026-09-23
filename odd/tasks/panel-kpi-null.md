@@ -101,11 +101,11 @@ stays nullable), `web/src/types.ts` (the type is already correct), any new depen
   file's existing seed/fixture shape. Watch it fail on `[null, 1]`.
 - [x] **T2** — GREEN (backend): `func.coalesce(Case.service, "sin clasificar")` in the select and the
   `group_by` of `app/services/dashboard.py`. T1 passes; no other KPI value changes.
-- [ ] **T3** — RED (frontend): extend `web/src/components/pages/Dashboard.test.tsx` with a `motivos`
+- [x] **T3** — RED (frontend): extend `web/src/components/pages/Dashboard.test.tsx` with a `motivos`
   payload containing `null` (via the D3 cast) and assert the panel still renders. Watch it fail.
-- [ ] **T4** — GREEN (frontend): make `motivoAccent` null-safe and give the chip the fallback label in
+- [x] **T4** — GREEN (frontend): make `motivoAccent` null-safe and give the chip the fallback label in
   `web/src/components/pages/Dashboard.tsx`. T3 passes.
-- [ ] **T5** — Verification: full `uv run pytest tests/`, `cd web && npm run test`,
+- [x] **T5** — Verification: full `uv run pytest tests/`, `cd web && npm run test`,
   `npx tsc -b --noEmit`, `npm run build`.
 
 ## Acceptance criteria
@@ -141,6 +141,18 @@ stays nullable), `web/src/types.ts` (the type is already correct), any new depen
   failed at `test_kpis_names_null_service_bucket`: expected `["sin clasificar", 1]`, observed `[[null, 1]]`.
 - T2 GREEN: `eval "$(./infra/test-db.sh env)" && uv run pytest tests/functional/test_api_dashboard.py` —
   `22 passed`.
+- Backend work-unit commit: `be65e6a1` (`fix(panel): bucket NULL case services as sin clasificar`).
+- T3 RED: `cd web && npm run test -- --run src/components/pages/Dashboard.test.tsx` — failed at
+  `Dashboard operational surface > renders a readable fallback when the API sends a null motivo` with
+  `TypeError: Cannot read properties of null (reading 'length')` at `Dashboard.tsx:49:30`.
+- T4 GREEN: `cd web && npm run test -- --run src/components/pages/Dashboard.test.tsx` — `1 passed`,
+  `7 passed`; existing React `act(...)` warnings remain.
+- T5 verification: `eval "$(./infra/test-db.sh env)" && uv run pytest tests/` — `1304 passed`, `2 warnings`.
+- T5 verification: `cd web && npm run test` — `79 passed`, `619 passed`; existing React `act(...)` and
+  jsdom navigation warnings remain.
+- T5 verification: `cd web && npx tsc -b --noEmit` — passed with no output.
+- T5 verification: `cd web && npm run build` — passed; Vite transformed 332 modules and emitted the
+  production bundle, with the existing chunk-size warning.
 
 ## Recovery
 
