@@ -1,9 +1,32 @@
 import type { BadgeTone } from "../primitives/Badge";
 
 const CASE_STATUS_TONES: Record<string, BadgeTone> = { abierto: "neutral", en_evaluacion: "warning", escalado: "danger", cerrado: "success" };
-const CUSTOMER_STATE_TONES: Record<string, BadgeTone> = { nuevo: "warning", activo: "success", inactivo: "neutral", bloqueado: "danger" };
+// Customer states are the real domain enum `customer_state`, emitted raw by
+// `to_customer_dict()` in app/panel/api/serializers.py. Tones follow the DESIGN_SYSTEM
+// domain-state hierarchy: warning = needs attention now, success = confirmed outcome,
+// neutral = routine. `agendado` and `cancelado` stay neutral deliberately — a booking has
+// not happened yet and a cancellation is routine, not a failure.
+const CUSTOMER_STATE_TONES: Record<string, BadgeTone> = {
+  nuevo: "warning",
+  contactado: "neutral",
+  pendiente: "warning",
+  agendado: "neutral",
+  en_evaluacion: "warning",
+  finalizado: "success",
+  cancelado: "neutral",
+  postventa: "neutral",
+};
 const CONVERSATION_LABELS: Record<string, string> = { bot: "Agente atendiendo", human: "Atención humana", closed: "Cerrada", pending: "En espera", escalated: "Escalado" };
-const CUSTOMER_STATE_LABELS: Record<string, string> = { nuevo: "Nuevo", activo: "Activo", inactivo: "Inactivo", bloqueado: "Bloqueado" };
+const CUSTOMER_STATE_LABELS: Record<string, string> = {
+  nuevo: "Nuevo",
+  contactado: "Contactado",
+  pendiente: "Pendiente",
+  agendado: "Agendado",
+  en_evaluacion: "En evaluación",
+  finalizado: "Finalizado",
+  cancelado: "Cancelado",
+  postventa: "Postventa",
+};
 const CASE_STATUS_LABELS: Record<string, string> = { abierto: "Abierto", en_evaluacion: "En evaluación", escalado: "Escalado", cerrado: "Cerrado" };
 const KB_STATUS_LABELS: Record<string, string> = { activo: "Activo", deshabilitado: "Deshabilitado", procesando: "Procesando", error: "Error" };
 const DIRECTION_LABELS: Record<string, string> = { inbound: "Entrante", outbound: "Saliente" };

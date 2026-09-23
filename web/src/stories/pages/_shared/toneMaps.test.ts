@@ -47,35 +47,63 @@ describe("caseStatusTone", () => {
 });
 
 describe("customerStateTone", () => {
-  // All CustomerState values per design D4: nuevo/activo/inactivo/bloqueado.
+  // All 8 CustomerState values, taken from the real domain enum `customer_state`
+  // (nuevo/contactado/pendiente/agendado/en_evaluacion/finalizado/cancelado/postventa).
+  // The previous four-value list was fiction: the API serialises `customer.state.value`
+  // and only `nuevo` overlapped with it.
   it("maps nuevo to warning", () => {
     expect(customerStateTone("nuevo")).toBe("warning");
   });
 
-  it("maps activo to success", () => {
-    expect(customerStateTone("activo")).toBe("success");
+  it("maps contactado to neutral", () => {
+    expect(customerStateTone("contactado")).toBe("neutral");
   });
 
-  it("maps inactivo to neutral", () => {
-    expect(customerStateTone("inactivo")).toBe("neutral");
+  it("maps pendiente to warning", () => {
+    expect(customerStateTone("pendiente")).toBe("warning");
   });
 
-  it("maps bloqueado to danger", () => {
-    expect(customerStateTone("bloqueado")).toBe("danger");
+  it("maps agendado to neutral", () => {
+    expect(customerStateTone("agendado")).toBe("neutral");
+  });
+
+  it("maps en_evaluacion to warning", () => {
+    expect(customerStateTone("en_evaluacion")).toBe("warning");
+  });
+
+  it("maps finalizado to success", () => {
+    expect(customerStateTone("finalizado")).toBe("success");
+  });
+
+  it("maps cancelado to neutral", () => {
+    expect(customerStateTone("cancelado")).toBe("neutral");
+  });
+
+  it("maps postventa to neutral", () => {
+    expect(customerStateTone("postventa")).toBe("neutral");
   });
 
   it("maps every CustomerState to a valid BadgeTone", () => {
-    const states: string[] = ["nuevo", "activo", "inactivo", "bloqueado"];
-    expect(states.length).toBeGreaterThan(0);
+    const states: string[] = [
+      "nuevo",
+      "contactado",
+      "pendiente",
+      "agendado",
+      "en_evaluacion",
+      "finalizado",
+      "cancelado",
+      "postventa",
+    ];
+    expect(states.length).toBe(8);
     for (const s of states) {
       expect(VALID_TONES).toContain(customerStateTone(s));
     }
   });
 
-  it("maps each distinct state to a distinct tone (no collisions)", () => {
-    const tones = ["nuevo", "activo", "inactivo", "bloqueado"].map(customerStateTone);
-    expect(new Set(tones).size).toBe(4);
-  });
+  // The former "maps each distinct state to a distinct tone (no collisions)" case is gone
+  // on purpose: eight domain states cannot map injectively onto four BadgeTone values, so
+  // that assertion only held while the map described a four-state vocabulary that does not
+  // exist in the domain.
 });
 
 describe("appointmentStatusTone", () => {
@@ -132,11 +160,11 @@ describe("approved Spanish labels (DS-UI-LABELS)", () => {
   // string values) MUST resolve to a non-empty Spanish label, and raw state
   // keys MUST NOT leak onto the surface.
   const domains: Array<[string, (key: string) => string, string[]]> = [
-    // CustomerState union: 'nuevo'|'activo'|'inactivo'|'bloqueado'
+    // CustomerState union: the 8 real `customer_state` domain values
     [
       "customerStateLabel",
       customerStateLabel,
-      ["nuevo", "activo", "inactivo", "bloqueado"],
+      ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"],
     ],
     // MessageDirection union: 'inbound'|'outbound'
     ["directionLabel", directionLabel, ["inbound", "outbound"]],
@@ -173,9 +201,13 @@ describe("approved Spanish labels (DS-UI-LABELS)", () => {
 
   it("matches the approved LABELS table for customer states", () => {
     expect(customerStateLabel("nuevo")).toBe("Nuevo");
-    expect(customerStateLabel("activo")).toBe("Activo");
-    expect(customerStateLabel("inactivo")).toBe("Inactivo");
-    expect(customerStateLabel("bloqueado")).toBe("Bloqueado");
+    expect(customerStateLabel("contactado")).toBe("Contactado");
+    expect(customerStateLabel("pendiente")).toBe("Pendiente");
+    expect(customerStateLabel("agendado")).toBe("Agendado");
+    expect(customerStateLabel("en_evaluacion")).toBe("En evaluación");
+    expect(customerStateLabel("finalizado")).toBe("Finalizado");
+    expect(customerStateLabel("cancelado")).toBe("Cancelado");
+    expect(customerStateLabel("postventa")).toBe("Postventa");
   });
 
   it("matches the approved LABELS table for case statuses", () => {

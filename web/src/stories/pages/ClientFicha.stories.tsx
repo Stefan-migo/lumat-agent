@@ -16,7 +16,7 @@ const ficha: ClientFichaResponse = {
   },
   notes: [],
   memo: memories.find((memory) => memory.topic_key === "customer_memo")?.contenido ?? "",
-  states: ["nuevo", "activo", "inactivo", "bloqueado"],
+  states: ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"],
 };
 
 export function ClientFichaView({ memo = ficha.memo }: { memo?: string }) {

@@ -2,7 +2,17 @@ import { describe, expect, it } from "vitest";
 import type { Customer, CustomerState } from "../../../../types";
 import { clients } from "./clients";
 
-const CUSTOMER_STATES: CustomerState[] = ["nuevo", "activo", "inactivo", "bloqueado"];
+// The real domain enum, not the former four-value fiction (only `nuevo` overlapped).
+const CUSTOMER_STATES: CustomerState[] = [
+  "nuevo",
+  "contactado",
+  "pendiente",
+  "agendado",
+  "en_evaluacion",
+  "finalizado",
+  "cancelado",
+  "postventa",
+];
 
 describe("Customer mock (clients.ts)", () => {
   it("exports a non-empty Customer[]", () => {

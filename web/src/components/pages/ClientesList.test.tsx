@@ -18,7 +18,7 @@ const customers: Customer[] = [
     email: "marcela@example.com",
     comuna: "Ñuñoa",
     address: "Av. Italia 123",
-    state: "activo",
+    state: "contactado",
     consent_status: true,
     consent_at: null,
     created_at: "2026-07-15T12:00:00Z",
@@ -42,7 +42,7 @@ const customers: Customer[] = [
     email: null,
     comuna: null,
     address: null,
-    state: "bloqueado",
+    state: "en_evaluacion",
     consent_status: true,
     consent_at: null,
     created_at: null,
@@ -65,8 +65,8 @@ describe("ClientesList", () => {
 
     expect(screen.getByText("Marcela Fuentes")).toBeInTheDocument();
     expect(screen.getByText("+56912345678")).toBeInTheDocument();
-    expect(screen.getByText("Activo")).toBeInTheDocument();
-    expect(screen.getByText("Bloqueado")).toBeInTheDocument();
+    expect(screen.getByText("Contactado")).toBeInTheDocument();
+    expect(screen.getByText("En evaluación")).toBeInTheDocument();
     expect(screen.getByText("2026-07-15")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });

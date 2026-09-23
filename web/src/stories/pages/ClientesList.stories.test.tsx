@@ -87,11 +87,11 @@ describe("ClientesList page story (R-PRD-PG-6)", () => {
   it("renders each customer's approved Spanish state label (triangulation)", () => {
     render(<ClientesListView />);
     const table = screen.getByRole("table");
-    // Cover a different state than the first row (e.g. bloqueado → "Bloqueado")
-    const blocked = customers.find((c) => c.state === "bloqueado")!;
-    const row = within(table).getByRole("link", { name: blocked.name! }).closest("tr")!;
-    const badge = within(row).getByText(customerStateLabel(blocked.state));
-    expect(badge.getAttribute("data-tone")).toBe(customerStateTone(blocked.state));
+    // Cover a different state than the first row (e.g. en_evaluacion → "En evaluación")
+    const evaluating = customers.find((c) => c.state === "en_evaluacion")!;
+    const row = within(table).getByRole("link", { name: evaluating.name! }).closest("tr")!;
+    const badge = within(row).getByText(customerStateLabel(evaluating.state));
+    expect(badge.getAttribute("data-tone")).toBe(customerStateTone(evaluating.state));
   });
 
   it("renders a stale-data banner pairing status role with a visible label", () => {

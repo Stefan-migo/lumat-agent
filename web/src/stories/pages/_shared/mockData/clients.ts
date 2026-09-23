@@ -2,8 +2,8 @@ import type { Customer } from "../../../../types";
 
 /** Customer mock matching `app/panel/api/serializers.py` to_customer_dict()
  *  (snake_case keys, ISO datetime strings, nullable timestamps). Realistic
- *  Chilean names + E.164 +56 phone numbers. Covers all 4 CustomerState values
- *  (nuevo/activo/inactivo/bloqueado) for tone-map + ficha rendering
+ *  Chilean names + E.164 +56 phone numbers. Covers all 8 real CustomerState values
+ *  (the `customer_state` domain enum) for tone-map + ficha rendering
  *  (R-PRD-PG-3, R-PRD-PG-7). */
 export const clients: Customer[] = [
   {
@@ -13,7 +13,7 @@ export const clients: Customer[] = [
     email: "marcela.fuentes@example.cl",
     comuna: "Providencia",
     address: "Av. Providencia 1234, depto 45",
-    state: "activo",
+    state: "contactado",
     consent_status: true,
     consent_at: "2026-06-10T14:22:00-04:00",
     created_at: "2026-01-05T09:14:00-03:00",
@@ -37,7 +37,7 @@ export const clients: Customer[] = [
     email: "valentina.rojas@example.cl",
     comuna: "Maipú",
     address: "Av. Américo Vespucio 507, casa 8",
-    state: "activo",
+    state: "agendado",
     consent_status: true,
     consent_at: "2026-05-20T17:40:00-04:00",
     created_at: "2026-02-11T11:03:00-03:00",
@@ -49,7 +49,7 @@ export const clients: Customer[] = [
     email: "rodrigo.paredes@example.cl",
     comuna: "Las Condes",
     address: "Av. Apoquindo 4500, oficina 703",
-    state: "inactivo",
+    state: "cancelado",
     consent_status: false,
     consent_at: null,
     created_at: "2025-11-02T15:30:00-03:00",
@@ -61,7 +61,7 @@ export const clients: Customer[] = [
     email: "camila.soto@example.cl",
     comuna: "Vitacura",
     address: "Nueva Costanera 3911, depto 22",
-    state: "bloqueado",
+    state: "en_evaluacion",
     consent_status: true,
     consent_at: "2026-03-01T12:11:00-03:00",
     created_at: "2026-01-22T08:55:00-03:00",
@@ -73,9 +73,33 @@ export const clients: Customer[] = [
     email: "andres.herrera@example.cl",
     comuna: "La Florida",
     address: "Av. La Florida 9845, depto 301",
-    state: "activo",
+    state: "postventa",
     consent_status: true,
     consent_at: "2026-07-14T16:02:00-04:00",
     created_at: "2026-04-02T13:47:00-04:00",
+  },
+  {
+    id: 7,
+    phone_e164: "+56961234507",
+    name: "Paula Contreras",
+    email: "paula.contreras@example.cl",
+    comuna: "San Miguel",
+    address: "Av. Departamental 1520, casa 4",
+    state: "pendiente",
+    consent_status: true,
+    consent_at: "2026-06-28T09:35:00-04:00",
+    created_at: "2026-05-19T10:20:00-04:00",
+  },
+  {
+    id: 8,
+    phone_e164: "+56981234508",
+    name: "Ignacio Vera",
+    email: "ignacio.vera@example.cl",
+    comuna: "Peñalolén",
+    address: "Av. Grecia 7788, depto 1102",
+    state: "finalizado",
+    consent_status: true,
+    consent_at: "2026-04-11T08:12:00-04:00",
+    created_at: "2026-03-02T12:00:00-03:00",
   },
 ];
