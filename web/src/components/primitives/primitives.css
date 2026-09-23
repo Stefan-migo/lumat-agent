@@ -292,6 +292,13 @@
 .table__link {
   color: var(--primary-700);
 }
+.disclosure__summary {
+  list-style: none;
+  cursor: pointer;
+}
+.disclosure__summary::-webkit-details-marker {
+  display: none;
+}
 /* The composed surface a data table sits on: border, radius and elevation only — no padding,
    so the rows per screen do not change and the table keeps its own cell rhythm. It wraps the
    table only, never an `.empty-state`, which is already a surface of its own (no card-on-card).
