@@ -58,6 +58,11 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   `memory/spec.md:50-82` (MEM-3).
   Checks: unit test for the digest bound + a test that the digest shape is stable at `limit`;
   AT-8 and MEM-3 amended; existing own-read tests still green.
+  Status: code + tests + spec clauses committed (`3f243d18`, `52149dce`, `243d0cbb`,
+  `c35c67c0`); acceptance blocked on T8, which resolves the AT-8 contradiction this change
+  exposed. Independent verification: mutation check proved the digest test load-bearing; ORM
+  projection verified against `app/models.py:480-520` and `contenido` is `NOT NULL`
+  (`app/models.py:490`, `db/migrations/009_memory.sql:28`).
 - [ ] **T2 — AT-10: pin `memory.search` failure degradation** (audit item 2)
   `tests/unit/test_assistant_tool_loop.py:96` only exercises `memory.read`. Parameterize (or add
   a sibling test) for `"memory.search"` and assert status `degraded`, the responder continuation,
@@ -90,21 +95,47 @@ KB calibration worktree (`odd/kb-calibration-state-restore`, owned by another se
   artifacts (`ProjectsPage.tsx:13-30`). **Open decision**: where the entry point lives and whether
   the project binding is URL-addressable.
 
+- [ ] **T8 — align the public memory scope contract across spec, prose and prompt** (found by
+  T1's independent verification; human decided to close it inside this unit)
+  The code contract is `scope="own" | "customer"` (`registry.py:95-101`, discriminated union);
+  the server derives the panel and agent axes internally. Three artifacts still describe
+  `panel`/`agent` as public tool scopes:
+  1. AT-8's own scenarios: `assistant-tools/spec.md:34-46` ("Panel read binding", "scope outside
+     `panel` or `customer`") and `:63-71` ("Canonical agent scope"). T1's rewrite of AT-8's
+     requirement sentence left them contradicting it.
+  2. The compaction prompt tells the assistant to use a scope that validation rejects:
+     `app/chat/assistant/nodes.py:263-265` ("Pull it with memory.read with scope=panel and no
+     entity_id"). The guardrail rejects the plan and falls back
+     (`test_assistant_harness_guardrails.py:506-515`), so the recap cannot be pulled after a
+     compaction — a live functional gap, not a cosmetic one.
+  3. Tests asserting the stale instruction: `tests/unit/test_assistant_planner.py:578-590` and
+     the guardrail fixture above.
+  Also fold in the verification advisory: assert the digest bound once against the **real ORM
+  path** (the existing DB-backed assertion in `tests/spec/test_memory_spec.py:872-879` exercises
+  the projection but does not assert the bound; the unit digest test is mock-based).
+
 ## Delivery
 
-- Strategy: `ask-on-risk` (default). Forecast at planning: **~780 authored changed lines**
-  (T1 ~120, T2 ~30, T3 ~200, T4 ~40, T5 ~80, T6 ~60, T7 ~250) → **over the 400-line review budget,
-  so chained PRs are required** unless the maintainer accepts `size:exception`.
+- Strategy: `ask-on-risk` (default). Forecast at planning: **~840 authored changed lines**
+  (T1 ~120, T2 ~30, T3 ~200, T4 ~40, T5 ~80, T6 ~60, T7 ~250, T8 ~60) → **over the 400-line review
+  budget, so chained PRs are required** unless the maintainer accepts `size:exception`.
   Chain strategy: **not chosen yet** (must be `stacked-to-main` or `feature-branch-chain`).
 - Work-unit commits on this branch, tests and docs with their behavior, Conventional Commits.
 - Push, PR and merge stay human decisions.
 
 ## Progress
 
-- Worktree + record created. No task started.
+- Worktree + record created. No task accepted yet.
+- T1: code, tests and spec clauses committed (`3f243d18`, `52149dce`, `243d0cbb`, `c35c67c0`).
+  Independent verification passed on code, consumers and ORM projection, and produced the T8
+  finding. Blocked on T8 before acceptance.
+- Decisions taken by the human: T1 = extend `memory.read` (not a new tool, not optional `query`);
+  T8 = align everything to `own`/`customer` inside this unit.
 - Re-validated context: audit #4769 still holds at base `a2092b92`; the audit's "hardcoded 22
   tools" claim is stale (current whitelist: 21 entries, `agent/registry.yaml:59-79`).
+- The audit missed T8; it was found by verifying T1's candidate instead of trusting it.
 
 ## Next step
 
-T1 (decision already taken), then T2/T3/T4/T5 (mechanical pinning), then resolve T6/T7 decisions.
+T8 (unblocks T1's acceptance), then T2/T3/T4/T5 (mechanical pinning), then resolve the T6/T7
+open decisions. Chained-PR strategy still unchosen.
