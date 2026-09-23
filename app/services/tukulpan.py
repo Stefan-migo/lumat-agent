@@ -24,7 +24,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import func, literal_column, select, update
+from sqlalchemy import func, literal_column, select, update as sql_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -74,6 +74,7 @@ __all__ = [
     "close_conversation",
     "archive_report",
     "delete",
+    "update",
     "get_by_key",
     "hybrid_search",
     "list_for_entity",
@@ -189,17 +190,17 @@ def _fold_duplicate(session: Session, duplicate: Memory, *, survivor: Memory) ->
     without creating a cycle, because this module already imports `projects`.
     """
     session.execute(
-        update(MemoryObservation)
+        sql_update(MemoryObservation)
         .where(MemoryObservation.memory_id == duplicate.id)
         .values(memory_id=survivor.id)
     )
     session.execute(
-        update(MemoryRelation)
+        sql_update(MemoryRelation)
         .where(MemoryRelation.id_a == duplicate.id)
         .values(id_a=survivor.id)
     )
     session.execute(
-        update(MemoryRelation)
+        sql_update(MemoryRelation)
         .where(MemoryRelation.id_b == duplicate.id)
         .values(id_b=survivor.id)
     )
@@ -581,6 +582,32 @@ def delete(session: Session, memory_id: int) -> Memory:
     if row is None:
         raise ValueError(f"memory {memory_id} not found")
     session.delete(row)
+    session.flush()
+    return row
+
+
+def update(
+    session: Session,
+    memory_id: int,
+    *,
+    titulo: str | None = None,
+    contenido: str | None = None,
+    tipo: MemoryType | None = None,
+) -> Memory:
+    """Update selected fields on one memory row, re-embedding changed content."""
+    row = session.get(Memory, memory_id)
+    if row is None:
+        raise ValueError(f"memory {memory_id} not found")
+    content_changed = contenido is not None and contenido != row.contenido
+    if titulo is not None:
+        row.titulo = titulo
+    if tipo is not None:
+        row.tipo = tipo
+    if content_changed:
+        row.contenido = contenido
+        row.embedding = _embed([contenido])[0]
+        row.normalized_hash = _normalized_hash(contenido)
+        row.review_after = _review_after(row.tipo)
     session.flush()
     return row
 
