@@ -113,6 +113,29 @@ def test_prod_api_build_wires_deployed_identity():
     assert "COPY pyproject.toml ./" in dockerfile
 
 
+def test_prod_image_ships_every_repo_path_the_runtime_resolves():
+    """odd/prod-image-agent-dir: the image copied app/ and db/, but not agent/.
+
+    The runtime resolves these paths relative to the image root:
+
+    - `app/agent_registry.py:223` -> `parents[1] / "agent" / "registry.yaml"`
+    - `app/services/prompts.py:30` -> `parents[2] / "agent"`
+    - `app/config.py:19` -> `parents[1] / "pyproject.toml"`
+
+    `agent/` was the missing one, so `load_registry()` raised
+    `registry file not found: /app/agent/registry.yaml` on the first assistant
+    turn and the panel answered with the raw error. The registry has no fallback
+    (unlike `prompts.load()`, which silently serves its literal FALLBACKS), so a
+    missing `agent/` is a hard failure of every assistant turn.
+    """
+    dockerfile = DOCKERFILE.read_text()
+    for copy in ("COPY pyproject.toml ./", "COPY agent/ agent/", "COPY db/ db/"):
+        assert copy in dockerfile, (
+            f"the prod image must ship {copy!r}: the runtime resolves that path "
+            f"relative to the image root"
+        )
+
+
 def test_prod_api_service_has_a_writable_embedder_cache():
     """odd/prod-embedder-cache: the prod api runs read_only, so the local embedding
     model needs an explicit writable cache. `volumes: !override` silently drops
