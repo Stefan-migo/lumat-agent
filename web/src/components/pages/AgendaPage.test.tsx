@@ -101,6 +101,8 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[appointment()]} state="ready" />);
     await user.click(screen.getByRole('button', { name: 'Cancelar visita' }));
     expect(screen.getByRole('dialog', { name: 'Cancelar visita' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toHaveTextContent('La visita no podrá volver a reservarse');
+    expect(screen.getByLabelText('Motivo de cancelación')).toHaveClass('field__control');
     await user.type(screen.getByLabelText('Motivo de cancelación'), 'Cliente avisó');
     await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }));
 
@@ -137,7 +139,17 @@ describe('AgendaPage', () => {
     await user.click(screen.getByRole('button', { name: 'Cancelar visita' }));
     await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cancelar');
+    expect(await screen.findByRole('dialog')).toHaveTextContent('No se pudo cancelar');
     expect(screen.getByText(appointmentStatusLabel('booked'))).toBeInTheDocument();
+  });
+
+  it('shows sync retry failures beside the row action', async () => {
+    const user = userEvent.setup();
+    vi.mocked(retryCalendarSync).mockRejectedValue(new Error('Calendario no disponible'));
+    render(<AgendaPage data={[appointment({ sync: { status: 'failed', error: null, retry: true } })]} state="ready" />);
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar calendario' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Calendario no disponible');
+    expect(screen.getByRole('row', { name: /Mantención/ })).toHaveTextContent('Calendario no disponible');
   });
 });
