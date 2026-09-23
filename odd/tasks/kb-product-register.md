@@ -263,7 +263,7 @@ Hand the branch to the human for the 1366×768 visual gate.
 - [x] Worktree created and `npm ci` run
 - [x] T0: this doc committed on the branch (`8f194da9`)
 - [x] Slice 1 (T1–T3)
-- [ ] Slice 2 (T4)
+- [x] Slice 2 (T4)
 - [ ] Slice 3 (T5–T9)
 
 ## Verification evidence
@@ -316,3 +316,56 @@ readback and the four re-run checks above.
 Slice 2 (T4): the disable MUST violation, standalone and small. RED must mount the
 real path (`<KbList />` bare, as `AppShell.tsx:119` does), click `Deshabilitar`,
 and assert the confirmation names the clicked document with no mutation yet.
+
+### Slice 2 (T4) — branch `odd/kb-disable-confirmation`
+
+Commits: `4764b516` (the confirmation) and `196da565` (the unification), on branch
+`odd/kb-disable-confirmation` based on the slice-1 branch.
+
+The fix: `KbListState` no longer carries `disable-confirmation`; the page owns a
+single discriminated `Confirmation` state (`{ kind: "disable", doc } | { kind:
+"restore", doc, version }`), `onDisable` opens it with the clicked document, and only
+`Confirmar` runs the mutation. Restore and disable share one confirmation block and
+one class (`.kb-actions__confirmation`, renamed from
+`.kb-actions__restore-confirmation`, which had come to name only one of its two users).
+
+RED verified independently by the parent, not taken on report: with the base
+`KbList.tsx` and the new test, it fails on the confirmation assertion (the base fires
+the mutation immediately and surfaces the mutation error).
+
+Parent readback found one defect the writer did not, and it was corrected:
+
+- **Two confirmations could be open at once.** `restoreConfirmation` and
+  `disableConfirmation` were independent and neither cleared the other, and opening a
+  confirmation does not set `busy`, so clicking `Restaurar` on one row and then
+  `Deshabilitar` on another rendered two warning banners with two ambiguous
+  `Confirmar` buttons — in the destructive flow the handoff flags as KB's highest
+  domain risk. The discriminated state makes the overlap unrepresentable and collapsed
+  the duplicated markup. The regression test asserts exactly one alert and one
+  `Confirmar`, and that the surviving `Confirmar` disables the clicked document.
+
+Parent re-ran the checks on the corrected candidate:
+
+- `npm run test`: **80 files / 669 tests passed**
+- `npx tsc -b --noEmit`: passed
+
+Writer-reported, not re-run by the parent: `npm run build` passed,
+`npm run build-storybook` passed.
+
+Process note: the slice-2 writer ran an early `graphify` refresh. The repo rule is one
+refresh per work session, at close. It wrote only inside the unit worktree (untracked),
+so the branch is unaffected; recorded here so the deviation is visible.
+
+### Base movement during the unit
+
+`main` advanced from `9b83e27f` to `a94a98b4` (merge of PR #329,
+`odd/assistant-web-search`) while this unit was in flight, and a new unit
+(`odd/agenda-product-register`) appeared. PR #329 changed **no file under `web/`**
+(`git diff --stat 9b83e27f..a94a98b4 -- web/` is empty), so there is no conflict with
+this work; PR #328 reported `MERGEABLE` / `CLEAN` against the moved base.
+
+## Next step
+
+Slice 3 (T5–T9): the workspace recomposition. Start at T5 with the shared styled
+disclosure, then T6 (`.data-region`), T7 (document-first composition), T8 (upload
+validation feedback), T9 (full state matrix).
