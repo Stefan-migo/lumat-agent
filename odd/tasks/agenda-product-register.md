@@ -238,35 +238,35 @@ is not in this unit's scope.
 
 ### Slice 1 — operator agenda (ships in PR 1)
 
-- [ ] **T0** — Write the `### Agenda` page-architecture section in
+- [x] **T0** — Write the `### Agenda` page-architecture section in
   `web/DESIGN_SYSTEM.md`, in the shape of the neighbouring `### Clientes` section:
   what the operator agenda is for, its required content, its actions, and what it
   must never offer.
-- [ ] **T1** — RED/GREEN: `1 visitas`. The count renders singular and plural
+- [x] **T1** — RED/GREEN: `1 visitas`. The count renders singular and plural
   correctly. RED observed before the fix.
-- [ ] **T2** — RED/GREEN: the operator slot renders 24 hours, matching the
+- [x] **T2** — RED/GREEN: the operator slot renders 24 hours, matching the
   technician surface. Minimal targeted change — pin the hour cycle (D13); the
   shared contract is extracted in T9, where a second consumer exists. Asserted on
   a row with a known `timezone` and `starts_at`; RED observed as a meridiem-bearing
   slot before the fix.
-- [ ] **T3** — RED/GREEN: a section with no rows renders no nested `.empty-state`
+- [x] **T3** — RED/GREEN: a section with no rows renders no nested `.empty-state`
   and no "No hay visitas" copy; page-empty and section-empty are distinct. RED
   observed.
-- [ ] **T4** — RED/GREEN: the cancellation `Dialog` uses `Textarea`, states the
+- [x] **T4** — RED/GREEN: the cancellation `Dialog` uses `Textarea`, states the
   consequence of cancelling, and renders its success/failure at the locus; the
   sync-retry failure renders at the row. RED observed (no `.field__control`,
   feedback only in the page banner).
-- [ ] **T5** — RED/GREEN: the retry controls in the stale and error states are
+- [x] **T5** — RED/GREEN: the retry controls in the stale and error states are
   `Button`. `grep -c "<button" AgendaPage.tsx` → 0.
-- [ ] **T6** — RED/GREEN: the operator surface gets the named region and the
+- [x] **T6** — RED/GREEN: the operator surface gets the named region and the
   shared `.data-region` surface, applied only when rows exist (D7); the refresh
   control's home is decided and recorded (it is absent from the operator page
   today; the technician keeps it in `PageFrame` actions). RED observed (no region
   role).
-- [ ] **T7** — stories: extend the story matrix with the cases the redesign must
+- [x] **T7** — stories: extend the story matrix with the cases the redesign must
   not regress (section-empty with a populated page, denied, cancel-confirmation,
   sync-failure/retry), plus their story assertions.
-- [ ] **T8** — Slice 1 verification of record: `npm run test`,
+- [x] **T8** — Slice 1 verification of record: `npm run test`,
   `npx tsc -b --noEmit`, `npm run build`, `npm run build-storybook`.
 
 ### Slice 2 — technician agenda (ships in PR 2)
@@ -344,12 +344,72 @@ is not in this unit's scope.
 - [x] Doc amended before T0: D13 and the slice ordering for the time contract —
   the observable divergence is fixed in slice 1, and the shared module lands in
   slice 2 with its real second consumer.
-- [ ] T0–T8.
+- [x] T0–T8. T0 commit `05ff620f`; T1 `dea88fcf`; T2 `a7008a46`; T3
+  `b164fe3e`; T4 `bf712125`; T5 `4647c19e`; T6 `c6a14141`; T7
+  `890fae2d`; T8 documentation commit recorded below.
+
+### Slice 1 implementation evidence
+
+- T0 RED: not applicable (documentation-only). GREEN: `### Agenda` matches the
+  neighbouring page-architecture shape and records the operator register,
+  actions, states, and non-goals.
+- T1 Graph nodes: `AgendaPage()`, `AgendaPage.test.tsx`, `PageFrame()`.
+  RED: `Unable to find an element with the text: 1 visita`; the rendered
+  header contained `1 visitas`. GREEN: focused test passed.
+- T2 Graph nodes/edge: `AgendaPage()` → `DataTable()` (`AgendaPage.tsx`
+  imports `DataTable`). RED: `Unable to find an element with the text: 14:00`;
+  the rendered slot was `02:00 p. m.`. GREEN: focused test passed after the
+  targeted `hourCycle: "h23"` pin.
+- T3 Graph nodes: `AgendaPage()`, `DataTable()`, `EmptyState()`. RED:
+  `expected document not to contain element, found <div class="empty-state">`
+  in the empty `Hoy` section. GREEN: focused test passed after omitting the
+  section table when it has no rows.
+- T4 Graph nodes: `AgendaPage()`, `Dialog()`, `Textarea()`, `StateMessage()`.
+  RED: the dialog lacked the consequence copy and field class; after submit,
+  the dialog lacked `No se pudo cancelar`; sync failure was absent from the row.
+  GREEN: four focused mutation tests passed; feedback is dialog-local for
+  cancellation and row-local for sync retry.
+- T5 Graph nodes: `AgendaPage()`, `Button()`, `StateMessage()`. RED:
+  `toHaveClass("btn")` received an element with no class for the error retry.
+  GREEN: focused recovery test passed and `grep -c "<button" AgendaPage.tsx`
+  returned `0`.
+- T6 Graph nodes/edge: `AgendaPage()` → `DataTable()`; `ClientesList` and
+  `ClientFicha` were consulted for the `.data-region` contract. RED:
+  `Unable to find an accessible element with the role "region" and name
+  "Registro de agenda"`. GREEN: focused region test passed. The operator has
+  no refresh control because refresh is not an existing operator action; no
+  toolbar was invented. `.data-region` wraps `DataTable` only inside a section
+  when `rows.length > 0`, so `DataTable`'s own `.empty-state` is never nested.
+- T7 Graph nodes/edge: `AgendaPage.stories.tsx` → `AgendaPage()`; `Dialog()` and
+  `StateMessage()` were consulted. RED: the new story assertion failed with
+  `Cannot read properties of undefined (reading 'args')` before `SectionEmpty`
+  existed. GREEN: the complete Storybook state matrix passed 9/9 tests,
+  including section-empty, denied, cancel confirmation, and sync retry.
+- T8 Graph nodes: `AgendaPage()`, `AgendaPage.stories.tsx`, `DataTable()`,
+  `PageFrame()`, `Button()`, `Textarea()`, `Dialog()`. All four verification
+  commands passed; see the final verification record below.
+
+### Slice 1 verification record
+
+- `cd web && npm run test` — passed: `Test Files 80 passed (80)`, `Tests 671
+  passed (671)`. Existing React `act(...)` and jsdom navigation warnings were
+  emitted; no test failed.
+- `cd web && npx tsc -b --noEmit` — passed with no output.
+- `cd web && npm run build` — passed: Vite transformed `332 modules` and
+  emitted the production bundle. Vite reported the pre-existing large-chunk
+  warning.
+- `cd web && npm run build-storybook` — passed: Storybook `8.6.18` built the
+  preview and emitted `storybook-static`. Storybook reported its existing
+  `eval` and large-chunk warnings.
 
 ## Size
 
 To be recorded at the end of each slice: changed lines under `web/`
 (added/deleted), the dominant terms, and whether the slice fits the ~400
+review-line budget.
+
+Slice 1 changed `90` lines under `web/` (`72` added, `18` deleted), dominated
+by Agenda state tests and local feedback/section composition. It fits the ~400
 review-line budget.
 
 ## Open items
