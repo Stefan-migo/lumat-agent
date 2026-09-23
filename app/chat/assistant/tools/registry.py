@@ -19,7 +19,6 @@ from app.chat.assistant.tools.search import SearchFailure
 from app.services import automation, cases, customers, kb, projects, relations, scheduling, tukulpan as memory
 
 MAX_ITEMS = 20
-CAPABILITIES_TEXT_LIMIT = 4_000
 SDB_WRITE_ALLOWLIST = frozenset({
     "automation.create_rule",
     "project.create",
@@ -452,7 +451,7 @@ def _assistant_capabilities(_session, _args: CapabilitiesArgs):
         lines.append(f"{name} — {definition.description} ({access})")
     return {
         "tool_count": len(whitelist),
-        "capabilities": "\n".join(lines)[:CAPABILITIES_TEXT_LIMIT],
+        "capabilities": "\n".join(lines),
     }
 
 

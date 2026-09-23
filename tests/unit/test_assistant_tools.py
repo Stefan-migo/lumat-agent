@@ -5,7 +5,6 @@ import pytest
 
 from app.chat.assistant.tools.registry import (
     AUTONOMOUS_WRITE_ALLOWLIST,
-    CAPABILITIES_TEXT_LIMIT,
     MAX_ITEMS,
     CapabilitiesArgs,
     MemoryArgs,
@@ -84,29 +83,6 @@ def test_assistant_capabilities_excludes_non_whitelisted_registry_entry(monkeypa
     assert result["tool_count"] == 1
     assert "customers.search" in result["capabilities"]
     assert "project.list" not in result["capabilities"]
-
-
-def test_assistant_capabilities_bounds_text(monkeypatch):
-    original = TOOL_REGISTRY["customers.search"]
-    monkeypatch.setitem(
-        TOOL_REGISTRY,
-        "customers.search",
-        ToolDefinition(
-            original.name,
-            original.args_model,
-            original.read_only,
-            original.handler,
-            "x" * (CAPABILITIES_TEXT_LIMIT + 100),
-        ),
-    )
-    monkeypatch.setattr(
-        "app.services.prompts.load_assistant_config",
-        lambda: SimpleNamespace(tools_whitelist=["customers.search"]),
-    )
-
-    result = _assistant_capabilities(SimpleNamespace(), CapabilitiesArgs())
-
-    assert len(result["capabilities"]) == CAPABILITIES_TEXT_LIMIT
 
 
 def test_memory_kpis_is_not_a_registered_tool():
@@ -739,6 +715,43 @@ def test_memory_service_update_reembeds_only_changed_content(monkeypatch):
     assert embedded == [["New content"]]
     assert row.embedding == [1.0]
     assert row.normalized_hash == memory._normalized_hash("New content")
+
+
+def test_memory_service_update_recomputes_review_after_when_tipo_becomes_decaying():
+    row = SimpleNamespace(
+        contenido="Content", titulo="Title", tipo=memory.MemoryType.DECISION,
+        embedding=[0.0], normalized_hash="hash", review_after=None,
+    )
+    session = SimpleNamespace(get=lambda _model, _id: row, flush=lambda: None)
+
+    memory.update(session, 1, tipo=memory.MemoryType.SUMMARY)
+
+    assert row.review_after is not None
+
+
+def test_memory_service_update_clears_review_after_when_tipo_becomes_non_decaying():
+    row = SimpleNamespace(
+        contenido="Content", titulo="Title", tipo=memory.MemoryType.SUMMARY,
+        embedding=[0.0], normalized_hash="hash", review_after=memory._review_after(memory.MemoryType.SUMMARY),
+    )
+    session = SimpleNamespace(get=lambda _model, _id: row, flush=lambda: None)
+
+    memory.update(session, 1, tipo=memory.MemoryType.DECISION)
+
+    assert row.review_after is None
+
+
+def test_memory_service_update_title_only_keeps_review_after():
+    review_after = memory._review_after(memory.MemoryType.SUMMARY)
+    row = SimpleNamespace(
+        contenido="Content", titulo="Title", tipo=memory.MemoryType.SUMMARY,
+        embedding=[0.0], normalized_hash="hash", review_after=review_after,
+    )
+    session = SimpleNamespace(get=lambda _model, _id: row, flush=lambda: None)
+
+    memory.update(session, 1, titulo="New title")
+
+    assert row.review_after == review_after
 
 
 def test_memory_write_global_visibility_uses_canonical_agent_axis(monkeypatch):
