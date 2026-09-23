@@ -87,21 +87,25 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       meta={data ? `${data.length} ${data.length === 1 ? "cliente" : "clientes"}` : undefined}
       state={stateMessage(state, retry)}
     >
-      <div className="toolbar">
-        <SearchInput key={searchResetKey} aria-label="Buscar clientes" onSearch={(next) => { setQuery(next); setQueryVersion((current) => current + 1); }} />
-        <Button variant="secondary" href="/panel/export/clients.csv">Exportar clientes CSV</Button>
-        <Button variant="secondary" href="/panel/export/cases.csv">Exportar casos CSV</Button>
-      </div>
-      {state === "loading" ? null : data && data.length > 0 ? (
-        <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} />
-      ) : filtered ? (
-        <div>
-          <EmptyState title="Sin resultados" description="Ajusta tu búsqueda o límpiala para ver todo el listado." />
-          <Button variant="secondary" onClick={clearSearch}>Limpiar búsqueda</Button>
+      <section aria-label="Listado de clientes">
+        <div className="toolbar">
+          <SearchInput key={searchResetKey} aria-label="Buscar clientes" onSearch={(next) => { setQuery(next); setQueryVersion((current) => current + 1); }} />
+          <Button variant="secondary" href="/panel/export/clients.csv">Exportar clientes CSV</Button>
+          <Button variant="secondary" href="/panel/export/cases.csv">Exportar casos CSV</Button>
         </div>
-      ) : state === "empty" || (state === "ready" && data?.length === 0) ? (
-        <EmptyState title="No hay registros" description="Ajusta tu búsqueda o agrega nuevos clientes." />
-      ) : null}
+        {state === "loading" ? null : data && data.length > 0 ? (
+          <div className="data-region">
+            <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} />
+          </div>
+        ) : filtered ? (
+          <div>
+            <EmptyState title="Sin resultados" description="Ajusta tu búsqueda o límpiala para ver todo el listado." />
+            <Button variant="secondary" onClick={clearSearch}>Limpiar búsqueda</Button>
+          </div>
+        ) : state === "empty" || (state === "ready" && data?.length === 0) ? (
+          <EmptyState title="No hay registros" description="Ajusta tu búsqueda o agrega nuevos clientes." />
+        ) : null}
+      </section>
     </PageFrame>
   );
 }

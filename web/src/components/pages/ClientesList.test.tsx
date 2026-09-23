@@ -125,6 +125,22 @@ describe("ClientesList", () => {
     expect(screen.getByLabelText("Buscar clientes")).toHaveValue("");
   });
 
+  // T8 — the amended DS-GRAMMAR-1 appearance axis: the surface composes into a named region
+  // on the shared panel surface idiom, while the data layer stays control-room.
+  it("exposes the list as a named region inside the shared data-surface contract", () => {
+    const { container } = render(<ClientesList data={customers} state="ready" />);
+
+    expect(screen.getByRole("region", { name: "Listado de clientes" })).toBeInTheDocument();
+    expect(container.querySelector(".data-region")).not.toBeNull();
+  });
+
+  it("keeps the dense data layer tabular with no conversation component", () => {
+    const { container } = render(<ClientesList data={customers} state="ready" />);
+
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(container.querySelector(".ai-agent-grammar__bubble, .assistant-chat__conversation, .ai-agent-grammar__composer")).toBeNull();
+  });
+
   it("renders the stale, partial-error and denied states", () => {
     const { unmount } = render(<ClientesList data={customers} state="stale" />);
     expect(screen.getByRole("heading", { name: "Datos posiblemente desactualizados" })).toBeInTheDocument();

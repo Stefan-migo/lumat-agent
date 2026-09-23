@@ -292,6 +292,17 @@
 .table__link {
   color: var(--primary-700);
 }
+/* The composed surface a data table sits on: border, radius and elevation only — no padding,
+   so the rows per screen do not change and the table keeps its own cell rhythm. It wraps the
+   table only, never an `.empty-state`, which is already a surface of its own (no card-on-card).
+   Second consumer to be named before this generalises beyond Clientes. */
+.data-region {
+  border: 1px solid var(--corp-border);
+  border-radius: var(--radius-md);
+  background: var(--brand-bg-elevated);
+  box-shadow: var(--shadow-1);
+  overflow-x: auto;
+}
 /* Tabs (CORP-TABS-1): underline accent marks the active tab; inactive tabs use
    --corp-muted; panel content inherits --corp-text. */
 .tabs {
