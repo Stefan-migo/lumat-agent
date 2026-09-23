@@ -306,6 +306,14 @@ Do not add autonomous-resolution, response-time, satisfaction, or revenue metric
 - The ficha groups identity, consent, state control, notes, and history.
 - Destructive or blocking customer-state changes require clear consequences and recovery guidance.
 
+### Agenda
+
+- The operator agenda is a chronological register of scheduled visits, divided into `Hoy` and `Próximas`.
+- Show the visit time in 24-hour format, service, customer, technician, appointment status, calendar sync status, and row actions when applicable.
+- Keep the primary presentation tabular. The operator may cancel a booked visit and retry a pending or failed calendar sync; destructive cancellation requires confirmation and an optional reason.
+- Provide explicit loading, permission, empty, stale, and error states. Action failures stay beside the action that caused them.
+- Do not offer a month grid, create/edit/rebook actions, an unowned filter or search toolbar, conversation bubbles, a composer, a thread rail, or an inspector on this surface.
+
 ### Conversaciones and human inbox
 
 - List rows show customer, explicit conversation state, assignee, summary, freshness, and created date.
