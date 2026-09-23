@@ -319,9 +319,12 @@ is not in this unit's scope.
 - [x] **T9** — RED/GREEN: the agenda-shaped time contract is extracted from the
   technician's four local helpers and **both** surfaces consume it (D4, D13) — the
   second consumer is real at the moment of extraction, not promised.
-- [x] **T10** — RED/GREEN: the address link uses the shared link contract and no
-  longer inherits the browser default colour. RED observed (no class on the
-  anchor).
+- [x] **T10** — the address is a real control, not a browser-default anchor. The
+  implementation chose `Button variant="secondary" href` — the same treatment
+  `technician-surface` D3/T2 gave the phone control on this card — over the shared
+  `.table__link`, whose own comment scopes it to the in-table drill-down role. RED
+  observed (the raw anchor carried no class at all). Its composition is corrected
+  in C4.
 - [ ] **T11** — RED/GREEN: only the card facts that are genuinely ambiguous without
   a label gain structure (D15). If the audit finds none, close the task with the
   recorded verdict and no code change: the card's reading order is a decision from
@@ -335,6 +338,20 @@ is not in this unit's scope.
 - [ ] **T13** — stories: extend the technician story matrix only for what T9–T12
   actually changed, with assertions. Invent no story for a state that did not move.
 - [ ] **T14** — Slice 2 verification of record: the same four commands.
+
+### Slice 2 — correction pass
+
+- [ ] **C4** — The new address control must obey the card's own composition rule.
+  `.technician-agenda__item` is a grid, so its children stretch by default; the
+  phone control hugs its label through `.technician-agenda__call`, for a reason the
+  surface wrote down: *a full-width 990px "phone number" button is not a phone
+  number*. The address control shipped with no composition class, so it stretches
+  the full card width while its sibling does not — one control contradicting a rule
+  this surface already decided. Bring both field controls under the same
+  composition rule (a page-owned rule is legitimate here — D10 and D14 leave the
+  page-specific composition to the page) and record whether the selector count
+  changed. The height a real control adds is justified by that surface's own
+  touch-target requirement; a full-width pill is not.
 
 ## Acceptance criteria
 
