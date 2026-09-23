@@ -69,6 +69,15 @@ services:
     working_dir: /app
     volumes:
       - ..:/app
+      # fastembed's ONNX model cache (~241MB), mounted so the container reuses
+      # the host's copy instead of re-downloading from the HF Hub. Without
+      # this, the cache lands in the container's own /tmp (fastembed's default
+      # is tempfile.gettempdir()/fastembed_cache, with no env var to override
+      # it) and every recreate re-pays ~5m30s of download inside the FIRST
+      # embedding-dependent turn — long enough to blow past the panel's 300 s
+      # SSE stream cap, which drops the stream silently and reads as "the agent
+      # never answers". Point EMBED_CACHE_DIR at a durable host path.
+      - ${EMBED_CACHE_DIR:-/tmp/fastembed_cache}:/tmp/fastembed_cache
       # .venv shadowed by a named volume: the container's `uv sync` builds its
       # own venv and NEVER clobbers the host's .venv (bind mount is read-write).
       - venv:/app/.venv
