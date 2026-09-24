@@ -90,7 +90,7 @@ Investigation found five concrete, evidence-backed items — one of them a regre
 | **T1** | Remove the stray outer `<details>` in the inspector so no UA-generated summary exists; assert in a test that every `<details>` inside `.ai-agent-grammar__inspector` has its own `<summary>`. | delegated writer |
 | **T2** | Use the direct state-action labels from `DESIGN_SYSTEM.md:377` (`Tomar conversación`, `Devolver al agente`, `Cerrar conversación`) in the detail header and in the queue row; update the tests that assert the old strings. | delegated writer |
 | **T3** | Card radius: `.conversations-queue__row` and `.conversation-workspace` to `var(--radius-lg)`, with a CSS contract test. Confirm the mobile reset at `primitives.css:1942` stays intentional. | delegated writer |
-| **T4** | List rows must show the assignee and the created date (`DESIGN_SYSTEM.md:371`). **Blocked on a decision:** `responsible_id` is an id with no name source in the row's data — decide how to resolve it (users map, API field) before rendering. | pending decision |
+| **T4** | List rows must show the assignee and the created date (`DESIGN_SYSTEM.md:371`), and a human-assigned row may take a warning-tinted leading treatment (`:371`). **Blocked on a decision:** `Conversation.responsible_id` is a bare id. The name-resolution precedent exists (`CasesList.tsx:26-29` `responsibleLabel(id, users)` → `username`, fed by its own `data.users`), but the conversations response carries **no** `users`, `AppShell.tsx:117` renders `ConversationsList` without even the existing `customerName` prop, and the only users endpoint (`api.ts:174` `fetchUsers`) is **admin-only** while the conversations view is open to every role. Decide the users source before rendering a name. | pending decision |
 | **T5** | Background/hierarchy of the detail page: measure the workspace at desktop widths inside the real shell, then decide whether the thread area should sit on the canvas `--bg` while the inspector stays `--surface`. No token swap before the measurement. | pending measurement |
 
 ## Acceptance criteria
@@ -132,8 +132,43 @@ Nodes consulted (`graphify query "Conversaciones list page and conversation deta
 
 - [x] Unit opened; worktree `../lumat-agent-odd-conversations-redesign`, branch
       `odd/conversations-redesign`, base `66625430`.
-- [ ] T1
-- [ ] T2
-- [ ] T3
-- [ ] T4 — blocked on assignee-name decision
+- [x] **T1** — `d3e75dfc` *fix(web): drop the stray details wrapper from the conversation inspector*
+- [x] **T2** — `8e07c9d6` *fix(web): use the direct state action labels in conversations*
+- [x] **T3** — `237972a5` *fix(web): use the card radius on the conversation surfaces*
+- [ ] T4 — blocked on the users-source decision
 - [ ] T5 — blocked on measurement
+
+## Verification evidence
+
+Observed, not asserted. RED and GREEN below are the vitest summary lines as printed.
+
+| Task | Test added/changed | RED | GREEN |
+| --- | --- | --- | --- |
+| T1 | `gives every inspector details element its own summary` (new) | `1 failed \| 737 passed (738)` | `738 passed (738)` |
+| T2 | `refetches the thread after a successful close command`, `keeps conversation actions in the thread header and context actions-free`, `production conversations list`, `renders the interactive story action set` (labels updated in three files) | `4 failed \| 734 passed (738)` | `738 passed (738)` |
+| T3 | `uses card radius for conversation cards and preserves the mobile workspace reset` (new) | `1 failed` | `739 passed (739)` |
+
+- Final full suite, **re-run by the orchestrator as the parent spot check**, not taken from the
+  writer's report: `Test Files 86 passed (86)` / `Tests 739 passed (739)`.
+- `cd web && npm run build`: passed, `✓ built in 4.12s` (Vite chunk-size warning only).
+- `gentle-ai review assess --cwd <worktree> --agent opencode --base-ref 66625430 --committed-only --json`:
+  `risk: "medium"`, `changed_lines: 184`, `changed_paths: 7`, **`review_due: false`,
+  `review_due_reason: "under_budget"`**. The candidate stays pending inside the slice; no native
+  review is due yet and none was started.
+- RDD is **on** for this clone (decided by global), verified with `gentle-ai review mode status`.
+
+**Not verified** (stated honestly, not claimed as done):
+
+- Actual narrow-viewport browser layout after T2's longer labels. The CSS wraps on both action bars
+  and the updated rendered-action tests pass, but no browser measurement was run — T5's measurement
+  session must cover it.
+- The visual spacing effect of removing the T1 wrapper. `jsdom` has no layout, so no vitest test can
+  prove it; the fix is structural and correct by construction, but the rendered result is unmeasured.
+- Known nit from review of the diff: the T1 test's `for (const details of …)` loop passes vacuously
+  if the inspector ever renders zero `<details>`; the fixture supplies `captured_data`, so the inner
+  disclosure is present today.
+
+## Delivery
+
+No PR yet. Three fix commits plus one docs commit sit on `odd/conversations-redesign`; nothing has
+been pushed.
