@@ -173,7 +173,10 @@ def fetch_page(url: str, *, client: httpx.Client | None = None) -> FetchedPage:
                         raise FetchFailure(f"fetch stopped after {MAX_REDIRECTS} redirects")
                     target = resolve_target(urljoin(target.url, location))
                     continue
-                if response.status_code >= 400:
+                # Only a 2xx is a page. A 3xx outside the redirect set above, or an empty success such
+                # as 204, must not travel on as an empty "page" -- that is the silent-empty-result
+                # failure this reader exists to avoid.
+                if not 200 <= response.status_code < 300:
                     raise FetchFailure(f"fetch got HTTP {response.status_code} from {target.host}")
                 content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
                 if content_type not in ALLOWED_CONTENT_TYPES:
@@ -181,6 +184,10 @@ def fetch_page(url: str, *, client: httpx.Client | None = None) -> FetchedPage:
                         f"fetch only reads text pages, not {content_type or 'a response without a content type'}"
                     )
                 body, truncated = _read_bounded(response)
+                # A 2xx with no body (204, say) is not a page: reporting it as one would be the silent
+                # empty result this reader exists to avoid.
+                if not body.strip():
+                    raise FetchFailure(f"fetch got an empty page from {target.host}")
                 return FetchedPage(
                     url=target.url, content_type=content_type, body=body, truncated=truncated
                 )

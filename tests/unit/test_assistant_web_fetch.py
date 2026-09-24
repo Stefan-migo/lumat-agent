@@ -291,6 +291,29 @@ def test_fetch_reports_an_http_error_status():
         fetch_page(f"{PUBLIC}/missing")
 
 
+@pytest.mark.parametrize("status", [300, 304, 305])
+@respx.mock
+def test_fetch_refuses_a_status_that_is_not_a_readable_page(status):
+    # Only a 2xx is a page: a 3xx outside the manual redirect set must fail explicitly instead of
+    # travelling on as a "page" (R3-non-success-status).
+    respx.get(f"{PUBLIC}/odd").respond(
+        status, headers={"content-type": "text/html"}, content=b"<p>x</p>"
+    )
+
+    with pytest.raises(FetchFailure, match="HTTP"):
+        fetch_page(f"{PUBLIC}/odd")
+
+
+@respx.mock
+def test_fetch_refuses_an_empty_successful_response():
+    # 204 is a success with no body. Returning it as a page is exactly the silent empty result this
+    # reader exists to avoid (R3-non-success-status).
+    respx.get(f"{PUBLIC}/nothing").respond(204, headers={"content-type": "text/html"})
+
+    with pytest.raises(FetchFailure, match="empty"):
+        fetch_page(f"{PUBLIC}/nothing")
+
+
 @respx.mock
 def test_fetch_reports_a_timeout():
     respx.get(f"{PUBLIC}/slow").mock(side_effect=httpx.ConnectTimeout("too slow"))
