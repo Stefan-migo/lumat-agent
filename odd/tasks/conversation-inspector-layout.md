@@ -285,6 +285,13 @@ session in this repository. No report was filed and no retry loop was run.
 - The handoff lists `DS-TKN-2` as a blanket additive-only constraint. The canonical spec scopes it to
   `tokens.css`.
 
+## Delivery
+
+- Branch `odd/conversation-inspector-layout` pushed to `origin`.
+- Pull request **#350** against `main`, labelled `type:bug`, state `OPEN`, `MERGEABLE`.
+  <https://github.com/Stefan-migo/lumat-agent/pull/350>
+- Merge is a separate decision and was not taken by this unit.
+
 ## Recovery
 
 Resume with `mem_context`, then the project-scoped `mem_search` for `conversation-inspector-layout`,
