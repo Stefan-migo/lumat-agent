@@ -1,5 +1,5 @@
 import * as RadixTabs from "@radix-ui/react-tabs";
-import { useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import "./primitives.css";
 
 /** Tab definition for the Tabs primitive (catalog `tabs`, corporate). */
@@ -24,7 +24,6 @@ export interface TabsProps {
  *  click and keyboard activation, uncontrolled by default or controlled via `activeTab`. */
 export function Tabs({ tabs, activeTab, onTabChange, children, ariaLabel }: TabsProps) {
   const [internal, setInternal] = useState(tabs[0]?.id ?? "");
-  const triggerActivation = useRef(false);
   const isControlled = activeTab !== undefined;
   const active = isControlled ? activeTab : internal;
 
@@ -34,31 +33,10 @@ export function Tabs({ tabs, activeTab, onTabChange, children, ariaLabel }: Tabs
   };
 
   return (
-    <RadixTabs.Root
-      className="tabs"
-      value={active}
-      onValueChange={handleValueChange}
-    >
+    <RadixTabs.Root className="tabs" value={active} onValueChange={handleValueChange}>
       <RadixTabs.List aria-label={ariaLabel}>
         {tabs.map((tab) => (
-          <RadixTabs.Trigger
-            key={tab.id}
-            value={tab.id}
-            className="tabs__tab"
-            onMouseDown={(event) => {
-              triggerActivation.current = event.button === 0 && !event.ctrlKey;
-            }}
-            onKeyDown={(event) => {
-              triggerActivation.current = event.key === " " || event.key === "Enter";
-            }}
-            onClick={() => {
-              if (triggerActivation.current) {
-                triggerActivation.current = false;
-              } else {
-                handleValueChange(tab.id);
-              }
-            }}
-          >
+          <RadixTabs.Trigger key={tab.id} value={tab.id} className="tabs__tab">
             {tab.label}
           </RadixTabs.Trigger>
         ))}
