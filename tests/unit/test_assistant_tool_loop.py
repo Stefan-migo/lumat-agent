@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.chat.assistant.graph import _after_execute, _after_tool_loop, build_assistant_graph, run_assistant
-from app.chat.assistant.nodes import MAX_ASSISTANT_TOOL_STEPS, execute, tool_loop_head
+from app.chat.assistant.nodes import MAX_ASSISTANT_TOOL_STEPS, _context_text, execute, tool_loop_head
 
 
 def _tool_state(**overrides):
@@ -150,7 +150,7 @@ def test_step_two_write_plan_finishes_without_execution_or_approval():
         tool_steps=1,
         plan={
             "kind": "tool", "tool": "memory.write", "arguments": {},
-            "summary": "Write memory", "requires_approval": True, "follow_up": True,
+            "summary": "Write memory", "requires_approval": True, "follow_up": False,
         },
     )
 
@@ -159,6 +159,27 @@ def test_step_two_write_plan_finishes_without_execution_or_approval():
     assert result["status"] == "completed"
     assert result["approval"] is None
     assert result["guardrails"]["decision"] == "loop_write_refused"
+
+
+def test_single_tool_responder_receives_evidence_once_and_context_stays_clean(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda *args, **kwargs: {
+            "tool": "customers.search",
+            "status": "completed",
+            "result": [{"name": "Ana"}],
+        },
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: _streaming_client(calls))
+
+    first = execute(_tool_state())
+    execute({**_tool_state(), **first, "on_token": lambda _token: None})
+
+    prompt = calls[0]["messages"][-1]["content"]
+    assert prompt.count('[{"name": "Ana"}]') == 1
+    assert "Prior tool evidence" not in _context_text({**_tool_state(), **first})
 
 
 def test_tool_evidence_is_bounded_and_prompt_statement_is_truthful(monkeypatch):

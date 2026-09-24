@@ -265,10 +265,13 @@ def _context_text(state: AssistantState) -> str:
             "stored as thread memory. Pull it with memory.read with scope=own and no entity_id "
             "before claiming to remember earlier turns."
         )
-    prior_results = _render_tool_evidence(state)
-    if prior_results:
-        text.append(f"Prior tool evidence:\n{prior_results}")
     return "\n".join(text)
+
+
+def _planner_context_text(state: AssistantState) -> str:
+    context = _context_text(state)
+    prior_results = _render_tool_evidence(state)
+    return f"{context}\nPrior tool evidence:\n{prior_results}" if prior_results else context
 
 
 def _assistant_client():
@@ -459,7 +462,7 @@ def plan_llm(state: AssistantState) -> AssistantState:
     config = load_assistant_config()
     user_prompt = config.prompts["plan"]
     available_tools = _planner_tool_catalog(config.tools_whitelist)
-    for key, value in {"user_input": state["content"], "available_tools": available_tools, "context": _context_text(state)}.items():
+    for key, value in {"user_input": state["content"], "available_tools": available_tools, "context": _planner_context_text(state)}.items():
         user_prompt = user_prompt.replace("{{" + key + "}}", str(value))
     if state.get("cost_directive"):
         user_prompt += "\n\n" + state["cost_directive"]
@@ -604,30 +607,31 @@ def tool_loop_head(state: AssistantState) -> AssistantState:
         return {"cap_reached": True, "status": "completed"}
     if state.get("cost_mode", "normal") != "normal":
         return {"status": "completed"}
+    if plan.get("kind") == "tool" and plan.get("tool") and steps >= 1:
+        try:
+            read_only = get_tool(plan["tool"]).read_only
+        except (KeyError, ValueError):
+            return {
+                "guardrails": {
+                    **state.get("guardrails", {}),
+                    "decision": "loop_invalid_tool",
+                    "approval_required": False,
+                },
+                "status": "completed",
+            }
+        if not read_only:
+            return {
+                "approval": None,
+                "guardrails": {
+                    **state.get("guardrails", {}),
+                    "decision": "loop_write_refused",
+                    "approval_required": False,
+                },
+                "response": "Write tools cannot run after a read-only follow-up step.",
+                "status": "completed",
+            }
     if plan.get("kind") != "tool" or not plan.get("tool") or not plan.get("follow_up"):
         return {"status": "completed"}
-    try:
-        read_only = get_tool(plan["tool"]).read_only
-    except (KeyError, ValueError):
-        return {
-            "guardrails": {
-                **state.get("guardrails", {}),
-                "decision": "loop_invalid_tool",
-                "approval_required": False,
-            },
-            "status": "completed",
-        }
-    if steps >= 1 and not read_only:
-        return {
-            "approval": None,
-            "guardrails": {
-                **state.get("guardrails", {}),
-                "decision": "loop_write_refused",
-                "approval_required": False,
-            },
-            "response": "Write tools cannot run after a read-only follow-up step.",
-            "status": "completed",
-        }
     return {"status": "planned"}
 
 
