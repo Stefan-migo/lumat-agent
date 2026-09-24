@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -30,6 +32,17 @@ describe("KbList page", () => {
     expect(within(row).getByText(kbStatusLabel(first.active ? "activo" : "deshabilitado"))).toBeInTheDocument();
     expect(within(row).getByText("$0.000412")).toBeInTheDocument();
     expect(within(row).getByText("Cliente y Lumat")).toBeInTheDocument();
+  });
+
+  it("places the populated document table on the shared data surface", () => {
+    render(<KbListView />);
+    const table = screen.getByRole("table");
+    expect(table.closest(".data-region")).toBeInTheDocument();
+  });
+
+  it("does not keep KB-specific layout selectors for the shared upload structure", () => {
+    const stylesheet = readFileSync(resolve(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    expect(stylesheet).not.toMatch(/\.kb-upload__fields/);
   });
 
   it("renders an approved Spanish status label per document (triangulation across activo/deshabilitado)", () => {
