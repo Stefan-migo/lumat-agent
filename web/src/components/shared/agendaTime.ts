@@ -29,6 +29,59 @@ const localNoonForDay = (dayKey: string, timeZone: string) => {
   return new Date(probe.getTime() - (localAsUtc - probe.getTime()));
 };
 
+export type AgendaTimeErrorCode = 'nonexistent_local_time' | 'ambiguous_local_time';
+
+export class AgendaTimeError extends Error {
+  constructor(readonly code: AgendaTimeErrorCode, message: string) {
+    super(message);
+    this.name = 'AgendaTimeError';
+  }
+}
+
+const localParts = (instant: Date, timeZone: string) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(instant);
+  return Object.fromEntries(parts.filter(({ type }) => type !== 'literal').map(({ type, value }) => [type, value]));
+};
+
+const offsetAt = (instant: Date, timeZone: string) => {
+  const parts = localParts(instant, timeZone);
+  const localAsUtc = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute), Number(parts.second));
+  return localAsUtc - instant.getTime();
+};
+
+/** Converts operator-entered local time without allowing the runtime to normalize DST gaps/folds. */
+export function composeAgendaTime(localDate: string, localTime: string, timeZone: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(localDate) || !/^\d{2}:\d{2}(?::\d{2})?$/.test(localTime)) {
+    throw new RangeError('Invalid local date or time');
+  }
+  const [year, month, day] = localDate.split('-').map(Number);
+  const [hour, minute, second = 0] = localTime.split(':').map(Number);
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) {
+    throw new RangeError('Invalid local date or time');
+  }
+
+  const target = { year: String(year), month: String(month).padStart(2, '0'), day: String(day).padStart(2, '0'), hour: String(hour).padStart(2, '0'), minute: String(minute).padStart(2, '0'), second: String(second).padStart(2, '0') };
+  const wallUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+  const offsets = new Set<number>();
+  for (let hours = -48; hours <= 48; hours += 1) offsets.add(offsetAt(new Date(wallUtc + hours * 60 * 60 * 1000), timeZone));
+  const matches = [...offsets]
+    .map((offset) => new Date(wallUtc - offset))
+    .filter((instant) => JSON.stringify(localParts(instant, timeZone)) === JSON.stringify(target));
+
+  if (matches.length === 0) throw new AgendaTimeError('nonexistent_local_time', 'This local time does not exist because of a daylight-saving transition.');
+  if (matches.length > 1) throw new AgendaTimeError('ambiguous_local_time', 'This local time is ambiguous because daylight-saving time repeats it.');
+  return { local_date: localDate, local_time: `${target.hour}:${target.minute}:${target.second}`, timezone: timeZone };
+}
+
 const calendarFormat = (timeZone: string, options: Intl.DateTimeFormatOptions) =>
   new Intl.DateTimeFormat('es-CL', { ...options, timeZone });
 

@@ -9,6 +9,7 @@ import {
   agendaTodayKey,
   agendaWeekDays,
   agendaWeekdayLabels,
+  composeAgendaTime,
   formatAgendaSlot,
 } from './agendaTime';
 
@@ -75,5 +76,18 @@ describe('agenda time contract', () => {
     expect(agendaShiftPeriod('2025-12-31', 'week', 1, 'America/Santiago')).toBe('2026-01-05');
     expect(agendaShiftPeriod('2026-01-01', 'month', 0, 'America/Santiago')).toBe(agendaTodayKey('America/Santiago'));
     expect(agendaShiftPeriod('2026-01-01', 'week', 0, 'America/Santiago')).toBe(agendaTodayKey('America/Santiago'));
+  });
+
+  it('composes a valid local date and time into appointment payload parts', () => {
+    expect(composeAgendaTime('2026-09-05', '14:30', 'America/Santiago')).toEqual({
+      local_date: '2026-09-05',
+      local_time: '14:30:00',
+      timezone: 'America/Santiago',
+    });
+  });
+
+  it('reports nonexistent and ambiguous local times distinctly', () => {
+    expect(() => composeAgendaTime('2026-03-08', '02:30', 'America/New_York')).toThrow('does not exist');
+    expect(() => composeAgendaTime('2026-11-01', '01:30', 'America/New_York')).toThrow('ambiguous');
   });
 });
