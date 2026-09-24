@@ -203,7 +203,7 @@
   padding: var(--space-4);
   border: 1px solid var(--corp-border);
   border-radius: var(--radius-lg);
-  background: var(--surface-raised);
+  background: var(--brand-bg-elevated);
   box-shadow: var(--elevation-raised);
 }
 .card__title {
@@ -312,7 +312,7 @@
 .data-region {
   border: 1px solid var(--corp-border);
   border-radius: var(--radius-lg);
-  background: var(--surface-raised);
+  background: var(--brand-bg-elevated);
   box-shadow: var(--elevation-raised);
   overflow-x: auto;
 }

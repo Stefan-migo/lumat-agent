@@ -177,9 +177,8 @@ describe('design tokens — B9 foundation additions (DS-TKN-3..7)', () => {
     expect(cssVars.get('--radius-xl')).toBe('16px');
     expect(cssVars.get('--radius-pill')).toBe('9999px');
     expect(cssVars.get('--surface-subtle')).toBe('var(--table-head-bg)');
-    expect(cssVars.get('--surface-raised')).toBe('var(--surface)');
     expect(cssVars.get('--elevation-raised')).toBe('var(--shadow-1)');
-    expect(cssVars.get('--elevation-overlay')).toBe('var(--shadow-2)');
+    expect(cssVars.get('--elevation-overlay')).toBe('var(--shadow-3)');
     expect(cssVars.get('--icon-md')).toBe('20px');
     expect(cssVars.get('--font-ui')).toBe('Inter, var(--font-sans)');
 

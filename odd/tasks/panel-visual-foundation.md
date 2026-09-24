@@ -201,6 +201,14 @@ security class.
   doc, and their real consumer (the `Icon` primitive) belongs to slice 2. Remove
   their drift-guard assertions in lockstep and correct the icon-size line so it
   does not name tokens that do not exist yet.
+- [x] **T5c** — Correct two undeclared visual deltas found by the orchestrator's
+  own diff read (the independent verifier had passed them). (1) `.dialog` had
+  moved from `--shadow-3` to `--elevation-overlay`, defined as `var(--shadow-2)` —
+  a weaker elevation than the base; `--elevation-overlay` now resolves to
+  `var(--shadow-3)`. (2) `.card` and `.data-region` had moved from
+  `--brand-bg-elevated` (the brand tint) to `--surface-raised` (pure white) while
+  ~27 other surfaces in the same stylesheet keep the brand tint; both revert, and
+  `--surface-raised` is removed because it then has no consumer (D11).
 
 ### Slice 2 — icon system (PR 2)
 
@@ -279,6 +287,26 @@ D1–D12 and the constraints. Result: **FAIL**, one item.
 - **GREEN:** removed the three assertions and corrected the icon-size line;
   `npm run test` → 84 files / 708 tests passed; `npx tsc -b` → exit 0.
 
+### Second correction pass (T5c) — orchestrator diff review
+
+The independent verifier marked "token wiring only, no visual change" PASS. The
+orchestrator's own read of the `primitives.css` diff found two substitutions that
+did change the rendered result:
+
+- **Dialog elevation.** `.dialog` moved from `--shadow-3` to `--elevation-overlay`,
+  which was defined as `var(--shadow-2)` — a weaker shadow than the base.
+  `--elevation-overlay` now resolves to `var(--shadow-3)`.
+- **Card and data-region background.** Both moved from `--brand-bg-elevated` (the
+  translucent brand tint, `color-mix(--brand-bg 60%, --surface)`) to
+  `--surface-raised` (= `--surface` = `#fff`), while ~27 other surfaces in the same
+  stylesheet keep the brand tint — an inconsistency, not a declared change. Both
+  revert to `--brand-bg-elevated`, and `--surface-raised` is removed (no consumer,
+  D11).
+- **Evidence:** RED first (`npx vitest run src/tokens/tokens.test.ts` →
+  `1 failed | 18 passed`, `expected undefined to be 'var(--surface)'`), then GREEN:
+  `npm run test` → 84 files / 708 tests passed; `npx tsc -b` → exit 0;
+  `npm run build-storybook` → built.
+
 ## Size
 
 Actual authored changed lines (additions + deletions):
@@ -289,8 +317,11 @@ Actual authored changed lines (additions + deletions):
   (61 additions, 1 deletion); T4 tokens, mirror, tests, and Inter package.
 - `0b45b2a5` — `feat(primitives): apply visual foundation tokens` — **58 lines**
   (32 additions, 26 deletions); T5 primitive consumers.
-- **T5b correction commit** — removes the three unconsumed tokens, their
-  assertions, and the icon-size doc line (~10 lines across 3 files).
+- **T5b correction commit** (`cdac973f`) — removes the three unconsumed tokens,
+  their assertions, and the icon-size doc line (~10 lines across 3 files).
+- **T5c correction commit** — restores the dialog overlay elevation and the
+  card/data-region brand surface, and removes `--surface-raised` (~8 lines across
+  3 files).
 
 All commits remain below the 400-line review budget.
 
