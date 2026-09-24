@@ -12,6 +12,7 @@ import { ClientFicha } from '../pages/ClientFicha';
 import { ConversationsList } from '../pages/ConversationsList';
 import { ConversationThread } from '../pages/ConversationThread';
 import { KbList } from '../pages/KbList';
+import { KbDocumentDetail } from '../pages/KbDocumentDetail';
 import { Settings } from '../pages/Settings';
 import { NotificationCenter } from '../pages/NotificationCenter';
 import { PushSettings } from '../pages/PushSettings';
@@ -106,6 +107,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const sectionTabs = <AssistantTabs active={assistantView} onSelect={(target) => navigateToRoute({ view: target })} />;
   const clientId = route.clientId ?? null;
   const conversationId = route.conversationId ?? null;
+  const kbDocId = route.kbDocId ?? null;
 
   const page = view === 'dashboard' ? <Dashboard role={user.role} onNavigate={navigate} />
       : view === 'advanced-dashboard' ? <AdvancedDashboard />
@@ -116,7 +118,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
      : view === 'notifications' ? <NotificationCenter />
      : view === 'push' ? <PushSettings />
           : view === 'chat' ? <AgentChat sectionTabs={sectionTabs} onThreadOpened={(id) => navigateToRoute({ view: 'chat', threadId: id })} />
-       : view === 'kb' ? <KbList />
+       : view === 'kb' ? kbDocId !== null ? <KbDocumentDetail documentId={kbDocId} /> : <KbList onOpenDocument={(id) => navigateToRoute({ view: 'kb', kbDocId: id })} />
       : view === 'users' ? <UserManagement currentUser={user} />
          : view === 'projects' ? <ProjectsPage sectionTabs={sectionTabs} projectSlug={route.projectSlug} onOpenProject={(slug) => navigateToRoute({ view: 'projects', projectSlug: slug })} onOpenChat={(slug) => navigateToRoute({ view: 'chat', projectSlug: slug })} />
         : view === 'planning-sessions' ? <PlanningSessions sectionTabs={sectionTabs} sessionSlug={route.planningSessionSlug} onOpenSession={(slug) => navigateToRoute({ view: 'planning-sessions', planningSessionSlug: slug })} onOpenThread={(id) => { window.history.pushState({}, '', `${pathForView('chat')}?thread_id=${id}`); setRoute({ view: 'chat' }); }} />

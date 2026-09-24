@@ -292,6 +292,13 @@
 .table__link {
   color: var(--primary-700);
 }
+.disclosure__summary {
+  list-style: none;
+  cursor: pointer;
+}
+.disclosure__summary::-webkit-details-marker {
+  display: none;
+}
 /* The composed surface a data table sits on: border, radius and elevation only — no padding,
    so the rows per screen do not change and the table keeps its own cell rhythm. It wraps the
    table only, never an `.empty-state`, which is already a surface of its own (no card-on-card).
@@ -304,41 +311,41 @@
   overflow-x: auto;
 }
 
-/* ---- Client ficha: summary rail + main region (ODD clientes-product-register) ---- */
+/* ---- Shared detail region: summary rail + main region ---- */
 /* Two regions by owner decision. The rail sticks while the history scrolls, and collapses
    to a single column below the 1024px reference breakpoint. */
-.client-ficha {
+.detail-region {
   display: grid;
   grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr);
   gap: var(--space-4);
   align-items: start;
 }
-.client-ficha__rail {
+.detail-region__rail {
   display: grid;
   gap: var(--space-4);
   position: sticky;
   top: var(--space-4);
 }
-.client-ficha__main {
+.detail-region__main {
   display: grid;
   gap: var(--space-4);
   min-width: 0;
 }
-.client-ficha__facts {
+.detail-region__facts {
   display: grid;
   gap: var(--space-2);
   margin: 0;
 }
-.client-ficha__facts > div {
+.detail-region__facts > div {
   display: grid;
   gap: var(--space-1);
 }
-.client-ficha__facts dt {
+.detail-region__facts dt {
   color: var(--text-muted);
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
 }
-.client-ficha__facts dd {
+.detail-region__facts dd {
   margin: 0;
   color: var(--corp-text);
   font-size: var(--text-sm);
@@ -375,10 +382,10 @@
   justify-items: start;
 }
 @media (max-width: 63.99rem) {
-  .client-ficha {
+  .detail-region {
     grid-template-columns: minmax(0, 1fr);
   }
-  .client-ficha__rail {
+  .detail-region__rail {
     position: static;
   }
 }
@@ -1927,25 +1934,6 @@
   gap: var(--space-2);
   margin-top: var(--space-2);
 }
-.kb-actions__technical {
-  display: grid;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-}
-.kb-actions__technical p { margin: 0; }
-.kb-actions__technical-title {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-bold);
-}
-.kb-actions__technical-copy {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-}
-.kb-actions__technical-value { font-variant-numeric: tabular-nums; }
 .kb-actions__visibility { display: grid; gap: var(--space-2); }
 .kb-actions__visibility p { margin: 0; }
 .kb-actions__confirmation { display: flex; gap: var(--space-2); }

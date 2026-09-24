@@ -1,0 +1,176 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { AppShell } from "../domain/AppShell";
+import { parsePanelPath, pathForRoute } from "../domain/panelRoutes";
+import { KbDocumentDetail } from "./KbDocumentDetail";
+import type { KbDocument, User } from "../../types";
+
+const admin: User = { username: "ana", role: "admin" };
+const document = {
+  id: 1,
+  title: "Manual de atencion al cliente",
+  format: "pdf",
+  version: 3,
+  active_version: 2,
+  active: true,
+  visibility: "customer",
+  provider: "OpenRouter",
+  model: "deepseek-chat",
+  cost_meta: 0.000412,
+  created_at: "2026-07-10T14:02:00-04:00",
+  content: "Contenido del documento.",
+} satisfies KbDocument;
+
+beforeEach(() => {
+  window.history.replaceState({}, "", "/panel/app/kb/1");
+});
+
+afterEach(() => {
+  window.history.replaceState({}, "", "/panel/app/");
+  vi.restoreAllMocks();
+});
+
+describe("KB document detail route", () => {
+  it("builds and parses a KB document route", () => {
+    expect(pathForRoute({ view: "kb", kbDocId: document.id })).toBe(`/panel/app/kb/${document.id}`);
+    expect(parsePanelPath(`/panel/app/kb/${document.id}`)).toEqual({ view: "kb", kbDocId: document.id });
+  });
+
+  it("renders the detail for a document route with the shared back control", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const path = new URL(String(input), "http://localhost").pathname;
+      if (path === "/panel/api/notifications") return new Response(JSON.stringify({ notifications: [] }), { status: 200 });
+      if (path === `/panel/api/kb/${document.id}`) return new Response(JSON.stringify(document), { status: 200 });
+      return new Response(JSON.stringify({ docs: [] }), { status: 200 });
+    });
+
+    render(<AppShell user={admin} />);
+
+    expect(await screen.findByRole("heading", { name: document.title })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Volver a documentos" })).toBeInTheDocument();
+  });
+
+  it("renders labelled identity facts in a rail and operations in the main region", () => {
+    render(<KbDocumentDetail data={document} state="ready" />);
+
+    const surface = screen.getByRole("heading", { name: document.title }).closest("main") as HTMLElement;
+    const rail = surface.querySelector(".detail-region__rail") as HTMLElement;
+    expect(surface.querySelector(".detail-region")).toBeInTheDocument();
+    expect(surface.querySelector(".detail-region__rail")).toBeInTheDocument();
+    expect(surface.querySelector(".detail-region__main")).toBeInTheDocument();
+    expect(within(rail).getByText("Título")).toBeInTheDocument();
+    expect(within(rail).getByText(document.title)).toBeInTheDocument();
+    for (const label of ["Formato", "Versión activa", "Cantidad de versiones", "Estado", "Audiencia", "Proveedor", "Modelo", "Costo", "Creado"]) {
+      expect(within(rail).getByText(label)).toBeInTheDocument();
+    }
+    expect(within(rail).getByText(document.provider)).toBeInTheDocument();
+    expect(within(rail).getByText(document.model)).toBeInTheDocument();
+  });
+
+  it("keeps disable confirmation page-owned and names the document", async () => {
+    const user = userEvent.setup();
+    render(<KbDocumentDetail data={document} state="ready" />);
+
+    await user.click(screen.getByRole("button", { name: "Deshabilitar" }));
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Confirma la desactivación");
+    expect(alert).toHaveTextContent(document.title);
+    expect(alert).toHaveTextContent(/el agente dejará de responder/i);
+    expect(screen.getByRole("button", { name: "Confirmar" })).toBeInTheDocument();
+  });
+
+  it("keeps only the latest confirmation open when workflows overlap", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...document, active: true }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...document, active: false }), { status: 200 }));
+    render(<KbDocumentDetail data={document} state="ready" />);
+
+    await user.selectOptions(screen.getByLabelText("Restaurar"), "1");
+    await user.click(screen.getByRole("button", { name: "Restaurar" }));
+    await user.click(screen.getByRole("button", { name: "Deshabilitar" }));
+
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Confirmar" })).toHaveLength(1);
+    expect(screen.getByRole("alert")).toHaveTextContent("Confirma la desactivación");
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith(`/kb/${document.id}/disable`))).toBe(true);
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith(`/kb/${document.id}/restore`))).toBe(false);
+    fetchMock.mockRestore();
+  });
+
+  it("renders the detail fetch states", () => {
+    const { rerender } = render(<KbDocumentDetail documentId={document.id} data={null} state="loading" />);
+    expect(screen.getByRole("status")).toHaveTextContent("Cargando documento");
+    rerender(<KbDocumentDetail documentId={document.id} data={null} state="denied" />);
+    expect(screen.getByRole("alert")).toHaveTextContent("No tienes permiso para ver este documento");
+    rerender(<KbDocumentDetail documentId={document.id} data={null} state="error" />);
+    expect(screen.getByRole("alert")).toHaveTextContent("No pudimos cargar el documento");
+  });
+
+  it("edits content as a new version from the detail", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      if (init?.method === "POST") return new Response(JSON.stringify({ ok: true, doc: document }), { status: 200 });
+      return new Response(JSON.stringify({ ...document, content: "Contenido existente" }), { status: 200 });
+    });
+    render(<KbDocumentDetail data={document} state="ready" />);
+    await user.click(screen.getByText("Editar contenido"));
+    expect(await screen.findByDisplayValue("Contenido existente")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /guardar/i }));
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith(`/kb/${document.id}/edit`))).toBe(true);
+    fetchMock.mockRestore();
+  });
+
+  it("restores a selected version and changes audience from the detail", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ ...document, content: "Contenido" }), { status: 200 }));
+    render(<KbDocumentDetail data={document} state="ready" />);
+    await user.selectOptions(screen.getByLabelText("Restaurar"), "1");
+    await user.click(screen.getByRole("button", { name: "Restaurar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/reabrirá como Interno \(solo Lumat\)/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/dejará de usarlo para responder a clientes/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/marques como Cliente y Lumat/i);
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    await user.selectOptions(screen.getByLabelText("Audiencia"), "internal");
+    await user.click(screen.getByRole("button", { name: "Cambiar audiencia" }));
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes(`/kb/${document.id}/restore`))).toBe(true);
+    const visibilityCall = fetchMock.mock.calls.find(([input]) => String(input).includes(`/kb/${document.id}/visibility`));
+    expect(visibilityCall).toBeDefined();
+    expect(JSON.parse(visibilityCall?.[1]?.body as string)).toEqual({ visibility: "internal" });
+    fetchMock.mockRestore();
+  });
+
+  it.each([400, 422])("maps %i validation failures to safe actionable feedback", async (status) => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      if (init?.method === "POST") return new Response(JSON.stringify({ detail: "database secret" }), { status });
+      return new Response(JSON.stringify({ ...document, content: "Contenido existente" }), { status: 200 });
+    });
+    render(<KbDocumentDetail data={document} state="ready" />);
+    await user.click(screen.getByText("Editar contenido"));
+    await screen.findByDisplayValue("Contenido existente");
+    await user.click(screen.getByRole("button", { name: /guardar/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Revisa los campos e inténtalo nuevamente.");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("database secret");
+    fetchMock.mockRestore();
+  });
+
+  it("keeps mutation feedback safe and disables controls while saving", async () => {
+    const user = userEvent.setup();
+    let resolve!: (response: Response) => void;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise((next) => { resolve = next; }));
+    render(<KbDocumentDetail data={document} state="ready" />);
+    await user.click(screen.getByRole("button", { name: "Deshabilitar" }));
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+    expect(screen.getByRole("button", { name: "Deshabilitar" })).toBeDisabled();
+    resolve(new Response(JSON.stringify({ detail: "admin role required" }), { status: 403 }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permiso para modificar la base de conocimientos");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("admin role required");
+    fetchMock.mockRestore();
+  });
+});

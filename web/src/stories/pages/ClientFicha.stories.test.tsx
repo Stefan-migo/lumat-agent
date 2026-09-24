@@ -146,8 +146,8 @@ describe("ClientFicha state matrix stories", () => {
   it("composes the two regions and the shared data surfaces", () => {
     const { container } = render(<ClientFichaView />);
 
-    expect(container.querySelector(".client-ficha__rail")).not.toBeNull();
-    expect(container.querySelector(".client-ficha__main")).not.toBeNull();
+    expect(container.querySelector(".detail-region__rail")).not.toBeNull();
+    expect(container.querySelector(".detail-region__main")).not.toBeNull();
     expect(container.querySelectorAll(".data-region").length).toBeGreaterThan(0);
   });
 });

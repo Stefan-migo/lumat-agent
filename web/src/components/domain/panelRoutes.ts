@@ -6,6 +6,7 @@ export type PanelRoute = {
   clientId?: number;
   conversationId?: number;
   automationRuleId?: number;
+  kbDocId?: number;
   projectSlug?: string;
   threadId?: number;
   planningSessionSlug?: string;
@@ -54,6 +55,9 @@ export function pathForRoute(route: PanelRoute): string {
   }
   if (route.view === 'automation-rules' && route.automationRuleId !== undefined && Number.isSafeInteger(route.automationRuleId) && route.automationRuleId > 0) {
     return `${base}/${route.automationRuleId}`;
+  }
+  if (route.view === 'kb' && route.kbDocId !== undefined && Number.isSafeInteger(route.kbDocId) && route.kbDocId > 0) {
+    return `${base}/${route.kbDocId}`;
   }
   if (route.view === 'projects' && route.projectSlug) return `${base}/${encodeURIComponent(route.projectSlug)}`;
   if (route.view === 'planning-sessions' && route.planningSessionSlug) return `${base}/${encodeURIComponent(route.planningSessionSlug)}`;
@@ -107,7 +111,8 @@ export function parsePanelPath(pathname: string): PanelRoute {
   const id = positiveId(segments[3]);
   if (view === 'projects') return { view, projectSlug: segments[3] };
   if (view === 'planning-sessions') return { view, planningSessionSlug: segments[3] };
-  if (id === null || !['clients', 'conversations', 'automation-rules'].includes(view)) return fallback();
+  if (id === null || !['clients', 'conversations', 'automation-rules', 'kb'].includes(view)) return fallback();
   if (view === 'automation-rules') return { view, automationRuleId: id };
+  if (view === 'kb') return { view, kbDocId: id };
   return view === 'clients' ? { view, clientId: id } : { view, conversationId: id };
 }
