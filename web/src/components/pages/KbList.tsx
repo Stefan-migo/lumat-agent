@@ -76,7 +76,7 @@ function SearchPanel() {
     }
   };
 
-  return <Card title="Probar recuperación">
+  return <section aria-label="Herramienta de recuperación"><Card title="Probar recuperación">
     <div className="kb-search">
       <div className="kb-search__fields">
         <Input label="Consulta" placeholder="Escribe una consulta" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -91,7 +91,7 @@ function SearchPanel() {
       {searchState === "empty" ? <EmptyState title="No encontramos resultados" description="Prueba con otra consulta o baja la similitud mínima." /> : null}
       {searchState === "ready" ? <><p className="kb-search__summary">{results.length} resultados ordenados por similitud.</p><DataTable columns={searchColumns} rows={results} rowKey={(result) => `${result.document_id}-${result.version}-${result.chunk_index}`} /></> : null}
     </div>
-  </Card>;
+  </Card></section>;
 }
 
 export function KbList({ data: controlledData, state: controlledState, onRetry, onOpenDocument }: KbListProps = {}) {
@@ -118,8 +118,8 @@ export function KbList({ data: controlledData, state: controlledState, onRetry, 
   return <PageFrame title="Base de conocimientos" meta={data ? `${docs.length} documentos` : undefined} state={stateMessage(state, controlledState === "error")}>
     {feedback ? <StateMessage tone={feedback.tone} role="alert" title={feedback.title} /> : null}
     {showWorkspace ? <>
-       <Card title="Agregar documento"><div className="toolbar"><Input label="Título" placeholder="Título del documento" value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy !== null} /><Input label="Archivo (pdf / md / txt / csv)" type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} disabled={busy !== null} /><Select label="Audiencia" value={visibility} options={AUDIENCE_OPTIONS} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} /><p className="kb-search__hint">Un documento interno nunca se usa para responder a clientes.</p><Button disabled={busy !== null} onClick={() => file && mutate(() => uploadKbDocument(title, file, visibility))}>Agregar</Button></div></Card>
          {docs.length === 0 ? <EmptyState title="No hay documentos" description="Sube el primer documento para comenzar." /> : <div className="data-region"><DataTable columns={columns(onOpenDocument)} rows={docs} rowKey={(doc) => String(doc.id)} /></div>}
+       <section aria-labelledby="kb-upload-heading"><h2 id="kb-upload-heading">Agregar documento</h2><div><Input label="Título" placeholder="Título del documento" value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy !== null} /><Input label="Archivo (pdf / md / txt / csv)" type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} disabled={busy !== null} /><Select label="Audiencia" value={visibility} options={AUDIENCE_OPTIONS} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} /><p className="kb-search__hint">Un documento interno nunca se usa para responder a clientes.</p><Button disabled={busy !== null} onClick={() => file && mutate(() => uploadKbDocument(title, file, visibility))}>Agregar</Button></div></section>
        <SearchPanel />
       </> : null}
     {state === "error" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}

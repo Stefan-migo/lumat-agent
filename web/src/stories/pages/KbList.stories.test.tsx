@@ -12,10 +12,10 @@ describe("KbList page", () => {
   it("renders the Spanish page title and upload surface", () => {
     render(<KbListView />);
     expect(screen.getByRole("heading", { name: "Base de conocimientos" })).toBeInTheDocument();
-    const addCard = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
-    expect(within(addCard).getByLabelText(/título/i)).toBeInTheDocument();
-    expect(within(addCard).getByLabelText(/archivo/i)).toBeInTheDocument();
-    expect(within(addCard).getByRole("button", { name: "Agregar" })).toBeInTheDocument();
+    const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
+    expect(within(addRegion).getByLabelText(/título/i)).toBeInTheDocument();
+    expect(within(addRegion).getByLabelText(/archivo/i)).toBeInTheDocument();
+    expect(within(addRegion).getByRole("button", { name: "Agregar" })).toBeInTheDocument();
   });
 
   it("renders document rows with approved headers, statuses, audience and cost", () => {
@@ -43,6 +43,15 @@ describe("KbList page", () => {
   it("does not keep KB-specific layout selectors for the shared upload structure", () => {
     const stylesheet = readFileSync(resolve(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
     expect(stylesheet).not.toMatch(/\.kb-upload__fields/);
+  });
+
+  it("makes documents primary and keeps upload and retrieval as secondary regions", () => {
+    render(<KbListView />);
+    const table = screen.getByRole("table");
+    const uploadHeading = screen.getByRole("heading", { name: "Agregar documento" });
+    expect(table.compareDocumentPosition(uploadHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(uploadHeading.closest(".card")).toBeNull();
+    expect(screen.getByRole("region", { name: "Herramienta de recuperación" })).toBeInTheDocument();
   });
 
   it("renders an approved Spanish status label per document (triangulation across activo/deshabilitado)", () => {
@@ -79,9 +88,9 @@ describe("KbList page", () => {
 
   it("declares who reads a customer document on every remaining audience surface", () => {
     render(<KbList data={{ docs }} />);
-    const addCard = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
-    expect(within(addCard).getByRole("option", { name: "Cliente y Lumat" })).toBeInTheDocument();
-    expect(within(addCard).getByRole("option", { name: "Interno (solo Lumat)" })).toBeInTheDocument();
+    const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
+    expect(within(addRegion).getByRole("option", { name: "Cliente y Lumat" })).toBeInTheDocument();
+    expect(within(addRegion).getByRole("option", { name: "Interno (solo Lumat)" })).toBeInTheDocument();
   });
 
   it("keeps provider/model advanced keys out of ordinary table rows", () => {
@@ -199,12 +208,12 @@ describe("KbList API page", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
     render(<KbList />);
     await screen.findByText(docs[0].title);
-    const addCard = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
-    expect(within(addCard).getByLabelText("Audiencia")).toHaveValue("internal");
-    await user.selectOptions(within(addCard).getByLabelText("Audiencia"), "customer");
-    await user.type(within(addCard).getByLabelText("Título"), "Guide");
-    await user.upload(within(addCard).getByLabelText(/archivo/i), new File(["# Content"], "guide.md", { type: "text/markdown" }));
-    await user.click(within(addCard).getByRole("button", { name: "Agregar" }));
+    const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
+    expect(within(addRegion).getByLabelText("Audiencia")).toHaveValue("internal");
+    await user.selectOptions(within(addRegion).getByLabelText("Audiencia"), "customer");
+    await user.type(within(addRegion).getByLabelText("Título"), "Guide");
+    await user.upload(within(addRegion).getByLabelText(/archivo/i), new File(["# Content"], "guide.md", { type: "text/markdown" }));
+    await user.click(within(addRegion).getByRole("button", { name: "Agregar" }));
     const request = fetchMock.mock.calls[1][1] as RequestInit;
     expect(request.method).toBe("POST");
     expect(request.body).toBeInstanceOf(FormData);
