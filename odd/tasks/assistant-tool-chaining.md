@@ -387,16 +387,17 @@ main ──●────────────●─────────
 | 1 | #1 → `main` | T1, T2, T3 | The loop exists and is safe: baseline measurement, planner opt-in, accumulating state, bounded back-edge, cap, write refusal, per-iteration cost gate | ready |
 | 2 | #2 → `main` after #1 | T4, T6, T7, T8, T9 | The loop is observable and proven: user-visible write refusal, persisted `cap_reached`/`tool_steps`, end-to-end chained turn, chaining-cost delta | not started |
 
-**Slice 1 review budget** (additions + deletions, unit record excluded):
+**Slice 1 review budget** (additions + deletions, unit record excluded), measured with
+`git diff --numstat e16b3ff8..HEAD -- . ':(exclude)odd/tasks/'`:
 
-| Area | Lines |
-|---|---|
-| `app/chat/assistant/nodes.py` | 80 |
-| `tests/unit/test_assistant_tool_loop.py` | 154 |
-| `app/chat/assistant/graph.py` | 23 |
-| `agent/prompts/assistant_plan.md` | 8 |
-| `app/chat/assistant/state.py` | 4 |
-| **Total** | **~269** entering T3, **381** with T3 included |
+| File | +/- | Lines |
+|---|---|---|
+| `app/chat/assistant/nodes.py` | +109 / −16 | 125 |
+| `tests/unit/test_assistant_tool_loop.py` | +200 / −21 | 221 |
+| `app/chat/assistant/graph.py` | +20 / −3 | 23 |
+| `agent/prompts/assistant_plan.md` | +7 / −1 | 8 |
+| `app/chat/assistant/state.py` | +4 / −0 | 4 |
+| **Total** | | **381** |
 
 **Out of scope for both slices**: U2, U3, deep research, any new tool, tool-catalog cost hygiene, lazy
 tool loading.
