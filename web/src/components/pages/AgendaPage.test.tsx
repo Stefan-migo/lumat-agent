@@ -267,4 +267,9 @@ describe('AgendaPage', () => {
     expect(css).not.toMatch(/\.agenda-calendar__weekday\s*\{[^}]*text-transform:\s*uppercase/s);
     expect(css).toMatch(/\.agenda-calendar\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
   });
+
+  it('keeps the agenda desktop track minimum in text-zoom-immune pixels', () => {
+    const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+    expect(css).toMatch(/@media\s*\(min-width:\s*64rem\)[\s\S]*?\.agenda-page__layout\s*\{[^}]*grid-template-columns:\s*minmax\(320px,\s*1fr\)\s+minmax\(0,\s*1\.35fr\)/s);
+  });
 });
