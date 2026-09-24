@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { docs } from "./_shared/mockData/kb";
 import { kbStatusLabel } from "./_shared/toneMaps";
@@ -43,6 +43,11 @@ describe("KbList page", () => {
   it("does not keep KB-specific layout selectors for the shared upload structure", () => {
     const stylesheet = readFileSync(resolve(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
     expect(stylesheet).not.toMatch(/\.kb-upload__fields/);
+  });
+
+  it("does not expose a workflow state prop that production does not provide", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/components/pages/KbList.tsx"), "utf8");
+    expect(source).not.toMatch(/state\?: KbListState/);
   });
 
   it("makes documents primary and keeps upload and retrieval as secondary regions", () => {
@@ -99,11 +104,9 @@ describe("KbList page", () => {
     expect(within(row).queryByText(`${docs[0].provider} / ${docs[0].model}`)).toBeNull();
   });
 
-  it("renders processing and error state banners", () => {
-    const { rerender } = render(<KbListView state="processing" />);
-    expect(screen.getByRole("status")).toHaveTextContent("Procesando documento");
-    rerender(<KbListView state="error" />);
-    expect(screen.getByRole("alert")).toHaveTextContent("No pudimos procesar el documento");
+  it("renders the fetch error state from the page data source", async () => {
+    render(<KbListView state="error" />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos cargar la base de conocimientos");
   });
 });
 
@@ -222,6 +225,39 @@ describe("KbList API page", () => {
     expect((request.body as FormData).get("visibility")).toBe("customer");
     expect((request.headers as Record<string, string> | undefined)?.["Content-Type"]).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
+    fetchMock.mockRestore();
+  });
+
+  it("shows the supported formats and size limit before upload", async () => {
+    const user = userEvent.setup();
+    render(<KbList data={{ docs }} />);
+    const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
+    const fileInput = within(addRegion).getByLabelText(/archivo/i);
+    expect(fileInput).toHaveAttribute("accept", ".pdf,.md,.txt,.csv");
+    expect(within(addRegion).getByText(/máximo 5 mb/i)).toBeInTheDocument();
+    await user.type(within(addRegion).getByLabelText("Título"), "Guide");
+    fireEvent.change(fileInput, { target: { files: [new File(["content"], "guide.exe", { type: "application/octet-stream" })] } });
+    await user.click(within(addRegion).getByRole("button", { name: "Agregar" }));
+    expect(await within(addRegion).findByRole("alert")).toHaveTextContent("Formato no compatible");
+  });
+
+  it("keeps processing feedback at the upload locus and offers upload retry after failure", async () => {
+    const user = userEvent.setup();
+    let resolveUpload!: (response: Response) => void;
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Response(JSON.stringify({ detail: "upload failed" }), { status: 500 }));
+    render(<KbList data={{ docs }} />);
+    const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
+    await user.type(within(addRegion).getByLabelText("Título"), "Guide");
+    await user.upload(within(addRegion).getByLabelText(/archivo/i), new File(["content"], "guide.md", { type: "text/markdown" }));
+    await user.click(within(addRegion).getByRole("button", { name: "Agregar" }));
+    expect(await within(addRegion).findByRole("alert")).toHaveTextContent("No pudimos procesar el documento");
+    expect(within(addRegion).getByRole("button", { name: "Reintentar carga" })).toBeInTheDocument();
+
+    fetchMock.mockReturnValueOnce(new Promise((resolve) => { resolveUpload = resolve; }));
+    await user.click(within(addRegion).getByRole("button", { name: "Reintentar carga" }));
+    expect(within(addRegion).getByRole("status")).toHaveTextContent("Procesando documento");
+    resolveUpload(new Response(JSON.stringify({ ok: true, doc: docs[0] }), { status: 200 }));
     fetchMock.mockRestore();
   });
 });

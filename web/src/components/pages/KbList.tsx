@@ -14,8 +14,10 @@ import { StateMessage } from "../shared/StateMessage";
 import { KB_OPERATION_TONES, kbStatusLabel, kbStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 
-export type KbListState = AsyncDataState | "processing";
-export interface KbListProps { data?: DocsResponse | null; state?: KbListState; onRetry?: () => void; onOpenDocument?: (id: number) => void; }
+export interface KbListProps { data?: DocsResponse | null; onRetry?: () => void; onOpenDocument?: (id: number) => void; fetchDocuments?: () => Promise<DocsResponse>; }
+
+const ACCEPTED_EXTENSIONS = [".pdf", ".md", ".txt", ".csv"];
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 // `customer` means the customer channel may ground on the document AND Lumat may still read it —
 // never client-only. The label says who reads it, symmetrically with `internal`.
@@ -50,11 +52,10 @@ const searchColumns: Column<KbSearchResult>[] = [
   { key: "content", header: "Contenido", render: (result) => <span className="kb-search__result-content">{result.content}</span> },
 ];
 
-function stateMessage(state: KbListState, storyError: boolean) {
+function stateMessage(state: AsyncDataState) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando base de conocimientos" />;
   if (state === "denied") return <StateMessage tone="danger" role="alert" title="No tienes permiso para ver este panel" />;
-  if (state === "error") return <StateMessage tone={KB_OPERATION_TONES.error} role="alert" title={storyError ? "No pudimos procesar el documento" : "No pudimos cargar la base de conocimientos"} />;
-  if (state === "processing") return <StateMessage tone={KB_OPERATION_TONES.procesando} role="status" spinner title="Procesando documento" detail="Revisando el formato, tamaño y contenido. Verifica el estado en unos momentos." />;
+  if (state === "error") return <StateMessage tone={KB_OPERATION_TONES.error} role="alert" title="No pudimos cargar la base de conocimientos" />;
   return null;
 }
 
@@ -94,32 +95,50 @@ function SearchPanel() {
   </Card></section>;
 }
 
-export function KbList({ data: controlledData, state: controlledState, onRetry, onOpenDocument }: KbListProps = {}) {
-  const fetchDocs = useCallback(() => refreshKbDocuments(), []);
+export function KbList({ data: controlledData, onRetry, onOpenDocument, fetchDocuments }: KbListProps = {}) {
+  const fetchDocs = useCallback(() => (fetchDocuments ?? refreshKbDocuments)(), [fetchDocuments]);
   const fetched = useAsyncData(fetchDocs, controlledData === undefined);
   const [refreshed, setRefreshed] = useState<DocsResponse | null>(null);
   const [busy, setBusy] = useState<"upload" | null>(null);
-  const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; title: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; title: string; retry?: boolean } | null>(null);
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [visibility, setVisibility] = useState<KbVisibility>("internal");
+  const [uploadDraft, setUploadDraft] = useState<{ title: string; file: File; visibility: KbVisibility } | null>(null);
   const data = refreshed ?? controlledData ?? fetched.data;
-  const state = controlledState ?? (controlledData !== undefined ? "ready" : fetched.state);
+  const state: AsyncDataState = controlledData !== undefined ? (controlledData ? "ready" : "empty") : fetched.state;
   const docs = data?.docs ?? [];
   const refresh = async () => setRefreshed(await refreshKbDocuments());
   const mutate = async (commit: () => Promise<unknown>) => {
     setBusy("upload"); setFeedback(null);
-    try { await commit(); await refresh(); setFeedback({ tone: "success", title: "Cambios guardados" }); }
-     catch (error) { setFeedback({ tone: "danger", title: error instanceof ApiError && error.status === 403 ? "No tienes permiso para modificar la base de conocimientos." : "No pudimos guardar los cambios. Inténtalo nuevamente." }); }
+    try { await commit(); await refresh(); setFeedback({ tone: "success", title: "Documento agregado" }); }
+     catch (error) { setFeedback({ tone: "danger", retry: true, title: error instanceof ApiError && error.status === 403 ? "No tienes permiso para modificar la base de conocimientos." : "No pudimos procesar el documento" }); }
     finally { setBusy(null); }
   };
   const retry = onRetry ?? fetched.retry;
-  const showWorkspace = state !== "processing" && state !== "error" && state !== "denied" && state !== "loading" && data;
-  return <PageFrame title="Base de conocimientos" meta={data ? `${docs.length} documentos` : undefined} state={stateMessage(state, controlledState === "error")}>
-    {feedback ? <StateMessage tone={feedback.tone} role="alert" title={feedback.title} /> : null}
+  const showWorkspace = (state === "ready" || state === "empty") && data;
+  const submitUpload = () => {
+    if (!file) return;
+    const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+    if (!ACCEPTED_EXTENSIONS.includes(extension)) {
+      setFeedback({ tone: "danger", title: "Formato no compatible. Usa PDF, Markdown, TXT o CSV." });
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setFeedback({ tone: "danger", title: "El archivo supera el tamaño máximo de 5 MB." });
+      return;
+    }
+    const draft = { title, file, visibility };
+    setUploadDraft(draft);
+    void mutate(() => uploadKbDocument(draft.title, draft.file, draft.visibility));
+  };
+  const retryUpload = () => {
+    if (uploadDraft) void mutate(() => uploadKbDocument(uploadDraft.title, uploadDraft.file, uploadDraft.visibility));
+  };
+  return <PageFrame title="Base de conocimientos" meta={data ? `${docs.length} documentos` : undefined} state={stateMessage(state)}>
     {showWorkspace ? <>
          {docs.length === 0 ? <EmptyState title="No hay documentos" description="Sube el primer documento para comenzar." /> : <div className="data-region"><DataTable columns={columns(onOpenDocument)} rows={docs} rowKey={(doc) => String(doc.id)} /></div>}
-       <section aria-labelledby="kb-upload-heading"><h2 id="kb-upload-heading">Agregar documento</h2><div><Input label="Título" placeholder="Título del documento" value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy !== null} /><Input label="Archivo (pdf / md / txt / csv)" type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} disabled={busy !== null} /><Select label="Audiencia" value={visibility} options={AUDIENCE_OPTIONS} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} /><p className="kb-search__hint">Un documento interno nunca se usa para responder a clientes.</p><Button disabled={busy !== null} onClick={() => file && mutate(() => uploadKbDocument(title, file, visibility))}>Agregar</Button></div></section>
+       <section aria-labelledby="kb-upload-heading"><h2 id="kb-upload-heading">Agregar documento</h2><div>{busy ? <StateMessage tone={KB_OPERATION_TONES.procesando} role="status" spinner title="Procesando documento" detail="Revisando el formato, tamaño y contenido." /> : null}{feedback ? <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.title} /> : null}<Input label="Título" placeholder="Título del documento" value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy !== null} /><Input label="Archivo (PDF / MD / TXT / CSV)" type="file" accept={ACCEPTED_EXTENSIONS.join(",")} onChange={(event) => setFile(event.target.files?.[0] ?? null)} disabled={busy !== null} /><p className="kb-search__hint">Formatos admitidos: PDF, Markdown, TXT y CSV. Máximo 5 MB.</p><Select label="Audiencia" value={visibility} options={AUDIENCE_OPTIONS} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} /><p className="kb-search__hint">Un documento interno nunca se usa para responder a clientes.</p><Button disabled={busy !== null} onClick={submitUpload}>Agregar</Button>{feedback?.retry ? <Button variant="secondary" disabled={busy !== null} onClick={retryUpload}>Reintentar carga</Button> : null}</div></section>
        <SearchPanel />
       </> : null}
     {state === "error" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}
