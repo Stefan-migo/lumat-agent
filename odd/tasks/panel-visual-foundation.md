@@ -70,15 +70,15 @@ exports, `DS-SHELL-4` no new primitive, `DS-STORY-6` glob).
 
 **In:** `web/DESIGN_SYSTEM.md`; `web/src/tokens/tokens.css` with its `tokens.ts`
 mirror and `tokens.test.ts` drift guard; the existing primitives that consume the
-new tokens; `web/package.json` (+ lockfile) for one icon family and the Radix
+new tokens; the UI web font (`Inter`) with its loader and any token role it needs;
+`web/package.json` (+ lockfile) for the font, one icon family, and the Radix
 packages the migration needs; `web/src/components/primitives/**` (a new `Icon`
 primitive and the migrated composites with their tests and stories); the OpenSpec
 delta for any `DS-*` requirement the amendment changes.
 
-**Out:** any backend or panel API change; any section page surface (Agenda is in
-flight on `odd/agenda-calendar-view`, KB on `odd/kb-document-surface`); the values
-of pre-existing tokens (additive only); dark mode; a font dependency unless decided
-separately; a wholesale split of `primitives.css`; and any weakening of the
+**Out:** any backend or panel API change; any section page surface (Agenda merged
+2026-09-24 as PR #335, KB as PR #334); the values of pre-existing tokens (additive
+only); dark mode; a wholesale split of `primitives.css`; and any weakening of the
 security class.
 
 ## Authorized scope
@@ -117,8 +117,8 @@ security class.
   get the language (typography, radii, neutrality, flat depth, quiet hover)
   without extra vertical air. Density comes from hierarchy, not padding.
 - **Gradients stay closed.** ChatGPT is gradient-free, so the gradient non-goal is
-  not lifted. `clamp()` only in the display type scale, and only if that decision
-  is confirmed.
+  not lifted. `clamp()` is allowed in the display type scale only (`--text-xl`,
+  `--text-2xl`, `--text-3xl`); body sizes stay static rem.
 - UI copy stays neutral Chilean Spanish; artifacts in English; conventional
   commits with no AI attribution.
 - Work-unit commits on this branch are authorized; push and PR require explicit
@@ -169,14 +169,17 @@ security class.
   existing Lumat names; only genuinely new tokens are proposed.
 - **D11 — Every new token needs a named real consumer.** Per implementation rule 5,
   no token is added speculatively. The default is reuse.
+- **D12 — T1 resolutions (2026-09-24).** **Font: Inter**, added as the UI font — the
+  font non-goal is explicitly amended because the reference is font-led and no other
+  change closes that gap. **Icons: Lucide.** **Radix scope: Dialog, Popover, Tabs,
+  Tooltip, Select.** **`clamp()`: display scale only.**
 
 ## Tasks
 
 ### Slice 1 — contract amendment + token foundation (PR 1)
 
-- [ ] **T1** — Resolve the four open direction items and record them in the
-  amendment: font (`system-ui` vs revisit the non-goal), icon family
-  (Lucide/Phosphor), Radix scope, and `clamp()`.
+- [x] **T1** — Resolved 2026-09-24: font **Inter**, icons **Lucide**, Radix **the
+  five composites**, `clamp()` **display-only** (recorded as D12).
 - [ ] **T2** — Amend `web/DESIGN_SYSTEM.md`: add the rule-class separation; record
   the direction (ChatGPT, option B), the forest guard and the density line; relax
   card-on-card; record the icon and interaction-policy amendments. The Agenda scope
@@ -239,12 +242,10 @@ further if it exceeds it.
 
 ## Open items
 
-- [ ] **Font** — keep `system-ui`, or revisit the font non-goal as its own explicit
-  decision? The reference is font-led; this is the most likely reason the look
-  still feels "off" after radii and rhythm land.
-- [ ] **Icon family** — Lucide (default) vs Phosphor?
-- [ ] **Radix scope** — confirm `Dialog`/`Popover`/`Tabs`/`Tooltip`/`Select`.
-- [ ] **`clamp()`** — allowed in the display type scale only?
+- [x] **Font** → resolved 2026-09-24: **Inter** (amends the font non-goal).
+- [x] **Icon family** → resolved 2026-09-24: **Lucide**.
+- [x] **Radix scope** → resolved 2026-09-24: **the five composites**.
+- [x] **`clamp()`** → resolved 2026-09-24: **display scale only**.
 - [ ] **OpenSpec delta** — does the interaction-policy line need a `DS-*` delta, or
   is the `DESIGN_SYSTEM.md` amendment sufficient?
 - [ ] **Dark mode** — remains deferred; not part of this unit.
