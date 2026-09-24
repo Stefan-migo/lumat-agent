@@ -22,6 +22,7 @@ import {
   streamChatEvents,
   uploadAssistantAttachment,
 } from "../../api";
+import { Check, Copy, Paperclip, RotateCcw, Send } from "lucide-react";
 import type {
   AssistantApproval,
   AssistantAttachment,
@@ -48,72 +49,7 @@ import { Textarea } from "../primitives/Textarea";
 import { PageFrame } from "../shared/PageFrame";
 import { Markdown } from "../shared/Markdown";
 import { StateMessage } from "../shared/StateMessage";
-
-/**
- * Inline SVG icons. The project ships no icon dependency on purpose, so these
- * follow the same convention as `PanelShell`/`Dashboard`: a tiny local helper
- * over a stroked 24x24 viewBox, `currentColor`, and `aria-hidden` (the
- * accessible name always lives on the button, never on the glyph).
- */
-const icon = (children: ReactNode, size: number) => (
-  <svg
-    viewBox="0 0 24 24"
-    width={size}
-    height={size}
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={2}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    {children}
-  </svg>
-);
-
-function CopyIcon({ size = 16 }: { size?: number }) {
-  return icon(
-    <>
-      <rect x="9" y="9" width="13" height="13" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </>,
-    size,
-  );
-}
-
-function RetryIcon({ size = 16 }: { size?: number }) {
-  return icon(
-    <>
-      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-      <path d="M3 3v5h5" />
-    </>,
-    size,
-  );
-}
-
-function CheckIcon({ size = 16 }: { size?: number }) {
-  return icon(<path d="M20 6 9 17l-5-5" />, size);
-}
-
-function PaperclipIcon({ size = 20 }: { size?: number }) {
-  return icon(
-    <path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l8.57-8.57a4 4 0 1 1 5.66 5.66l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />,
-    size,
-  );
-}
-
-function SendIcon({ size = 18 }: { size?: number }) {
-  // Points right on purpose: a 45° paper plane carries its visual mass at the
-  // top-right tip and reads as off-centre inside a circle even when the
-  // geometry is centred. A horizontally symmetric glyph centres cleanly.
-  return icon(
-    <>
-      <path d="M3.5 3.5 21 12 3.5 20.5l3.2-8.5z" />
-      <path d="M6.7 12H21" />
-    </>,
-    size,
-  );
-}
+import { Icon } from "../primitives/Icon";
 
 export const COMMAND_CENTER_BREAKPOINTS = {
   compactMax: 640,
@@ -1025,7 +961,7 @@ export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatPr
                         }
                         onClick={() => copyMessage(message)}
                       >
-                        {copiedId === message.id ? <CheckIcon /> : <CopyIcon />}
+                        {copiedId === message.id ? <Icon icon={Check} size="sm" /> : <Icon icon={Copy} size="sm" />}
                       </button>
                       {copiedId === message.id ? (
                         <span className="assistant-chat__copy-done" role="status">
@@ -1040,7 +976,7 @@ export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatPr
                           title="Reintentar mensaje"
                           onClick={() => void send(message.content, true)}
                         >
-                          <RetryIcon />
+                          <Icon icon={RotateCcw} size="sm" />
                         </button>
                       ) : null}
                     </div>
@@ -1121,7 +1057,7 @@ export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatPr
               />
               <div className="assistant-chat__composer-controls">
                 <label className="assistant-chat__attach" title="Adjuntar archivo">
-                  <PaperclipIcon />
+                  <Icon icon={Paperclip} size="md" />
                   <input
                     aria-label="Adjuntar archivo"
                     type="file"
@@ -1138,7 +1074,7 @@ export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatPr
                   onClick={() => void send()}
                   disabled={!thread || processing || !content.trim()}
                 >
-                  <SendIcon />
+                  <Icon icon={Send} size="md" />
                 </button>
               </div>
             </div>
