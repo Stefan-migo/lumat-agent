@@ -3,7 +3,8 @@
 **Branch**: `odd/assistant-web-fetch`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-web-fetch`
 **Base**: `4b31796c` (= `main` at branch time)
-**Status**: slices 1 and 2 complete (T1–T3, 69 tests green); T4–T8 next
+**Status**: slice 1 shipped as PR #348 (approved, burned); slice 2 complete and ahead of it locally
+(T1–T3, 74 tests green); T4–T8 next
 **Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/session.md`
 (decisions 4 and 6, risk row *local extractor reintroduces an SSRF surface*); Engram #4890, #4894, #4897.
 
@@ -226,6 +227,19 @@ order; the next slice's PR opens after the previous one merges. The slices are l
 module, so the strict order costs nothing. Recorded here before the first commit, as the budget rule
 requires.
 
+## Review outcome — slice 1 (native RDD)
+
+- **`approved`**, authority burned (`review-696c33c4ce8b4c9e`). 3 changed paths, risk **medium**, one
+  lens (`review-reliability`). PR at `https://github.com/Stefan-migo/lumat-agent/pull/348`.
+- **One advisory, non-blocking — `R3-malformed-url`** (`fetch.py:45`, WARNING, informational):
+  `urlsplit` raises `ValueError` on a malformed bracketed host, and that escaped `resolve_target`
+  instead of becoming a `FetchFailure`, so "every refusal is a FetchFailure" was not literally total.
+  Verified independently before fixing: **five** malformed shapes reproduce it (`[::1/`, `[::1]x/`,
+  `]foo/`, `[not]/`, `[v6.]/`).
+- **Closed in slice 2** rather than by editing the reviewed candidate — a RED test over the five
+  shapes, then the parser call wrapped (`a9aa36c9`). Same pattern U1 used: ship the reviewed slice,
+  carry its advisory forward as tracked work.
+
 ## Graph nodes consulted (Graph Check, Step 1)
 
 - `graphify query "assistant web fetch URL retrieval and tool registry"` → `assistant/tools/registry.py`,
@@ -254,13 +268,18 @@ requires.
 - 2026-09-24 — **T2 + T3 done**, slice 2: bounded fetch, revalidated redirects, byte/timeout/content
   bounds, local extraction and the evidence bound. 69 passed in the new file; 153 passed across the
   assistant, config, registry, planner and harness files. Committed as **one** work unit — neither half
-  is reachable alone (the fetch has no caller until `read_page`), so the commit's concern is "the reader
+  is reachable alone (the fetch has no caller until `read_page`), so the commit's concern   is "the reader
   returns bounded citable evidence", not two separate changes. Recorded because it deviates from the
   task-by-task commit granularity used so far.
+- 2026-09-24 — **Slice 1 reviewed and shipped.** Native review `approved`, authority burned; one
+  advisory (`R3-malformed-url`). Full suite on the stack head: **1427 passed, 2 warnings, 183.93s**
+  (1358 base + 69 new). Branch pushed at the slice-1 commit and PR #348 opened.
+- 2026-09-24 — **`R3-malformed-url` closed** (`a9aa36c9`): RED over the five malformed shapes, then the
+  parser wrapped. 74 passed. The fix rides in slice 2 so the reviewed slice-1 candidate stays frozen.
 
 ## Next step
 
-Slice 1 is deliverable now: push `odd/assistant-web-fetch` at its T1 commit and open PR #1 against
-`main` — pending the owner's push/PR authorization. Slice 2 is committed locally and follows after #1
-merges (stacked-to-main). Then T4–T8: registry, whitelist 22 → 23, persona/prompt, spec, harness,
-regression and the payload measurement.
+Slice 1 is shipped as PR #348 and awaiting its merge. Slice 2 is committed locally on the same branch
+and is pushed once #1 lands (stacked-to-main) — with slice 1 already in `main`, the #2 diff is only its
+own delta. Then T4–T8: registry, whitelist 22 → 23, persona/prompt, spec, harness, regression and the
+payload measurement.
