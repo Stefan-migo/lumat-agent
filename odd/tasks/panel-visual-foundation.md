@@ -615,15 +615,24 @@ Pull request **#336** — merged as `e16b3ff8`.
 owner chose to split it at the ~400-line review budget (612 authored lines was the
 inflated count; under this repository's own rule the real review sizes are 160 and 372).
 
-| | Branch | Worktree | PR | Review size |
-|---|---|---|---|---|
-| **2a — icon foundation** | `odd/panel-visual-foundation` | none (plain branch, tip `a2e3ab1e`) | **#337** → `main` | 160 |
-| **2b — 30-glyph migration** | `odd/panel-visual-foundation-icons` | `../lumat-agent-odd-panel-visual-foundation-icons` | after 2a merges | 372 |
+| | Branch | Worktree | PR | Review size | Status |
+|---|---|---|---|---|---|
+| **2a — icon foundation** | `odd/panel-visual-foundation` | none (plain branch, tip `a2e3ab1e`) | **#337** → `main` | 160 | **MERGED** as `b5bb040f`; branch deleted local + remote |
+| **2b — 30-glyph migration** | `odd/panel-visual-foundation-icons` | `../lumat-agent-odd-panel-visual-foundation-icons` | not open yet | 372 | local only, pre-rebase |
 
-**Next action for 2b:** once #337 merges, rebase this branch onto the new `main`
-(`git rebase --onto main a2e3ab1e odd/panel-visual-foundation-icons`) and open the PR.
-The rebase drops 2a's commits, which are already in `main` by then — that is the point of
-the stacked split, not a conflict to resolve.
+**Handoff for 2b:** Engram `odd/panel-visual-foundation/handoff-slice-2b`.
+
+**Next action for 2b:** `git fetch origin && git rebase origin/main` in the 2b worktree,
+then run the checks, then open the PR. `a2e3ab1e` is an ancestor of `origin/main` after the
+2a merge, so the fetch-and-rebase replays only 2b's own commits. The rebase **drops 2a's
+commits** because they are already in `main` — that is the point of the stacked split, not
+a conflict to resolve.
+
+**Known record consequence of that rebase:** every 2b commit hash cited in this document
+(`36794db0`, `34ead677`, `b57d21b6`, `fb96f8e1`, `60f9871b`, `1b9c61d4`, `198a222a`,
+`9cb349e7`) is a **pre-rebase** hash and will no longer resolve afterwards. The commit
+**messages** are the stable identifiers; re-record the new hashes when the rebase runs.
+2a's hashes stay valid — they are in `main` through the merge.
 
 - Session record: `.rapsodia-code/sessions/archived/2026-09-24-panel-aesthetic-direction/`
   — `report.md` carries slice 1's full evidence and the rule classification.
