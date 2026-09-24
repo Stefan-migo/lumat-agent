@@ -164,9 +164,9 @@ block directly after the Table block. Every value resolves through an existing t
   contents and re-running, then restore byte-identical. Do **not** add a rule for `DataTable.tsx`.
 - [x] **T5 — verification.** `npm run test`, `npx tsc -b`, `npm run build-storybook`; record the
   real counts.
-- [ ] **T6 — visual check** by the owner at 1366×768 with the 640/1024/1280 references. This change
+- [x] **T6 — visual check** by the owner at 1366×768 with the 640/1024/1280 references. This change
   must be **pixel-identical** to the base: it moves declarations, it does not alter them.
-- [ ] **T7 — record.**
+- [x] **T7 — record.**
 
 ## Checks
 
@@ -236,6 +236,33 @@ Guards that must stay green: `tokens.test.ts`, `style-boundary.test.ts`,
   The single-run green reported by the implementing writer was observed; it is not reproducible while
   the host is saturated. A fully green full-suite run was therefore **not** obtained by the
   orchestrator. `npx tsc -b` exit 0 is confirmed.
+- 2026-09-24 — **T6 passed.** The owner ran the manual visual check against the checklist in
+  Storybook served from this worktree and reports everything looks right, reading as pixel-identical
+  to the base. See `## Visual check results`. The orchestrator did not and could not perform this
+  check — it is the owner's evidence, recorded as such.
+- 2026-09-24 — PR #346 opened against `main` with the `type:refactor` label and merged.
+
+## Visual check results
+
+### `inline-style-boundary` (2026-09-24, Storybook :6006, PR #346)
+
+The owner ran the manual visual check and reports **PASSED** — everything looks right, and the change
+reads as pixel-identical to the base, which is the acceptance criterion for a pure move. Storybook
+was served from this worktree at `http://localhost:6006` (verified via the server process `cwd`), so
+the check could not have been reading another worktree's output.
+
+Checked: `pages/caseslist--default` (action cell — stacked `Select`s bottom-aligned, button row gap,
+customer link colour), `pages/caseslist--stale` (the stale note spacing and colour), the stale sweep
+on `pages/clienteslist--stale` and `pages/dashboard--stale`, `pages/clientmemories--default` (upsert
+section spacing), and the surrounding pages `pages/clientficha--default` and `pages/agendapage--data`.
+
+**Known coverage gap, pre-existing and not created by this unit.** Two of the ten migrated sites —
+`.client-memories__relation` and `.client-memories__relation-actions` — live in the pending-relations
+section of `ClientMemories`, which renders only when `pendingRelations` is non-empty, and **no story
+supplies it**. Those two were equally invisible on the base, so no before/after comparison exists for
+them. Their evidence is the component test (class applied, no inline style), the verified
+declaration-by-declaration equivalence of the six CSS rules, and the class-to-rule cross-check.
+Adding a story fixture with `pendingRelations` is a recorded follow-up, not done here.
 
 ## Open items
 
