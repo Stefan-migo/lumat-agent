@@ -121,7 +121,7 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
   keeps availability blocks and create/edit/rebook out. Add scenarios for day selection and for the
   calendar's own state contract. Update `web/DESIGN_SYSTEM.md` (line 316 + an Agenda
   page-architecture paragraph for the calendar).
-- [ ] **T2 — RED/GREEN: date helpers.** Extend `agendaTime.test.ts` with month/week helpers
+- [x] **T2 — RED/GREEN: date helpers.** Extend `agendaTime.test.ts` with month/week helpers
   (day-key list for a month, day-key list for a week with Monday-first weeks, month label, weekday
   labels, day-number, and navigation across month/year boundaries), watch it fail, then implement
   them in `agendaTime.ts`.
@@ -180,6 +180,9 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
       `AG-UI-2` extended with the shared calendar/register state contract; `AG-UI-4` extended with
       the calendar story coverage; the spec `Purpose` updated. `web/DESIGN_SYSTEM.md` Agenda section
       rewritten and the month-grid prohibition removed. No component code touched yet.
+- [x] **T2** — `agendaTime.ts` now provides timezone-aware month/week labels, day lists, period
+      navigation, and day formatting. RED: focused Vitest reported 10 failures with missing exported
+      helper functions. GREEN: commit `b0f69ec6`; focused Vitest passed **12 tests**.
 
 ## Recovery
 
