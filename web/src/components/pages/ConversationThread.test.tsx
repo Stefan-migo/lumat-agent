@@ -145,7 +145,7 @@ describe('conversation inspector layout CSS contract', () => {
   const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
 
   it('gives the inspector column a bounded responsive width', () => {
-    expect(css).toMatch(/\.conversation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)\s+minmax\(18rem, 24rem\);/);
+    expect(css).toMatch(/\.conversation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(24rem, 1fr\)\s+minmax\(18rem, 24rem\);/);
   });
 
   it('allows inspector detail rows to wrap', () => {
