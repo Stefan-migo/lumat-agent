@@ -4,7 +4,7 @@
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-tool-chaining-slice2`
 (the slice 1 worktree was removed after its merge)
 **Base**: `e16b3ff8` (slice 1) · `6b3214bd` (= `main` after PR #339, slice 2)
-**Status**: slice 1 merged · slice 2 in progress (T4–T6 done, T7–T9 outstanding)
+**Status**: slice 1 merged · slice 2 in progress (T4–T8 done, T9 outstanding)
 **Origin**: `.rapsodia-code/sessions/ready-for-odd/2026-09-24-panel-agency-and-web-grounding/`
 (Engram `handoff/panel-agency-to-u1-tool-chaining`)
 
@@ -228,10 +228,27 @@ Observable behavior this unit must produce. Implementation shape is the implemen
   planner's decision is now read first, and `cap_reached` is recorded only when the **budget**, not the
   planner, ended the turn. The earlier pass on this task noticed the symptom and worked around it by
   monkeypatching `MAX_ASSISTANT_TOOL_STEPS` to 3; that workaround is gone and the test uses the real cap.
-- [ ] **T7 — Harness end-to-end.** An integration turn that chains `web.search → kb.retrieve` and answers
-  from combined evidence, plus a turn that stops at the cap with the truncation recorded.
-- [ ] **T8 — After measurement.** Re-run T1's measurement against the new code and report the delta,
-  including the extra planner call per tool turn.
+- [x] **T7 — Harness end-to-end.** Done in `3094c46a`, as a **test-only** task. Two integration tests in
+  `tests/integration/test_assistant_chat.py` drive the real panel harness with a scripted planner:
+  `test_a_chained_read_only_turn_responder_receives_combined_tool_evidence` and
+  `test_a_capped_read_only_turn_responder_receives_combined_tool_evidence`. Both plan
+  `assistant.capabilities` (`follow_up` true) → `dashboard.summary` and assert the responder's prompt — the
+  input its answer is built from — carries **both** results' payloads, then that the turn finishes with the
+  responder's answer. The markers are exact, not incidental: `"tool_count"` is unique to
+  `assistant.capabilities` and `"contacts"` to `dashboard.summary`, so neither result can satisfy the other's
+  assertion. *(Deviation from this record's wording, stated so it is visible: the task text proposed
+  `web.search → kb.retrieve`; those need a live search adapter and KB data, whereas these two read-only tools
+  are deterministic against the test DB. The contract — two chained read-only tools, answer from combined
+  evidence — is met; the tool choice is not the point.)* **RED was proved by breaking the real tree both
+  ways**: keeping only the newest result in `_render_tool_evidence` fails the `"tool_count"` assertion,
+  keeping only the oldest fails the `"contacts"` assertion, and returning no evidence fails the first. A
+  first-pass GREEN would have proved nothing — the behavior already existed; the two-sided break is what
+  makes the tests meaningful. The source was restored byte-identical (`git diff app/chat/assistant/nodes.py`
+  empty). GREEN: 54 passed in `test_assistant_chat.py`, 24 passed in `test_assistant_tool_loop.py`.
+- [x] **T8 — After measurement.** Done. Re-ran T1's instrument (mocked `_assistant_client` and the tool
+  execution boundary, `session=None`, no network, no database) against the current code. See
+  *After measurement (T8)* below. The instrument is a throwaway script, not committed; T8 adds **zero**
+  authored lines to the change.
 - [x] **T9 — Suite and spec check (slice 1).** Full suite green on retry: **1342 passed, 2 warnings in
   178.17s**; the first run stalled in the documented pre-existing way (see *Known environmental failure*).
   Every pre-existing assistant assertion still holds; the `tool_result` and `<tool_evidence>` contracts
@@ -346,6 +363,44 @@ Two defects found by the parent's readback of the first T2 attempt, both fixed b
    to forbid. The guard now evaluates the plan independently of `follow_up` and always refuses with a
    visible `loop_write_refused` decision.
 
+## After measurement (T8)
+
+Re-measured with the same instrument shape as T1 — a throwaway script that patches `_assistant_client` and
+the tool execution boundary and runs the real graph with `session=None`, so it makes **no network call and
+touches no database** — against the current code at `3094c46a`. Three scenarios, each a fresh run:
+
+| Scenario | Planner calls | Tools | Responder calls | Planner prompt chars | Responder prompt chars | Total chars | Est. tokens |
+|---|---|---|---|---|---|---|---|
+| A — non-chaining single tool | 1 | 1 | 1 | 12,513 | 2,497 | **15,010** | 3,752 |
+| B — chaining two read-only tools | 2 | 2 | 1 | 12,513; 12,561 | 2,524 | **27,598** | 6,900 |
+| C — capped turn | 2 | 2 | 1 | 12,513; 12,561 | 2,524 | **27,598** | 6,900 |
+
+**Delta of a chained turn (B vs A): +1 planner call, +12,588 prompt chars ≈ +3,147 estimated tokens, plus
+one provider round-trip.** The extra planner call carries the full catalog **plus** a `Prior tool evidence:`
+block (`second_planner_has_prior_evidence: true`), which is why the second planner prompt is 12,561 chars —
+48 more than the first. The responder prompt grows by only 27 chars here because the mocked payloads are
+tiny; on real payloads the combined evidence is bounded by `_TOOL_EVIDENCE_LIMIT = 4,000`, so the growth is
+real but bounded.
+
+**Checks against the record:**
+
+- **The non-chaining turn reproduces the post-T2 ledger exactly**: planner 12,513, responder 2,497, total
+  15,010. Scenario A matches byte-for-byte, so T2–T6 changed nothing about a normal tool turn's shape. This
+  is the acceptance criterion D4 exists to protect, now **measured**, not asserted.
+- **The predicted delta was ~12,150 chars ≈ 3,037 tok.** Measured: **+12,588 chars ≈ +3,147 tok**. The
+  prediction was the catalog cost alone; the measured extra also carries the prior-evidence block and the
+  small responder growth, so the prediction was low by ~438 chars. This paragraph is the correction.
+- **A capped turn and a natural two-step chain cost the same** (both 2 planner + 2 tool + 1 responder): with
+  `MAX_ASSISTANT_TOOL_STEPS = 2`, a three-plan chain is cut at the second tool, so the cap does not buy a
+  third call — it bounds the worst case at exactly the two-step price.
+
+**Honest gaps, unchanged from T1:**
+
+- **Wall latency is NOT measured.** It needs a live provider call through the dev panel. Recorded explicitly
+  as **not run — requires the live dev panel**, never inferred from the mocked run.
+- Token figures are `chars / 4` estimates, not provider-reported usage. `session=None` no-ops
+  `_record_usage`, so real usage needs the DB-backed path.
+
 ## Progress
 
 - 2026-09-24 — Handoff read; repo state verified against `main` (`uv.lock` drift only; RDD `off` for this
@@ -401,6 +456,12 @@ Two defects found by the parent's readback of the first T2 attempt, both fixed b
   implemented-but-unproven, and the missing proof exposed the newest-evidence truncation.
 - 2026-09-24 — **T6 done** (`3c602761`). Persisted `tool_steps`/`cap_reached` and fixed the cap semantics
   that made the persisted value a lie.
+- 2026-09-24 — **T7 done** (`3094c46a`). Two harness tests prove a chained and a capped turn answer from the
+  combined evidence of both executed tools, end to end through the real HTTP harness. RED proved by breaking
+  `_render_tool_evidence` in both directions on the real tree; source restored byte-identical.
+- 2026-09-24 — **T8 done.** Re-measured the non-chaining and the chaining turn with T1's instrument. The
+  non-chaining turn is unchanged (15,010 chars); a chained turn costs **+12,588 chars ≈ +3,147 tok and one
+  round-trip**. Live wall latency recorded as **not run** (needs the dev panel).
 - 2026-09-24 — **Unrelated worktrees cleaned (owner-approved)**: `lumat-agent-odd-assistant-web-context`
   (branch proved 100% contained in `main` with `git merge-base --is-ancestor`, no stashes, only the
   `uv.lock` drift) removed with its branch, container and network; the orphan container
@@ -475,7 +536,7 @@ main ──●──────────────●───────
 | Slice | PR | Tasks | Content | Status |
 |---|---|---|---|---|
 | 1 | #339 → `main` (`6b3214bd`) | T1, T2, T3 | The loop exists and is safe: baseline measurement, planner opt-in, accumulating state, bounded back-edge, cap, write refusal, per-iteration cost gate | **merged** — CI green, RDD `approved` |
-| 2 | #2 → `main` after #1 | T4, T6, T7, T8, T9 | The loop is observable and proven: user-visible write refusal, persisted `cap_reached`/`tool_steps`, end-to-end chained turn, chaining-cost delta | **in progress** |
+| 2 | #2 → `main` after #1 | T4, T5, T6, T7, T8, T9 | The loop is observable and proven: user-visible write refusal, newest-evidence truncation declared to the planner, persisted `cap_reached`/`tool_steps`, end-to-end chained turn answering from combined evidence, chaining-cost delta | **ready for review** |
 
 **Slice 2 carries one inherited defect: R3-001.** The slice 1 review found that the looped-write refusal
 is enforced but invisible: `tool_loop_head` sets a canned `response` and routes with `status: completed`
@@ -501,22 +562,22 @@ tool loading.
 | `app/chat/assistant/state.py` | +4 / −0 | 4 |
 | **Total** | | **381** |
 
-**Slice 2 review budget, measured at `3c602761`** (T4–T6 done, T7–T9 outstanding), with
+**Slice 2 review budget, measured at `3094c46a`** (T4–T8 done, T9 outstanding), with
 `git diff --numstat 6b3214bd..HEAD -- . ':(exclude)odd/tasks/'`:
 
 | File | +/- | Lines |
 |---|---|---|
 | `tests/unit/test_assistant_tool_loop.py` | +194 / −9 | 203 |
-| `tests/integration/test_assistant_chat.py` | +46 / −2 | 48 |
+| `tests/integration/test_assistant_chat.py` | +88 / −2 | 90 |
 | `app/chat/assistant/nodes.py` | +28 / −26 | 54 |
 | `app/services/agent_chat.py` | +2 / −0 | 2 |
 | `app/chat/assistant/graph.py` | +1 / −1 | 2 |
-| **Total** | | **309** |
+| **Total** | | **351** |
 
-309 of the ~400-line budget with T7 (harness end-to-end) and T8 (measurement) still to come, so slice 2
-stays a **single PR**; there is no measured reason to split it, and the owner confirmed that plan. The unit
-record itself is 157 further lines and is excluded by the repository's rule (commit `69f84db4`) — it is the
-ledger, not the change.
+351 of the ~400-line budget. T8 adds no authored lines (its instrument is a throwaway script, not committed)
+and T9 adds none, so slice 2 stays a **single PR**; there is no measured reason to split it, and the owner
+confirmed that plan. The unit record itself is further lines and is excluded by the repository's rule
+(commit `69f84db4`) — it is the ledger, not the change.
 
 ## Slice 2 discovery — D2 and D3 were never enforced on the real graph
 
@@ -559,18 +620,14 @@ not silently ignored.
 
 ## Next step
 
-**T7 — harness end-to-end.** An integration turn that chains two tools and answers from the combined
-evidence, plus a turn that stops at the cap with the truncation recorded. T6's integration tests already
-cover the persisted `tool_steps`/`cap_reached` half of that; T7's own half — the **answer** being built
-from the combined evidence, end to end — is not yet proved at the harness level.
+**T9 — full suite green + native RDD review + PR #2.** Run the full suite (`uv run pytest tests/`),
+re-running on the documented intermittent stall rather than diagnosing it; push the branch (nothing of slice
+2 exists on the remote yet — that is the first durability step); run the native RDD review on the frozen
+candidate; then open PR #2 against `main` as a **single PR** (351 authored lines, under the 400 budget).
 
-Then **T8** (re-run T1's measurement against the new code and report the delta, including the extra planner
-call on a turn that actually chains; live wall latency still needs the dev panel or must be recorded as an
-explicit unrun row), then **T9** (full suite green + native RDD review + PR #2).
-
-There is no rebase to do: `main` is at `f0330667` and `6b3214bd` is its ancestor. The branch is **not
-pushed** — nothing about slice 2 exists on the remote, so pushing it is the first durability step whenever
-that is wanted.
+There is no rebase to do: `main` is at `f0330667` and `6b3214bd` is its ancestor. Any edit to this record
+after the review starts would invalidate the frozen candidate, so the record is complete before the review
+opens.
 
 **Slice 2 limits, recorded before the work starts.** Slice 2 makes the existing loop visible, enforced and
 proven. It does **not** raise `MAX_ASSISTANT_TOOL_STEPS`, does not change which tools are read-only, does
