@@ -617,6 +617,10 @@ def guardrails(state: AssistantState) -> AssistantState:
     return {"guardrails": decisions, "status": "executing"}
 
 
+def _omission_marker(omitted: int) -> str:
+    return f"[{omitted} earlier tool result(s) omitted]\n"
+
+
 def _render_tool_evidence(state: AssistantState) -> str:
     results = state.get("tool_results") or ([state["tool_result"]] if state.get("tool_result") else [])
     rendered_results = []
@@ -626,21 +630,28 @@ def _render_tool_evidence(state: AssistantState) -> str:
             rendered_results.append(json.dumps(payload, ensure_ascii=False))
     if not rendered_results:
         return ""
+    # Newest first, and the omission marker is budgeted *with* the results. The newest result
+    # is what the planner decides from, so it must never be the part a final cut removes --
+    # prepending the marker after budgeting is exactly how it used to disappear.
+    newest_first = list(reversed(rendered_results))
     kept: list[str] = []
     used = 0
-    for item in reversed(rendered_results):
-        if kept and used + len(item) + 1 > _TOOL_EVIDENCE_LIMIT:
+    for index, item in enumerate(newest_first):
+        older = len(newest_first) - index - 1
+        reserve = len(_omission_marker(older)) if older else 0
+        if kept and used + len(item) + 1 + reserve > _TOOL_EVIDENCE_LIMIT:
             break
         kept.append(item)
         used += len(item) + 1
-    rendered = "\n".join(reversed(kept))
+    omitted = len(newest_first) - len(kept)
+    body = "\n".join(reversed(kept))
     # Dropping older results must not be silent: the planner decides "I have enough" from this
     # rendering, so it has to know when evidence was left out of it.
-    if len(kept) < len(rendered_results):
-        rendered = f"[{len(rendered_results) - len(kept)} earlier tool result(s) omitted]\n{rendered}"
-    if len(rendered) <= _TOOL_EVIDENCE_LIMIT:
-        return rendered
-    return rendered[:_TOOL_EVIDENCE_LIMIT - 1] + "…"
+    prefix = _omission_marker(omitted) if omitted else ""
+    if len(prefix) + len(body) <= _TOOL_EVIDENCE_LIMIT:
+        return prefix + body
+    # A single result larger than the whole budget: truncate it, never the marker.
+    return prefix + body[: _TOOL_EVIDENCE_LIMIT - len(prefix) - 1] + "…"
 
 
 def tool_loop_head(state: AssistantState) -> AssistantState:

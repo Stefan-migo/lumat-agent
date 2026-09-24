@@ -164,6 +164,36 @@ def test_replan_keeps_newest_tool_evidence_within_budget(monkeypatch):
     assert len(evidence) <= _TOOL_EVIDENCE_LIMIT
 
 
+def test_replan_marker_never_cuts_the_newest_result(monkeypatch):
+    calls = []
+    marker = "NEWEST_RESULT_MARKER"
+    plans = ['{"kind":"respond","tool":null,"arguments":{},"summary":"Done","requires_approval":false}']
+
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    # The middle result fills the budget almost exactly and the oldest is dropped, so the
+    # omission marker gets prepended. Budgeting it outside the limit made the final cut
+    # remove the newest result instead of older evidence.
+    plan_llm(
+        {
+            "content": "Find Ana",
+            "context": {"items": [], "meta": {}},
+            "tool_results": [
+                {"result": [{"evidence": "kb.retrieve", "pad": "o" * 10_000}]},
+                {"result": [{"evidence": "customers.search", "pad": "m" * 3_870}]},
+                {"result": [{"evidence": "memory.search", "tail": marker}]},
+            ],
+        }
+    )
+
+    evidence = calls[-1]["messages"][-1]["content"].split("Prior tool evidence:\n", 1)[1]
+    assert marker in evidence
+    assert "earlier tool result(s) omitted" in evidence
+    assert len(evidence) <= _TOOL_EVIDENCE_LIMIT
+
+
 def test_cap_refuses_a_third_execution(monkeypatch):
     calls = []
     handler_calls = []
