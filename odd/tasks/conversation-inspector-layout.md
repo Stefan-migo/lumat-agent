@@ -19,7 +19,7 @@ Owner's report:
 Diagnosed and measured with Playwright (headless chromium) against Storybook, and re-verified
 against the code in this worktree. Three root causes, in cause order:
 
-- **RC1 — the column is a fixed 144px.** `web/src/components/primitives/primitives.css:1912`:
+- **RC1 — the column is a fixed 144px.** `web/src/components/primitives/primitives.css:1911`:
   `.conversation-workspace { grid-template-columns: minmax(0, 1fr) calc(var(--space-8) * 4.5); }`.
   `--space-8` is `32px` (`web/src/tokens/tokens.css:82`), so the inspector track is exactly **144px**,
   which leaves 112px of content after the 16px padding each side (`primitives.css:1697`).
@@ -27,7 +27,7 @@ against the code in this worktree. Three root causes, in cause order:
   is `display: flex; justify-content: space-between` with no `flex-wrap`, and
   `.ai-agent-grammar__detail dd` has no `overflow-wrap`. `dt` + `dd` therefore always demand their
   min-content width and can never adapt.
-- **RC3 — why it scrolls instead of reflowing.** `primitives.css:1915`:
+- **RC3 — why it scrolls instead of reflowing.** `primitives.css:1914`:
   `.conversation-workspace .ai-agent-grammar__inspector { min-width: 0; overflow-y: auto; }`. With
   `min-width: 0` the grid never widens, and because `overflow-y: auto` computes `overflow-x: auto`,
   the inspector **clips its own content and grows an internal horizontal scrollbar** (measured
@@ -44,9 +44,9 @@ that is not what the cascade does:
 
 - `< 40rem` → `primitives.css:1942` sets `.conversation-workspace { display: block; ... }` → the
   inspector stacks at full width.
-- `40rem–63.99rem` → `primitives.css:1926` sets `grid-template-columns: minmax(0, 1fr)` → single
+- `40rem–63.99rem` → `primitives.css:1925` sets `grid-template-columns: minmax(0, 1fr)` → single
   column, inspector stacked.
-- `≥ 64rem` → `primitives.css:1912` → the two-column grid, and this is the only place the 144px
+- `≥ 64rem` → `primitives.css:1911` → the two-column grid, and this is the only place the 144px
   defect exists.
 
 So the fix needs no new responsive tier: the collapse already exists below 1024px.
@@ -60,7 +60,8 @@ shipped; the sibling unit has since added an interactive story that supplies `cu
 
 - Worktree: `/home/stefan/repos/lumat-agent-odd-conversation-inspector-layout`
 - Branch: `odd/conversation-inspector-layout`
-- Base: `b75a1c1d` (`odd/conversation-thread-actions` tip; sibling PR #347 is open into `main`)
+- Base: `794aae7a` (`main`, after PR #347 merged). This unit was branched from the sibling tip
+  `b75a1c1d`, which is now part of `main`; it was rebased onto `794aae7a` before any source change.
 - Files:
   - `odd/tasks/conversation-inspector-layout.md`
   - `web/src/components/primitives/primitives.css`
@@ -88,22 +89,23 @@ Any file outside this list needs a scope update here first.
   reading is over-broad and would make the RC1 fix impossible.
 - `DS-GRAMMAR-2` / `DS-UI-PRIMS`: styles live in the tokenized stylesheet, resolve through `var(--*)`,
   inject no `<style>`, contain no hard-coded colour.
-- Raw `rem` literals are the established convention in `primitives.css` (`:1912` height `30rem/46rem`,
-  `:1924` `11rem`, `:1960` `20rem`). The new width uses `rem` literals; no new token is added.
+- Raw `rem` literals are the established convention in `primitives.css` (`:1911` height `30rem/46rem`,
+  `:1923` `11rem`, `:1960` `20rem`). The new width uses `rem` literals; no new token is added.
 - **Language:** code, identifiers, comments, tests and this record are English. Operator-facing copy
   stays neutral Chilean Spanish.
 - Conventional commits, **no AI attribution and no `Co-Authored-By`**.
 - Work-unit commits are authorized. **Push and PR are separate decisions.**
-- Delivery: `stacked-to-main`. This unit is its own PR; it targets `main` after PR #347 merges, and
-  rebases onto the merge first. If #347 is still open when this unit is ready, the PR targets
-  `odd/conversation-thread-actions` so the review diff stays honest.
+- Delivery: `stacked-to-main`. PR #347 merged into `main` while this unit was being set up, so this
+  unit is its own PR targeting `main` directly, rebased onto `794aae7a`. The provisional
+  `feature-branch-chain` fallback (PR targeting `odd/conversation-thread-actions`) is no longer needed.
 
 ## Decisions
 
-- **D1 — Build on the sibling unit, do not duplicate it.** The base is `b75a1c1d`, not `main`. The
-  sibling moved the actions into the header and deleted the inspector's `Acciones` section; this unit
-  fixes the column those remaining sections live in. Branching from `main` would collide textually in
-  `primitives.css` and would make the pre-fix surface impossible to measure.
+- **D1 — Build on the sibling unit, do not duplicate it.** This unit was branched from the sibling's
+  tip `b75a1c1d` rather than from `main`, then rebased onto `main` once PR #347 merged. The sibling
+  moved the actions into the header and deleted the inspector's `Acciones` section; this unit fixes
+  the column those remaining sections live in. Branching from `main` at the time would have collided
+  textually in `primitives.css` and would have made the pre-fix surface impossible to measure.
 - **D2 — The width is `minmax(18rem, 24rem)`, owner's decision.** 18rem (288px) covers the 285px the
   realistic content needs today; 24rem (384px) gives the `captured_data` JSON room when the container
   has it; wrapping (D3) handles the 647px worst case.
@@ -124,7 +126,7 @@ Any file outside this list needs a scope update here first.
   The surface-specific fixture therefore lives in `ConversationThread.stories.tsx`, extending the
   existing `interactiveConversation` with a long `captured_data` value. That keeps the inspector
   measurable without mutating a contract that belongs to another surface.
-- **D6 — No new responsive tier.** Below 64rem the workspace already stacks (`:1942`, `:1926`).
+- **D6 — No new responsive tier.** Below 64rem the workspace already stacks (`:1942`, `:1925`).
   Touching that would be scope the defect does not require.
 
 ## Route per task
@@ -173,8 +175,14 @@ Any file outside this list needs a scope update here first.
 - [x] Base pinned to `b75a1c1d`; `graphify-out/` copied in and `.graphify_root` pointed at this worktree.
 - [x] Graph Check run: hub community `ConversationsList.tsx` (holds `ConversationThread.tsx` and its
   test) and `PNL-APP-12 Conditional Conversation and Dense-Page Surfaces` ("Optional Inspector
-  Region"). The graph was built from `4b31796c`, three commits behind this base; refresh runs at
-  session close.
+  Region"). The graph was built from `4b31796c`; `main` has since advanced to `794aae7a`, so the graph
+  is two merges behind. Refresh runs at session close.
+- [x] Sibling PR #347 merged into `main` (`794aae7a`) while this unit was being set up; this branch was
+  rebased onto it before any source change. No source change had been made yet, so the rebase was
+  clean.
+- [x] Re-verified on `794aae7a` that all three target declarations survive untouched: `.conversation-workspace`'s
+  `calc(var(--space-8) * 4.5)` track, `.ai-agent-grammar__detail`/`dd` with no wrapping, and
+  `.conversation-workspace .ai-agent-grammar__inspector { min-width: 0; overflow-y: auto; }`.
 
 ## Verification evidence
 
@@ -186,11 +194,12 @@ Pending.
 
 ## Corrections to the handoff (verified this session)
 
-- The handoff's `STATE` section says the sibling is "NOT pushed and has NO PR". It is now pushed at
-  `b75a1c1d` with **PR #347 open** into `main` (+281/−12, mergeable).
+- The handoff's `STATE` section says the sibling is "NOT pushed and has NO PR". It was pushed, and
+  **PR #347 merged into `main` as `794aae7a`** while this unit was being set up; the branch advanced
+  from `341ad43a` to `407cf4f9` in that window. This unit was rebased onto that merge.
 - The handoff claims the sibling change makes the 144px column matter at narrow widths. Measured
   against the cascade, the two-column defect exists **only at ≥64rem**; below that the workspace is
-  `display: block` (`:1942`) or a one-column grid (`:1926`).
+  `display: block` (`:1942`) or a one-column grid (`:1925`).
 - The handoff places `.graphify_root` at the repo root. It actually lives at
   `graphify-out/.graphify_root`, and `--update` rewrites it with the root it was given.
 - The handoff lists `DS-TKN-2` as a blanket additive-only constraint. The canonical spec scopes it to
