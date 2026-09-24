@@ -607,15 +607,31 @@ The owner ran the manual visual check against the three declared deltas.
 
 ## Recovery
 
-- Base `59034858` on `main`; branch `odd/panel-visual-foundation`; worktree
-  `../lumat-agent-odd-panel-visual-foundation`.
+**Slice 1 (merged).** Base `59034858` on `main`; branch `odd/panel-visual-foundation`;
+worktree `../lumat-agent-odd-panel-visual-foundation` (both cleaned after merge).
+Pull request **#336** — merged as `e16b3ff8`.
+
+**Slice 2 (current).** Base `e16b3ff8` on `main`. Delivered as a stacked pair after the
+owner chose to split it at the ~400-line review budget (612 authored lines was the
+inflated count; under this repository's own rule the real review sizes are 160 and 372).
+
+| | Branch | Worktree | PR | Review size |
+|---|---|---|---|---|
+| **2a — icon foundation** | `odd/panel-visual-foundation` | none (plain branch, tip `a2e3ab1e`) | **#337** → `main` | 160 |
+| **2b — 30-glyph migration** | `odd/panel-visual-foundation-icons` | `../lumat-agent-odd-panel-visual-foundation-icons` | after 2a merges | 372 |
+
+**Next action for 2b:** once #337 merges, rebase this branch onto the new `main`
+(`git rebase --onto main a2e3ab1e odd/panel-visual-foundation-icons`) and open the PR.
+The rebase drops 2a's commits, which are already in `main` by then — that is the point of
+the stacked split, not a conflict to resolve.
+
 - Session record: `.rapsodia-code/sessions/archived/2026-09-24-panel-aesthetic-direction/`
-  — `report.md` carries the full evidence and the rule classification.
-- Pull request: **#336** (`odd/panel-visual-foundation` → `main`) — open and
-  mergeable; slice 1 reviewed, independently verified, and corrected.
+  — `report.md` carries slice 1's full evidence and the rule classification.
 - Storybook dev server for visual checks: `cd web && npm run storybook` (port 6006);
-  stop with `pkill -f "storybook dev -p 6006"`.
-- Engram: `cortex-session/panel-aesthetic-direction` (report) plus
-  `cortex-session/panel-aesthetic-direction/{init,decision/*,discovery/*,risk/*}`
-  (#4860–#4869).
+  stop with `pkill -f "storybook dev -p 6006"`. Note: `pkill -f` matches its own
+  command line, so the shell that runs it can kill itself — run it in its own call.
+- Engram: `cortex-session/panel-aesthetic-direction` (slice 1 report, #4860–#4869),
+  `odd/panel-visual-foundation/handoff-slice-2` (#4910),
+  `odd/panel-visual-foundation/slice-2-state` (#4918),
+  `odd/panel-visual-foundation/visual-check-slice-2` (#4919).
 - Created 2026-09-24; consuming this session archives it.
