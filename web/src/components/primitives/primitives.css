@@ -73,7 +73,6 @@
 .icon {
   width: var(--icon-md);
   height: var(--icon-md);
-  color: currentColor;
   flex: none;
 }
 .icon.icon--sm {
