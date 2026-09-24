@@ -75,7 +75,7 @@ it('refetches the thread after a successful close command', async () => {
 
   render(<ConversationThread interactive conversationId={9} />);
   expect(await screen.findByText(/Atención humana/)).toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: 'Cerrar' }));
+  await user.click(screen.getByRole('button', { name: 'Cerrar conversación' }));
 
   expect(await screen.findByText(/Cerrada/)).toBeInTheDocument();
   expect(threadRequests).toBe(2);
@@ -127,12 +127,27 @@ it('keeps conversation actions in the thread header and context actions-free', (
 
   const header = document.querySelector('.ai-agent-grammar__header');
   expect(header).not.toBeNull();
-  for (const label of ['Tomar', 'Devolver', 'Cerrar', 'Reconocer emergencia']) {
+  for (const label of ['Tomar conversación', 'Devolver al agente', 'Cerrar conversación', 'Reconocer emergencia']) {
     const button = screen.getByRole('button', { name: label });
     expect(header).toContainElement(button);
   }
-  expect(screen.getByRole('complementary', { name: /inspector de conversación/i }).querySelector('details')).toBeTruthy();
+  expect(screen.getByRole('complementary', { name: /inspector de conversación/i })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Acciones' })).not.toBeInTheDocument();
+});
+
+it('gives every inspector details element its own summary', () => {
+  render(<ConversationThread data={{ ...thread, conversation: {
+    ...thread.conversation,
+    customer: { id: 4, name: 'María González', phone_e164: '+5694' },
+    case: { id: 22, service: 'Urgencia', priority: 'high', status: 'open', emergency: false, summary: null, acknowledged_at: null, closed_at: null },
+    captured_data: { source: 'web' },
+  } }} state="ready" />);
+
+  const inspector = screen.getByRole('complementary', { name: /inspector de conversación/i });
+  for (const details of inspector.querySelectorAll('details')) {
+    expect(details.querySelector(':scope > summary')).not.toBeNull();
+  }
+  expect(inspector.querySelector('summary')).not.toHaveTextContent(/^Details$/);
 });
 
 it('does not hide the conversation inspector at the 64rem breakpoint', () => {
@@ -143,6 +158,12 @@ it('does not hide the conversation inspector at the 64rem breakpoint', () => {
 
 describe('conversation inspector layout CSS contract', () => {
   const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+
+  it('uses card radius for conversation cards and preserves the mobile workspace reset', () => {
+    expect(css).toMatch(/\.conversations-queue__row\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
+    expect(css).toMatch(/\.conversation-workspace\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
+    expect(css).toMatch(/@media \(max-width: 39\.99rem\)[\s\S]*?\.conversation-workspace\s*\{[^}]*border-radius:\s*0/s);
+  });
 
   it('gives the inspector column a bounded responsive width', () => {
     expect(css).toMatch(/\.conversation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(24rem, 1fr\)\s+minmax\(18rem, 24rem\);/);

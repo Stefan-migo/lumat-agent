@@ -88,7 +88,7 @@ export function ConversationsList({ data: controlledData, state: controlledState
           </div>
           <div className="conversations-queue__trailing">
             <time className="conversations-queue__time" dateTime={c.last_message_at ?? undefined}>{formatRecency(c.last_message_at)}</time>
-            <div className="conversations-queue__actions">{onOpenThread ? <Button variant="secondary" className="conversations-queue__open" onClick={() => { setSelectedId(c.id); onOpenThread(c.id); }}>Abrir</Button> : null}{c.state === "bot" ? <Button disabled={busyId === c.id} onClick={() => void runAction(c.id, () => takeConversation(c.id, c.version ?? 0))}>Tomar</Button> : null}{c.emergency && !c.acknowledged_at && c.case_id != null ? <Button variant="secondary" disabled={busyId === c.id} onClick={() => void runAction(c.id, () => acknowledgeCase(c.case_id!))}>Reconocer emergencia</Button> : null}</div>
+            <div className="conversations-queue__actions">{onOpenThread ? <Button variant="secondary" className="conversations-queue__open" onClick={() => { setSelectedId(c.id); onOpenThread(c.id); }}>Abrir</Button> : null}{c.state === "bot" ? <Button disabled={busyId === c.id} onClick={() => void runAction(c.id, () => takeConversation(c.id, c.version ?? 0))}>Tomar conversación</Button> : null}{c.emergency && !c.acknowledged_at && c.case_id != null ? <Button variant="secondary" disabled={busyId === c.id} onClick={() => void runAction(c.id, () => acknowledgeCase(c.case_id!))}>Reconocer emergencia</Button> : null}</div>
           </div>
         </li>;
      })}</ul>}</Tabs>
