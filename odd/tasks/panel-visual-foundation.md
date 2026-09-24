@@ -215,8 +215,12 @@ security class.
 - [ ] **T6** — Add the chosen icon family; build the `Icon` primitive on the
   `--icon-*` size scale and `currentColor`, adding `--icon-sm`/`--icon-lg` with
   their new consumer.
-- [ ] **T7** — Replace the loose inline `<svg>` and close the icon gaps in the
-  primitives with the adopted family.
+- [ ] **T7** — Replace the loose inline `<svg>` AND the text-glyph pseudo-icons with
+  the adopted family. The 2026-09-24 visual check found two: `SearchInput.tsx`
+  renders `<span aria-hidden="true">⌕</span>` (a Unicode character used as the
+  magnifier, which is why it renders tiny and shifts with the font) and
+  `Dialog.tsx` renders its close control as a raw `<button className="dialog__close">✕</button>`
+  (a text glyph, not an icon).
 
 ### Slice 3 — composite migration to Radix (PR 3)
 
@@ -335,12 +339,48 @@ All commits remain below the 400-line review budget.
   are amended under `openspec/changes/panel-visual-foundation/`.
 - [ ] **Dark mode** — remains deferred; not part of this unit.
 
+## Visual check result (2026-09-24, Storybook :6006)
+
+The owner ran the manual visual check. **Passed:** pill buttons, card, design
+tokens, Inter on ClientesList. Every finding below is **pre-existing** — this
+unit's diff touches zero `.tsx` files, so none were introduced here. Full evidence
+in Engram `odd/panel-visual-foundation/visual-check-findings`.
+
+Findings that belong to **this unit (slice 2)**: the two text-glyph pseudo-icons
+now named in T7.
+
+## Follow-up units (not this unit)
+
+- **`panel-shell`** — remove the broken focus mode (`PanelShell.tsx` implements it
+  at lines 155, 258–302, 412–496; the owner reports it does not work and asked for
+  its removal); move the notifications bell to the far right of the header; and
+  redesign the sidebar header against the ChatGPT reference — collapse control +
+  a search (lupa) + a smaller Lumat logo **inside** the sidebar header, instead of
+  the collapse button sitting outside it today.
+- **`panel-nits`** — `Dialog.tsx` renders its close control as a raw `<button>`
+  with the text glyph `✕`; `Dialog.stories.tsx:32–45` uses raw `<button>` elements
+  for "Eliminar registro"/"Cancelar"/"Eliminar" plus an inline `style={{…}}`
+  (line 39), violating the tokenized-stylesheet boundary; `ClientMemories.tsx:75–76`
+  nests a `PageHeader title="Memorias"` inside a `Card title="Memorias del cliente"`,
+  duplicating the heading and using a page component inside a region.
+- **`table-interactivity`** — open a row and offer quick actions on `ClientesList`
+  and `ClientFicha`. The owner acknowledges this needs backend CRUD endpoints that
+  do not exist yet; treat it as a UI/UX change with its own proposal, not a
+  frontend slice.
+- **Unresolved** — the `AppShell` `Admin` story renders an empty shell
+  (`render: (args) => <AppShell {...args} />` with no routing context). Needs
+  investigation; may be a story-harness gap rather than a product defect.
+
 ## Recovery
 
 - Base `59034858` on `main`; branch `odd/panel-visual-foundation`; worktree
   `../lumat-agent-odd-panel-visual-foundation`.
-- Session record: `.rapsodia-code/sessions/ready-for-odd/2026-09-24-panel-aesthetic-direction/`
+- Session record: `.rapsodia-code/sessions/archived/2026-09-24-panel-aesthetic-direction/`
   — `report.md` carries the full evidence and the rule classification.
+- Pull request: **#336** (`odd/panel-visual-foundation` → `main`) — open and
+  mergeable; slice 1 reviewed, independently verified, and corrected.
+- Storybook dev server for visual checks: `cd web && npm run storybook` (port 6006);
+  stop with `pkill -f "storybook dev -p 6006"`.
 - Engram: `cortex-session/panel-aesthetic-direction` (report) plus
   `cortex-session/panel-aesthetic-direction/{init,decision/*,discovery/*,risk/*}`
   (#4860–#4869).
