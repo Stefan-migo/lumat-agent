@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { AssistantTabs } from "./AssistantTabs";
 
 describe("AssistantTabs", () => {
@@ -18,11 +19,11 @@ describe("AssistantTabs", () => {
     expect(screen.getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "false");
   });
 
-  it("selects the clicked section", () => {
+  it("selects the clicked section", async () => {
     const onSelect = vi.fn();
     render(<AssistantTabs active="chat" onSelect={onSelect} />);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Sesiones de planificación" }));
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Sesiones de planificación" }));
 
     expect(onSelect).toHaveBeenCalledWith("planning-sessions");
   });

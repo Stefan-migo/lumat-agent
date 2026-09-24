@@ -1,4 +1,6 @@
+import * as RadixTabs from "@radix-ui/react-tabs";
 import { useState, type ReactNode } from "react";
+import "./primitives.css";
 
 /** Tab definition for the Tabs primitive (catalog `tabs`, corporate). */
 export interface TabItem {
@@ -19,38 +21,29 @@ export interface TabsProps {
 }
 
 /** Corporate Tabs primitive (CORP-TABS-1/2): WAI-ARIA tablist/tab/tabpanel with
- *  click activation, uncontrolled by default or controlled via `activeTab`. */
+ *  click and keyboard activation, uncontrolled by default or controlled via `activeTab`. */
 export function Tabs({ tabs, activeTab, onTabChange, children, ariaLabel }: TabsProps) {
   const [internal, setInternal] = useState(tabs[0]?.id ?? "");
-  const active = activeTab ?? internal;
+  const isControlled = activeTab !== undefined;
+  const active = isControlled ? activeTab : internal;
+
+  const handleValueChange = (id: string) => {
+    if (!isControlled) setInternal(id);
+    onTabChange?.(id);
+  };
 
   return (
-    <div className="tabs">
-      <div role="tablist" aria-label={ariaLabel}>
-        {tabs.map((tab) => {
-          const selected = tab.id === active;
-          return (
-            <button
-              key={tab.id}
-              id={`tabs-${tab.id}-tab`}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              aria-controls={`tabs-${tab.id}-panel`}
-              className="tabs__tab"
-              onClick={() => {
-                if (activeTab === undefined) setInternal(tab.id);
-                onTabChange?.(tab.id);
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-      <div id={`tabs-${active}-panel`} role="tabpanel" className="tabs__panel">
+    <RadixTabs.Root className="tabs" value={active} onValueChange={handleValueChange}>
+      <RadixTabs.List aria-label={ariaLabel}>
+        {tabs.map((tab) => (
+          <RadixTabs.Trigger key={tab.id} value={tab.id} className="tabs__tab">
+            {tab.label}
+          </RadixTabs.Trigger>
+        ))}
+      </RadixTabs.List>
+      <RadixTabs.Content value={active} className="tabs__panel">
         {children(active)}
-      </div>
-    </div>
+      </RadixTabs.Content>
+    </RadixTabs.Root>
   );
 }

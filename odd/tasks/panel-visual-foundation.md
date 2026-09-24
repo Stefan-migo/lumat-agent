@@ -192,6 +192,26 @@ security class.
   It is **not** required by `PanelEntry.stories.test.tsx:230-237`, which never reads the
   `Usuarios` entry; the original mapping already passed that test. If the owner prefers the
   pre-migration identity, revert `users` to `Users` — no test depends on the distinction.
+- **D15 — T8 re-scoped: Radix applies to `Tabs` only (2026-09-24).** Field evidence
+  contradicts D8's premise. `Dialog` (native `<dialog>` + `showModal()`, source comment
+  "native modal ownership"), `Popover` (native Popover API, `popover="auto"`), `Tooltip`
+  (`popover="hint"`) and `Select` (native `<select>`; its public API *is*
+  `SelectHTMLAttributes<HTMLSelectElement>`) already delegate to platform features. D8's
+  assumed "~12 KB of hand-rolled behaviour" does not exist: the five sources total **8.6 KB**,
+  of which the actual behaviour is **~55 LOC**. Migrating them would move them from Ponytail
+  rung 2 (native platform) back to rung 3 (installed dependency), add four packages, and make
+  T8's own **"DOM-equivalent"** criterion impossible — `<dialog>` → `<div role="dialog">`
+  (losing the native top layer, `::backdrop`, focus trap and `onCancel`), and `<select>` → a
+  custom listbox that forces an adapter for six production consumers reading
+  `event.target.value` as a native `ChangeEvent<HTMLSelectElement>`. **Decision:** T8 migrates
+  `Tabs` only — the sole primitive with hand-rolled behaviour — and *declares* the resulting
+  delta: Radix Tabs adds roving tabindex and arrow-key/Home/End navigation
+  (`activationMode="automatic"`), which today's click-only implementation lacks. The other
+  four are recorded as a finding under Slice 3, not migrated. Rejected: migrating all five
+  (breaks DOM-equivalence and rewrites the a11y contract the tests pin); closing T8 unshipped
+  (leaves the real keyboard-ARIA gap in `Tabs` unfixed); a hand-rolled roving tabindex
+  (re-implements what an installed dependency already provides once Radix is adopted for
+  `Tabs`, and diverges from the `Menu.tsx` precedent).
 
 ## Tasks
 
@@ -394,8 +414,27 @@ clean. Three things needed correcting:
 
 ### Slice 3 — composite migration to Radix (PR 3)
 
-- [ ] **T8** — Migrate `Dialog`, `Popover`, `Tabs`, `Tooltip` and `Select` to
-  Radix, behaviour- and DOM-equivalent, tests green, no visual change.
+- [ ] **T8 — Migrate `Tabs` to `@radix-ui/react-tabs` (`D15`), behaviour-equivalent
+  except the declared keyboard delta.** The public API is unchanged: `TabItem`,
+  `TabsProps` (`tabs`, `activeTab` for controlled mode / omit for uncontrolled,
+  `onTabChange`, `children(activeId)` render prop, `ariaLabel`). The DOM hooks the
+  stylesheet and tests rely on must survive: `.tabs`, `.tabs [role="tablist"]`,
+  `.tabs__tab`, `.tabs__tab[aria-selected="true"]`, `.tabs__panel`, and
+  `role="tablist"` / `role="tab"` / `role="tabpanel"`. Controlled semantics are
+  preserved exactly: in controlled mode a click fires `onTabChange` but the selection
+  does **not** move until `activeTab` changes; only the active panel is rendered.
+  **Declared delta:** arrow-key / Home / End navigation with roving tabindex (Radix
+  `activationMode="automatic"`, the default), absent in the click-only implementation.
+  `Dialog`, `Popover`, `Tooltip` and `Select` are **out of scope** per `D15`.
+
+**T8 Ponytail finding — the four not migrated (2026-09-24).** `Dialog`, `Popover`,
+`Tooltip` and `Select` sit at Ponytail rung 2: the native platform already covers
+their behaviour, and `Menu.tsx` is the only composite in this repo that ever needed
+Radix. Migrating them would add four packages, remove no behaviour, and force a
+`Select` adapter for six native-`ChangeEvent` consumers. The unit's remaining Radix
+value is exactly one genuine keyboard-ARIA gap, in `Tabs`. A uniform Radix primitives
+layer adopted for consistency is a legitimate but *separate* architectural decision
+with its own cost — it is not a simplification, and it is not this unit's.
 
 ## Acceptance criteria
 
@@ -481,6 +520,22 @@ did change the rendered result:
   `npm run test` → 84 files / 708 tests passed; `npx tsc -b` → exit 0;
   `npm run build-storybook` → built.
 
+### Slice 3 (T8) — implementation, verification and review (2026-09-24, delivery pending)
+
+Scope was re-derived **before any code was written**: field evidence contradicted D8's
+premise, so T8 was re-scoped to `Tabs` only (**D15**) and the other four composites were
+recorded as a Ponytail finding rather than migrated.
+
+Commits: `db483543` (docs — re-scope T8 to `Tabs`, D15), `892fae39` (feat — migrate `Tabs`
+to `@radix-ui/react-tabs`), `6ab7ad1b` (refactor — drop the click-compat shim and adapt the
+consumer test).
+
+- **Graph Check:** `graphify query "Tabs primitive tablist tabpanel consumers AssistantTabs ConversationsList"` consulted `Tabs()`, `Tabs.tsx`, `Tabs.test.tsx`, `Tabs.stories.tsx`, `AssistantTabs()`, `ConversationsList()`; edge `Tabs.tsx <--imports_from-- AssistantTabs.tsx`; community `AssistantTabs.tsx`.
+- **Strict TDD RED:** the new keyboard-navigation test was added against the **pre-migration** component first and failed — `1 failed | 84 passed` files, `1 failed | 713 passed` tests, expected `aria-selected="true"` received `"false"`. GREEN after the migration.
+- **Verification:** `npm run test` → **85 files / 714 tests passed**; `npx tsc -b` → exit 0; `npm run build-storybook` → built (existing Storybook eval/chunk warnings only). Guard tests `tokens.test.ts`, `style-boundary.test.ts`, `dependency-boundary.test.ts` green. **No CSS changed**: the migration reuses `.tabs`, `.tabs [role="tablist"]`, `.tabs__tab`, `.tabs__tab[aria-selected="true"]` and `.tabs__panel`, and Radix's `Tabs.Trigger` was verified empirically to render `aria-selected`.
+- **Correction (orchestrator diff review).** The first implementation shipped a hand-rolled activation guard — a ref driven by `onMouseDown`/`onKeyDown` plus an `onClick` fallback calling `onValueChange` — that duplicated Radix's own mousedown/keydown activation. It was load-bearing only for `AssistantTabs.test.tsx`, which activated a tab with a bare `fireEvent.click`, an event that skips the real mousedown→click sequence. The guard was removed and that consumer test moved to `userEvent.click`. No production code calls `.click()` on a tab, so the guard served no real caller.
+- **Native review** (`review-f0141b1ee3228be0`, tier **medium**, lens `review-reliability`, single bounded lens): **approved with zero findings**; authority acknowledged and burned. Push, PR and merge are the owner's decision and have **not** been taken.
+
 ## Size
 
 Actual authored changed lines (additions + deletions):
@@ -530,11 +585,29 @@ passes) contributed **240**.
 
 All commits remain below the 400-line review budget.
 
+### Slice 3 (T8)
+
+- `892fae39` — `feat(tabs): migrate primitive to Radix UI` — **113 lines**
+  (74 additions, 39 deletions) across `Tabs.tsx`, `Tabs.test.tsx`, `Tabs.stories.tsx`
+  and `package.json`.
+- `db483543` — `docs(odd): re-scope T8 to the Tabs migration (D15)` — 43 lines on the
+  unit record; **excluded** from the review size per this repository's rule.
+- `6ab7ad1b` — `refactor(tabs): drop the click-compat shim and adapt the consumer test` —
+  **35 lines** (7 additions, 28 deletions) across `Tabs.tsx` and `AssistantTabs.test.tsx`.
+
+Slice 3 total: **148 authored lines** across the three commits (96 net after the
+correction — `package.json` 1, `AssistantTabs.test.tsx` 7, `Tabs.test.tsx` 35,
+`Tabs.tsx` 49, `Tabs.stories.tsx` 4; the unit record's 43 lines and the generated
+`package-lock.json`'s 31 are excluded). Well inside the ~400-line budget: **one PR, no
+split needed**.
+
 ## Open items
 
 - [x] **Font** → resolved 2026-09-24: **Inter** (amends the font non-goal).
 - [x] **Icon family** → resolved 2026-09-24: **Lucide**.
-- [x] **Radix scope** → resolved 2026-09-24: **the five composites**.
+- [x] **Radix scope** → resolved 2026-09-24: **the five composites**, then **re-scoped to
+  `Tabs` only** by **D15** once field evidence showed the other four already delegate to
+  native platform features. The other four are a recorded Ponytail finding, not a task.
 - [x] **`clamp()`** → resolved 2026-09-24: **display scale only**.
 - [x] **OpenSpec delta** — `DS-DOC-1`, `DS-TKN-3`, and stale fixed-count `DS-STORY-1`
   are amended under `openspec/changes/panel-visual-foundation/`.
@@ -611,16 +684,25 @@ The owner ran the manual visual check against the three declared deltas.
 worktree `../lumat-agent-odd-panel-visual-foundation` (both cleaned after merge).
 Pull request **#336** — merged as `e16b3ff8`.
 
-**Slice 2 (current).** Base `e16b3ff8` on `main`. Delivered as a stacked pair after the
+**Slice 2 (merged).** Base `e16b3ff8` on `main`. Delivered as a stacked pair after the
 owner chose to split it at the ~400-line review budget (612 authored lines was the
 inflated count; under this repository's own rule the real review sizes are 160 and 372).
 
 | | Branch | Worktree | PR | Review size | Status |
 |---|---|---|---|---|---|
 | **2a — icon foundation** | `odd/panel-visual-foundation` | none (plain branch, tip `a2e3ab1e`) | **#337** → `main` | 160 | **MERGED** as `b5bb040f`; branch deleted local + remote |
-| **2b — 30-glyph migration** | `odd/panel-visual-foundation-icons` | `../lumat-agent-odd-panel-visual-foundation-icons` | **#338** → `main` | 372 | **OPEN**, rebased on `b5bb040f`, pushed |
+| **2b — 30-glyph migration** | `odd/panel-visual-foundation-icons` | `../lumat-agent-odd-panel-visual-foundation-icons` | **#338** → `main` | 372 | **MERGED** as `8492268e`; worktree cleaned, branch deleted |
+| **3 — Tabs to Radix** | `odd/panel-visual-foundation-radix` | `../lumat-agent-odd-panel-visual-foundation-radix` | **#340** → `main` | 96 | **OPEN**; pushed, checks running |
 
 **Handoff for 2b:** Engram `odd/panel-visual-foundation/handoff-slice-2b`.
+
+**Slice 3 recovery.** Base `6b3214bd` on `main` (PR #339 from `odd/assistant-tool-chaining`
+landed after #338; the 2b handoff's "local main is 21 commits behind" no longer applied).
+Branch `odd/panel-visual-foundation-radix`, worktree
+`../lumat-agent-odd-panel-visual-foundation-radix`. Commits `892fae39`, `db483543`,
+`6ab7ad1b`. Native review lineage `review-f0141b1ee3228be0`, approved and burned. Pushed and opened as
+PR **#340** against `main` with `type:feature` (4 commits, 96 authored lines). `graphify-out/`
+was mirrored into the new worktree and its `.graphify_root` corrected to the worktree path.
 
 **Delivery executed 2026-09-24.** `git fetch origin && git rebase origin/main` replayed the
 nine 2b commits onto `b5bb040f` with no conflicts — 2a's commits were already in `main`

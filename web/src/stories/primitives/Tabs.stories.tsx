@@ -12,7 +12,7 @@ const meta = {
           "Pestañas corporativas (catálogo `tabs`) con semántica WAI-ARIA: `tablist`, `tab` y `tabpanel`.\n\n" +
           "**Cuándo usarla** — alternar entre secciones relacionadas de un mismo contexto (ficha de cliente, detalle de caso, configuración).\n" +
           "**Cuándo no usarla** — navegación entre páginas (para eso está la navegación del `PanelShell`) o acordeones para contenido jerárquico.\n\n" +
-          "**Accesibilidad** — la pestaña activa expone `aria-selected`, cada `tab` apunta a su panel con `aria-controls` y el `tabpanel` visible es el único renderizado. Activación por clic; navegación por teclado (flechas) queda documentada como follow-up.",
+          "**Accesibilidad** — la pestaña activa expone `aria-selected`, cada `tab` apunta a su panel con `aria-controls` y el `tabpanel` visible es el único renderizado. Activación por clic y navegación por teclado con flechas, Home y End.",
       },
     },
   },
