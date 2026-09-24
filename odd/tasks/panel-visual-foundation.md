@@ -692,7 +692,7 @@ inflated count; under this repository's own rule the real review sizes are 160 a
 |---|---|---|---|---|---|
 | **2a — icon foundation** | `odd/panel-visual-foundation` | none (plain branch, tip `a2e3ab1e`) | **#337** → `main` | 160 | **MERGED** as `b5bb040f`; branch deleted local + remote |
 | **2b — 30-glyph migration** | `odd/panel-visual-foundation-icons` | `../lumat-agent-odd-panel-visual-foundation-icons` | **#338** → `main` | 372 | **MERGED** as `8492268e`; worktree cleaned, branch deleted |
-| **3 — Tabs to Radix** | `odd/panel-visual-foundation-radix` | `../lumat-agent-odd-panel-visual-foundation-radix` | not opened | 96 | **IMPLEMENTED, VERIFIED, REVIEWED**; 3 commits, not pushed |
+| **3 — Tabs to Radix** | `odd/panel-visual-foundation-radix` | `../lumat-agent-odd-panel-visual-foundation-radix` | **#340** → `main` | 96 | **OPEN**; pushed, checks running |
 
 **Handoff for 2b:** Engram `odd/panel-visual-foundation/handoff-slice-2b`.
 
@@ -700,9 +700,9 @@ inflated count; under this repository's own rule the real review sizes are 160 a
 landed after #338; the 2b handoff's "local main is 21 commits behind" no longer applied).
 Branch `odd/panel-visual-foundation-radix`, worktree
 `../lumat-agent-odd-panel-visual-foundation-radix`. Commits `892fae39`, `db483543`,
-`6ab7ad1b`. Native review lineage `review-f0141b1ee3228be0`, approved and burned. Nothing
-pushed; no PR opened. `graphify-out/` was mirrored into the new worktree and its
-`.graphify_root` corrected to the worktree path.
+`6ab7ad1b`. Native review lineage `review-f0141b1ee3228be0`, approved and burned. Pushed and opened as
+PR **#340** against `main` with `type:feature` (4 commits, 96 authored lines). `graphify-out/`
+was mirrored into the new worktree and its `.graphify_root` corrected to the worktree path.
 
 **Delivery executed 2026-09-24.** `git fetch origin && git rebase origin/main` replayed the
 nine 2b commits onto `b5bb040f` with no conflicts — 2a's commits were already in `main`
