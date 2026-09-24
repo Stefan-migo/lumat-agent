@@ -257,3 +257,32 @@ The assistant MUST expose `assistant.capabilities` as a read-only tool with no a
 - GIVEN a business question without sufficient bounded `<kb>` evidence
 - WHEN the assistant evaluates the question
 - THEN it retains the existing knowledge-base grounding refusal rather than using the capability inventory
+
+### Requirement: AT-13 — Bounded Single-URL Reader
+
+The assistant MUST expose `web.fetch` as a read-only tool that reads one public URL and returns bounded citable evidence: the final URL after redirects, the page title when present, and extracted visible text sized to fit the existing tool-evidence budget. Every request MUST pass an explicit policy — an `http`/`https` scheme allowlist, no URL credentials, default ports only, and every resolved address validated as public across IPv4 and IPv6 before any request — and redirects MUST be followed manually with a cap, each hop revalidated. The body MUST be byte-capped while reading, timeouts MUST be explicit, and only text content types MAY be read. Script, style, noscript and template bodies MUST NOT become page text, and block-level elements MUST separate text. Any refusal or failure MUST surface as an explicit error state and never as an empty result. `web.search` and the evidence budget MUST remain unchanged.
+
+#### Scenario: Reader returns citable bounded evidence
+- GIVEN an allow-listed `web.fetch` plan for a public page
+- WHEN the reader completes
+- THEN the evidence carries the final URL, the page title when present, and visible text
+
+#### Scenario: Every redirect hop is revalidated
+- GIVEN a public URL that redirects to a non-public address or to a non-`http(s)` scheme
+- WHEN the reader evaluates the redirect
+- THEN the hop is refused and no request is made to that target
+
+#### Scenario: Policy refusal is explicit and makes no request
+- GIVEN a URL with credentials, a non-default port, a disallowed scheme, or a non-public address
+- WHEN the reader evaluates it
+- THEN the tool returns a testable error evidence state and performs no request
+
+#### Scenario: Extracted text excludes script and style bodies
+- GIVEN an HTML page whose script and style bodies contain text
+- WHEN the reader extracts the page text
+- THEN those bodies are absent and adjacent block text stays separated
+
+#### Scenario: Oversized page stays inside the evidence budget
+- GIVEN a page whose title and body exceed the evidence budget by an order of magnitude
+- WHEN the reader serializes its evidence
+- THEN the result fits the existing tool-evidence limit with margin
