@@ -1,6 +1,14 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { apiFetch, getDashboardToday, getDashboardTrend } from "../../api";
 import { Dashboard } from "./Dashboard";
+
+vi.mock("../../api", async () => {
+  const actual = await vi.importActual<typeof import("../../api")>("../../api");
+  return { ...actual, apiFetch: vi.fn(), getDashboardToday: vi.fn(), getDashboardTrend: vi.fn() };
+});
 
 const data = {
   contacts: 12,
@@ -21,11 +29,11 @@ const data = {
 };
 
 describe("Dashboard operational surface", () => {
-  it("renders HOY rows and navigates each row to its operational view", () => {
+  it("renders Hoy rows and navigates each row to its operational view", () => {
     const onNavigate = vi.fn();
     render(<Dashboard data={data} state="ready" role="admin" onNavigate={onNavigate} />);
 
-    expect(screen.getByRole("heading", { name: "HOY" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Hoy" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Ana/ }));
     fireEvent.click(screen.getByRole("button", { name: /Pedro/ }));
     fireEvent.click(screen.getByRole("button", { name: /Lucía/ }));
@@ -64,5 +72,35 @@ describe("Dashboard operational surface", () => {
   ] as const)("renders the %s state", (state, message) => {
     render(<Dashboard state={state} />);
     expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
+  it.each([
+    ["stale", "Los datos pueden estar desactualizados"],
+    ["partial-error", "No pudimos cargar toda la actividad"],
+    ["fatal-error", "No pudimos cargar el panel"],
+  ] as const)("renders a distinct %s state", (state, message) => {
+    render(<Dashboard state={state} />);
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
+
+  it("keeps KPI data visible and does not render a failed today request as empty", async () => {
+    vi.mocked(apiFetch).mockResolvedValue({ ...data, today: undefined });
+    vi.mocked(getDashboardToday).mockRejectedValue(new Error("today unavailable"));
+    vi.mocked(getDashboardTrend).mockResolvedValue({ buckets: data.trend });
+
+    render(<Dashboard />);
+
+    await waitFor(() => expect(screen.getByText("No pudimos cargar toda la actividad")).toBeInTheDocument());
+    expect(screen.getByText("Contactos")).toBeInTheDocument();
+    expect(screen.queryByText("Aún no hay actividad en esta ventana")).not.toBeInTheDocument();
+  });
+
+  it("keeps the dashboard CSS contract aligned with the design system", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    expect(css).toMatch(/\.dashboard__card-ops\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
+    expect(css).toMatch(/\.dashboard__card\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
+    expect(css).not.toMatch(/\.dashboard__section-head h2\s*\{[^}]*text-transform:\s*uppercase/s);
+    expect(css).toMatch(/@media \(max-width:\s*63\.99rem\)[\s\S]*?\.dashboard__hoy\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
+    expect(css).toMatch(/@media \(max-width:\s*63\.99rem\)[\s\S]*?\.dashboard__grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
   });
 });

@@ -87,20 +87,23 @@ function dayShort(start: string): string {
 
 export interface DashboardProps {
   data?: Kpis | null;
-  state?: AsyncDataState;
+  state?: DashboardState;
   onRetry?: () => void;
   role?: Role;
   onNavigate?: (view: PanelView) => void;
 }
 
-type DashboardData = Kpis & { today?: DashboardToday };
+export type DashboardState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
+type DashboardData = Kpis & { today?: DashboardToday; todayError?: boolean; trendError?: boolean };
 const emptyToday: DashboardToday = { tz: "", local_date: "", appointments_today: [], unanswered_conversations: [], urgent_cases: [] };
 
-function stateMessage(state: AsyncDataState, retry: () => void) {
+function stateMessage(state: DashboardState, retry: () => void) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando indicadores" />;
   if (state === "empty") return <StateMessage tone="info" role="status" title="Aún no hay actividad en esta ventana" />;
   if (state === "denied") return <StateMessage tone="danger" role="alert" title="No tienes permiso para ver este panel" />;
-  if (state === "error") return <div><StateMessage tone="danger" role="alert" title="No pudimos cargar el panel" detail="Reintenta para recuperar los indicadores." /><button type="button" onClick={retry}>Reintentar</button></div>;
+  if (state === "stale") return <StateMessage tone="warning" role="status" title="Los datos pueden estar desactualizados" detail="Mostramos la última información disponible." />;
+  if (state === "partial-error") return <StateMessage tone="warning" role="alert" title="No pudimos cargar toda la actividad" detail="Algunos indicadores pueden estar incompletos." />;
+  if (state === "error" || state === "fatal-error") return <div><StateMessage tone="danger" role="alert" title="No pudimos cargar el panel" detail="Reintenta para recuperar los indicadores." /><button type="button" onClick={retry}>Reintentar</button></div>;
   return null;
 }
 
@@ -108,17 +111,22 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
   const fetchDashboard = useCallback(async (): Promise<DashboardData> => {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const kpis = await apiFetch<Kpis>("/panel/api/kpis");
-    const [today, trend] = await Promise.all([
-      getDashboardToday(timezone).catch(() => emptyToday),
-      getDashboardTrend(timezone).catch(() => ({ buckets: [] })),
+    const fetchToday = (): Promise<{ today?: DashboardToday; todayError?: boolean }> =>
+      getDashboardToday(timezone).then((today) => ({ today })).catch(() => ({ todayError: true }));
+    const fetchTrend = (): Promise<{ trend?: { buckets: DashboardData["trend"] }; trendError?: boolean }> =>
+      getDashboardTrend(timezone).then((trend) => ({ trend })).catch(() => ({ trendError: true }));
+    const [todayResult, trendResult] = await Promise.all([
+      fetchToday(),
+      fetchTrend(),
     ]);
-    return { ...kpis, today, trend: trend.buckets ?? [] };
+    return { ...kpis, today: todayResult.today, todayError: todayResult.todayError, trend: trendResult.trend?.buckets ?? [], trendError: trendResult.trendError };
   }, []);
   const fetched = useAsyncData(fetchDashboard, controlledData === undefined);
   const data = (controlledData === undefined ? fetched.data : controlledData) as DashboardData | null | undefined;
   const state = controlledState ?? fetched.state;
   const retry = onRetry ?? fetched.retry;
   const today = data?.today && Array.isArray(data.today.appointments_today) ? data.today : emptyToday;
+  const hasPartialError = data?.todayError || data?.trendError;
   const navigate = (view: PanelView) => onNavigate?.(view);
   const cards = ["Conversaciones", "Clientes", "Agenda", "Casos"] as const;
   const viewFor = { Conversaciones: "conversations", Clientes: "clients", Agenda: "agenda", Casos: "cases" } as const;
@@ -147,9 +155,10 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
 
   return <PageFrame title="Panel" headerClassName="dashboard-header" meta={data ? <span className="dashboard-meta"><Icon icon={ICONS.calendar} size="sm" />Actividad de los últimos {data.window_days} días · Desde {data.window_start}</span> : undefined} state={stateMessage(state, retry)}>
     {state === "ready" && data ? <div className="dashboard">
+      {hasPartialError ? stateMessage("partial-error", retry) : null}
       <section className="dashboard__section" aria-labelledby="today-title">
         <div className="dashboard__section-head">
-          <h2 id="today-title">HOY</h2>
+          <h2 id="today-title">Hoy</h2>
           {today.local_date ? <span className="dashboard__day"><Icon icon={ICONS.calendar} size="sm" />{dayLabel(today.local_date)}</span> : null}
         </div>
         <div className="dashboard__hoy">
