@@ -308,12 +308,14 @@ Do not add autonomous-resolution, response-time, satisfaction, or revenue metric
 
 ### Agenda
 
-- The operator agenda is a chronological register of scheduled visits, divided into `Hoy` and `Próximas`.
+- The operator agenda pairs a visit calendar with a chronological register of scheduled visits.
+- The calendar offers a month view and a week view over the request timezone. Navigating periods moves the register window; selecting a day filters the register to that day. An unselected window shows `Hoy` and `Próximas` when it contains today, and a single `Visitas del período` otherwise; a selected day shows a single dated section.
+- Expose day density without relying on colour alone: each day carries its visit count as text or a labelled indicator, and days outside the visible month or week are empty cells, never agenda days.
 - Show the visit time in 24-hour format, service, customer, technician, appointment status, calendar sync status, and row actions when applicable.
-- Keep the primary presentation tabular. The operator may cancel a booked visit and retry a pending or failed calendar sync; destructive cancellation requires confirmation and an optional reason.
+- Keep the register tabular. The operator may cancel a booked visit and retry a pending or failed calendar sync; destructive cancellation requires confirmation and an optional reason.
 - Cancellation confirmation states that the visit will be marked as cancelled and that this panel does not offer rebooking; it does not claim a domain-level guarantee.
-- Provide explicit loading, permission, empty, stale, and error states. Action failures stay beside the action that caused them.
-- Do not offer a month grid, create/edit/rebook actions, an unowned filter or search toolbar, conversation bubbles, a composer, a thread rail, or an inspector on this surface.
+- Provide explicit loading, permission, empty, stale, and error states. Action failures stay beside the action that caused them. An empty period is an explicit empty state, not a bare grid.
+- Do not offer availability blocks, create/edit/rebook actions, an unowned filter or search toolbar, conversation bubbles, a composer, a thread rail, or an inspector on this surface. The calendar is the approved navigation surface; it is not a filter toolbar.
 
 ### Conversaciones and human inbox
 

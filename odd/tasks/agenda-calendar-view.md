@@ -116,7 +116,7 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
 
 ## Tasks
 
-- [ ] **T1 — Contract delta (first).** Modify `AG-UI-1` so the agenda MAY render a month/week
+- [x] **T1 — Contract delta (first).** Modify `AG-UI-1` so the agenda MAY render a month/week
   calendar, defines the day-selection filter, keeps `Hoy`/`Próximas` for the unselected window, and
   keeps availability blocks and create/edit/rebook out. Add scenarios for day selection and for the
   calendar's own state contract. Update `web/DESIGN_SYSTEM.md` (line 316 + an Agenda
@@ -176,6 +176,10 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
       `shared/toneMaps.ts`, `ODD: ds-stylesheet-boundary`. The graph's agenda community is intact.
       Note: the graph was built from `3abe522d`; HEAD is `fe221c0b` (the KB slice), which does not
       touch agenda modules. Per repo policy the refresh runs once at session close, not mid-task.
+- [x] **T1** — `AG-UI-1` rewritten (calendar navigation + register sections + four new scenarios);
+      `AG-UI-2` extended with the shared calendar/register state contract; `AG-UI-4` extended with
+      the calendar story coverage; the spec `Purpose` updated. `web/DESIGN_SYSTEM.md` Agenda section
+      rewritten and the month-grid prohibition removed. No component code touched yet.
 
 ## Recovery
 
