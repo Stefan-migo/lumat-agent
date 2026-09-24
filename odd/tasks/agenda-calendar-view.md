@@ -129,7 +129,7 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
   month and week grids, previous/next/today navigation, view toggle, day selection with an
   accessible selected state, per-day visit counts, keyboard operation, and an empty month. Add its
   commented CSS section in `primitives.css`.
-- [ ] **T3B — Correction (review finding, reopens T3).** Two defects found on orchestrator review of
+- [x] **T3B — Correction (review finding, reopens T3).** Two defects found on orchestrator review of
   T3: (a) the calendar is ARIA-invalid — `role="grid"` with `role="gridcell"` children and no
   `role="row"`, plus `aria-selected` on a `<button>`, which is not an allowed role for that
   attribute; this contradicts `AG-UI-2`'s semantic-markup requirement and the WCAG 2.2 AA baseline.
@@ -212,8 +212,12 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
       through `Button` (it destructures without spreading). It refused to widen the slice on its own,
       which is the correct behaviour. Verified independently: `Button.tsx:19-27` destructures a fixed
       set of props and never spreads, so its type contract overpromises. Resolution recorded in T3B
-      (single action-labelled toggle, no primitive change); the primitive defect is parked under
-      Follow-ups.
+  (single action-labelled toggle, no primitive change); the primitive defect is parked under
+  Follow-ups.
+- [x] **T3B** — Replaced the invalid ARIA grid with native table semantics, moved toolbar controls
+      to the `Button` primitive, and changed the view switch to one action-labelled toggle. RED:
+      focused Vitest found the old grid roles, old two-button toggle, and invalid selection assertion.
+      GREEN: commit `49cdd91a`; focused Vitest passed **7 tests**.
 
 ## Follow-ups
 
