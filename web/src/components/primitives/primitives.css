@@ -70,6 +70,19 @@
   height: var(--icon-md);
   flex: none;
 }
+.icon {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  flex: none;
+}
+.icon.icon--sm {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+.icon.icon--lg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+}
 .btn:focus-visible,
 .popover__trigger:focus-visible,
 .tooltip__trigger:focus-visible {
