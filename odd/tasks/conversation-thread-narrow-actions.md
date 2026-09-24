@@ -209,7 +209,12 @@ build above were re-run on the resulting tree.
 
 ## Assess outcome
 
-`gentle-ai review assess --base-ref 4b31796c --committed-only` over this branch is recorded below.
+`gentle-ai review assess --base-ref 4b31796c --committed-only` over the five commits:
+
+- risk `medium` (`reasons: [executable_change]` on `ConversationThread.test.tsx`), 6 changed paths,
+  288 changed lines, `review_due: false`, `review_due_reason: under_budget`.
+
+No native review is due for this unit; the tier and reason are recorded per protocol.
 
 ## Recovery
 
