@@ -1,7 +1,7 @@
 # ODD: kb-product-register
 
 Repository-relative locator: `odd/tasks/kb-product-register.md`
-Worktree: `/home/stefan/repos/lumat-agent-odd-kb-product-register` | Branch `odd/kb-product-register` | Base `9b83e27f`
+Worktree: `/home/stefan/repos/lumat-agent-odd-kb-product-register` | Branch `odd/kb-document-surface`, synced to `main` at the slice-4 base | Unit base `9b83e27f`, slice-4 base `main` `fe221c0b`
 Session seed: `.rapsodia-code/sessions/ready-for-odd/2026-09-23-kb-product-register/report.md`
 
 ## Objective
@@ -73,9 +73,10 @@ upload above the collection and every document operation crammed into a row
 `<details>`.
 
 Measured debt: **23 unique `.kb*` selectors** (`primitives.css:1892-1959`: 15
-layout, 7 visual chrome, 0 state, 1 one-off hack) and the documents table bypasses
-the shared `.data-region` (`primitives.css:295-305`) that already has two named
-consumers (`ClientesList.tsx:101`, `ClientFicha.tsx:230`).
+layout, 7 visual chrome, 0 state, 1 one-off hack) at the unit base; **22 remain at
+the slice-4 base** — slice 3's dead-CSS cleanup removed one. The documents table
+bypasses the shared `.data-region` (`primitives.css:295-305`) that already has two
+named consumers (`ClientesList.tsx:101`, `ClientFicha.tsx:230`).
 
 ## Decisions carried from the session
 
@@ -161,7 +162,7 @@ consumer.** Preexisting token values are not touched (`DS-TKN-2` is additive).
 ## Checks
 
 ```
-cd web && npm run test          # Vitest — baseline 80 files / 665 tests, all green
+cd web && npm run test          # Vitest — baseline 82 files / 670 tests at the slice-4 base, all green
 cd web && npx tsc -b --noEmit
 cd web && npm run build
 cd web && npm run build-storybook
@@ -323,9 +324,14 @@ driving data rather than a workflow prop, and hand the branch to the human for t
 - [x] Worktree created and `npm ci` run
 - [x] T0: this doc committed on the branch (`8f194da9`)
 - [x] Slice 1 (T1–T3) — merged to `main` as `a937f81e` (PR #328)
-- [x] Slice 2 (T4) — PR #330, open, retargeted to `main`, CI green
-- [x] Slice 3 (T5–T7) — PR 3, open, CI green
-- [ ] Slice 4 (T8–T10)
+- [x] Slice 2 (T4) — merged to `main` as `8548e988` (PR #330)
+- [x] Slice 3 (T5–T7) — merged to `main` as `fe221c0b` (PR #331), retargeted to `main` before merge
+- [ ] Slice 4 (T8–T10) — in flight. Route: delegated writer (trigger: 2+ non-trivial files — `KbList.tsx`, `primitives.css`, stories and tests). Branch synced to `main` `fe221c0b`; the worktree tree is identical to `main`, so PR 4's diff is exactly this slice.
+
+> Merge gate note (2026-09-24): the owner authorized merging PR #330 and PR #331
+> directly. The documented 1366×768 human visual gate for those two slices is not
+> recorded as performed before the merge; acceptance criterion 8 remains open for
+> them.
 
 ## Verification evidence
 
