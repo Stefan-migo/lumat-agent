@@ -44,11 +44,9 @@ function ConversationContext({ conversation }: { conversation: NonNullable<Threa
   const customer = conversation.customer;
   const caseData = conversation.case;
   return <aside className="ai-agent-grammar__inspector" aria-label="Inspector de conversación">
-    <details open>
       {customer ? <section aria-labelledby="conversation-customer-heading"><h2 id="conversation-customer-heading">Cliente</h2><dl><div className="ai-agent-grammar__detail"><dt>Nombre</dt><dd>{customer.name ?? "Sin nombre"}</dd></div><div className="ai-agent-grammar__detail"><dt>Teléfono</dt><dd>{customer.phone_e164 ?? conversation.wa_phone ?? "Sin teléfono"}</dd></div></dl></section> : null}
       {caseData ? <section aria-labelledby="conversation-case-heading"><h2 id="conversation-case-heading">Caso</h2><dl><div className="ai-agent-grammar__detail"><dt>Servicio</dt><dd>{caseData.service}</dd></div><div className="ai-agent-grammar__detail"><dt>Estado</dt><dd>{conversation.case_status ?? caseData.status}</dd></div><div className="ai-agent-grammar__detail"><dt>Prioridad</dt><dd>{conversation.case_priority ?? caseData.priority}</dd></div><div className="ai-agent-grammar__detail"><dt>Emergencia</dt><dd>{conversation.emergency ? "Sí" : "No"}</dd></div><div className="ai-agent-grammar__detail"><dt>Reconocimiento</dt><dd>{conversation.acknowledged_at ? "Reconocida" : "Pendiente"}</dd></div>{caseData.summary ? <div className="ai-agent-grammar__detail"><dt>Resumen</dt><dd>{caseData.summary}</dd></div> : null}</dl></section> : null}
       {conversation.captured_data && Object.keys(conversation.captured_data).length > 0 ? <details open><summary>Datos capturados</summary><dl>{Object.entries(conversation.captured_data).map(([key, value]) => <div className="ai-agent-grammar__detail" key={key}><dt>{key}</dt><dd>{displayCapturedValue(value)}</dd></div>)}</dl></details> : null}
-    </details>
   </aside>;
 }
 export function ConversationThread({ conversationId, data: controlledData, state: controlledState, customerName, refreshKey = 0, onMutate, onBack, interactive = false }: ConversationThreadProps) {

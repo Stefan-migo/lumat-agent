@@ -131,8 +131,23 @@ it('keeps conversation actions in the thread header and context actions-free', (
     const button = screen.getByRole('button', { name: label });
     expect(header).toContainElement(button);
   }
-  expect(screen.getByRole('complementary', { name: /inspector de conversación/i }).querySelector('details')).toBeTruthy();
+  expect(screen.getByRole('complementary', { name: /inspector de conversación/i })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Acciones' })).not.toBeInTheDocument();
+});
+
+it('gives every inspector details element its own summary', () => {
+  render(<ConversationThread data={{ ...thread, conversation: {
+    ...thread.conversation,
+    customer: { id: 4, name: 'María González', phone_e164: '+5694' },
+    case: { id: 22, service: 'Urgencia', priority: 'high', status: 'open', emergency: false, summary: null, acknowledged_at: null, closed_at: null },
+    captured_data: { source: 'web' },
+  } }} state="ready" />);
+
+  const inspector = screen.getByRole('complementary', { name: /inspector de conversación/i });
+  for (const details of inspector.querySelectorAll('details')) {
+    expect(details.querySelector(':scope > summary')).not.toBeNull();
+  }
+  expect(inspector.querySelector('summary')).not.toHaveTextContent(/^Details$/);
 });
 
 it('does not hide the conversation inspector at the 64rem breakpoint', () => {
