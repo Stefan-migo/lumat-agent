@@ -27,8 +27,8 @@
   gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
   border: 1px solid transparent;
-  border-radius: var(--corp-radius);
-  font-family: var(--font-sans);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
   font-size: var(--text-sm);
   line-height: 1.2;
   cursor: pointer;
@@ -64,6 +64,12 @@
 .btn--tertiary:hover {
   text-decoration: underline;
 }
+.btn > svg,
+.dialog__close > svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  flex: none;
+}
 .btn:focus-visible,
 .popover__trigger:focus-visible,
 .tooltip__trigger:focus-visible {
@@ -83,7 +89,7 @@
   gap: var(--space-1);
 }
 .field__label {
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: var(--text-sm);
   color: var(--corp-text);
 }
@@ -91,7 +97,7 @@
   color: var(--corp-fg-muted);
 }
 .field__control {
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: var(--text-md);
   padding: var(--space-2);
   border: 1px solid var(--corp-border);
@@ -118,7 +124,7 @@
   cursor: not-allowed;
 }
 .field__error {
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: var(--text-sm);
   color: var(--danger);
 }
@@ -196,14 +202,14 @@
   gap: var(--corp-gap);
   padding: var(--space-4);
   border: 1px solid var(--corp-border);
-  border-radius: var(--radius-md);
-  background: var(--brand-bg-elevated);
-  box-shadow: var(--shadow-1);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--elevation-raised);
 }
 .card__title {
   margin: 0;
   color: var(--corp-text);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: var(--text-lg);
 }
 .badge {
@@ -212,12 +218,12 @@
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--corp-border);
   border-radius: var(--corp-radius);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: var(--text-sm);
 }
 .badge--neutral {
   color: var(--corp-fg-muted);
-  background: var(--corp-surface-hover);
+  background: var(--surface-subtle);
 }
 .badge--success {
   color: var(--success);
@@ -243,7 +249,7 @@
   border-radius: var(--radius-md);
   background: var(--primary-100);
   color: var(--primary-800);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: var(--text-sm);
 }
 .avatar img {
@@ -267,7 +273,7 @@
   width: 100%;
   border-collapse: collapse;
   color: var(--corp-text);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: var(--text-md);
 }
 .table th,
@@ -305,9 +311,9 @@
    Consumers: the Clientes list and the ClientFicha history tables. */
 .data-region {
   border: 1px solid var(--corp-border);
-  border-radius: var(--radius-md);
-  background: var(--brand-bg-elevated);
-  box-shadow: var(--shadow-1);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--elevation-raised);
   overflow-x: auto;
 }
 
@@ -407,7 +413,7 @@
   border: 0;
   padding: var(--space-2) var(--space-3);
   color: var(--corp-muted);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: var(--text-sm);
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -432,8 +438,8 @@
   padding: 0;
   background: var(--corp-surface);
   border: 1px solid var(--corp-border);
-  border-radius: var(--corp-radius);
-  box-shadow: var(--shadow-3);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--elevation-overlay);
   color: var(--corp-fg);
 }
 .dialog::backdrop {
@@ -473,7 +479,7 @@
   align-items: center;
   gap: var(--space-2);
   color: var(--text-muted);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: var(--text-sm);
 }
 .spinner__indicator {
@@ -481,7 +487,7 @@
   height: var(--space-4);
   border: 2px solid var(--border);
   border-top-color: var(--info);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   animation: spin var(--duration-slow) linear infinite;
 }
 @keyframes spin {
@@ -499,7 +505,7 @@
   padding: var(--space-3);
   border: 1px solid var(--corp-border);
   border-radius: var(--corp-radius);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: var(--text-sm);
 }
 .flash-message--success {
@@ -705,7 +711,7 @@
   margin: 0 auto;
   display: grid;
   gap: var(--space-5);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
 }
 .page-header {
   display: flex;
@@ -778,7 +784,7 @@
   padding: var(--space-5);
   background: var(--corp-bg);
   color: var(--corp-text);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
 }
 .login-page,
 .login-page * {
@@ -880,7 +886,7 @@
   min-height: 100dvh;
   background: color-mix(in srgb, var(--brand-bg) 100%, transparent);
   color: var(--corp-fg);
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
 }
 .panel-shell__mobile-bar {
   position: sticky;
@@ -1604,7 +1610,7 @@
 /* Concept story uses the same shared grammar boundary as production. */
 .ai-agent-grammar,
 .ai-agent-grammar * { box-sizing: border-box; }
-.ai-agent-grammar { min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font-sans); }
+.ai-agent-grammar { min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font-ui); }
 .ai-agent-grammar__shell { display: grid; grid-template-columns: calc(var(--space-8) * 7.5) minmax(0, 1fr) calc(var(--space-8) * 4.5); min-height: 100vh; }
 .ai-agent-grammar__shell--compact { grid-template-columns: calc(var(--space-8) * 2) minmax(0, 1fr) calc(var(--space-8) * 4.5); }
 .ai-agent-grammar__shell--wide { grid-template-columns: calc(var(--space-8) * 7.5) minmax(0, 1fr); }
