@@ -106,9 +106,15 @@ Any file outside this list needs a scope update here first.
   moved the actions into the header and deleted the inspector's `Acciones` section; this unit fixes
   the column those remaining sections live in. Branching from `main` at the time would have collided
   textually in `primitives.css` and would have made the pre-fix surface impossible to measure.
-- **D2 — The width is `minmax(18rem, 24rem)`, owner's decision.** 18rem (288px) covers the 285px the
-  realistic content needs today; 24rem (384px) gives the `captured_data` JSON room when the container
-  has it; wrapping (D3) handles the 647px worst case.
+- **D2 — The width is `minmax(24rem, 1fr) minmax(18rem, 24rem)`.** The owner first chose the sidebar
+  track as `minmax(18rem, 24rem)`. Measurement on the real story then showed that with a
+  `minmax(0, 1fr)` sibling — which can collapse to zero — the sidebar track takes its 24rem maximum
+  essentially always, so the fluid range rarely engages. At the tightest two-column width (1024px) the
+  sidebar measured 384px against a 350px thread: the secondary surface wider than the primary content.
+  The owner chose to floor the thread track instead, so the sidebar is the one that yields and stays
+  inside its 18rem–24rem range. Measured on the same page: 1024px → thread 384 / sidebar 350;
+  1280px → 606 / 384; 1366px → 692 / 384. Identical to the first choice at 1280 and 1366, corrected at
+  1024. Wrapping (D3) handles the 647px worst case at any width.
 - **D3 — Wrapping over widening.** `flex-wrap: wrap` on `.ai-agent-grammar__detail` and
   `overflow-wrap: anywhere` on its `dd`, so long values adapt instead of demanding width. Width alone
   can never absorb an unbounded token.
@@ -137,14 +143,16 @@ Any file outside this list needs a scope update here first.
 
 ## Tasks
 
-- [ ] **T1 — RED (CSS contract).** Vitest `readFileSync` assertions: the `.conversation-workspace`
+- [x] **T1 — RED (CSS contract).** Vitest `readFileSync` assertions: the `.conversation-workspace`
   track is `minmax(18rem, 24rem)`, `.ai-agent-grammar__detail` wraps, its `dd` breaks long words, and
   `.conversation-workspace .ai-agent-grammar__inspector` does not scroll sideways. Must fail before T2.
-- [ ] **T2 — GREEN.** Apply the three CSS changes: width, wrapping, leak guard.
-- [ ] **T3 — Story fixture and contract.** Extend the interactive fixture with a long `captured_data`
+  Observed RED: 4 failed | 14 passed. The width assertion was later re-pointed at the D2 floor and
+  observed RED again on its own before the D2 change.
+- [x] **T2 — GREEN.** Apply the three CSS changes: width, wrapping, leak guard.
+- [x] **T3 — Story fixture and contract.** Extend the interactive fixture with a long `captured_data`
   value; assert the inspector renders `Cliente`, `Caso` and `Datos capturados` with that value. RED
   first: the assertion fails while the fixture has no `captured_data`.
-- [ ] **T4 — Evidence.** Browser measurement at 1024 / 1280 / 1366 proving no internal horizontal
+- [x] **T4 — Evidence.** Browser measurement at 1024 / 1280 / 1366 proving no internal horizontal
   scrollbar and no content past the viewport, plus the recorded command outputs.
 
 ## Acceptance criteria
@@ -152,7 +160,9 @@ Any file outside this list needs a scope update here first.
 1. Measured in a browser at 1024 / 1280 / 1366: the inspector's `scrollWidth === clientWidth` (no
    internal horizontal scrollbar) and its content's right edge stays inside the viewport. Measured, not
    inferred from CSS.
-2. The inspector track measures between 288px and 384px at ≥64rem.
+2. The inspector track measures between 288px and 384px at ≥64rem, and the thread track keeps a 24rem
+   floor so the sidebar yields before the thread does. Measured: 1024px → thread 384 / sidebar 350;
+   1280px and 1366px → sidebar 384.
 3. Nothing below 64rem changes: the workspace still stacks at <64rem.
 4. No new hex anywhere, no `<style>` injection, no static inline style, no new token declaration.
 5. `cd web && npm run test` green (the load-fragile `AgendaPage` 5s-timeout test is recorded honestly
@@ -183,14 +193,84 @@ Any file outside this list needs a scope update here first.
 - [x] Re-verified on `794aae7a` that all three target declarations survive untouched: `.conversation-workspace`'s
   `calc(var(--space-8) * 4.5)` track, `.ai-agent-grammar__detail`/`dd` with no wrapping, and
   `.conversation-workspace .ai-agent-grammar__inspector { min-width: 0; overflow-y: auto; }`.
+- [x] T1–T3 implemented by one bounded writer (commits `311645d7`, `5e34e6fb`); the orchestrator then
+  verified the diff structurally, re-ran the focused tests itself, and re-ran the full suite.
+- [x] D2 floor applied by the orchestrator as a mechanical two-file change, in TDD order: the width
+  assertion was re-pointed first and observed RED on exactly that assertion, then the CSS changed and
+  the focused pair came back GREEN. Commit `d1c175e6`.
+- [x] T4 measured in a real browser against this worktree's own Storybook (port 6012, server cwd
+  verified), with a same-page control that re-applies the pre-fix declarations.
 
 ## Verification evidence
 
-Pending. To be recorded from observed command output only.
+Observed command output only.
+
+- T1 RED (writer): `ConversationThread.test.tsx` → `Tests 4 failed | 14 passed (18)`; the four CSS
+  assertions for width, wrapping, long-value breaking and overflow failed.
+- T2 GREEN (writer): the same file → `Tests 18 passed (18)`.
+- T3 RED (writer): `ConversationThread.stories.test.tsx` → `Tests 1 failed | 5 passed (6)`,
+  "Unable to find an element with the text: Datos capturados".
+- T3 GREEN (writer): the same file → `Tests 6 passed (6)`.
+- D2 RED (orchestrator): after re-pointing the width assertion at `minmax(24rem, 1fr)`, the file
+  reported exactly one failure — that assertion — with the other three green.
+- D2 GREEN (orchestrator): focused pair → `Test Files 2 passed (2)`, `Tests 24 passed (24)`. This was
+  the orchestrator's own re-run on the frozen tree, re-confirmed after the writer returned.
+- `cd web && npx tsc -b`: exit 0, both before and after the D2 change.
+- `cd web && npm run test`, full suite, three runs on this shared host:
+  - run 1: `1 failed | 735 passed` — the failing test's name was lost to output truncation by the
+    orchestrator. Recorded as unattributed: not claimed as a pass, not claimed as a flake.
+  - run 2: `Test Files 86 passed (86)`, `Tests 736 passed (736)`.
+  - run 3: `2 failed | 734 passed` — `AgendaPage > creates an appointment from the agenda and refreshes
+    the visible period` (5318ms) and `AutomationRuleDetailPage > refreshes the persisted rule through
+    GET after admin creation` (5370ms). Both are >5s timeouts on surfaces this change does not touch.
+    `npx vitest run src/components/pages/AgendaPage.test.tsx` in isolation: `Tests 19 passed (19)`.
+    That matches the documented load-fragility (handoff trap 3), not a regression.
+- `cd web && npm run build-storybook`: exit 0 on the final tree (`✓ built in 26.78s`).
+- `git diff --check`: clean.
+
+Browser measurement (T4) — Playwright headless chromium against a Storybook served from this worktree
+(port 6012; the listening process's `cwd` was verified as this worktree's `web/`). The "control"
+column re-applies the pre-fix declarations through an injected override on the same page: it is a
+same-page control, not a pre-fix build.
+
+| viewport | control sidebar | control internal h-scroll | control overrun | fixed thread / sidebar | fixed internal h-scroll | fixed overrun | wrapped rows | page h-scroll |
+| ---: | ---: | :--: | ---: | ---: | :--: | ---: | ---: | :--: |
+| 1024 | 144px | yes (143 vs 453) | 294px past the inspector | 384 / 350 | no (383 vs 383) | none (−16px inside) | 1 | no |
+| 1280 | 144px | yes (143 vs 453) | 294px past the inspector | 606 / 384 | no (383 vs 383) | none (−16px inside) | 1 | no |
+| 1366 | 144px | yes (143 vs 453) | 294px past the inspector | 692 / 384 | no (383 vs 383) | none (−16px inside) | 1 | no |
+
+Ten `dt`/`dd` rows render in every case; the long `captured_data` URL is present and wraps. The
+Storybook server was terminated by PID after measuring (never by command-line pattern).
 
 ## Assess outcome
 
-Pending.
+`gentle-ai review assess --cwd . --base-ref 794aae7a --committed-only --json`, read-only, exit 0:
+
+- risk `medium` (`reasons: [executable_change]` on `ConversationThread.test.tsx`), 5 changed paths,
+  251 changed lines, `review_due: false`, `review_due_reason: under_budget`.
+
+No native review is due for this unit; the tier and reason are recorded per protocol. Note that the
+251 changed lines include this record — the code-plus-tests delta is roughly 40 lines.
+
+**Anomaly observed in the optional `--agent` path. Unresolved, and not smoothed over.**
+
+Adding `--agent opencode` — the flag that carries the runtime identity for a `next_transition`
+preflight — changed the same command's result and its exit code:
+
+- the first invocation with `--agent opencode` returned the normal `medium` / `under_budget` /
+  `review_due: false` envelope with exit 0;
+- every later invocation with identical flags returned `risk: "high"`,
+  `reasons: [{code: "unassessable", detail: "the active runtime is not eligible for immutable receipt
+  review ... supported immutable review runtimes: <list>"}]`, `changed_paths: 0`, `changed_lines: 0`,
+  `review_due: true`, `review_due_reason: high_risk`, exit 1;
+- the supported-runtime list inside that message differed between invocations (`claude-code, codex`
+  first, then `claude-code, opencode, codex`) while still reporting the active runtime as ineligible;
+- the identical command **without** `--agent` has returned the normal assessment consistently, exit 0.
+
+The read-only assessment is the authority for whether a review is due and it says none is, so this unit
+is not gated by the anomaly. The cause is not determined: it is consistent both with a defect in the
+eligibility check and with the installed managed assets being rewritten concurrently by another live
+session in this repository. No report was filed and no retry loop was run.
 
 ## Corrections to the handoff (verified this session)
 
