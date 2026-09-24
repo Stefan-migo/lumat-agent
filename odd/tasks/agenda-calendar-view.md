@@ -229,7 +229,7 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
       selected, empty, dense, and narrow variants. RED: story tests exposed date-dependent expectations
       and fake-timer interaction; GREEN: focused Storybook tests passed **15 tests** and
       `npm run build-storybook` passed.
-- [x] **T4B** — RED: the two new page tests failed (**2 failed, 16 passed**); GREEN: deriving
+- [x] **T4B** — commit `2c2282ce`. RED: the two new page tests failed (**2 failed, 16 passed**); GREEN: deriving
       `renderedRows` from the active register path made the focused suite pass (**18 tests**). The
       full suite then passed **84 files / 699 tests**.
 
