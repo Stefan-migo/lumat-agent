@@ -94,7 +94,8 @@ bad timezone on create, which nothing covered before.
   `tests/functional/test_api_scheduling.py`, `web/src/api.ts`, `web/src/types.ts`,
   `web/src/components/shared/agendaTime.ts`, `web/src/components/shared/agendaTime.test.ts`,
   `web/src/components/pages/AgendaPage.tsx`, `web/src/components/pages/AgendaPage.test.tsx`,
-  `uv.lock` (D7 only — the stale project version, nothing else).
+  `web/src/stories/pages/AgendaPage.stories.test.tsx`, `uv.lock` (D7 only — the stale project
+  version, nothing else).
 
 Any file outside this list needs a scope update here first.
 
@@ -143,25 +144,40 @@ Any file outside this list needs a scope update here first.
   `'Confirmar cancelación'`, `'Próximas'`, `'Registro de agenda'` are the established strings
   (`AgendaPage.tsx`, asserted in `AgendaPage.test.tsx`). `openspec/config.yaml:14` says client-facing
   documentation is Spanish; the panel is the operator's interface and is already Spanish throughout.
-- **D7 — `uv.lock` is regenerated as its own commit.** It was stale at the base commit (the lock
-  pinned project version `2026.9.2` while `pyproject.toml` was `2026.9.5`), and `uv sync` corrects
+- **D7 — `uv.lock` is regenerated as its own commit.** It was stale at the base commit — the lock
+  pinned project version `2026.9.2` while `pyproject.toml` was `2026.9.5` — and `uv sync` corrects
   it, so it cannot be left dirty in a reviewable tree. It ships as a separate `chore(deps)` work unit
   and is added to the authorized scope for that reason only.
+- **D8 — The "no new controls" guard is narrowed, not deleted.** Two tests exist that assert the
+  Agenda page does **not** offer `crear|editar|reagendar|disponibilidad`
+  (`AgendaPage.test.tsx:106`, `AgendaPage.stories.test.tsx:97-98`). This unit deliberately
+  invalidates exactly one of those words: creation is now an approved capability. The guard keeps
+  forbidding `editar`, `reagendar` and `disponibilidad`, and the stories test additionally asserts
+  that the approved control **is** present — so the guard now pins the new boundary instead of the
+  old one. Deleting the guard would have been the wrong move; it was protecting a real contract.
+
+## Route per task
+
+| Task | Route | Trigger evidence |
+| --- | --- | --- |
+| T1–T6 | delegated (one bounded writer) | 5+ non-trivial files across Python and TypeScript; the writer trigger fired |
+| T7 | delegated (one bounded writer) | operator copy across a component plus its test, plus a separate lock correction |
+| D8 guard fix | inline | two one-line negative assertions in files already read; no research and no unresolved design work |
 
 ## Tasks
 
-- [ ] **T1 — RED (backend).** Functional test: `POST /panel/api/appointments` with an invalid IANA
+- [x] **T1 — RED (backend).** Functional test: `POST /panel/api/appointments` with an invalid IANA
   timezone returns `400` with a structured code, not a 500.
-- [ ] **T2 — GREEN.** Map `InvalidTimezone` in `create_appointment` next to the existing handlers.
-- [ ] **T3 — RED/GREEN (web helper).** `agendaTime`: compose a local date + clock + IANA timezone
+- [x] **T2 — GREEN.** Map `InvalidTimezone` in `create_appointment` next to the existing handlers.
+- [x] **T3 — RED/GREEN (web helper).** `agendaTime`: compose a local date + clock + IANA timezone
   into the request payload parts, and report nonexistent / ambiguous local time distinctly. Vitest
   first.
-- [ ] **T4 — Web API client.** Request type, `createAppointment`, and any lookup helper the form
+- [x] **T4 — Web API client.** Request type, `createAppointment`, and any lookup helper the form
   needs that is genuinely missing.
-- [ ] **T5 — RED/GREEN (UI).** Create dialog in `AgendaPage` with the outcome handling of D5 and the
+- [x] **T5 — RED/GREEN (UI).** Create dialog in `AgendaPage` with the outcome handling of D5 and the
   refetch of D3. Vitest first.
-- [ ] **T6 — Evidence.** Required checks run; results recorded below.
-- [ ] **T7 — Correction pass (found in review).** The first implementation shipped English operator
+- [x] **T6 — Evidence.** Required checks run; results recorded below.
+- [x] **T7 — Correction pass (found in review).** The first implementation shipped English operator
   copy inside the Spanish panel (D6). Translate every string the operator reads in the create flow to
   Spanish (`es-CL`), keep the test queries in sync, and confirm no English label remains in the new
   flow. Also commit the `uv.lock` correction as its own `chore(deps)` work unit (D7).
@@ -193,12 +209,40 @@ Any file outside this list needs a scope update here first.
 ## Progress
 
 - [x] Created this ODD record before the first source change.
+- [x] T1/T2 — the invalid-timezone code is pinned by a test. The original premise (a 500) was wrong and
+      is corrected above; the shipped change only aligns create with the code the list route already
+      published.
+- [x] T3 — `composeAgendaTime` detects nonexistent and ambiguous local times by probing the real UTC
+      offsets around the wall clock, and returns the exact payload parts.
+- [x] T4 — `createAppointment`, `fetchClients`, `fetchCases` and the request/response types.
+- [x] T5 — the create dialog in `AgendaPage`, with 409 / DST / generic outcomes separated (D5).
+- [x] T7 — operator copy translated to Spanish; DST feedback switched on `AgendaTimeError.code` so the
+      utility keeps its English developer messages (D6). `uv.lock` corrected separately (D7).
+- [x] D8 — the no-new-controls guard narrowed in both files.
+- [x] T6 — evidence below.
 
 ## Verification evidence
 
+Numbers below were observed by the orchestrator on the final tree (not copied from a worker report).
+
 | Command | Observed result |
 | --- | --- |
-| (pending) | |
+| `uv run pytest tests/functional/test_api_scheduling.py` | `7 passed in 1.19s` |
+| `uv run pytest tests/` | exit `0`; all dots, no failures, no errors. The summary line is suppressed by `addopts = "-q"` (`pyproject.toml:46`) — a known condition, not a defect |
+| `cd web && npx vitest run` | exit `0`; `85 passed (85)` files, `716 passed (716)` tests — two consecutive green runs |
+| `cd web && npm run build` | exit `0`; `✓ built in 5.96s` |
+| `git diff --check` | no output |
+| `grep` for the retired English copy in `AgendaPage.tsx` | no matches |
+| Authored lines (`git diff --numstat` against the branch point) | `additions=224 deletions=5` before the correction pass; the correction pass adds the copy, guard and lock commits |
+
+**Unresolved, recorded rather than hidden:** one intermediate `vitest` run reported
+`1 failed | 715 passed (716)`. The output was overwritten before the failing test could be
+attributed, and the failure did not reproduce across two subsequent full green runs. Treat it as an
+unattributed flake; if it reappears, capture the test name first.
+
+**Environment conditions met, not defects:** the worktree's `graphify-out/` is absent (gitignored), so
+the Graph Check ran against the primary worktree's graph. The worktree test database runs on host port
+6009 as project `lumat-test-lumat-agent-odd-agenda-booking`.
 
 ## Recovery
 
