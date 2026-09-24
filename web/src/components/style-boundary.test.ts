@@ -22,6 +22,18 @@ describe("stylesheet boundary", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("keeps fully migrated components free of static inline styles", () => {
+    const componentFiles = [
+      "src/components/domain/ClientMemories.tsx",
+      "src/components/pages/CasesList.tsx",
+    ];
+    const offenders = componentFiles.filter((file) =>
+      /style=\{\{/.test(readFileSync(join(process.cwd(), file), "utf8")),
+    );
+
+    expect(offenders).toEqual([]);
+  });
+
   it("keeps the migrated icon surfaces free of inline svg literals", () => {
     const iconFiles = [
       "src/components/domain/PanelShell.tsx",

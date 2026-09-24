@@ -75,7 +75,7 @@ export function ClientMemories({
         emptyMessage="Sin memorias todavía"
         rowKey={(m) => String(m.id)}
         actions={(m) => (
-          <div style={{ display: "flex", gap: "var(--space-2)" }}>
+          <div className="table__actions">
             {onPin ? (
               <Button variant="secondary" onClick={() => onPin(m.id, !m.pin)}>
                 {m.pin ? "Quitar pin" : "Fijar"}
@@ -90,7 +90,7 @@ export function ClientMemories({
         )}
       />
       {onUpsert ? (
-        <div style={{ display: "grid", gap: "var(--space-3)", marginTop: "var(--space-4)" }}>
+        <div className="client-memories__section">
           <Textarea
             label="Nueva memoria"
             placeholder="Escribe una memoria sobre este cliente…"
@@ -111,17 +111,17 @@ export function ClientMemories({
         </div>
       ) : null}
       {pendingRelations.length ? (
-        <div style={{ display: "grid", gap: "var(--space-3)", marginTop: "var(--space-4)" }}>
+        <div className="client-memories__section">
           <h3>Relaciones pendientes</h3>
           {pendingRelations.map((pending) => (
-            <article key={pending.id} style={{ display: "grid", gap: "var(--space-2)" }}>
+            <article key={pending.id} className="client-memories__relation">
               <strong>{pending.memory_a.titulo} · {pending.memory_b.titulo}</strong>
               <p>{pending.memory_a.contenido}</p>
               <p>{pending.memory_b.contenido}</p>
               <p>Propuesta: {pending.relation} · Confianza: {pending.confidence}</p>
               <p>Motivo: {pending.reason ?? "—"}</p>
               {onResolveRelation ? (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-2)" }}>
+                <div className="client-memories__relation-actions">
                   {(["supersedes", "conflicts", "related", "compatible", "scoped", "not_conflict"] as const).map((relation) => (
                     <Button
                       key={relation}
