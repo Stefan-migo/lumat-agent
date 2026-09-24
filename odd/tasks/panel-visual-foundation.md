@@ -192,6 +192,26 @@ security class.
   It is **not** required by `PanelEntry.stories.test.tsx:230-237`, which never reads the
   `Usuarios` entry; the original mapping already passed that test. If the owner prefers the
   pre-migration identity, revert `users` to `Users` — no test depends on the distinction.
+- **D15 — T8 re-scoped: Radix applies to `Tabs` only (2026-09-24).** Field evidence
+  contradicts D8's premise. `Dialog` (native `<dialog>` + `showModal()`, source comment
+  "native modal ownership"), `Popover` (native Popover API, `popover="auto"`), `Tooltip`
+  (`popover="hint"`) and `Select` (native `<select>`; its public API *is*
+  `SelectHTMLAttributes<HTMLSelectElement>`) already delegate to platform features. D8's
+  assumed "~12 KB of hand-rolled behaviour" does not exist: the five sources total **8.6 KB**,
+  of which the actual behaviour is **~55 LOC**. Migrating them would move them from Ponytail
+  rung 2 (native platform) back to rung 3 (installed dependency), add four packages, and make
+  T8's own **"DOM-equivalent"** criterion impossible — `<dialog>` → `<div role="dialog">`
+  (losing the native top layer, `::backdrop`, focus trap and `onCancel`), and `<select>` → a
+  custom listbox that forces an adapter for six production consumers reading
+  `event.target.value` as a native `ChangeEvent<HTMLSelectElement>`. **Decision:** T8 migrates
+  `Tabs` only — the sole primitive with hand-rolled behaviour — and *declares* the resulting
+  delta: Radix Tabs adds roving tabindex and arrow-key/Home/End navigation
+  (`activationMode="automatic"`), which today's click-only implementation lacks. The other
+  four are recorded as a finding under Slice 3, not migrated. Rejected: migrating all five
+  (breaks DOM-equivalence and rewrites the a11y contract the tests pin); closing T8 unshipped
+  (leaves the real keyboard-ARIA gap in `Tabs` unfixed); a hand-rolled roving tabindex
+  (re-implements what an installed dependency already provides once Radix is adopted for
+  `Tabs`, and diverges from the `Menu.tsx` precedent).
 
 ## Tasks
 
@@ -394,8 +414,27 @@ clean. Three things needed correcting:
 
 ### Slice 3 — composite migration to Radix (PR 3)
 
-- [ ] **T8** — Migrate `Dialog`, `Popover`, `Tabs`, `Tooltip` and `Select` to
-  Radix, behaviour- and DOM-equivalent, tests green, no visual change.
+- [ ] **T8 — Migrate `Tabs` to `@radix-ui/react-tabs` (`D15`), behaviour-equivalent
+  except the declared keyboard delta.** The public API is unchanged: `TabItem`,
+  `TabsProps` (`tabs`, `activeTab` for controlled mode / omit for uncontrolled,
+  `onTabChange`, `children(activeId)` render prop, `ariaLabel`). The DOM hooks the
+  stylesheet and tests rely on must survive: `.tabs`, `.tabs [role="tablist"]`,
+  `.tabs__tab`, `.tabs__tab[aria-selected="true"]`, `.tabs__panel`, and
+  `role="tablist"` / `role="tab"` / `role="tabpanel"`. Controlled semantics are
+  preserved exactly: in controlled mode a click fires `onTabChange` but the selection
+  does **not** move until `activeTab` changes; only the active panel is rendered.
+  **Declared delta:** arrow-key / Home / End navigation with roving tabindex (Radix
+  `activationMode="automatic"`, the default), absent in the click-only implementation.
+  `Dialog`, `Popover`, `Tooltip` and `Select` are **out of scope** per `D15`.
+
+**T8 Ponytail finding — the four not migrated (2026-09-24).** `Dialog`, `Popover`,
+`Tooltip` and `Select` sit at Ponytail rung 2: the native platform already covers
+their behaviour, and `Menu.tsx` is the only composite in this repo that ever needed
+Radix. Migrating them would add four packages, remove no behaviour, and force a
+`Select` adapter for six native-`ChangeEvent` consumers. The unit's remaining Radix
+value is exactly one genuine keyboard-ARIA gap, in `Tabs`. A uniform Radix primitives
+layer adopted for consistency is a legitimate but *separate* architectural decision
+with its own cost — it is not a simplification, and it is not this unit's.
 
 ## Acceptance criteria
 
