@@ -44,4 +44,12 @@ describe("ConversationThread", () => {
     expect(screen.getByRole("button", { name: "Cerrar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reconocer emergencia" })).toBeInTheDocument();
   });
+
+  it("renders the interactive story inspector content", () => {
+    render(<InteractiveConversationThreadView />);
+    expect(screen.getByRole("heading", { name: "Cliente" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Caso" })).toBeInTheDocument();
+    expect(screen.getByText("Datos capturados")).toBeInTheDocument();
+    expect(screen.getByText("https://portal.aguas.cl/ordenes/2026/cliente-301/seguimiento-reparacion-urgente-987654321")).toBeInTheDocument();
+  });
 });
