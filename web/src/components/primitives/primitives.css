@@ -2098,10 +2098,10 @@
 .agenda-calendar__toolbar h2 { margin: 0; font-size: var(--text-lg); }
 .agenda-calendar__view-toggle { margin-left: var(--space-2); }
 .agenda-calendar__view-toggle [aria-pressed="true"] { border-color: var(--primary-700); background: var(--primary-100); color: var(--primary-800); }
-.agenda-calendar__grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: var(--space-1);
+.agenda-calendar__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: var(--space-1);
   min-width: calc(var(--space-8) * 9);
 }
 .agenda-calendar__weekday {
@@ -2114,7 +2114,7 @@
 }
 .agenda-calendar__cell,
 .agenda-calendar__empty { min-width: 0; min-height: calc(var(--space-8) * 2); }
-.agenda-calendar__cell { display: grid; }
+.agenda-calendar__cell { width: calc(100% / 7); }
 .agenda-calendar__day {
   display: grid;
   align-content: start;

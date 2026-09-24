@@ -7,6 +7,7 @@ import {
   agendaWeekDays,
   agendaWeekdayLabels,
 } from "./agendaTime";
+import { Button } from "../primitives/Button";
 
 export type AgendaCalendarView = "month" | "week";
 
@@ -43,50 +44,41 @@ export function AgendaCalendar({
   const monthLabel = agendaMonthLabel(anchor, timezone);
   const monthCells = [...Array.from({ length: leadingEmptyCells }), ...days];
   const trailingEmptyCells = view === "month" ? (7 - (monthCells.length % 7)) % 7 : 0;
-  const gridCells = view === "month" ? [...monthCells, ...Array.from({ length: trailingEmptyCells })] : days;
+  const tableCells = view === "month" ? [...monthCells, ...Array.from({ length: trailingEmptyCells })] : days;
+  const rows = view === "month" ? Array.from({ length: tableCells.length / 7 }, (_, index) => tableCells.slice(index * 7, index * 7 + 7)) : [tableCells];
 
   return (
     <section className="agenda-calendar" aria-labelledby="agenda-calendar-title">
       <div className="agenda-calendar__toolbar">
         <h2 id="agenda-calendar-title">{view === "month" ? monthLabel : `Semana del ${agendaPeriodLabel(days[0], timezone)}`}</h2>
         <div className="agenda-calendar__actions">
-          <button type="button" className="btn btn--secondary" onClick={() => onNavigate(-1)}>Período anterior</button>
-          <button type="button" className="btn btn--secondary" onClick={() => onNavigate(0)}>Hoy</button>
-          <button type="button" className="btn btn--secondary" onClick={() => onNavigate(1)}>Período siguiente</button>
+          <Button variant="secondary" onClick={() => onNavigate(-1)}>Período anterior</Button>
+          <Button variant="secondary" onClick={() => onNavigate(0)}>Hoy</Button>
+          <Button variant="secondary" onClick={() => onNavigate(1)}>Período siguiente</Button>
           <div className="agenda-calendar__view-toggle" aria-label="Vista del calendario">
-            <button type="button" className="btn btn--secondary" aria-pressed={view === "month"} onClick={() => onViewChange("month")}>Mes</button>
-            <button type="button" className="btn btn--secondary" aria-pressed={view === "week"} onClick={() => onViewChange("week")}>Semana</button>
+            <Button variant="secondary" onClick={() => onViewChange(view === "month" ? "week" : "month")}>
+              {view === "month" ? "Ver semana" : "Ver mes"}
+            </Button>
           </div>
         </div>
       </div>
-      <div className="agenda-calendar__grid" role="grid" aria-label={`Calendario de ${monthLabel}`}>
-        {agendaWeekdayLabels(timezone).map((label) => <div key={label} className="agenda-calendar__weekday" role="columnheader">{label}</div>)}
-        {gridCells.map((day, index) => {
-          if (typeof day !== "string") {
-            return <div key={`empty-${index}`} className="agenda-calendar__empty" role="gridcell" aria-hidden="true" />;
-          }
+      <table className="agenda-calendar__table" aria-label={`Calendario de ${monthLabel}`}>
+        <thead><tr>{agendaWeekdayLabels(timezone).map((label) => <th key={label} className="agenda-calendar__weekday" scope="col">{label}</th>)}</tr></thead>
+        <tbody>{rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((day, index) => {
+          if (typeof day !== "string") return <td key={`empty-${rowIndex}-${index}`} className="agenda-calendar__empty" aria-hidden="true" />;
           const count = visitCounts[day] ?? 0;
           const selected = selectedDay === day;
           const current = today === day;
-          return (
-            <div key={day} className="agenda-calendar__cell" role="gridcell" aria-selected={selected}>
-              <button
-                type="button"
-                className="agenda-calendar__day"
-                aria-label={`${agendaPeriodLabel(day, timezone)}, ${visitLabel(count)}`}
-                aria-selected={selected}
-                aria-current={current ? "date" : undefined}
-                onClick={() => onSelectDay(selected ? null : day)}
-              >
-                <span className="agenda-calendar__number">{agendaDayNumber(day)}</span>
-                <span className="agenda-calendar__count">{visitLabel(count)}</span>
-                {current ? <span className="agenda-calendar__today">Hoy</span> : null}
-                {selected ? <span className="agenda-calendar__selected">Seleccionado</span> : null}
-              </button>
-            </div>
-          );
-        })}
-      </div>
+          return <td key={day} className="agenda-calendar__cell">
+            <button type="button" className="agenda-calendar__day" aria-label={`${agendaPeriodLabel(day, timezone)}, ${visitLabel(count)}`} aria-pressed={selected} aria-current={current ? "date" : undefined} onClick={() => onSelectDay(selected ? null : day)}>
+              <span className="agenda-calendar__number">{agendaDayNumber(day)}</span>
+              <span className="agenda-calendar__count">{visitLabel(count)}</span>
+              {current ? <span className="agenda-calendar__today">Hoy</span> : null}
+              {selected ? <span className="agenda-calendar__selected">Seleccionado</span> : null}
+            </button>
+          </td>;
+        })}</tr>)}</tbody>
+      </table>
     </section>
   );
 }
