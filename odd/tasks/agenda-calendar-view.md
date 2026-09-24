@@ -125,7 +125,7 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
   (day-key list for a month, day-key list for a week with Monday-first weeks, month label, weekday
   labels, day-number, and navigation across month/year boundaries), watch it fail, then implement
   them in `agendaTime.ts`.
-- [ ] **T3 — RED/GREEN: `AgendaCalendar`.** New `AgendaCalendar.test.tsx` + `AgendaCalendar.tsx`:
+- [x] **T3 — RED/GREEN: `AgendaCalendar`.** New `AgendaCalendar.test.tsx` + `AgendaCalendar.tsx`:
   month and week grids, previous/next/today navigation, view toggle, day selection with an
   accessible selected state, per-day visit counts, keyboard operation, and an empty month. Add its
   commented CSS section in `primitives.css`.
@@ -183,6 +183,10 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
 - [x] **T2** — `agendaTime.ts` now provides timezone-aware month/week labels, day lists, period
       navigation, and day formatting. RED: focused Vitest reported 10 failures with missing exported
       helper functions. GREEN: commit `b0f69ec6`; focused Vitest passed **12 tests**.
+- [x] **T3** — `AgendaCalendar` now renders tokenized month/week grids with navigation, view toggle,
+      selection, current-day marking, visit density, keyboard controls, and non-selectable empty cells.
+      RED: focused Vitest failed to resolve `./AgendaCalendar` because the component did not exist.
+      GREEN: commit `f86b0f83`; focused Vitest passed **6 tests**, with the stylesheet boundary green.
 
 ## Recovery
 
