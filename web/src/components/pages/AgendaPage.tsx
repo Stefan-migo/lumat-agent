@@ -10,7 +10,8 @@ import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
-import { agendaDayKey, formatAgendaSlot } from "../shared/agendaTime";
+import { agendaMonthDays, agendaPeriodLabel, agendaShiftPeriod, agendaTodayKey, agendaWeekDays, formatAgendaSlot } from "../shared/agendaTime";
+import { AgendaCalendar, type AgendaCalendarView } from "../shared/AgendaCalendar";
 import { appointmentStatusLabel, appointmentStatusTone, appointmentSyncLabel, appointmentSyncTone } from "../shared/toneMaps";
 
 export type AgendaPageState = AsyncDataState | "stale";
@@ -25,13 +26,6 @@ export interface AgendaPageProps {
 type ActionFeedback = { id: number; tone: "success" | "danger"; title: string; detail?: string };
 
 function localDate(value: string) { return value.slice(0, 10); }
-
-function requestDates(timezone: string) {
-  const today = agendaDayKey(new Date().toISOString(), timezone);
-  const end = new Date(`${today}T12:00:00Z`);
-  end.setUTCDate(end.getUTCDate() + 30);
-  return { from: today, to: end.toISOString().slice(0, 10) };
-}
 
 function stateMessage(state: AgendaPageState, retry: () => void) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando agenda" />;
@@ -56,19 +50,23 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const [mutatingId, setMutatingId] = useState<number | null>(null);
   const [cancelFeedback, setCancelFeedback] = useState<ActionFeedback | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<ActionFeedback | null>(null);
+  const [view, setView] = useState<AgendaCalendarView>("month");
+  const [anchor, setAnchor] = useState(() => agendaTodayKey(timezone));
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const periodDays = view === "month" ? agendaMonthDays(anchor, timezone) : agendaWeekDays(anchor, timezone);
+  const from = periodDays[0];
+  const to = periodDays[periodDays.length - 1];
   const fetchAgenda = useCallback(() => {
-    const dates = requestDates(timezone);
-    return listAppointments(dates.from, dates.to, timezone).then((response) => response.appointments);
-  }, [timezone]);
-  const fetched = useAsyncData(fetchAgenda, controlledData === undefined);
+    return listAppointments(from, to, timezone).then((response) => response.appointments);
+  }, [from, to, timezone]);
+  const fetched = useAsyncData(fetchAgenda, controlledData === undefined, Date.parse(from));
   const data = updatedData ?? (controlledData === undefined ? fetched.data : controlledData);
   const state = controlledState ?? fetched.state;
   const retry = onRetry ?? fetched.retry;
-  const today = agendaDayKey(new Date().toISOString(), timezone);
+  const today = agendaTodayKey(timezone);
   const appointments = data ?? [];
   const refreshAgenda = async () => {
-    const dates = requestDates(timezone);
-    const response = await listAppointments(dates.from, dates.to, timezone);
+    const response = await listAppointments(from, to, timezone);
     setUpdatedData(response.appointments);
   };
   const cancel = async () => {
@@ -101,23 +99,51 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       setMutatingId(null);
     }
   };
-  const todayRows = appointments.filter((row) => localDate(row.local_start) === today).sort((a, b) => a.local_start.localeCompare(b.local_start));
-  const upcomingRows = appointments.filter((row) => localDate(row.local_start) !== today).sort((a, b) => a.local_start.localeCompare(b.local_start));
+  const sortedAppointments = [...appointments].sort((a, b) => a.local_start.localeCompare(b.local_start));
+  const visitCounts = appointments.reduce<Record<string, number>>((counts, row) => {
+    const day = localDate(row.local_start);
+    counts[day] = (counts[day] ?? 0) + 1;
+    return counts;
+  }, {});
+  const todayRows = sortedAppointments.filter((row) => localDate(row.local_start) === today);
+  const upcomingRows = sortedAppointments.filter((row) => localDate(row.local_start) > today);
+  const periodRows = sortedAppointments;
+  const selectedRows = selectedDay ? sortedAppointments.filter((row) => localDate(row.local_start) === selectedDay) : null;
+  const containsToday = periodDays.includes(today);
   const actions = (row: AgendaAppointment) => <>
     {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setCancelTarget(row); setCancelFeedback(null); }}>Cancelar visita</Button> : null}
     {row.sync.status === "pending" || row.sync.status === "failed" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void retrySync(row.id)} aria-label="Reintentar calendario">Reintentar calendario</Button> : null}
     {cancelFeedback?.id === row.id && cancelFeedback.tone === "success" ? <span role="status"><Badge tone="success">{cancelFeedback.title}</Badge></span> : null}
     {syncFeedback?.id === row.id ? <span role={syncFeedback.tone === "danger" ? "alert" : "status"}><Badge tone={syncFeedback.tone}>{syncFeedback.title}{syncFeedback.detail ? `: ${syncFeedback.detail}` : null}</Badge></span> : null}
   </>;
-  const section = (title: string, rows: AgendaAppointment[]) => (
+  const section = (title: string, rows: AgendaAppointment[]) => rows.length > 0 ? (
     <section className="agenda-page__section" aria-labelledby={`agenda-${title.toLowerCase()}`}>
       <h2 id={`agenda-${title.toLowerCase()}`}>{title}</h2>
-      {rows.length > 0 ? <div className="agenda-page__table-wrap"><div className="data-region"><DataTable columns={columns} rows={rows} emptyMessage="No hay visitas" rowKey={(row) => String(row.id)} actions={actions} actionsHeader="Acciones" /></div></div> : null}
+      <div className="agenda-page__table-wrap"><div className="data-region"><DataTable columns={columns} rows={rows} emptyMessage="No hay visitas" rowKey={(row) => String(row.id)} actions={actions} actionsHeader="Acciones" /></div></div>
     </section>
-  );
+  ) : null;
+
+  const navigate = (direction: -1 | 0 | 1) => {
+    setAnchor(direction === 0 ? agendaTodayKey(timezone) : agendaShiftPeriod(anchor, view, direction, timezone));
+    setSelectedDay(null);
+  };
+  const changeView = (nextView: AgendaCalendarView) => {
+    setView(nextView);
+    setSelectedDay(null);
+  };
+  const register = selectedRows
+    ? section(agendaPeriodLabel(selectedDay ?? "", timezone), selectedRows)
+    : containsToday
+      ? <>{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</>
+      : section("Visitas del período", periodRows);
+  const renderedRows = selectedRows ?? (containsToday ? [...todayRows, ...upcomingRows] : periodRows);
+  const showEmpty = data?.length === 0 || state === "empty" || renderedRows.length === 0;
 
   return <PageFrame title="Agenda" meta={data ? `${appointments.length} ${appointments.length === 1 ? "visita" : "visitas"}` : undefined} state={stateMessage(state, retry)}>
-    {state === "loading" || state === "error" || state === "denied" ? null : data?.length === 0 || state === "empty" ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : <section aria-label="Registro de agenda">{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</section>}
+    {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
+      <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
+      {showEmpty ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : <section aria-label="Registro de agenda">{register}</section>}
+    </div>}
     <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title={cancelTarget ? `Cancelar visita de ${cancelTarget.customer_name ?? "cliente"} — ${cancelTarget.service}` : "Cancelar visita"}>
       <p>La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.</p>
       <Textarea id="cancel-reason" label="Motivo de cancelación" value={reason} onChange={(event) => setReason(event.target.value)} />

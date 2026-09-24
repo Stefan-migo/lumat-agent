@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { cancelAppointment, listAppointments, retryCalendarSync } from "../../api";
@@ -26,8 +26,12 @@ vi.mock("../../api", () => ({
 describe("AgendaPage Storybook state matrix", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-09-05T12:00:00-04:00"));
     vi.mocked(listAppointments).mockResolvedValue({ appointments: [] });
   });
+
+  afterEach(() => vi.useRealTimers());
 
   it("covers production-shaped lifecycle and independent sync data", () => {
     render(<AgendaPageStory data={Data.args?.data} state="ready" />);
@@ -52,7 +56,7 @@ describe("AgendaPage Storybook state matrix", () => {
   });
 
   it("covers the cancel confirmation and sync retry paths", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     vi.mocked(cancelAppointment).mockResolvedValue({ ok: true, appointment: Data.args!.data![0] });
     vi.mocked(retryCalendarSync).mockResolvedValue({ ok: true, calendar: { status: "synced", error: null } });
     vi.mocked(listAppointments).mockResolvedValue({ appointments: Data.args!.data! });
@@ -76,11 +80,9 @@ describe("AgendaPage Storybook state matrix", () => {
     expect(screen.getAllByRole("dialog", { name: "Cancelar visita de Camila Soto — Mantención de calefón" })).toHaveLength(1);
   });
 
-  it("covers a populated page with an empty Hoy section", () => {
+  it("does not render an empty Hoy section", () => {
     render(<AgendaPageStory {...(SectionEmpty.args ?? {})} />);
-    const today = screen.getByRole("heading", { name: "Hoy", level: 2 }).closest("section");
-    expect(today).not.toBeNull();
-    expect(today).not.toHaveTextContent("No hay visitas");
+    expect(screen.queryByRole("heading", { name: "Hoy", level: 2 })).not.toBeInTheDocument();
     expect(screen.getByText("Instalación de cocina")).toBeInTheDocument();
   });
 
