@@ -530,14 +530,17 @@ Assessment for the slice diff (`fe221c0b..HEAD`): `medium`, 5 paths,
 the medium tier is covered by the writer's self-verification, the parent's
 independent RED verification, the readback and the four checks above.
 
-**Review size: 229 changed lines (168 added, 61 deleted)** — under the ~400 budget,
-so no cut pass was needed.
+**Review size: 207 changed lines of code and tests (154 added, 53 deleted)** —
+under the ~400 budget, so no cut pass was needed. The unit record is excluded from
+the review size by definition: it grew when this very evidence was recorded, so
+including it would make the number move every time it is written down.
 
 | Side | Changed lines |
 |---|---|
 | Production source (`KbList.tsx`, `primitives.css`) | 67 |
 | Tests and stories | 140 |
-| This unit record | 22 |
+| **Code and tests — the review size** | **207** |
+| This unit record (not part of the review size) | 107 |
 
 Open items declared for slice 4:
 
