@@ -240,19 +240,19 @@ describe('AgendaPage', () => {
     vi.mocked(listAppointments).mockResolvedValue({ appointments: [] });
 
     render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
-    await user.click(screen.getByRole('button', { name: 'New appointment' }));
-    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Create appointment' })).toBeInTheDocument());
-    await user.selectOptions(screen.getByLabelText('Customer'), '10');
-    await user.selectOptions(screen.getByLabelText('Case'), '20');
-    await user.selectOptions(screen.getByLabelText('Technician'), '30');
-    await user.type(screen.getByLabelText('Service'), 'Maintenance');
-    await user.clear(screen.getByLabelText('Local date'));
-    await user.type(screen.getByLabelText('Local date'), '2026-09-05');
-    await user.clear(screen.getByLabelText('Local time'));
-    await user.type(screen.getByLabelText('Local time'), '10:00');
-    await user.clear(screen.getByLabelText('Duration (minutes)'));
-    await user.type(screen.getByLabelText('Duration (minutes)'), '60');
-    await user.click(screen.getByRole('button', { name: 'Create appointment' }));
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
+    await user.selectOptions(screen.getByLabelText('Caso'), '20');
+    await user.selectOptions(screen.getByLabelText('Técnico'), '30');
+    await user.type(screen.getByLabelText('Servicio'), 'Maintenance');
+    await user.clear(screen.getByLabelText('Fecha local'));
+    await user.type(screen.getByLabelText('Fecha local'), '2026-09-05');
+    await user.clear(screen.getByLabelText('Hora local'));
+    await user.type(screen.getByLabelText('Hora local'), '10:00');
+    await user.clear(screen.getByLabelText('Duración (minutos)'));
+    await user.type(screen.getByLabelText('Duración (minutos)'), '60');
+    await user.click(screen.getByRole('button', { name: 'Crear visita' }));
 
     await waitFor(() => expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({ customer_id: 10, case_id: 20, technician_id: 30, timezone: 'America/Santiago', local_time: '10:00:00' })));
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
