@@ -60,7 +60,7 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[appointment(), appointment({ id: 2, service: 'Instalación', local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
     expect(screen.getByRole('heading', { name: 'Hoy', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Próximas', level: 2 })).toBeInTheDocument();
-    expect(screen.getAllByRole('table')).toHaveLength(2);
+    expect(screen.getAllByRole('table')).toHaveLength(3);
     expect(screen.getAllByText('Camila Soto')).toHaveLength(2);
     expect(screen.getByText('Instalación')).toBeInTheDocument();
     expect(screen.getByText('Mantención')).toBeInTheDocument();
@@ -68,10 +68,10 @@ describe('AgendaPage', () => {
 
   it('uses singular and plural visit counts', () => {
     const { rerender } = render(<AgendaPage data={[appointment()]} state="ready" />);
-    expect(screen.getByText('1 visita')).toBeInTheDocument();
+    expect(screen.getByText('1 visita', { selector: 'p' })).toBeInTheDocument();
 
     rerender(<AgendaPage data={[appointment(), appointment({ id: 2 })]} state="ready" />);
-    expect(screen.getByText('2 visitas')).toBeInTheDocument();
+    expect(screen.getByText('2 visitas', { selector: 'p' })).toBeInTheDocument();
   });
 
   it('renders appointment slots in 24-hour time', () => {
@@ -82,10 +82,8 @@ describe('AgendaPage', () => {
 
   it('does not render an empty surface for a section without rows', () => {
     render(<AgendaPage data={[appointment({ local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
-    const today = screen.getByRole('heading', { name: 'Hoy', level: 2 }).closest('section');
-    expect(today).not.toBeNull();
-    expect(today?.querySelector('.empty-state')).not.toBeInTheDocument();
-    expect(today).not.toHaveTextContent('No hay visitas');
+    expect(screen.queryByRole('heading', { name: 'Hoy', level: 2 })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Próximas', level: 2 })).toBeInTheDocument();
   });
 
   it('names the register region and surfaces only non-empty tables', () => {
@@ -164,5 +162,51 @@ describe('AgendaPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Calendario no disponible');
     expect(screen.getByRole('row', { name: /Mantención/ })).toHaveTextContent('Calendario no disponible');
     expect(screen.getByRole('alert').querySelector('h2')).not.toBeInTheDocument();
+  });
+
+  it('uses the visible month as the fetch window and navigates to the next month', async () => {
+    const user = userEvent.setup();
+    vi.mocked(listAppointments).mockResolvedValue({ appointments: [] });
+    render(<AgendaPage timezone="America/Santiago" />);
+
+    await waitFor(() => expect(listAppointments).toHaveBeenCalledWith('2026-09-01', '2026-09-30', 'America/Santiago'));
+    await user.click(screen.getByRole('button', { name: 'Período siguiente' }));
+    await waitFor(() => expect(listAppointments).toHaveBeenCalledWith('2026-10-01', '2026-10-31', 'America/Santiago'));
+  });
+
+  it('filters the register by selected day and restores sections when cleared', async () => {
+    const user = userEvent.setup();
+    const tomorrow = appointment({ id: 2, service: 'Instalación', local_start: '2026-09-06T09:00:00-04:00' });
+    render(<AgendaPage data={[appointment(), tomorrow]} state="ready" timezone="America/Santiago" />);
+
+    await user.click(screen.getByRole('button', { name: /^sábado 5 de septiembre,/ }));
+    expect(screen.getByRole('heading', { name: 'sábado 5 de septiembre', level: 2 })).toBeInTheDocument();
+    expect(screen.getByText('Mantención')).toBeInTheDocument();
+    expect(screen.queryByText('Instalación')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^sábado 5 de septiembre,/ }));
+    expect(screen.getByRole('heading', { name: 'Hoy', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Próximas', level: 2 })).toBeInTheDocument();
+  });
+
+  it('uses a single period section after navigating outside the current day', async () => {
+    const user = userEvent.setup();
+    vi.mocked(listAppointments)
+      .mockResolvedValueOnce({ appointments: [appointment()] })
+      .mockResolvedValue({ appointments: [appointment({ id: 2, service: 'Instalación', local_start: '2026-10-06T09:00:00-03:00' })] });
+    render(<AgendaPage timezone="America/Santiago" />);
+
+    await waitFor(() => expect(screen.getByText('Mantención')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Período siguiente' }));
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Visitas del período', level: 2 })).toBeInTheDocument());
+    expect(screen.getByText('Instalación')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Hoy', level: 2 })).not.toBeInTheDocument();
+  });
+
+  it('shows the existing empty state when the visible period has no rows', async () => {
+    vi.mocked(listAppointments).mockResolvedValue({ appointments: [] });
+    render(<AgendaPage timezone="America/Santiago" />);
+
+    expect(await screen.findByText('No hay visitas')).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Calendario de septiembre de 2026' })).toBeInTheDocument();
   });
 });

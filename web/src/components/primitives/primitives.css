@@ -2075,6 +2075,10 @@
 /* Agenda page: page-specific table layout remains inside the shared stylesheet boundary. */
 .agenda-page__section { display: grid; gap: var(--space-3); min-width: 0; }
 .agenda-page__table-wrap { min-width: 0; overflow-x: auto; }
+.agenda-page__layout { display: grid; gap: var(--space-5); min-width: 0; }
+@media (min-width: 64rem) {
+  .agenda-page__layout { grid-template-columns: minmax(20rem, 1fr) minmax(0, 1.35fr); align-items: start; }
+}
 
 /* ---- Agenda calendar (AG-UI-1 / D6) ---- */
 .agenda-calendar {
