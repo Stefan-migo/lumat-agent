@@ -146,23 +146,23 @@ block directly after the Table block. Every value resolves through an existing t
 
 ## Tasks
 
-- [ ] **T1 (DataTable, TDD)** — RED: extend the DataTable test so it asserts the stale note carries
+- [x] **T1 (DataTable, TDD)** — RED: extend the DataTable test so it asserts the stale note carries
   `table__stale` and has **no** `style` attribute. Then move `DataTable.tsx:63` to the class and add
   `.table__stale` + `.table__actions` to `primitives.css`. Re-run → GREEN. Leave `:28`, `:71`, `:80`
   untouched.
-- [ ] **T2 (ClientMemories, TDD)** — RED: assert the rendered region applies
+- [x] **T2 (ClientMemories, TDD)** — RED: assert the rendered region applies
   `client-memories__section` (both sites), `client-memories__relation`,
   `client-memories__relation-actions` and `table__actions`, that each carries no `style` attribute,
   and that no migrated site keeps an inline style. Then replace the five sites and add the four
   `.client-memories__*` rules. Re-run → GREEN.
-- [ ] **T3 (CasesList, TDD)** — RED: assert the customer link carries `table__link`, the outer
+- [x] **T3 (CasesList, TDD)** — RED: assert the customer link carries `table__link`, the outer
   wrapper `cases-list__actions`, the button row `table__actions`, and that each has no `style`
   attribute. Then replace the four sites and add `.cases-list__actions`. Re-run → GREEN.
-- [ ] **T4 (regrowth guard)** — RED first: add to `style-boundary.test.ts` a source walk asserting
+- [x] **T4 (regrowth guard)** — RED first: add to `style-boundary.test.ts` a source walk asserting
   zero `style={{` occurrences in `ClientMemories.tsx` and `CasesList.tsx`. It fails before T2/T3 and
   passes after; if T2/T3 already landed, verify the RED by temporarily checking out the base file
   contents and re-running, then restore byte-identical. Do **not** add a rule for `DataTable.tsx`.
-- [ ] **T5 — verification.** `npm run test`, `npx tsc -b`, `npm run build-storybook`; record the
+- [x] **T5 — verification.** `npm run test`, `npx tsc -b`, `npm run build-storybook`; record the
   real counts.
 - [ ] **T6 — visual check** by the owner at 1366×768 with the 640/1024/1280 references. This change
   must be **pixel-identical** to the base: it moves declarations, it does not alter them.
@@ -208,6 +208,12 @@ Guards that must stay green: `tokens.test.ts`, `style-boundary.test.ts`,
   community.
 - 2026-09-24 — Base verified to contain `66cc868a`; all ten static sites and `.table__link`
   confirmed present at the stated lines.
+- 2026-09-24 — Baseline `cd web && npm run test`: 86 test files passed, 718 tests passed.
+- 2026-09-24 — T1–T5 implemented and committed: `1f80143c` (DataTable), `51da8559`
+  (ClientMemories), `74ceeff4` (CasesList), `f1386777` (regrowth guard). TDD RED evidence was
+  observed before each migration; T4 was also proven RED against the base component files.
+- 2026-09-24 — Final verification: `cd web && npm run test` passed with 86 test files and 721
+  tests; `cd web && npx tsc -b` exited 0; `cd web && npm run build-storybook` completed successfully.
 
 ## Open items
 
