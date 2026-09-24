@@ -4,7 +4,7 @@
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-tool-chaining-slice2`
 (the slice 1 worktree was removed after its merge)
 **Base**: `e16b3ff8` (slice 1) · `6b3214bd` (= `main` after PR #339, slice 2)
-**Status**: slice 1 merged · slice 2 in progress (T4–T8 outstanding)
+**Status**: slice 1 merged · slice 2 in progress (T4–T6 done, T7–T9 outstanding)
 **Origin**: `.rapsodia-code/sessions/ready-for-odd/2026-09-24-panel-agency-and-web-grounding/`
 (Engram `handoff/panel-agency-to-u1-tool-chaining`)
 
@@ -207,22 +207,27 @@ Observable behavior this unit must produce. Implementation shape is the implemen
   (`customers.search → memory.search`), so the core U1 feature is intact.
   *(This entry was written, and the task list description corrected, before the review freeze — the
   slice 1 record could not be edited while its review was open.)*
-- [ ] **T5 — RED + GREEN, planner sees prior results, bounded.** **Partially delivered inside T2 and never
-  checked off — slice 2 must finish it.** The implementation exists: `_planner_context_text()`
-  (`nodes.py:275-278`) appends `_render_tool_evidence()` to the planner prompt only (`plan_llm`,
-  `nodes.py:489`), and `_render_tool_evidence()` truncates the combined rendering at
-  `_TOOL_EVIDENCE_LIMIT`. What does NOT exist is the proof: the only related assertion,
-  `test_assistant_tool_loop.py:348`, checks that the *shared* `_context_text()` stays clean — it never
-  asserts that the **planner** prompt carries the accumulated results. Contract items 4 and 7 are
-  therefore implemented-but-unproven, and the slice 2 handoff omitted T5 from its task list entirely.
-  RED: the planner prompt carries a bounded rendering of accumulated results and the combined rendering
-  stays within budget across N results. GREEN: extend the planning prompt with the bounded rendering.
-  **Open question T5 must answer with evidence, not opinion:** `_render_tool_evidence()` truncates the
-  *joined* string from the end, so with N results a large earlier result can push the **newest** result —
-  the very one that triggered the re-plan — out of the planner's view. Decide whether the budget must
-  favour the most recent results, and pin the answer with a test either way.
-- [ ] **T6 — Observability.** `tool_steps` and `cap_reached` reach the persisted run state; a per-iteration
-  stage is published. Proved by test, not by comment.
+- [x] **T5 — RED + GREEN, planner sees prior results, bounded.** Done in `3689c352`, with a correction of
+  the unit's own starting assumption. The implementation was already in place from T2; the proof was not,
+  and measuring it exposed a real defect: `_render_tool_evidence()` truncated the **joined** results from
+  the end, so a large earlier result pushed the **newest** result — the one that triggered the re-plan — out
+  of the planner's view, and the planner re-planned blind. The budget now keeps the most recent results
+  within `_TOOL_EVIDENCE_LIMIT`, and the rendering **states** when earlier results were omitted instead of
+  hiding the loss, because the planner decides "I have enough" from exactly that text. Behavioral RED:
+  `assert 'NEWEST_RESULT_MARKER' in '[{"evidence": "customers.search", ...'`. GREEN: 22 tests in
+  `test_assistant_tool_loop.py`. Note for the record: the parent's brief said to assert **both** tools'
+  evidence in the re-plan prompt; that was wrong — the second planner call can only see the first result,
+  and the implementer asserted what is true instead of forcing the brief.
+- [x] **T6 — Observability.** Done in `3c602761`. `tool_steps` and `cap_reached` now reach the persisted run
+  state (`_run_agent_turn_session`, beside `cost_mode`), proved by integration tests that read
+  `thread.assistant_state` back out of the database; the per-iteration stage is proved by an `on_stage`
+  spy that asserts `"planning"` is emitted **after** the first `"executing"`. Measuring the observable also
+  found that **`cap_reached` lied**: the cap check ran before the planner's own `follow_up` decision, so
+  **every** two-tool turn reported a truncation — measured on the real graph, `cap_reached=True` for both
+  `follow_up` false and true — which destroys the very signal D1 wants to read before raising the cap. The
+  planner's decision is now read first, and `cap_reached` is recorded only when the **budget**, not the
+  planner, ended the turn. The earlier pass on this task noticed the symptom and worked around it by
+  monkeypatching `MAX_ASSISTANT_TOOL_STEPS` to 3; that workaround is gone and the test uses the real cap.
 - [ ] **T7 — Harness end-to-end.** An integration turn that chains `web.search → kb.retrieve` and answers
   from combined evidence, plus a turn that stops at the cap with the truncation recorded.
 - [ ] **T8 — After measurement.** Re-run T1's measurement against the new code and report the delta,
@@ -390,6 +395,22 @@ Two defects found by the parent's readback of the first T2 attempt, both fixed b
   (`6b3214bd`), branch `odd/assistant-tool-chaining-slice2`. Environment: `infra/.env` copied, `uv sync`,
   test-db up on port **6341**, `graphify-out/` present and **fresh at `6b3214bd`** (built from the
   current head, so no rebuild was needed). Graph Check run before the first edit.
+- 2026-09-24 — **T4 done** (`0a3d1b8b`). The task was re-scoped by measurement from a visibility fix to an
+  **enforcement** fix: D2 and D3 were never enforced on the real graph. See *Slice 2 discovery*.
+- 2026-09-24 — **T5 done** (`3689c352`). Recovered from this record after the slice 2 handoff omitted it;
+  implemented-but-unproven, and the missing proof exposed the newest-evidence truncation.
+- 2026-09-24 — **T6 done** (`3c602761`). Persisted `tool_steps`/`cap_reached` and fixed the cap semantics
+  that made the persisted value a lie.
+- 2026-09-24 — **Unrelated worktrees cleaned (owner-approved)**: `lumat-agent-odd-assistant-web-context`
+  (branch proved 100% contained in `main` with `git merge-base --is-ancestor`, no stashes, only the
+  `uv.lock` drift) removed with its branch, container and network; the orphan container
+  `lumat-test-lumat-agent-odd-assistant-web-search-db-test-1` and its network removed (its worktree no
+  longer existed). `lumat-agent-odd-agenda-booking` was left alone: a different unit, active. `rapso
+  worktree cleanup` removes the worktree and branch but **not** the container or network — the parent ran
+  those by hand.
+- 2026-09-24 — `main` advanced to `f0330667` (PR #340, panel-visual-foundation radix) while slice 2 was in
+  progress. `git diff --stat 6b3214bd..f0330667` touches **none** of this unit's files, and `6b3214bd` is
+  an ancestor of `main`, so **no rebase was needed**.
 
 ## Graph nodes consulted (Graph Check, Step 1)
 
@@ -480,6 +501,23 @@ tool loading.
 | `app/chat/assistant/state.py` | +4 / −0 | 4 |
 | **Total** | | **381** |
 
+**Slice 2 review budget, measured at `3c602761`** (T4–T6 done, T7–T9 outstanding), with
+`git diff --numstat 6b3214bd..HEAD -- . ':(exclude)odd/tasks/'`:
+
+| File | +/- | Lines |
+|---|---|---|
+| `tests/unit/test_assistant_tool_loop.py` | +194 / −9 | 203 |
+| `tests/integration/test_assistant_chat.py` | +46 / −2 | 48 |
+| `app/chat/assistant/nodes.py` | +28 / −26 | 54 |
+| `app/services/agent_chat.py` | +2 / −0 | 2 |
+| `app/chat/assistant/graph.py` | +1 / −1 | 2 |
+| **Total** | | **309** |
+
+309 of the ~400-line budget with T7 (harness end-to-end) and T8 (measurement) still to come, so slice 2
+stays a **single PR**; there is no measured reason to split it, and the owner confirmed that plan. The unit
+record itself is 157 further lines and is excluded by the repository's rule (commit `69f84db4`) — it is the
+ledger, not the change.
+
 ## Slice 2 discovery — D2 and D3 were never enforced on the real graph
 
 Measured by the parent on **unmodified code** at the slice 2 base, with a throwaway probe that mocks
@@ -521,12 +559,18 @@ not silently ignored.
 
 ## Next step
 
-T4 — enforce the step-2 write refusal where policy is decided (`guardrails`, pre-execution and
-pre-approval), route it terminally so the refusal is what the user receives, and remove the post-execution
-write branch from `tool_loop_head` that prevents nothing and mislabels successful write turns. See *Slice 2
-discovery* above for the measurement that moved this from a visibility fix to an enforcement fix. Then T6
-(persisted `cap_reached` / `tool_steps`), T7 (harness end-to-end chain), T8 (chaining-turn delta), T9
-(suite + PR).
+**T7 — harness end-to-end.** An integration turn that chains two tools and answers from the combined
+evidence, plus a turn that stops at the cap with the truncation recorded. T6's integration tests already
+cover the persisted `tool_steps`/`cap_reached` half of that; T7's own half — the **answer** being built
+from the combined evidence, end to end — is not yet proved at the harness level.
+
+Then **T8** (re-run T1's measurement against the new code and report the delta, including the extra planner
+call on a turn that actually chains; live wall latency still needs the dev panel or must be recorded as an
+explicit unrun row), then **T9** (full suite green + native RDD review + PR #2).
+
+There is no rebase to do: `main` is at `f0330667` and `6b3214bd` is its ancestor. The branch is **not
+pushed** — nothing about slice 2 exists on the remote, so pushing it is the first durability step whenever
+that is wanted.
 
 **Slice 2 limits, recorded before the work starts.** Slice 2 makes the existing loop visible, enforced and
 proven. It does **not** raise `MAX_ASSISTANT_TOOL_STEPS`, does not change which tools are read-only, does
