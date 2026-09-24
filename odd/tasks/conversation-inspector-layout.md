@@ -1,0 +1,202 @@
+# ODD: conversation-inspector-layout
+
+## Objective
+
+Make the conversation thread's right-hand inspector usable: give its column a real width, let the
+detail rows wrap, and stop it from growing an internal horizontal scrollbar.
+
+Comes from the owner's report, and it is the follow-up the sibling unit
+`conversation-thread-actions` explicitly declared out of scope. Independent of the `agenda-*` and
+dashboard units.
+
+## Problem
+
+Owner's report:
+
+> "el sidebar del lado derecho no se alcanza a ver bien, queda fuera del view port y se abre un
+> scroll horizontal"
+
+Diagnosed and measured with Playwright (headless chromium) against Storybook, and re-verified
+against the code in this worktree. Three root causes, in cause order:
+
+- **RC1 — the column is a fixed 144px.** `web/src/components/primitives/primitives.css:1912`:
+  `.conversation-workspace { grid-template-columns: minmax(0, 1fr) calc(var(--space-8) * 4.5); }`.
+  `--space-8` is `32px` (`web/src/tokens/tokens.css:82`), so the inspector track is exactly **144px**,
+  which leaves 112px of content after the 16px padding each side (`primitives.css:1697`).
+- **RC2 — the detail rows can never wrap.** `primitives.css:1700-1702`: `.ai-agent-grammar__detail`
+  is `display: flex; justify-content: space-between` with no `flex-wrap`, and
+  `.ai-agent-grammar__detail dd` has no `overflow-wrap`. `dt` + `dd` therefore always demand their
+  min-content width and can never adapt.
+- **RC3 — why it scrolls instead of reflowing.** `primitives.css:1915`:
+  `.conversation-workspace .ai-agent-grammar__inspector { min-width: 0; overflow-y: auto; }`. With
+  `min-width: 0` the grid never widens, and because `overflow-y: auto` computes `overflow-x: auto`,
+  the inspector **clips its own content and grows an internal horizontal scrollbar** (measured
+  `scrollWidth 285 / 647` against `clientWidth 143`).
+
+The owner's description is literal and correct: the content does leave the viewport (measured right
+edge 1829px on a 1366px viewport) and there is a horizontal scrollbar — but it is **inside the
+sidebar**, not the page. Measured `document.scrollingElement.scrollWidth === clientWidth` at
+1366/1280/1100: do not chase a page-level scroll.
+
+**Where the defect actually applies — corrected against the handoff.** The handoff claims the sibling
+change makes the 144px column matter at narrow widths too. Re-verified against this worktree's CSS,
+that is not what the cascade does:
+
+- `< 40rem` → `primitives.css:1942` sets `.conversation-workspace { display: block; ... }` → the
+  inspector stacks at full width.
+- `40rem–63.99rem` → `primitives.css:1926` sets `grid-template-columns: minmax(0, 1fr)` → single
+  column, inspector stacked.
+- `≥ 64rem` → `primitives.css:1912` → the two-column grid, and this is the only place the 144px
+  defect exists.
+
+So the fix needs no new responsive tier: the collapse already exists below 1024px.
+
+**Why nobody caught it.** `web/src/stories/pages/_shared/mockData/conversations.ts` defines the mock
+conversations with no `customer` and no `case`, and `ConversationContext` renders those sections only
+when they exist. The inspector rendered empty in every story. That fixture gap is the real reason this
+shipped; the sibling unit has since added an interactive story that supplies `customer`/`case` inline.
+
+## Authorized scope
+
+- Worktree: `/home/stefan/repos/lumat-agent-odd-conversation-inspector-layout`
+- Branch: `odd/conversation-inspector-layout`
+- Base: `b75a1c1d` (`odd/conversation-thread-actions` tip; sibling PR #347 is open into `main`)
+- Files:
+  - `odd/tasks/conversation-inspector-layout.md`
+  - `web/src/components/primitives/primitives.css`
+  - `web/src/components/pages/ConversationThread.test.tsx`
+  - `web/src/stories/pages/ConversationThread.stories.tsx`
+  - `web/src/stories/pages/ConversationThread.stories.test.tsx`
+
+Any file outside this list needs a scope update here first.
+
+## Constraints
+
+- **Strict TDD: ON** — source `openspec/config.yaml:38`. Web runner `cd web && npm run test`.
+- **No Python file changes, so the pytest suite is not applicable to this unit.** Not run.
+- Type check is `cd web && npx tsc -b`. No linter or formatter in this repo.
+- **CSS-contract tests follow the repository pattern**: a Vitest test that reads
+  `src/components/primitives/primitives.css` with `readFileSync` and asserts declarations
+  (`web/src/components/primitives/Button.test.tsx:65`).
+- `web/src/components/style-boundary.test.ts` rejects `<style>` JSX blocks anywhere and forbids static
+  `style={{...}}` in a named file list.
+- `DS-TKN-1`: no hex outside the single `:root` of `tokens.css`. This unit adds no colour at all.
+- **`DS-TKN-2` is scoped to `tokens.css`, not to `primitives.css`.** The canonical spec
+  (`openspec/specs/panel-design-system/spec.md`) reads: "The token set in `tokens.css` MUST evolve
+  additively". Editing an existing `primitives.css` declaration is therefore legitimate, and this unit
+  must do exactly that for RC1. The handoff lists `DS-TKN-2` as a blanket additive-only rule; that
+  reading is over-broad and would make the RC1 fix impossible.
+- `DS-GRAMMAR-2` / `DS-UI-PRIMS`: styles live in the tokenized stylesheet, resolve through `var(--*)`,
+  inject no `<style>`, contain no hard-coded colour.
+- Raw `rem` literals are the established convention in `primitives.css` (`:1912` height `30rem/46rem`,
+  `:1924` `11rem`, `:1960` `20rem`). The new width uses `rem` literals; no new token is added.
+- **Language:** code, identifiers, comments, tests and this record are English. Operator-facing copy
+  stays neutral Chilean Spanish.
+- Conventional commits, **no AI attribution and no `Co-Authored-By`**.
+- Work-unit commits are authorized. **Push and PR are separate decisions.**
+- Delivery: `stacked-to-main`. This unit is its own PR; it targets `main` after PR #347 merges, and
+  rebases onto the merge first. If #347 is still open when this unit is ready, the PR targets
+  `odd/conversation-thread-actions` so the review diff stays honest.
+
+## Decisions
+
+- **D1 — Build on the sibling unit, do not duplicate it.** The base is `b75a1c1d`, not `main`. The
+  sibling moved the actions into the header and deleted the inspector's `Acciones` section; this unit
+  fixes the column those remaining sections live in. Branching from `main` would collide textually in
+  `primitives.css` and would make the pre-fix surface impossible to measure.
+- **D2 — The width is `minmax(18rem, 24rem)`, owner's decision.** 18rem (288px) covers the 285px the
+  realistic content needs today; 24rem (384px) gives the `captured_data` JSON room when the container
+  has it; wrapping (D3) handles the 647px worst case.
+- **D3 — Wrapping over widening.** `flex-wrap: wrap` on `.ai-agent-grammar__detail` and
+  `overflow-wrap: anywhere` on its `dd`, so long values adapt instead of demanding width. Width alone
+  can never absorb an unbounded token.
+- **D4 — Close the leak with `overflow-x: hidden` on the inspector.** Whatever does not fit must wrap
+  or clip, never scroll sideways. This is the guard that makes RC3 structurally unrepeatable.
+- **D5 — Do not add `customer` / `case` to the shared mock.** This deliberately deviates from the
+  handoff's "part 0" as literally written, and the deviation is measured, not assumed:
+  - `web/src/stories/pages/_shared/mockData/conversations.test.ts:44-47` asserts the **exact** key set
+    of `conversations[0]` as the `R-PRD-PG-3` serializer shape. Adding fields breaks it by design.
+  - `web/src/components/pages/ConversationsList.tsx:75` renders
+    `c.customer?.name ?? customerName?.(c.customer_id) ?? 'Cliente #${id}'`, so adding `customer` to
+    `conversations[0]` flips `ConversationsList.stories.test.tsx:11,18` from `Cliente #1` to the
+    customer's name — a different surface, outside this scope.
+
+  The surface-specific fixture therefore lives in `ConversationThread.stories.tsx`, extending the
+  existing `interactiveConversation` with a long `captured_data` value. That keeps the inspector
+  measurable without mutating a contract that belongs to another surface.
+- **D6 — No new responsive tier.** Below 64rem the workspace already stacks (`:1942`, `:1926`).
+  Touching that would be scope the defect does not require.
+
+## Route per task
+
+| Task | Route | Trigger evidence |
+| --- | --- | --- |
+| T1–T4 | delegated (one bounded writer) | CSS plus stories plus tests across 4 non-trivial files; the writer trigger fired |
+
+## Tasks
+
+- [ ] **T1 — RED (CSS contract).** Vitest `readFileSync` assertions: the `.conversation-workspace`
+  track is `minmax(18rem, 24rem)`, `.ai-agent-grammar__detail` wraps, its `dd` breaks long words, and
+  `.conversation-workspace .ai-agent-grammar__inspector` does not scroll sideways. Must fail before T2.
+- [ ] **T2 — GREEN.** Apply the three CSS changes: width, wrapping, leak guard.
+- [ ] **T3 — Story fixture and contract.** Extend the interactive fixture with a long `captured_data`
+  value; assert the inspector renders `Cliente`, `Caso` and `Datos capturados` with that value. RED
+  first: the assertion fails while the fixture has no `captured_data`.
+- [ ] **T4 — Evidence.** Browser measurement at 1024 / 1280 / 1366 proving no internal horizontal
+  scrollbar and no content past the viewport, plus the recorded command outputs.
+
+## Acceptance criteria
+
+1. Measured in a browser at 1024 / 1280 / 1366: the inspector's `scrollWidth === clientWidth` (no
+   internal horizontal scrollbar) and its content's right edge stays inside the viewport. Measured, not
+   inferred from CSS.
+2. The inspector track measures between 288px and 384px at ≥64rem.
+3. Nothing below 64rem changes: the workspace still stacks at <64rem.
+4. No new hex anywhere, no `<style>` injection, no static inline style, no new token declaration.
+5. `cd web && npm run test` green (the load-fragile `AgendaPage` 5s-timeout test is recorded honestly
+   if it trips, per the handoff trap 3); `cd web && npx tsc -b` exits 0; `cd web && npm run
+   build-storybook` succeeds.
+6. Only the files in Authorized scope change.
+
+## Checks
+
+- `cd web && npm run test`
+- `cd web && npx tsc -b`
+- `cd web && npm run build-storybook`
+- Browser measurement against a Storybook served **from this worktree** (the server on port 6006 serves
+  the main worktree and shows the old code), with the installed chromium binary passed explicitly
+- `git diff --check`
+
+## Progress
+
+- [x] Created this ODD record before the first source change.
+- [x] Base pinned to `b75a1c1d`; `graphify-out/` copied in and `.graphify_root` pointed at this worktree.
+- [x] Graph Check run: hub community `ConversationsList.tsx` (holds `ConversationThread.tsx` and its
+  test) and `PNL-APP-12 Conditional Conversation and Dense-Page Surfaces` ("Optional Inspector
+  Region"). The graph was built from `4b31796c`, three commits behind this base; refresh runs at
+  session close.
+
+## Verification evidence
+
+Pending. To be recorded from observed command output only.
+
+## Assess outcome
+
+Pending.
+
+## Corrections to the handoff (verified this session)
+
+- The handoff's `STATE` section says the sibling is "NOT pushed and has NO PR". It is now pushed at
+  `b75a1c1d` with **PR #347 open** into `main` (+281/−12, mergeable).
+- The handoff claims the sibling change makes the 144px column matter at narrow widths. Measured
+  against the cascade, the two-column defect exists **only at ≥64rem**; below that the workspace is
+  `display: block` (`:1942`) or a one-column grid (`:1926`).
+- The handoff places `.graphify_root` at the repo root. It actually lives at
+  `graphify-out/.graphify_root`, and `--update` rewrites it with the root it was given.
+- The handoff lists `DS-TKN-2` as a blanket additive-only constraint. The canonical spec scopes it to
+  `tokens.css`.
+
+## Recovery
+
+Resume with `mem_context`, then the project-scoped `mem_search` for `conversation-inspector-layout`,
+then `mem_get_observation` for the full document, then read this file.
