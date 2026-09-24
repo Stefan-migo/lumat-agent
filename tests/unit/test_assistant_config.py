@@ -35,6 +35,21 @@ def test_assistant_persona_keeps_approval_for_every_other_write(repo_root):
     assert "Every other write still needs approval" in config.persona
 
 
+def test_assistant_extends_the_web_allowance_to_fetched_page_text(repo_root):
+    """The reader's evidence is citable, but only as narrowly as the search allowance.
+
+    Both artifacts must carry the tool and the citation duty: the persona is the standing rule and
+    the responder prompt is the per-turn reminder, so one carrying the allowance without the other
+    is a silent gap between what the runtime declares and what the model is told.
+    """
+    config = load_assistant_config(repo_root / "agent" / "registry.yaml")
+
+    assert "web.fetch" in config.persona
+    assert "the URL that evidence reports after redirects" in config.persona
+    assert "web.fetch" in config.prompts["respond"]
+    assert "the URL that evidence reports after redirects" in config.prompts["respond"]
+
+
 def test_missing_assistant_reference_fails_before_runtime_use(tmp_path, repo_root):
     registry = (repo_root / "agent" / "registry.yaml").read_text(encoding="utf-8")
     registry = registry.replace("personas/assistant.md", "personas/missing.md")

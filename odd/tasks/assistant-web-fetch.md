@@ -3,8 +3,9 @@
 **Branch**: `odd/assistant-web-fetch`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-web-fetch`
 **Base**: `4b31796c` (= `main` at branch time)
-**Status**: slice 1 shipped as PR #348 (approved, burned); slice 2 complete and ahead of it locally
-(T1–T3, 74 tests green); T4–T8 next
+**Status**: slices 1 and 2 shipped as PR #348 and PR #349, **both merged**. Slice 3 is **complete and
+open as PR #352** on `odd/assistant-web-fetch-slice3` — T4–T8 done, full suite 1,440 green, native review
+**`approved`** with zero findings and authority burned — awaiting its merge
 **Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/session.md`
 (decisions 4 and 6, risk row *local extractor reintroduces an SSRF surface*); Engram #4890, #4894, #4897.
 
@@ -160,14 +161,74 @@ no credentials, **every redirect hop revalidated**, body byte-capped, timeouts, 
     one word).
   - Worst case measured, not asserted by hand: a 5,000-character title and a 50,000-character body
     produce a serialized result under `_TOOL_EVIDENCE_LIMIT`.
-- [ ] **T4 — Registry and whitelist, RED + GREEN.** Args model and `ToolDefinition`; whitelist 22 → 23;
-  the tool-count, capabilities and known-tool assertions updated to the new contract, never weakened.
-- [ ] **T5 — Evidence contract.** Persona allowance + responder instruction, as narrow as the existing
-  web-search one. The phrases `tests/unit/test_assistant_config.py` pins MUST survive.
-- [ ] **T6 — Spec.** AT-13 for the reader, matching the file's existing requirement shape.
-- [ ] **T7 — Harness.** The chained turn, and the blocked-URL turn.
-- [ ] **T8 — Regression and measurement.** Full suite green; the serialized-payload size measured and
-  recorded against the 4,000 budget.
+- [x] **T4 — Registry and whitelist, RED + GREEN.** Args model and `ToolDefinition`; whitelist 22 → 23.
+  **Done.**
+  - RED was a **wiring RED**, not behavioural: the new registry-contract test failed with
+    `AssertionError: assert 'web.fetch' in {...}` because the tool was not registered yet. It proves
+    the registration was missing, not the reader's behaviour — that behaviour is T1–T3's.
+  - **A premise in this record was wrong, and the reality is better.** No test hardcodes a tool count.
+    `tests/unit/test_agent_registry.py` asserts `set(reg.assistant.tools_whitelist) == set(TOOL_REGISTRY)`,
+    and the capabilities and responder-inventory tests derive from `load_assistant_config()`. So the
+    recorded plan to "update the tool-count, capabilities and known-tool assertions" had nothing to
+    update: adding the tool to the registry is itself what turns the existing whitelist assertion into
+    the RED. Nothing was rewritten and nothing was weakened.
+  - `execute_tool` needed **no** change. `FetchFailure` subclasses `RuntimeError`, so it lands in the
+    existing generic error branch and produces the same `status="error"` + `evidence` envelope the
+    `SearchFailure` branch does. A dedicated `except FetchFailure` would be duplicate code.
+  - URL cap set to 2,000 characters as input validation at a trust boundary; the citable output stays
+    bounded by `URL_LIMIT`.
+  - Verified: 23 registry entries == 23 whitelist entries; assistant/config/registry/planner 124 passed;
+    harness + chat 84 passed; full suite 1437 collected, exit 0.
+- [x] **T5 — Evidence contract.** Persona allowance + responder instruction, as narrow as the existing
+  web-search one. **Done** (`b42c604f`). RED was a config-contract test over both artifacts; the six
+  phrases `tests/unit/test_assistant_config.py` pins all still pass. The reader adds one duty search
+  does not have: the citation is the URL the evidence reports **after redirects**, not the requested one.
+- [x] **T6 — Spec.** AT-13 with five individually refutable scenarios. **Done** (`41ad1384`).
+- [x] **T7 — Harness.** The chained turn and the blocked-URL turn. **Done** (`0764cb26`).
+  - The chain test asserts `tool_loop_head` takes the back-edge after the search and finishes after the
+    fetch, and that the responder receives both results carrying the page text and its URL.
+  - The refusal test runs the **real** `execute_tool` and the real policy: a loopback address is refused
+    while resolving, before any client is built, so the turn reaches a degraded state holding the
+    reader's reason instead of an empty result. No mock of the thing under test, and no network.
+  - **Mutation check**: disabling the back-edge in `tool_loop_head` failed the chain assertion, and
+    renaming the policy's reason string failed the refusal assertion. Exactly those two failed, and
+    both sources were restored byte-identical (`git diff` empty).
+- [x] **T8 — Regression and measurement.** Full suite **1,440 collected, exit 0**. **Done**, with a real
+  defect found and fixed — see *Measurement* below.
+
+## Measurement — T8 (the serialized payload against the 4,000 budget)
+
+Measured through `_bounded_evidence`, the function `read_page` returns from, with every cap saturated
+(`url` 500, `title` 200, raw `text` 3,000) and serialized with `ensure_ascii=False`, exactly as
+`_render_tool_evidence` does:
+
+| Text | Before | After (`a2c68ade`) | Text kept |
+|---|---|---|---|
+| Plain | 3,736 | **3,600** | 2,864 / 3,000 |
+| Quote-heavy (15%) | **4,186 — over** | **3,600** | 2,414 / 3,000 |
+| All quotes | **6,736 — over** | **3,600** | 1,432 / 3,000 |
+| All backslashes | **6,736 — over** | **3,600** | 1,432 / 3,000 |
+| All control characters | **18,060 — over** | **3,598** | 477 / 3,000 |
+
+**The defect this exposed.** `MAX_TEXT` bounded the raw string, but the evidence travels as JSON, so
+the cap that mattered was on the *serialized* payload. Three of these cases did not fit: the renderer's
+truncation was the real limit, which is not what D3 means by the reader owning its bound. The existing
+boundary test (`test_reader_result_fits_the_tool_evidence_budget_at_its_worst_case`) fed a 50,000-char
+body of the letter `a`, which never escapes, so it passed while the guarantee was false.
+
+Reachability was checked rather than assumed. Quotes survive extraction and are ordinary page content.
+The control-character case arrives through a `text/plain` body, which is decoded and collapsed with no
+parser to normalise it; the same characters written as HTML entities (`&#0;`) reach the text as U+FFFD
+instead, so they are not the extreme. The fitting prefix is **bisected** rather than cut
+proportionally, because a cut derived from the overshoot empties the text on an all-control page.
+
+**Owner decision.** Shown the measurement, the owner chose to fix it inside slice 3 rather than record
+it as an accepted limitation.
+
+**Live fetch.** `read_page("https://example.com/")` was run once against the real network: url
+`https://example.com/`, title `Example Domain`, 127 characters of text, serialized **197 / 4,000**. It
+is recorded as a separate evidence row and is **not** part of the suite — no test reaches the network,
+as the Constraints require.
 
 ## Acceptance criteria
 
@@ -240,6 +301,33 @@ requires.
   shapes, then the parser call wrapped (`a9aa36c9`). Same pattern U1 used: ship the reviewed slice,
   carry its advisory forward as tracked work.
 
+## Review outcome — slice 2 (native RDD)
+
+- **`approved`**, authority burned (`review-f4f9c777ac79d4d8`). 3 changed paths, risk **medium**, one
+  lens. PR at `https://github.com/Stefan-migo/lumat-agent/pull/349`.
+- **`R3-dns-rebinding`** (`fetch.py:153`, WARNING, informational): the rebinding window D6 already
+  records and accepts. The reviewer cited that record; it stays an accepted limitation, not new work.
+- **`R3-non-success-status`** (`fetch.py:161`, WARNING, informational, deterministic, introduced):
+  only `>= 400` was rejected, so a 3xx outside the manual redirect set **and** an empty success such as
+  `204` both travelled on as usable pages. Verified by reproduction before fixing — four statuses
+  returned a "page" instead of failing.
+- **Closed in slice 3** rather than by editing the reviewed candidate. Two rules replaced one: only a
+  2xx is a page, and a 2xx with no body is not one either.
+
+## Review outcome — slice 3 (native RDD)
+
+- **`approved`, with zero findings** — not one advisory, blocking or otherwise. Authority burned
+  (`review-ec4cb1d85112e471`, acknowledgement `dbec8d39…`). 11 changed paths, risk **medium**, one lens
+  (`review-reliability`). PR at `https://github.com/Stefan-migo/lumat-agent/pull/352`.
+- The reviewer's evidence: *"Reviewed all changed paths, including fetch failure handling, redirect/status
+  boundaries, serialized evidence sizing, registry wiring, configuration, specification, and regression
+  tests."* The `R3-non-success-status` fix from slice 2 and the `_bounded_evidence` bisection were both
+  inside the reviewed candidate and neither was questioned.
+- **The reviewed tree is not this branch's HEAD.** The review froze the candidate at the T8 commit
+  (`a2c68ade`); this section and the *Status* line above were written **after** the acknowledgement, in a
+  documentation-only commit. Recording an outcome cannot precede the outcome, so the order is the honest
+  one — but it means the receipt covers the tree without this text, exactly as it does for slices 1 and 2.
+
 ## Graph nodes consulted (Graph Check, Step 1)
 
 - `graphify query "assistant web fetch URL retrieval and tool registry"` → `assistant/tools/registry.py`,
@@ -249,6 +337,12 @@ requires.
   `BraveSearch`, `execute_tool`, `Planner Tool Catalog`.
 - Direct reads during exploration: `search.py` (full), `registry.py:600-650`, `agent/registry.yaml:55-85`,
   `openspec/specs/assistant-tools/spec.md:237-260`, `tests/unit/test_assistant_config.py`.
+- **T4 Graph Check**: `graphify query "assistant tool registry whitelist and planner tool catalog"` →
+  `assistant/tools/registry.py`, `execute_tool()`, `get_tool()`, `ToolValidationError`,
+  `is_tool_whitelisted()`, `agent_registry.py`, `unit/test_assistant_tools.py`,
+  `Planner Tool Catalog`, plus the `TOOL_REGISTRY` consumers in `test_agent_registry.py` and
+  `test_assistant_harness_guardrails.py`. The query returned 257 nodes and was truncated at its token
+  budget; the 65 shown already carried the two consumers that mattered.
 - **Correction worth keeping**: a delegated map reported that `tests/unit/test_assistant_config.py` does
   not exist. It does, and it pins the persona phrases. Verified directly — delegation output is a lead,
   not a fact.
@@ -276,10 +370,42 @@ requires.
   (1358 base + 69 new). Branch pushed at the slice-1 commit and PR #348 opened.
 - 2026-09-24 — **`R3-malformed-url` closed** (`a9aa36c9`): RED over the five malformed shapes, then the
   parser wrapped. 74 passed. The fix rides in slice 2 so the reviewed slice-1 candidate stays frozen.
+- 2026-09-24 — **Slice 1 merged** (PR #348 → `3d0b80f7`); its merged remote branch deleted; `main`
+  synced. Slice 2 moved to its own branch `odd/assistant-web-fetch-slice2` and pushed.
+- 2026-09-24 — **Slice 2 reviewed and shipped as PR #349.** Native review `approved`, authority burned;
+  two advisories. Slice 3 started on its own branch `odd/assistant-web-fetch-slice3`.
+- 2026-09-24 — **`R3-non-success-status` closed** (`8db50c1b`): RED over 204/300/304/305 first — all
+  four returned a "page" — then two rules, only a 2xx is a page and a 2xx with no body is not one.
+  78 passed.
+- 2026-09-24 — **Slice 2 merged.** PR #349 merged to `main` as **`5320dbb8`**; its merged remote branch
+  deleted; `main` fast-forwarded locally. Slice 3 rebased onto the new `main` (unpushed, so no rewrite
+  of published history): the two slice-3 commits were replayed as `e23c1e11` and `0835ac5a`, and the
+  SHA this record cited for the slice-2 fix is now `e23c1e11`, not `8db50c1b`. Slice 3's diff against
+  `main` is 3 files / 56 insertions before T4.
+- 2026-09-24 — **T4 done** (`45c0d88d`): `WebFetchArgs`, `_web_fetch`, the `web.fetch` registry entry
+  and the whitelist line. The record's premise about hardcoded assertions was wrong — none exist — so
+  nothing was rewritten and nothing was weakened. RDD assessment over the commit: risk **medium**,
+  `review_due: false` (`under_budget`, 6 paths / 82 lines since `5320dbb8`), so the reviewed boundary
+  stays at `main` until a later commit reaches the budget.
+- 2026-09-24 — **T5, T6 and T7 done**: the evidence allowance in both artifacts (`b42c604f`), AT-13 in
+  the spec (`41ad1384`), and the two harness tests with their mutation check (`0764cb26`).
+- 2026-09-24 — **T8 done, and it found a real defect.** The full suite is green (1,440 collected, exit
+  0), but measuring the payload against the budget showed the reader bounded raw text while the
+  evidence ships as JSON: quote-heavy pages serialized to 4,186 and a `text/plain` control-character
+  body to 18,060, both over the 4,000 budget, so the renderer's truncation was the real limit. The
+  owner chose to fix it inside slice 3. Fixed in `a2c68ade` — the payload is measured serialized and
+  the text bisected to the longest prefix that fits — with two boundary tests that fail on the old
+  code. Full numbers in *Measurement — T8*.
+- 2026-09-24 — **Slice 3 shipped and reviewed.** Branch pushed, **PR #352** opened against `main`
+  (11 files, +391/−22; the record excluded, **274 authored lines** of the 400 budget). The owner granted
+  the native review, one lens ran, and it returned **`approved` with zero findings**; authority burned
+  at `review-ec4cb1d85112e471`. Delivery is the owner's decision from here.
 
 ## Next step
 
-Slice 1 is shipped as PR #348 and awaiting its merge. Slice 2 is committed locally on the same branch
-and is pushed once #1 lands (stacked-to-main) — with slice 1 already in `main`, the #2 diff is only its
-own delta. Then T4–T8: registry, whitelist 22 → 23, persona/prompt, spec, harness, regression and the
-payload measurement.
+Slice 3 is **complete, reviewed and open as PR #352** (`approved`, zero findings, authority burned).
+Delivery is the owner's: merging the PR is ordinary repository policy and no review decision depends on
+it. Nothing else is outstanding on this unit.
+
+**After the merge**: refresh Graphify once (`graphify <root> --update`) per the delivery/cleanup rule,
+and U3 (panel sub-agent delegation) remains unstarted and out of this unit's scope.

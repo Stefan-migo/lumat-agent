@@ -8,6 +8,7 @@ a reason, never silently skipped.
 from __future__ import annotations
 
 import ipaddress
+import json
 import socket
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -30,6 +31,9 @@ ALLOWED_CONTENT_TYPES = frozenset({"text/html", "application/xhtml+xml", "text/p
 WEB_FETCH_TIMEOUT = httpx.Timeout(5.0, connect=3.0)
 USER_AGENT = "Mozilla/5.0 (compatible; LumatReader/1.0)"
 #: The reader owns its bound, so a full result always fits `_TOOL_EVIDENCE_LIMIT` (4,000) with room.
+#: `MAX_TEXT` bounds the raw text, but the evidence travels as JSON: one quote becomes `\"` and one
+#: control character becomes `\uXXXX`. The serialized payload is what has to fit, so it is measured.
+MAX_PAYLOAD = 3_600
 MAX_TEXT = 3_000
 TITLE_LIMIT = 200
 URL_LIMIT = 500
@@ -173,7 +177,10 @@ def fetch_page(url: str, *, client: httpx.Client | None = None) -> FetchedPage:
                         raise FetchFailure(f"fetch stopped after {MAX_REDIRECTS} redirects")
                     target = resolve_target(urljoin(target.url, location))
                     continue
-                if response.status_code >= 400:
+                # Only a 2xx is a page. A 3xx outside the redirect set above, or an empty success such
+                # as 204, must not travel on as an empty "page" -- that is the silent-empty-result
+                # failure this reader exists to avoid.
+                if not 200 <= response.status_code < 300:
                     raise FetchFailure(f"fetch got HTTP {response.status_code} from {target.host}")
                 content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
                 if content_type not in ALLOWED_CONTENT_TYPES:
@@ -181,6 +188,10 @@ def fetch_page(url: str, *, client: httpx.Client | None = None) -> FetchedPage:
                         f"fetch only reads text pages, not {content_type or 'a response without a content type'}"
                     )
                 body, truncated = _read_bounded(response)
+                # A 2xx with no body (204, say) is not a page: reporting it as one would be the silent
+                # empty result this reader exists to avoid.
+                if not body.strip():
+                    raise FetchFailure(f"fetch got an empty page from {target.host}")
                 return FetchedPage(
                     url=target.url, content_type=content_type, body=body, truncated=truncated
                 )
@@ -237,6 +248,34 @@ def extract_text(html: str) -> tuple[str, str]:
     return _collapse("".join(parser.title_parts)), _collapse("".join(parser.parts))
 
 
+def _serialized_size(payload: dict[str, str]) -> int:
+    return len(json.dumps(payload, ensure_ascii=False))
+
+
+def _bounded_evidence(url: str, title: str, text: str) -> dict[str, str]:
+    """Evidence whose serialized size fits `MAX_PAYLOAD`, keeping as much text as actually fits.
+
+    The caps above bound the raw strings, but the payload travels as JSON: one quote becomes `\\"`
+    and one control character becomes `\\uXXXX`. Escaping is not linear in characters, so the
+    fitting prefix is found by bisection rather than cut proportionally -- a cut guessed from the
+    overshoot empties the text entirely on a page that is all control characters. The URL is fixed
+    first and never shrinks: it is the citation.
+    """
+    payload = {"url": url, "title": title, "text": text}
+    if _serialized_size(payload) <= MAX_PAYLOAD:
+        return payload
+    low, high = 0, len(text)
+    while low < high:
+        middle = (low + high + 1) // 2
+        payload["text"] = text[:middle]
+        if _serialized_size(payload) <= MAX_PAYLOAD:
+            low = middle
+        else:
+            high = middle - 1
+    payload["text"] = text[:low]
+    return payload
+
+
 def read_page(url: str, *, client: httpx.Client | None = None) -> dict[str, str]:
     """Fetch `url` and return the bounded, citable evidence the assistant answers from.
 
@@ -248,8 +287,4 @@ def read_page(url: str, *, client: httpx.Client | None = None) -> dict[str, str]
         title, text = extract_text(page.body)
     else:
         title, text = "", _collapse(page.body)
-    return {
-        "url": page.url[:URL_LIMIT],
-        "title": title[:TITLE_LIMIT],
-        "text": text[:MAX_TEXT],
-    }
+    return _bounded_evidence(page.url[:URL_LIMIT], title[:TITLE_LIMIT], text[:MAX_TEXT])
