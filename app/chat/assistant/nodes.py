@@ -626,7 +626,18 @@ def _render_tool_evidence(state: AssistantState) -> str:
             rendered_results.append(json.dumps(payload, ensure_ascii=False))
     if not rendered_results:
         return ""
-    rendered = "\n".join(rendered_results)
+    kept: list[str] = []
+    used = 0
+    for item in reversed(rendered_results):
+        if kept and used + len(item) + 1 > _TOOL_EVIDENCE_LIMIT:
+            break
+        kept.append(item)
+        used += len(item) + 1
+    rendered = "\n".join(reversed(kept))
+    # Dropping older results must not be silent: the planner decides "I have enough" from this
+    # rendering, so it has to know when evidence was left out of it.
+    if len(kept) < len(rendered_results):
+        rendered = f"[{len(rendered_results) - len(kept)} earlier tool result(s) omitted]\n{rendered}"
     if len(rendered) <= _TOOL_EVIDENCE_LIMIT:
         return rendered
     return rendered[:_TOOL_EVIDENCE_LIMIT - 1] + "…"

@@ -9,9 +9,11 @@ from app.chat.assistant.graph import END, _after_execute, _after_guardrails, _af
 from app.chat.assistant.nodes import (
     MAX_ASSISTANT_TOOL_STEPS,
     PANEL_LOOP_WRITE_REFUSAL,
+    _TOOL_EVIDENCE_LIMIT,
     _context_text,
     execute,
     guardrails,
+    plan_llm,
     tool_loop_head,
 )
 
@@ -96,8 +98,38 @@ def test_opted_in_turn_executes_two_tools_and_narrates_combined_evidence(monkeyp
     assert handler_calls == ["customers.search", "memory.search"]
     assert len([call for call in calls if not call.get("stream")]) == 2
     assert final["response"] == "Ana is a customer"
-    assert '"customers.search"' in calls[-1]["messages"][-1]["content"]
-    assert '"memory.search"' in calls[-1]["messages"][-1]["content"]
+    planner_calls = [call for call in calls if not call.get("stream")]
+    planner_prompt = planner_calls[-1]["messages"][-1]["content"]
+    responder_prompt = calls[-1]["messages"][-1]["content"]
+    assert '"customers.search"' in planner_prompt
+    assert responder_prompt.count('[{"evidence": "customers.search"}]') == 1
+    assert responder_prompt.count('[{"evidence": "memory.search"}]') == 1
+
+
+def test_replan_keeps_newest_tool_evidence_within_budget(monkeypatch):
+    calls = []
+    marker = "NEWEST_RESULT_MARKER"
+    plans = ['{"kind":"respond","tool":null,"arguments":{},"summary":"Done","requires_approval":false}']
+
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    plan_llm(
+        {
+            "content": "Find Ana",
+            "context": {"items": [], "meta": {}},
+            "tool_results": [
+                {"result": [{"evidence": "customers.search", "payload": "x" * 10_000}]},
+                {"result": [{"evidence": "memory.search", "marker": marker}]},
+            ],
+        }
+    )
+
+    evidence = calls[-1]["messages"][-1]["content"].split("Prior tool evidence:\n", 1)[1]
+    assert marker in evidence
+    assert "1 earlier tool result(s) omitted" in evidence
+    assert len(evidence) <= _TOOL_EVIDENCE_LIMIT
 
 
 def test_cap_refuses_a_third_execution(monkeypatch):
