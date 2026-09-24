@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 _TOOL_EVIDENCE_LIMIT = 4_000
 _KB_EVIDENCE_LIMIT = 4_000
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
+MAX_ASSISTANT_TOOL_STEPS = 2
 PANEL_GROUNDING_REFUSAL = (
     "No encontré evidencia suficiente en la base de conocimiento para responder con seguridad. "
     "Reformula la consulta o aporta más contexto."
@@ -267,6 +268,12 @@ def _context_text(state: AssistantState) -> str:
     return "\n".join(text)
 
 
+def _planner_context_text(state: AssistantState) -> str:
+    context = _context_text(state)
+    prior_results = _render_tool_evidence(state)
+    return f"{context}\nPrior tool evidence:\n{prior_results}" if prior_results else context
+
+
 def _assistant_client():
     provider = getattr(llm.get_settings(), "assistant_chat_provider", None)
     try:
@@ -404,25 +411,45 @@ def resolve_sdb_item(spec: dict, requested: str) -> dict:
     return {"status": "error", "error": "not-exist"}
 
 
+def _cost_snapshot(session: object, thread_id: int) -> dict[str, float | str]:
+    """Read the current cost state without emitting alerts or changing state."""
+    if session is None:
+        return {
+            "thread_percent": 0.0,
+            "thread_mode": "normal",
+            "daily_percent": 0.0,
+            "daily_mode": "normal",
+            "mode": "normal",
+        }
+    thread_percent, thread_mode = internal_thread_cost_state(session, thread_id)
+    day_percent, day_mode = daily_cost_state(session)
+    return {
+        "thread_percent": thread_percent,
+        "thread_mode": thread_mode,
+        "daily_percent": day_percent,
+        "daily_mode": day_mode,
+        "mode": combined_cost_mode(thread_mode, day_mode),
+    }
+
+
 def panel_cost_gate(state: AssistantState) -> AssistantState:
     """Choose the worst internal-thread/UTC-day mode before any paid LLM call."""
     session = state.get("session")
+    snapshot = _cost_snapshot(session, state["thread_id"])
     if session is None:
         return {"cost_mode": "normal", "cost_directive": ""}
 
-    thread_percent, thread_mode = internal_thread_cost_state(session, state["thread_id"])
-    day_percent, day_mode = daily_cost_state(session)
     today = datetime.now(timezone.utc).date().isoformat()
     maybe_alert_owner(
         session, scope="conversation", entity_id=str(state["thread_id"]),
-        percent=thread_percent,
+        percent=snapshot["thread_percent"],
         spend=internal_thread_spend(session, state["thread_id"]),
     )
     maybe_alert_owner(
-        session, scope="daily", entity_id=today, percent=day_percent,
+        session, scope="daily", entity_id=today, percent=snapshot["daily_percent"],
         spend=daily_spend(session),
     )
-    mode = combined_cost_mode(thread_mode, day_mode)
+    mode = snapshot["mode"]
     return {
         "cost_mode": mode,
         "cost_directive": COST_DIRECTIVE if mode == "conservative" else "",
@@ -431,8 +458,8 @@ def panel_cost_gate(state: AssistantState) -> AssistantState:
         "guardrails": {
             "cost_allowed": mode != "blocked",
             "cost_mode": mode,
-            "thread_percent": thread_percent,
-            "daily_percent": day_percent,
+            "thread_percent": snapshot["thread_percent"],
+            "daily_percent": snapshot["daily_percent"],
         },
     }
 
@@ -455,7 +482,7 @@ def plan_llm(state: AssistantState) -> AssistantState:
     config = load_assistant_config()
     user_prompt = config.prompts["plan"]
     available_tools = _planner_tool_catalog(config.tools_whitelist)
-    for key, value in {"user_input": state["content"], "available_tools": available_tools, "context": _context_text(state)}.items():
+    for key, value in {"user_input": state["content"], "available_tools": available_tools, "context": _planner_context_text(state)}.items():
         user_prompt = user_prompt.replace("{{" + key + "}}", str(value))
     if state.get("cost_directive"):
         user_prompt += "\n\n" + state["cost_directive"]
@@ -578,14 +605,72 @@ def guardrails(state: AssistantState) -> AssistantState:
 
 
 def _render_tool_evidence(state: AssistantState) -> str:
-    result = state.get("tool_result") or {}
-    payload = result.get("result") if isinstance(result, dict) else None
-    if payload is None:
+    results = state.get("tool_results") or ([state["tool_result"]] if state.get("tool_result") else [])
+    rendered_results = []
+    for result in results:
+        payload = result.get("result") if isinstance(result, dict) else None
+        if payload is not None:
+            rendered_results.append(json.dumps(payload, ensure_ascii=False))
+    if not rendered_results:
         return ""
-    rendered = json.dumps(payload, ensure_ascii=False)
+    rendered = "\n".join(rendered_results)
     if len(rendered) <= _TOOL_EVIDENCE_LIMIT:
         return rendered
     return rendered[:_TOOL_EVIDENCE_LIMIT - 1] + "…"
+
+
+def tool_loop_head(state: AssistantState) -> AssistantState:
+    """Finish or request an explicitly opted-in, bounded read-only follow-up."""
+    plan = state.get("plan") or {}
+    steps = state.get("tool_steps", 0)
+    if steps >= MAX_ASSISTANT_TOOL_STEPS:
+        return {"cap_reached": True, "status": "completed"}
+    cost = _cost_snapshot(state.get("session"), state["thread_id"])
+    if cost["mode"] != "normal":
+        return {
+            "cost_mode": cost["mode"],
+            "cost_directive": COST_DIRECTIVE if cost["mode"] == "conservative" else "",
+            "guardrails": {
+                **state.get("guardrails", {}),
+                "cost_allowed": cost["mode"] != "blocked",
+                "cost_mode": cost["mode"],
+                "decision": "loop_cost_stopped",
+            },
+            "status": "completed",
+        }
+    if plan.get("kind") == "tool" and plan.get("tool") and steps >= 1:
+        try:
+            read_only = get_tool(plan["tool"]).read_only
+        except (KeyError, ValueError):
+            return {
+                "guardrails": {
+                    **state.get("guardrails", {}),
+                    "decision": "loop_invalid_tool",
+                    "approval_required": False,
+                },
+                "status": "completed",
+            }
+        if not read_only:
+            return {
+                "approval": None,
+                "guardrails": {
+                    **state.get("guardrails", {}),
+                    "decision": "loop_write_refused",
+                    "approval_required": False,
+                },
+                "response": "Write tools cannot run after a read-only follow-up step.",
+                "status": "completed",
+            }
+    if plan.get("kind") != "tool" or not plan.get("tool") or not plan.get("follow_up"):
+        return {"status": "completed"}
+    return {"status": "planned"}
+
+
+def _tool_accumulation(state: AssistantState, result: dict) -> dict:
+    return {
+        "tool_results": [*(state.get("tool_results") or []), result],
+        "tool_steps": state.get("tool_steps", 0) + 1,
+    }
 
 
 def _render_kb_evidence(state: AssistantState) -> str:
@@ -651,7 +736,7 @@ def retrieve_kb(state: AssistantState) -> AssistantState:
 
 def execute(state: AssistantState) -> AssistantState:
     plan_data = state["plan"]
-    tool_already_ran = state.get("tool_result") is not None
+    tool_already_ran = state.get("status") in {"completed", "degraded", "error", "approval_pending"}
     autonomous_write = _is_autonomous_write(plan_data.get("tool"), state.get("thread_id"))
     if not tool_already_ran and plan_data["requires_approval"] and not autonomous_write and not validate_execution(plan_data, state.get("approval") or {}):
         detail = "approval is missing, expired, tampered, or already consumed"
@@ -688,6 +773,7 @@ def execute(state: AssistantState) -> AssistantState:
             )
         except (ToolExecutionError, ToolValidationError) as exc:
             detail = str(exc)
+            failed_result = {"tool": tool_name, "status": "error", "error": detail}
             if state.get("session") is not None:
                 record_audit(
                     state["session"], actor=state.get("actor") or "assistant",
@@ -696,7 +782,8 @@ def execute(state: AssistantState) -> AssistantState:
                     after={"run_id": state.get("run_id"), "tool": tool_name, "status": "error"},
                 )
             return {
-                "tool_result": {"tool": tool_name, "status": "error", "error": detail},
+                "tool_result": failed_result,
+                **_tool_accumulation(state, failed_result),
                 "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],
                 "error": detail,
                 "response": f"Tool execution failed: {detail}",
@@ -711,14 +798,18 @@ def execute(state: AssistantState) -> AssistantState:
                     "tool": tool_name,
                     "degraded_reason": "Read-only tool unavailable",
                 }
+                degraded_reason = bounded_result["degraded_reason"]
+                bounded_result = {**result, "result": bounded_result}
                 return {
-                    "tool_result": {**result, "result": bounded_result},
-                    "evidence": [make_evidence(tool=tool_name, status="degraded", detail=bounded_result["degraded_reason"])],
+                    "tool_result": bounded_result,
+                    **_tool_accumulation(state, bounded_result),
+                    "evidence": [make_evidence(tool=tool_name, status="degraded", detail=degraded_reason)],
                     "response": f"Tool {tool_name} unavailable.",
                     "status": "degraded",
                 }
             return {
                 "tool_result": result,
+                **_tool_accumulation(state, result),
                 "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],
                 "error": detail,
                 "response": f"Tool execution failed: {detail}",
@@ -727,6 +818,7 @@ def execute(state: AssistantState) -> AssistantState:
         if result.get("status") == "approval_pending":
             return {
                 "tool_result": result,
+                **_tool_accumulation(state, result),
                 "approval": result.get("approval"),
                 "guardrails": {**state.get("guardrails", {}), "approval_required": True,
                                 "decision": "approval_pending"},
@@ -742,6 +834,7 @@ def execute(state: AssistantState) -> AssistantState:
             )
         return {
             "tool_result": result,
+            **_tool_accumulation(state, result),
             "evidence": [make_evidence(tool=tool_name, status="completed", detail="Tool execution completed")],
             "response": f"Tool {tool_name} completed.",
             "status": "completed",
