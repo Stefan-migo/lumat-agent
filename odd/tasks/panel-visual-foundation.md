@@ -268,6 +268,50 @@ security class.
 - **Verification:** final `npm run test` → `85 passed` files / `711 passed` tests (one earlier run hit the pre-existing 5-second `AppShell.test.tsx` timeout, then passed on rerun); final `npx tsc -b` → exit 0; final `npm run build-storybook` → built successfully with existing eval and chunk-size warnings. The first typecheck exposed two authored issues (`glyph` unused and Matrix story `args` required), fixed in `9a89bdc5`.
 - **Commits:** `c9dc904d` — `feat(icons): add tokenized Lucide icon foundation` (**46 authored lines**); `466059e9` — `test(icons): cover tokenized icon sizing contract` (**112 authored lines**); `9a89bdc5` — `fix(icons): satisfy icon test and story types` (**11 authored lines**).
 
+### Slice 2 correction pass (T6c) — orchestrator read of the delivered foundation
+
+The orchestrator read the delivered foundation before accepting it. The tokens,
+the `Icon` primitive, the `DS-SHELL-6` delta, the `DESIGN_SYSTEM.md` update and the
+boundary-test analysis all held. Two things did not:
+
+- **Item 1 — the sizing-contract test did not test what it named.** The delivered
+  `Icon.test.tsx` had a case called "keeps the small size when nested in a button"
+  that rendered a `.btn` wrapper and then re-asserted **the same stylesheet regex**
+  as the case above it: it verified nothing about the nested case, and the record's
+  claim that the assertion "covers the `.btn > svg` specificity trap" was prose, not
+  a check. Replaced with a real invariant: the test now reads the compound size
+  selectors **from the stylesheet** and proves, by computed specificity, that they
+  outrank `.btn > svg` and `.dialog__close > svg`. **Mutation-checked:** weakening
+  `.icon.icon--sm` to `.icon--sm` fails **2** of the 4 tests.
+- **Item 2 — a no-op declaration pinned by an assertion.** `.icon` carried
+  `color: currentColor`, which is inert on the `color` property in the absence of
+  any competing declaration, and the test asserted it. Both removed. The real
+  inheritance mechanism is now asserted where it lives: Lucide's `stroke="currentColor"`
+  on the rendered glyph.
+- **Item 3 — the story reused a pattern this unit already flags.** `Icon.stories.tsx`
+  rendered a matrix inside `<div style={{ gap: "16px" }}>` — a hard-coded dimension
+  in an inline style prop, exactly the `Dialog.stories.tsx` finding the `panel-nits`
+  follow-up already records. The wrapper is gone; explicit `Medium` and `Large`
+  stories carry the scale instead.
+
+**Process deviation, recorded honestly.** The delivered commits landed
+`tokens.css` + `Icon.tsx` in one commit and their tests in the next, and the RED
+recorded in the evidence is a tooling failure (`vitest: command not found`) followed
+by a jsdom limitation — not a genuine failing assertion. Strict TDD was therefore
+**not** observed for those source changes. The corrected tests reverse the order for
+their own scope: the removal of the dead declaration was RED-observed
+(`1 failed | 2 passed`, the `color: currentColor` assertion) before the test rewrite
+made it GREEN.
+
+**Correction evidence:** `npx vitest run src/components/primitives/Icon.test.tsx` →
+`4 passed`; full `npm run test` → **85 files / 712 tests passed**; `npx tsc -b` →
+exit 0; `npm run build-storybook` → built.
+
+**Correction commits:** `222f875f` — `fix(icons): test the real icon sizing and color
+contract` (**43/15** on `Icon.test.tsx`, **0/1** on `primitives.css`);
+`6fab9afb` — `fix(stories): drop the inline style from the icon stories`
+(**3/10** on `Icon.stories.tsx`).
+
 ### Slice 3 — composite migration to Radix (PR 3)
 
 - [ ] **T8** — Migrate `Dialog`, `Popover`, `Tabs`, `Tooltip` and `Select` to
@@ -380,6 +424,14 @@ Actual authored changed lines (additions + deletions):
 - `9a89bdc5` — `fix(icons): satisfy icon test and story types` — **11 lines**
   (7 additions, 4 deletions); removes unused test bindings and supplies Matrix
   story args.
+- `222f875f` — `fix(icons): test the real icon sizing and color contract` — **58
+  lines** (43 additions, 15 deletions) across `Icon.test.tsx` and `primitives.css`.
+- `6fab9afb` — `fix(stories): drop the inline style from the icon stories` — **13
+  lines** (3 additions, 10 deletions) on `Icon.stories.tsx`.
+
+Slice 2 totals so far: **240 authored lines** across 7 commits, well inside the
+400-line review budget. Slice 2 is PR 2 and still needs T7 (the 30-glyph
+migration); its size will be counted on top of this when it lands.
 
 All commits remain below the 400-line review budget.
 
