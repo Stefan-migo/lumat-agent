@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgendaPage } from './AgendaPage';
 import type { AgendaAppointment } from '../../types';
-import { cancelAppointment, createAppointment, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from '../../api';
+import { cancelAppointment, createAppointment, fetchCases, fetchClients, fetchTechnicians, listAppointments, retryCalendarSync } from '../../api';
 import { appointmentStatusLabel, appointmentSyncLabel } from '../shared/toneMaps';
 
 vi.mock('../../api', () => ({
@@ -13,7 +13,7 @@ vi.mock('../../api', () => ({
   createAppointment: vi.fn(),
   fetchClients: vi.fn(),
   fetchCases: vi.fn(),
-  fetchUsers: vi.fn(),
+  fetchTechnicians: vi.fn(),
 }));
 
 const appointment = (overrides: Partial<AgendaAppointment> = {}): AgendaAppointment => ({
@@ -237,7 +237,7 @@ describe('AgendaPage', () => {
     const user = userEvent.setup();
     vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
     vi.mocked(fetchCases).mockResolvedValue({ cases: [{ id: 20, service: 'Mantención', customer: { id: 10, name: 'Camila Soto' } }] as never, users: [] });
-    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: 'Luis', role: 'tecnico', active: true }] as never });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: 'Luis' }] });
     vi.mocked(createAppointment).mockResolvedValue({ ok: true, appointment: {} as never });
     vi.mocked(listAppointments).mockResolvedValue({ appointments: [] });
 

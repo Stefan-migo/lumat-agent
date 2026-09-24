@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { ApiError, cancelAppointment, createAppointment, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from "../../api";
+import { ApiError, cancelAppointment, createAppointment, fetchCases, fetchClients, fetchTechnicians, listAppointments, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { AgendaAppointment, Case, Customer, AdminUser } from "../../types";
+import type { AgendaAppointment, Case, Customer, UserRef } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Dialog } from "../primitives/Dialog";
@@ -57,7 +57,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const [createFeedback, setCreateFeedback] = useState<{ tone: "danger" | "success"; title: string; detail?: string } | null>(null);
   const [clients, setClients] = useState<Customer[]>([]);
   const [cases, setCases] = useState<Case[]>([]);
-  const [technicians, setTechnicians] = useState<AdminUser[]>([]);
+  const [technicians, setTechnicians] = useState<UserRef[]>([]);
   const [createForm, setCreateForm] = useState({ customer_id: "", case_id: "", technician_id: "", service: "", local_date: "", local_time: "09:00", duration_minutes: "60" });
   const [view, setView] = useState<AgendaCalendarView>("month");
   const [anchor, setAnchor] = useState(() => agendaTodayKey(timezone));
@@ -113,10 +113,10 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     setCreateFeedback(null);
     setCreateForm((form) => ({ ...form, local_date: form.local_date || from }));
     try {
-      const [clientResponse, caseResponse, userResponse] = await Promise.all([fetchClients(), fetchCases(), fetchUsers()]);
+      const [clientResponse, caseResponse, technicianResponse] = await Promise.all([fetchClients(), fetchCases(), fetchTechnicians()]);
       setClients(clientResponse.clients);
       setCases(caseResponse.cases);
-      setTechnicians(userResponse.users.filter((user) => user.role === "tecnico"));
+      setTechnicians(technicianResponse.technicians);
     } catch (error) {
       setCreateFeedback({ tone: "danger", title: "No pudimos cargar las opciones de la visita", detail: error instanceof Error ? error.message : undefined });
     }

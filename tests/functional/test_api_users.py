@@ -63,6 +63,35 @@ def test_admin_list_is_ordered_and_allow_listed(client, make_user):
     assert all("password_hash" not in row and "failed_logins" not in row and "locked_until" not in row for row in users)
 
 
+def test_technician_list_is_operator_readable_and_minimal(client, make_user):
+    response = client.get("/panel/api/technicians", follow_redirects=False)
+    assert response.status_code == 401
+    assert response.headers["content-type"].startswith("application/json")
+    assert "location" not in response.headers
+
+    make_user("admin-account", "password1", role="admin")
+    make_user("operator-account", "password1", role="operador")
+    make_user("zeta-tech", "password1", role="tecnico")
+    make_user("alpha-tech", "password1", role="tecnico")
+    _login(client, make_user, "technician-list-operator", "password1", "operador")
+
+    response = client.get("/panel/api/technicians", follow_redirects=False)
+
+    assert response.status_code == 200
+    technicians = response.json()["technicians"]
+    assert [row["username"] for row in technicians] == ["alpha-tech", "zeta-tech"]
+    assert all(set(row) == {"id", "username"} for row in technicians)
+    assert {row["username"] for row in technicians}.isdisjoint(
+        {"admin-account", "operator-account", "technician-list-operator"}
+    )
+    assert client.get("/panel/api/users", follow_redirects=False).status_code == 403
+
+    client.post("/panel/api/logout")
+    _login(client, make_user, "technician-list-technician", "password1", "tecnico")
+    assert client.get("/panel/api/technicians", follow_redirects=False).status_code == 403
+    assert client.get("/panel/api/users", follow_redirects=False).status_code == 403
+
+
 def test_create_accepts_each_role_and_hashes_password(client, make_user):
     _admin(client, make_user)
     for role in ("admin", "operador", "tecnico"):
