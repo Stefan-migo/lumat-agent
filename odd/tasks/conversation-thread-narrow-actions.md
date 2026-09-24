@@ -186,15 +186,30 @@ Observed evidence:
   because the buttons were still in the inspector, and the CSS assertion failed because the 64rem block
   still contained `.ai-agent-grammar__inspector { display: none; }`.
 - Focused GREEN: `2 test files passed, 19 tests passed`.
-- Full web test: `85 files passed, 1 failed; 723 passed, 1 failed`; the unrelated pre-existing
-  `AgendaPage > creates an appointment from the agenda and refreshes the visible period` timed out at
-  5000ms. The focused files remained green.
+- Full web test, observed by the orchestrator on the frozen tree with nothing else running:
+  `Test Files 86 passed (86)`; `Tests 724 passed (724)`. An earlier run by the implementing worker
+  reported `85 files passed, 1 failed / 723 passed, 1 failed`, with the unrelated
+  `AgendaPage > creates an appointment from the agenda and refreshes the visible period` timing out at
+  5000ms. That failure did not reproduce on the clean re-run. It is the same 5-second-timeout flake seen
+  in the `panel-dashboard-alignment` unit, in both cases while a Storybook and a Playwright process were
+  competing for CPU. It is pre-existing test brittleness under load, not a signal about this change, and
+  it is recorded rather than smoothed over. The record below was corrected to the observed green run; the
+  worker's own doc entry had captured the earlier failing run.
 - Build: `npm run build` passed (`tsc -b && vite build`, 2222 modules transformed).
 - Browser command: `node /tmp/opencode/measure-conversation-thread.mjs` against Storybook `:6011`.
   At 375x812, 768x900, 1024x900 and 1280x900, each of `Tomar`, `Devolver`, `Cerrar` and
   `Reconocer emergencia` had `count: 1`, `nonZero: true`, and `offsetParent: true`; context was reachable
   at 375px. Measurements were `scrollWidth == innerWidth` at every viewport: 375, 768, 1024 and 1280.
 - `git diff --check` passed. No pytest run per D7.
+
+**Correction applied by the orchestrator after the worker returned.** The worker left
+`.ai-agent-grammar__actions` (`primitives.css:1705`) declared after deleting the only section that
+rendered it — dead CSS created by this change. The declaration was removed. The full suite and the
+build above were re-run on the resulting tree.
+
+## Assess outcome
+
+`gentle-ai review assess --base-ref 4b31796c --committed-only` over this branch is recorded below.
 
 ## Recovery
 
