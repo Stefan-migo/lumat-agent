@@ -183,12 +183,11 @@ Observable behavior this unit must produce. Implementation shape is the implemen
 
 - [x] **T1 — Baseline measurement, before any source change.** Recorded against unmodified `main`-derived
   code, before the first source edit. See *Baseline measurement (T1)* below.
-- [ ] **T2 — RED + GREEN, bounded opt-in cycle and accumulating state.** RED: a planner that asks for a
-  follow-up step executes a second tool and the turn answers from the combined evidence; a third is
-  refused at the cap; a planner that does **not** ask keeps the turn at one planner call, one tool, one
-  responder (D4). Rewrite `tests/unit/test_assistant_tool_loop.py:40-45` to assert the bounded cycle
-  exists and is opt-in. GREEN: the planner opt-in field (model + prompt), the accumulating state, the
-  counter, and the back-edge through a loop-head node that does not re-enter the per-turn gates.
+- [x] **T2 — RED + GREEN, bounded opt-in cycle and accumulating state.** Done in `83218556` + correction
+  `b99646fe`. RED for the opt-in field was an `ImportError` (weak — it proves the symbol was missing, not
+  the behavior); the correction's REDs were behavioral (`assert 2 == 1` on the duplicated evidence,
+  `KeyError: 'approval'` on the silent drop). GREEN: 124 tests across the four assistant test files, full
+  suite 1,339 passed.
 - [ ] **T3 — RED + GREEN, cost gate per iteration.** RED: a turn that would chain is stopped when the cost
   mode turns `conservative` or `blocked` mid-loop, and answers with what it has. GREEN: re-evaluate the
   cost mode at the loop head.
@@ -286,6 +285,35 @@ non-chaining tool turn is byte-for-byte identical in call count and prompt chara
 - Token figures are `chars / 4` estimates, not provider-reported usage. `_record_usage()` no-ops without
   a session (`nodes.py:278-292`), so real usage needs the DB-backed path.
 
+## Ledger of measured change (T1 → T2)
+
+Re-measured with the same instrument after T2, on the **non-opted-in single-tool turn** (the path D4
+guarantees is unchanged):
+
+| Vector | T1 baseline | After T2 | Delta |
+|---|---|---|---|
+| Planner calls | 1 | 1 | **0** |
+| Tool executions | 1 | 1 | **0** |
+| Responder calls | 1 | 1 | **0** |
+| Responder prompt chars | 2,497 | **2,497** | **0** |
+| Planner prompt chars | 12,150 | 12,513 | **+363** |
+| Total prompt chars | 14,647 | 15,010 | +363 (+2.5%) |
+
+The only remaining delta on a normal tool turn is **+363 chars (~91 tokens) on the planner prompt**: the
+`follow_up` contract added to `agent/prompts/assistant_plan.md`. It is the unavoidable price of publishing
+the opt-in field to the planner — without it the planner cannot ask for a second step. Recorded, not hidden.
+
+Two defects found by the parent's readback of the first T2 attempt, both fixed before the task closed:
+
+1. **Tool evidence leaked into the responder prompt.** `_context_text()` was patched to append prior tool
+   evidence, but the responder consumes `_context_text()` too, so every tool turn carried the evidence
+   **twice** — measured +47 chars on the synthetic turn, bounded at up to 4,000 duplicated chars on a real
+   one. Fixed with a planner-only `_planner_context_text()`; the responder prompt returned to exactly 2,497.
+2. **A step-2 write exited silently.** The `follow_up` exit ran *before* the write guard, so a step-2 write
+   plan with `follow_up` false was dropped with no decision and no reason — the implicit behavior D2 exists
+   to forbid. The guard now evaluates the plan independently of `follow_up` and always refuses with a
+   visible `loop_write_refused` decision.
+
 ## Progress
 
 - 2026-09-24 — Handoff read; repo state verified against `main` (`uv.lock` drift only; RDD `off` for this
@@ -301,6 +329,19 @@ non-chaining tool turn is byte-for-byte identical in call count and prompt chara
 - 2026-09-24 — **T1 done.** Baseline measured on the unmodified branch: 9,883-char catalog, 14,647 prompt
   chars per single-tool turn, 1 planner call per tool turn. Predicted U1 delta: +1 planner call
   (~12,150 chars) per tool turn.
+- 2026-09-24 — **D4 added.** T1's measurement contradicted the handoff's "a single-tool turn is unchanged"
+  requirement: an unconditional re-plan taxes every tool turn. The loop is now opt-in by the planner.
+- 2026-09-24 — **T2 done** (`83218556 feat(assistant): add bounded opt-in tool chaining`). Planner
+  `follow_up` field + prompt contract, accumulating `tool_results`/`tool_steps`, `tool_loop_head`, and a
+  bounded back-edge that bypasses the per-turn gates. `test_assistant_tool_loop.py:40-45` and `:48-70`
+  rewritten (not deleted) to assert the bounded cycle; six new tests cover the opt-in, the cap, the
+  combined-evidence answer, the per-turn-gate bypass, the write refusal, and the evidence budget.
+- 2026-09-24 — Parent readback of T2 found two defects and one bounded correction fixed both
+  (`b99646fe fix(assistant): keep tool evidence planner-only and refuse looped writes`). Re-verified by
+  measurement, not by report: responder prompt back to exactly 2,497 chars; write guard now evaluated
+  independently of the opt-in flag.
+- 2026-09-24 — After-measurement of the normal tool turn recorded in the ledger above: call counts
+  unchanged, responder prompt unchanged, planner prompt +363 chars from the new prompt contract.
 
 ## Graph nodes consulted (Graph Check, Step 1)
 
@@ -316,4 +357,6 @@ non-chaining tool turn is byte-for-byte identical in call count and prompt chara
 
 ## Next step
 
-T1 — take the baseline measurement before touching source. Then T2 (RED first) begins the loop.
+T3 — RED + GREEN, cost gate per iteration: a chain must stop when the cost mode turns `conservative` or
+`blocked` mid-loop and answer with what it has. The seam already exists (`tool_loop_head` checks
+`cost_mode`), so T3 makes it explicit, tested and evidence-bearing.
