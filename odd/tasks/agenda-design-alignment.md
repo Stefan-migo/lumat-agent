@@ -89,6 +89,8 @@ not Agenda — it belongs in its own unit.
 Forecast: fewer than 20 authored changed lines plus tests. Far under the ~400-line
 review budget → single PR, no chained slices.
 
+Delivered as **PR #351** (`type:bug`), base `main`.
+
 ## Progress / Evidence
 
 - [x] T1 RED observed — `AgendaPage.test.tsx` CSS contract failed on the uppercase assertion.
@@ -168,5 +170,11 @@ page itself is `375px` wide, so this is the shell's, not Agenda's.
 
 ## Next step
 
-Report the verified alignment result and the Finding 1/2 evidence, then decide whether the
-text-zoom reflow becomes its own unit or is folded in here.
+Unit closed. Delivered as PR #351.
+
+Work handed off to its own unit, per the owner's call: the **200% text-zoom reflow**
+defect (Finding 1) — the shell rail's rem doubling plus the `minmax(20rem, 1fr)` track
+minimum — and the shell footer-nav overflow at 375px (Finding 2). Neither is fixed here.
+
+Still open and owned by the owner: the original "breaks when shrinking the viewport"
+report remains unreproduced after 11 widths measured **inside the real shell**.
