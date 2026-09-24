@@ -194,16 +194,33 @@ Observable behavior this unit must produce. Implementation shape is the implemen
   tool run. GREEN: `test_cost_mode_flip_stops_loop_before_second_planner` is parametrized over
   `conservative` and `blocked`, drives the real graph, and asserts one tool, one planner call, the answer
   from the gathered evidence, and the visible `loop_cost_stopped` decision.
-- [ ] **T4 — RED + GREEN, write refusal at step ≥ 2.** RED: a step-2 plan for a non-read-only tool is
-  refused with a visible reason, executes nothing, and issues no approval. GREEN: explicit guardrails
-  rule. Assert the *absence* of an approval, not only the absence of execution.
-  **Corrected at slice 2 start by measurement — see *Slice 2 discovery* below.** The refusal is not
-  merely invisible: it is **not enforced at all** on the real graph, because `guardrails` intercepts the
-  step-2 write before `tool_loop_head` ever sees it. T4 is therefore the enforcement fix, and the
-  enforcement point moves into `guardrails` (which is what this task already said), not `tool_loop_head`.
-- [ ] **T5 — RED + GREEN, planner sees prior results, bounded.** RED: the planner prompt carries a
-  bounded rendering of accumulated results and the combined rendering stays within budget across N
-  results. GREEN: extend the planning prompt with the bounded rendering.
+- [x] **T4 — RED + GREEN, write refusal at step ≥ 2.** Done in `0a3d1b8b`. Measurement (see *Slice 2
+  discovery*) moved this from a visibility fix to an enforcement fix: the refusal now sits in
+  `guardrails`, before execution and before the approval branch, and routes to `END`, so the user
+  receives the reason instead of a model answer. The post-execution branch in `tool_loop_head` was
+  removed — it prevented nothing and mislabelled successful single write turns as `loop_write_refused`.
+  RED was behavioral: `assert 'executing' == 'completed'` on the `guardrails` unit test, and six
+  failures that pinned the executed autonomous write, the issued approval token, and the mislabel.
+  GREEN: 21 tests in `test_assistant_tool_loop.py`, 294 across the ten assistant/chat/cortex/sdb files.
+  Verified independently by the parent with the same real-graph probe that found the defect: all five
+  scenarios correct, **including the legitimate two-read-only chain still chaining**
+  (`customers.search → memory.search`), so the core U1 feature is intact.
+  *(This entry was written, and the task list description corrected, before the review freeze — the
+  slice 1 record could not be edited while its review was open.)*
+- [ ] **T5 — RED + GREEN, planner sees prior results, bounded.** **Partially delivered inside T2 and never
+  checked off — slice 2 must finish it.** The implementation exists: `_planner_context_text()`
+  (`nodes.py:275-278`) appends `_render_tool_evidence()` to the planner prompt only (`plan_llm`,
+  `nodes.py:489`), and `_render_tool_evidence()` truncates the combined rendering at
+  `_TOOL_EVIDENCE_LIMIT`. What does NOT exist is the proof: the only related assertion,
+  `test_assistant_tool_loop.py:348`, checks that the *shared* `_context_text()` stays clean — it never
+  asserts that the **planner** prompt carries the accumulated results. Contract items 4 and 7 are
+  therefore implemented-but-unproven, and the slice 2 handoff omitted T5 from its task list entirely.
+  RED: the planner prompt carries a bounded rendering of accumulated results and the combined rendering
+  stays within budget across N results. GREEN: extend the planning prompt with the bounded rendering.
+  **Open question T5 must answer with evidence, not opinion:** `_render_tool_evidence()` truncates the
+  *joined* string from the end, so with N results a large earlier result can push the **newest** result —
+  the very one that triggered the re-plan — out of the planner's view. Decide whether the budget must
+  favour the most recent results, and pin the answer with a test either way.
 - [ ] **T6 — Observability.** `tool_steps` and `cap_reached` reach the persisted run state; a per-iteration
   stage is published. Proved by test, not by comment.
 - [ ] **T7 — Harness end-to-end.** An integration turn that chains `web.search → kb.retrieve` and answers
@@ -213,7 +230,8 @@ Observable behavior this unit must produce. Implementation shape is the implemen
 - [x] **T9 — Suite and spec check (slice 1).** Full suite green on retry: **1342 passed, 2 warnings in
   178.17s**; the first run stalled in the documented pre-existing way (see *Known environmental failure*).
   Every pre-existing assistant assertion still holds; the `tool_result` and `<tool_evidence>` contracts
-  are intact. The PR opens slice 1 only; T4/T6/T7/T8 ship as slice 2.
+  are intact. The PR opens slice 1 only; **T4/T5/T6/T7/T8** ship as slice 2 (T5 was omitted from the
+  slice 2 handoff's task list and recovered from this record during slice 2; see the T5 entry).
 
 ## Acceptance criteria
 
@@ -238,7 +256,7 @@ eval "$(bash infra/test-db.sh env)"
 # and suppresses the pass summary
 
 uv run pytest tests/unit/test_assistant_tool_loop.py
-uv run pytest tests/unit/test_assistant_graph.py tests/unit/test_cortex_session_loop.py
+uv run pytest tests/unit/test_assistant_*.py tests/unit/test_cortex_session_*.py
 uv run pytest tests/integration/test_assistant_harness_guardrails.py
 uv run pytest tests/integration/test_assistant_chat.py
 uv run pytest tests/spec/test_sdb_recovery.py
