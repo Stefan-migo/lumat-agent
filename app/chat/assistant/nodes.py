@@ -46,6 +46,10 @@ PANEL_KB_UNAVAILABLE = (
     "La base de conocimiento no está disponible para esta consulta. "
     "No pude consultarla; un operador deberá revisarla."
 )
+PANEL_LOOP_WRITE_REFUSAL = (
+    "No puedo ejecutar esa acción dentro de una consulta de varios pasos. "
+    "Pídemela directamente y te pediré confirmación antes de ejecutarla."
+)
 _SOCIAL_WORDS = frozenset({
     "adios", "buenas", "buenos", "bye", "chau", "como", "de", "dia", "días", "día",
     "dias", "estas", "esta", "excelente", "gracias", "hello", "hi", "hola", "hasta",
@@ -596,6 +600,15 @@ def guardrails(state: AssistantState) -> AssistantState:
         fallback = bounded_fallback(diagnosis["reason"])
         return {"planner": {**fallback.model_dump(), "valid": False, "failure": diagnosis}, "plan": fallback.model_dump(), "guardrails": {**decisions, "decision": "fallback"}, "response": fallback.summary, "status": "responding"}
     autonomous_write = _is_autonomous_write(tool_name, state.get("thread_id"))
+    if not get_tool(tool_name).read_only and state.get("tool_steps", 0) >= 1:
+        decisions["decision"] = "loop_write_refused"
+        decisions["approval_required"] = False
+        return {
+            "approval": None,
+            "guardrails": decisions,
+            "response": PANEL_LOOP_WRITE_REFUSAL,
+            "status": "completed",
+        }
     if not get_tool(tool_name).read_only and not autonomous_write and not state.get("approval"):
         from app.chat.assistant.approval import issue_approval
         decisions["approval_required"] = True
@@ -638,29 +651,6 @@ def tool_loop_head(state: AssistantState) -> AssistantState:
             },
             "status": "completed",
         }
-    if plan.get("kind") == "tool" and plan.get("tool") and steps >= 1:
-        try:
-            read_only = get_tool(plan["tool"]).read_only
-        except (KeyError, ValueError):
-            return {
-                "guardrails": {
-                    **state.get("guardrails", {}),
-                    "decision": "loop_invalid_tool",
-                    "approval_required": False,
-                },
-                "status": "completed",
-            }
-        if not read_only:
-            return {
-                "approval": None,
-                "guardrails": {
-                    **state.get("guardrails", {}),
-                    "decision": "loop_write_refused",
-                    "approval_required": False,
-                },
-                "response": "Write tools cannot run after a read-only follow-up step.",
-                "status": "completed",
-            }
     if plan.get("kind") != "tool" or not plan.get("tool") or not plan.get("follow_up"):
         return {"status": "completed"}
     return {"status": "planned"}
