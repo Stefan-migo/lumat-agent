@@ -159,6 +159,12 @@ it('does not hide the conversation inspector at the 64rem breakpoint', () => {
 describe('conversation inspector layout CSS contract', () => {
   const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
 
+  it('uses card radius for conversation cards and preserves the mobile workspace reset', () => {
+    expect(css).toMatch(/\.conversations-queue__row\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
+    expect(css).toMatch(/\.conversation-workspace\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
+    expect(css).toMatch(/@media \(max-width: 39\.99rem\)[\s\S]*?\.conversation-workspace\s*\{[^}]*border-radius:\s*0/s);
+  });
+
   it('gives the inspector column a bounded responsive width', () => {
     expect(css).toMatch(/\.conversation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(24rem, 1fr\)\s+minmax\(18rem, 24rem\);/);
   });
