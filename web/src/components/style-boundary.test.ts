@@ -21,4 +21,19 @@ describe("stylesheet boundary", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it("keeps the migrated icon surfaces free of inline svg literals", () => {
+    const iconFiles = [
+      "src/components/domain/PanelShell.tsx",
+      "src/components/pages/Dashboard.tsx",
+      "src/components/pages/AgentChat.tsx",
+      "src/components/primitives/SearchInput.tsx",
+      "src/components/primitives/Dialog.tsx",
+    ];
+    const offenders = iconFiles.filter((file) =>
+      /<svg[\s>]/.test(readFileSync(join(process.cwd(), file), "utf8")),
+    );
+
+    expect(offenders).toEqual([]);
+  });
 });
