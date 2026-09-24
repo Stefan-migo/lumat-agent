@@ -1,19 +1,32 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { extname, join, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { docs } from "./_shared/mockData/kb";
 import { kbStatusLabel } from "./_shared/toneMaps";
 import { KbList } from "../../components/pages/KbList";
 import { KbListView, KbListEmpty } from "./KbList.stories";
 
+const sourceRoot = resolve(process.cwd(), "src");
+
+function sourceFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path);
+    if (path.includes(".test.")) return [];
+    return [path].filter((file) => [".ts", ".tsx"].includes(extname(file)));
+  });
+}
+
 describe("KbList page", () => {
   it("renders the Spanish page title and upload surface", () => {
     render(<KbListView />);
     expect(screen.getByRole("heading", { name: "Base de conocimientos" })).toBeInTheDocument();
-    const addCard = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
-    expect(within(addCard).getByLabelText(/título/i)).toBeInTheDocument();
-    expect(within(addCard).getByLabelText(/archivo/i)).toBeInTheDocument();
-    expect(within(addCard).getByRole("button", { name: "Agregar" })).toBeInTheDocument();
+    const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
+    expect(within(addRegion).getByLabelText(/título/i)).toBeInTheDocument();
+    expect(within(addRegion).getByLabelText(/archivo/i)).toBeInTheDocument();
+    expect(within(addRegion).getByRole("button", { name: "Agregar" })).toBeInTheDocument();
   });
 
   it("renders document rows with approved headers, statuses, audience and cost", () => {
@@ -30,6 +43,35 @@ describe("KbList page", () => {
     expect(within(row).getByText(kbStatusLabel(first.active ? "activo" : "deshabilitado"))).toBeInTheDocument();
     expect(within(row).getByText("$0.000412")).toBeInTheDocument();
     expect(within(row).getByText("Cliente y Lumat")).toBeInTheDocument();
+  });
+
+  it("places the populated document table on the shared data surface", () => {
+    render(<KbListView />);
+    const table = screen.getByRole("table");
+    expect(table.closest(".data-region")).toBeInTheDocument();
+  });
+
+  it("keeps every KB stylesheet class referenced by a component or story", () => {
+    const stylesheet = readFileSync(resolve(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    const declaredClasses = [...stylesheet.matchAll(/\.((?:kb)[a-z0-9_-]*)\b/g)].map((match) => match[1]);
+    const source = sourceFiles(sourceRoot).map((file) => readFileSync(file, "utf8")).join("\n");
+    const unreferenced = [...new Set(declaredClasses)].filter((className) => !new RegExp(`(?:^|[^a-z0-9_-])${className}(?:$|[^a-z0-9_-])`).test(source));
+
+    expect(unreferenced, `Unreferenced KB classes: ${unreferenced.join(", ")}`).toEqual([]);
+  });
+
+  it("does not expose a workflow state prop that production does not provide", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/components/pages/KbList.tsx"), "utf8");
+    expect(source).not.toMatch(/state\?: KbListState/);
+  });
+
+  it("makes documents primary and keeps upload and retrieval as secondary regions", () => {
+    render(<KbListView />);
+    const table = screen.getByRole("table");
+    const uploadHeading = screen.getByRole("heading", { name: "Agregar documento" });
+    expect(table.compareDocumentPosition(uploadHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(uploadHeading.closest(".card")).toBeNull();
+    expect(screen.getByRole("region", { name: "Herramienta de recuperación" })).toBeInTheDocument();
   });
 
   it("renders an approved Spanish status label per document (triangulation across activo/deshabilitado)", () => {
@@ -66,9 +108,9 @@ describe("KbList page", () => {
 
   it("declares who reads a customer document on every remaining audience surface", () => {
     render(<KbList data={{ docs }} />);
-    const addCard = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
-    expect(within(addCard).getByRole("option", { name: "Cliente y Lumat" })).toBeInTheDocument();
-    expect(within(addCard).getByRole("option", { name: "Interno (solo Lumat)" })).toBeInTheDocument();
+    const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
+    expect(within(addRegion).getByRole("option", { name: "Cliente y Lumat" })).toBeInTheDocument();
+    expect(within(addRegion).getByRole("option", { name: "Interno (solo Lumat)" })).toBeInTheDocument();
   });
 
   it("keeps provider/model advanced keys out of ordinary table rows", () => {
@@ -77,12 +119,16 @@ describe("KbList page", () => {
     expect(within(row).queryByText(`${docs[0].provider} / ${docs[0].model}`)).toBeNull();
   });
 
-  it("renders processing and error state banners", () => {
-    const { rerender } = render(<KbListView state="processing" />);
-    expect(screen.getByRole("status")).toHaveTextContent("Procesando documento");
-    rerender(<KbListView state="error" />);
-    expect(screen.getByRole("alert")).toHaveTextContent("No pudimos procesar el documento");
+  it("renders the fetch error state from the page data source", async () => {
+    render(<KbListView state="error" />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos cargar la base de conocimientos");
   });
+
+  it("renders the page loading banner from its own data source", async () => {
+    render(<KbList fetchDocuments={() => new Promise(() => undefined)} />);
+    expect(await screen.findByRole("status")).toHaveTextContent("Cargando base de conocimientos");
+  });
+
 });
 
 describe("KbList empty story", () => {
@@ -186,12 +232,12 @@ describe("KbList API page", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
     render(<KbList />);
     await screen.findByText(docs[0].title);
-    const addCard = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
-    expect(within(addCard).getByLabelText("Audiencia")).toHaveValue("internal");
-    await user.selectOptions(within(addCard).getByLabelText("Audiencia"), "customer");
-    await user.type(within(addCard).getByLabelText("Título"), "Guide");
-    await user.upload(within(addCard).getByLabelText(/archivo/i), new File(["# Content"], "guide.md", { type: "text/markdown" }));
-    await user.click(within(addCard).getByRole("button", { name: "Agregar" }));
+    const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
+    expect(within(addRegion).getByLabelText("Audiencia")).toHaveValue("internal");
+    await user.selectOptions(within(addRegion).getByLabelText("Audiencia"), "customer");
+    await user.type(within(addRegion).getByLabelText("Título"), "Guide");
+    await user.upload(within(addRegion).getByLabelText(/archivo/i), new File(["# Content"], "guide.md", { type: "text/markdown" }));
+    await user.click(within(addRegion).getByRole("button", { name: "Agregar" }));
     const request = fetchMock.mock.calls[1][1] as RequestInit;
     expect(request.method).toBe("POST");
     expect(request.body).toBeInstanceOf(FormData);
@@ -200,6 +246,46 @@ describe("KbList API page", () => {
     expect((request.body as FormData).get("visibility")).toBe("customer");
     expect((request.headers as Record<string, string> | undefined)?.["Content-Type"]).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(await within(addRegion).findByRole("status")).toHaveTextContent("Documento agregado");
+    fetchMock.mockRestore();
+  });
+
+  it("derives the extension only from a real filename suffix", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/components/pages/KbList.tsx"), "utf8");
+    expect(source).toMatch(/const dot = file\.name\.lastIndexOf\("\."\);/);
+    expect(source).toMatch(/const extension = dot > 0 \? file\.name\.slice\(dot\)\.toLowerCase\(\) : "";/);
+  });
+
+  it("shows the supported formats and size limit before upload", async () => {
+    const user = userEvent.setup();
+    render(<KbList data={{ docs }} />);
+    const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
+    const fileInput = within(addRegion).getByLabelText(/archivo/i);
+    expect(fileInput).toHaveAttribute("accept", ".pdf,.md,.txt,.csv");
+    expect(within(addRegion).getByText(/máximo 5 mb/i)).toBeInTheDocument();
+    await user.type(within(addRegion).getByLabelText("Título"), "Guide");
+    fireEvent.change(fileInput, { target: { files: [new File(["content"], "guide.exe", { type: "application/octet-stream" })] } });
+    await user.click(within(addRegion).getByRole("button", { name: "Agregar" }));
+    expect(await within(addRegion).findByRole("alert")).toHaveTextContent("Formato no compatible");
+  });
+
+  it("keeps processing feedback at the upload locus and offers upload retry after failure", async () => {
+    const user = userEvent.setup();
+    let resolveUpload!: (response: Response) => void;
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Response(JSON.stringify({ detail: "upload failed" }), { status: 500 }));
+    render(<KbList data={{ docs }} />);
+    const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
+    await user.type(within(addRegion).getByLabelText("Título"), "Guide");
+    await user.upload(within(addRegion).getByLabelText(/archivo/i), new File(["content"], "guide.md", { type: "text/markdown" }));
+    await user.click(within(addRegion).getByRole("button", { name: "Agregar" }));
+    expect(await within(addRegion).findByRole("alert")).toHaveTextContent("No pudimos procesar el documento");
+    expect(within(addRegion).getByRole("button", { name: "Reintentar carga" })).toBeInTheDocument();
+
+    fetchMock.mockReturnValueOnce(new Promise((resolve) => { resolveUpload = resolve; }));
+    await user.click(within(addRegion).getByRole("button", { name: "Reintentar carga" }));
+    expect(within(addRegion).getByRole("status")).toHaveTextContent("Procesando documento");
+    resolveUpload(new Response(JSON.stringify({ ok: true, doc: docs[0] }), { status: 200 }));
     fetchMock.mockRestore();
   });
 });
