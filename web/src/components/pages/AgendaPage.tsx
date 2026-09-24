@@ -1,16 +1,18 @@
 import { useCallback, useState } from "react";
-import { cancelAppointment, listAppointments, retryCalendarSync } from "../../api";
+import { ApiError, cancelAppointment, createAppointment, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { AgendaAppointment } from "../../types";
+import type { AgendaAppointment, Case, Customer, AdminUser } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Dialog } from "../primitives/Dialog";
+import { Input } from "../primitives/Input";
+import { Select } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
-import { agendaMonthDays, agendaPeriodLabel, agendaShiftPeriod, agendaTodayKey, agendaWeekDays, formatAgendaSlot } from "../shared/agendaTime";
+import { AgendaTimeError, agendaMonthDays, agendaPeriodLabel, agendaShiftPeriod, agendaTodayKey, agendaWeekDays, composeAgendaTime, formatAgendaSlot } from "../shared/agendaTime";
 import { AgendaCalendar, type AgendaCalendarView } from "../shared/AgendaCalendar";
 import { appointmentStatusLabel, appointmentStatusTone, appointmentSyncLabel, appointmentSyncTone } from "../shared/toneMaps";
 
@@ -50,6 +52,13 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const [mutatingId, setMutatingId] = useState<number | null>(null);
   const [cancelFeedback, setCancelFeedback] = useState<ActionFeedback | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<ActionFeedback | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createFeedback, setCreateFeedback] = useState<{ tone: "danger" | "success"; title: string; detail?: string } | null>(null);
+  const [clients, setClients] = useState<Customer[]>([]);
+  const [cases, setCases] = useState<Case[]>([]);
+  const [technicians, setTechnicians] = useState<AdminUser[]>([]);
+  const [createForm, setCreateForm] = useState({ customer_id: "", case_id: "", technician_id: "", service: "", local_date: "", local_time: "09:00", duration_minutes: "60" });
   const [view, setView] = useState<AgendaCalendarView>("month");
   const [anchor, setAnchor] = useState(() => agendaTodayKey(timezone));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -99,6 +108,56 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       setMutatingId(null);
     }
   };
+  const openCreate = async () => {
+    setCreateOpen(true);
+    setCreateFeedback(null);
+    setCreateForm((form) => ({ ...form, local_date: form.local_date || from }));
+    try {
+      const [clientResponse, caseResponse, userResponse] = await Promise.all([fetchClients(), fetchCases(), fetchUsers()]);
+      setClients(clientResponse.clients);
+      setCases(caseResponse.cases);
+      setTechnicians(userResponse.users.filter((user) => user.role === "tecnico"));
+    } catch (error) {
+      setCreateFeedback({ tone: "danger", title: "No pudimos cargar las opciones de la visita", detail: error instanceof Error ? error.message : undefined });
+    }
+  };
+  const create = async () => {
+    if (createBusy) return;
+    const customerId = Number(createForm.customer_id);
+    const caseId = Number(createForm.case_id);
+    const technicianId = Number(createForm.technician_id);
+    if (!customerId || !caseId || !technicianId || !createForm.service.trim() || !createForm.local_date || !createForm.local_time || Number(createForm.duration_minutes) <= 0) {
+      setCreateFeedback({ tone: "danger", title: "Completa todos los campos de la visita" });
+      return;
+    }
+    setCreateBusy(true);
+    setCreateFeedback(null);
+    try {
+      const localTime = composeAgendaTime(createForm.local_date, createForm.local_time, timezone);
+      await createAppointment({ ...localTime, service: createForm.service.trim(), customer_id: customerId, case_id: caseId, technician_id: technicianId, duration_minutes: Number(createForm.duration_minutes) });
+      setCreateOpen(false);
+      await refreshAgenda();
+      setCreateFeedback({ tone: "success", title: "Visita creada" });
+    } catch (error) {
+      if (error instanceof AgendaTimeError) {
+        const title = error.code === "nonexistent_local_time"
+          ? "Esa hora no existe ese día por el cambio de horario de verano"
+          : "Esa hora se repite ese día por el cambio de horario de verano";
+        setCreateFeedback({ tone: "danger", title });
+      } else {
+        let code = "";
+        if (error instanceof ApiError) {
+          try { code = String((JSON.parse(error.detail) as { code?: string }).code ?? ""); } catch { /* raw detail */ }
+        }
+        const title = error instanceof ApiError && error.status === 409 && ["appointment_conflict", "technician_unavailable"].includes(code)
+          ? "Ese técnico ya tiene una visita a esa hora"
+          : code === "invalid_local_time" ? "Elige una hora local válida" : error instanceof ApiError ? error.detail : "No pudimos crear la visita";
+        setCreateFeedback({ tone: "danger", title });
+      }
+    } finally {
+      setCreateBusy(false);
+    }
+  };
   const sortedAppointments = [...appointments].sort((a, b) => a.local_start.localeCompare(b.local_start));
   const visitCounts = appointments.reduce<Record<string, number>>((counts, row) => {
     const day = localDate(row.local_start);
@@ -139,7 +198,10 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const renderedRows = selectedRows ?? (containsToday ? [...todayRows, ...upcomingRows] : periodRows);
   const showEmpty = data?.length === 0 || state === "empty" || renderedRows.length === 0;
 
+  const field = (key: keyof typeof createForm, value: string) => setCreateForm((form) => ({ ...form, [key]: value }));
   return <PageFrame title="Agenda" meta={data ? `${appointments.length} ${appointments.length === 1 ? "visita" : "visitas"}` : undefined} state={stateMessage(state, retry)}>
+    <Button onClick={() => void openCreate()}>Nueva visita</Button>
+    {createFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={createFeedback.title} /> : null}
     {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
       <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
       {showEmpty ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : <section aria-label="Registro de agenda">{register}</section>}
@@ -149,6 +211,18 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       <Textarea id="cancel-reason" label="Motivo de cancelación" value={reason} onChange={(event) => setReason(event.target.value)} />
       {cancelTarget && cancelFeedback?.id === cancelTarget.id && cancelFeedback.tone === "danger" ? <StateMessage tone="danger" role="alert" title={cancelFeedback.title} detail={cancelFeedback.detail} /> : null}
       <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void cancel()}>Confirmar cancelación</Button>
+    </Dialog>
+    <Dialog open={createOpen} onClose={() => { if (!createBusy) setCreateOpen(false); }} title="Crear visita">
+      <Select label="Cliente" value={createForm.customer_id} onChange={(event) => field("customer_id", event.target.value)} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} />
+      <Select label="Caso" value={createForm.case_id} onChange={(event) => { field("case_id", event.target.value); const selected = cases.find((item) => item.id === Number(event.target.value)); if (selected && !createForm.service) field("service", selected.service); }} options={[{ value: "", label: "Selecciona un caso" }, ...cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service} (#${item.id})` }))]} />
+      <Select label="Técnico" value={createForm.technician_id} onChange={(event) => field("technician_id", event.target.value)} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
+      <Input label="Servicio" value={createForm.service} onChange={(event) => field("service", event.target.value)} />
+      <Input label="Fecha local" type="date" value={createForm.local_date} onChange={(event) => field("local_date", event.target.value)} />
+      <Input label="Hora local" type="time" value={createForm.local_time} onChange={(event) => field("local_time", event.target.value)} />
+      <Input label="Duración (minutos)" type="number" min="1" value={createForm.duration_minutes} onChange={(event) => field("duration_minutes", event.target.value)} />
+      <Input label="Zona horaria" value={timezone} readOnly />
+      {createFeedback?.tone === "danger" ? <StateMessage tone="danger" role="alert" title={createFeedback.title} detail={createFeedback.detail} /> : null}
+      <Button variant="secondary" disabled={createBusy} onClick={() => void create()}>{createBusy ? "Creando…" : "Crear visita"}</Button>
     </Dialog>
   </PageFrame>;
 }
