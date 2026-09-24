@@ -173,6 +173,15 @@ security class.
   font non-goal is explicitly amended because the reference is font-led and no other
   change closes that gap. **Icons: Lucide.** **Radix scope: Dialog, Popover, Tabs,
   Tooltip, Select.** **`clamp()`: display scale only.**
+- **D13 — Icon sizes normalize to the declared scale (slice 2, 2026-09-24).** The
+  migrated call sites that used off-scale sizes (12px, 14px, 18px) move to the declared
+  16/20/24 scale (`--icon-sm` / `--icon-md` / `--icon-lg`). `--icon-md: 20px` stays
+  byte-identical per `DS-TKN-2`. This is a **declared** visual delta: it is recorded
+  here and in the PR body rather than discovered afterwards (the T5c lesson), and the
+  density acceptance criterion is verified against it. Rejected: a numeric escape hatch
+  on `Icon` (keeps the scale hollow in the unit that exists to create it) and extending
+  the scale down to 12/14 (contradicts the doc line and produces a 14→20 gap, because
+  `--icon-md: 20px` is frozen).
 
 ## Tasks
 
@@ -212,7 +221,7 @@ security class.
 
 ### Slice 2 — icon system (PR 2)
 
-- [ ] **T6** — Add the chosen icon family; build the `Icon` primitive on the
+- [x] **T6** — Add the chosen icon family; build the `Icon` primitive on the
   `--icon-*` size scale and `currentColor`, adding `--icon-sm`/`--icon-lg` with
   their new consumer.
 - [ ] **T7** — Replace the loose inline `<svg>` AND the text-glyph pseudo-icons with
@@ -221,6 +230,42 @@ security class.
   magnifier, which is why it renders tiny and shifts with the font) and
   `Dialog.tsx` renders its close control as a raw `<button className="dialog__close">✕</button>`
   (a text glyph, not an icon).
+- [x] **T7b** — Amend `DS-SHELL-6` in the OpenSpec delta. The canonical requirement
+  still reads "Shell icons MUST be semantically distinct and inline/native with no new
+  dependency" / "THEN no icon library … appears"
+  (`openspec/specs/panel-design-system/spec.md:546-553`), which directly contradicts the
+  adopted Lucide family. The matching delta belongs under
+  `openspec/changes/panel-visual-foundation/`.
+
+**Slice 2 implementation notes (verified 2026-09-24 against the code).**
+
+- The real inventory is **30 local glyph definitions**, not "three files with loose
+  svg": `PanelShell.tsx` 13 (shared wrapper at `:11-25`, fixed 20px), `Dashboard.tsx`
+  12 (local `Icon name={...} size={...}`, sizes 12/14/16/18/20 across 18 call sites),
+  `AgentChat.tsx` 5 (`icon(children, size)`, defaults 16/16/16/20/18). Two concepts are
+  duplicated across files (calendar, users), so the Lucide mapping is narrower than 30.
+- **`primitives.css:67-72` already forces the size.** `.btn > svg` and
+  `.dialog__close > svg` are pinned to `width/height: var(--icon-md)`. Any `Icon`
+  that sets its own size is silently overridden inside buttons and the dialog close.
+  This must be resolved, not left lying.
+- `Dashboard.tsx:12` declares a local `Icon` component; it disappears with the
+  migration, so the new primitive name does not collide in the end.
+- No boundary test blocks the dependency: `dependency-boundary.test.ts` only prevents
+  components from importing Storybook files, and the no-hard-coded-hex walk lives in
+  `tokens.test.ts` (which excludes tests and stories).
+- Assertions that read the migrated markup and must stay green:
+  `PanelEntry.stories.test.tsx:230-237` (each nav button's `svg` `innerHTML` stays
+  distinct) and `AppShell.test.tsx:270` (collapse control contains an svg with
+  `stroke="currentColor"`). `PanelShell.test.tsx`, `Dashboard.test.tsx`,
+  `AgentChat.test.tsx`, `SearchInput.test.tsx` and `Dialog.test.tsx` assert names and
+  behaviour, not svg markup.
+
+### Slice 2 implementation evidence
+
+- **Graph Check:** `graphify query "Icon primitive Lucide icon size tokens primitives stylesheet token drift tests stories"` consulted `primitives`, `tokens`, `primitives.css (tokenized shell CSS boundary)`, `Scenario: Drift guard green`, `PanelShell.tsx`, `tokens.test.ts`, and `Tokens.stories.tsx`. `graphify path "web/src/components/primitives/Badge.tsx" "web/src/tokens/tokens.test.ts"` found no directed path; the Badge conventions, token drift guard, and CSS consumers were verified directly. The consulted graph relationship was the tokenized primitive stylesheet boundary from `Icon`/`primitives.css` to `tokens.css`/`tokens.test.ts`.
+- **Strict TDD RED:** `cd web && npm run test -- --run src/components/primitives/Icon.test.tsx src/tokens/tokens.test.ts` → `sh: line 1: vitest: command not found` before source changes; after `npm install lucide-react`, the first CSS assertions also failed with `expected '' to be 'var(--icon-sm)'` and the currentColor attribute assertion failed, so the test was corrected to assert the stylesheet contract rather than jsdom's unsupported CSS resolution.
+- **Strict TDD GREEN:** focused Vitest → `2 passed` files / `22 passed` tests. The `.icon.icon--sm` selector assertion covers the `.btn > svg` specificity trap, and the token drift guard asserts both new tokens and their CSS consumers.
+- **Commits:** `c9dc904d` — `feat(icons): add tokenized Lucide icon foundation` (**46 authored lines**); `466059e9` — `test(icons): cover tokenized icon sizing contract` (**112 authored lines**).
 
 ### Slice 3 — composite migration to Radix (PR 3)
 
@@ -326,6 +371,11 @@ Actual authored changed lines (additions + deletions):
 - **T5c correction commit** — restores the dialog overlay elevation and the
   card/data-region brand surface, and removes `--surface-raised` (~8 lines across
   3 files).
+- `c9dc904d` — `feat(icons): add tokenized Lucide icon foundation` — **46 lines**
+  (46 additions); T6 source, dependency, token scale, and CSS.
+- `466059e9` — `test(icons): cover tokenized icon sizing contract` — **112 lines**
+  (104 additions, 8 deletions); Icon tests/story, drift guard, documentation, and
+  DS-SHELL-6 delta.
 
 All commits remain below the 400-line review budget.
 
