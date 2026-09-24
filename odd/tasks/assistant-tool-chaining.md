@@ -205,8 +205,10 @@ Observable behavior this unit must produce. Implementation shape is the implemen
   from combined evidence, plus a turn that stops at the cap with the truncation recorded.
 - [ ] **T8 — After measurement.** Re-run T1's measurement against the new code and report the delta,
   including the extra planner call per tool turn.
-- [ ] **T9 — Suite and spec check.** Full suite green; every pre-existing assistant assertion still holds;
-  the pre-existing `tool_result` and `<tool_evidence>` contracts are intact.
+- [x] **T9 — Suite and spec check (slice 1).** Full suite green on retry: **1342 passed, 2 warnings in
+  178.17s**; the first run stalled in the documented pre-existing way (see *Known environmental failure*).
+  Every pre-existing assistant assertion still holds; the `tool_result` and `<tool_evidence>` contracts
+  are intact. The PR opens slice 1 only; T4/T6/T7/T8 ship as slice 2.
 
 ## Acceptance criteria
 
@@ -353,7 +355,9 @@ Two defects found by the parent's readback of the first T2 attempt, both fixed b
   `execute_tool(..., cost_allowed=...)` → `registry.py:555`. A `blocked` loop-stop therefore sets
   `cost_allowed=False`, but the stop routes to `respond_stream`, where `tool_already_ran` is already true,
   so the tool branch (and that check) is never reached. Confirmed rather than assumed. 131 tests pass
-  across the five assistant/chat test files; full suite 1,342 passed.
+  across the five assistant/chat test files.
+- 2026-09-24 — Slice 1 closed: delivery decision recorded (stacked-to-main), budget measured at 381
+  authored lines excluding the unit record, full suite green on retry (1342 passed). Ready for PR #1.
 
 ## Graph nodes consulted (Graph Check, Step 1)
 
@@ -366,6 +370,22 @@ Two defects found by the parent's readback of the first T2 attempt, both fixed b
 - Graph staleness: built from `59034858`; base is `e16b3ff8`. The diff touches no backend file, so the
   map is valid for this area. Refresh once at session close (`graphify <path> --update` **and**
   `graphify cluster-only <path>`).
+
+## Known environmental failure (pre-existing, not this unit)
+
+The full suite **stalls intermittently** — documented in the repository's own `pyproject.toml:48-52`:
+*"the suite stalls intermittently, unrelated to the code under test"* (that comment is why the 120 s
+`pytest-timeout` ceiling and `timeout_method = "thread"` exist at all), and scoped but unstarted in
+`odd/tasks/suite-truncate-stall.md`, which measures it at roughly two CI runs in three.
+
+Observed here, honestly:
+
+- Run 1 — `uv run pytest tests/`: the 120 s ceiling fired during teardown inside SQLAlchemy
+  `Session.close()` → `after_transaction_end`, with the main thread waiting on the socket.
+- Run 2 — **identical code**, immediately after: `1342 passed, 2 warnings in 178.17s`, exit 0.
+
+Not a regression from this unit: the same suite passes on a retry of the same tree, and the stall class
+predates the branch. Do not treat a stalled run as a failure of this change; re-run it.
 
 ## Delivery — chained PRs, `stacked-to-main` (owner-decided 2026-09-24)
 
