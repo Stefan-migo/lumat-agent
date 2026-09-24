@@ -191,7 +191,9 @@ body {
   --surface-subtle: var(--table-head-bg);
   --elevation-raised: var(--shadow-1);
   --elevation-overlay: var(--shadow-3);
+  --icon-sm: 16px;
   --icon-md: 20px;
+  --icon-lg: 24px;
   /* DS-TKN-2: --font-sans remains byte-identical; Inter is additive. */
   --font-ui: Inter, var(--font-sans);
 }
