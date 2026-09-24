@@ -459,6 +459,22 @@ export interface AgendaResponse {
   appointments: AgendaAppointment[];
 }
 
+export interface AppointmentCreateRequest {
+  service: string;
+  customer_id: number;
+  case_id: number;
+  technician_id: number;
+  local_date: string;
+  local_time: string;
+  timezone: string;
+  duration_minutes: number;
+}
+
+export interface AppointmentMutationResponse {
+  ok: true;
+  appointment: Appointment;
+}
+
 export interface TechnicianCustomer {
   name: string | null;
   address: string | null;
