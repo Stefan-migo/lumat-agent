@@ -197,6 +197,10 @@ Observable behavior this unit must produce. Implementation shape is the implemen
 - [ ] **T4 — RED + GREEN, write refusal at step ≥ 2.** RED: a step-2 plan for a non-read-only tool is
   refused with a visible reason, executes nothing, and issues no approval. GREEN: explicit guardrails
   rule. Assert the *absence* of an approval, not only the absence of execution.
+  **Corrected at slice 2 start by measurement — see *Slice 2 discovery* below.** The refusal is not
+  merely invisible: it is **not enforced at all** on the real graph, because `guardrails` intercepts the
+  step-2 write before `tool_loop_head` ever sees it. T4 is therefore the enforcement fix, and the
+  enforcement point moves into `guardrails` (which is what this task already said), not `tool_loop_head`.
 - [ ] **T5 — RED + GREEN, planner sees prior results, bounded.** RED: the planner prompt carries a
   bounded rendering of accumulated results and the combined rendering stays within budget across N
   results. GREEN: extend the planning prompt with the bounded rendering.
@@ -458,14 +462,56 @@ tool loading.
 | `app/chat/assistant/state.py` | +4 / −0 | 4 |
 | **Total** | | **381** |
 
+## Slice 2 discovery — D2 and D3 were never enforced on the real graph
+
+Measured by the parent on **unmodified code** at the slice 2 base, with a throwaway probe that mocks
+`_assistant_client` and `execute_tool` and drives the **real graph** via `run_assistant` (no network, no
+database). The probe is deleted after use; nothing in the repository depends on it.
+
+| Scenario (real graph, mocked handlers) | Measured on unmodified code | Verdict |
+|---|---|---|
+| Plan 1 `customers.search` (`follow_up` true) → plan 2 `memory.write` (autonomous) | **executed `['customers.search', 'memory.write']`** — the write ran; `decision: execute`, `approval: None` | **D3 violated** |
+| Plan 1 `customers.search` → plan 2 `automation.create_rule` (non-autonomous, valid args) | write did not execute, but `decision: approval_pending` with **a freshly issued approval token**, `response: None` | **D2 violated** |
+| Single autonomous write turn (`memory.write`) | write executed, yet the final state reads **`decision: loop_write_refused`** | label lies |
+| Single read-only turn | `decision: execute`, normal answer | correct |
+
+**Mechanism.** `_after_plan` sends a plan with `tool_steps >= 1` to `guardrails`; `_after_guardrails` sends
+a tool plan to `execute_tool`, or ends the turn with a pending approval. `tool_loop_head` runs **after**
+`execute`, so its write guard can only ever see a plan that has already been executed. It therefore
+prevents nothing and mislabels successful write turns. The slice 1 unit test that "covered" the refusal
+called `tool_loop_head` **directly**, so it passed while the hole stayed open — a test of the guard is not
+a test of its reachability.
+
+**Therefore T4 is an enforcement fix, not a visibility fix**, and the ordering matters:
+
+1. `guardrails` refuses — **before** execution and **before** the approval branch — any non-read-only tool
+   when `tool_steps >= 1`, with the visible `PANEL_LOOP_WRITE_REFUSAL` copy, `approval: None` and no token.
+2. `_after_guardrails` routes `loop_write_refused` to `END`, mirroring the existing `grounding_refusal`
+   precedent (`_after_retrieve_kb`), so the refusal is what the user actually receives.
+3. `tool_loop_head`'s post-execution write branch (and its unreachable `loop_invalid_tool` sibling) is
+   **removed**: it cannot prevent anything and it mislabels real write turns.
+
+**Consequences, stated plainly.** A step-2 non-autonomous write changes from *approval prompt* to
+*visible refusal*. That is what D2 already decided ("rejected: re-issuing approval per iteration"); the
+approval prompt was a decided-against behavior that leaked through. It is a behavior change, and it is the
+decided one.
+
+**Newly found, deliberately NOT fixed here.** An autonomous write at step 1 that opts into `follow_up`
+can still chain into a read-only step 2 (act → discover). No acceptance criterion covers it, D3's wording
+is about the write-*with-approval* turn, and fixing it is a separate policy question. Recorded as a gap,
+not silently ignored.
+
 ## Next step
 
-T4 (narrowed) — the looped-write refusal is enforced and tested, but the reason never reaches the user:
-the refusal sets a canned `response`, and `respond_stream` overwrites it with the model's answer, so a turn
-that asked to act finishes silently with text. Surface it honestly. Then T6 (persisted `cap_reached` /
-`tool_steps`), T7 (harness end-to-end chain), T8 (chaining-turn delta), T9 (suite + PR).
+T4 — enforce the step-2 write refusal where policy is decided (`guardrails`, pre-execution and
+pre-approval), route it terminally so the refusal is what the user receives, and remove the post-execution
+write branch from `tool_loop_head` that prevents nothing and mislabels successful write turns. See *Slice 2
+discovery* above for the measurement that moved this from a visibility fix to an enforcement fix. Then T6
+(persisted `cap_reached` / `tool_steps`), T7 (harness end-to-end chain), T8 (chaining-turn delta), T9
+(suite + PR).
 
-**Slice 2 limits, recorded before the work starts.** Slice 2 makes the existing loop visible and proven.
-It does **not** raise `MAX_ASSISTANT_TOOL_STEPS`, does not change which tools are read-only, does not
-touch the approval mechanism, `resume_thread` or SDB, and does not start U2 or U3. The write refusal
-stays a refusal: T4 changes whether the user can **see** it, never whether it happens.
+**Slice 2 limits, recorded before the work starts.** Slice 2 makes the existing loop visible, enforced and
+proven. It does **not** raise `MAX_ASSISTANT_TOOL_STEPS`, does not change which tools are read-only, does
+not touch the approval mechanism, `resume_thread` or SDB, and does not start U2 or U3. T4 makes the write
+refusal **actually happen** at the point policy is decided and be **visible** where policy is enforced; it
+does not change the rule itself, which D2/D3 already fixed.
