@@ -36,6 +36,7 @@ class PlannerOutput(BaseModel):
     arguments: dict = Field(default_factory=dict)
     summary: str = Field(min_length=1, max_length=200)
     requires_approval: bool = False
+    follow_up: bool = False
 
     @field_validator("summary", mode="before")
     @classmethod
@@ -160,6 +161,9 @@ class AssistantState(TypedDict, total=False):
     plan: dict
     approval: dict | None
     tool_result: dict | None
+    tool_results: list[dict]
+    tool_steps: int
+    cap_reached: bool
     evidence: list[dict]
     status: str
     response: str | None

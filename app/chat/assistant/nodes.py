@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 _TOOL_EVIDENCE_LIMIT = 4_000
 _KB_EVIDENCE_LIMIT = 4_000
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
+MAX_ASSISTANT_TOOL_STEPS = 2
 PANEL_GROUNDING_REFUSAL = (
     "No encontré evidencia suficiente en la base de conocimiento para responder con seguridad. "
     "Reformula la consulta o aporta más contexto."
@@ -264,6 +265,9 @@ def _context_text(state: AssistantState) -> str:
             "stored as thread memory. Pull it with memory.read with scope=own and no entity_id "
             "before claiming to remember earlier turns."
         )
+    prior_results = _render_tool_evidence(state)
+    if prior_results:
+        text.append(f"Prior tool evidence:\n{prior_results}")
     return "\n".join(text)
 
 
@@ -578,14 +582,60 @@ def guardrails(state: AssistantState) -> AssistantState:
 
 
 def _render_tool_evidence(state: AssistantState) -> str:
-    result = state.get("tool_result") or {}
-    payload = result.get("result") if isinstance(result, dict) else None
-    if payload is None:
+    results = state.get("tool_results") or ([state["tool_result"]] if state.get("tool_result") else [])
+    rendered_results = []
+    for result in results:
+        payload = result.get("result") if isinstance(result, dict) else None
+        if payload is not None:
+            rendered_results.append(json.dumps(payload, ensure_ascii=False))
+    if not rendered_results:
         return ""
-    rendered = json.dumps(payload, ensure_ascii=False)
+    rendered = "\n".join(rendered_results)
     if len(rendered) <= _TOOL_EVIDENCE_LIMIT:
         return rendered
     return rendered[:_TOOL_EVIDENCE_LIMIT - 1] + "…"
+
+
+def tool_loop_head(state: AssistantState) -> AssistantState:
+    """Finish or request an explicitly opted-in, bounded read-only follow-up."""
+    plan = state.get("plan") or {}
+    steps = state.get("tool_steps", 0)
+    if steps >= MAX_ASSISTANT_TOOL_STEPS:
+        return {"cap_reached": True, "status": "completed"}
+    if state.get("cost_mode", "normal") != "normal":
+        return {"status": "completed"}
+    if plan.get("kind") != "tool" or not plan.get("tool") or not plan.get("follow_up"):
+        return {"status": "completed"}
+    try:
+        read_only = get_tool(plan["tool"]).read_only
+    except (KeyError, ValueError):
+        return {
+            "guardrails": {
+                **state.get("guardrails", {}),
+                "decision": "loop_invalid_tool",
+                "approval_required": False,
+            },
+            "status": "completed",
+        }
+    if steps >= 1 and not read_only:
+        return {
+            "approval": None,
+            "guardrails": {
+                **state.get("guardrails", {}),
+                "decision": "loop_write_refused",
+                "approval_required": False,
+            },
+            "response": "Write tools cannot run after a read-only follow-up step.",
+            "status": "completed",
+        }
+    return {"status": "planned"}
+
+
+def _tool_accumulation(state: AssistantState, result: dict) -> dict:
+    return {
+        "tool_results": [*(state.get("tool_results") or []), result],
+        "tool_steps": state.get("tool_steps", 0) + 1,
+    }
 
 
 def _render_kb_evidence(state: AssistantState) -> str:
@@ -651,7 +701,7 @@ def retrieve_kb(state: AssistantState) -> AssistantState:
 
 def execute(state: AssistantState) -> AssistantState:
     plan_data = state["plan"]
-    tool_already_ran = state.get("tool_result") is not None
+    tool_already_ran = state.get("status") in {"completed", "degraded", "error", "approval_pending"}
     autonomous_write = _is_autonomous_write(plan_data.get("tool"), state.get("thread_id"))
     if not tool_already_ran and plan_data["requires_approval"] and not autonomous_write and not validate_execution(plan_data, state.get("approval") or {}):
         detail = "approval is missing, expired, tampered, or already consumed"
@@ -688,6 +738,7 @@ def execute(state: AssistantState) -> AssistantState:
             )
         except (ToolExecutionError, ToolValidationError) as exc:
             detail = str(exc)
+            failed_result = {"tool": tool_name, "status": "error", "error": detail}
             if state.get("session") is not None:
                 record_audit(
                     state["session"], actor=state.get("actor") or "assistant",
@@ -696,7 +747,8 @@ def execute(state: AssistantState) -> AssistantState:
                     after={"run_id": state.get("run_id"), "tool": tool_name, "status": "error"},
                 )
             return {
-                "tool_result": {"tool": tool_name, "status": "error", "error": detail},
+                "tool_result": failed_result,
+                **_tool_accumulation(state, failed_result),
                 "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],
                 "error": detail,
                 "response": f"Tool execution failed: {detail}",
@@ -711,14 +763,18 @@ def execute(state: AssistantState) -> AssistantState:
                     "tool": tool_name,
                     "degraded_reason": "Read-only tool unavailable",
                 }
+                degraded_reason = bounded_result["degraded_reason"]
+                bounded_result = {**result, "result": bounded_result}
                 return {
-                    "tool_result": {**result, "result": bounded_result},
-                    "evidence": [make_evidence(tool=tool_name, status="degraded", detail=bounded_result["degraded_reason"])],
+                    "tool_result": bounded_result,
+                    **_tool_accumulation(state, bounded_result),
+                    "evidence": [make_evidence(tool=tool_name, status="degraded", detail=degraded_reason)],
                     "response": f"Tool {tool_name} unavailable.",
                     "status": "degraded",
                 }
             return {
                 "tool_result": result,
+                **_tool_accumulation(state, result),
                 "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],
                 "error": detail,
                 "response": f"Tool execution failed: {detail}",
@@ -727,6 +783,7 @@ def execute(state: AssistantState) -> AssistantState:
         if result.get("status") == "approval_pending":
             return {
                 "tool_result": result,
+                **_tool_accumulation(state, result),
                 "approval": result.get("approval"),
                 "guardrails": {**state.get("guardrails", {}), "approval_required": True,
                                 "decision": "approval_pending"},
@@ -742,6 +799,7 @@ def execute(state: AssistantState) -> AssistantState:
             )
         return {
             "tool_result": result,
+            **_tool_accumulation(state, result),
             "evidence": [make_evidence(tool=tool_name, status="completed", detail="Tool execution completed")],
             "response": f"Tool {tool_name} completed.",
             "status": "completed",

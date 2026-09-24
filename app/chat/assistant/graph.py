@@ -21,6 +21,7 @@ from app.chat.assistant.nodes import (
     sdb_plan,
     sdb_spec,
     sdb_verify,
+    tool_loop_head,
 )
 from app.chat.assistant.state import AssistantState, normalize_sdb_trigger
 
@@ -91,7 +92,15 @@ def _after_retrieve_kb(state: AssistantState) -> str:
 
 
 def _after_execute(state: AssistantState) -> str:
-    return "respond_stream" if state.get("status") in {"completed", "degraded"} else END
+    return "tool_loop_head" if state.get("status") in {"completed", "degraded"} else END
+
+
+def _after_tool_loop(state: AssistantState) -> str:
+    return "plan_llm" if state.get("status") == "planned" else "respond_stream"
+
+
+def _after_plan(state: AssistantState) -> str:
+    return "guardrails" if state.get("tool_steps", 0) else "cortex_session_gate"
 
 
 def _after_cost_gate(state: AssistantState) -> str:
@@ -120,12 +129,16 @@ def build_assistant_graph():
     builder.add_node("guardrails", guardrails)
     builder.add_node("retrieve_kb", retrieve_kb)
     builder.add_node("execute_tool", execute)
+    builder.add_node("tool_loop_head", tool_loop_head)
     builder.add_node("respond_stream", execute)
     builder.add_node("evidence", collect_evidence)
     builder.add_edge(START, "assemble_context")
     builder.add_edge("assemble_context", "panel_cost_gate")
     builder.add_conditional_edges("panel_cost_gate", _after_cost_gate, {"plan_llm": "plan_llm", "evidence": "evidence"})
-    builder.add_edge("plan_llm", "cortex_session_gate")
+    builder.add_conditional_edges(
+        "plan_llm", _after_plan,
+        {"cortex_session_gate": "cortex_session_gate", "guardrails": "guardrails"},
+    )
     builder.add_conditional_edges(
         "cortex_session_gate", _after_cortex_gate,
         {"cortex_turn": "cortex_turn", "sdb_trigger_gate": "sdb_trigger_gate"},
@@ -144,7 +157,8 @@ def build_assistant_graph():
     builder.add_edge("sdb_deliver", "evidence")
     builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "retrieve_kb": "retrieve_kb", "respond_stream": "respond_stream", END: END})
     builder.add_conditional_edges("retrieve_kb", _after_retrieve_kb, {"respond_stream": "respond_stream", END: END})
-    builder.add_conditional_edges("execute_tool", _after_execute, {"respond_stream": "respond_stream", END: END})
+    builder.add_conditional_edges("execute_tool", _after_execute, {"tool_loop_head": "tool_loop_head", END: END})
+    builder.add_conditional_edges("tool_loop_head", _after_tool_loop, {"plan_llm": "plan_llm", "respond_stream": "respond_stream"})
     builder.add_edge("respond_stream", "evidence")
     builder.add_edge("evidence", END)
     return builder.compile()
@@ -174,6 +188,8 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
         "projection_evidence": (context or {}).get("meta", {}),
         "compaction": compaction or {},
         "cortex_session": cortex_session,
+        "tool_results": [],
+        "tool_steps": 0,
     }
     graph = build_assistant_graph()
     if on_stage is None:
@@ -186,6 +202,7 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
         "sdb_plan": "planning", "sdb_approve": "planning", "sdb_execute": "executing",
         "sdb_verify": "executing", "sdb_deliver": "responding", "execute_tool": "executing",
         "respond_stream": "streaming",
+        "tool_loop_head": "planning",
     }
     for mode, chunk in graph.stream(state, stream_mode=["values", "updates"]):
         if mode == "values":
