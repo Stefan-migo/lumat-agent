@@ -129,6 +129,15 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
   month and week grids, previous/next/today navigation, view toggle, day selection with an
   accessible selected state, per-day visit counts, keyboard operation, and an empty month. Add its
   commented CSS section in `primitives.css`.
+- [ ] **T3B — Correction (review finding, reopens T3).** Two defects found on orchestrator review of
+  T3: (a) the calendar is ARIA-invalid — `role="grid"` with `role="gridcell"` children and no
+  `role="row"`, plus `aria-selected` on a `<button>`, which is not an allowed role for that
+  attribute; this contradicts `AG-UI-2`'s semantic-markup requirement and the WCAG 2.2 AA baseline.
+  (b) The toolbar controls use raw `btn btn--secondary` classes instead of the `Button` primitive,
+  contradicting "reuse existing primitives". Preference: native `<table>` semantics
+  (platform-first, no ARIA roles needed); fall back to corrected grid roles with real `role="row"`
+  containers only if a table is genuinely awkward for the week strip. Behavior, the accessible visit
+  count, and the selected/today state MUST NOT change.
 - [ ] **T4 — RED/GREEN: `AgendaPage` integration.** Wire the calendar as the fetch-window driver and
   the day filter; resize the register into the new layout; keep every existing state (loading,
   denied, error, stale, empty) and both row actions working. Update `AgendaPage.test.tsx`; existing
@@ -187,6 +196,14 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
       selection, current-day marking, visit density, keyboard controls, and non-selectable empty cells.
       RED: focused Vitest failed to resolve `./AgendaCalendar` because the component did not exist.
       GREEN: commit `f86b0f83`; focused Vitest passed **6 tests**, with the stylesheet boundary green.
+- [x] **T2/T3 verified independently by the orchestrator** — `npm run test` re-run on the worktree:
+      **83 files, 686 tests, all passing** (76s), matching the writer's report. Working tree clean,
+      only authorized files changed, `graphify-out` untracked.
+- [ ] **T3 review — two defects found; reopened as T3B.** The month/week grid ships invalid ARIA
+      (`role="grid"` without `role="row"`, and `aria-selected` on a `<button>`) and its toolbar
+      bypasses the `Button` primitive with raw `btn` classes. Behavior and tests are otherwise sound.
+      Recorded rather than silently accepted: an invalid ARIA grid is a real accessibility defect and
+      the design system requires semantic markup and primitive reuse.
 
 ## Recovery
 
