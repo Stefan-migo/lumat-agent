@@ -249,6 +249,30 @@ the Graph Check ran against the primary worktree's graph. The worktree test data
 Resume with `mem_context`, then the project-scoped `mem_search` for this feature, then
 `mem_get_observation` for the full document, then read this file.
 
+## Delivery record
+
+- **PR #341** — `feat(web): create appointments from the Agenda screen, agenda-booking slice 1`,
+  branch `odd/agenda-booking`, label `type:feature`. 11 files, +490 −9.
+- CI `Tests` passed (`uv sync --frozen` + `uv run pytest tests/`, 2m10s); GitGuardian passed.
+- Reviewed by the native lifecycle: lineage `review-706ead16d06fa030`, risk medium, one lens
+  (`review-reliability`), verdict **approved**, authority burned
+  (`gentle-ai.review-acknowledged/v1`, consumed revision `sha256:f2f2759d…`).
+- **Note for the next session: CI does not run `vitest`.** The workflow runs the Python suite only,
+  so the web suite (716 tests) is local evidence and nothing gates it.
+
 ## Next step
 
-Slice 1 implementation (T1). Slice 2 (technician availability) is scoped but not started.
+Slice 2 — technician availability endpoints and editor. Slice 1 merged; slice 2 is scoped above and
+not started.
+
+Two advisory findings from the slice 1 review are separate later work and are **not** a reason to
+re-review that candidate:
+
+- `R3-stale-case-selection` (`web/src/components/pages/AgendaPage.tsx:214`) — changing the customer
+  does not clear the selected case, so a case belonging to another customer can be submitted. The
+  backend fails safe (`400 unlinked_appointment`), but the operator sees a confusing error.
+- `R3-invalid-date-classification` (`web/src/components/shared/agendaTime.ts:71`) — an impossible
+  date such as February 31 is not rejected as a date and is reported as a nonexistent DST time.
+
+One unattributed `vitest` flake remains unresolved: a single run reported `1 failed | 715 passed`
+and the output was overwritten before the test could be named. Two subsequent full runs were green.
