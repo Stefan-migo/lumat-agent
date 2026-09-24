@@ -409,6 +409,21 @@
   gap: var(--space-2);
   justify-items: start;
 }
+/* ---- ClientMemories (MEM-6) ---- */
+.client-memories__section {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.client-memories__relation {
+  display: grid;
+  gap: var(--space-2);
+}
+.client-memories__relation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
 @media (max-width: 63.99rem) {
   .detail-region {
     grid-template-columns: minmax(0, 1fr);
