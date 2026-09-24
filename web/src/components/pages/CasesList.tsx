@@ -145,7 +145,7 @@ export function CasesList({ data: controlledData, state: controlledState, onRetr
         <EmptyState title="No hay registros" description="No existen casos abiertos pendientes o escalados." />
       ) : data ? (
         <DataTable
-           columns={columns.map((column) => column.key === "responsible" ? { ...column, render: (c: Case) => responsibleLabel(c.responsible_id, users) } : column.key === "customer" && onOpenClient ? { ...column, render: (c: Case) => <a className="table__link" href={pathForRoute({ view: "clients", clientId: c.customer.id })} onClick={(event) => { event.preventDefault(); onOpenClient(c.customer.id); }}>{c.customer.name ?? "—"}</a> } : column)}
+          columns={columns.map((column) => column.key === "responsible" ? { ...column, render: (c: Case) => responsibleLabel(c.responsible_id, users) } : column.key === "customer" && onOpenClient ? { ...column, render: (c: Case) => <a className="table__link" href={pathForRoute({ view: "clients", clientId: c.customer.id })} onClick={(event) => { event.preventDefault(); onOpenClient(c.customer.id); }}>{c.customer.name ?? "—"}</a> } : column)}
           rows={cases}
           rowKey={(c) => String(c.id)}
           actions={(c) => <CaseActions c={c} users={users} onUpdate={controlledData === undefined ? updateCase : undefined} onAcknowledge={controlledData === undefined ? acknowledgeCase : undefined} />}
