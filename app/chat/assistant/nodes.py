@@ -647,8 +647,6 @@ def tool_loop_head(state: AssistantState) -> AssistantState:
     """Finish or request an explicitly opted-in, bounded read-only follow-up."""
     plan = state.get("plan") or {}
     steps = state.get("tool_steps", 0)
-    if steps >= MAX_ASSISTANT_TOOL_STEPS:
-        return {"cap_reached": True, "status": "completed"}
     cost = _cost_snapshot(state.get("session"), state["thread_id"])
     if cost["mode"] != "normal":
         return {
@@ -664,6 +662,9 @@ def tool_loop_head(state: AssistantState) -> AssistantState:
         }
     if plan.get("kind") != "tool" or not plan.get("tool") or not plan.get("follow_up"):
         return {"status": "completed"}
+    # Record the cap only when another step was requested and the budget ended the turn.
+    if steps >= MAX_ASSISTANT_TOOL_STEPS:
+        return {"cap_reached": True, "status": "completed"}
     return {"status": "planned"}
 
 

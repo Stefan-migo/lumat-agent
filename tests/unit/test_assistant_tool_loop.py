@@ -106,6 +106,38 @@ def test_opted_in_turn_executes_two_tools_and_narrates_combined_evidence(monkeyp
     assert responder_prompt.count('[{"evidence": "memory.search"}]') == 1
 
 
+def test_chained_turn_publishes_planning_after_first_execution(monkeypatch):
+    calls = []
+    stages = []
+    plans = [
+        '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}',
+        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":true}',
+    ]
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda _session, tool_name, *_args, **_kwargs: {
+            "tool": tool_name,
+            "status": "completed",
+            "result": [{"evidence": tool_name}],
+        },
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    run_assistant(
+        thread_id=7,
+        user_id=1,
+        content="Find Ana",
+        run_id="run-stage-loop",
+        on_token=lambda _token: None,
+        on_stage=stages.append,
+    )
+
+    first_executing = stages.index("executing")
+    assert "planning" in stages[first_executing + 1:]
+
+
 def test_replan_keeps_newest_tool_evidence_within_budget(monkeypatch):
     calls = []
     marker = "NEWEST_RESULT_MARKER"
@@ -160,6 +192,28 @@ def test_cap_refuses_a_third_execution(monkeypatch):
 
     assert _after_tool_loop(state) == "respond_stream"
     result = tool_loop_head(state)
+    assert result["cap_reached"] is True
+    assert result["status"] == "completed"
+
+
+def test_cap_is_recorded_only_when_follow_up_is_still_requested():
+    completed_state = _tool_state(
+        tool_steps=MAX_ASSISTANT_TOOL_STEPS,
+        plan={**_tool_state()["plan"], "follow_up": False},
+    )
+
+    result = tool_loop_head(completed_state)
+
+    assert "cap_reached" not in result
+    assert result["status"] == "completed"
+
+    capped_state = _tool_state(
+        tool_steps=MAX_ASSISTANT_TOOL_STEPS,
+        plan={**_tool_state()["plan"], "follow_up": True},
+    )
+
+    result = tool_loop_head(capped_state)
+
     assert result["cap_reached"] is True
     assert result["status"] == "completed"
 

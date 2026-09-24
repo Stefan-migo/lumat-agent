@@ -16,6 +16,7 @@ from app.chat.assistant.approval import (
     validate_approval,
     validate_execution,
 )
+from app.chat.assistant.nodes import MAX_ASSISTANT_TOOL_STEPS
 from app.models import InternalChatMessage, InternalChatThread, Message, User
 from app.services.agent_chat import (
     STALE_RUN_SECONDS,
@@ -561,12 +562,13 @@ def _agent_answer(settled: dict) -> str:
     return [item for item in settled["messages"] if item["author"] == "agent"][-1]["content"]
 
 
-def _turn_with_plan(client, monkeypatch, content: str, planner_output: str):
+def _turn_with_plan(client, monkeypatch, content: str, planner_output: str | list[str]):
     _user(f"assistant-failure-{content}", "admin")
     _login(client, f"assistant-failure-{content}")
     thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
     stream_calls: list = []
-    provider = _scripted_client([planner_output], stream_calls=stream_calls)
+    outputs = [planner_output] if isinstance(planner_output, str) else planner_output
+    provider = _scripted_client(outputs, stream_calls=stream_calls)
     monkeypatch.setattr("app.services.llm.openai_client", lambda: provider)
     return _run_turn(client, thread_id, content), stream_calls, thread_id
 
@@ -615,6 +617,48 @@ def test_a_successful_tool_plan_still_executes_and_responds(client, monkeypatch)
     with SessionLocal() as session:
         guardrails_state = session.get(InternalChatThread, thread_id).assistant_state["guardrails"]
     assert guardrails_state["decision"] == "execute"
+
+
+def test_a_chained_read_only_turn_persists_tool_steps_and_cap_state(client, monkeypatch):
+    plans = [
+        json.dumps({
+            "kind": "tool", "tool": "customers.search", "arguments": {"query": "ana"},
+            "summary": "find customer", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "memory.search", "arguments": {"query": "ana"},
+            "summary": "find memory", "requires_approval": False,
+        }),
+    ]
+    _, _, thread_id = _turn_with_plan(client, monkeypatch, "chained-read-only", plans)
+
+    with SessionLocal() as session:
+        state = session.get(InternalChatThread, thread_id).assistant_state
+    assert state["tool_steps"] == 2
+    assert state["cap_reached"] is False
+
+
+def test_a_chained_read_only_turn_persists_the_tool_step_cap(client, monkeypatch):
+    plans = [
+        json.dumps({
+            "kind": "tool", "tool": "customers.search", "arguments": {"query": "ana"},
+            "summary": "find customer", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "memory.search", "arguments": {"query": "ana"},
+            "summary": "find memory", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "customers.search", "arguments": {"query": "ana"},
+            "summary": "find customer again", "requires_approval": False, "follow_up": True,
+        }),
+    ]
+    _, _, thread_id = _turn_with_plan(client, monkeypatch, "capped-read-only", plans)
+
+    with SessionLocal() as session:
+        state = session.get(InternalChatThread, thread_id).assistant_state
+    assert state["tool_steps"] == MAX_ASSISTANT_TOOL_STEPS
+    assert state["cap_reached"] is True
 
 
 def test_stream_disconnect_keeps_known_usage_and_failed_request(client, monkeypatch):
