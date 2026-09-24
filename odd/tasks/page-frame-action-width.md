@@ -93,16 +93,36 @@ community. `graphify-out/` was copied into this worktree by `rapso worktree crea
 
 ## Delivery
 
-One production declaration plus a small test → single PR against `main`, label `type:bug`.
-Forecast well inside the ~400-line review budget; no chained slices.
+One production declaration plus a small test → single PR against `main` (`66625430`),
+label `type:bug`, well inside the ~400-line review budget. No chained slices.
+
+Delivered as **PR #353** — https://github.com/Stefan-migo/lumat-agent/pull/353
+
+Native review: `gentle-ai review assess --base-ref 66625430 --committed-only` → risk
+**medium** (`executable_change` on the test file), 3 changed paths, 122 changed lines,
+**`review_due: false`** with reason `under_budget`. No native review was due for this
+slice; the tier and the reason are recorded rather than left implicit.
 
 ## Progress / Evidence
 
-- [ ] T1 RED observed
-- [ ] T2 GREEN observed
-- [ ] T3 visual proof recorded
-- [ ] T4 suite + build recorded
+- [x] T1 RED observed — `PageFrame.test.tsx:8` failed: no `justify-self: start` on
+      `.page-frame__content > .btn`.
+- [x] T2 GREEN observed — focused run: `1 file passed, 1 test passed`.
+- [x] T3 visual proof recorded — Chromium at viewport 1024: the action measured **736px**
+      before the guard, identical to the 736px content box, and **112.5px** after it.
+- [x] T4 suite + build recorded — `Test Files 87 passed (87)`, `Tests 738 passed (738)`;
+      `npm run build` passed.
+
+Commits:
+
+- `e1d63829` docs(odd): record the page-frame-action-width unit
+- `ae65b937` fix(panel): prevent page actions stretching in PageFrame
+
+The reading came from composing `PanelShell` + `AgendaPage` in a Storybook served from
+this branch on port 6011 and reading the action's bounding rect. Playwright's bundled
+Chromium was missing in this environment; the reading ran on system Chrome at
+`/usr/bin/google-chrome`.
 
 ## Next step
 
-T1 → T2, then T3 and T4.
+Unit complete and delivered as **PR #353**. Merge is the owner's decision, not this unit's.
