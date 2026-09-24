@@ -103,7 +103,9 @@ describe('AgendaPage', () => {
     const { container } = render(<AgendaPage data={[]} state="empty" />);
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
     expect(container.querySelector('.agenda-page__table-wrap')).toBeInTheDocument();
-    expect(screen.queryByText(/disponibilidad|crear|editar|reagendar/i)).not.toBeInTheDocument();
+    // Creation is an approved control since the agenda-booking unit. Edit, reschedule and
+    // availability remain deliberately absent, so the guard keeps forbidding those.
+    expect(screen.queryByText(/disponibilidad|editar|reagendar/i)).not.toBeInTheDocument();
   });
 
   it('offers cancellation only for booked rows and refreshes after confirming a reason', async () => {

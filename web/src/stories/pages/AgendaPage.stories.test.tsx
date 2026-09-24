@@ -94,7 +94,10 @@ describe("AgendaPage Storybook state matrix", () => {
 
     render(<AgendaPageStory data={Data.args?.data} state="ready" />);
     expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
-    expect(screen.queryByText(/crear|editar|reagendar|disponibilidad/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /crear|editar|reagendar/i })).not.toBeInTheDocument();
+    // Creation is the only control this page gained (agenda-booking); the guard keeps
+    // asserting that edit, reschedule and availability are still not invented.
+    expect(screen.getByRole("button", { name: "Nueva visita" })).toBeInTheDocument();
+    expect(screen.queryByText(/editar|reagendar|disponibilidad/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /editar|reagendar/i })).not.toBeInTheDocument();
   });
 });
