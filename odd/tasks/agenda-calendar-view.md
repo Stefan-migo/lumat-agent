@@ -133,11 +133,14 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
   T3: (a) the calendar is ARIA-invalid — `role="grid"` with `role="gridcell"` children and no
   `role="row"`, plus `aria-selected` on a `<button>`, which is not an allowed role for that
   attribute; this contradicts `AG-UI-2`'s semantic-markup requirement and the WCAG 2.2 AA baseline.
-  (b) The toolbar controls use raw `btn btn--secondary` classes instead of the `Button` primitive,
-  contradicting "reuse existing primitives". Preference: native `<table>` semantics
-  (platform-first, no ARIA roles needed); fall back to corrected grid roles with real `role="row"`
-  containers only if a table is genuinely awkward for the week strip. Behavior, the accessible visit
-  count, and the selected/today state MUST NOT change.
+  (b) The toolbar controls use raw `btn btn--secondary` classes instead of the `Button` primitive.
+  **Resolution:** use native `<table>` semantics (platform-first, no ARIA grid roles needed) and the
+  `Button` primitive for every toolbar control. The view switch becomes a SINGLE action-labelled
+  `Button` (`Ver semana` / `Ver mes`) instead of two `aria-pressed` buttons: `Button.tsx` silently
+  drops attributes it does not destructure, so `aria-pressed` cannot be passed through it — the
+  current period is announced by the calendar heading, and the control states the action. The
+  underlying primitive defect is recorded under Follow-ups, not fixed here. Behavior, the accessible
+  visit count, and the selected/today state MUST NOT change.
 - [ ] **T4 — RED/GREEN: `AgendaPage` integration.** Wire the calendar as the fetch-window driver and
   the day filter; resize the register into the new layout; keep every existing state (loading,
   denied, error, stale, empty) and both row actions working. Update `AgendaPage.test.tsx`; existing
@@ -204,6 +207,25 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
       bypasses the `Button` primitive with raw `btn` classes. Behavior and tests are otherwise sound.
       Recorded rather than silently accepted: an invalid ARIA grid is a real accessibility defect and
       the design system requires semantic markup and primitive reuse.
+- [ ] **T3B first attempt — blocked honestly, then re-scoped.** The writer converted the grid to
+      native `<table>` semantics but stopped when the typed view toggle could not pass `aria-pressed`
+      through `Button` (it destructures without spreading). It refused to widen the slice on its own,
+      which is the correct behaviour. Verified independently: `Button.tsx:19-27` destructures a fixed
+      set of props and never spreads, so its type contract overpromises. Resolution recorded in T3B
+      (single action-labelled toggle, no primitive change); the primitive defect is parked under
+      Follow-ups.
+
+## Follow-ups
+
+- **`Button` drops undeclared attributes (pre-existing defect).**
+  `web/src/components/primitives/Button.tsx` extends
+  `ButtonHTMLAttributes<HTMLButtonElement>` but destructures only a fixed set of props and never
+  spreads the rest, so `aria-*`, `data-*` and other valid attributes are silently discarded. This is
+  not introduced by this unit: `AgendaPage` already passes `aria-label="Reintentar calendario"` to a
+  `Button` and that label never reaches the DOM. Deliberately out of scope here — it is a shared
+  primitive with ~20 consumers and a wider blast radius, and binding it to this slice would put two
+  risks in one diff. It needs its own ODD unit, which must settle the `<a>` branch contract
+  (`href` renders an anchor, where button-only attributes do not apply) before spreading.
 
 ## Recovery
 
