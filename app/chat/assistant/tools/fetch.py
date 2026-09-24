@@ -97,7 +97,12 @@ def _unsafe_reason(raw: str) -> str | None:
 
 def resolve_target(url: str) -> FetchTarget:
     """Validate `url` and its resolved addresses, or raise `FetchFailure`."""
-    parts = urlsplit(url.strip())
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError as exc:
+        # The stdlib parser rejects malformed bracketed hosts with its own ValueError. Refusal has to
+        # be total: a caller catching only FetchFailure must not have a raw parser error leak past it.
+        raise FetchFailure("fetch could not read the URL") from exc
     scheme = parts.scheme.lower()
     if scheme not in ALLOWED_SCHEMES:
         raise FetchFailure(f"fetch requires an http or https URL, not {scheme or 'a schemeless URL'!r}")

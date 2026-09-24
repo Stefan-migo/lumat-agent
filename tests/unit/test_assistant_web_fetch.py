@@ -107,6 +107,23 @@ def test_reader_refuses_a_url_without_a_host(url):
 
 
 @pytest.mark.parametrize(
+    "url",
+    [
+        "http://[::1/",
+        "http://[::1]x/",
+        "http://]foo/",
+        "http://[not]/",
+        "http://[v6.]/",
+    ],
+)
+def test_reader_refuses_a_url_the_parser_cannot_even_read(url):
+    # Refusal is total: a URL the stdlib parser rejects is a FetchFailure, never a raw ValueError
+    # escaping the policy (R3-malformed-url).
+    with pytest.raises(FetchFailure):
+        resolve_target(url)
+
+
+@pytest.mark.parametrize(
     "host",
     [
         "127.0.0.1",
