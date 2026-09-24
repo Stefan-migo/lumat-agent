@@ -403,6 +403,43 @@ def test_reader_result_fits_the_tool_evidence_budget_at_its_worst_case():
 
 
 @respx.mock
+def test_reader_result_fits_the_budget_when_the_page_text_escapes_in_json():
+    """The bound is on the serialized payload, not on the raw text length.
+
+    Every quote becomes `\\"` in the evidence the responder receives, so a page made of quotes
+    serializes far past `MAX_TEXT` worth of budget. Bounding the raw text alone let that through and
+    left the renderer's truncation as the real limit, which is not what the reader owning its bound
+    means.
+    """
+    body = f"<p>{'"' * 4_000}</p>"
+    respx.get(f"{PUBLIC}/quotes").respond(
+        200, headers={"content-type": "text/html"}, content=body.encode()
+    )
+
+    result = read_page(f"{PUBLIC}/quotes")
+
+    assert result["text"]
+    assert len(json.dumps(result, ensure_ascii=False)) <= _TOOL_EVIDENCE_LIMIT
+
+
+@respx.mock
+def test_reader_result_fits_the_budget_when_a_plain_text_page_carries_control_characters():
+    """A control character serializes as `\\uXXXX`: six characters for one.
+
+    A `text/plain` body reaches the text unchanged -- there is no parser to normalise it -- so this
+    is the widest expansion the reader has to survive.
+    """
+    respx.get(f"{PUBLIC}/raw").respond(
+        200, headers={"content-type": "text/plain"}, content=b"\x00" * 4_000
+    )
+
+    result = read_page(f"{PUBLIC}/raw")
+
+    assert result["text"]
+    assert len(json.dumps(result, ensure_ascii=False)) <= _TOOL_EVIDENCE_LIMIT
+
+
+@respx.mock
 def test_reader_keeps_plain_text_pages_unparsed():
     respx.get(f"{PUBLIC}/notes").respond(
         200, headers={"content-type": "text/plain"}, content=b"a <b>not</b> html   page"
