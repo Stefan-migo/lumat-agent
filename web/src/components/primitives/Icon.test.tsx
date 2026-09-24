@@ -25,13 +25,12 @@ describe("Icon", () => {
   });
 
   it("keeps the small size when nested in a button", () => {
-    const { container } = render(
+    render(
       <button className="btn" type="button">
         <Icon icon={Search} size="sm" />
       </button>,
     );
 
-    const glyph = container.querySelector("svg")!;
     expect(primitivesCss).toMatch(
       /\.icon\.icon--sm\s*\{[^}]*width:\s*var\(--icon-sm\);[^}]*height:\s*var\(--icon-sm\);/s,
     );
@@ -40,8 +39,11 @@ describe("Icon", () => {
   it("inherits the current text color and accepts a custom class", () => {
     const { container } = render(<Icon icon={Search} className="icon--custom" />);
 
-    const glyph = container.querySelector("svg")!;
-    expect(glyph).toHaveClass("icon", "icon--md", "icon--custom");
+    expect(container.querySelector("svg")).toHaveClass(
+      "icon",
+      "icon--md",
+      "icon--custom",
+    );
     expect(primitivesCss).toMatch(
       /\.icon\s*\{[^}]*color:\s*currentColor;/s,
     );

@@ -26,6 +26,7 @@ type Story = StoryObj<typeof meta>;
 export const Small: Story = { args: { icon: Search, size: "sm" } };
 
 export const Matrix: Story = {
+  args: { icon: Search },
   render: () => (
     <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
       <Icon icon={Search} size="sm" />
