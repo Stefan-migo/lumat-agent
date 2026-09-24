@@ -265,7 +265,8 @@ security class.
 - **Graph Check:** `graphify query "Icon primitive Lucide icon size tokens primitives stylesheet token drift tests stories"` consulted `primitives`, `tokens`, `primitives.css (tokenized shell CSS boundary)`, `Scenario: Drift guard green`, `PanelShell.tsx`, `tokens.test.ts`, and `Tokens.stories.tsx`. `graphify path "web/src/components/primitives/Badge.tsx" "web/src/tokens/tokens.test.ts"` found no directed path; the Badge conventions, token drift guard, and CSS consumers were verified directly. The consulted graph relationship was the tokenized primitive stylesheet boundary from `Icon`/`primitives.css` to `tokens.css`/`tokens.test.ts`.
 - **Strict TDD RED:** `cd web && npm run test -- --run src/components/primitives/Icon.test.tsx src/tokens/tokens.test.ts` → `sh: line 1: vitest: command not found` before source changes; after `npm install lucide-react`, the first CSS assertions also failed with `expected '' to be 'var(--icon-sm)'` and the currentColor attribute assertion failed, so the test was corrected to assert the stylesheet contract rather than jsdom's unsupported CSS resolution.
 - **Strict TDD GREEN:** focused Vitest → `2 passed` files / `22 passed` tests. The `.icon.icon--sm` selector assertion covers the `.btn > svg` specificity trap, and the token drift guard asserts both new tokens and their CSS consumers.
-- **Commits:** `c9dc904d` — `feat(icons): add tokenized Lucide icon foundation` (**46 authored lines**); `466059e9` — `test(icons): cover tokenized icon sizing contract` (**112 authored lines**).
+- **Verification:** final `npm run test` → `85 passed` files / `711 passed` tests (one earlier run hit the pre-existing 5-second `AppShell.test.tsx` timeout, then passed on rerun); final `npx tsc -b` → exit 0; final `npm run build-storybook` → built successfully with existing eval and chunk-size warnings. The first typecheck exposed two authored issues (`glyph` unused and Matrix story `args` required), fixed in `9a89bdc5`.
+- **Commits:** `c9dc904d` — `feat(icons): add tokenized Lucide icon foundation` (**46 authored lines**); `466059e9` — `test(icons): cover tokenized icon sizing contract` (**112 authored lines**); `9a89bdc5` — `fix(icons): satisfy icon test and story types` (**11 authored lines**).
 
 ### Slice 3 — composite migration to Radix (PR 3)
 
@@ -376,6 +377,9 @@ Actual authored changed lines (additions + deletions):
 - `466059e9` — `test(icons): cover tokenized icon sizing contract` — **112 lines**
   (104 additions, 8 deletions); Icon tests/story, drift guard, documentation, and
   DS-SHELL-6 delta.
+- `9a89bdc5` — `fix(icons): satisfy icon test and story types` — **11 lines**
+  (7 additions, 4 deletions); removes unused test bindings and supplies Matrix
+  story args.
 
 All commits remain below the 400-line review budget.
 
