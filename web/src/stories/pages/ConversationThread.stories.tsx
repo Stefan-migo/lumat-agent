@@ -13,6 +13,10 @@ const interactiveConversation = {
   case_id: 301,
   emergency: true,
   acknowledged_at: null,
+  captured_data: {
+    canal: "WhatsApp",
+    enlace_seguimiento: "https://portal.aguas.cl/ordenes/2026/cliente-301/seguimiento-reparacion-urgente-987654321",
+  },
 };
 export type ConversationThreadState = "ready" | "loading" | "empty";
 export function ConversationThreadView({ state = "ready" }: { state?: ConversationThreadState }) {
