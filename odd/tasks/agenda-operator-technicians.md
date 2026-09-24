@@ -147,6 +147,23 @@ Any file outside this list needs a scope update here first.
 - `cd web && npm run build`
 - `git diff --check`
 
+## Parking note — unverified draft on this branch
+
+This unit was paused mid-flight by the owner. The bounded worker that had been launched for T1–T4
+was cancelled, but it had already written a complete-looking implementation before the cancellation
+landed. It sat uncommitted in this worktree.
+
+That draft is preserved as commit `8d9b9f6e`
+(`chore(panel): park the unverified technician list draft from a cancelled worker`). It touches the
+five source files this record authorizes plus the test file, and it implements the plan literally: an
+operator-readable `GET /panel/api/technicians` reusing `to_user_dict`, role-filtered to `TECNICO`,
+ordered by username.
+
+**It is UNVERIFIED and must not be treated as a finished change.** No RED was observed, no test run was
+recorded, and no build was run for it. The Strict TDD constraint above still applies: observe RED
+before accepting any part of it. Re-derive the failing test first, then decide whether the draft
+satisfies it; do not assume it does because it looks complete.
+
 ## Progress
 
 - [x] Created this ODD record before the first source change.
