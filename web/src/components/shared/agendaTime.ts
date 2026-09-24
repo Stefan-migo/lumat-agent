@@ -32,9 +32,12 @@ const localNoonForDay = (dayKey: string, timeZone: string) => {
 export type AgendaTimeErrorCode = 'nonexistent_local_time' | 'ambiguous_local_time';
 
 export class AgendaTimeError extends Error {
-  constructor(readonly code: AgendaTimeErrorCode, message: string) {
+  readonly code: AgendaTimeErrorCode;
+
+  constructor(code: AgendaTimeErrorCode, message: string) {
     super(message);
     this.name = 'AgendaTimeError';
+    this.code = code;
   }
 }
 

@@ -3,13 +3,17 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgendaPage } from './AgendaPage';
 import type { AgendaAppointment } from '../../types';
-import { cancelAppointment, listAppointments, retryCalendarSync } from '../../api';
+import { cancelAppointment, createAppointment, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from '../../api';
 import { appointmentStatusLabel, appointmentSyncLabel } from '../shared/toneMaps';
 
 vi.mock('../../api', () => ({
   listAppointments: vi.fn(),
   cancelAppointment: vi.fn(),
   retryCalendarSync: vi.fn(),
+  createAppointment: vi.fn(),
+  fetchClients: vi.fn(),
+  fetchCases: vi.fn(),
+  fetchUsers: vi.fn(),
 }));
 
 const appointment = (overrides: Partial<AgendaAppointment> = {}): AgendaAppointment => ({
@@ -225,5 +229,32 @@ describe('AgendaPage', () => {
 
     expect(await screen.findByText('No hay visitas')).toBeInTheDocument();
     expect(screen.getByRole('table', { name: 'Calendario de septiembre de 2026' })).toBeInTheDocument();
+  });
+
+  it('creates an appointment from the agenda and refreshes the visible period', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
+    vi.mocked(fetchCases).mockResolvedValue({ cases: [{ id: 20, service: 'Mantención', customer: { id: 10, name: 'Camila Soto' } }] as never, users: [] });
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: 'Luis', role: 'tecnico', active: true }] as never });
+    vi.mocked(createAppointment).mockResolvedValue({ ok: true, appointment: {} as never });
+    vi.mocked(listAppointments).mockResolvedValue({ appointments: [] });
+
+    render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
+    await user.click(screen.getByRole('button', { name: 'New appointment' }));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Create appointment' })).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Customer'), '10');
+    await user.selectOptions(screen.getByLabelText('Case'), '20');
+    await user.selectOptions(screen.getByLabelText('Technician'), '30');
+    await user.type(screen.getByLabelText('Service'), 'Maintenance');
+    await user.clear(screen.getByLabelText('Local date'));
+    await user.type(screen.getByLabelText('Local date'), '2026-09-05');
+    await user.clear(screen.getByLabelText('Local time'));
+    await user.type(screen.getByLabelText('Local time'), '10:00');
+    await user.clear(screen.getByLabelText('Duration (minutes)'));
+    await user.type(screen.getByLabelText('Duration (minutes)'), '60');
+    await user.click(screen.getByRole('button', { name: 'Create appointment' }));
+
+    await waitFor(() => expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({ customer_id: 10, case_id: 20, technician_id: 30, timezone: 'America/Santiago', local_time: '10:00:00' })));
+    await waitFor(() => expect(listAppointments).toHaveBeenCalled());
   });
 });
