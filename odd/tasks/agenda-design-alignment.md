@@ -91,11 +91,82 @@ review budget → single PR, no chained slices.
 
 ## Progress / Evidence
 
-- [ ] T1 RED observed
-- [ ] T2 GREEN observed
-- [ ] T3 shell-aware measurement recorded
-- [ ] T4 suite + build recorded
+- [x] T1 RED observed — `AgendaPage.test.tsx` CSS contract failed on the uppercase assertion.
+- [x] T2 GREEN observed — assertion passes after the `primitives.css` edit.
+- [x] T3 shell-aware measurement recorded — see below.
+- [x] T4 suite + build recorded — `732 passed / 86 files`; `npm run build` clean.
+
+Commits:
+
+- `0b25f733` docs(odd): record the agenda-design-alignment unit
+- `85d679f0` fix(web): align the agenda calendar with the design system
+
+Flake note (belongs to the separate `AgendaPage` flake item): the first full-suite
+run reported `4 failed | 728 passed`, all four 5000ms timeouts in `AgendaPage.test.tsx`
+(`shows actionable inline mutation failures…`, `creates an appointment from the agenda…`).
+An immediate re-run with identical code reported `732 passed`, zero failures. The flake
+is therefore CPU-contention driven and reproduces **without** Storybook or Playwright
+running — the earlier attribution to Storybook contention was too narrow.
+
+## T3 — shell-aware measurement result
+
+Measured `PanelShell` + `AgendaPage` (ready state) in real Chromium. Effective content
+box is `.panel-shell__content`.
+
+| Viewport | Content width | Two-column | Real Agenda overflow |
+|---:|---:|:---:|---|
+| 375 | 375 | no | none (shell footer labels overflow — see finding 2) |
+| 639 | 639 | no | none |
+| 640 | 640 | no | none |
+| 768 | 768 | no | none |
+| 1023 | 1023 | no | none |
+| 1024 | 784 | yes | none |
+| 1100 | 860 | yes | none |
+| 1200 | 960 | yes | none |
+| 1279 | 1039 | yes | none |
+| 1280 | 1040 | yes | none |
+| 1440 | 1200 | yes | none |
+
+At **normal text size there is no break at any width from 375 to 1440** — the owner's
+original complaint "breaks when shrinking the viewport" is still not reproducible inside
+the real shell either.
+
+### Finding 1 (out of scope — class-level defect): text-zoom reflow
+
+At **viewport 1024 with 200% text zoom**, the Agenda layout breaks:
+
+- `.agenda-page__layout` computes to `640px 0px` — the register column collapses to zero.
+- `.panel-shell__content` reports `scrollWidth 716` vs `clientWidth 544`.
+
+Mechanism (verified by reading the CSS, not just by measurement):
+
+- `.agenda-page__layout` switches to two columns on a **viewport** media query
+  (`@media (min-width: 64rem)`), and its first track minimum is `minmax(20rem, 1fr)`.
+- `20rem` resolves against the **root font-size**, so at 200% text zoom the minimum
+  becomes 640px while the available content box shrinks to 544px.
+- The content box shrinks because the shell rail is `var(--shell-rail-expanded)`
+  (rem-based) and therefore also doubles under text zoom, from 192px to 384px.
+- `DESIGN_SYSTEM.md:308` specifies the rail as a **compact 192px** desktop sidebar
+  (absolute), and `:267`/`:554` require 200% text zoom to preserve content and actions.
+
+This is a **class-level defect, not Agenda-specific**: the same mechanism affects the
+shell rail and any two-column page, and the measurement also found 200%-zoom overflow in
+`.panel-shell__breadcrumbs` and a shell footer-nav label overflow at 375px. Band-aiding
+it inside Agenda would leave the shell defect in place. Recommended as its OWN unit.
+
+### Finding 2 (out of scope — shell): footer navigation overflow at 375px
+
+At viewport 375 the `.panel-shell__footer-nav` label spans ("Notificaciones",
+"Agente Lumat", "Conversaciones", "Agenda" at 200% zoom) exceed their cells. The panel
+page itself is `375px` wide, so this is the shell's, not Agenda's.
+
+## Decisions added by measurement
+
+- **D5 — do not band-aid the text-zoom reflow inside this unit.** It is a shell-level
+  class defect; Agenda would only mask its instance. Opened as a separate unit pending
+  the owner's call.
 
 ## Next step
 
-Start T1 (RED) in this worktree.
+Report the verified alignment result and the Finding 1/2 evidence, then decide whether the
+text-zoom reflow becomes its own unit or is folded in here.
