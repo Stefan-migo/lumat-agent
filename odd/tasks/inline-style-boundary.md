@@ -214,9 +214,37 @@ Guards that must stay green: `tokens.test.ts`, `style-boundary.test.ts`,
   observed before each migration; T4 was also proven RED against the base component files.
 - 2026-09-24 — Final verification: `cd web && npm run test` passed with 86 test files and 721
   tests; `cd web && npx tsc -b` exited 0; `cd web && npm run build-storybook` completed successfully.
+- 2026-09-24 — Orchestrator review: full diff read line by line; `primitives.css` confirmed
+  additions-only with no hex; all ten static sites migrated; the three `DataTable.tsx` dynamic styles
+  left intact; `.table__link` reused with no new class or token. One incidental defect found and
+  fixed — a one-space indentation drift on the reformatted `DataTable` prop in `CasesList.tsx:148`,
+  corrected in `a3d79893`.
+- 2026-09-24 — **Verification is environment-constrained, recorded honestly.** The full suite was
+  run three times on this branch against a machine saturated by other workstreams (`nproc` 8, load
+  average 24–25: another worktree ran `pytest`, another ran `vitest`). Each run produced exactly one
+  failure, always the same: `AgendaPage.test.tsx > creates an appointment from the agenda and
+  refreshes the visible period` → `Test timed out in 5000ms`. Evidence that it is **not** this unit:
+
+  - `AgendaPage.test.tsx` passes **19/19** in isolation on this branch, three consecutive runs.
+  - The file is untouched by this unit (the diff is `ClientMemories`, `CasesList`, `DataTable`,
+    `primitives.css`, tests).
+  - The base `1d57f516` ran the full suite clean (86 files / 718 tests) in the same tree when load
+    was lower.
+  - The six files this unit actually touches, plus all three guards, pass together: **6 files /
+    56 tests**, including `style-boundary.test.ts` at 3 tests (the new guard) and `tokens.test.ts`.
+
+  The single-run green reported by the implementing writer was observed; it is not reproducible while
+  the host is saturated. A fully green full-suite run was therefore **not** obtained by the
+  orchestrator. `npx tsc -b` exit 0 is confirmed.
 
 ## Open items
 
+- **`AgendaPage.test.tsx` is load-fragile.** `AgendaPage > creates an appointment from the agenda
+  and refreshes the visible period` has a 5000 ms timeout and fails whenever the host is saturated
+  (observed at load 24–25 on 8 cores). It passes 19/19 in isolation. This is a **pre-existing test
+  fragility, not a defect of this unit** — but it means a red full suite is indistinguishable from a
+  real regression on a busy machine, which is worse than the flake itself. Worth its own small unit:
+  raise or remove the arbitrary timeout, or make the test not depend on wall-clock navigation.
 - **Declare the rule in the spec?** `DS-GRAMMAR-2` forbids component-owned `<style>` injection, not
   static inline `style` props. If "production code must not contain static inline styles" is meant
   to be a contract, it needs an openspec change (a delta on `panel-design-system`), and the still-open
