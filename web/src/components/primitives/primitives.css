@@ -1702,13 +1702,12 @@
 .ai-agent-grammar__detail dd { margin: 0; text-align: right; }
 .ai-agent-grammar__chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .ai-agent-grammar__chip { padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: var(--text-xs); }
-.ai-agent-grammar__actions { display: grid; gap: var(--space-2); }
+.ai-agent-grammar__header-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .ai-agent-grammar .emergency-action { color: var(--danger); border-color: var(--danger-border); }
 @media (max-width: 64rem) {
   .panel-shell--with-inspector { grid-template-columns: calc(var(--space-8) * 2) minmax(0, 1fr); }
   .panel-shell--with-inspector .panel-shell__inspector { display: none; }
   .ai-agent-grammar__shell, .ai-agent-grammar__shell--compact { grid-template-columns: calc(var(--space-8) * 2) minmax(0, 1fr); }
-  .ai-agent-grammar__inspector { display: none; }
   .ai-agent-grammar__brand-label, .ai-agent-grammar__rail .ai-agent-grammar__section-label, .ai-agent-grammar__rail .ai-agent-grammar__thread-list, .ai-agent-grammar__footer { display: none; }
   .ai-agent-grammar__nav a { text-align: center; }
 }

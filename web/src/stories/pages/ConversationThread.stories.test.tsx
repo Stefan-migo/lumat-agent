@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ConversationThread } from "../../components/pages/ConversationThread";
-import { ConversationThreadBubbles, ConversationThreadView } from "./ConversationThread.stories";
+import { ConversationThreadBubbles, ConversationThreadView, InteractiveConversationThreadView } from "./ConversationThread.stories";
 import { conversations, messages } from "./_shared/mockData/conversations";
 
 const conversation = conversations[0];
@@ -35,5 +35,13 @@ describe("ConversationThread", () => {
     render(<ConversationThreadBubbles />);
     expect(screen.queryAllByRole("table")).toHaveLength(0);
     expect(screen.getAllByLabelText(/mensaje/i).length).toBeGreaterThan(0);
+  });
+
+  it("renders the interactive story action set", () => {
+    render(<InteractiveConversationThreadView />);
+    expect(screen.getByRole("button", { name: "Tomar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Devolver" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cerrar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reconocer emergencia" })).toBeInTheDocument();
   });
 });
