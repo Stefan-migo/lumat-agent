@@ -3,8 +3,8 @@
 **Branch**: `odd/assistant-web-fetch`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-web-fetch`
 **Base**: `4b31796c` (= `main` at branch time)
-**Status**: slice 1 shipped as PR #348 (approved, burned); slice 2 complete and ahead of it locally
-(T1–T3, 74 tests green); T4–T8 next
+**Status**: slices 1 and 2 shipped as PR #348 (merged) and PR #349 (approved, burned). Slice 3 in
+progress on `odd/assistant-web-fetch-slice3`: reader is 78 tests green, T4–T8 next
 **Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/session.md`
 (decisions 4 and 6, risk row *local extractor reintroduces an SSRF surface*); Engram #4890, #4894, #4897.
 
@@ -240,6 +240,19 @@ requires.
   shapes, then the parser call wrapped (`a9aa36c9`). Same pattern U1 used: ship the reviewed slice,
   carry its advisory forward as tracked work.
 
+## Review outcome — slice 2 (native RDD)
+
+- **`approved`**, authority burned (`review-f4f9c777ac79d4d8`). 3 changed paths, risk **medium**, one
+  lens. PR at `https://github.com/Stefan-migo/lumat-agent/pull/349`.
+- **`R3-dns-rebinding`** (`fetch.py:153`, WARNING, informational): the rebinding window D6 already
+  records and accepts. The reviewer cited that record; it stays an accepted limitation, not new work.
+- **`R3-non-success-status`** (`fetch.py:161`, WARNING, informational, deterministic, introduced):
+  only `>= 400` was rejected, so a 3xx outside the manual redirect set **and** an empty success such as
+  `204` both travelled on as usable pages. Verified by reproduction before fixing — four statuses
+  returned a "page" instead of failing.
+- **Closed in slice 3** rather than by editing the reviewed candidate. Two rules replaced one: only a
+  2xx is a page, and a 2xx with no body is not one either.
+
 ## Graph nodes consulted (Graph Check, Step 1)
 
 - `graphify query "assistant web fetch URL retrieval and tool registry"` → `assistant/tools/registry.py`,
@@ -276,10 +289,16 @@ requires.
   (1358 base + 69 new). Branch pushed at the slice-1 commit and PR #348 opened.
 - 2026-09-24 — **`R3-malformed-url` closed** (`a9aa36c9`): RED over the five malformed shapes, then the
   parser wrapped. 74 passed. The fix rides in slice 2 so the reviewed slice-1 candidate stays frozen.
+- 2026-09-24 — **Slice 1 merged** (PR #348 → `3d0b80f7`); its merged remote branch deleted; `main`
+  synced. Slice 2 moved to its own branch `odd/assistant-web-fetch-slice2` and pushed.
+- 2026-09-24 — **Slice 2 reviewed and shipped as PR #349.** Native review `approved`, authority burned;
+  two advisories. Slice 3 started on its own branch `odd/assistant-web-fetch-slice3`.
+- 2026-09-24 — **`R3-non-success-status` closed** (`8db50c1b`): RED over 204/300/304/305 first — all
+  four returned a "page" — then two rules, only a 2xx is a page and a 2xx with no body is not one.
+  78 passed.
 
 ## Next step
 
-Slice 1 is shipped as PR #348 and awaiting its merge. Slice 2 is committed locally on the same branch
-and is pushed once #1 lands (stacked-to-main) — with slice 1 already in `main`, the #2 diff is only its
-own delta. Then T4–T8: registry, whitelist 22 → 23, persona/prompt, spec, harness, regression and the
-payload measurement.
+T4 — the registry entry and the whitelist (22 → 23), with the tool-count and known-tool assertions
+updated to the new contract. Then T5–T8: persona/prompt, spec, harness, regression and the payload
+measurement.
