@@ -216,6 +216,13 @@ build above were re-run on the resulting tree.
 
 No native review is due for this unit; the tier and reason are recorded per protocol.
 
+## Delivery record
+
+- **PR #347** — `fix(web): keep the conversation thread actions reachable at every width`,
+  branch `odd/conversation-thread-actions`, base `4b31796c`, label `type:bug`. 6 files, +281 −12.
+- CI `Tests` passed; GitGuardian passed. Mergeable at the time of opening.
+- No native review authority was burned: `review_due: false` (`under_budget`).
+
 ## Recovery
 
 Resume with `mem_context`, then the project-scoped `mem_search` for `conversation-thread-narrow-actions`,
