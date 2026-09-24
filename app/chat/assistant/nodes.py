@@ -671,7 +671,13 @@ def tool_loop_head(state: AssistantState) -> AssistantState:
             },
             "status": "completed",
         }
-    if plan.get("kind") != "tool" or not plan.get("tool") or not plan.get("follow_up"):
+    if plan.get("kind") != "tool" or not plan.get("tool"):
+        return {"status": "completed"}
+    # Chaining is read-only end to end (D3): a write is an action, not evidence, so it always
+    # ends the turn -- including an autonomous write that opted into a follow-up step.
+    if not get_tool(plan["tool"]).read_only:
+        return {"status": "completed"}
+    if not plan.get("follow_up"):
         return {"status": "completed"}
     # Record the cap only when another step was requested and the budget ended the turn.
     if steps >= MAX_ASSISTANT_TOOL_STEPS:

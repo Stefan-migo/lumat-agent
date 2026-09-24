@@ -334,6 +334,48 @@ def test_sessionless_normal_cost_mode_keeps_two_step_chain(monkeypatch):
     assert len([call for call in calls if not call.get("stream")]) == 2
 
 
+def test_autonomous_write_turn_does_not_chain(monkeypatch):
+    calls = []
+    handler_calls = []
+    plans = [
+        json.dumps(
+            {
+                "kind": "tool",
+                "tool": "memory.write",
+                "arguments": {"titulo": "N", "contenido": "Content", "topic_key": "agent:test", "tipo": "discovery"},
+                "summary": "Write memory",
+                "requires_approval": False,
+                "follow_up": True,
+            }
+        ),
+        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":true}',
+    ]
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda _session, name, *_args, **_kwargs: handler_calls.append(name)
+        or {"tool": name, "status": "completed", "result": [{"name": "Ana"}]},
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    run_assistant(
+        thread_id=7, user_id=1, content="Save Ana", run_id="run-write-close", on_token=lambda _token: None
+    )
+
+    assert handler_calls == ["memory.write"]
+    assert len([call for call in calls if not call.get("stream")]) == 1
+
+
+def test_read_only_tool_with_follow_up_still_chains():
+    state = _tool_state(tool_steps=1, plan={**_tool_state()["plan"], "follow_up": True})
+
+    result = tool_loop_head(state)
+
+    assert result["status"] == "planned"
+    assert _after_tool_loop(result) == "plan_llm"
+
+
 def test_step_two_write_plan_is_refused_by_guardrails():
     state = _tool_state(
         tool_steps=1,
