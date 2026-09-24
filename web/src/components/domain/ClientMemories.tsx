@@ -5,7 +5,6 @@ import { Card } from "../primitives/Card";
 import { Textarea } from "../primitives/Textarea";
 import type { Column } from "../shared/DataTable";
 import { DataTable } from "../shared/DataTable";
-import { PageHeader } from "../shared/PageHeader";
 import type { Memory, MemoryRelation, MemoryRelationKind } from "../../types";
 
 export type MemoryHandler = (memoryId: number) => void;
@@ -14,8 +13,6 @@ export type MemoryPinHandler = (memoryId: number, pin: boolean) => void;
 export interface ClientMemoriesProps {
   /** Customer-scoped memories for the ficha (MEM-6). */
   memories: Memory[];
-  /** Customer display name for the PageHeader meta. */
-  customerName?: string | null;
   /** Upsert a new memory; the parent refreshes the list. */
   onUpsert?: (contenido: string) => void;
   onDelete?: MemoryHandler;
@@ -41,11 +38,10 @@ function tipoTone(tipo: Memory["tipo"]): "neutral" | "success" | "warning" | "da
 
 /** Ficha memories panel (MEM-6): list + edit + delete + mark(pin) over the
  *  customer's `scope='customer'` memories. Reuses primitives (Card,
- *  DataTable, Textarea, Button) and PageHeader per the ClientFicha pattern.
+  *  DataTable, Textarea, Button) per the ClientFicha pattern.
  *  Pure-presentational: the parent owns fetch + mutation wiring. */
 export function ClientMemories({
   memories,
-  customerName,
   onUpsert,
   onDelete,
   onPin,
@@ -73,7 +69,6 @@ export function ClientMemories({
 
   return (
     <Card title="Memorias del cliente">
-      <PageHeader title="Memorias" meta={customerName ? `Ficha de ${customerName}` : undefined} />
       <DataTable
         columns={columns}
         rows={memories}
