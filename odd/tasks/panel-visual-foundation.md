@@ -182,6 +182,16 @@ security class.
   on `Icon` (keeps the scale hollow in the unit that exists to create it) and extending
   the scale down to 12/14 (contradicts the doc line and produces a 14→20 gap, because
   `--icon-md: 20px` is frozen).
+- **D14 — `Clients` and `Usuarios` stop sharing a glyph (slice 2, 2026-09-24).** The
+  pre-migration shell mapped both destinations to the same hand-rolled `UsersIcon`
+  (`NAVIGATION.clients` and `NAVIGATION.users`, base `e16b3ff8`). The migration maps
+  `clients` → `Users` and `users` → `UserRound`. This is a **declared** semantic delta
+  beyond D13's size normalization — and it is reversible. It is kept because
+  `DS-SHELL-6` requires shell icons to be "semantically distinct", so two destinations
+  rendering one glyph contradicts the requirement this unit adopted Lucide to satisfy.
+  It is **not** required by `PanelEntry.stories.test.tsx:230-237`, which never reads the
+  `Usuarios` entry; the original mapping already passed that test. If the owner prefers the
+  pre-migration identity, revert `users` to `Users` — no test depends on the distinction.
 
 ## Tasks
 
@@ -350,10 +360,37 @@ contract` (**43/15** on `Icon.test.tsx`, **0/1** on `primitives.css`);
 - **Raw SVG evidence:** one raw inline SVG remains under `web/src`, in
   `web/src/stories/primitives/Avatar.stories.tsx`; the five T7 target files contain none.
 - **Accessible names:** `Enviar`, `Copiar mensaje`, `Reintentar` and `Cerrar` remained
-  unchanged and their tests pass. `PanelEntry.stories.test.tsx:230-237` compares the
-  `innerHTML` of the eight drawer navigation SVGs and requires eight distinct values;
-  the `Usuarios` entry uses `UserRound` rather than the `Clientes` `Users` glyph to
-  preserve that invariant. AppShell's collapse SVG still emits `stroke="currentColor"`.
+  unchanged and their tests pass. AppShell's collapse SVG still emits `stroke="currentColor"`.
+- **`PanelEntry.stories.test.tsx:230-237` — what it actually asserts.** It compares the
+  `innerHTML` of the **eight** drawer destinations it names (`Panel unificado`,
+  `Asistente Lumat`, `Conversaciones`, `Clientes`, `Agenda`, `Base de Conocimientos`,
+  `Automatizaciones`, `Configuración`) and requires eight distinct values. `Usuarios` is
+  **not** in that list. The pre-migration `NAVIGATION` map (`e16b3ff8`) assigned `UsersIcon`
+  to both `clients` and `users`, and still satisfied the invariant with 8/8 distinct glyphs
+  among the eight tested labels — verified by replaying the mapping. So the `UserRound`
+  choice was **not** required to preserve the test. See **D14** for why it was kept.
+
+### T7 correction pass (orchestrator read of the delivered migration)
+
+Read before accepting. The migration itself holds: every one of the 30 glyph definitions is
+gone, the sizes follow D13, accessible names are unchanged, the `style-boundary` guard is
+new and real (it was RED before the migration and is GREEN after), and `tsc`/Storybook stay
+clean. Three things needed correcting:
+
+- **Item 1 — a false justification, corrected.** The evidence section claimed `Usuarios`
+  uses `UserRound` "to preserve that invariant" (the eight-distinct-SVG assertion). That is
+  wrong: `Usuarios` is not among the eight labels the test reads, and the original mapping
+  already passed it. The claim is corrected above and the real reason is recorded as **D14**.
+- **Item 2 — assertion strength verified by mutation, not by the record.** The SearchInput
+  and Dialog assertions were added *after* their source migration, so no RED was observed for
+  them (already disclosed by the writer). Rather than accept prose, both were mutation-checked:
+  restoring `<span aria-hidden="true">⌕</span>` in `SearchInput.tsx` and the `✕` text glyph in
+  `Dialog.tsx` fails **2 of 5** tests across the two files. The assertions are real.
+- **Item 3 — a stray indentation on committed code.** `Dialog.tsx` carried one extra leading
+  space on the migrated `<Icon>` line. Fixed.
+
+**Correction evidence:** full `npm run test` → **85 files / 713 tests passed**;
+`npx tsc -b` → exit 0; guard mutation checks as described above.
 
 ### Slice 3 — composite migration to Radix (PR 3)
 
@@ -480,8 +517,16 @@ Actual authored changed lines (additions + deletions):
 - `fb96f8e1` — `refactor(primitives): replace the pseudo-icons with Lucide` — **18 lines**
   (15 additions, 3 deletions); SearchInput/Dialog, rendered guards, and story copy.
 
-Slice 2 total: **612 authored lines** across 11 commits, well inside the 400-line
-review budget per work-unit commit. T7 contributed **372 authored lines**.
+Slice 2 total: **612 authored lines** across 11 commits. **This exceeds the ~400-line
+PR budget**: every work-unit commit fits inside it, but the slice as a whole does not.
+The unit doc's delivery line said "PR 2 for icons" as a single PR; at 612 authored lines
+that PR is over budget and the delivery strategy for this unit is chained/stacked. The
+split (icon foundation as PR 2a, the 30-glyph migration as PR 2b) versus a
+maintainer-approved `size:exception` is a delivery decision and is recorded in **Open
+items**.
+
+T7 contributed **372 authored lines**; the foundation (T6/T7b plus its two correction
+passes) contributed **240**.
 
 All commits remain below the 400-line review budget.
 
@@ -494,6 +539,10 @@ All commits remain below the 400-line review budget.
 - [x] **OpenSpec delta** — `DS-DOC-1`, `DS-TKN-3`, and stale fixed-count `DS-STORY-1`
   are amended under `openspec/changes/panel-visual-foundation/`.
 - [ ] **Dark mode** — remains deferred; not part of this unit.
+- [ ] **Slice 2 PR boundary** — 612 authored lines exceeds the ~400-line review budget.
+  Pending the owner's choice: split slice 2 into two chained PRs (2a = icon foundation,
+  2b = the 30-glyph migration) or merge it as one PR under a maintainer-approved
+  `size:exception`. No PR has been opened; nothing is pushed.
 
 ## Visual check result (2026-09-24, Storybook :6006)
 

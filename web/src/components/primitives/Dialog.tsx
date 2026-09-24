@@ -62,7 +62,7 @@ export function Dialog({ open, onClose, title, children, closeLabel = "Cerrar" }
             aria-label={closeLabel}
             onClick={onClose}
           >
-             <Icon icon={X} size="md" />
+            <Icon icon={X} size="md" />
           </button>
         </div>
         <div className="dialog__body">{children}</div>
