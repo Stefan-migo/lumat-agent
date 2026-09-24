@@ -151,7 +151,7 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
 - [x] **T5 — Storybook.** Extend `AgendaPage.stories.tsx` (+ its stories test) and add
   `AgendaCalendar.stories.tsx`, covering month/week, selected day, empty month, dense month, and
   narrow widths.
-- [ ] **T6 — Closeout.** Run the full checks, reconcile this progress list against `git log`, and
+- [x] **T6 — Closeout.** Run the full checks, reconcile this progress list against `git log`, and
   harvest any `ponytail:` markers.
 
 ## Acceptance criteria
@@ -205,12 +205,12 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
 - [x] **T2/T3 verified independently by the orchestrator** — `npm run test` re-run on the worktree:
       **83 files, 686 tests, all passing** (76s), matching the writer's report. Working tree clean,
       only authorized files changed, `graphify-out` untracked.
-- [ ] **T3 review — two defects found; reopened as T3B.** The month/week grid ships invalid ARIA
+- [x] **T3 review — two defects found; reopened as T3B.** The month/week grid ships invalid ARIA
       (`role="grid"` without `role="row"`, and `aria-selected` on a `<button>`) and its toolbar
       bypasses the `Button` primitive with raw `btn` classes. Behavior and tests are otherwise sound.
       Recorded rather than silently accepted: an invalid ARIA grid is a real accessibility defect and
       the design system requires semantic markup and primitive reuse.
-- [ ] **T3B first attempt — blocked honestly, then re-scoped.** The writer converted the grid to
+- [x] **T3B first attempt — blocked honestly, then re-scoped.** The writer converted the grid to
       native `<table>` semantics but stopped when the typed view toggle could not pass `aria-pressed`
       through `Button` (it destructures without spreading). It refused to widen the slice on its own,
       which is the correct behaviour. Verified independently: `Button.tsx:19-27` destructures a fixed
@@ -232,6 +232,26 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
 - [x] **T4B** — commit `2c2282ce`. RED: the two new page tests failed (**2 failed, 16 passed**); GREEN: deriving
       `renderedRows` from the active register path made the focused suite pass (**18 tests**). The
       full suite then passed **84 files / 699 tests**.
+
+- [x] **T6 — Closeout.** Full checks re-run by the orchestrator on the frozen branch:
+      `npm run test` → **84 files, 699 tests, all passing** (66s); `npm run build` → built in 3.45s;
+      `npx tsc -b --noEmit` → clean. No dependency added (`package.json` / `package-lock.json`
+      untouched). No `ponytail:` markers in this unit's code. Progress list reconciled against
+      `git log`: every ticked task maps to a commit, and the two review records above are marked
+      done because the review and the re-scope both actually happened.
+- [x] **Acceptance criteria verified.** (1) `AG-UI-1` no longer forbids the grid and now defines the
+      calendar and the day filter; (2) the `DESIGN_SYSTEM.md` month-grid prohibition is removed;
+      (3) month/week views, period navigation, day filtering and selection clearing are all covered
+      by tests; (4) existing cancel / retry / state behavior is preserved (the page state matrix is
+      still green); (5) no new dependency, no hard-coded colour, no `<style>` injection (the
+      style-boundary guard is green); (6) the fetched window is ≤31 days by construction
+      (`agendaMonthDays` never exceeds one month; a week is 7 days); (7) the three checks pass;
+      (8) only authorized files changed, plus `AgendaCalendar.stories.test.tsx`, retroactively
+      authorized under the repository's stories-sibling convention.
+- [x] **Reporting corrections recorded for the record.** The writer twice reported imprecisely: it
+      called a `stderr` block a test failure (the suite was green at 84/697), and it omitted T3B
+      from a completion report while having done it. Both were caught by independent verification;
+      neither shipped.
 
 ## Follow-ups
 
