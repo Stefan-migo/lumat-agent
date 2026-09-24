@@ -188,9 +188,11 @@ Observable behavior this unit must produce. Implementation shape is the implemen
   the behavior); the correction's REDs were behavioral (`assert 2 == 1` on the duplicated evidence,
   `KeyError: 'approval'` on the silent drop). GREEN: 124 tests across the four assistant test files, full
   suite 1,339 passed.
-- [ ] **T3 — RED + GREEN, cost gate per iteration.** RED: a turn that would chain is stopped when the cost
-  mode turns `conservative` or `blocked` mid-loop, and answers with what it has. GREEN: re-evaluate the
-  cost mode at the loop head.
+- [x] **T3 — RED + GREEN, cost gate per iteration.** Done in `9f77520b`. Behavioral RED:
+  `assert ['customers.search', 'memory.search'] == ['customers.search']` — the stale gate let the second
+  tool run. GREEN: `test_cost_mode_flip_stops_loop_before_second_planner` is parametrized over
+  `conservative` and `blocked`, drives the real graph, and asserts one tool, one planner call, the answer
+  from the gathered evidence, and the visible `loop_cost_stopped` decision.
 - [ ] **T4 — RED + GREEN, write refusal at step ≥ 2.** RED: a step-2 plan for a non-read-only tool is
   refused with a visible reason, executes nothing, and issues no approval. GREEN: explicit guardrails
   rule. Assert the *absence* of an approval, not only the absence of execution.
@@ -342,6 +344,16 @@ Two defects found by the parent's readback of the first T2 attempt, both fixed b
   independently of the opt-in flag.
 - 2026-09-24 — After-measurement of the normal tool turn recorded in the ledger above: call counts
   unchanged, responder prompt unchanged, planner prompt +363 chars from the new prompt contract.
+- 2026-09-24 — **T3 done** (`9f77520b feat(assistant): re-evaluate the cost gate on every loop step`).
+  Extracted a side-effect-free `_cost_snapshot(session, thread_id)` shared by `panel_cost_gate` and
+  `tool_loop_head`; the loop head now reads the **live** cost mode instead of the value frozen at turn
+  start, so a chain that itself pushes the thread past a threshold stops spending. `panel_cost_gate`
+  keeps its exact return shape and its two owner alerts — the loop head emits none.
+- 2026-09-24 — T3 verification: `cost_allowed` is consumed downstream at `nodes.py:770` →
+  `execute_tool(..., cost_allowed=...)` → `registry.py:555`. A `blocked` loop-stop therefore sets
+  `cost_allowed=False`, but the stop routes to `respond_stream`, where `tool_already_ran` is already true,
+  so the tool branch (and that check) is never reached. Confirmed rather than assumed. 131 tests pass
+  across the five assistant/chat test files; full suite 1,342 passed.
 
 ## Graph nodes consulted (Graph Check, Step 1)
 
@@ -357,6 +369,7 @@ Two defects found by the parent's readback of the first T2 attempt, both fixed b
 
 ## Next step
 
-T3 — RED + GREEN, cost gate per iteration: a chain must stop when the cost mode turns `conservative` or
-`blocked` mid-loop and answer with what it has. The seam already exists (`tool_loop_head` checks
-`cost_mode`), so T3 makes it explicit, tested and evidence-bearing.
+T4 (narrowed) — the looped-write refusal is enforced and tested, but the reason never reaches the user:
+the refusal sets a canned `response`, and `respond_stream` overwrites it with the model's answer, so a turn
+that asked to act finishes silently with text. Surface it honestly. Then T6 (persisted `cap_reached` /
+`tool_steps`), T7 (harness end-to-end chain), T8 (chaining-turn delta), T9 (suite + PR).
