@@ -1915,11 +1915,6 @@
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
-.kb-actions {
-  display: grid;
-  gap: var(--space-2);
-}
-.kb-actions__edit,
 .kb-actions__restore {
   display: flex;
   gap: var(--space-2);
@@ -1939,7 +1934,6 @@
 }
 @media (max-width: 39.99rem) {
   .kb-search__fields,
-  .kb-actions__edit,
   .kb-actions__restore { align-items: stretch; flex-direction: column; }
 }
 

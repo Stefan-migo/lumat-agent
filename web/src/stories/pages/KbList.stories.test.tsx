@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { extname, join, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -7,6 +7,17 @@ import { docs } from "./_shared/mockData/kb";
 import { kbStatusLabel } from "./_shared/toneMaps";
 import { KbList } from "../../components/pages/KbList";
 import { KbListView, KbListEmpty } from "./KbList.stories";
+
+const sourceRoot = resolve(process.cwd(), "src");
+
+function sourceFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path);
+    if (path.includes(".test.")) return [];
+    return [path].filter((file) => [".ts", ".tsx"].includes(extname(file)));
+  });
+}
 
 describe("KbList page", () => {
   it("renders the Spanish page title and upload surface", () => {
@@ -40,9 +51,13 @@ describe("KbList page", () => {
     expect(table.closest(".data-region")).toBeInTheDocument();
   });
 
-  it("does not keep KB-specific layout selectors for the shared upload structure", () => {
+  it("keeps every KB stylesheet class referenced by a component or story", () => {
     const stylesheet = readFileSync(resolve(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
-    expect(stylesheet).not.toMatch(/\.kb-upload__fields/);
+    const declaredClasses = [...stylesheet.matchAll(/\.((?:kb)[a-z0-9_-]*)\b/g)].map((match) => match[1]);
+    const source = sourceFiles(sourceRoot).map((file) => readFileSync(file, "utf8")).join("\n");
+    const unreferenced = [...new Set(declaredClasses)].filter((className) => !new RegExp(`(?:^|[^a-z0-9_-])${className}(?:$|[^a-z0-9_-])`).test(source));
+
+    expect(unreferenced, `Unreferenced KB classes: ${unreferenced.join(", ")}`).toEqual([]);
   });
 
   it("does not expose a workflow state prop that production does not provide", () => {
@@ -108,6 +123,7 @@ describe("KbList page", () => {
     render(<KbListView state="error" />);
     expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos cargar la base de conocimientos");
   });
+
 });
 
 describe("KbList empty story", () => {
