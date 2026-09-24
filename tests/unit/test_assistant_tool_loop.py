@@ -164,6 +164,36 @@ def test_replan_keeps_newest_tool_evidence_within_budget(monkeypatch):
     assert len(evidence) <= _TOOL_EVIDENCE_LIMIT
 
 
+def test_replan_marker_never_cuts_the_newest_result(monkeypatch):
+    calls = []
+    marker = "NEWEST_RESULT_MARKER"
+    plans = ['{"kind":"respond","tool":null,"arguments":{},"summary":"Done","requires_approval":false}']
+
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    # The middle result fills the budget almost exactly and the oldest is dropped, so the
+    # omission marker gets prepended. Budgeting it outside the limit made the final cut
+    # remove the newest result instead of older evidence.
+    plan_llm(
+        {
+            "content": "Find Ana",
+            "context": {"items": [], "meta": {}},
+            "tool_results": [
+                {"result": [{"evidence": "kb.retrieve", "pad": "o" * 10_000}]},
+                {"result": [{"evidence": "customers.search", "pad": "m" * 3_870}]},
+                {"result": [{"evidence": "memory.search", "tail": marker}]},
+            ],
+        }
+    )
+
+    evidence = calls[-1]["messages"][-1]["content"].split("Prior tool evidence:\n", 1)[1]
+    assert marker in evidence
+    assert "earlier tool result(s) omitted" in evidence
+    assert len(evidence) <= _TOOL_EVIDENCE_LIMIT
+
+
 def test_cap_refuses_a_third_execution(monkeypatch):
     calls = []
     handler_calls = []
@@ -302,6 +332,48 @@ def test_sessionless_normal_cost_mode_keeps_two_step_chain(monkeypatch):
 
     assert handler_calls == ["customers.search", "memory.search"]
     assert len([call for call in calls if not call.get("stream")]) == 2
+
+
+def test_autonomous_write_turn_does_not_chain(monkeypatch):
+    calls = []
+    handler_calls = []
+    plans = [
+        json.dumps(
+            {
+                "kind": "tool",
+                "tool": "memory.write",
+                "arguments": {"titulo": "N", "contenido": "Content", "topic_key": "agent:test", "tipo": "discovery"},
+                "summary": "Write memory",
+                "requires_approval": False,
+                "follow_up": True,
+            }
+        ),
+        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":true}',
+    ]
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda _session, name, *_args, **_kwargs: handler_calls.append(name)
+        or {"tool": name, "status": "completed", "result": [{"name": "Ana"}]},
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    run_assistant(
+        thread_id=7, user_id=1, content="Save Ana", run_id="run-write-close", on_token=lambda _token: None
+    )
+
+    assert handler_calls == ["memory.write"]
+    assert len([call for call in calls if not call.get("stream")]) == 1
+
+
+def test_read_only_tool_with_follow_up_still_chains():
+    state = _tool_state(tool_steps=1, plan={**_tool_state()["plan"], "follow_up": True})
+
+    result = tool_loop_head(state)
+
+    assert result["status"] == "planned"
+    assert _after_tool_loop(result) == "plan_llm"
 
 
 def test_step_two_write_plan_is_refused_by_guardrails():
