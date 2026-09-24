@@ -618,15 +618,15 @@ inflated count; under this repository's own rule the real review sizes are 160 a
 | | Branch | Worktree | PR | Review size | Status |
 |---|---|---|---|---|---|
 | **2a — icon foundation** | `odd/panel-visual-foundation` | none (plain branch, tip `a2e3ab1e`) | **#337** → `main` | 160 | **MERGED** as `b5bb040f`; branch deleted local + remote |
-| **2b — 30-glyph migration** | `odd/panel-visual-foundation-icons` | `../lumat-agent-odd-panel-visual-foundation-icons` | not open yet | 372 | local only, pre-rebase |
+| **2b — 30-glyph migration** | `odd/panel-visual-foundation-icons` | `../lumat-agent-odd-panel-visual-foundation-icons` | **#338** → `main` | 372 | **OPEN**, rebased on `b5bb040f`, pushed |
 
 **Handoff for 2b:** Engram `odd/panel-visual-foundation/handoff-slice-2b`.
 
-**Next action for 2b:** `git fetch origin && git rebase origin/main` in the 2b worktree,
-then run the checks, then open the PR. `a2e3ab1e` is an ancestor of `origin/main` after the
-2a merge, so the fetch-and-rebase replays only 2b's own commits. The rebase **drops 2a's
-commits** because they are already in `main` — that is the point of the stacked split, not
-a conflict to resolve.
+**Delivery executed 2026-09-24.** `git fetch origin && git rebase origin/main` replayed the
+nine 2b commits onto `b5bb040f` with no conflicts — 2a's commits were already in `main`
+through the stacked split, so the rebase dropped them, which is the point of the split and
+not a conflict. The branch was pushed and PR **#338** opened against `main` with
+`type:feature`.
 
 **Rebase executed 2026-09-24 (delivery session).** The nine 2b commits were replayed onto
 `b5bb040f` with no conflicts; every pre-rebase hash formerly cited in this document no
