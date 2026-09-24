@@ -124,6 +124,11 @@ describe("KbList page", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos cargar la base de conocimientos");
   });
 
+  it("renders the page loading banner from its own data source", async () => {
+    render(<KbList fetchDocuments={() => new Promise(() => undefined)} />);
+    expect(await screen.findByRole("status")).toHaveTextContent("Cargando base de conocimientos");
+  });
+
 });
 
 describe("KbList empty story", () => {
@@ -241,6 +246,7 @@ describe("KbList API page", () => {
     expect((request.body as FormData).get("visibility")).toBe("customer");
     expect((request.headers as Record<string, string> | undefined)?.["Content-Type"]).toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(await within(addRegion).findByRole("status")).toHaveTextContent("Documento agregado");
     fetchMock.mockRestore();
   });
 
