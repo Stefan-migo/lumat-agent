@@ -32,6 +32,8 @@ describe("TechnicianAgenda page story", () => {
     const card = screen.getByText("Revisión de calefont").closest("article");
     expect(card?.firstElementChild).toHaveClass("technician-agenda__slot");
     expect(within(card as HTMLElement).getByText("15:00")).toBeInTheDocument();
+    expect(within(card as HTMLElement).getByRole("link", { name: "+56912345678" })).toHaveClass("technician-agenda__field-control");
+    expect(within(card as HTMLElement).getByRole("link", { name: "Los Alerces 42" })).toHaveClass("technician-agenda__field-control");
   });
 
   it("keeps every fallback string on the card when the customer data is absent", () => {
@@ -63,6 +65,7 @@ describe("TechnicianAgenda page story", () => {
 
     rerender(<TechnicianSurfaceView data={null} state="error" />);
     expect(screen.getByRole("alert")).toHaveTextContent("No pudimos cargar la agenda");
+    expect(screen.getByRole("alert").parentElement).toHaveClass("agenda-recovery");
     expect(screen.getByRole("button", { name: "Reintentar" })).toHaveClass("btn");
   });
 

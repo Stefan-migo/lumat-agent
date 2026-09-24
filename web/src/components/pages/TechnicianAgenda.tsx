@@ -7,6 +7,7 @@ import { Button } from '../primitives/Button';
 import { EmptyState } from '../shared/EmptyState';
 import { PageFrame } from '../shared/PageFrame';
 import { StateMessage } from '../shared/StateMessage';
+import { agendaDayKey, formatAgendaSlot } from '../shared/agendaTime';
 import { appointmentStatusLabel, appointmentStatusTone } from '../shared/toneMaps';
 
 /** Technician agenda (TECH-AGENDA-1).
@@ -20,29 +21,11 @@ import { appointmentStatusLabel, appointmentStatusTone } from '../shared/toneMap
  * re-fetching a page that is opened on purpose, and the technician needs to know
  * how current what they are reading is. */
 
-/** 24-hour: an agenda slot must be unambiguous and fit a phone width, and a
- *  range rendered as "03:00 p. m. – 04:00 p. m." repeats the meridiem. */
-const clockFormat = (timeZone: string) =>
-  new Intl.DateTimeFormat('es-CL', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-
-/** `en-CA` yields YYYY-MM-DD, which is directly comparable as a string. */
-const dayKeyFormat = (timeZone: string) =>
-  new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
-
 const dayLabelFormat = (timeZone: string) =>
   new Intl.DateTimeFormat('es-CL', { timeZone, weekday: 'long', day: 'numeric', month: 'long' });
 
 /** Freshness is about the reader's own clock, so it stays in the host zone. */
 const stampFormat = new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-
-/** Local calendar day of an instant in the appointment's own zone. */
-function dayKey(iso: string, timezone: string) {
-  return dayKeyFormat(timezone).format(new Date(iso));
-}
-
-function clock(iso: string, timezone: string) {
-  return clockFormat(timezone).format(new Date(iso));
-}
 
 function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -60,15 +43,15 @@ function groupByDay(rows: TechnicianAppointment[], now: Date): DayGroup[] {
   const tomorrowIso = new Date(now.getTime() + 86_400_000).toISOString();
   const groups: DayGroup[] = [];
   for (const row of rows) {
-    const key = dayKey(row.starts_at, row.timezone);
+    const key = agendaDayKey(row.starts_at, row.timezone);
     const current = groups[groups.length - 1];
     if (current && current.key === key) {
       current.rows.push(row);
       continue;
     }
-    const label = key === dayKey(nowIso, row.timezone)
+    const label = key === agendaDayKey(nowIso, row.timezone)
       ? 'Hoy'
-      : key === dayKey(tomorrowIso, row.timezone)
+      : key === agendaDayKey(tomorrowIso, row.timezone)
         ? 'Mañana'
         : capitalize(dayLabelFormat(row.timezone).format(new Date(row.starts_at)));
     groups.push({ key, label, rows: [row] });
@@ -82,7 +65,7 @@ function splitAtToday(rows: TechnicianAppointment[], now: Date) {
   const upcoming: TechnicianAppointment[] = [];
   const past: TechnicianAppointment[] = [];
   for (const row of rows) {
-    (dayKey(row.starts_at, row.timezone) < dayKey(nowIso, row.timezone) ? past : upcoming).push(row);
+    (agendaDayKey(row.starts_at, row.timezone) < agendaDayKey(nowIso, row.timezone) ? past : upcoming).push(row);
   }
   return { upcoming, past };
 }
@@ -90,7 +73,7 @@ function splitAtToday(rows: TechnicianAppointment[], now: Date) {
 function stateMessage(state: AsyncDataState, retry: () => void) {
   if (state === 'loading') return <StateMessage tone="info" role="status" spinner title="Cargando agenda" />;
   if (state === 'denied') return <StateMessage tone="danger" role="alert" title="No tienes permiso para ver la agenda" />;
-  if (state === 'error') return <div className="technician-agenda__error"><StateMessage tone="danger" role="alert" title="No pudimos cargar la agenda" /><Button variant="secondary" onClick={retry}>Reintentar</Button></div>;
+  if (state === 'error') return <div className="agenda-recovery"><StateMessage tone="danger" role="alert" title="No pudimos cargar la agenda" /><Button variant="secondary" onClick={retry}>Reintentar</Button></div>;
   return null;
 }
 
@@ -101,9 +84,9 @@ function AppointmentCard({ row }: { row: TechnicianAppointment }) {
   return (
     <article className="technician-agenda__item">
       <p className="technician-agenda__slot">
-        <time dateTime={row.starts_at}>{clock(row.starts_at, row.timezone)}</time>
+        <time dateTime={row.starts_at}>{formatAgendaSlot(row.starts_at, row.timezone)}</time>
         <span aria-hidden="true">–</span>
-        <time dateTime={row.ends_at}>{clock(row.ends_at, row.timezone)}</time>
+        <time dateTime={row.ends_at}>{formatAgendaSlot(row.ends_at, row.timezone)}</time>
       </p>
       <Badge tone={appointmentStatusTone(row.status)} className="technician-agenda__status">
         {appointmentStatusLabel(row.status)}
@@ -113,11 +96,11 @@ function AppointmentCard({ row }: { row: TechnicianAppointment }) {
       <p className="technician-agenda__service">{row.service}</p>
       <strong>{row.customer.name ?? 'Cliente sin nombre'}</strong>
       {mapQuery
-        ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}>{row.customer.address ?? 'Dirección no registrada'}</a>
+         ? <Button className="technician-agenda__field-control" variant="secondary" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}>{row.customer.address ?? 'Dirección no registrada'}</Button>
         : <span>Dirección no registrada</span>}
       <span>{row.customer.comuna ?? 'Comuna no registrada'}</span>
       {row.customer.phone
-        ? <Button className="technician-agenda__call" variant="secondary" href={`tel:${row.customer.phone}`}>{row.customer.phone}</Button>
+         ? <Button className="technician-agenda__field-control" variant="secondary" href={`tel:${row.customer.phone}`}>{row.customer.phone}</Button>
         : <span>Teléfono no registrado</span>}
       {row.case_summary ? <p>{row.case_summary}</p> : null}
     </article>

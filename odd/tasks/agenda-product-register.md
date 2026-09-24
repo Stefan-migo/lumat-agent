@@ -192,7 +192,10 @@ is not in this unit's scope.
   24h slot in the appointment's own zone, a long day heading, a comparable
   `YYYY-MM-DD` day key, and a reader-clock freshness stamp. The
   `dateStyle`/`timeStyle` timestamps elsewhere in the panel are a different role
-  and are explicitly out of scope.
+  and are explicitly out of scope. The promotion rule (D3) applies **per role**: a
+  role enters the shared module when two consumers use it today; a role with a
+  single consumer stays local until a second one exists, and which roles moved is
+  recorded rather than assumed.
 - **D5 — Both surfaces read an agenda slot the same way: 24 hours.** The
   technician's rationale (`:23-24`) is not surface-specific — an agenda slot must
   be unambiguous, and a meridiem repeated across a range is noise. One contract,
@@ -233,6 +236,22 @@ is not in this unit's scope.
   smallest change that fixes the observable defect, and slice 2 extracts the
   agenda-shaped contract at the moment both surfaces consume it. Ordering is a
   correctness rule here, not a packaging preference.
+- **D14 — The technician surface's local grammar is deliberate, not debt.**
+  `odd/tasks/technician-surface.md` already raised that surface — 748 changed lines
+  under `web/`, D1–D7 and T1–T10 — and the 13 `.technician-agenda__*` selectors are
+  its documented output, not an accident: the card idiom was chosen after measuring
+  that a `--border-strong` stroke lands at 2.84:1 on `--brand-bg`, the slot leads
+  the card by decision (D4), the call control hugs its own label (T3), the recovery
+  control sits under its alert (T7), and the class was made real (T8). T12 is
+  therefore **not** "reduce the 13 selectors": each one is audited against the
+  promotion rule, and the page-specific remainder keeps its ownership with its
+  rationale recorded.
+- **D15 — The card's unlabelled facts are re-examined, not converted.** The ficha's
+  six bare `<p>` elements were ambiguous because a desktop identity block carries no
+  reading order. The technician card's order was decided instead of inherited
+  (`technician-surface` D4/T4: *when*, then *what*, then *who*, then *where*, then
+  how to call). A label is added only where a value is genuinely ambiguous without
+  one, and no label is added that repeats its value or fights a 390px phone width.
 
 ## Tasks
 
@@ -297,22 +316,43 @@ is not in this unit's scope.
 
 ### Slice 2 — technician agenda (ships in PR 2)
 
-- [ ] **T9** — RED/GREEN: the agenda-shaped time contract is extracted from the
+- [x] **T9** — RED/GREEN: the agenda-shaped time contract is extracted from the
   technician's four local helpers and **both** surfaces consume it (D4, D13) — the
   second consumer is real at the moment of extraction, not promised.
-- [ ] **T10** — RED/GREEN: the address link uses the shared link contract and no
-  longer inherits the browser default colour. RED observed (no class on the
-  anchor).
-- [ ] **T11** — RED/GREEN: the technician card's facts carry label/value structure
-  where it fits the phone width (address, comuna, phone, service); no label is
-  added that merely repeats its value.
-- [ ] **T12** — RED/GREEN: the 13 page-owned selectors are reduced by the D10
-  test, with the count before and after recorded and each promotion naming its
-  second consumer; the page-specific remainder stays page-owned and keeps its
-  tokens.
-- [ ] **T13** — stories: extend the technician story matrix for whatever
-  T9–T12 changed, with its assertions.
-- [ ] **T14** — Slice 2 verification of record: the same four commands.
+- [x] **T10** — the address is a real control, not a browser-default anchor. The
+  implementation chose `Button variant="secondary" href` — the same treatment
+  `technician-surface` D3/T2 gave the phone control on this card — over the shared
+  `.table__link`, whose own comment scopes it to the in-table drill-down role. RED
+  observed (the raw anchor carried no class at all). Its composition is corrected
+  in C4.
+- [x] **T11** — RED/GREEN: only the card facts that are genuinely ambiguous without
+  a label gain structure (D15). If the audit finds none, close the task with the
+  recorded verdict and no code change: the card's reading order is a decision from
+  `technician-surface` and inventing labels would churn it.
+- [x] **T12** — RED/GREEN: audit all 13 `.technician-agenda__*` selectors against
+  the promotion rule (D3, D10, D14) and record the verdict for each. Promote at most
+  what both a slice needs and a named second consumer actually uses — the operator
+  surface renders the same `StateMessage` plus recovery-control shape, so that
+  layout is the single candidate named here. Everything page-specific stays
+  page-owned and keeps its tokens. Record the selector count before and after.
+- [x] **T13** — stories: extend the technician story matrix only for what T9–T12
+  actually changed, with assertions. Invent no story for a state that did not move.
+- [x] **T14** — Slice 2 verification of record: the same four commands.
+
+### Slice 2 — correction pass
+
+- [x] **C4** — The new address control must obey the card's own composition rule.
+  `.technician-agenda__item` is a grid, so its children stretch by default; the
+  phone control hugs its label through `.technician-agenda__call` (renamed by C4
+  to `.technician-agenda__field-control`), for a reason the
+  surface wrote down: *a full-width 990px "phone number" button is not a phone
+  number*. The address control shipped with no composition class, so it stretches
+  the full card width while its sibling does not — one control contradicting a rule
+  this surface already decided. Bring both field controls under the same
+  composition rule (a page-owned rule is legitimate here — D10 and D14 leave the
+  page-specific composition to the page) and record whether the selector count
+  changed. The height a real control adds is justified by that surface's own
+  touch-target requirement; a full-width pill is not.
 
 ## Acceptance criteria
 
@@ -373,6 +413,114 @@ is not in this unit's scope.
 - [x] T0–T8. T0 commit `05ff620f`; T1 `dea88fcf`; T2 `a7008a46`; T3
   `b164fe3e`; T4 `bf712125`; T5 `4647c19e`; T6 `c6a14141`; T7
   `890fae2d`; T8 documentation commit `a3aa7750`.
+
+### Slice 2 implementation evidence
+
+- [x] T9 Graph nodes/edges: `TechnicianAgenda()` → `Button()` and the
+  `TechnicianAgenda.tsx` / `AgendaPage.tsx` / `agendaTime.ts` communities were
+  consulted. The shared module exports `formatAgendaSlot()` and `agendaDayKey()`.
+  The 24-hour slot role moved because both Agenda surfaces render it. The
+  comparable local-day-key role moved because both surfaces use it for date
+  calculations. The long day heading and reader-clock freshness stamp stayed in
+  `TechnicianAgenda.tsx`: each has one consumer today, so D3 does not permit
+  promotion. RED was the module test's real unresolved import: `Failed to resolve
+  import "./agendaTime" ... Does the file exist?` GREEN was the focused run's
+  `3 Test Files passed (3)`, `33 Tests passed (33)` after both surfaces were
+  wired. Commit `a99ee513`. The existing technician test file remained unmodified.
+  The cross-surface same-slot assertion is a guard, not a RED: it passed once the
+  shared module was wired and is not presented as a test-first failure.
+- [x] T10 Graph nodes/edge: `TechnicianAgenda()` → `Button()` was consulted, with
+  `Button.tsx`, `TechnicianAgenda.test.tsx`, and the technician card styles in
+  `primitives.css` as the affected contract. RED was the updated address test:
+  `19 tests | 1 failed`, receiving no classes where `btn btn--secondary` was
+  expected. GREEN was `TechnicianAgenda.test.tsx`: `1 Test File passed (1)`,
+  `19 Tests passed (19)`. The chosen contract is `Button variant="secondary"
+  href`; it matches D3's precedent for the phone action, so the address is a
+  real tokenized control at 390px without new CSS. `.table__link` was rejected
+  because its comment documents an in-table drill-down, density-neutral role and
+  its consumers are tables, not an external card action. The existing address
+   test gained only the class assertion because the rendered contract genuinely
+   changed. Missing addresses remain plain text. Commit `739bdb5f`.
+
+- [x] T11 audit verdict (no source change): Graph nodes `AppointmentCard()`,
+  `TechnicianAgenda.tsx`, `TechnicianAppointment`, `Button()`, and
+  `agendaTime.ts` were consulted; the undirected path to `AgendaPage()` ran through
+  `agendaDayKey()`. The facts are deliberately read in the binding T4 order:
+  slot (semantic `<time>` range), service, customer, address/comuna, phone, and
+  case summary. None is genuinely ambiguous at its position: status and safety
+  already carry visible Badge labels, address and phone controls expose their
+  values, and the fallbacks state their missing values. No label was invented for
+  the 390px card. No RED/GREEN run was applicable because the audit found no
+  authorized source change; no commit was created for T11.
+
+- [x] T12 audit and promotion: Graph nodes `TechnicianAgenda()`, `AgendaPage()`,
+  `StateMessage()`, `Button()`, `PageFrame()`, `TechnicianAgenda.test.tsx`, and
+  `AgendaPage.test.tsx` were consulted; the relevant edge is
+  `TechnicianAgenda.tsx --imports--> Button.tsx`, and the shared recovery shape
+  connects both page consumers. The original count was 13 agenda selector/class
+  selectors (12 `technician-agenda__*` declarations plus the root
+  `.technician-agenda` rule). The post-T12 page-owned count is 11; the two recovery
+  selectors are promoted as `.agenda-recovery` and `.agenda-recovery .btn`.
+  The 13-row audit is:
+
+  | Original selector | Verdict and rationale |
+  | --- | --- |
+  | `.technician-agenda` | Stays page-owned: technician surface root/list composition. |
+  | `.technician-agenda__section` | Stays page-owned: upcoming/past section rhythm. |
+  | `.technician-agenda__error` | Promoted to `.agenda-recovery`: same `StateMessage` + recovery `Button` shape is consumed by `AgendaPage`. |
+  | `.technician-agenda__error .btn` | Promoted to `.agenda-recovery .btn`: the recovery control must hug its label in both Agenda consumers. |
+  | `.technician-agenda__section-title` | Stays page-owned: technician uppercase section hierarchy, not an Agenda register contract. |
+  | `.technician-agenda__day` | Stays page-owned: local-day grouping composition. |
+  | `.technician-agenda__day-label` | Stays page-owned: technician day-heading treatment. |
+  | `.technician-agenda__item` | Stays page-owned: measured technician card idiom and grid. |
+  | `.technician-agenda__slot` | Stays page-owned: technician scanning anchor and range layout. |
+  | `.technician-agenda__service` | Stays page-owned: card content priority. |
+  | `.technician-agenda__status` | Stays page-owned: status badge placement under the slot. |
+  | `.technician-agenda__safety` | Stays page-owned: emergency/priority badge placement. |
+  | `.technician-agenda__call` | Stays page-owned as composition, then generalized by C4 to `.technician-agenda__field-control` so the address and phone controls share the same rule. |
+
+  RED was the two focused assertions receiving the old technician recovery class
+  and an unclassed operator wrapper (`2 failed, 29 passed`); GREEN was
+  `2 Test Files passed`, `31 Tests passed`. Commit `6617b2e3`.
+
+- [x] T13 story matrix: Graph nodes `TechnicianAgenda.stories.tsx`,
+  `TechnicianAgenda.stories.test.tsx`, `TechnicianAgenda()`, `Button()`, and
+  `agendaData` were consulted. Only the existing `Error` and `Default` story
+  assertions were extended: `Error` asserts the promoted recovery composition;
+  `Default` asserts both address and phone field controls hug their labels. No
+  new story was invented for T11 because its audit produced no changed behavior.
+  These assertions were guards after the implementation, not RED claims. Commit
+  `4f55f12e`.
+
+- [x] C4 RED/GREEN: Graph nodes `TechnicianAgenda()`, `Button()`,
+  `TechnicianAgenda.test.tsx`, and the technician agenda CSS were consulted. The
+  card grid made the address Button stretch while the phone used the old call-only
+  rule. RED was `2 failed, 17 passed`: both controls lacked the expected
+  `technician-agenda__field-control` class. GREEN was `1 Test File passed`, `19
+  Tests passed`. The chosen general page-owned rule is
+  `.technician-agenda__field-control { justify-self: start; }`, applied to both
+  real field controls; a general rule prevents the same composition defect from
+  returning on a third field control. The page-owned selector count stayed 11:
+  `.technician-agenda__call` was replaced by the equally page-owned generalized
+  selector. Commit `63e64471`.
+
+- [x] T14 graph closure: the final verification used the same Agenda graph
+  community (`TechnicianAgenda()`, `AgendaPage()`, `Button()`, `StateMessage()`,
+  `TechnicianAgenda.stories.test.tsx`) and the extracted edges
+  `TechnicianAgenda.tsx --imports--> Button.tsx` and
+  `AppointmentCard() <--contains-- TechnicianAgenda.tsx --imports-->
+  agendaDayKey() <--calls-- AgendaPage()`.
+
+### Slice 2 verification record
+
+- `cd web && npm run test` — passed: `Test Files 81 passed (81)`, `Tests 673
+  passed (673)`. Existing React `act(...)` and jsdom navigation warnings were
+  emitted; no test failed.
+- `cd web && npx tsc -b --noEmit` — passed with no output.
+- `cd web && npm run build` — passed: Vite transformed `333 modules` and emitted
+  the production bundle. The existing large-chunk warning remained.
+- `cd web && npm run build-storybook` — passed: Storybook `8.6.18` built the
+  preview. The existing `eval` and large-chunk warnings remained.
 
 ### Slice 1 implementation evidence
 
@@ -488,9 +636,26 @@ is not in this unit's scope.
 - `cd web && npm run build-storybook` — passed: Storybook `8.6.18` built the
   preview. Storybook reported its existing `eval` and large-chunk warnings.
 
+### Slice 2 re-scoped before implementation
+
+- T11 and T12 were rewritten after reading `odd/tasks/technician-surface.md`. The
+  earlier framing — "the 13 page-owned selectors go to the shared register" — was
+  wrong. That surface already had its own design pass, with decisions backed by
+  measurement, and the selectors are its documented output (D14). T12 is now an
+  audit that applies the promotion rule per selector, and T11 requires evidence of
+  real ambiguity before a single label is added (D15). This is the same correction
+  the Clientes/KB handoff warned about: re-diagnose, never transfer conclusions.
+
 ## Size
 
-Slice 1 (`9b83e27f..HEAD` under `web/`) changed **134 lines** (110 added, 24
+Unit total (`9b83e27f..HEAD`, authoritative): **228 changed lines under `web/`**
+(167 added, 61 deleted) across 11 files. This is the number the review budget
+applies to, and the whole unit sits well inside the ~400-line budget. The
+per-slice figures below are each measured at their own range boundary; because a
+line changed in both slices is counted inside each range and once in the union,
+the two ranges need not sum to the total.
+
+Slice 1 (`9b83e27f..774901f3` under `web/`) changed **134 lines** (110 added, 24
 deleted) across 5 files: `AgendaPage.test.tsx` 51, `AgendaPage.tsx` 43,
 `AgendaPage.stories.test.tsx` 22, `AgendaPage.stories.tsx` 9, `DESIGN_SYSTEM.md`
 9. Production code is 43 of those lines; the rest is tests, stories and the
@@ -500,6 +665,18 @@ technician slice.
 An earlier revision of this section recorded 90 lines (72 added, 18 deleted); that
 number was measured before the C1–C3 correction pass and is superseded by the
 figures above.
+
+Slice 2 (`774901f3..HEAD` under `web/`) changed **100 lines** (60 added, 40
+deleted) across 8 files: `TechnicianAgenda.tsx` 37, `agendaTime.ts` 16 (new),
+`primitives.css` 15, `agendaTime.test.ts` 12 (new), `AgendaPage.tsx` 11,
+`TechnicianAgenda.test.tsx` 4, `TechnicianAgenda.stories.test.tsx` 3 and
+`AgendaPage.test.tsx` 2. Production code is 79 of those lines; the rest is tests.
+The count is from `git diff --numstat`, not an estimate.
+
+An earlier revision of this section recorded 35 lines (21 added, 14 deleted)
+across 6 files. That range started at `3143bc9b`, so it missed the T9 and T10
+commits that landed before it, and it omitted the new shared module and its test.
+The figures above supersede it.
 
 ## Open items
 
@@ -525,6 +702,12 @@ figures above.
   contract work is undecided.
 - **`AutomationRulesPage.tsx:24`** still renders its drill-down link on the
   browser default colour (inherited; out of scope).
+- **The two Agenda surfaces render their section headings differently.** The
+  technician's section titles are uppercase and muted
+  (`.technician-agenda__section-title`); the operator's `Hoy` and `Próximas` are
+  plain `h2`. Each treatment was deliberate inside its own unit, so unifying them is
+  a design decision for the owner rather than an obvious cleanup — recorded here for
+  the visual review.
 - **The row-local sync-failure detail rides inside the status pill.**
   `AgendaPage.tsx` renders the API message appended to the badge
   (`title: detail`), so a long server message will stretch the actions cell. It is

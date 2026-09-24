@@ -91,7 +91,7 @@ describe('technician surface — reaching the customer', () => {
 
     const call = await screen.findByRole('link', { name: '+56912345678' });
     expect(call).toHaveAttribute('href', 'tel:+56912345678');
-    expect(call).toHaveClass('btn');
+    expect(call).toHaveClass('btn', 'technician-agenda__field-control');
   });
 });
 
@@ -241,6 +241,7 @@ describe('technician surface — visit safety and location', () => {
       'href',
       `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Los Alerces 42, Ñuñoa')}`,
     );
+    expect(address).toHaveClass('btn', 'btn--secondary', 'technician-agenda__field-control');
   });
 
   it('does not link a comuna when the street address is missing', async () => {
@@ -265,6 +266,7 @@ describe('technician surface — controls come from the panel primitives', () =>
     renderSurface();
 
     expect(await screen.findByRole('button', { name: 'Reintentar' })).toHaveClass('btn');
+    expect(screen.getByRole('alert').parentElement).toHaveClass('agenda-recovery');
     expect(screen.getByRole('button', { name: 'Cerrar sesión' })).toHaveClass('btn');
   });
 });
