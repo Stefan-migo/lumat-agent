@@ -41,7 +41,8 @@ move the customer name into.
 `web/src/components/primitives/primitives.css`, `web/src/components/domain/ClientMemories.tsx`,
 `web/src/components/pages/ClientFicha.tsx`,
 `web/src/stories/pages/ClientMemories.stories.tsx`,
-`web/src/stories/pages/ClientMemories.stories.test.tsx`, and this record.
+`web/src/stories/pages/ClientMemories.stories.test.tsx`, this record, and the
+record-hygiene target `odd/tasks/panel-visual-foundation.md`.
 
 **Out:** the N3 inline-style sweep (split out — see below); the dead `primitives.css:67-72` block and
 its `tokens.test.ts:195` assertion (owner decision, per the handoff — not ours to remove); the
@@ -129,7 +130,7 @@ N3 follow-up unit name: `inline-style-boundary` (not opened here; record only).
   `npm run build-storybook` all green; record the real test count.
 - [ ] **T6 — Visual check** at 1366×768 with the 640/1024/1280 references for the Dialog story and
   the client ficha memories region.
-- [ ] **T7 — Record hygiene carried from the handoff** (see below).
+- [x] **T7 — Record hygiene carried from the handoff** (see below).
 
 ## Checks
 
@@ -179,14 +180,31 @@ Guard tests that must stay green: `tokens.test.ts`, `style-boundary.test.ts`,
 - 2026-09-24 — Split decision recorded (N3 out) before the first source write.
 - 2026-09-24 — T1 RED observed: the new Dialog contract test failed because `DialogConfirmView` was
   undefined; T1/T2 then passed with the Button primitive and tokenized classes.
-- 2026-09-24 — T3 RED observed: the rewritten ClientMemories contract failed because the nested
-  PageHeader did not expose the required heading contract; T3/T4 then passed after removing it.
+- 2026-09-24 — T3 RED observed: the rewritten ClientMemories contract failed against the base source
+  with `expected document not to contain element, found <h1>` — the region's page-level heading.
+  Re-verified independently by the orchestrator by restoring `ClientMemories.tsx` from `f0330667`
+  and re-running the test file (1 failed / 6 passed), then restoring the worktree byte-identical.
+  T3/T4 then passed after removing the nested `PageHeader` and the `customerName` prop.
 - 2026-09-24 — T5 passed: `npm run test` reported **86 files / 715 tests passed**; `npx tsc -b`
   and `npm run build-storybook` both exited 0. Existing act/navigation and Storybook chunk-size
   warnings remained non-failing.
 - 2026-09-24 — Implementation commits: `a5354df5` (`fix(web): use the Button primitive in the
   Dialog story fixture`) and `5ccc12b8` (`refactor(web): drop the page-level PageHeader from the
   ClientMemories region`).
+- 2026-09-24 — Orchestrator-side verification: diff read line by line; `cd web && npm run test`
+  re-run as the independent spot check → **86 files / 715 tests passed**; `npx tsc -b` exit 0.
+  Source-only authored change is **90 lines** (`git diff --numstat` excluding this record), far
+  under the ~400 budget.
+- 2026-09-24 — RDD gate read without changing it: mode `on` (global). `gentle-ai review assess`
+  over the committed slice (`--base-ref f0330667 --committed-only`) reports risk `medium`,
+  `review_due: false`, `review_due_reason: under_budget` — no native review is due for this
+  candidate.
+- 2026-09-24 — T7 record hygiene applied to `odd/tasks/panel-visual-foundation.md`: added the
+  slice 3 visual-check subsection, reconciled the false `## Open items` "Slice 2 PR boundary" entry
+  against the four MERGED PRs, corrected the `ClientMemories.tsx` path to
+  `web/src/components/domain/ClientMemories.tsx`, and marked the `panel-nits` follow-up bullet as
+  N1+N2 consumed with N3 split out.
+- 2026-09-24 — **T6 remains open**: the visual check needs the owner in a browser at 1366×768.
 
 ## Open items
 

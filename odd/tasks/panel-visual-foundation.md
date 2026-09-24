@@ -612,10 +612,11 @@ split needed**.
 - [x] **OpenSpec delta** — `DS-DOC-1`, `DS-TKN-3`, and stale fixed-count `DS-STORY-1`
   are amended under `openspec/changes/panel-visual-foundation/`.
 - [ ] **Dark mode** — remains deferred; not part of this unit.
-- [ ] **Slice 2 PR boundary** — 612 authored lines exceeds the ~400-line review budget.
-  Pending the owner's choice: split slice 2 into two chained PRs (2a = icon foundation,
-  2b = the 30-glyph migration) or merge it as one PR under a maintainer-approved
-  `size:exception`. No PR has been opened; nothing is pushed.
+- [x] **Slice 2 PR boundary** — resolved 2026-09-24: the owner chose chained PRs over a
+  `size:exception` and the whole unit shipped. Verified this session against
+  `origin/main` — slice 1 (#336 → `e16b3ff8`), slice 2a (#337 → `b5bb040f`), slice 2b
+  (#338 → `8492268e`) and slice 3 (#340 → `f0330667`) all report `MERGED`. Nothing is
+  pending and nothing is unpushed.
 
 ## Visual check results
 
@@ -653,6 +654,17 @@ The owner ran the manual visual check against the three declared deltas.
   leave it to `panel-nits`. The icon half of that item — the `✕` close glyph — is
   already done in slice 2.
 
+### Slice 3 (2026-09-24, Storybook :6006)
+
+The owner ran the manual visual check on the Radix `Tabs` migration at `f0330667`.
+**PASSED with no visual changes**, consistent with the diff touching no CSS: the
+migration keeps `.tabs`, `.tabs [role="tablist"]`, `.tabs__tab`,
+`.tabs__tab[aria-selected="true"]` and `.tabs__panel`, and Radix renders
+`aria-selected` itself. Stories checked: `primitives-tabs--default`,
+`primitives-tabs--controlled`, `primitives-tabs--docs`,
+`pages-conversationslist--default`. Full evidence in Engram
+`odd/panel-visual-foundation/visual-check-slice-3` (#4942).
+
 ## Follow-up units (not this unit)
 
 - **`panel-shell`** — remove the broken focus mode (`PanelShell.tsx` implements it
@@ -661,15 +673,20 @@ The owner ran the manual visual check against the three declared deltas.
   redesign the sidebar header against the ChatGPT reference — collapse control +
   a search (lupa) + a smaller Lumat logo **inside** the sidebar header, instead of
   the collapse button sitting outside it today.
-- **`panel-nits`** — *(partly consumed by slice 2: the `Dialog.tsx` text-glyph `✕`
-  close control is done — it is the `Icon` primitive with Lucide `X` at 20px.)* Still
-  open: `Dialog.stories.tsx:32-45` uses raw `<button>` elements for "Eliminar
-  registro"/"Cancelar"/"Eliminar" with **no `className`**, so they render with browser
-  defaults, plus inline `style` props at lines 36 **and** 39, violating the
-  tokenized-stylesheet boundary. **Confirmed by the owner's slice-2 visual check and
-  deliberately deferred here.** Also `ClientMemories.tsx:75-76` nests a
-  `PageHeader title="Memorias"` inside a `Card title="Memorias del cliente"`,
-  duplicating the heading and using a page component inside a region.
+- **`panel-nits`** — **N1 and N2 consumed** by the `panel-nits` unit on branch
+  `odd/panel-nits` (record: `odd/tasks/panel-nits.md`). **N1:** `Dialog.stories.tsx:32-45`
+  rendered three raw `<button>` elements for "Eliminar registro"/"Cancelar"/"Eliminar"
+  with **no `className`**, so they fell back to browser defaults, plus inline `style`
+  props at lines 36 **and** 39. Fixed: the fixture now uses the `Button` primitive
+  (`secondary` trigger, `secondary`/`primary` dialog actions) and two tokenized classes
+  (`.dialog__message`, `.dialog__actions`) added to `primitives.css`. **N2:**
+  `web/src/components/domain/ClientMemories.tsx:75-76` nested a
+  `PageHeader title="Memorias"` inside a `Card title="Memorias del cliente"`, duplicating
+  the label and putting a page-level `<h1>` inside a region. Fixed: the nested header is
+  gone and the `customerName` prop went with it — the page already owns the client
+  identity through `PageFrame`. The `Dialog.tsx` `✕` close glyph was already consumed by
+  slice 2. **N3 split out:** the static inline `style` props across production components
+  are now the separate `inline-style-boundary` follow-up unit, not part of this one.
 - **`table-interactivity`** — open a row and offer quick actions on `ClientesList`
   and `ClientFicha`. The owner acknowledges this needs backend CRUD endpoints that
   do not exist yet; treat it as a UI/UX change with its own proposal, not a
