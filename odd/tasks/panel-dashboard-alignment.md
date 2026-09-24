@@ -230,6 +230,13 @@ No native review is due for this unit; the assessed tier and reason are recorded
 first assessment invocation omitted `--base-ref` and reported `high` / `unassessable` with
 `changed_paths: 0`; that was the selector, not the change.
 
+## Delivery record
+
+- **PR #345** — `fix(web): align the dashboard with the design system and surface partial failures`,
+  branch `odd/panel-dashboard-alignment`, base `66cc868a`, label `type:bug`. 6 files, +307 −21.
+- CI `Tests` passed; GitGuardian passed. Mergeable at the time of opening.
+- No native review authority was burned: `review_due: false` (`under_budget`).
+
 ## Recovery
 
 Resume with `mem_context`, then the project-scoped `mem_search` for `panel-dashboard-alignment`,
