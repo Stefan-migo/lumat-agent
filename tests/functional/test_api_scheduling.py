@@ -55,6 +55,32 @@ def test_operator_can_book_and_conflict_is_actionable(client, make_user):
     assert conflict.json()["detail"]["code"] == "appointment_conflict"
 
 
+def test_operator_cannot_book_with_an_invalid_timezone(client, make_user):
+    operator_id = make_user("oper", "oper-pass", role="operador")
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56912345679")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add(conversation)
+        session.flush()
+        case = Case(conversation_id=conversation.id, customer_id=customer.id, service="calefont")
+        session.add(case)
+        session.commit()
+        customer_id, case_id = customer.id, case.id
+
+    assert client.post("/panel/api/login", json={"username": "oper", "password": "oper-pass"}).status_code == 200
+    response = client.post(
+        "/panel/api/appointments",
+        json={"service": "calefont", "customer_id": customer_id, "case_id": case_id,
+              "technician_id": operator_id, "local_date": "2026-07-15", "local_time": "10:00",
+              "timezone": "Not/AZone", "duration_minutes": 60},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "invalid_timezone"
+
+
 def _agenda_rows(session):
     technician = User(username="tech", password_hash="unused")
     customer = Customer(phone_e164="+56911111111", name="Ana Customer")

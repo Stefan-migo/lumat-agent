@@ -60,6 +60,8 @@ def create_appointment(body: AppointmentBody, session: Session = Depends(get_db)
         raise HTTPException(status_code=409, detail={"code": "appointment_conflict", "message": str(exc)}) from exc
     except scheduling.Unavailable as exc:
         raise HTTPException(status_code=409, detail={"code": "technician_unavailable", "message": str(exc)}) from exc
+    except scheduling.InvalidTimezone as exc:
+        raise HTTPException(status_code=400, detail={"code": "invalid_timezone", "message": str(exc)}) from exc
     except (scheduling.NonexistentLocalTime, scheduling.AmbiguousLocalTime, ValueError) as exc:
         raise HTTPException(status_code=400, detail={"code": "invalid_local_time", "message": str(exc)}) from exc
     session.commit()
