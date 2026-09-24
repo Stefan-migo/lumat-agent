@@ -544,15 +544,41 @@ All commits remain below the 400-line review budget.
   2b = the 30-glyph migration) or merge it as one PR under a maintainer-approved
   `size:exception`. No PR has been opened; nothing is pushed.
 
-## Visual check result (2026-09-24, Storybook :6006)
+## Visual check results
+
+### Slice 1 (2026-09-24, Storybook :6006)
 
 The owner ran the manual visual check. **Passed:** pill buttons, card, design
-tokens, Inter on ClientesList. Every finding below is **pre-existing** — this
-unit's diff touches zero `.tsx` files, so none were introduced here. Full evidence
+tokens, Inter on ClientesList. Every finding below is **pre-existing** — slice 1's
+diff touches zero `.tsx` files, so none were introduced there. Full evidence
 in Engram `odd/panel-visual-foundation/visual-check-findings`.
 
-Findings that belong to **this unit (slice 2)**: the two text-glyph pseudo-icons
-now named in T7.
+Findings that belonged to this unit: the two text-glyph pseudo-icons, named in T7
+and replaced in slice 2.
+
+### Slice 2 (2026-09-24, Storybook :6006)
+
+The owner ran the manual visual check against the three declared deltas.
+
+- **D13 size normalization — PASSED.** The Dashboard's dense rows did not regress:
+  the 12→16px change on the visit time, the "Urgente" tag and the "Abrir" hints did
+  not become a density problem at the reference widths. The owner also reports the
+  Dashboard has **other, unrelated problems** that warrant their own redesign unit —
+  not this one. They were not enumerated, so nothing is recorded here as a finding.
+- **D14 Clients/Usuarios distinctness — PASSED.** The split glyphs read correctly.
+- **Icon weight across the shell — PASSED.** The sidebar and header glyphs at 20px
+  with stroke 2 do not read heavier or lighter than their neighbours.
+- **One finding, pre-existing and already parked.** In `primitives/Dialog` the owner
+  reported the action buttons still render as browser defaults instead of the Lumat
+  `Button` primitive. Verified on the source: `Dialog.tsx:35-70` renders **no**
+  action buttons at all — only the header, the close control and `{children}`; the
+  buttons are the caller's content. `Dialog.stories.tsx:32-45` renders three raw
+  `<button>` elements **with no `className`**, which is exactly why they fall back to
+  browser styling, plus inline `style` props at lines 36 **and** 39 (the earlier
+  record named only line 39). That is story-fixture sloppiness, **not** a defect of
+  the Dialog primitive, and it is the `panel-nits` item below. The owner chose to
+  leave it to `panel-nits`. The icon half of that item — the `✕` close glyph — is
+  already done in slice 2.
 
 ## Follow-up units (not this unit)
 
@@ -562,11 +588,14 @@ now named in T7.
   redesign the sidebar header against the ChatGPT reference — collapse control +
   a search (lupa) + a smaller Lumat logo **inside** the sidebar header, instead of
   the collapse button sitting outside it today.
-- **`panel-nits`** — `Dialog.tsx` renders its close control as a raw `<button>`
-  with the text glyph `✕`; `Dialog.stories.tsx:32–45` uses raw `<button>` elements
-  for "Eliminar registro"/"Cancelar"/"Eliminar" plus an inline `style={{…}}`
-  (line 39), violating the tokenized-stylesheet boundary; `ClientMemories.tsx:75–76`
-  nests a `PageHeader title="Memorias"` inside a `Card title="Memorias del cliente"`,
+- **`panel-nits`** — *(partly consumed by slice 2: the `Dialog.tsx` text-glyph `✕`
+  close control is done — it is the `Icon` primitive with Lucide `X` at 20px.)* Still
+  open: `Dialog.stories.tsx:32-45` uses raw `<button>` elements for "Eliminar
+  registro"/"Cancelar"/"Eliminar" with **no `className`**, so they render with browser
+  defaults, plus inline `style` props at lines 36 **and** 39, violating the
+  tokenized-stylesheet boundary. **Confirmed by the owner's slice-2 visual check and
+  deliberately deferred here.** Also `ClientMemories.tsx:75-76` nests a
+  `PageHeader title="Memorias"` inside a `Card title="Memorias del cliente"`,
   duplicating the heading and using a page component inside a region.
 - **`table-interactivity`** — open a row and offer quick actions on `ClientesList`
   and `ClientFicha`. The owner acknowledges this needs backend CRUD endpoints that
