@@ -143,6 +143,73 @@ def test_non_opted_in_turn_keeps_one_planner_call_and_one_execution(monkeypatch)
     assert len([call for call in calls if not call.get("stream")]) == 1
 
 
+@pytest.mark.parametrize("flipped_mode", ["conservative", "blocked"])
+def test_cost_mode_flip_stops_loop_before_second_planner(monkeypatch, flipped_mode):
+    calls = []
+    handler_calls = []
+    cost_calls = 0
+    plans = [
+        '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}',
+        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":true}',
+    ]
+
+    def thread_cost(_session, _thread_id):
+        nonlocal cost_calls
+        cost_calls += 1
+        return (0.0, "normal") if cost_calls == 1 else (100.0, flipped_mode)
+
+    monkeypatch.setattr("app.chat.assistant.graph.assemble_context_node", lambda _state: {"context": {"items": [], "meta": {}}})
+    monkeypatch.setattr("app.chat.assistant.nodes.internal_thread_cost_state", thread_cost)
+    monkeypatch.setattr("app.chat.assistant.nodes.daily_cost_state", lambda _session: (0.0, "normal"))
+    monkeypatch.setattr("app.chat.assistant.nodes.maybe_alert_owner", lambda *args, **kwargs: False)
+    monkeypatch.setattr("app.chat.assistant.nodes.internal_thread_spend", lambda *args: 0.0)
+    monkeypatch.setattr("app.chat.assistant.nodes.daily_spend", lambda *args: 0.0)
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda _session, tool_name, *_args, **_kwargs: handler_calls.append(tool_name)
+        or {"tool": tool_name, "status": "completed", "result": [{"evidence": "Ana"}]},
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    final = run_assistant(
+        thread_id=7,
+        user_id=1,
+        content="Find Ana",
+        run_id=f"run-cost-{flipped_mode}",
+        session=SimpleNamespace(),
+        on_token=lambda _token: None,
+    )
+
+    assert handler_calls == ["customers.search"]
+    assert len([call for call in calls if not call.get("stream")]) == 1
+    assert final["response"] == "Ana is a customer"
+    assert final["guardrails"]["decision"] == "loop_cost_stopped"
+
+
+def test_sessionless_normal_cost_mode_keeps_two_step_chain(monkeypatch):
+    calls = []
+    handler_calls = []
+    plans = [
+        '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}',
+        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":true}',
+    ]
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda _session, tool_name, *_args, **_kwargs: handler_calls.append(tool_name)
+        or {"tool": tool_name, "status": "completed", "result": [{"evidence": tool_name}]},
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    run_assistant(thread_id=7, user_id=1, content="Find Ana", run_id="run-normal", on_token=lambda _token: None)
+
+    assert handler_calls == ["customers.search", "memory.search"]
+    assert len([call for call in calls if not call.get("stream")]) == 2
+
+
 def test_step_two_write_plan_finishes_without_execution_or_approval():
     from app.chat.assistant.nodes import tool_loop_head
 

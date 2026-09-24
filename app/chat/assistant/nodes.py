@@ -411,25 +411,45 @@ def resolve_sdb_item(spec: dict, requested: str) -> dict:
     return {"status": "error", "error": "not-exist"}
 
 
+def _cost_snapshot(session: object, thread_id: int) -> dict[str, float | str]:
+    """Read the current cost state without emitting alerts or changing state."""
+    if session is None:
+        return {
+            "thread_percent": 0.0,
+            "thread_mode": "normal",
+            "daily_percent": 0.0,
+            "daily_mode": "normal",
+            "mode": "normal",
+        }
+    thread_percent, thread_mode = internal_thread_cost_state(session, thread_id)
+    day_percent, day_mode = daily_cost_state(session)
+    return {
+        "thread_percent": thread_percent,
+        "thread_mode": thread_mode,
+        "daily_percent": day_percent,
+        "daily_mode": day_mode,
+        "mode": combined_cost_mode(thread_mode, day_mode),
+    }
+
+
 def panel_cost_gate(state: AssistantState) -> AssistantState:
     """Choose the worst internal-thread/UTC-day mode before any paid LLM call."""
     session = state.get("session")
+    snapshot = _cost_snapshot(session, state["thread_id"])
     if session is None:
         return {"cost_mode": "normal", "cost_directive": ""}
 
-    thread_percent, thread_mode = internal_thread_cost_state(session, state["thread_id"])
-    day_percent, day_mode = daily_cost_state(session)
     today = datetime.now(timezone.utc).date().isoformat()
     maybe_alert_owner(
         session, scope="conversation", entity_id=str(state["thread_id"]),
-        percent=thread_percent,
+        percent=snapshot["thread_percent"],
         spend=internal_thread_spend(session, state["thread_id"]),
     )
     maybe_alert_owner(
-        session, scope="daily", entity_id=today, percent=day_percent,
+        session, scope="daily", entity_id=today, percent=snapshot["daily_percent"],
         spend=daily_spend(session),
     )
-    mode = combined_cost_mode(thread_mode, day_mode)
+    mode = snapshot["mode"]
     return {
         "cost_mode": mode,
         "cost_directive": COST_DIRECTIVE if mode == "conservative" else "",
@@ -438,8 +458,8 @@ def panel_cost_gate(state: AssistantState) -> AssistantState:
         "guardrails": {
             "cost_allowed": mode != "blocked",
             "cost_mode": mode,
-            "thread_percent": thread_percent,
-            "daily_percent": day_percent,
+            "thread_percent": snapshot["thread_percent"],
+            "daily_percent": snapshot["daily_percent"],
         },
     }
 
@@ -605,8 +625,19 @@ def tool_loop_head(state: AssistantState) -> AssistantState:
     steps = state.get("tool_steps", 0)
     if steps >= MAX_ASSISTANT_TOOL_STEPS:
         return {"cap_reached": True, "status": "completed"}
-    if state.get("cost_mode", "normal") != "normal":
-        return {"status": "completed"}
+    cost = _cost_snapshot(state.get("session"), state["thread_id"])
+    if cost["mode"] != "normal":
+        return {
+            "cost_mode": cost["mode"],
+            "cost_directive": COST_DIRECTIVE if cost["mode"] == "conservative" else "",
+            "guardrails": {
+                **state.get("guardrails", {}),
+                "cost_allowed": cost["mode"] != "blocked",
+                "cost_mode": cost["mode"],
+                "decision": "loop_cost_stopped",
+            },
+            "status": "completed",
+        }
     if plan.get("kind") == "tool" and plan.get("tool") and steps >= 1:
         try:
             read_only = get_tool(plan["tool"]).read_only
