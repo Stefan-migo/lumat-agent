@@ -27,11 +27,22 @@ missing.
   enforces availability when at least one block exists (`scheduling.py:81-83`), the enforcement half
   of the engine is dormant. That is slice 2's reason to exist.
 
-**Bug found while scoping, and in scope here:** `create_appointment()` catches
-`UnlinkedAppointment`, `AppointmentConflict`, `Unavailable` and `ValueError`
-(`appointments.py:57-64`) but **not `InvalidTimezone`**, which `local_interval()` can raise
-(`scheduling.py:45-55`). Listing the agenda maps it (`appointments.py:37-40`); create does not. So a
-bad timezone on create is an unhandled 500 today — and the new form will be sending a timezone.
+**Corrected while reviewing the first implementation — the original claim in this record was wrong.**
+This record first stated that a bad timezone on create was an unhandled 500. It is not, and it never
+was: every scheduling exception subclasses `ValueError` (`app/services/scheduling.py:17,21,25,29,33,37,41`),
+so the pre-existing `except (..., ValueError)` at `appointments.py:63` already caught
+`InvalidTimezone` and returned `400 invalid_local_time`.
+
+What is actually true is an **inconsistency between sibling routes**: listing the agenda maps a bad
+timezone to `400 invalid_timezone` (`appointments.py:37-40`), while create returned
+`400 invalid_local_time` for the same failure. This slice aligns create with the code the list route
+already publishes. The change is two lines and cannot alter any other path, because the new
+`except` clause is more specific and therefore only intercepts `InvalidTimezone`. No consumer
+regresses: the only client is this panel, which could not create appointments at all before this
+unit.
+
+The test that came out of the original claim is worth keeping — it pins the existing behaviour of a
+bad timezone on create, which nothing covered before.
 
 ## Why this is cheap
 
@@ -82,7 +93,8 @@ bad timezone on create is an unhandled 500 today — and the new form will be se
 - Files: `odd/tasks/agenda-booking.md`, `app/panel/api/routes/appointments.py`,
   `tests/functional/test_api_scheduling.py`, `web/src/api.ts`, `web/src/types.ts`,
   `web/src/components/shared/agendaTime.ts`, `web/src/components/shared/agendaTime.test.ts`,
-  `web/src/components/pages/AgendaPage.tsx`, `web/src/components/pages/AgendaPage.test.tsx`.
+  `web/src/components/pages/AgendaPage.tsx`, `web/src/components/pages/AgendaPage.test.tsx`,
+  `uv.lock` (D7 only — the stale project version, nothing else).
 
 Any file outside this list needs a scope update here first.
 
@@ -124,6 +136,17 @@ Any file outside this list needs a scope update here first.
 - **D5 — `409` is a first-class outcome, not an error.** The form must distinguish
   `appointment_conflict` / `technician_unavailable` (409) from `invalid_local_time` (400) and from a
   generic failure, because the operator's next action differs: pick another time versus fix the input.
+- **D6 — Artifacts are English; operator-facing UI copy is Spanish.** The distinction matters and the
+  first implementation got it wrong (it shipped English labels inside a Spanish panel). Code,
+  identifiers, comments, tests and this record are English. **Copy the operator reads in the panel is
+  Spanish (`es-CL`), consistent with the rest of `AgendaPage`** — `'Reintentar'`, `'Cancelar visita'`,
+  `'Confirmar cancelación'`, `'Próximas'`, `'Registro de agenda'` are the established strings
+  (`AgendaPage.tsx`, asserted in `AgendaPage.test.tsx`). `openspec/config.yaml:14` says client-facing
+  documentation is Spanish; the panel is the operator's interface and is already Spanish throughout.
+- **D7 — `uv.lock` is regenerated as its own commit.** It was stale at the base commit (the lock
+  pinned project version `2026.9.2` while `pyproject.toml` was `2026.9.5`), and `uv sync` corrects
+  it, so it cannot be left dirty in a reviewable tree. It ships as a separate `chore(deps)` work unit
+  and is added to the authorized scope for that reason only.
 
 ## Tasks
 
@@ -138,6 +161,10 @@ Any file outside this list needs a scope update here first.
 - [ ] **T5 — RED/GREEN (UI).** Create dialog in `AgendaPage` with the outcome handling of D5 and the
   refetch of D3. Vitest first.
 - [ ] **T6 — Evidence.** Required checks run; results recorded below.
+- [ ] **T7 — Correction pass (found in review).** The first implementation shipped English operator
+  copy inside the Spanish panel (D6). Translate every string the operator reads in the create flow to
+  Spanish (`es-CL`), keep the test queries in sync, and confirm no English label remains in the new
+  flow. Also commit the `uv.lock` correction as its own `chore(deps)` work unit (D7).
 
 ## Acceptance criteria
 
@@ -152,6 +179,8 @@ Any file outside this list needs a scope update here first.
    mounted with props and when mounted bare.
 6. `cd web && npm run build` passes (the only type check available).
 7. Only the files in Authorized scope change.
+8. Every string the operator reads in the create flow is Spanish and reads like the rest of the
+   panel; no English label remains (D6).
 
 ## Checks
 
