@@ -33,7 +33,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = { render: () => <KbListView /> };
-export const Processing: Story = { render: () => <KbList data={{ docs }} /> };
+// Processing is only observable during an in-flight upload; the API page test covers that transient state.
 export const Error: Story = { render: () => <KbListView state="error" /> };
 export const DisableConfirmation: Story = {
   render: () => <KbListView />,
