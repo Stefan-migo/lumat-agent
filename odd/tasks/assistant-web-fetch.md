@@ -3,7 +3,7 @@
 **Branch**: `odd/assistant-web-fetch`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-web-fetch`
 **Base**: `4b31796c` (= `main` at branch time)
-**Status**: slice 1 in progress — T1 done (SSRF policy), T2/T3 next
+**Status**: slices 1 and 2 complete (T1–T3, 69 tests green); T4–T8 next
 **Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/session.md`
 (decisions 4 and 6, risk row *local extractor reintroduces an SSRF surface*); Engram #4890, #4894, #4897.
 
@@ -77,12 +77,17 @@ The extractor is local, per decision 4 of the source session.
 9. Failure is explicit: every rejection raises the reader's failure type and reaches the turn as
    `status="error"`. An empty result is never faked.
 
-**D6 — The residual DNS-rebinding window is a recorded limitation, not a silent one.**
+**D6 — The DNS-rebinding window stays open, deliberately and on the record.**
 
-Validating the resolved address and then letting the HTTP client resolve again leaves a TOCTOU window.
-T2 must evaluate closing it (connect to the validated address, or a validating network backend) and
-either implement it or record why not, with the residual window stated in this record. It is never
-silently ignored.
+Between our resolution and the HTTP client's own, the name can answer differently (classic rebinding).
+Closing it means connecting to the validated address instead of the name. httpx exposes no resolver or
+peer-validation hook, so that requires building on `httpcore` internals — an httpx implementation
+detail — for a narrow window.
+
+**Evaluated in T2 and accepted.** What the policy does bound: only `http`/`https`, only default ports,
+no credentials, **every redirect hop revalidated**, body byte-capped, timeouts, text-only. What it does
+**not** stop: a name that answers public first and private second, reaching a private service on port
+80/443. Follow-up candidate: pin the connection (a validating network backend) if the surface widens.
 
 ## Contract
 
@@ -134,12 +139,26 @@ silently ignored.
     `224.0.0.1` (multicast) reports `is_global=True`, and `64:ff9b::7f00:1` (NAT64-encoded
     `127.0.0.1`) reports it too. The policy is therefore `not is_global or is_multicast`, with NAT64
     addresses unwrapped first. Both bypasses are pinned by tests.
-- [ ] **T2 — Bounded fetch, RED + GREEN.** Happy path via `respx`; manual redirects capped and
+- [x] **T2 — Bounded fetch, RED + GREEN.** Happy path via `respx`; manual redirects capped and
   revalidated per hop; byte cap enforced while reading; timeouts; content-type allowlist; every failure
-  explicit. D6 evaluated here and recorded either way.
-- [ ] **T3 — Extraction and the evidence bound, RED + GREEN.** `<script>`/`<style>` bodies suppressed;
-  title captured; whitespace collapsed; serialized output bounded to fit `_TOOL_EVIDENCE_LIMIT` with a
-  test at the boundary.
+  explicit. D6 evaluated and recorded above. **Done.**
+  - RED was import-level for the new symbols, then **genuine behavioural RED**: 13 tests failed on a
+    real defect — `httpx.Client.send(..., stream=True)` returns a response that is not a context
+    manager in this version. Switched to `Client.stream(...)`, which also lets `follow_redirects=False`
+    be forced **per request** rather than trusted from an injected client.
+  - **Mutation check (the tests must bite).** Relaxing per-hop revalidation made
+    `test_fetch_refuses_a_redirect_to_a_private_address_without_requesting_it` and
+    `..._to_a_non_http_scheme` fail; disabling the byte cap made `..._stops_reading_at_the_byte_cap`
+    fail. Exactly 3 failures, exactly the right 3. Source restored byte-identical (diff-verified).
+- [x] **T3 — Extraction and the evidence bound, RED + GREEN.** `<script>`/`<style>`/`<noscript>`/
+  `<template>` bodies suppressed; title captured; whitespace collapsed; serialized output bounded to fit
+  `_TOOL_EVIDENCE_LIMIT`. **Done.**
+  - **Behavioural RED found a real quality defect**: adjacent `<p>` elements glued their words together
+    (`$90.000segunda linea`) once whitespace was collapsed. Fixed with block-level separators, and
+    pinned in **both** directions — block tags separate, inline tags must not (`foo<b>bar</b>baz` stays
+    one word).
+  - Worst case measured, not asserted by hand: a 5,000-character title and a 50,000-character body
+    produce a serialized result under `_TOOL_EVIDENCE_LIMIT`.
 - [ ] **T4 — Registry and whitelist, RED + GREEN.** Args model and `ToolDefinition`; whitelist 22 → 23;
   the tool-count, capabilities and known-tool assertions updated to the new contract, never weakened.
 - [ ] **T5 — Evidence contract.** Persona allowance + responder instruction, as narrow as the existing
@@ -232,8 +251,16 @@ requires.
 - 2026-09-24 — **T1 done**, slice 1: `fetch.py` SSRF policy + `tests/unit/test_assistant_web_fetch.py`.
   47 passed. Found and closed two real bypasses in the predicate (`is_global` on multicast and on
   NAT64-encoded loopback) — see the T1 entry.
+- 2026-09-24 — **T2 + T3 done**, slice 2: bounded fetch, revalidated redirects, byte/timeout/content
+  bounds, local extraction and the evidence bound. 69 passed in the new file; 153 passed across the
+  assistant, config, registry, planner and harness files. Committed as **one** work unit — neither half
+  is reachable alone (the fetch has no caller until `read_page`), so the commit's concern is "the reader
+  returns bounded citable evidence", not two separate changes. Recorded because it deviates from the
+  task-by-task commit granularity used so far.
 
 ## Next step
 
-T2 — the bounded fetch (manual revalidated redirects, byte cap, timeouts, content-type allowlist,
-explicit failures), including the D6 decision on the DNS-rebinding window.
+Slice 1 is deliverable now: push `odd/assistant-web-fetch` at its T1 commit and open PR #1 against
+`main` — pending the owner's push/PR authorization. Slice 2 is committed locally and follows after #1
+merges (stacked-to-main). Then T4–T8: registry, whitelist 22 → 23, persona/prompt, spec, harness,
+regression and the payload measurement.
