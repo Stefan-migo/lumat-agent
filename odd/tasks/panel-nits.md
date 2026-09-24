@@ -128,7 +128,7 @@ N3 follow-up unit name: `inline-style-boundary` (not opened here; record only).
   `ClientMemories.stories.test.tsx` call site. Re-run T3 → green.
 - [x] **T5 — Guards + typecheck + build.** `npm run test`, `npx tsc -b`,
   `npm run build-storybook` all green; record the real test count.
-- [ ] **T6 — Visual check** at 1366×768 with the 640/1024/1280 references for the Dialog story and
+- [x] **T6 — Visual check** at 1366×768 with the 640/1024/1280 references for the Dialog story and
   the client ficha memories region.
 - [x] **T7 — Record hygiene carried from the handoff** (see below).
 
@@ -205,6 +205,30 @@ Guard tests that must stay green: `tokens.test.ts`, `style-boundary.test.ts`,
   `web/src/components/domain/ClientMemories.tsx`, and marked the `panel-nits` follow-up bullet as
   N1+N2 consumed with N3 split out.
 - 2026-09-24 — **T6 remains open**: the visual check needs the owner in a browser at 1366×768.
+
+## Visual check results
+
+### `panel-nits` (2026-09-24, Storybook :6006, PR #342)
+
+The owner ran the manual visual check against the checklist and reports **PASSED with no findings**.
+Storybook was served from this worktree at `http://localhost:6006` (the stale main-worktree server on
+the same port was stopped first, so the check could not have been reading merged-code output).
+
+The checklist covered, in three blocks:
+
+1. `primitives-dialog--confirmacion` — the three controls render as the `Button` primitive and match
+   `primitives-button--secondary` / `--primary`; correct variants; right-aligned single row; paragraph
+   spacing preserved; keyboard focus visible; `#storybook-root [style]` count is 0.
+2. `pages-clientmemories--default` and `pages-clientficha--default` — a single region heading
+   (`Memorias del cliente`), the card shortened by exactly the removed duplicate, and `h1` count on
+   the ficha equal to 1 (was 2).
+3. Regression sweep — `pages-agendapage--cancel-confirmation` and
+   `pages-automationruledetailpage--confirmation` (production dialogs on `.dialog__body`) unchanged,
+   and the two docs pages render with no console errors.
+
+No finding was raised, so nothing needed a fix. The exact set of reference widths the owner
+exercised is the owner's report and is not instrumented here; 1366×768 plus the 640/1024/1280
+references were what the checklist asked for.
 
 ## Open items
 
