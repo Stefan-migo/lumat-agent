@@ -367,6 +367,40 @@ Two defects found by the parent's readback of the first T2 attempt, both fixed b
   map is valid for this area. Refresh once at session close (`graphify <path> --update` **and**
   `graphify cluster-only <path>`).
 
+## Delivery — chained PRs, `stacked-to-main` (owner-decided 2026-09-24)
+
+The running authored count crossed the review budget (~400 changed lines) while T4/T6/T7 were still
+outstanding, so the delivery decision was taken **before** the next commit, as the rule requires. Owner
+chose **Stacked PRs to main**: each slice lands on `main` in order, independently reviewable.
+
+```
+main ──●────────────●────────────▶
+       │            │
+       └ PR #1 ─────┘  (slice 1: the bounded loop)
+                    │
+                    └ PR #2 ──▶  (slice 2: observable + proven)
+                        📍 next
+```
+
+| Slice | PR | Tasks | Content | Status |
+|---|---|---|---|---|
+| 1 | #1 → `main` | T1, T2, T3 | The loop exists and is safe: baseline measurement, planner opt-in, accumulating state, bounded back-edge, cap, write refusal, per-iteration cost gate | ready |
+| 2 | #2 → `main` after #1 | T4, T6, T7, T8, T9 | The loop is observable and proven: user-visible write refusal, persisted `cap_reached`/`tool_steps`, end-to-end chained turn, chaining-cost delta | not started |
+
+**Slice 1 review budget** (additions + deletions, unit record excluded):
+
+| Area | Lines |
+|---|---|
+| `app/chat/assistant/nodes.py` | 80 |
+| `tests/unit/test_assistant_tool_loop.py` | 154 |
+| `app/chat/assistant/graph.py` | 23 |
+| `agent/prompts/assistant_plan.md` | 8 |
+| `app/chat/assistant/state.py` | 4 |
+| **Total** | **~269** entering T3, **381** with T3 included |
+
+**Out of scope for both slices**: U2, U3, deep research, any new tool, tool-catalog cost hygiene, lazy
+tool loading.
+
 ## Next step
 
 T4 (narrowed) — the looped-write refusal is enforced and tested, but the reason never reaches the user:
