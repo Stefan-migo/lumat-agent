@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgendaPage } from './AgendaPage';
@@ -258,5 +260,11 @@ describe('AgendaPage', () => {
 
     await waitFor(() => expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({ customer_id: 10, case_id: 20, technician_id: 30, timezone: 'America/Santiago', local_time: '10:00:00' })));
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
+  });
+
+  it('keeps the agenda calendar CSS contract aligned with the design system', () => {
+    const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+    expect(css).not.toMatch(/\.agenda-calendar__weekday\s*\{[^}]*text-transform:\s*uppercase/s);
+    expect(css).toMatch(/\.agenda-calendar\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
   });
 });
