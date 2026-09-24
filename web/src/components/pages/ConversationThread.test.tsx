@@ -141,6 +141,26 @@ it('does not hide the conversation inspector at the 64rem breakpoint', () => {
   expect(mediaBlock).not.toMatch(/\.ai-agent-grammar__inspector\s*\{\s*display:\s*none;/);
 });
 
+describe('conversation inspector layout CSS contract', () => {
+  const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+
+  it('gives the inspector column a bounded responsive width', () => {
+    expect(css).toMatch(/\.conversation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)\s+minmax\(18rem, 24rem\);/);
+  });
+
+  it('allows inspector detail rows to wrap', () => {
+    expect(css).toMatch(/\.ai-agent-grammar__detail\s*\{[^}]*flex-wrap:\s*wrap;/);
+  });
+
+  it('breaks long inspector detail values anywhere', () => {
+    expect(css).toMatch(/\.ai-agent-grammar__detail dd\s*\{[^}]*overflow-wrap:\s*anywhere;/);
+  });
+
+  it('prevents the inspector from scrolling horizontally', () => {
+    expect(css).toMatch(/\.conversation-workspace \.ai-agent-grammar__inspector\s*\{[^}]*overflow-x:\s*hidden;/);
+  });
+});
+
   it('renders the conversation inspector beside the thread', () => {
   render(<ConversationThread data={{ ...thread, conversation: {
     ...thread.conversation,
