@@ -3,8 +3,9 @@
 **Branch**: `odd/assistant-web-fetch`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-web-fetch`
 **Base**: `4b31796c` (= `main` at branch time)
-**Status**: slices 1 and 2 shipped as PR #348 and PR #349, **both merged**. Slice 3 in progress on
-`odd/assistant-web-fetch-slice3`: reader is 78 tests green, T4 done, T5–T8 next
+**Status**: slices 1 and 2 shipped as PR #348 and PR #349, **both merged**. Slice 3 implementation is
+**complete** on `odd/assistant-web-fetch-slice3` — T4–T8 done, full suite 1,440 green — but the branch is
+**not pushed** and its PR is not open yet
 **Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/session.md`
 (decisions 4 and 6, risk row *local extractor reintroduces an SSRF surface*); Engram #4890, #4894, #4897.
 
@@ -178,12 +179,56 @@ no credentials, **every redirect hop revalidated**, body byte-capped, timeouts, 
     bounded by `URL_LIMIT`.
   - Verified: 23 registry entries == 23 whitelist entries; assistant/config/registry/planner 124 passed;
     harness + chat 84 passed; full suite 1437 collected, exit 0.
-- [ ] **T5 — Evidence contract.** Persona allowance + responder instruction, as narrow as the existing
-  web-search one. The phrases `tests/unit/test_assistant_config.py` pins MUST survive.
-- [ ] **T6 — Spec.** AT-13 for the reader, matching the file's existing requirement shape.
-- [ ] **T7 — Harness.** The chained turn, and the blocked-URL turn.
-- [ ] **T8 — Regression and measurement.** Full suite green; the serialized-payload size measured and
-  recorded against the 4,000 budget.
+- [x] **T5 — Evidence contract.** Persona allowance + responder instruction, as narrow as the existing
+  web-search one. **Done** (`b42c604f`). RED was a config-contract test over both artifacts; the six
+  phrases `tests/unit/test_assistant_config.py` pins all still pass. The reader adds one duty search
+  does not have: the citation is the URL the evidence reports **after redirects**, not the requested one.
+- [x] **T6 — Spec.** AT-13 with five individually refutable scenarios. **Done** (`41ad1384`).
+- [x] **T7 — Harness.** The chained turn and the blocked-URL turn. **Done** (`0764cb26`).
+  - The chain test asserts `tool_loop_head` takes the back-edge after the search and finishes after the
+    fetch, and that the responder receives both results carrying the page text and its URL.
+  - The refusal test runs the **real** `execute_tool` and the real policy: a loopback address is refused
+    while resolving, before any client is built, so the turn reaches a degraded state holding the
+    reader's reason instead of an empty result. No mock of the thing under test, and no network.
+  - **Mutation check**: disabling the back-edge in `tool_loop_head` failed the chain assertion, and
+    renaming the policy's reason string failed the refusal assertion. Exactly those two failed, and
+    both sources were restored byte-identical (`git diff` empty).
+- [x] **T8 — Regression and measurement.** Full suite **1,440 collected, exit 0**. **Done**, with a real
+  defect found and fixed — see *Measurement* below.
+
+## Measurement — T8 (the serialized payload against the 4,000 budget)
+
+Measured through `_bounded_evidence`, the function `read_page` returns from, with every cap saturated
+(`url` 500, `title` 200, raw `text` 3,000) and serialized with `ensure_ascii=False`, exactly as
+`_render_tool_evidence` does:
+
+| Text | Before | After (`a2c68ade`) | Text kept |
+|---|---|---|---|
+| Plain | 3,736 | **3,600** | 2,864 / 3,000 |
+| Quote-heavy (15%) | **4,186 — over** | **3,600** | 2,414 / 3,000 |
+| All quotes | **6,736 — over** | **3,600** | 1,432 / 3,000 |
+| All backslashes | **6,736 — over** | **3,600** | 1,432 / 3,000 |
+| All control characters | **18,060 — over** | **3,598** | 477 / 3,000 |
+
+**The defect this exposed.** `MAX_TEXT` bounded the raw string, but the evidence travels as JSON, so
+the cap that mattered was on the *serialized* payload. Three of these cases did not fit: the renderer's
+truncation was the real limit, which is not what D3 means by the reader owning its bound. The existing
+boundary test (`test_reader_result_fits_the_tool_evidence_budget_at_its_worst_case`) fed a 50,000-char
+body of the letter `a`, which never escapes, so it passed while the guarantee was false.
+
+Reachability was checked rather than assumed. Quotes survive extraction and are ordinary page content.
+The control-character case arrives through a `text/plain` body, which is decoded and collapsed with no
+parser to normalise it; the same characters written as HTML entities (`&#0;`) reach the text as U+FFFD
+instead, so they are not the extreme. The fitting prefix is **bisected** rather than cut
+proportionally, because a cut derived from the overshoot empties the text on an all-control page.
+
+**Owner decision.** Shown the measurement, the owner chose to fix it inside slice 3 rather than record
+it as an accepted limitation.
+
+**Live fetch.** `read_page("https://example.com/")` was run once against the real network: url
+`https://example.com/`, title `Example Domain`, 127 characters of text, serialized **197 / 4,000**. It
+is recorded as a separate evidence row and is **not** part of the suite — no test reaches the network,
+as the Constraints require.
 
 ## Acceptance criteria
 
@@ -328,13 +373,24 @@ requires.
   nothing was rewritten and nothing was weakened. RDD assessment over the commit: risk **medium**,
   `review_due: false` (`under_budget`, 6 paths / 82 lines since `5320dbb8`), so the reviewed boundary
   stays at `main` until a later commit reaches the budget.
+- 2026-09-24 — **T5, T6 and T7 done**: the evidence allowance in both artifacts (`b42c604f`), AT-13 in
+  the spec (`41ad1384`), and the two harness tests with their mutation check (`0764cb26`).
+- 2026-09-24 — **T8 done, and it found a real defect.** The full suite is green (1,440 collected, exit
+  0), but measuring the payload against the budget showed the reader bounded raw text while the
+  evidence ships as JSON: quote-heavy pages serialized to 4,186 and a `text/plain` control-character
+  body to 18,060, both over the 4,000 budget, so the renderer's truncation was the real limit. The
+  owner chose to fix it inside slice 3. Fixed in `a2c68ade` — the payload is measured serialized and
+  the text bisected to the longest prefix that fits — with two boundary tests that fail on the old
+  code. Full numbers in *Measurement — T8*.
 
 ## Next step
 
-T5 — extend the web-evidence allowance in `agent/personas/assistant.md` and
-`agent/prompts/assistant_respond.md` to fetched page text plus the citation duty, as narrow as the
-existing web-search allowance, without breaking the phrases `tests/unit/test_assistant_config.py`
-pins. Then T6 (spec AT-13), T7 (harness), T8 (regression and the payload measurement).
+Slice 3's implementation is complete: T4–T8 done, the full suite green, no source change outstanding.
+The branch is **not pushed** and no PR is open.
 
-Slice 3 is **not pushed** yet; the branch exists only locally. Under `stacked-to-main` its PR opens
-now that #349 is merged.
+Under `stacked-to-main` the slice-3 PR opens now that #349 is merged; the next action is the owner's
+decision to push the branch and open it. The review boundary is still `main` (`5320dbb8`) — RDD
+reported medium / `under_budget` after T7, so the slice-3 PR is what carries this work to review.
+
+Before the PR: refresh the Engram mirror of this record (`odd/assistant-web-fetch/tasks`, observation
+#4970), which was last written before slice 2 merged.
