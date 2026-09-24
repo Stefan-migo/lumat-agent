@@ -63,3 +63,18 @@ tokenized primitives retain the visual contract.
 - WHEN it is styled
 - THEN the visual output resolves through the panel tokenized stylesheet, not
   through Radix defaults
+
+### Requirement: DS-SHELL-6 — Coherent Tokenized Chrome
+
+Shell icons MUST be semantically distinct and use the shared `Icon` primitive
+with the approved Lucide outline family. PanelShell, PageHeader, and login frame
+styles MUST consume existing tokens or `--corp-*` aliases, remove the phantom
+auth class, and preserve the PWA boundary.
+
+#### Scenario: Source review
+
+- GIVEN the shell and login diff
+- WHEN dependencies, classes, and styles are inspected
+- THEN the approved Lucide icon dependency may appear through the shared `Icon`
+  primitive, while unapproved icon libraries, `card--auth`, hard-coded color,
+  and PWA architecture changes do not appear.

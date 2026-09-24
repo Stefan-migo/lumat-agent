@@ -179,19 +179,23 @@ describe('design tokens — B9 foundation additions (DS-TKN-3..7)', () => {
     expect(cssVars.get('--surface-subtle')).toBe('var(--table-head-bg)');
     expect(cssVars.get('--elevation-raised')).toBe('var(--shadow-1)');
     expect(cssVars.get('--elevation-overlay')).toBe('var(--shadow-3)');
+    expect(cssVars.get('--icon-sm')).toBe('16px');
     expect(cssVars.get('--icon-md')).toBe('20px');
+    expect(cssVars.get('--icon-lg')).toBe('24px');
     expect(cssVars.get('--font-ui')).toBe('Inter, var(--font-sans)');
 
     const primitivesRaw = readFileSync(
       join(componentsRoot, 'components', 'primitives', 'primitives.css'),
       'utf8',
     );
-    expect(primitivesRaw).toContain('var(--radius-lg)');
-    expect(primitivesRaw).toContain('var(--radius-pill)');
-    expect(primitivesRaw).toContain('var(--surface-subtle)');
-    expect(primitivesRaw).toContain('var(--elevation-raised)');
-    expect(primitivesRaw).toContain('var(--icon-md)');
-    expect(primitivesRaw).toContain('var(--font-ui)');
+    expect(primitivesRaw).toMatch(/\.card\s*\{[^}]*border-radius:\s*var\(--radius-lg\);/s);
+    expect(primitivesRaw).toMatch(/\.btn\s*\{[^}]*border-radius:\s*var\(--radius-pill\);/s);
+    expect(primitivesRaw).toMatch(/\.badge--neutral\s*\{[^}]*background:\s*var\(--surface-subtle\);/s);
+    expect(primitivesRaw).toMatch(/\.card\s*\{[^}]*box-shadow:\s*var\(--elevation-raised\);/s);
+    expect(primitivesRaw).toMatch(/\.btn\s*>\s*svg,[^\{]*\.dialog__close\s*>\s*svg\s*\{[^}]*width:\s*var\(--icon-md\);/s);
+    expect(primitivesRaw).toMatch(/\.icon\.icon--sm\s*\{[^}]*width:\s*var\(--icon-sm\);/s);
+    expect(primitivesRaw).toMatch(/\.icon\.icon--lg\s*\{[^}]*width:\s*var\(--icon-lg\);/s);
+    expect(primitivesRaw).toMatch(/\.card__title\s*\{[^}]*font-family:\s*var\(--font-ui\);/s);
   });
 
   it('pins the approved Lumat brand roles from the definitive design system', () => {
