@@ -119,7 +119,8 @@ export function KbList({ data: controlledData, onRetry, onOpenDocument, fetchDoc
   const showWorkspace = (state === "ready" || state === "empty") && data;
   const submitUpload = () => {
     if (!file) return;
-    const extension = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+    const dot = file.name.lastIndexOf(".");
+    const extension = dot > 0 ? file.name.slice(dot).toLowerCase() : "";
     if (!ACCEPTED_EXTENSIONS.includes(extension)) {
       setFeedback({ tone: "danger", title: "Formato no compatible. Usa PDF, Markdown, TXT o CSV." });
       return;

@@ -250,6 +250,12 @@ describe("KbList API page", () => {
     fetchMock.mockRestore();
   });
 
+  it("derives the extension only from a real filename suffix", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/components/pages/KbList.tsx"), "utf8");
+    expect(source).toMatch(/const dot = file\.name\.lastIndexOf\("\."\);/);
+    expect(source).toMatch(/const extension = dot > 0 \? file\.name\.slice\(dot\)\.toLowerCase\(\) : "";/);
+  });
+
   it("shows the supported formats and size limit before upload", async () => {
     const user = userEvent.setup();
     render(<KbList data={{ docs }} />);
