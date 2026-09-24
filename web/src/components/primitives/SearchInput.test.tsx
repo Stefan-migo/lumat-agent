@@ -7,6 +7,11 @@ describe("SearchInput (T8.1)", () => {
     vi.useFakeTimers();
     const onSearch = vi.fn();
     render(<SearchInput onSearch={onSearch} />);
+    expect(screen.getByRole("searchbox").parentElement?.querySelector("svg")).toHaveClass(
+      "icon",
+      "icon--sm",
+    );
+    expect(screen.queryByText("⌕")).not.toBeInTheDocument();
     const input = screen.getByRole("searchbox", { name: "Buscar" });
     fireEvent.change(input, { target: { value: "fuga" } });
     expect(onSearch).not.toHaveBeenCalled();

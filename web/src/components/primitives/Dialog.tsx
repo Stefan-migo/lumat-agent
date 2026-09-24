@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { X } from "lucide-react";
 import "./primitives.css";
+import { Icon } from "./Icon";
 
 export interface DialogProps {
   open: boolean;
@@ -60,7 +62,7 @@ export function Dialog({ open, onClose, title, children, closeLabel = "Cerrar" }
             aria-label={closeLabel}
             onClick={onClose}
           >
-            ✕
+            <Icon icon={X} size="md" />
           </button>
         </div>
         <div className="dialog__body">{children}</div>

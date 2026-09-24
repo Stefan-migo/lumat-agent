@@ -9,7 +9,7 @@ const meta = {
     docs: {
       description: {
         component:
-          "Campo de búsqueda con debounce y glifo de lupa integrado (DS-STORY-2).\n\n" +
+          "Campo de búsqueda con debounce y un ícono de lupa integrado (DS-STORY-2).\n\n" +
           "**Cuándo usarlo** — búsqueda de clientes/facturas donde conviene retrasar las pulsaciones y llamar a `onSearch` tras una pausa.\n" +
           "**Cuándo no usarlo** — un campo cuyo valor se lee al enviar (para eso usa `Input`).\n\n" +
           "**Accesibilidad** — el control expone un `aria-label` (por defecto `Buscar`) porque no tiene etiqueta visible; pasá uno más específico, p. ej. `Buscar clientes`. El foco DEBE usar los tokens de diseño: `--focus-ring`, `--focus-ring-width`, `--focus-ring-offset` (2px sólido, 2px de offset) para cumplir WCAG 2.4.11 sobre `--bg` y `--surface`.",

@@ -182,6 +182,16 @@ security class.
   on `Icon` (keeps the scale hollow in the unit that exists to create it) and extending
   the scale down to 12/14 (contradicts the doc line and produces a 14→20 gap, because
   `--icon-md: 20px` is frozen).
+- **D14 — `Clients` and `Usuarios` stop sharing a glyph (slice 2, 2026-09-24).** The
+  pre-migration shell mapped both destinations to the same hand-rolled `UsersIcon`
+  (`NAVIGATION.clients` and `NAVIGATION.users`, base `e16b3ff8`). The migration maps
+  `clients` → `Users` and `users` → `UserRound`. This is a **declared** semantic delta
+  beyond D13's size normalization — and it is reversible. It is kept because
+  `DS-SHELL-6` requires shell icons to be "semantically distinct", so two destinations
+  rendering one glyph contradicts the requirement this unit adopted Lucide to satisfy.
+  It is **not** required by `PanelEntry.stories.test.tsx:230-237`, which never reads the
+  `Usuarios` entry; the original mapping already passed that test. If the owner prefers the
+  pre-migration identity, revert `users` to `Users` — no test depends on the distinction.
 
 ## Tasks
 
@@ -224,7 +234,7 @@ security class.
 - [x] **T6** — Add the chosen icon family; build the `Icon` primitive on the
   `--icon-*` size scale and `currentColor`, adding `--icon-sm`/`--icon-lg` with
   their new consumer.
-- [ ] **T7** — Replace the loose inline `<svg>` AND the text-glyph pseudo-icons with
+- [x] **T7** — Replace the loose inline `<svg>` AND the text-glyph pseudo-icons with
   the adopted family. The 2026-09-24 visual check found two: `SearchInput.tsx`
   renders `<span aria-hidden="true">⌕</span>` (a Unicode character used as the
   magnifier, which is why it renders tiny and shifts with the font) and
@@ -311,6 +321,76 @@ exit 0; `npm run build-storybook` → built.
 contract` (**43/15** on `Icon.test.tsx`, **0/1** on `primitives.css`);
 `6fab9afb` — `fix(stories): drop the inline style from the icon stories`
 (**3/10** on `Icon.stories.tsx`).
+
+### T7 implementation evidence
+
+- **Graph Check:** `graphify query "PanelShell Dashboard AgentChat Icon SearchInput Dialog icon migration tests"`
+  consulted `PanelShell.tsx`, `Dashboard.tsx`, `AgentChat.tsx`, `SearchInput.tsx`,
+  `Dialog.tsx`, their tests/stories, and the primitive icon boundary. Directed paths
+  consulted were `PanelShell.tsx → icon()` and `Dashboard.tsx → PanelShell.tsx → icon()`;
+  no directed path was available for `AgentChat.tsx → Icon.tsx` or
+  `SearchInput.tsx → Dialog.tsx`, so those relationships were verified directly.
+- **Lucide export verification:** the installed `lucide-react@1.48.0` exports every
+  selected glyph, including `PanelLeft`, `Users`, `MessageSquare`, `Bot`, `Zap`,
+  `BookOpen`, `Settings`, `Calendar`, `ChevronLeft`, `ChevronRight`, `LogOut`, `Bell`,
+  `Menu`, `X`, `Clock`, `Briefcase`, `AlertTriangle`, `Inbox`, `ArrowRight`,
+  `ChartColumn`, `Tag`, `Copy`, `RotateCcw`, `Check`, `Paperclip`, `Send`, and `Search`.
+- **Strict TDD RED:** `cd web && npm run test -- --run src/components/style-boundary.test.ts`
+  before migration failed with `1 failed | 1 passed`; the guard reported the three
+  source files containing inline SVG literals: `PanelShell.tsx`, `Dashboard.tsx`, and
+  `AgentChat.tsx`.
+- **Strict TDD GREEN:** the same guard passed after migration. Focused migration tests
+  passed with `5 passed` files / `55 passed` tests. The SearchInput and Dialog rendered
+  assertions verify `.icon.icon--sm`/`.icon.icon--md` and absence of `⌕`/`✕`.
+  The SearchInput and Dialog assertions were added after their source migration, so no
+  RED was observed for those two assertions; this process deviation is recorded rather
+  than reconstructed.
+- **D13 declared visual delta:** Dashboard's clock, alert, and arrow call sites moved
+  from 12px to `"sm"`; its metadata/day call sites moved from 14px to `"sm"`; its
+  operational, empty-state, chart, and tag call sites moved from 16px to `"sm"`; its
+  agent, card, and automation call sites moved from 18px/20px to `"md"`. AgentChat's
+  Copy/Retry/Check call sites use `"sm"`, and its Paperclip/Send call sites use `"md"`.
+  PanelShell remains at the Icon default `"md"`; SearchInput is `"sm"`; Dialog is
+  `"md"`.
+- **Ponytail findings:** `primitives.css:67-72` may now be dead because all migrated
+  target SVGs are `.icon` elements; the rule remains unchanged because
+  `tokens.test.ts:195` asserts it. `Dialog.stories.tsx` still contains the separate,
+  pre-existing inline-dimension finding recorded under `panel-nits`. No scope-level
+  finding was acted on.
+- **Raw SVG evidence:** one raw inline SVG remains under `web/src`, in
+  `web/src/stories/primitives/Avatar.stories.tsx`; the five T7 target files contain none.
+- **Accessible names:** `Enviar`, `Copiar mensaje`, `Reintentar` and `Cerrar` remained
+  unchanged and their tests pass. AppShell's collapse SVG still emits `stroke="currentColor"`.
+- **`PanelEntry.stories.test.tsx:230-237` — what it actually asserts.** It compares the
+  `innerHTML` of the **eight** drawer destinations it names (`Panel unificado`,
+  `Asistente Lumat`, `Conversaciones`, `Clientes`, `Agenda`, `Base de Conocimientos`,
+  `Automatizaciones`, `Configuración`) and requires eight distinct values. `Usuarios` is
+  **not** in that list. The pre-migration `NAVIGATION` map (`e16b3ff8`) assigned `UsersIcon`
+  to both `clients` and `users`, and still satisfied the invariant with 8/8 distinct glyphs
+  among the eight tested labels — verified by replaying the mapping. So the `UserRound`
+  choice was **not** required to preserve the test. See **D14** for why it was kept.
+
+### T7 correction pass (orchestrator read of the delivered migration)
+
+Read before accepting. The migration itself holds: every one of the 30 glyph definitions is
+gone, the sizes follow D13, accessible names are unchanged, the `style-boundary` guard is
+new and real (it was RED before the migration and is GREEN after), and `tsc`/Storybook stay
+clean. Three things needed correcting:
+
+- **Item 1 — a false justification, corrected.** The evidence section claimed `Usuarios`
+  uses `UserRound` "to preserve that invariant" (the eight-distinct-SVG assertion). That is
+  wrong: `Usuarios` is not among the eight labels the test reads, and the original mapping
+  already passed it. The claim is corrected above and the real reason is recorded as **D14**.
+- **Item 2 — assertion strength verified by mutation, not by the record.** The SearchInput
+  and Dialog assertions were added *after* their source migration, so no RED was observed for
+  them (already disclosed by the writer). Rather than accept prose, both were mutation-checked:
+  restoring `<span aria-hidden="true">⌕</span>` in `SearchInput.tsx` and the `✕` text glyph in
+  `Dialog.tsx` fails **2 of 5** tests across the two files. The assertions are real.
+- **Item 3 — a stray indentation on committed code.** `Dialog.tsx` carried one extra leading
+  space on the migrated `<Icon>` line. Fixed.
+
+**Correction evidence:** full `npm run test` → **85 files / 713 tests passed**;
+`npx tsc -b` → exit 0; guard mutation checks as described above.
 
 ### Slice 3 — composite migration to Radix (PR 3)
 
@@ -428,10 +508,25 @@ Actual authored changed lines (additions + deletions):
   lines** (43 additions, 15 deletions) across `Icon.test.tsx` and `primitives.css`.
 - `6fab9afb` — `fix(stories): drop the inline style from the icon stories` — **13
   lines** (3 additions, 10 deletions) on `Icon.stories.tsx`.
+- `03558c2b` — `refactor(shell): migrate the panel shell icons to Lucide` — **187 lines**
+  (57 additions, 130 deletions); PanelShell and the inline-SVG guard.
+- `769c1969` — `refactor(dashboard): migrate the dashboard icons to Lucide` — **91 lines**
+  (49 additions, 42 deletions); Dashboard mapping and normalized sizes.
+- `e1019cb2` — `refactor(chat): migrate the agent chat icons to Lucide` — **76 lines**
+  (6 additions, 70 deletions); AgentChat mapping and normalized sizes.
+- `4ce59302` — `refactor(primitives): replace the pseudo-icons with Lucide` — **18 lines**
+  (15 additions, 3 deletions); SearchInput/Dialog, rendered guards, and story copy.
 
-Slice 2 totals so far: **240 authored lines** across 7 commits, well inside the
-400-line review budget. Slice 2 is PR 2 and still needs T7 (the 30-glyph
-migration); its size will be counted on top of this when it lands.
+Slice 2 total: **612 authored lines** across 11 commits. **This exceeds the ~400-line
+PR budget**: every work-unit commit fits inside it, but the slice as a whole does not.
+The unit doc's delivery line said "PR 2 for icons" as a single PR; at 612 authored lines
+that PR is over budget and the delivery strategy for this unit is chained/stacked. The
+split (icon foundation as PR 2a, the 30-glyph migration as PR 2b) versus a
+maintainer-approved `size:exception` is a delivery decision and is recorded in **Open
+items**.
+
+T7 contributed **372 authored lines**; the foundation (T6/T7b plus its two correction
+passes) contributed **240**.
 
 All commits remain below the 400-line review budget.
 
@@ -444,16 +539,46 @@ All commits remain below the 400-line review budget.
 - [x] **OpenSpec delta** — `DS-DOC-1`, `DS-TKN-3`, and stale fixed-count `DS-STORY-1`
   are amended under `openspec/changes/panel-visual-foundation/`.
 - [ ] **Dark mode** — remains deferred; not part of this unit.
+- [ ] **Slice 2 PR boundary** — 612 authored lines exceeds the ~400-line review budget.
+  Pending the owner's choice: split slice 2 into two chained PRs (2a = icon foundation,
+  2b = the 30-glyph migration) or merge it as one PR under a maintainer-approved
+  `size:exception`. No PR has been opened; nothing is pushed.
 
-## Visual check result (2026-09-24, Storybook :6006)
+## Visual check results
+
+### Slice 1 (2026-09-24, Storybook :6006)
 
 The owner ran the manual visual check. **Passed:** pill buttons, card, design
-tokens, Inter on ClientesList. Every finding below is **pre-existing** — this
-unit's diff touches zero `.tsx` files, so none were introduced here. Full evidence
+tokens, Inter on ClientesList. Every finding below is **pre-existing** — slice 1's
+diff touches zero `.tsx` files, so none were introduced there. Full evidence
 in Engram `odd/panel-visual-foundation/visual-check-findings`.
 
-Findings that belong to **this unit (slice 2)**: the two text-glyph pseudo-icons
-now named in T7.
+Findings that belonged to this unit: the two text-glyph pseudo-icons, named in T7
+and replaced in slice 2.
+
+### Slice 2 (2026-09-24, Storybook :6006)
+
+The owner ran the manual visual check against the three declared deltas.
+
+- **D13 size normalization — PASSED.** The Dashboard's dense rows did not regress:
+  the 12→16px change on the visit time, the "Urgente" tag and the "Abrir" hints did
+  not become a density problem at the reference widths. The owner also reports the
+  Dashboard has **other, unrelated problems** that warrant their own redesign unit —
+  not this one. They were not enumerated, so nothing is recorded here as a finding.
+- **D14 Clients/Usuarios distinctness — PASSED.** The split glyphs read correctly.
+- **Icon weight across the shell — PASSED.** The sidebar and header glyphs at 20px
+  with stroke 2 do not read heavier or lighter than their neighbours.
+- **One finding, pre-existing and already parked.** In `primitives/Dialog` the owner
+  reported the action buttons still render as browser defaults instead of the Lumat
+  `Button` primitive. Verified on the source: `Dialog.tsx:35-70` renders **no**
+  action buttons at all — only the header, the close control and `{children}`; the
+  buttons are the caller's content. `Dialog.stories.tsx:32-45` renders three raw
+  `<button>` elements **with no `className`**, which is exactly why they fall back to
+  browser styling, plus inline `style` props at lines 36 **and** 39 (the earlier
+  record named only line 39). That is story-fixture sloppiness, **not** a defect of
+  the Dialog primitive, and it is the `panel-nits` item below. The owner chose to
+  leave it to `panel-nits`. The icon half of that item — the `✕` close glyph — is
+  already done in slice 2.
 
 ## Follow-up units (not this unit)
 
@@ -463,11 +588,14 @@ now named in T7.
   redesign the sidebar header against the ChatGPT reference — collapse control +
   a search (lupa) + a smaller Lumat logo **inside** the sidebar header, instead of
   the collapse button sitting outside it today.
-- **`panel-nits`** — `Dialog.tsx` renders its close control as a raw `<button>`
-  with the text glyph `✕`; `Dialog.stories.tsx:32–45` uses raw `<button>` elements
-  for "Eliminar registro"/"Cancelar"/"Eliminar" plus an inline `style={{…}}`
-  (line 39), violating the tokenized-stylesheet boundary; `ClientMemories.tsx:75–76`
-  nests a `PageHeader title="Memorias"` inside a `Card title="Memorias del cliente"`,
+- **`panel-nits`** — *(partly consumed by slice 2: the `Dialog.tsx` text-glyph `✕`
+  close control is done — it is the `Icon` primitive with Lucide `X` at 20px.)* Still
+  open: `Dialog.stories.tsx:32-45` uses raw `<button>` elements for "Eliminar
+  registro"/"Cancelar"/"Eliminar" with **no `className`**, so they render with browser
+  defaults, plus inline `style` props at lines 36 **and** 39, violating the
+  tokenized-stylesheet boundary. **Confirmed by the owner's slice-2 visual check and
+  deliberately deferred here.** Also `ClientMemories.tsx:75-76` nests a
+  `PageHeader title="Memorias"` inside a `Card title="Memorias del cliente"`,
   duplicating the heading and using a page component inside a region.
 - **`table-interactivity`** — open a row and offer quick actions on `ClientesList`
   and `ClientFicha`. The owner acknowledges this needs backend CRUD endpoints that
@@ -479,15 +607,54 @@ now named in T7.
 
 ## Recovery
 
-- Base `59034858` on `main`; branch `odd/panel-visual-foundation`; worktree
-  `../lumat-agent-odd-panel-visual-foundation`.
+**Slice 1 (merged).** Base `59034858` on `main`; branch `odd/panel-visual-foundation`;
+worktree `../lumat-agent-odd-panel-visual-foundation` (both cleaned after merge).
+Pull request **#336** — merged as `e16b3ff8`.
+
+**Slice 2 (current).** Base `e16b3ff8` on `main`. Delivered as a stacked pair after the
+owner chose to split it at the ~400-line review budget (612 authored lines was the
+inflated count; under this repository's own rule the real review sizes are 160 and 372).
+
+| | Branch | Worktree | PR | Review size | Status |
+|---|---|---|---|---|---|
+| **2a — icon foundation** | `odd/panel-visual-foundation` | none (plain branch, tip `a2e3ab1e`) | **#337** → `main` | 160 | **MERGED** as `b5bb040f`; branch deleted local + remote |
+| **2b — 30-glyph migration** | `odd/panel-visual-foundation-icons` | `../lumat-agent-odd-panel-visual-foundation-icons` | **#338** → `main` | 372 | **OPEN**, rebased on `b5bb040f`, pushed |
+
+**Handoff for 2b:** Engram `odd/panel-visual-foundation/handoff-slice-2b`.
+
+**Delivery executed 2026-09-24.** `git fetch origin && git rebase origin/main` replayed the
+nine 2b commits onto `b5bb040f` with no conflicts — 2a's commits were already in `main`
+through the stacked split, so the rebase dropped them, which is the point of the split and
+not a conflict. The branch was pushed and PR **#338** opened against `main` with
+`type:feature`.
+
+**Rebase executed 2026-09-24 (delivery session).** The nine 2b commits were replayed onto
+`b5bb040f` with no conflicts; every pre-rebase hash formerly cited in this document no
+longer resolves. Old → new, keyed by the stable commit **message**:
+
+| Message | Pre-rebase | Post-rebase |
+| --- | --- | --- |
+| `refactor(shell): migrate the panel shell icons to Lucide` | `36794db0` | `03558c2b` |
+| `refactor(dashboard): migrate the dashboard icons to Lucide` | `34ead677` | `769c1969` |
+| `refactor(chat): migrate the agent chat icons to Lucide` | `b57d21b6` | `e1019cb2` |
+| `refactor(primitives): replace the pseudo-icons with Lucide` | `fb96f8e1` | `4ce59302` |
+| `docs(task): record T7 icon migration evidence` | `60f9871b` | `731ae431` |
+| `fix(icons): correct the migration record and the dialog indentation` | `1b9c61d4` | `b60c4602` |
+| `docs(odd): record the slice 2 visual check result` | `198a222a` | `9ecb3e4a` |
+| `docs(odd): record the slice 2 stacked split and PR 2a` | `9cb349e7` | `effe36cd` |
+| `docs(odd): record the 2a merge and the slice 2b handoff` | `1a171aa0` | `590050ed` |
+
+Post-rebase re-verification, all green: `npm run test` 85 files / 713 tests, `npx tsc -b`
+exit 0, `npm run build-storybook` exit 0. 2a's hashes stay valid — they are in `main`
+through the merge.
+
 - Session record: `.rapsodia-code/sessions/archived/2026-09-24-panel-aesthetic-direction/`
-  — `report.md` carries the full evidence and the rule classification.
-- Pull request: **#336** (`odd/panel-visual-foundation` → `main`) — open and
-  mergeable; slice 1 reviewed, independently verified, and corrected.
+  — `report.md` carries slice 1's full evidence and the rule classification.
 - Storybook dev server for visual checks: `cd web && npm run storybook` (port 6006);
-  stop with `pkill -f "storybook dev -p 6006"`.
-- Engram: `cortex-session/panel-aesthetic-direction` (report) plus
-  `cortex-session/panel-aesthetic-direction/{init,decision/*,discovery/*,risk/*}`
-  (#4860–#4869).
+  stop with `pkill -f "storybook dev -p 6006"`. Note: `pkill -f` matches its own
+  command line, so the shell that runs it can kill itself — run it in its own call.
+- Engram: `cortex-session/panel-aesthetic-direction` (slice 1 report, #4860–#4869),
+  `odd/panel-visual-foundation/handoff-slice-2` (#4910),
+  `odd/panel-visual-foundation/slice-2-state` (#4918),
+  `odd/panel-visual-foundation/visual-check-slice-2` (#4919).
 - Created 2026-09-24; consuming this session archives it.

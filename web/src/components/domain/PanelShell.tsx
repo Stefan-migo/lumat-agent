@@ -1,138 +1,50 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
+import {
+  Bell,
+  BookOpen,
+  Bot,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  Menu,
+  MessageSquare,
+  PanelLeft,
+  Settings,
+  UserRound,
+  Users,
+  X,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import type { PanelNotification, User } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
+import { Icon } from "../primitives/Icon";
 
 export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "users" | "projects" | "planning-sessions";
 
-/** Shell icon wrapper: 20px, stroke-based, `currentColor`, aria-hidden.
- *  Inline SVGs on purpose — no icon library (ponytail: no new deps). */
-const icon = (children: ReactNode) => (
-  <svg
-    viewBox="0 0 24 24"
-    width={20}
-    height={20}
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={2}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    {children}
-  </svg>
-);
-
-function PanelIcon() {
-  return icon(
-    <>
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-    </>,
-  );
-}
-
-function UsersIcon() {
-  return icon(
-    <>
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </>,
-  );
-}
-
-function ChatIcon() {
-  return icon(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />);
-}
-
-function AssistantIcon() {
-  return icon(<><path d="M12 3a7 7 0 0 0-7 7v4a4 4 0 0 0 4 4h6a4 4 0 0 0 4-4v-4a7 7 0 0 0-7-7Z" /><path d="M9 12h.01M15 12h.01M9 16h6" /></>);
-}
-
-function AutomationIcon() {
-  return icon(<><path d="M6 4v16M18 4v16M6 8h12M6 16h12" /><circle cx="6" cy="4" r="2" /><circle cx="18" cy="20" r="2" /></>);
-}
-
-function BookIcon() {
-  return icon(
-    <>
-      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-    </>,
-  );
-}
-
-function GearIcon() {
-  return icon(
-    <>
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-      <circle cx="12" cy="12" r="3" />
-    </>,
-  );
-}
-
-function CalendarIcon() {
-  return icon(
-    <>
-      <rect x="3" y="4" width="18" height="17" rx="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
-    </>,
-  );
-}
-
-function PanelToggleIcon({ collapsed }: { collapsed: boolean }) {
-  return icon(
-    <>
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <path d="M9 3v18" />
-      {collapsed ? <path d="m13 9 3 3-3 3" /> : <path d="m16 9-3 3 3 3" />}
-    </>,
-  );
-}
-
-function LogoutIcon() {
-  return icon(
-    <>
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <path d="m16 17 5-5-5-5" />
-      <path d="M21 12H9" />
-    </>,
-  );
-}
-
-function BellIcon() {
-  return icon(<><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>);
-}
-
-function MenuIcon() {
-  return icon(<><path d="M4 6h16M4 12h16M4 18h16" /></>);
-}
-
-function CloseIcon() {
-  return icon(<path d="M18 6 6 18M6 6l12 12" />);
-}
-
 interface NavigationItem {
   label: string;
-  icon: () => ReactNode;
+  icon: LucideIcon;
   adminOnly?: boolean;
 }
 
+function PanelToggleIcon({ collapsed }: { collapsed: boolean }) {
+  return <Icon icon={collapsed ? ChevronRight : ChevronLeft} />;
+}
+
 const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" | "advanced-dashboard" | "projects" | "planning-sessions">, NavigationItem> = {
-  dashboard: { label: "Panel unificado", icon: PanelIcon },
-  chat: { label: "Asistente Lumat", icon: AssistantIcon, adminOnly: true },
-  conversations: { label: "Conversaciones", icon: ChatIcon },
-  clients: { label: "Clientes", icon: UsersIcon },
-  agenda: { label: "Agenda", icon: CalendarIcon },
-  kb: { label: "Base de Conocimientos", icon: BookIcon, adminOnly: true },
-  'automation-rules': { label: "Automatizaciones", icon: AutomationIcon, adminOnly: true },
-  settings: { label: "Configuración", icon: GearIcon, adminOnly: true },
-  users: { label: "Usuarios", icon: UsersIcon, adminOnly: true },
+  dashboard: { label: "Panel unificado", icon: PanelLeft },
+  chat: { label: "Asistente Lumat", icon: Bot, adminOnly: true },
+  conversations: { label: "Conversaciones", icon: MessageSquare },
+  clients: { label: "Clientes", icon: Users },
+  agenda: { label: "Agenda", icon: Calendar },
+  kb: { label: "Base de Conocimientos", icon: BookOpen, adminOnly: true },
+  'automation-rules': { label: "Automatizaciones", icon: Zap, adminOnly: true },
+  settings: { label: "Configuración", icon: Settings, adminOnly: true },
+  users: { label: "Usuarios", icon: UserRound, adminOnly: true },
 };
 
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
@@ -199,7 +111,7 @@ function UserContext({ user, compact = false, onLogout }: { user: User; compact?
           title="Cerrar sesión"
           onClick={() => void onLogout()}
         >
-          <LogoutIcon />
+          <Icon icon={LogOut} />
           <span className="panel-shell__logout-label">Cerrar sesión</span>
         </button>
       ) : null}
@@ -221,7 +133,7 @@ function Navigation({
     <nav className="panel-shell__navigation" aria-label="Navegación principal">
       <ul className="panel-shell__navigation-list">
         {items.map((view) => {
-          const Icon = NAVIGATION[view].icon;
+          const glyph = NAVIGATION[view].icon;
           return (
             <li key={view}>
               <button
@@ -232,7 +144,7 @@ function Navigation({
                 title={collapsed ? NAVIGATION[view].label : undefined}
                 onClick={() => onNavigate?.(view)}
               >
-                <Icon />
+                <Icon icon={glyph} />
                 {collapsed ? null : <span className="panel-shell__nav-label">{NAVIGATION[view].label}</span>}
               </button>
             </li>
@@ -432,7 +344,7 @@ export function PanelShell({
           title="Abrir menú de navegación"
           onClick={() => setDrawerOpen(true)}
         >
-          <MenuIcon />
+          <Icon icon={Menu} />
         </button>
       </header>
 
@@ -456,7 +368,7 @@ export function PanelShell({
           <div className="panel-shell__drawer-heading">
             <Brand mobile />
             <button ref={closeButtonRef} type="button" className="panel-shell__drawer-close" aria-label="Cerrar menú de navegación" title="Cerrar menú de navegación" onClick={closeDrawer}>
-              <CloseIcon />
+              <Icon icon={X} />
             </button>
           </div>
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} />
@@ -499,11 +411,11 @@ export function PanelShell({
                 >{focusMode ? "×" : "Focus"}</button>
                 <div ref={notificationsRef} className="panel-shell__notifications">
                <button ref={bellRef} type="button" className="panel-shell__header-action" aria-expanded={notificationsOpen} aria-haspopup="dialog" aria-label={notificationState.status === "loading" ? "Cargando notificaciones" : notificationState.status === "error" ? "Notificaciones no disponibles" : notificationState.unread > 0 ? `Notificaciones (${notificationState.unread} sin leer)` : "Notificaciones"} title="Notificaciones" onClick={() => setNotificationsOpen((open) => !open)}>
-                 <BellIcon />
+                 <Icon icon={Bell} />
                  {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
                </button>
                {notificationsOpen ? <section className="panel-shell__notifications-panel" role="dialog" aria-modal="true" aria-labelledby="panel-notifications-title" onKeyDown={keepFocusInNotifications}>
-                 <div className="panel-shell__notifications-heading"><h2 id="panel-notifications-title">Notificaciones</h2><button ref={notificationCloseRef} type="button" className="panel-shell__notifications-close" aria-label="Cerrar notificaciones" onClick={closeNotifications}><CloseIcon /></button></div>
+                  <div className="panel-shell__notifications-heading"><h2 id="panel-notifications-title">Notificaciones</h2><button ref={notificationCloseRef} type="button" className="panel-shell__notifications-close" aria-label="Cerrar notificaciones" onClick={closeNotifications}><Icon icon={X} /></button></div>
                  <ul className="panel-shell__notifications-list">
                    {notifications.slice(0, 5).map((notification) => <li key={notification.id} className={notification.read_at === null ? "panel-shell__notification panel-shell__notification--unread" : "panel-shell__notification"}><span className="panel-shell__notification-dot" aria-hidden="true" /><strong>{notification.title}</strong><p>{notification.content}</p><small>{notification.source} · {notification.created_at ?? "Sin fecha"}</small></li>)}
                    {notifications.length === 0 ? <li className="panel-shell__notification-empty">No hay notificaciones.</li> : null}
@@ -526,8 +438,8 @@ export function PanelShell({
        </div>
        <nav className={`panel-shell__footer-nav${user.role === "admin" ? " panel-shell__footer-nav--admin" : ""}`} aria-label="Navegación inferior">
          {(["notifications", "dashboard", ...(user.role === "admin" ? ["chat"] : []), "conversations", "agenda"] as PanelView[]).map((view) => {
-           const item = view === "notifications" ? { label: "Notificaciones", Icon: BellIcon } : view === "dashboard" ? { label: "Panel", Icon: PanelIcon } : view === "chat" ? { label: "Agente Lumat", Icon: AssistantIcon } : view === "conversations" ? { label: "Conversaciones", Icon: ChatIcon } : { label: "Agenda", Icon: CalendarIcon };
-           return <button key={view} type="button" className={view === "chat" ? "panel-shell__footer-nav--primary" : undefined} aria-current={currentView === view ? "page" : undefined} aria-label={item.label} onClick={() => handleNavigation(view)}><item.Icon /><span>{item.label}</span></button>;
+            const item = view === "notifications" ? { label: "Notificaciones", icon: Bell } : view === "dashboard" ? { label: "Panel", icon: PanelLeft } : view === "chat" ? { label: "Agente Lumat", icon: Bot } : view === "conversations" ? { label: "Conversaciones", icon: MessageSquare } : { label: "Agenda", icon: Calendar };
+            return <button key={view} type="button" className={view === "chat" ? "panel-shell__footer-nav--primary" : undefined} aria-current={currentView === view ? "page" : undefined} aria-label={item.label} onClick={() => handleNavigation(view)}><Icon icon={item.icon} /><span>{item.label}</span></button>;
          })}
        </nav>
         {inspector ? <aside className="panel-shell__inspector" aria-label="Inspector operacional" aria-hidden={focusMode || undefined}>{inspector}</aside> : null}
