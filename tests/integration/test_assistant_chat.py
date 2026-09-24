@@ -638,6 +638,25 @@ def test_a_chained_read_only_turn_persists_tool_steps_and_cap_state(client, monk
     assert state["cap_reached"] is False
 
 
+def test_a_chained_read_only_turn_responder_receives_combined_tool_evidence(client, monkeypatch):
+    plans = [
+        json.dumps({
+            "kind": "tool", "tool": "assistant.capabilities", "arguments": {},
+            "summary": "list capabilities", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "dashboard.summary", "arguments": {"window_days": 7},
+            "summary": "read dashboard", "requires_approval": False,
+        }),
+    ]
+    settled, stream_calls, _ = _turn_with_plan(client, monkeypatch, "combined-evidence", plans)
+
+    responder_prompt = "\n".join(message["content"] for message in stream_calls[-1]["messages"])
+    assert '"tool_count"' in responder_prompt
+    assert '"contacts"' in responder_prompt
+    assert _agent_answer(settled) == "answer"
+
+
 def test_a_chained_read_only_turn_persists_the_tool_step_cap(client, monkeypatch):
     plans = [
         json.dumps({
@@ -659,6 +678,29 @@ def test_a_chained_read_only_turn_persists_the_tool_step_cap(client, monkeypatch
         state = session.get(InternalChatThread, thread_id).assistant_state
     assert state["tool_steps"] == MAX_ASSISTANT_TOOL_STEPS
     assert state["cap_reached"] is True
+
+
+def test_a_capped_read_only_turn_responder_receives_combined_tool_evidence(client, monkeypatch):
+    plans = [
+        json.dumps({
+            "kind": "tool", "tool": "assistant.capabilities", "arguments": {},
+            "summary": "list capabilities", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "dashboard.summary", "arguments": {"window_days": 7},
+            "summary": "read dashboard", "requires_approval": False, "follow_up": True,
+        }),
+        json.dumps({
+            "kind": "tool", "tool": "assistant.capabilities", "arguments": {},
+            "summary": "list capabilities again", "requires_approval": False, "follow_up": True,
+        }),
+    ]
+    settled, stream_calls, _ = _turn_with_plan(client, monkeypatch, "capped-evidence", plans)
+
+    responder_prompt = "\n".join(message["content"] for message in stream_calls[-1]["messages"])
+    assert '"tool_count"' in responder_prompt
+    assert '"contacts"' in responder_prompt
+    assert _agent_answer(settled) == "answer"
 
 
 def test_stream_disconnect_keeps_known_usage_and_failed_request(client, monkeypatch):
