@@ -13,6 +13,7 @@ from app.chat.assistant.nodes import (
     guardrails,
     panel_cost_gate,
     plan_llm,
+    tool_loop_head,
 )
 from app.chat.assistant.tools.registry import ToolValidationError, execute_tool
 from app.db import SessionLocal
@@ -213,6 +214,103 @@ def test_web_search_failure_is_visible_instead_of_empty_evidence(monkeypatch):
     assert result["status"] == "degraded"
     assert result["tool_result"]["status"] == "error"
     assert result["tool_result"]["evidence"]["status"] == "error"
+
+
+def test_a_chained_search_then_fetch_turn_answers_from_the_page_text_and_cites_it(monkeypatch):
+    """`web.search` finds the page, `web.fetch` reads it, and the answer comes from the page text.
+
+    The chain is proven rather than assumed: `tool_loop_head` must take the back-edge after the
+    search because the planner asked for a follow-up, and must finish after the fetch. A reader that
+    never became reachable, or a chain that quietly stopped at the snippets, fails here.
+    """
+    calls = []
+    page_url = "https://example.test/boiler"
+    page_text = "Annual maintenance reduces breakdown risk. Book a technician every twelve months."
+    results = {
+        "web.search": {
+            "tool": "web.search",
+            "status": "completed",
+            "result": [
+                {
+                    "title": "Boiler maintenance",
+                    "url": page_url,
+                    "snippet": "Annual maintenance reduces breakdown risk.",
+                }
+            ],
+        },
+        "web.fetch": {
+            "tool": "web.fetch",
+            "status": "completed",
+            "result": {"url": page_url, "title": "Boiler maintenance", "text": page_text},
+        },
+    }
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda _session, name, _arguments, **_kwargs: results[name],
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: _streaming_client(calls, text=f"{page_text} {page_url}"),
+    )
+
+    content = "What does the web say about boiler maintenance?"
+    search_state = _tool_loop_state(
+        content=content,
+        plan={
+            "kind": "tool",
+            "tool": "web.search",
+            "arguments": {"query": "boiler maintenance"},
+            "requires_approval": False,
+            "follow_up": True,
+        },
+    )
+    searched = execute(search_state)
+    assert tool_loop_head({**search_state, **searched})["status"] == "planned"
+
+    fetch_state = {
+        **search_state,
+        **searched,
+        "status": "executing",
+        "plan": {
+            "kind": "tool",
+            "tool": "web.fetch",
+            "arguments": {"url": page_url},
+            "requires_approval": False,
+        },
+    }
+    fetched = execute(fetch_state)
+    assert tool_loop_head({**fetch_state, **fetched})["status"] == "completed"
+    assert [entry["tool"] for entry in fetched["tool_results"]] == ["web.search", "web.fetch"]
+
+    execute({**fetch_state, **fetched, "on_token": lambda _token: None})
+
+    prompt = calls[0]["messages"][-1]["content"]
+    assert page_text in prompt
+    assert page_url in prompt
+
+
+def test_a_refused_fetch_url_reaches_the_turn_as_an_explicit_error():
+    """A blocked URL must fail visibly, never as an empty result.
+
+    This runs the real `execute_tool` and the real policy: the loopback address is refused while
+    resolving, before any client is built, so the assertion covers the registry wiring and the
+    reader's refusal together without touching the network.
+    """
+    result = execute(_tool_loop_state(
+        content="Read http://127.0.0.1/admin and summarise it.",
+        plan={
+            "kind": "tool",
+            "tool": "web.fetch",
+            "arguments": {"url": "http://127.0.0.1/admin"},
+            "requires_approval": False,
+        },
+    ))
+
+    assert result["status"] == "degraded"
+    assert result["tool_result"]["status"] == "error"
+    assert "non-public address 127.0.0.1" in result["tool_result"]["error"]
+    assert result["evidence"][0]["status"] == "degraded"
+    assert result["tool_result"]["result"]["unavailable"] is True
 
 
 def test_completed_tool_traversal_records_one_execution_audit(monkeypatch, migrated_db):
