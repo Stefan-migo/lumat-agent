@@ -162,10 +162,8 @@ Observable behavior this unit must produce. Implementation shape is the implemen
 
 ## Tasks (strict TDD — observed RED before each source change)
 
-- [ ] **T1 — Baseline measurement, before any source change.** Record, for the **current** code: the
-  planner call count, the catalog payload size, the character/token cost and the wall latency of (a) a
-  single-tool turn and (b) a two-tool scenario. Static baseline already known: catalog 9,883 chars ≈
-  2,471 tokens/turn (Engram #4899, #4901). This is the "before" of the required before/after comparison.
+- [x] **T1 — Baseline measurement, before any source change.** Recorded against unmodified `main`-derived
+  code, before the first source edit. See *Baseline measurement (T1)* below.
 - [ ] **T2 — RED + GREEN, bounded cycle and accumulating state.** RED: a turn whose planner asks for a
   second tool executes both and answers from the combined evidence; a third is refused at the cap; a
   single-tool turn is byte-for-byte unchanged in behavior. Rewrite
@@ -229,6 +227,40 @@ rewritten by every `uv run` — `git checkout -- uv.lock` before committing. `gr
 from main (built at `59034858`, `cluster-only`); it is gitignored, so a **new** worktree does not get it
 for free.
 
+## Baseline measurement (T1)
+
+Taken **before the first source change**, against the unmodified branch head. Instrument: a throwaway
+script that patches `app.chat.assistant.nodes._assistant_client` and `execute_tool`, so it makes **no
+network call and touches no database** (`session=None` short-circuits `panel_cost_gate` and
+`assemble_context_node`). It counts LLM calls and sums prompt characters; tokens are `chars / 4`.
+
+| Vector | Measured |
+|---|---|
+| Whitelisted tools | 22 |
+| Planner catalog payload | **9,883 chars** ≈ 2,471 tok — reproduces the handoff's figure exactly (Engram #4899) |
+| Persona (system prompt) | 1,448 chars |
+| **Single-tool turn** (`customers.search`) | 1 planner call + 1 tool execution + 1 responder call |
+| Planner prompt | **12,150 chars** ≈ 3,037 tok (the catalog is 81% of it) |
+| Responder prompt | 2,497 chars ≈ 624 tok |
+| Single-tool turn total | **14,647 prompt chars** ≈ 3,661 tok |
+| `respond`-plan turn | 1 planner call, no responder — see caveat |
+
+**The delta U1 introduces, per tool turn:** one **additional planner call** of ~12,150 prompt chars
+(≈3,037 tok), i.e. **+83% prompt characters** on a single-tool turn, plus one extra provider round-trip.
+Planner calls per tool turn go **1 → 2**. This is the number the after-measurement (T8) must confirm or
+correct.
+
+**Honest gaps in this baseline:**
+
+- **Wall latency is NOT measured.** It needs a live provider call. The mocked run's wall time is
+  meaningless and is deliberately not reported. Live before/after latency must be taken against the dev
+  panel, or recorded as an explicit unrun row — never inferred.
+- The `respond`-plan run read `degraded` ("knowledge base unavailable") because `session=None` leaves
+  `retrieve_kb` with no data source. That row is an artifact of the instrumentation, **not** a measured
+  production path; only the tool-turn row is a production-shaped baseline.
+- Token figures are `chars / 4` estimates, not provider-reported usage. `_record_usage()` no-ops without
+  a session (`nodes.py:278-292`), so real usage needs the DB-backed path.
+
 ## Progress
 
 - 2026-09-24 — Handoff read; repo state verified against `main` (`uv.lock` drift only; RDD `off` for this
@@ -241,6 +273,9 @@ for free.
 - 2026-09-24 — Worktree created with explicit owner consent: base `e16b3ff8`, branch
   `odd/assistant-tool-chaining`; environment set up; Graph Check run. **This record created before the
   first source change.**
+- 2026-09-24 — **T1 done.** Baseline measured on the unmodified branch: 9,883-char catalog, 14,647 prompt
+  chars per single-tool turn, 1 planner call per tool turn. Predicted U1 delta: +1 planner call
+  (~12,150 chars) per tool turn.
 
 ## Graph nodes consulted (Graph Check, Step 1)
 
