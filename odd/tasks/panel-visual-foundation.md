@@ -180,17 +180,17 @@ security class.
 
 - [x] **T1** — Resolved 2026-09-24: font **Inter**, icons **Lucide**, Radix **the
   five composites**, `clamp()` **display-only** (recorded as D12).
-- [ ] **T2** — Amend `web/DESIGN_SYSTEM.md`: add the rule-class separation; record
+- [x] **T2** — Amend `web/DESIGN_SYSTEM.md`: add the rule-class separation; record
   the direction (ChatGPT, option B), the forest guard and the density line; relax
   card-on-card; record the icon and interaction-policy amendments. The Agenda scope
   rule is already out (sibling unit, PR #335), so no Agenda work remains here.
-- [ ] **T3** — If a `DS-*` requirement changes (interaction policy, icons), write
-  the matching OpenSpec delta paired with this unit.
-- [ ] **T4** — Token foundation: add additively the tokens the direction proves —
+- [x] **T3** — `DS-DOC-1`, `DS-TKN-3`, and stale fixed-count `DS-STORY-1` changed;
+  the matching OpenSpec delta is under `openspec/changes/panel-visual-foundation/`.
+- [x] **T4** — Token foundation: add additively the tokens the direction proves —
   radii beyond 6/8, surface/elevation steps, icon sizes, and any repeated semantic
   role with a named consumer — plus the `tokens.ts` mirror and drift-guard
   spot-checks.
-- [ ] **T5** — Apply the new tokens to the existing primitives that need them. No
+- [x] **T5** — Apply the new tokens to the existing primitives that need them. No
   redesign of call sites in this slice.
 
 ### Slice 2 — icon system (PR 2)
@@ -231,14 +231,29 @@ security class.
 
 ## Progress
 
-Not started.
+Completed in three work-unit commits.
+
+### Evidence
+
+- **T2/T3 Graph Check:** `graphify query "DESIGN_SYSTEM.md rule classes interaction policy typography iconography visual direction"` consulted `web/DESIGN_SYSTEM.md`, `CST-PRIM-7 First-Slice Interaction Ownership`, and `Corp Primitives Specification`; the directed path to the live spec was absent, so both documents were verified directly.
+- **T4 Graph Check:** `graphify query "tokens.css font-ui radius surface elevation icon sizes tokens.ts tokens.test"` consulted `tokens.ts`, `tokens.test.ts`, `Tokens.stories.tsx`, `PanelShell.tsx`, and `main.tsx`; the directed token-to-test path was absent, so the drift contract was verified directly from both files.
+- **T5 Graph Check:** `graphify query "primitives.css visual token consumers button card dialog data region"` consulted `Button.tsx`, `Card.tsx`, `Dialog.tsx`, `tokens.test.ts`, and the `.data-region shared surface` contract; the directed CSS-to-token path was absent, so CSS consumers were verified directly.
+- **Strict TDD:** the token/consumer contract was added first; focused Vitest was RED (`1 failed, 18 passed`) before source changes, then GREEN (`19 passed`).
+- **Font loader:** installed `@fontsource/inter` and imported four weights from `tokens.css`; Storybook output contains the Inter font assets.
+- **Verification:** `npm run test` — 84 files / 708 tests passed; `npx tsc -b` — exit 0; `npm run build-storybook` — built successfully (existing Storybook eval/chunk-size warnings only).
 
 ## Size
 
-Forecast (authored lines, additions + deletions): slice 1 ≈ 250–400; slice 2
-≈ 150–250; slice 3 ≈ 400–600. Chained PRs, `stacked-to-main`: PR 1 amendment +
-tokens, PR 2 icons, PR 3 Radix. Review budget is 400 lines per PR — split a slice
-further if it exceeds it.
+Actual authored changed lines (additions + deletions):
+
+- `556743b5` — `docs(panel): amend visual foundation contract` — **161 lines**
+  (138 additions, 23 deletions); T2/T3 docs and delta.
+- `40ad0e54` — `feat(tokens): add visual foundation vocabulary` — **62 lines**
+  (61 additions, 1 deletion); T4 tokens, mirror, tests, and Inter package.
+- `0b45b2a5` — `feat(primitives): apply visual foundation tokens` — **58 lines**
+  (32 additions, 26 deletions); T5 primitive consumers.
+
+All commits remain below the 400-line review budget.
 
 ## Open items
 
@@ -246,8 +261,8 @@ further if it exceeds it.
 - [x] **Icon family** → resolved 2026-09-24: **Lucide**.
 - [x] **Radix scope** → resolved 2026-09-24: **the five composites**.
 - [x] **`clamp()`** → resolved 2026-09-24: **display scale only**.
-- [ ] **OpenSpec delta** — does the interaction-policy line need a `DS-*` delta, or
-  is the `DESIGN_SYSTEM.md` amendment sufficient?
+- [x] **OpenSpec delta** — `DS-DOC-1`, `DS-TKN-3`, and stale fixed-count `DS-STORY-1`
+  are amended under `openspec/changes/panel-visual-foundation/`.
 - [ ] **Dark mode** — remains deferred; not part of this unit.
 
 ## Recovery
