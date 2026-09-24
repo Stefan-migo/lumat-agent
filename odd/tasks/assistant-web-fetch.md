@@ -3,9 +3,9 @@
 **Branch**: `odd/assistant-web-fetch`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-web-fetch`
 **Base**: `4b31796c` (= `main` at branch time)
-**Status**: slices 1 and 2 shipped as PR #348 and PR #349, **both merged**. Slice 3 implementation is
-**complete** on `odd/assistant-web-fetch-slice3` — T4–T8 done, full suite 1,440 green — but the branch is
-**not pushed** and its PR is not open yet
+**Status**: slices 1 and 2 shipped as PR #348 and PR #349, **both merged**. Slice 3 is **complete and
+open as PR #352** on `odd/assistant-web-fetch-slice3` — T4–T8 done, full suite 1,440 green, native review
+**`approved`** with zero findings and authority burned — awaiting its merge
 **Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/session.md`
 (decisions 4 and 6, risk row *local extractor reintroduces an SSRF surface*); Engram #4890, #4894, #4897.
 
@@ -314,6 +314,20 @@ requires.
 - **Closed in slice 3** rather than by editing the reviewed candidate. Two rules replaced one: only a
   2xx is a page, and a 2xx with no body is not one either.
 
+## Review outcome — slice 3 (native RDD)
+
+- **`approved`, with zero findings** — not one advisory, blocking or otherwise. Authority burned
+  (`review-ec4cb1d85112e471`, acknowledgement `dbec8d39…`). 11 changed paths, risk **medium**, one lens
+  (`review-reliability`). PR at `https://github.com/Stefan-migo/lumat-agent/pull/352`.
+- The reviewer's evidence: *"Reviewed all changed paths, including fetch failure handling, redirect/status
+  boundaries, serialized evidence sizing, registry wiring, configuration, specification, and regression
+  tests."* The `R3-non-success-status` fix from slice 2 and the `_bounded_evidence` bisection were both
+  inside the reviewed candidate and neither was questioned.
+- **The reviewed tree is not this branch's HEAD.** The review froze the candidate at the T8 commit
+  (`a2c68ade`); this section and the *Status* line above were written **after** the acknowledgement, in a
+  documentation-only commit. Recording an outcome cannot precede the outcome, so the order is the honest
+  one — but it means the receipt covers the tree without this text, exactly as it does for slices 1 and 2.
+
 ## Graph nodes consulted (Graph Check, Step 1)
 
 - `graphify query "assistant web fetch URL retrieval and tool registry"` → `assistant/tools/registry.py`,
@@ -382,15 +396,16 @@ requires.
   owner chose to fix it inside slice 3. Fixed in `a2c68ade` — the payload is measured serialized and
   the text bisected to the longest prefix that fits — with two boundary tests that fail on the old
   code. Full numbers in *Measurement — T8*.
+- 2026-09-24 — **Slice 3 shipped and reviewed.** Branch pushed, **PR #352** opened against `main`
+  (11 files, +391/−22; the record excluded, **274 authored lines** of the 400 budget). The owner granted
+  the native review, one lens ran, and it returned **`approved` with zero findings**; authority burned
+  at `review-ec4cb1d85112e471`. Delivery is the owner's decision from here.
 
 ## Next step
 
-Slice 3's implementation is complete: T4–T8 done, the full suite green, no source change outstanding.
-The branch is **not pushed** and no PR is open.
+Slice 3 is **complete, reviewed and open as PR #352** (`approved`, zero findings, authority burned).
+Delivery is the owner's: merging the PR is ordinary repository policy and no review decision depends on
+it. Nothing else is outstanding on this unit.
 
-Under `stacked-to-main` the slice-3 PR opens now that #349 is merged; the next action is the owner's
-decision to push the branch and open it. The review boundary is still `main` (`5320dbb8`) — RDD
-reported medium / `under_budget` after T7, so the slice-3 PR is what carries this work to review.
-
-Before the PR: refresh the Engram mirror of this record (`odd/assistant-web-fetch/tasks`, observation
-#4970), which was last written before slice 2 merged.
+**After the merge**: refresh Graphify once (`graphify <root> --update`) per the delivery/cleanup rule,
+and U3 (panel sub-agent delegation) remains unstarted and out of this unit's scope.
