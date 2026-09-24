@@ -224,7 +224,7 @@ security class.
 - [x] **T6** — Add the chosen icon family; build the `Icon` primitive on the
   `--icon-*` size scale and `currentColor`, adding `--icon-sm`/`--icon-lg` with
   their new consumer.
-- [ ] **T7** — Replace the loose inline `<svg>` AND the text-glyph pseudo-icons with
+- [x] **T7** — Replace the loose inline `<svg>` AND the text-glyph pseudo-icons with
   the adopted family. The 2026-09-24 visual check found two: `SearchInput.tsx`
   renders `<span aria-hidden="true">⌕</span>` (a Unicode character used as the
   magnifier, which is why it renders tiny and shifts with the font) and
@@ -311,6 +311,49 @@ exit 0; `npm run build-storybook` → built.
 contract` (**43/15** on `Icon.test.tsx`, **0/1** on `primitives.css`);
 `6fab9afb` — `fix(stories): drop the inline style from the icon stories`
 (**3/10** on `Icon.stories.tsx`).
+
+### T7 implementation evidence
+
+- **Graph Check:** `graphify query "PanelShell Dashboard AgentChat Icon SearchInput Dialog icon migration tests"`
+  consulted `PanelShell.tsx`, `Dashboard.tsx`, `AgentChat.tsx`, `SearchInput.tsx`,
+  `Dialog.tsx`, their tests/stories, and the primitive icon boundary. Directed paths
+  consulted were `PanelShell.tsx → icon()` and `Dashboard.tsx → PanelShell.tsx → icon()`;
+  no directed path was available for `AgentChat.tsx → Icon.tsx` or
+  `SearchInput.tsx → Dialog.tsx`, so those relationships were verified directly.
+- **Lucide export verification:** the installed `lucide-react@1.48.0` exports every
+  selected glyph, including `PanelLeft`, `Users`, `MessageSquare`, `Bot`, `Zap`,
+  `BookOpen`, `Settings`, `Calendar`, `ChevronLeft`, `ChevronRight`, `LogOut`, `Bell`,
+  `Menu`, `X`, `Clock`, `Briefcase`, `AlertTriangle`, `Inbox`, `ArrowRight`,
+  `ChartColumn`, `Tag`, `Copy`, `RotateCcw`, `Check`, `Paperclip`, `Send`, and `Search`.
+- **Strict TDD RED:** `cd web && npm run test -- --run src/components/style-boundary.test.ts`
+  before migration failed with `1 failed | 1 passed`; the guard reported the three
+  source files containing inline SVG literals: `PanelShell.tsx`, `Dashboard.tsx`, and
+  `AgentChat.tsx`.
+- **Strict TDD GREEN:** the same guard passed after migration. Focused migration tests
+  passed with `5 passed` files / `55 passed` tests. The SearchInput and Dialog rendered
+  assertions verify `.icon.icon--sm`/`.icon.icon--md` and absence of `⌕`/`✕`.
+  The SearchInput and Dialog assertions were added after their source migration, so no
+  RED was observed for those two assertions; this process deviation is recorded rather
+  than reconstructed.
+- **D13 declared visual delta:** Dashboard's clock, alert, and arrow call sites moved
+  from 12px to `"sm"`; its metadata/day call sites moved from 14px to `"sm"`; its
+  operational, empty-state, chart, and tag call sites moved from 16px to `"sm"`; its
+  agent, card, and automation call sites moved from 18px/20px to `"md"`. AgentChat's
+  Copy/Retry/Check call sites use `"sm"`, and its Paperclip/Send call sites use `"md"`.
+  PanelShell remains at the Icon default `"md"`; SearchInput is `"sm"`; Dialog is
+  `"md"`.
+- **Ponytail findings:** `primitives.css:67-72` may now be dead because all migrated
+  target SVGs are `.icon` elements; the rule remains unchanged because
+  `tokens.test.ts:195` asserts it. `Dialog.stories.tsx` still contains the separate,
+  pre-existing inline-dimension finding recorded under `panel-nits`. No scope-level
+  finding was acted on.
+- **Raw SVG evidence:** one raw inline SVG remains under `web/src`, in
+  `web/src/stories/primitives/Avatar.stories.tsx`; the five T7 target files contain none.
+- **Accessible names:** `Enviar`, `Copiar mensaje`, `Reintentar` and `Cerrar` remained
+  unchanged and their tests pass. `PanelEntry.stories.test.tsx:230-237` compares the
+  `innerHTML` of the eight drawer navigation SVGs and requires eight distinct values;
+  the `Usuarios` entry uses `UserRound` rather than the `Clientes` `Users` glyph to
+  preserve that invariant. AppShell's collapse SVG still emits `stroke="currentColor"`.
 
 ### Slice 3 — composite migration to Radix (PR 3)
 
@@ -428,10 +471,17 @@ Actual authored changed lines (additions + deletions):
   lines** (43 additions, 15 deletions) across `Icon.test.tsx` and `primitives.css`.
 - `6fab9afb` — `fix(stories): drop the inline style from the icon stories` — **13
   lines** (3 additions, 10 deletions) on `Icon.stories.tsx`.
+- `36794db0` — `refactor(shell): migrate the panel shell icons to Lucide` — **187 lines**
+  (57 additions, 130 deletions); PanelShell and the inline-SVG guard.
+- `34ead677` — `refactor(dashboard): migrate the dashboard icons to Lucide` — **91 lines**
+  (49 additions, 42 deletions); Dashboard mapping and normalized sizes.
+- `b57d21b6` — `refactor(chat): migrate the agent chat icons to Lucide` — **76 lines**
+  (6 additions, 70 deletions); AgentChat mapping and normalized sizes.
+- `fb96f8e1` — `refactor(primitives): replace the pseudo-icons with Lucide` — **18 lines**
+  (15 additions, 3 deletions); SearchInput/Dialog, rendered guards, and story copy.
 
-Slice 2 totals so far: **240 authored lines** across 7 commits, well inside the
-400-line review budget. Slice 2 is PR 2 and still needs T7 (the 30-glyph
-migration); its size will be counted on top of this when it lands.
+Slice 2 total: **612 authored lines** across 11 commits, well inside the 400-line
+review budget per work-unit commit. T7 contributed **372 authored lines**.
 
 All commits remain below the 400-line review budget.
 
