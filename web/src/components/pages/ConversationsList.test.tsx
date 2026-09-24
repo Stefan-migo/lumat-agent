@@ -82,7 +82,7 @@ describe('production conversations list', () => {
     const emergency = row(8, 'bot', null, { emergency: true, case_id: 44, acknowledged_at: null });
     const user = userEvent.setup();
     render(<ConversationsList data={queue([emergency])} onRetry={onRetry} />);
-    await user.click(screen.getByRole('button', { name: /tomar/i }));
+    await user.click(screen.getByRole('button', { name: 'Tomar conversación' }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     await user.click(screen.getByRole('button', { name: /reconocer/i }));
     expect(onRetry).toHaveBeenCalledTimes(2);

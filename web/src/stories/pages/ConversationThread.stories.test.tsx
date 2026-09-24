@@ -39,9 +39,9 @@ describe("ConversationThread", () => {
 
   it("renders the interactive story action set", () => {
     render(<InteractiveConversationThreadView />);
-    expect(screen.getByRole("button", { name: "Tomar" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Devolver" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cerrar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tomar conversación" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Devolver al agente" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cerrar conversación" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reconocer emergencia" })).toBeInTheDocument();
   });
 

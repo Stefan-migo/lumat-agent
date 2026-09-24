@@ -75,7 +75,7 @@ it('refetches the thread after a successful close command', async () => {
 
   render(<ConversationThread interactive conversationId={9} />);
   expect(await screen.findByText(/Atención humana/)).toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: 'Cerrar' }));
+  await user.click(screen.getByRole('button', { name: 'Cerrar conversación' }));
 
   expect(await screen.findByText(/Cerrada/)).toBeInTheDocument();
   expect(threadRequests).toBe(2);
@@ -127,7 +127,7 @@ it('keeps conversation actions in the thread header and context actions-free', (
 
   const header = document.querySelector('.ai-agent-grammar__header');
   expect(header).not.toBeNull();
-  for (const label of ['Tomar', 'Devolver', 'Cerrar', 'Reconocer emergencia']) {
+  for (const label of ['Tomar conversación', 'Devolver al agente', 'Cerrar conversación', 'Reconocer emergencia']) {
     const button = screen.getByRole('button', { name: label });
     expect(header).toContainElement(button);
   }
