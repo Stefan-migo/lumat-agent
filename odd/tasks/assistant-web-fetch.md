@@ -3,8 +3,8 @@
 **Branch**: `odd/assistant-web-fetch`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-web-fetch`
 **Base**: `4b31796c` (= `main` at branch time)
-**Status**: slices 1 and 2 shipped as PR #348 (merged) and PR #349 (approved, burned). Slice 3 in
-progress on `odd/assistant-web-fetch-slice3`: reader is 78 tests green, T4–T8 next
+**Status**: slices 1 and 2 shipped as PR #348 and PR #349, **both merged**. Slice 3 in progress on
+`odd/assistant-web-fetch-slice3`: reader is 78 tests green, T4 done, T5–T8 next
 **Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/session.md`
 (decisions 4 and 6, risk row *local extractor reintroduces an SSRF surface*); Engram #4890, #4894, #4897.
 
@@ -160,8 +160,24 @@ no credentials, **every redirect hop revalidated**, body byte-capped, timeouts, 
     one word).
   - Worst case measured, not asserted by hand: a 5,000-character title and a 50,000-character body
     produce a serialized result under `_TOOL_EVIDENCE_LIMIT`.
-- [ ] **T4 — Registry and whitelist, RED + GREEN.** Args model and `ToolDefinition`; whitelist 22 → 23;
-  the tool-count, capabilities and known-tool assertions updated to the new contract, never weakened.
+- [x] **T4 — Registry and whitelist, RED + GREEN.** Args model and `ToolDefinition`; whitelist 22 → 23.
+  **Done.**
+  - RED was a **wiring RED**, not behavioural: the new registry-contract test failed with
+    `AssertionError: assert 'web.fetch' in {...}` because the tool was not registered yet. It proves
+    the registration was missing, not the reader's behaviour — that behaviour is T1–T3's.
+  - **A premise in this record was wrong, and the reality is better.** No test hardcodes a tool count.
+    `tests/unit/test_agent_registry.py` asserts `set(reg.assistant.tools_whitelist) == set(TOOL_REGISTRY)`,
+    and the capabilities and responder-inventory tests derive from `load_assistant_config()`. So the
+    recorded plan to "update the tool-count, capabilities and known-tool assertions" had nothing to
+    update: adding the tool to the registry is itself what turns the existing whitelist assertion into
+    the RED. Nothing was rewritten and nothing was weakened.
+  - `execute_tool` needed **no** change. `FetchFailure` subclasses `RuntimeError`, so it lands in the
+    existing generic error branch and produces the same `status="error"` + `evidence` envelope the
+    `SearchFailure` branch does. A dedicated `except FetchFailure` would be duplicate code.
+  - URL cap set to 2,000 characters as input validation at a trust boundary; the citable output stays
+    bounded by `URL_LIMIT`.
+  - Verified: 23 registry entries == 23 whitelist entries; assistant/config/registry/planner 124 passed;
+    harness + chat 84 passed; full suite 1437 collected, exit 0.
 - [ ] **T5 — Evidence contract.** Persona allowance + responder instruction, as narrow as the existing
   web-search one. The phrases `tests/unit/test_assistant_config.py` pins MUST survive.
 - [ ] **T6 — Spec.** AT-13 for the reader, matching the file's existing requirement shape.
@@ -262,6 +278,12 @@ requires.
   `BraveSearch`, `execute_tool`, `Planner Tool Catalog`.
 - Direct reads during exploration: `search.py` (full), `registry.py:600-650`, `agent/registry.yaml:55-85`,
   `openspec/specs/assistant-tools/spec.md:237-260`, `tests/unit/test_assistant_config.py`.
+- **T4 Graph Check**: `graphify query "assistant tool registry whitelist and planner tool catalog"` →
+  `assistant/tools/registry.py`, `execute_tool()`, `get_tool()`, `ToolValidationError`,
+  `is_tool_whitelisted()`, `agent_registry.py`, `unit/test_assistant_tools.py`,
+  `Planner Tool Catalog`, plus the `TOOL_REGISTRY` consumers in `test_agent_registry.py` and
+  `test_assistant_harness_guardrails.py`. The query returned 257 nodes and was truncated at its token
+  budget; the 65 shown already carried the two consumers that mattered.
 - **Correction worth keeping**: a delegated map reported that `tests/unit/test_assistant_config.py` does
   not exist. It does, and it pins the persona phrases. Verified directly — delegation output is a lead,
   not a fact.
@@ -296,9 +318,23 @@ requires.
 - 2026-09-24 — **`R3-non-success-status` closed** (`8db50c1b`): RED over 204/300/304/305 first — all
   four returned a "page" — then two rules, only a 2xx is a page and a 2xx with no body is not one.
   78 passed.
+- 2026-09-24 — **Slice 2 merged.** PR #349 merged to `main` as **`5320dbb8`**; its merged remote branch
+  deleted; `main` fast-forwarded locally. Slice 3 rebased onto the new `main` (unpushed, so no rewrite
+  of published history): the two slice-3 commits were replayed as `e23c1e11` and `0835ac5a`, and the
+  SHA this record cited for the slice-2 fix is now `e23c1e11`, not `8db50c1b`. Slice 3's diff against
+  `main` is 3 files / 56 insertions before T4.
+- 2026-09-24 — **T4 done** (`45c0d88d`): `WebFetchArgs`, `_web_fetch`, the `web.fetch` registry entry
+  and the whitelist line. The record's premise about hardcoded assertions was wrong — none exist — so
+  nothing was rewritten and nothing was weakened. RDD assessment over the commit: risk **medium**,
+  `review_due: false` (`under_budget`, 6 paths / 82 lines since `5320dbb8`), so the reviewed boundary
+  stays at `main` until a later commit reaches the budget.
 
 ## Next step
 
-T4 — the registry entry and the whitelist (22 → 23), with the tool-count and known-tool assertions
-updated to the new contract. Then T5–T8: persona/prompt, spec, harness, regression and the payload
-measurement.
+T5 — extend the web-evidence allowance in `agent/personas/assistant.md` and
+`agent/prompts/assistant_respond.md` to fetched page text plus the citation duty, as narrow as the
+existing web-search allowance, without breaking the phrases `tests/unit/test_assistant_config.py`
+pins. Then T6 (spec AT-13), T7 (harness), T8 (regression and the payload measurement).
+
+Slice 3 is **not pushed** yet; the branch exists only locally. Under `stacked-to-main` its PR opens
+now that #349 is merged.
