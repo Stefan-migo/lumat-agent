@@ -15,6 +15,7 @@ from typing import Annotated, Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 from app.chat.assistant.approval import issue_approval, validate_execution
+from app.chat.assistant.tools import fetch as webfetch
 from app.chat.assistant.tools import search as websearch
 from app.chat.assistant.tools.search import SearchFailure
 from app.services import automation, cases, customers, kb, projects, relations, scheduling, tukulpan as memory
@@ -179,6 +180,11 @@ class WebSearchArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(min_length=1, max_length=500)
     limit: int = Field(default=5, ge=1, le=5)
+
+
+class WebFetchArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    url: str = Field(min_length=1, max_length=2_000)
 
 
 class RuleArgs(BaseModel):
@@ -440,6 +446,10 @@ def _web_search(_session, args: WebSearchArgs):
     return websearch.search(args.query, limit=args.limit)
 
 
+def _web_fetch(_session, args: WebFetchArgs):
+    return webfetch.read_page(args.url)
+
+
 def _project_list(session, args: ProjectListArgs):
     return projects.list(session)[: args.limit]
 
@@ -511,6 +521,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "memory.delete": ToolDefinition("memory.delete", MemoryDeleteArgs, False, _delete_memory, "Delete an agent-authored memory."),
     "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis, "Read the operational dashboard summary."),
     "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter."),
+    "web.fetch": ToolDefinition("web.fetch", WebFetchArgs, True, _web_fetch, "Read one public http(s) page as bounded citable text."),
     "automation.create_rule": ToolDefinition("automation.create_rule", RuleArgs, False, _create_rule, "Create an automation after approval."),
     "project.list": ToolDefinition("project.list", ProjectListArgs, True, _project_list, "List project namespaces."),
     "project.find": ToolDefinition("project.find", ProjectFindArgs, True, _project_find, "Find a project namespace."),

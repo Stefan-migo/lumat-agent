@@ -44,6 +44,13 @@ def test_registry_exposes_typed_bounded_tools():
     assert get_tool("automation.create_rule").read_only is False
 
 
+def test_registry_exposes_the_single_url_reader_as_a_read_only_tool():
+    schemas = tool_schemas()
+    assert "web.fetch" in schemas
+    assert schemas["web.fetch"]["required"] == ["url"]
+    assert get_tool("web.fetch").read_only is True
+
+
 def test_capabilities_args_forbids_fields():
     with pytest.raises(ValueError):
         CapabilitiesArgs.model_validate({"unexpected": True})

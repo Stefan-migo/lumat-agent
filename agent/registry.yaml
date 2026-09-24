@@ -70,6 +70,7 @@ assistant:
     - memory.delete
     - dashboard.summary
     - web.search
+    - web.fetch
     - automation.create_rule
     - project.list
     - project.find
