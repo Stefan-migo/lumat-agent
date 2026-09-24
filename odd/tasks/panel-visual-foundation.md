@@ -508,13 +508,13 @@ Actual authored changed lines (additions + deletions):
   lines** (43 additions, 15 deletions) across `Icon.test.tsx` and `primitives.css`.
 - `6fab9afb` — `fix(stories): drop the inline style from the icon stories` — **13
   lines** (3 additions, 10 deletions) on `Icon.stories.tsx`.
-- `36794db0` — `refactor(shell): migrate the panel shell icons to Lucide` — **187 lines**
+- `03558c2b` — `refactor(shell): migrate the panel shell icons to Lucide` — **187 lines**
   (57 additions, 130 deletions); PanelShell and the inline-SVG guard.
-- `34ead677` — `refactor(dashboard): migrate the dashboard icons to Lucide` — **91 lines**
+- `769c1969` — `refactor(dashboard): migrate the dashboard icons to Lucide` — **91 lines**
   (49 additions, 42 deletions); Dashboard mapping and normalized sizes.
-- `b57d21b6` — `refactor(chat): migrate the agent chat icons to Lucide` — **76 lines**
+- `e1019cb2` — `refactor(chat): migrate the agent chat icons to Lucide` — **76 lines**
   (6 additions, 70 deletions); AgentChat mapping and normalized sizes.
-- `fb96f8e1` — `refactor(primitives): replace the pseudo-icons with Lucide` — **18 lines**
+- `4ce59302` — `refactor(primitives): replace the pseudo-icons with Lucide` — **18 lines**
   (15 additions, 3 deletions); SearchInput/Dialog, rendered guards, and story copy.
 
 Slice 2 total: **612 authored lines** across 11 commits. **This exceeds the ~400-line
@@ -628,11 +628,25 @@ then run the checks, then open the PR. `a2e3ab1e` is an ancestor of `origin/main
 commits** because they are already in `main` — that is the point of the stacked split, not
 a conflict to resolve.
 
-**Known record consequence of that rebase:** every 2b commit hash cited in this document
-(`36794db0`, `34ead677`, `b57d21b6`, `fb96f8e1`, `60f9871b`, `1b9c61d4`, `198a222a`,
-`9cb349e7`) is a **pre-rebase** hash and will no longer resolve afterwards. The commit
-**messages** are the stable identifiers; re-record the new hashes when the rebase runs.
-2a's hashes stay valid — they are in `main` through the merge.
+**Rebase executed 2026-09-24 (delivery session).** The nine 2b commits were replayed onto
+`b5bb040f` with no conflicts; every pre-rebase hash formerly cited in this document no
+longer resolves. Old → new, keyed by the stable commit **message**:
+
+| Message | Pre-rebase | Post-rebase |
+| --- | --- | --- |
+| `refactor(shell): migrate the panel shell icons to Lucide` | `36794db0` | `03558c2b` |
+| `refactor(dashboard): migrate the dashboard icons to Lucide` | `34ead677` | `769c1969` |
+| `refactor(chat): migrate the agent chat icons to Lucide` | `b57d21b6` | `e1019cb2` |
+| `refactor(primitives): replace the pseudo-icons with Lucide` | `fb96f8e1` | `4ce59302` |
+| `docs(task): record T7 icon migration evidence` | `60f9871b` | `731ae431` |
+| `fix(icons): correct the migration record and the dialog indentation` | `1b9c61d4` | `b60c4602` |
+| `docs(odd): record the slice 2 visual check result` | `198a222a` | `9ecb3e4a` |
+| `docs(odd): record the slice 2 stacked split and PR 2a` | `9cb349e7` | `effe36cd` |
+| `docs(odd): record the 2a merge and the slice 2b handoff` | `1a171aa0` | `590050ed` |
+
+Post-rebase re-verification, all green: `npm run test` 85 files / 713 tests, `npx tsc -b`
+exit 0, `npm run build-storybook` exit 0. 2a's hashes stay valid — they are in `main`
+through the merge.
 
 - Session record: `.rapsodia-code/sessions/archived/2026-09-24-panel-aesthetic-direction/`
   — `report.md` carries slice 1's full evidence and the rule classification.
