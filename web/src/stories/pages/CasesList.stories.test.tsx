@@ -31,6 +31,16 @@ describe("CasesList page story (T4.2, R-PRD-PG-6)", () => {
     // Customer (name, linked)
     const customerLink = within(row).getByRole("link", { name: first.customer.name! });
     expect(customerLink.getAttribute("href")).toContain(String(first.customer.id));
+    expect(customerLink).toHaveClass("table__link");
+    expect(customerLink).not.toHaveAttribute("style");
+
+    const actions = within(row).getByLabelText(/estado/i).closest("div")?.parentElement;
+    expect(actions).not.toBeNull();
+    expect(actions).toHaveClass("cases-list__actions");
+    expect(actions).not.toHaveAttribute("style");
+    const actionRow = within(row).getByRole("button", { name: "Actualizar" }).parentElement;
+    expect(actionRow).toHaveClass("table__actions");
+    expect(actionRow).not.toHaveAttribute("style");
 
     // Service + Summary
     expect(within(row).getByText(first.service)).toBeInTheDocument();
@@ -44,6 +54,14 @@ describe("CasesList page story (T4.2, R-PRD-PG-6)", () => {
       .getAllByText(statusLabel)
       .find((el) => el.getAttribute("data-tone") === caseStatusTone(first.status));
     expect(statusBadge, "a status badge with the expected tone should render").toBeDefined();
+  });
+
+  it("uses the shared link class for the interactive customer renderer", () => {
+    const onOpenClient = vi.fn();
+    render(<CasesList data={casesData} state="ready" onOpenClient={onOpenClient} />);
+    const link = within(screen.getByRole("table")).getAllByRole("link", { name: casesData.cases[0].customer.name! })[0];
+    expect(link).toHaveClass("table__link");
+    expect(link).not.toHaveAttribute("style");
   });
 
   it("renders each case's approved Spanish status label (triangulation)", () => {

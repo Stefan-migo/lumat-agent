@@ -338,6 +338,12 @@
   box-shadow: var(--elevation-raised);
   overflow-x: auto;
 }
+/* ---- CasesList ---- */
+.cases-list__actions {
+  display: grid;
+  gap: var(--space-2);
+  align-items: end;
+}
 
 /* ---- Shared detail region: summary rail + main region ---- */
 /* Two regions by owner decision. The rail sticks while the history scrolls, and collapses

@@ -54,7 +54,7 @@ function CaseActions({
   };
 
   return (
-    <div style={{ display: "grid", gap: "var(--space-2)", alignItems: "end" }}>
+    <div className="cases-list__actions">
       <Select
         label="Estado"
         aria-label={`Estado caso ${c.id}`}
@@ -71,7 +71,7 @@ function CaseActions({
         options={[{ value: "", label: "Sin asignar" }, ...users.map((user) => ({ value: String(user.id), label: user.username }))]}
         size="sm"
       />
-      <div style={{ display: "flex", gap: "var(--space-2)" }}>
+      <div className="table__actions">
         <Button
           variant="secondary"
           disabled={busy}
@@ -103,7 +103,7 @@ function EmergencyCell({ c }: { c: Case }) {
 
 const columns: Column<Case>[] = [
   { key: "id", header: "#", render: (c) => `#${c.id}` },
-  { key: "customer", header: "Cliente", render: (c) => <a href={pathForRoute({ view: "clients", clientId: c.customer.id })} style={{ color: "var(--primary-700)" }}>{c.customer.name ?? "—"}</a> },
+  { key: "customer", header: "Cliente", render: (c) => <a className="table__link" href={pathForRoute({ view: "clients", clientId: c.customer.id })}>{c.customer.name ?? "—"}</a> },
   { key: "service", header: "Servicio", render: (c) => c.service ?? "—" },
   { key: "status", header: "Estado", render: (c) => <Badge tone={caseStatusTone(c.status)}>{caseStatusLabel(c.status)}</Badge> },
   { key: "summary", header: "Resumen", render: (c) => c.summary ?? "—" },
@@ -145,7 +145,7 @@ export function CasesList({ data: controlledData, state: controlledState, onRetr
         <EmptyState title="No hay registros" description="No existen casos abiertos pendientes o escalados." />
       ) : data ? (
         <DataTable
-          columns={columns.map((column) => column.key === "responsible" ? { ...column, render: (c: Case) => responsibleLabel(c.responsible_id, users) } : column.key === "customer" && onOpenClient ? { ...column, render: (c: Case) => <a href={pathForRoute({ view: "clients", clientId: c.customer.id })} onClick={(event) => { event.preventDefault(); onOpenClient(c.customer.id); }} style={{ color: "var(--primary-700)" }}>{c.customer.name ?? "—"}</a> } : column)}
+           columns={columns.map((column) => column.key === "responsible" ? { ...column, render: (c: Case) => responsibleLabel(c.responsible_id, users) } : column.key === "customer" && onOpenClient ? { ...column, render: (c: Case) => <a className="table__link" href={pathForRoute({ view: "clients", clientId: c.customer.id })} onClick={(event) => { event.preventDefault(); onOpenClient(c.customer.id); }}>{c.customer.name ?? "—"}</a> } : column)}
           rows={cases}
           rowKey={(c) => String(c.id)}
           actions={(c) => <CaseActions c={c} users={users} onUpdate={controlledData === undefined ? updateCase : undefined} onAcknowledge={controlledData === undefined ? acknowledgeCase : undefined} />}
