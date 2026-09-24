@@ -48,9 +48,10 @@ describe('AgendaPage', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('No tienes permiso');
     rerender(<AgendaPage state="error" data={null} onRetry={retry} />);
     expect(screen.getByRole('alert')).toHaveTextContent('No pudimos cargar la agenda');
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toHaveClass('btn');
     rerender(<AgendaPage state="stale" data={[appointment()]} onRetry={retry} />);
     expect(screen.getByRole('status')).toHaveTextContent('desactualizados');
-    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toHaveClass('btn');
   });
 
   it('groups chronological visits into Hoy and Próximas in a semantic table', () => {
@@ -61,6 +62,37 @@ describe('AgendaPage', () => {
     expect(screen.getAllByText('Camila Soto')).toHaveLength(2);
     expect(screen.getByText('Instalación')).toBeInTheDocument();
     expect(screen.getByText('Mantención')).toBeInTheDocument();
+  });
+
+  it('uses singular and plural visit counts', () => {
+    const { rerender } = render(<AgendaPage data={[appointment()]} state="ready" />);
+    expect(screen.getByText('1 visita')).toBeInTheDocument();
+
+    rerender(<AgendaPage data={[appointment(), appointment({ id: 2 })]} state="ready" />);
+    expect(screen.getByText('2 visitas')).toBeInTheDocument();
+  });
+
+  it('renders appointment slots in 24-hour time', () => {
+    render(<AgendaPage data={[appointment({ starts_at: '2026-09-05T18:00:00+00:00' })]} state="ready" />);
+    expect(screen.getByText('14:00')).toBeInTheDocument();
+    expect(screen.queryByText(/a\. m\.|p\. m\./i)).not.toBeInTheDocument();
+  });
+
+  it('does not render an empty surface for a section without rows', () => {
+    render(<AgendaPage data={[appointment({ local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
+    const today = screen.getByRole('heading', { name: 'Hoy', level: 2 }).closest('section');
+    expect(today).not.toBeNull();
+    expect(today?.querySelector('.empty-state')).not.toBeInTheDocument();
+    expect(today).not.toHaveTextContent('No hay visitas');
+  });
+
+  it('names the register region and surfaces only non-empty tables', () => {
+    const { rerender } = render(<AgendaPage data={[appointment(), appointment({ id: 2, local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
+    expect(screen.getByRole('region', { name: 'Registro de agenda' })).toBeInTheDocument();
+    expect(document.querySelectorAll('.data-region')).toHaveLength(2);
+
+    rerender(<AgendaPage data={[appointment({ local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
+    expect(document.querySelectorAll('.data-region')).toHaveLength(1);
   });
 
   it('shows a labelled empty state and keeps the table wrapper mobile-safe', () => {
@@ -78,7 +110,9 @@ describe('AgendaPage', () => {
 
     render(<AgendaPage data={[appointment()]} state="ready" />);
     await user.click(screen.getByRole('button', { name: 'Cancelar visita' }));
-    expect(screen.getByRole('dialog', { name: 'Cancelar visita' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Cancelar visita de Camila Soto — Mantención' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toHaveTextContent('La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.');
+    expect(screen.getByLabelText('Motivo de cancelación')).toHaveClass('field__control');
     await user.type(screen.getByLabelText('Motivo de cancelación'), 'Cliente avisó');
     await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }));
 
@@ -115,7 +149,18 @@ describe('AgendaPage', () => {
     await user.click(screen.getByRole('button', { name: 'Cancelar visita' }));
     await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cancelar');
+    expect(await screen.findByRole('dialog')).toHaveTextContent('No se pudo cancelar');
     expect(screen.getByText(appointmentStatusLabel('booked'))).toBeInTheDocument();
+  });
+
+  it('shows sync retry failures beside the row action', async () => {
+    const user = userEvent.setup();
+    vi.mocked(retryCalendarSync).mockRejectedValue(new Error('Calendario no disponible'));
+    render(<AgendaPage data={[appointment({ sync: { status: 'failed', error: null, retry: true } })]} state="ready" />);
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar calendario' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Calendario no disponible');
+    expect(screen.getByRole('row', { name: /Mantención/ })).toHaveTextContent('Calendario no disponible');
+    expect(screen.getByRole('alert').querySelector('h2')).not.toBeInTheDocument();
   });
 });
