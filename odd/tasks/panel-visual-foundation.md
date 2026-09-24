@@ -26,12 +26,15 @@ requirements and identity/governance rules with the same `MUST NOT` / "do not"
 weight. A temporary scope choice therefore hardens into permanent law, while a
 genuine surface rule is enforced literally.
 
-- **Scope frozen as law.** `DESIGN_SYSTEM.md:316` ("Do not offer a month grid…")
-  and `AG-UI-1` ("MUST NOT render month grids…"), while the shipped backend
-  already serves the data: `app/panel/api/routes/appointments.py:34` reads an
-  inclusive `from`/`to` range ≤ 31 days per `CI-3`; `SS-1` supports rebook with
-  history; `SS-2` exposes technician availability. It is neither a design rule nor
-  a backend limit.
+- **Scope frozen as law — already corrected by a sibling unit.** On 2026-09-24 the
+  `agenda-calendar-view` unit (PR #335, branch `odd/agenda-calendar-view`) removed
+  the month-grid ban from both `DESIGN_SYSTEM.md` (now `:311-318`, describing the
+  month/week calendar) and `AG-UI-1`, shipping the calendar the rule had forbidden.
+  That is the precedent this unit follows: the amendment and its first consumer ship
+  together. What remains here is the rule-class separation and the direction, not the
+  Agenda rule. The backend had served the data all along
+  (`app/panel/api/routes/appointments.py:34`, inclusive ≤ 31-day range per `CI-3`;
+  `SS-1` rebook; `SS-2` availability).
 - **Surface bans enforced literally.** `primitives.css` contains 0 gradients and 1
   `clamp()`.
 
@@ -82,7 +85,7 @@ security class.
 
 - Worktree: `/home/stefan/repos/lumat-agent-odd-panel-visual-foundation`
 - Branch: `odd/panel-visual-foundation`
-- Base: `1acf1a4f`
+- Base: `59034858`
 - Files: `odd/tasks/panel-visual-foundation.md`, `web/DESIGN_SYSTEM.md`,
   `web/src/tokens/tokens.css`, `web/src/tokens/tokens.ts`,
   `web/src/tokens/tokens.test.ts`, `web/package.json`, `web/package-lock.json`,
@@ -174,10 +177,10 @@ security class.
 - [ ] **T1** — Resolve the four open direction items and record them in the
   amendment: font (`system-ui` vs revisit the non-goal), icon family
   (Lucide/Phosphor), Radix scope, and `clamp()`.
-- [ ] **T2** — Amend `web/DESIGN_SYSTEM.md`: add the rule-class separation; move
-  the restrictive scope rules out to their product changes; record the direction
-  (ChatGPT, option B), the forest guard and the density line; relax card-on-card;
-  record the icon and interaction-policy amendments.
+- [ ] **T2** — Amend `web/DESIGN_SYSTEM.md`: add the rule-class separation; record
+  the direction (ChatGPT, option B), the forest guard and the density line; relax
+  card-on-card; record the icon and interaction-policy amendments. The Agenda scope
+  rule is already out (sibling unit, PR #335), so no Agenda work remains here.
 - [ ] **T3** — If a `DS-*` requirement changes (interaction policy, icons), write
   the matching OpenSpec delta paired with this unit.
 - [ ] **T4** — Token foundation: add additively the tokens the direction proves —
@@ -248,7 +251,7 @@ further if it exceeds it.
 
 ## Recovery
 
-- Base `1acf1a4f` on `main`; branch `odd/panel-visual-foundation`; worktree
+- Base `59034858` on `main`; branch `odd/panel-visual-foundation`; worktree
   `../lumat-agent-odd-panel-visual-foundation`.
 - Session record: `.rapsodia-code/sessions/ready-for-odd/2026-09-24-panel-aesthetic-direction/`
   — `report.md` carries the full evidence and the rule classification.
