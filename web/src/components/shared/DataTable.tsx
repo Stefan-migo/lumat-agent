@@ -60,7 +60,7 @@ export function DataTable<T>({
   return (
     <div>
       {stale ? (
-        <p role="status" style={{ margin: "0 0 var(--space-3)", color: "var(--text-muted)", fontSize: "var(--text-sm)" }}>
+        <p role="status" className="table__stale">
           Datos posiblemente desactualizados
         </p>
       ) : null}

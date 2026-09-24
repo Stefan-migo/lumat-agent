@@ -108,6 +108,8 @@ describe("DataTable", () => {
       />,
     );
     expect(screen.getByText(/desactualizad/i)).toBeInTheDocument();
+    expect(container.querySelector(".table__stale")).not.toBeNull();
+    expect(container.querySelector(".table__stale")).not.toHaveAttribute("style");
     expect(container.querySelector("table")).not.toBeNull();
   });
 
