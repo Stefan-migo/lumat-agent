@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Tabs } from "./Tabs";
 
 const tabs = [
@@ -21,18 +22,17 @@ describe("Tabs (CORP-TABS-1)", () => {
     const tabDatos = screen.getByRole("tab", { name: "Datos" });
     const tabNotas = screen.getByRole("tab", { name: "Notas" });
     expect(tabDatos).toHaveAttribute("aria-selected", "true");
-    expect(tabDatos).toHaveAttribute("aria-controls", "tabs-datos-panel");
     expect(tabNotas).toHaveAttribute("aria-selected", "false");
 
     const panel = screen.getByRole("tabpanel");
-    expect(panel).toHaveAttribute("id", "tabs-datos-panel");
+    expect(tabDatos).toHaveAttribute("aria-controls", panel.id);
     expect(panel).toHaveTextContent("Panel: datos");
   });
 
-  it("moves selection and swaps the panel on click", () => {
+  it("moves selection and swaps the panel on click", async () => {
     render(<Tabs tabs={tabs}>{(activeId) => <p>Panel: {activeId}</p>}</Tabs>);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Notas" }));
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Notas" }));
 
     expect(screen.getByRole("tab", { name: "Datos" })).toHaveAttribute(
       "aria-selected",
@@ -44,10 +44,29 @@ describe("Tabs (CORP-TABS-1)", () => {
     );
     expect(screen.getByRole("tabpanel")).toHaveTextContent("Panel: notas");
   });
+
+  it("supports keyboard navigation with ArrowRight, Home, and End", async () => {
+    render(<Tabs tabs={tabs}>{(activeId) => <p>Panel: {activeId}</p>}</Tabs>);
+
+    const datos = screen.getByRole("tab", { name: "Datos" });
+    const user = userEvent.setup();
+    await user.click(datos);
+    await user.keyboard("{ArrowRight}");
+
+    const notas = screen.getByRole("tab", { name: "Notas" });
+    expect(notas).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("Panel: notas");
+
+    await user.keyboard("{Home}");
+    expect(datos).toHaveAttribute("aria-selected", "true");
+
+    await user.keyboard("{End}");
+    expect(notas).toHaveAttribute("aria-selected", "true");
+  });
 });
 
 describe("Tabs controlled (CORP-TABS-2)", () => {
-  it("honors activeTab and fires onTabChange", () => {
+  it("honors activeTab and fires onTabChange", async () => {
     const onTabChange = vi.fn();
     render(
       <Tabs tabs={tabs} activeTab="notas" onTabChange={onTabChange}>
@@ -60,7 +79,7 @@ describe("Tabs controlled (CORP-TABS-2)", () => {
       "true",
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Datos" }));
+    await userEvent.setup().click(screen.getByRole("tab", { name: "Datos" }));
     expect(onTabChange).toHaveBeenCalledWith("datos");
     // Controlled: selection still comes from the prop, not the click.
     expect(screen.getByRole("tab", { name: "Notas" })).toHaveAttribute(
