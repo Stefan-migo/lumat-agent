@@ -51,6 +51,9 @@ describe("Dialog (CST-PRIM-7, CORP-DIALOG-1)", () => {
     expect(dialog).toHaveAttribute("aria-labelledby", title.id);
 
     expect(screen.getByRole("button", { name: "Cerrar" })).toBeInTheDocument();
+    const close = screen.getByRole("button", { name: "Cerrar" });
+    expect(close.querySelector("svg")).toHaveClass("icon", "icon--md");
+    expect(close).not.toHaveTextContent("✕");
     expect(screen.getByRole("button", { name: "Confirmar" })).toBeInTheDocument();
   });
   it("calls onClose for the native close event", () => {

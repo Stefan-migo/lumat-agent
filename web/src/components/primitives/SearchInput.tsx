@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
+import { Search } from "lucide-react";
 import type { InputHTMLAttributes } from "react";
 import "./primitives.css";
+import { Icon } from "./Icon";
 
 export interface SearchInputProps
   extends Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "onChange"> {
@@ -19,7 +21,7 @@ export function SearchInput({
   useEffect(() => () => clearTimeout(timer.current), []);
   return (
     <div className="search-input">
-      <span aria-hidden="true">⌕</span>
+      <Icon icon={Search} size="sm" />
       <input
         {...rest}
         type="search"
