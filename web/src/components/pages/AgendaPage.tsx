@@ -136,7 +136,8 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     : containsToday
       ? <>{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</>
       : section("Visitas del período", periodRows);
-  const showEmpty = data?.length === 0 || state === "empty" || (!selectedRows && periodRows.length === 0);
+  const renderedRows = selectedRows ?? (containsToday ? [...todayRows, ...upcomingRows] : periodRows);
+  const showEmpty = data?.length === 0 || state === "empty" || renderedRows.length === 0;
 
   return <PageFrame title="Agenda" meta={data ? `${appointments.length} ${appointments.length === 1 ? "visita" : "visitas"}` : undefined} state={stateMessage(state, retry)}>
     {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">

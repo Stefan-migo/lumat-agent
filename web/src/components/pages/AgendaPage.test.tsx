@@ -188,6 +188,23 @@ describe('AgendaPage', () => {
     expect(screen.getByRole('heading', { name: 'Próximas', level: 2 })).toBeInTheDocument();
   });
 
+  it('shows the explicit empty state when the selected day has no visits', async () => {
+    const user = userEvent.setup();
+    render(<AgendaPage data={[appointment()]} state="ready" timezone="America/Santiago" />);
+
+    await user.click(screen.getByRole('button', { name: /^domingo 6 de septiembre,/ }));
+
+    expect(screen.getByText('No hay visitas')).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Calendario de septiembre de 2026' })).toBeInTheDocument();
+  });
+
+  it('shows the explicit empty state when today has no current or upcoming visits', () => {
+    render(<AgendaPage data={[appointment({ local_start: '2026-09-04T10:00:00-04:00' })]} state="ready" timezone="America/Santiago" />);
+
+    expect(screen.getByText('No hay visitas')).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Calendario de septiembre de 2026' })).toBeInTheDocument();
+  });
+
   it('uses a single period section after navigating outside the current day', async () => {
     const user = userEvent.setup();
     vi.mocked(listAppointments)

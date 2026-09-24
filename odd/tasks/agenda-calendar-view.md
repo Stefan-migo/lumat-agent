@@ -144,7 +144,10 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
 - [x] **T4 — RED/GREEN: `AgendaPage` integration.** Wire the calendar as the fetch-window driver and
   the day filter; resize the register into the new layout; keep every existing state (loading,
   denied, error, stale, empty) and both row actions working. Update `AgendaPage.test.tsx`; existing
-  assertions must keep passing unless the contract deliberately changed.
+   assertions must keep passing unless the contract deliberately changed.
+- [x] **T4B — RED/GREEN: explicit empty register states.** Derive the page empty surface from the
+   rows that the selected-day or current-period register will actually render, including a selected
+   zero-visit day and a today-containing window with only past visits.
 - [x] **T5 — Storybook.** Extend `AgendaPage.stories.tsx` (+ its stories test) and add
   `AgendaCalendar.stories.tsx`, covering month/week, selected day, empty month, dense month, and
   narrow widths.
@@ -226,6 +229,9 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
       selected, empty, dense, and narrow variants. RED: story tests exposed date-dependent expectations
       and fake-timer interaction; GREEN: focused Storybook tests passed **15 tests** and
       `npm run build-storybook` passed.
+- [x] **T4B** — RED: the two new page tests failed (**2 failed, 16 passed**); GREEN: deriving
+      `renderedRows` from the active register path made the focused suite pass (**18 tests**). The
+      full suite then passed **84 files / 699 tests**.
 
 ## Follow-ups
 
