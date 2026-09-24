@@ -805,6 +805,10 @@
   gap: var(--space-5);
   min-width: 0;
 }
+/* Page-level actions should not stretch across the content grid. */
+.page-frame__content > .btn {
+  justify-self: start;
+}
 .page-frame__titlebar h1 {
   font-weight: var(--weight-bold);
   letter-spacing: -0.02em;
