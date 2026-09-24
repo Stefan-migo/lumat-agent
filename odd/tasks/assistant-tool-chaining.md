@@ -1,9 +1,10 @@
 # ODD: assistant-tool-chaining
 
-**Branch**: `odd/assistant-tool-chaining`
-**Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-tool-chaining`
-**Base**: `e16b3ff8` (= `main` at branch time)
-**Status**: scoped — not started
+**Branch**: `odd/assistant-tool-chaining` (slice 1, merged) · `odd/assistant-tool-chaining-slice2` (slice 2)
+**Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-tool-chaining-slice2`
+(the slice 1 worktree was removed after its merge)
+**Base**: `e16b3ff8` (slice 1) · `6b3214bd` (= `main` after PR #339, slice 2)
+**Status**: slice 1 merged · slice 2 in progress (T4–T8 outstanding)
 **Origin**: `.rapsodia-code/sessions/ready-for-odd/2026-09-24-panel-agency-and-web-grounding/`
 (Engram `handoff/panel-agency-to-u1-tool-chaining`)
 
@@ -358,8 +359,19 @@ Two defects found by the parent's readback of the first T2 attempt, both fixed b
   across the five assistant/chat test files.
 - 2026-09-24 — Slice 1 closed: delivery decision recorded (stacked-to-main), budget measured at 381
   authored lines excluding the unit record, full suite green on retry (1342 passed). Ready for PR #1.
+- 2026-09-24 — **Slice 1 merged**: PR #339 → `main` as `6b3214bd`, CI green (2m14s) before the merge.
+  Native RDD review returned **`approved`** with receipt burned and **one advisory, non-blocking
+  finding, R3-001** (the looped-write refusal is not visible to the user). The finding's detail lives in
+  the PR #339 body, not here: the reviewed candidate is frozen byte-for-byte with its receipt, so the
+  record could not be edited while the review was open.
+- 2026-09-24 — **Slice 2 started.** Worktree created with explicit owner consent from `main`
+  (`6b3214bd`), branch `odd/assistant-tool-chaining-slice2`. Environment: `infra/.env` copied, `uv sync`,
+  test-db up on port **6341**, `graphify-out/` present and **fresh at `6b3214bd`** (built from the
+  current head, so no rebuild was needed). Graph Check run before the first edit.
 
 ## Graph nodes consulted (Graph Check, Step 1)
+
+**Slice 1:**
 
 - `graphify query "assistant tool execution and planner loop"` → `nodes.py`, `agent_chat.py`,
   `assistant/graph.py`, `assistant/state.py`, `registry.py`, `build_assistant_graph()`, `get_tool()`,
@@ -370,6 +382,21 @@ Two defects found by the parent's readback of the first T2 attempt, both fixed b
 - Graph staleness: built from `59034858`; base is `e16b3ff8`. The diff touches no backend file, so the
   map is valid for this area. Refresh once at session close (`graphify <path> --update` **and**
   `graphify cluster-only <path>`).
+
+**Slice 2** (worktree `-slice2`, graph `graphify-out/` **fresh at `6b3214bd`** — no rebuild needed):
+
+- `graphify query "assistant tool loop write refusal visibility respond_stream"` → `nodes.py`,
+  `assistant/graph.py`, `assistant/state.py`, `tools/registry.py` (`execute_tool`, `get_tool`),
+  `agent_chat.py` (`_run_agent_turn_session`), `agent_registry.py`, `tests/integration/…harness*`.
+- `graphify query "AssistantState cap_reached tool_steps persistence run state"` → `AssistantState`,
+  `nodes.py`, `execute()`, `assistant/graph.py`.
+- `graphify path tool_loop_head respond_stream` → **no directed path**, and `graphify path
+  tool_loop_head _run_agent_turn_session` → **no directed path** either. Honest reading: the graph does
+  **not** model LangGraph's string-keyed conditional edges, so an absence here is not evidence of a
+  missing back-edge — it is a limit of the extractor. The slice 1 note drew a stronger conclusion from
+  the same absence than this build supports. Slice 2 relies on reading `graph.py` itself.
+- `graphify-out/GRAPH_REPORT.md` hubs: `nodes.py`, `agent_chat.py`, `assistant/state.py`, `registry.py`,
+  `issue_approval`.
 
 ## Known environmental failure (pre-existing, not this unit)
 
@@ -394,18 +421,30 @@ outstanding, so the delivery decision was taken **before** the next commit, as t
 chose **Stacked PRs to main**: each slice lands on `main` in order, independently reviewable.
 
 ```
-main ──●────────────●────────────▶
-       │            │
-       └ PR #1 ─────┘  (slice 1: the bounded loop)
-                    │
-                    └ PR #2 ──▶  (slice 2: observable + proven)
-                        📍 next
+main ──●──────────────●────────────▶
+       │              │
+       └ PR #339 ─────┘  (slice 1: the bounded loop — merged)
+                      │
+                      └ PR #2 ──▶  (slice 2: observable + proven)
+                          📍 here
 ```
 
 | Slice | PR | Tasks | Content | Status |
 |---|---|---|---|---|
-| 1 | #1 → `main` | T1, T2, T3 | The loop exists and is safe: baseline measurement, planner opt-in, accumulating state, bounded back-edge, cap, write refusal, per-iteration cost gate | ready |
-| 2 | #2 → `main` after #1 | T4, T6, T7, T8, T9 | The loop is observable and proven: user-visible write refusal, persisted `cap_reached`/`tool_steps`, end-to-end chained turn, chaining-cost delta | not started |
+| 1 | #339 → `main` (`6b3214bd`) | T1, T2, T3 | The loop exists and is safe: baseline measurement, planner opt-in, accumulating state, bounded back-edge, cap, write refusal, per-iteration cost gate | **merged** — CI green, RDD `approved` |
+| 2 | #2 → `main` after #1 | T4, T6, T7, T8, T9 | The loop is observable and proven: user-visible write refusal, persisted `cap_reached`/`tool_steps`, end-to-end chained turn, chaining-cost delta | **in progress** |
+
+**Slice 2 carries one inherited defect: R3-001.** The slice 1 review found that the looped-write refusal
+is enforced but invisible: `tool_loop_head` sets a canned `response` and routes with `status: completed`
+to `respond_stream`, whose node is `execute`, and `execute` overwrites `response` — with the model's
+answer when `on_token` is set, and with `I received your request: …` when it is not. A turn that asked
+the assistant to act therefore finishes with text, in silence. T4 (narrowed) closes exactly this.
+
+The slice 1 review budget above (381 lines) is measured for slice 1 only. Slice 2 re-measures before its
+own PR, with the same rule: the unit record is excluded, because it is the ledger, not the change.
+
+**Out of scope for both slices**: U2, U3, deep research, any new tool, tool-catalog cost hygiene, lazy
+tool loading.
 
 **Slice 1 review budget** (additions + deletions, unit record excluded), measured with
 `git diff --numstat e16b3ff8..HEAD -- . ':(exclude)odd/tasks/'`:
@@ -419,12 +458,14 @@ main ──●────────────●─────────
 | `app/chat/assistant/state.py` | +4 / −0 | 4 |
 | **Total** | | **381** |
 
-**Out of scope for both slices**: U2, U3, deep research, any new tool, tool-catalog cost hygiene, lazy
-tool loading.
-
 ## Next step
 
 T4 (narrowed) — the looped-write refusal is enforced and tested, but the reason never reaches the user:
 the refusal sets a canned `response`, and `respond_stream` overwrites it with the model's answer, so a turn
 that asked to act finishes silently with text. Surface it honestly. Then T6 (persisted `cap_reached` /
 `tool_steps`), T7 (harness end-to-end chain), T8 (chaining-turn delta), T9 (suite + PR).
+
+**Slice 2 limits, recorded before the work starts.** Slice 2 makes the existing loop visible and proven.
+It does **not** raise `MAX_ASSISTANT_TOOL_STEPS`, does not change which tools are read-only, does not
+touch the approval mechanism, `resume_thread` or SDB, and does not start U2 or U3. The write refusal
+stays a refusal: T4 changes whether the user can **see** it, never whether it happens.
