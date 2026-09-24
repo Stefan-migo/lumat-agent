@@ -6,10 +6,11 @@ import { ClientMemoriesView } from "./ClientMemories.stories";
 import { memories } from "./_shared/mockData/memories";
 
 describe("ClientMemories domain component (MEM-6)", () => {
-  it("renders the header + customer name in the PageHeader", () => {
+  it("renders one region heading without a nested page heading", () => {
     render(<ClientMemoriesView />);
-    expect(screen.getByRole("heading", { name: "Memorias" })).toBeInTheDocument();
-    expect(screen.getByText(/Ficha de Marcela Fuentes/)).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "Memorias del cliente" })).toHaveLength(1);
+    expect(screen.queryByRole("heading", { name: "Memorias" })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("heading", { level: 1 })).toHaveLength(0);
   });
 
   it("renders every memory as a table row with stable identity", () => {
@@ -48,7 +49,6 @@ describe("ClientMemories domain component (MEM-6)", () => {
     render(
       <ClientMemories
         memories={[memories[0]]}
-        customerName={null}
         onDelete={onDelete}
         onPin={onPin}
       />,

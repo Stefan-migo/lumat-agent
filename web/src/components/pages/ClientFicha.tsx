@@ -204,7 +204,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             <p>{data.memo || "Todavía no hay memo para este cliente."}</p>
           </Card>
 
-          <ClientMemories memories={memories} customerName={customer.name} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} />
+          <ClientMemories memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} />
 
           <Card title="Notas">
             {data.notes.length ? data.notes.map((entry) => <p key={entry.id}>{entry.author ?? "—"} · {entry.note}</p>) : <EmptyState title="No hay notas" />}
