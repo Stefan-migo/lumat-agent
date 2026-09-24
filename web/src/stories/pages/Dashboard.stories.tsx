@@ -1,9 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { Dashboard } from "../../components/pages/Dashboard";
-import type { AsyncDataState } from "../../hooks/useAsyncData";
+import { Dashboard, type DashboardState as PageDashboardState } from "../../components/pages/Dashboard";
 import type { DashboardToday, DashboardTrendBucket, Kpis } from "../../types";
 
-export type DashboardState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
+export type DashboardState = PageDashboardState;
 
 export interface DashboardOverviewProps {
   state?: DashboardState;
@@ -50,8 +49,7 @@ const MOCK_KPIS: Kpis = {
 };
 
 export function DashboardOverview({ state = "ready", data = MOCK_KPIS }: DashboardOverviewProps) {
-  const normalized: AsyncDataState = state === "fatal-error" || state === "stale" || state === "partial-error" ? "error" : state;
-  return <Dashboard data={data} state={normalized} />;
+  return <Dashboard data={data} state={state} />;
 }
 
 const meta = {

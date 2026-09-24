@@ -24,6 +24,8 @@ describe("Dashboard page story (R-PRD-PG-6)", () => {
   it.each([
     ["loading", "Cargando indicadores"],
     ["empty", "Aún no hay actividad en esta ventana"],
+    ["stale", "Los datos pueden estar desactualizados"],
+    ["partial-error", "No pudimos cargar toda la actividad"],
     ["fatal-error", "No pudimos cargar el panel"],
   ] as const)("renders the %s state via the shared StateMessage", (state, message) => {
     render(<DashboardOverview state={state} />);

@@ -2022,14 +2022,14 @@
 /* ---- Section scaffolding ---- */
 .dashboard__section { display:grid; gap:var(--space-3); }
 .dashboard__section-head { display:flex; align-items:center; gap:var(--space-2); }
-.dashboard__section-head h2 { display:flex; align-items:center; gap:var(--space-2); margin:0; font-size:var(--text-sm); font-weight:var(--weight-semibold); text-transform:uppercase; letter-spacing:0.08em; color:var(--corp-fg-muted); }
+.dashboard__section-head h2 { display:flex; align-items:center; gap:var(--space-2); margin:0; font-size:var(--text-sm); font-weight:var(--weight-semibold); letter-spacing:0.08em; color:var(--corp-fg-muted); }
 .dashboard__section-head h2::before { content:""; width:var(--space-2); height:var(--space-2); border-radius:var(--radius-sm); background:var(--brand-lime); }
 .dashboard__day { display:inline-flex; align-items:center; gap:var(--space-2); margin-left:auto; padding:var(--space-1) var(--space-3); border:1px solid var(--corp-border); border-radius:999px; background:var(--brand-bg-elevated); color:var(--corp-fg-muted); font-size:var(--text-sm); font-weight:var(--weight-medium); }
 .dashboard__day svg { color:var(--primary-700); }
 
 /* ---- HOY: operational cards ---- */
 .dashboard__hoy { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--space-3); }
-.dashboard__card-ops { display:grid; grid-template-rows:auto minmax(0,1fr); gap:var(--space-3); padding:var(--space-4); border:1px solid var(--corp-border); border-radius:var(--radius-md); background:var(--brand-bg-elevated); box-shadow:var(--shadow-1); }
+.dashboard__card-ops { display:grid; grid-template-rows:auto minmax(0,1fr); gap:var(--space-3); padding:var(--space-4); border:1px solid var(--corp-border); border-radius:var(--radius-lg); background:var(--brand-bg-elevated); box-shadow:var(--shadow-1); }
 .dashboard__card-ops__head { display:flex; align-items:center; gap:var(--space-2); min-width:0; }
 .dashboard__card-ops__head h3 { margin:0; font-size:var(--text-md); font-weight:var(--weight-semibold); color:var(--corp-text); }
 .dashboard__card-ops__icon { display:grid; flex:none; place-items:center; width:var(--space-8); height:var(--space-8); border-radius:var(--radius-md); background:var(--primary-100); color:var(--primary-700); }
@@ -2055,7 +2055,7 @@
 
 /* ---- Atajos: bento grid ---- */
 .dashboard__grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--space-3); }
-.dashboard__card { --bent-accent:var(--primary-700); display:flex; flex-direction:column; gap:var(--space-2); min-height:calc(var(--space-8) * 3); padding:var(--space-4); border:1px solid var(--corp-border); border-radius:var(--radius-md); background:var(--brand-bg-elevated); color:var(--corp-text); text-align:left; cursor:pointer; box-shadow:var(--shadow-1); transition:border-color var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out); }
+.dashboard__card { --bent-accent:var(--primary-700); display:flex; flex-direction:column; gap:var(--space-2); min-height:calc(var(--space-8) * 3); padding:var(--space-4); border:1px solid var(--corp-border); border-radius:var(--radius-lg); background:var(--brand-bg-elevated); color:var(--corp-text); text-align:left; cursor:pointer; box-shadow:var(--shadow-1); transition:border-color var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out); }
 .dashboard__card:hover { border-color:var(--bent-accent); background:color-mix(in srgb, var(--bent-accent) 10%, var(--brand-bg-elevated)); box-shadow:var(--shadow-2); transform:translateY(calc(var(--space-1) * -1)); }
 .dashboard__card:active { transform:none; box-shadow:var(--shadow-1); }
 .dashboard__card:focus-visible { outline:var(--focus-ring-width) solid var(--focus-ring); outline-offset:var(--focus-ring-offset); }
@@ -2096,6 +2096,9 @@
 
 @media (max-width: 63.99rem) {
   .dashboard { padding-bottom:calc(var(--space-8) * 2 + var(--space-3)); }
+  .dashboard__hoy { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .dashboard__grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .dashboard__card--wide { grid-column:span 2; }
   .dashboard .kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .dashboard__period { grid-template-columns:1fr; }
 }
