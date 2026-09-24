@@ -115,17 +115,17 @@ N3 follow-up unit name: `inline-style-boundary` (not opened here; record only).
 
 ## Tasks
 
-- [ ] **T1 (N1, TDD)** — RED: add `web/src/stories/primitives/Dialog.stories.test.tsx` asserting the
+- [x] **T1 (N1, TDD)** — RED: add `web/src/stories/primitives/Dialog.stories.test.tsx` asserting the
   fixture renders `btn` / `btn--secondary` / `btn--primary` controls and contains zero `[style]`
   attributes. Extract the fixture body into an exported `DialogConfirmView` component and add it to
   `excludeStories`, mirroring the `ClientMemoriesView` pattern (`ClientMemories.stories.tsx:9-20`).
-- [ ] **T2 (N1, GREEN)** — convert the three raw `<button>` elements to the `Button` primitive, apply
+- [x] **T2 (N1, GREEN)** — convert the three raw `<button>` elements to the `Button` primitive, apply
   `.dialog__message` / `.dialog__actions`, and add both classes to `primitives.css`. Re-run T1 → green.
-- [ ] **T3 (N2, TDD)** — RED: rewrite the `ClientMemories` region-heading test to the D5 contract.
-- [ ] **T4 (N2, GREEN)** — remove the nested `PageHeader` and the `customerName` prop plus its
+- [x] **T3 (N2, TDD)** — RED: rewrite the `ClientMemories` region-heading test to the D5 contract.
+- [x] **T4 (N2, GREEN)** — remove the nested `PageHeader` and the `customerName` prop plus its
   import; update `ClientFicha.tsx`, `ClientMemories.stories.tsx` and the remaining
   `ClientMemories.stories.test.tsx` call site. Re-run T3 → green.
-- [ ] **T5 — Guards + typecheck + build.** `npm run test`, `npx tsc -b`,
+- [x] **T5 — Guards + typecheck + build.** `npm run test`, `npx tsc -b`,
   `npm run build-storybook` all green; record the real test count.
 - [ ] **T6 — Visual check** at 1366×768 with the 640/1024/1280 references for the Dialog story and
   the client ficha memories region.
@@ -177,6 +177,16 @@ Guard tests that must stay green: `tokens.test.ts`, `style-boundary.test.ts`,
   `PageHeader()`, `ClientFicha.tsx`, `primitives.css`, `tokens.test.ts`,
   `style-boundary.test.ts`, `dependency-boundary.test.ts`. Community: `ClientFicha.tsx`.
 - 2026-09-24 — Split decision recorded (N3 out) before the first source write.
+- 2026-09-24 — T1 RED observed: the new Dialog contract test failed because `DialogConfirmView` was
+  undefined; T1/T2 then passed with the Button primitive and tokenized classes.
+- 2026-09-24 — T3 RED observed: the rewritten ClientMemories contract failed because the nested
+  PageHeader did not expose the required heading contract; T3/T4 then passed after removing it.
+- 2026-09-24 — T5 passed: `npm run test` reported **86 files / 715 tests passed**; `npx tsc -b`
+  and `npm run build-storybook` both exited 0. Existing act/navigation and Storybook chunk-size
+  warnings remained non-failing.
+- 2026-09-24 — Implementation commits: `a5354df5` (`fix(web): use the Button primitive in the
+  Dialog story fixture`) and `5ccc12b8` (`refactor(web): drop the page-level PageHeader from the
+  ClientMemories region`).
 
 ## Open items
 
