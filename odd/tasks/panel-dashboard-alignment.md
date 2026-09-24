@@ -206,6 +206,30 @@ Verification:
 
 `.dashboard__chart__empty` was not changed: it is an empty-state box inside a card, not a card container. `.dashboard__chip` remains a pill with `border-radius:999px`.
 
+**Nuance, recorded rather than hidden.** When the `today` request fails, the Hoy region still renders
+through the `emptyToday` fallback (zero counts, empty lists) *underneath* the partial-error notice
+(`Dashboard.tsx:126,157`). The failure is no longer silent — it declares itself — but the affected
+region still reads as zero. Hiding the region entirely was considered and rejected here as a larger
+UI change than this alignment warrants. If the owner wants the failed region to disappear or to be
+replaced by the notice, that is one bounded follow-up.
+
+Non-blocking note on the writer's report: it returned `status: partial` after seeing intermittent
+`AgendaPage` timeouts on later full-suite reruns. Those were CPU contention from the Storybook and
+Playwright processes it had running concurrently, not a defect in this change: the orchestrator
+re-ran the full web suite on the frozen tree and observed `86 passed (86)` files and
+`725 passed (725)` tests with nothing else running. The declared status was worse than reality.
+
+## Assess outcome
+
+`gentle-ai review assess --base-ref 66cc868a --committed-only` over the three commits:
+
+- risk `medium` (`reasons: [executable_change]` on `Dashboard.test.tsx`), 6 changed paths, 304
+  changed lines, `review_due: false`, `review_due_reason: under_budget`.
+
+No native review is due for this unit; the assessed tier and reason are recorded per protocol. The
+first assessment invocation omitted `--base-ref` and reported `high` / `unassessable` with
+`changed_paths: 0`; that was the selector, not the change.
+
 ## Recovery
 
 Resume with `mem_context`, then the project-scoped `mem_search` for `panel-dashboard-alignment`,
