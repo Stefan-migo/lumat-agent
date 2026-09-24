@@ -699,6 +699,8 @@ def _run_agent_turn_session(
             "guardrails": result.get("guardrails", {}),
             "cost_mode": result.get("cost_mode", "normal"),
             "cost_directive": result.get("cost_directive", ""),
+            "tool_steps": result.get("tool_steps", 0),
+            "cap_reached": result.get("cap_reached", False),
             "compaction": compaction,
             **({"cortex_session": result["cortex_session"]} if result.get("cortex_session") else {}),
         })

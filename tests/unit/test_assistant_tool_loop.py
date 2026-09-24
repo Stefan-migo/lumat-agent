@@ -1,11 +1,21 @@
 """Contracts for narrating a completed panel assistant tool call."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
 
-from app.chat.assistant.graph import _after_execute, _after_tool_loop, build_assistant_graph, run_assistant
-from app.chat.assistant.nodes import MAX_ASSISTANT_TOOL_STEPS, _context_text, execute, tool_loop_head
+from app.chat.assistant.graph import END, _after_execute, _after_guardrails, _after_tool_loop, build_assistant_graph, run_assistant
+from app.chat.assistant.nodes import (
+    MAX_ASSISTANT_TOOL_STEPS,
+    PANEL_LOOP_WRITE_REFUSAL,
+    _TOOL_EVIDENCE_LIMIT,
+    _context_text,
+    execute,
+    guardrails,
+    plan_llm,
+    tool_loop_head,
+)
 
 
 def _tool_state(**overrides):
@@ -88,8 +98,70 @@ def test_opted_in_turn_executes_two_tools_and_narrates_combined_evidence(monkeyp
     assert handler_calls == ["customers.search", "memory.search"]
     assert len([call for call in calls if not call.get("stream")]) == 2
     assert final["response"] == "Ana is a customer"
-    assert '"customers.search"' in calls[-1]["messages"][-1]["content"]
-    assert '"memory.search"' in calls[-1]["messages"][-1]["content"]
+    planner_calls = [call for call in calls if not call.get("stream")]
+    planner_prompt = planner_calls[-1]["messages"][-1]["content"]
+    responder_prompt = calls[-1]["messages"][-1]["content"]
+    assert '"customers.search"' in planner_prompt
+    assert responder_prompt.count('[{"evidence": "customers.search"}]') == 1
+    assert responder_prompt.count('[{"evidence": "memory.search"}]') == 1
+
+
+def test_chained_turn_publishes_planning_after_first_execution(monkeypatch):
+    calls = []
+    stages = []
+    plans = [
+        '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}',
+        '{"kind":"tool","tool":"memory.search","arguments":{"query":"Ana"},"summary":"Find memory","requires_approval":false,"follow_up":true}',
+    ]
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda _session, tool_name, *_args, **_kwargs: {
+            "tool": tool_name,
+            "status": "completed",
+            "result": [{"evidence": tool_name}],
+        },
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    run_assistant(
+        thread_id=7,
+        user_id=1,
+        content="Find Ana",
+        run_id="run-stage-loop",
+        on_token=lambda _token: None,
+        on_stage=stages.append,
+    )
+
+    first_executing = stages.index("executing")
+    assert "planning" in stages[first_executing + 1:]
+
+
+def test_replan_keeps_newest_tool_evidence_within_budget(monkeypatch):
+    calls = []
+    marker = "NEWEST_RESULT_MARKER"
+    plans = ['{"kind":"respond","tool":null,"arguments":{},"summary":"Done","requires_approval":false}']
+
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    plan_llm(
+        {
+            "content": "Find Ana",
+            "context": {"items": [], "meta": {}},
+            "tool_results": [
+                {"result": [{"evidence": "customers.search", "payload": "x" * 10_000}]},
+                {"result": [{"evidence": "memory.search", "marker": marker}]},
+            ],
+        }
+    )
+
+    evidence = calls[-1]["messages"][-1]["content"].split("Prior tool evidence:\n", 1)[1]
+    assert marker in evidence
+    assert "1 earlier tool result(s) omitted" in evidence
+    assert len(evidence) <= _TOOL_EVIDENCE_LIMIT
 
 
 def test_cap_refuses_a_third_execution(monkeypatch):
@@ -120,6 +192,28 @@ def test_cap_refuses_a_third_execution(monkeypatch):
 
     assert _after_tool_loop(state) == "respond_stream"
     result = tool_loop_head(state)
+    assert result["cap_reached"] is True
+    assert result["status"] == "completed"
+
+
+def test_cap_is_recorded_only_when_follow_up_is_still_requested():
+    completed_state = _tool_state(
+        tool_steps=MAX_ASSISTANT_TOOL_STEPS,
+        plan={**_tool_state()["plan"], "follow_up": False},
+    )
+
+    result = tool_loop_head(completed_state)
+
+    assert "cap_reached" not in result
+    assert result["status"] == "completed"
+
+    capped_state = _tool_state(
+        tool_steps=MAX_ASSISTANT_TOOL_STEPS,
+        plan={**_tool_state()["plan"], "follow_up": True},
+    )
+
+    result = tool_loop_head(capped_state)
+
     assert result["cap_reached"] is True
     assert result["status"] == "completed"
 
@@ -210,22 +304,113 @@ def test_sessionless_normal_cost_mode_keeps_two_step_chain(monkeypatch):
     assert len([call for call in calls if not call.get("stream")]) == 2
 
 
-def test_step_two_write_plan_finishes_without_execution_or_approval():
-    from app.chat.assistant.nodes import tool_loop_head
-
+def test_step_two_write_plan_is_refused_by_guardrails():
     state = _tool_state(
         tool_steps=1,
         plan={
-            "kind": "tool", "tool": "memory.write", "arguments": {},
+            "kind": "tool", "tool": "memory.write",
+            "arguments": {"titulo": "N", "contenido": "Content", "topic_key": "agent:test", "tipo": "discovery"},
             "summary": "Write memory", "requires_approval": True, "follow_up": False,
         },
     )
 
-    result = tool_loop_head(state)
+    result = guardrails(state)
 
     assert result["status"] == "completed"
     assert result["approval"] is None
     assert result["guardrails"]["decision"] == "loop_write_refused"
+    assert result["response"] == PANEL_LOOP_WRITE_REFUSAL
+
+
+@pytest.mark.parametrize(
+    "tool_name,arguments",
+    [
+        (
+            "memory.write",
+            {
+                "titulo": "N",
+                "contenido": "Content",
+                "topic_key": "agent:test",
+                "tipo": "discovery",
+            },
+        ),
+        (
+            "automation.create_rule",
+            {
+                "name": "N",
+                "event_type": "appointment.created",
+                "conditions": {},
+                "channel": "whatsapp",
+                "template_event": "reminder",
+                "cooldown_seconds": 0,
+            },
+        ),
+    ],
+)
+@pytest.mark.parametrize("follow_up", [True, False])
+def test_graph_refuses_step_two_write_before_execution_or_approval(
+    monkeypatch, tool_name, arguments, follow_up
+):
+    calls = []
+    handler_calls = []
+    plans = [
+        '{"kind":"tool","tool":"customers.search","arguments":{"query":"Ana"},"summary":"Find Ana","requires_approval":false,"follow_up":true}',
+        json.dumps({
+            "kind": "tool",
+            "tool": tool_name,
+            "arguments": arguments,
+            "summary": "Write",
+            "requires_approval": True,
+            "follow_up": follow_up,
+        }),
+    ]
+    issued = []
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda _session, name, *_args, **_kwargs: handler_calls.append(name)
+        or {"tool": name, "status": "completed", "result": [{"name": "Ana"}]},
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "app.chat.assistant.approval.issue_approval",
+        lambda plan: issued.append(plan) or {"status": "pending"},
+    )
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    final = run_assistant(
+        thread_id=7, user_id=1, content="Find Ana", run_id="run-write-refusal", on_token=lambda _token: None
+    )
+
+    assert handler_calls == ["customers.search"]
+    assert final["response"] == PANEL_LOOP_WRITE_REFUSAL
+    assert final.get("approval") is None
+    assert issued == []
+    assert [call for call in calls if call.get("stream")] == []
+    assert _after_guardrails({**final, "guardrails": {"decision": "loop_write_refused"}}) == END
+
+
+def test_single_autonomous_write_executes_without_loop_refusal(monkeypatch):
+    calls = []
+    handler_calls = []
+    plans = [
+        '{"kind":"tool","tool":"memory.write","arguments":{"titulo":"N","contenido":"Content","topic_key":"agent:test","tipo":"discovery"},"summary":"Write","requires_approval":false,"follow_up":false}',
+    ]
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes.execute_tool",
+        lambda _session, name, *_args, **_kwargs: handler_calls.append(name)
+        or {"tool": name, "status": "completed", "result": [{"written": True}]},
+    )
+    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
+    client = _client(calls, plans)
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
+
+    final = run_assistant(
+        thread_id=7, user_id=1, content="Save this", run_id="run-single-write", on_token=lambda _token: None
+    )
+
+    assert handler_calls == ["memory.write"]
+    assert final["guardrails"]["decision"] == "execute"
 
 
 def test_single_tool_responder_receives_evidence_once_and_context_stays_clean(monkeypatch):
