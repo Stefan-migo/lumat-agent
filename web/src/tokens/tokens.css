@@ -126,8 +126,8 @@ body {
   --bp-sm: 640px;
   --bp-md: 1024px;
   --bp-lg: 1280px;
-  --shell-rail-compact: 4rem;
-  --shell-rail-expanded: 15rem;
+  --shell-rail-compact: 64px;
+  --shell-rail-expanded: 240px;
   --touch-target: 44px;
 
   /* Shadow */

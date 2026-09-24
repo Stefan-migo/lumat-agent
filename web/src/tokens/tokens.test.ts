@@ -64,6 +64,11 @@ const brandBgElevated = (): Rgb => {
 };
 
 describe('design tokens (PDW-TKN-1 / PDW-TKN-2)', () => {
+  it('keeps shell rail layout tokens in text-zoom-immune pixels', () => {
+    expect(cssVars.get('--shell-rail-compact')).toBe('64px');
+    expect(cssVars.get('--shell-rail-expanded')).toBe('240px');
+  });
+
   it('tokens.css is a single :root source with the exact spot-checked palette', () => {
     expect(tokensRaw).toContain(':root');
     expect(tokensRaw).toContain('#143c2c'); // brand primary-800
