@@ -141,11 +141,11 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
   current period is announced by the calendar heading, and the control states the action. The
   underlying primitive defect is recorded under Follow-ups, not fixed here. Behavior, the accessible
   visit count, and the selected/today state MUST NOT change.
-- [ ] **T4 — RED/GREEN: `AgendaPage` integration.** Wire the calendar as the fetch-window driver and
+- [x] **T4 — RED/GREEN: `AgendaPage` integration.** Wire the calendar as the fetch-window driver and
   the day filter; resize the register into the new layout; keep every existing state (loading,
   denied, error, stale, empty) and both row actions working. Update `AgendaPage.test.tsx`; existing
   assertions must keep passing unless the contract deliberately changed.
-- [ ] **T5 — Storybook.** Extend `AgendaPage.stories.tsx` (+ its stories test) and add
+- [x] **T5 — Storybook.** Extend `AgendaPage.stories.tsx` (+ its stories test) and add
   `AgendaCalendar.stories.tsx`, covering month/week, selected day, empty month, dense month, and
   narrow widths.
 - [ ] **T6 — Closeout.** Run the full checks, reconcile this progress list against `git log`, and
@@ -218,6 +218,14 @@ blocks; create/edit/rebook; the technician agenda (`TechnicianAgenda.tsx`) and i
       to the `Button` primitive, and changed the view switch to one action-labelled toggle. RED:
       focused Vitest found the old grid roles, old two-button toggle, and invalid selection assertion.
       GREEN: commit `49cdd91a`; focused Vitest passed **7 tests**.
+- [x] **T4** — Integrated the calendar into `AgendaPage` as the month/week fetch-window driver,
+      added selected-day filtering, preserved lifecycle and row-action behavior, and kept the
+      register mobile-safe. RED: existing page assertions needed calendar-aware table/text scopes.
+      GREEN: focused page Vitest passed **16 tests**, build and TypeScript checks passed.
+- [x] **T5** — Added page state-matrix coverage and `AgendaCalendar` stories for month, week,
+      selected, empty, dense, and narrow variants. RED: story tests exposed date-dependent expectations
+      and fake-timer interaction; GREEN: focused Storybook tests passed **15 tests** and
+      `npm run build-storybook` passed.
 
 ## Follow-ups
 
