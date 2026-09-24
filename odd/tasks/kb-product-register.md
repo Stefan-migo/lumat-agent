@@ -326,7 +326,7 @@ driving data rather than a workflow prop, and hand the branch to the human for t
 - [x] Slice 1 (T1–T3) — merged to `main` as `a937f81e` (PR #328)
 - [x] Slice 2 (T4) — merged to `main` as `8548e988` (PR #330)
 - [x] Slice 3 (T5–T7) — merged to `main` as `fe221c0b` (PR #331), retargeted to `main` before merge
-- [ ] Slice 4 (T8–T10) — in flight. Route: delegated writer (trigger: 2+ non-trivial files — `KbList.tsx`, `primitives.css`, stories and tests). Branch synced to `main` `fe221c0b`; the worktree tree is identical to `main`, so PR 4's diff is exactly this slice.
+- [x] Slice 4 (T8–T10) — implemented, corrected and green on `odd/kb-document-surface`; awaiting the human visual gate and PR 4. Route: delegated writer (trigger: 2+ non-trivial files — `KbList.tsx`, `primitives.css`, stories and tests), plus one bounded parent-ordered correction.
 
 > Merge gate note (2026-09-24): the owner authorized merging PR #330 and PR #331
 > directly. The documented 1366×768 human visual gate for those two slices is not
@@ -483,8 +483,87 @@ Process note: the slice-3 writer also ran an `graphify` refresh early (twice). V
 that it wrote only inside the unit worktree and left the main worktree's graph
 untouched.
 
+### Slice 4 (T8–T10) — branch `odd/kb-document-surface`
+
+Commits: `1a77d339` (T8), `88854091` (T9), `11ac9735` (T10), plus the bounded
+correction `3d363355`, `99bb0a20`, `6e17703c`, `060bfe38`.
+
+The documents are now the primary region on the shared `.data-region` surface, the
+upload is a secondary `section` below the collection, the retrieval probe is a named
+tool region, uploads validate format and size with processing/failure/retry at the
+upload locus, and every page state comes from the page's own data source
+(`KbListProps` no longer carries the `state` prop production ignored).
+
+**RED verified independently by the parent, not taken on report**: reverting the
+source to the task's base while keeping the new test fails that task's assertions —
+T8 against `fe221c0b` (6 failed / 13 passed), T9 against `1a77d339` (4 failed / 15
+passed), T10 against `88854091` (4 failed / 15 passed).
+
+Parent readback found three defects the writer did not declare, corrected in one
+bounded pass:
+
+1. **Orphaned `.kb*` CSS.** `.kb-actions` (a whole rule) and `.kb-actions__edit`
+   (one selector inside two rules) had zero consumers — orphaned when slice 3 moved
+   the operations to the detail as `kb-actions__edit-form`. T8 owns this trim, and
+   the original test pinned only the single class the writer had removed, so it
+   could not catch them. Removed; the test now asserts the invariant instead of the
+   instance — no `.kb*` class declared in the stylesheet may be unreferenced by any
+   component or story source (precedent: `style-boundary.test.ts`). The parent
+   verified the invariant by injecting `.kb-dead-check` (test fails naming it) and
+   restoring (test passes).
+2. **A story that lied.** `Processing` rendered the ready state under a name that
+   means the opposite — the fiction class D1 exists to kill. Removed, with the
+   reason recorded: processing is only observable during an in-flight upload.
+3. **Two states of the T10 matrix were unasserted**: the page loading banner and the
+   upload success feedback. Both now asserted, so all six states (loading, empty,
+   denied, error, processing, success) have coverage.
+
+Parent re-ran every check on the corrected candidate:
+
+- `npm run test`: **82 files / 678 tests passed**
+- `npx tsc -b --noEmit`: passed
+- `npm run build`: passed (pre-existing chunk-size warning only)
+- `npm run build-storybook`: passed (pre-existing warnings only)
+
+Assessment for the slice diff (`fe221c0b..HEAD`): `medium`, 5 paths,
+`under_budget`. RDD is `off` for this clone, so no native review lifecycle runs;
+the medium tier is covered by the writer's self-verification, the parent's
+independent RED verification, the readback and the four checks above.
+
+**Review size: 229 changed lines (168 added, 61 deleted)** — under the ~400 budget,
+so no cut pass was needed.
+
+| Side | Changed lines |
+|---|---|
+| Production source (`KbList.tsx`, `primitives.css`) | 67 |
+| Tests and stories | 140 |
+| This unit record | 22 |
+
+Open items declared for slice 4:
+
+- **The 5 MB upload cap is a panel-side policy, not a domain limit.**
+  `POST /panel/api/kb` enforces no size (`app/panel/api/routes/kb.py`); the number
+  matches the unrelated assistant-attachment convention (`app/config.py:53`). The
+  panel states "Máximo 5 MB" as a fact and now refuses larger files the API would
+  accept. Decision pending: keep it and record it as a deliberate panel policy (and
+  consider mirroring it server-side), or change the number. Declared in the PR body.
+- `kb-search__hint` carries the upload help copy: a class named for the search
+  affordance used by the upload section — the misleading-name pattern this repo
+  refuses elsewhere. Report-only; not fixed, because the search affordance is
+  explicitly authorized to keep its own class.
+- The dotless-filename fix is pinned by a source assertion, not a behavioral test,
+  because the behavior is identical before and after (a dotless name is rejected
+  either way). A pure `uploadExtension(name)` helper would allow a real behavioral
+  test; not done in the bounded pass.
+- Edge, recorded for honesty: the explicit `dot > 0` guard rejects a name that
+  begins with a dot (`.pdf`), which the previous `slice(0)` form accepted.
+  Pathological input.
+- Acceptance criterion 8 (human visual acceptance at 1366×768) is open for slice 4 —
+  and, as recorded above, for the already-merged slices 2 and 3.
+
 ## Next step
 
-Slice 4 (T8–T10): the corpus and completeness — `.data-region` on the documents table,
-the `.kb*` trim, the documents-first recomposition with the upload demoted, the retrieval
-probe as a tool region, upload validation feedback, and the full state matrix.
+Slice 4 is implemented, corrected and green on `odd/kb-document-surface`
+(`main` `fe221c0b` + the four slice commits and the correction). What remains is
+delivery: the owner's visual gate at 1366×768, then push and PR 4 against `main`,
+then the 5 MB decision recorded above.
