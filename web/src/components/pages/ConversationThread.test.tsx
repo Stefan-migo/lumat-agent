@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConversationThread } from './ConversationThread';
@@ -111,6 +113,32 @@ it('shows delivery failure content beside the retry action', () => {
 
   expect(screen.getByText(/canal no disponible/i)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /reintentar entrega #1/i })).toBeInTheDocument();
+});
+
+it('keeps conversation actions in the thread header and context actions-free', () => {
+  render(<ConversationThread data={{ ...thread, conversation: {
+    ...thread.conversation,
+    customer: { id: 4, name: 'María González', phone_e164: '+5694' },
+    case: { id: 22, service: 'Urgencia', priority: 'high', status: 'open', emergency: true, summary: 'Needs help', acknowledged_at: null, closed_at: null },
+    case_id: 22,
+    emergency: true,
+    acknowledged_at: null,
+  }, messages: thread.messages }} state="ready" interactive />);
+
+  const header = document.querySelector('.ai-agent-grammar__header');
+  expect(header).not.toBeNull();
+  for (const label of ['Tomar', 'Devolver', 'Cerrar', 'Reconocer emergencia']) {
+    const button = screen.getByRole('button', { name: label });
+    expect(header).toContainElement(button);
+  }
+  expect(screen.getByRole('complementary', { name: /inspector de conversación/i }).querySelector('details')).toBeTruthy();
+  expect(screen.queryByRole('heading', { name: 'Acciones' })).not.toBeInTheDocument();
+});
+
+it('does not hide the conversation inspector at the 64rem breakpoint', () => {
+  const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+  const mediaBlock = css.match(/@media \(max-width: 64rem\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  expect(mediaBlock).not.toMatch(/\.ai-agent-grammar__inspector\s*\{\s*display:\s*none;/);
 });
 
   it('renders the conversation inspector beside the thread', () => {
