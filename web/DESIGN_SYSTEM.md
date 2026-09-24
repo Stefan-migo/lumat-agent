@@ -20,9 +20,9 @@ This document defines how Lumat should look, read, and behave across the current
 | Grammar scope | Agent-app appearance across the whole panel; control-room physiology inside dense content primitives (tables, KPIs, badges) |
 | Primary authority | Deep forest `--primary-800`; not logo lime |
 | Brand expression | Cyan for information, lime for recognition/selection, graphite for grounding |
-| Typography | Existing system-ui stack; no font dependency |
-| Shape | Compact 6/8px radii and 4px spacing scale |
-| Theme | Light theme required; dark mode is a separate future change |
+| Typography | Inter UI font, composed through additive `--font-ui` |
+| Shape | ChatGPT structure: large radii/pills, 12–16px cards, and 4px spacing scale |
+| Theme | Light theme; theme scope is owned by the relevant product change |
 | Language | Neutral Chilean Spanish in the UI; English in code and technical artifacts |
 | Verification | WCAG 2.2 AA, complete states, Storybook, responsive and keyboard checks |
 
@@ -37,6 +37,26 @@ Use this order when sources disagree:
 5. The Jinja panel remains a production reference until each route is migrated.
 
 Do not duplicate token values in component or story code. Proposed tokens in this document become executable only when added to `tokens.css` through an approved SDD change.
+
+## Rule classes and authority
+
+This system distinguishes three classes of rules. They do not carry identical
+normative force:
+
+- **Restrictive — product scope and capability.** These rules belong to the
+  product change that introduces a surface, not to this design system. Product
+  proposals own decisions such as whether a route is read-only, which actions a
+  workflow exposes, and whether dark mode is in that change.
+- **Security — harm prevention.** WCAG 2.2 AA contrast pairs, keyboard and
+  focus operation, role permissions, login existence safety, destructive
+  confirmation, and colour-never-alone remain non-negotiable.
+- **Basic — identity, consistency, and governance.** The token source, semantic
+  roles, typography, spacing and shape vocabulary, primitive contracts,
+  localization, and Storybook verification define the shared product identity.
+
+Product changes may add scope and capability constraints in their own OpenSpec
+requirements. This document governs the visual and interaction foundation, not
+those temporary product decisions.
 
 ## Product context
 
@@ -62,7 +82,20 @@ Role restrictions must be visible through available navigation and actions. Do n
 
 ### Visual thesis
 
-Lumat is a calm service control room: deep forest structure conveys operational authority, cyan carries information and traceability, lime marks recognition and selection, and graphite keeps dense business data grounded.
+Lumat applies ChatGPT's visual language on Lumat's palette (option B): keep the
+cream canvas `--bg` and forest primary `--primary-800`, then adopt ChatGPT's
+structure — large radii and pills on buttons and the composer, approximately
+12–16px cards, approximately 16px body text, outline icons, flat depth, and
+quiet hover.
+
+Forest is reserved for the primary action and the active navigation state.
+Large surfaces stay cream, white, or neutral. Color remains sparse so the
+warmer cream canvas reads calm rather than saturated.
+
+Read surfaces (assistant, detail, forms, login, empty/error states, and dialogs)
+use ChatGPT's rhythm. Scan surfaces (tables, KPI rows, and queues) use the same
+typography, radii, neutrality, flat depth, and quiet hover language without
+extra vertical air. Density comes from hierarchy, not padding.
 
 ### Interaction thesis
 
@@ -97,15 +130,22 @@ physiology of control room") and corrects a drift introduced by the
 `panel-ai-agent-grammar` delta, which had restricted the appearance axis to
 conversation surfaces. The governing requirement is `DS-GRAMMAR-1`.
 
-### Platform-first interaction policy
+### Interaction policy
 
 Use native mechanics by default:
 
 - Native Popover API for popovers and tooltips; CSS anchor positioning enhances placement when supported.
-- Native `<dialog>` for modal behavior.
 - Native input + listbox semantics for comboboxes.
 
-The only approved Radix dependency is `@radix-ui/react-dropdown-menu`, used for menu semantics and keyboard behavior. Radix has no combobox primitive, so no combobox package is justified. This exception follows implementation rule 4 below: “Add no dependency unless the approved requirement cannot be met with the existing stack or platform.” The menu’s composite keyboard semantics are the approved requirement that warrants it; all other listed interactions use the platform.
+Radix is approved for `@radix-ui/react-dropdown-menu`, Dialog, Popover, Tabs,
+Tooltip, and Select where it supplies behaviour and ARIA only. Radix is
+headless and provides no visual styling; tokenized primitives keep the visual
+contract. Keep platform-first mechanics where the platform still owns the
+behaviour: native Popover API, CSS anchor positioning, native `<dialog>` where
+used, and native input plus listbox semantics for comboboxes.
+
+The dependency rule remains: add no dependency unless the approved requirement
+cannot be met with the existing stack or platform.
 
 The browser target is Safari 26+, Chrome 125+, and Firefox 147+ on current operating systems, including iPhone 12+ hardware running current iOS. An iPhone 12 on iOS 18 is below target and does not provide anchor positioning. The Popover API alone remains usable on Safari 17+.
 
@@ -199,11 +239,15 @@ Never communicate status, selection, or urgency through color alone. Pair color 
 
 ### Themes
 
-Light theme is the only required production theme. Dark mode is future scope and must not be implemented by partially inverting current colors. It requires a separate SDD change covering every primitive, page state, chart, focus treatment, and visual-regression surface.
+Light theme is the current production theme. Any additional theme is a product
+change that must cover every primitive, page state, chart, focus treatment, and
+visual-regression surface; it is not silently inferred from this document.
 
 ## Typography
 
-Use the shipped `--font-sans: system-ui, sans-serif` stack for all UI. Do not add Manrope, Inter, or another web-font dependency without a measured brand or readability requirement.
+Use Inter through the additive `--font-ui` token for the UI. The pre-existing
+`--font-sans: system-ui, sans-serif` declaration remains byte-identical under
+`DS-TKN-2`; `--font-ui` composes Inter with that existing fallback stack.
 
 | Role | Token | Weight | Use |
 |---|---|---:|---|
@@ -221,18 +265,23 @@ Rules:
 - Keep long operational text left-aligned.
 - Do not use all caps except very short machine/status labels where spacing and readability have been tested.
 - Preserve 200% text zoom without clipping or lost actions.
+- `clamp()` is allowed only in the display scale (`--text-xl`, `--text-2xl`,
+  `--text-3xl`); body sizes remain static rem values.
 
 ## Spacing, shape, and elevation
 
 The shipped 4px spacing scale is canonical. Prefer `--space-2`, `--space-3`, and `--space-4` for control, row, and region rhythm.
 
-- Controls and compact indicators use `--radius-sm` (6px).
-- Cards, avatars, dialogs, and larger containers use `--radius-md` (8px).
-- Do not introduce pill-shaped containers except badges, tags, or explicitly rounded tokens.
+- Controls and compact indicators use `--radius-sm` (6px) unless the surface
+  calls for the ChatGPT-style pill (`--radius-pill`).
+- Cards use `--radius-lg` (12px); dialogs and larger containers may use
+  `--radius-xl` (16px).
 - Borders are the default separation mechanism.
-- `--shadow-1` is for subtle raised cards only when hierarchy needs it.
-- `--shadow-2` and `--shadow-3` are reserved for menus, dialogs, drawers, and overlays.
-- Avoid nested card-on-card layouts. Use headings, dividers, spacing, or table regions first.
+- Use the flat surface/elevation vocabulary before shadows. `--shadow-1` is for
+  subtle raised cards; overlay elevation is reserved for menus, dialogs,
+  drawers, and overlays.
+- Prefer regions and dividers over nested cards. Nesting is allowed only when
+  it expresses real hierarchy (container → item).
 
 ## Application shell and information architecture
 
@@ -315,7 +364,7 @@ Do not add autonomous-resolution, response-time, satisfaction, or revenue metric
 - Keep the register tabular. The operator may cancel a booked visit and retry a pending or failed calendar sync; destructive cancellation requires confirmation and an optional reason.
 - Cancellation confirmation states that the visit will be marked as cancelled and that this panel does not offer rebooking; it does not claim a domain-level guarantee.
 - Provide explicit loading, permission, empty, stale, and error states. Action failures stay beside the action that caused them. An empty period is an explicit empty state, not a bare grid.
-- Do not offer availability blocks, create/edit/rebook actions, an unowned filter or search toolbar, conversation bubbles, a composer, a thread rail, or an inspector on this surface. The calendar is the approved navigation surface; it is not a filter toolbar.
+- The Agenda product change owns the available actions and surface composition; this system supplies the shared visual and accessibility grammar.
 
 ### Conversaciones and human inbox
 
@@ -351,10 +400,9 @@ Do not add autonomous-resolution, response-time, satisfaction, or revenue metric
 - Show saved, saving, validation, server-error, and stale-value states.
 - Keep advanced machine syntax (`category=mode`, keyword lists) visually separated from ordinary controls and validate it before saving.
 
-### Proyectos
+### Proyectos (product-change contract)
 
-- Treat Proyectos as a read-only registry of projects and their SDB assistant artifacts.
-- Do not expose create, rename, archive, or merge actions on this surface.
+- Treat Proyectos as a registry of projects and their SDB assistant artifacts; the owning product change defines its available actions.
 - In the list, use the project name as the drill-down control; show purpose and status as supporting columns.
 - In the detail view, show project name, purpose, status, and the explicit `Volver a proyectos` control.
 - Group artifacts by SDB entity. Use one read-only table per entity, headed by the entity name, with `Título`, `Contenido`, `Tipo`, and `Estado` columns.
@@ -480,9 +528,11 @@ Dates, times, currencies, decimals, and percentages follow the active Chilean lo
 
 ## Iconography, imagery, and motion
 
-- Use one outline icon family only after an existing dependency or approved asset source is available; do not add a package just for decorative icons.
-- Critical icons always have visible text.
+- Use Lucide as the single outline icon family. Icons are behavioural support,
+  not decoration; critical icons always have visible text.
 - Default icon sizes are 16px, 20px, and 24px with consistent optical weight.
+  `--icon-md` (20px) is the wired default; `--icon-sm` and `--icon-lg` land with
+  the `Icon` primitive.
 - Use logo facets as a subtle source for rails, dividers, and selected-state geometry, not as repeated background wallpaper.
 - Standard transitions use the existing 100/150/250ms tokens.
 - Animate opacity and transform where appropriate; avoid layout shift.
@@ -594,7 +644,8 @@ Known convergence work:
 
 - Figma or a Figma-to-code workflow.
 - A new component library or CSS framework.
-- A font dependency or visual rebrand.
+- A second font stack or a visual rebrand; Inter is the approved UI font and is
+  loaded through the tokenized stylesheet boundary.
 - Dark mode in the current slice.
 - Decorative 3D, glassmorphism, gradients, parallax, or animation systems.
 - New backend behavior, permissions, analytics formulas, or API contracts inferred from visual design.

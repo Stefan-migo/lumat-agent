@@ -172,6 +172,28 @@ describe('design tokens — B9 foundation additions (DS-TKN-3..7)', () => {
     expect(cssVars.get('--shadow-3')).toBe('0 8px 24px rgba(0, 0, 0, 0.16)');
   });
 
+  it('provides the visual foundation vocabulary with real primitive consumers', () => {
+    expect(cssVars.get('--radius-lg')).toBe('12px');
+    expect(cssVars.get('--radius-xl')).toBe('16px');
+    expect(cssVars.get('--radius-pill')).toBe('9999px');
+    expect(cssVars.get('--surface-subtle')).toBe('var(--table-head-bg)');
+    expect(cssVars.get('--elevation-raised')).toBe('var(--shadow-1)');
+    expect(cssVars.get('--elevation-overlay')).toBe('var(--shadow-3)');
+    expect(cssVars.get('--icon-md')).toBe('20px');
+    expect(cssVars.get('--font-ui')).toBe('Inter, var(--font-sans)');
+
+    const primitivesRaw = readFileSync(
+      join(componentsRoot, 'components', 'primitives', 'primitives.css'),
+      'utf8',
+    );
+    expect(primitivesRaw).toContain('var(--radius-lg)');
+    expect(primitivesRaw).toContain('var(--radius-pill)');
+    expect(primitivesRaw).toContain('var(--surface-subtle)');
+    expect(primitivesRaw).toContain('var(--elevation-raised)');
+    expect(primitivesRaw).toContain('var(--icon-md)');
+    expect(primitivesRaw).toContain('var(--font-ui)');
+  });
+
   it('pins the approved Lumat brand roles from the definitive design system', () => {
     expect(cssVars.get('--brand-lime')).toBe('#abc333');
     expect(cssVars.get('--brand-cyan')).toBe('#3d93af');

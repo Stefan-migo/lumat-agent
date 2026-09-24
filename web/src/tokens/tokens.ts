@@ -16,9 +16,12 @@ export const spacing: Record<number, string> = {
   8: '32px',
 };
 
-export const radius: Record<'sm' | 'md', string> = {
+export const radius: Record<'sm' | 'md' | 'lg' | 'xl' | 'pill', string> = {
   sm: '6px',
   md: '8px',
+  lg: '12px',
+  xl: '16px',
+  pill: '9999px',
 };
 
 export const zIndex: Record<'modal', string> = {

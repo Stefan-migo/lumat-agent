@@ -1,3 +1,8 @@
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+
 /* Lumat Panel design tokens (B6/T6.1) — SINGLE token source (PDW-TKN-1/2).
  *
  * Port of the panel's inline CSS palette (brand #143c2c seed), NOT a redesign.
@@ -178,4 +183,15 @@ body {
    * `@media (hover: none)` block in primitives.css). NEVER hardcode a size here
    * — the absent definition documents the fallback and keeps the alias layer
    * token-only. */
+
+  /* Visual foundation additions — ChatGPT structure on Lumat's palette. */
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 9999px;
+  --surface-subtle: var(--table-head-bg);
+  --elevation-raised: var(--shadow-1);
+  --elevation-overlay: var(--shadow-3);
+  --icon-md: 20px;
+  /* DS-TKN-2: --font-sans remains byte-identical; Inter is additive. */
+  --font-ui: Inter, var(--font-sans);
 }
