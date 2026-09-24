@@ -1,0 +1,239 @@
+# ODD: assistant-web-fetch
+
+**Branch**: `odd/assistant-web-fetch`
+**Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-web-fetch`
+**Base**: `4b31796c` (= `main` at branch time)
+**Status**: slice 1 in progress — T1 done (SSRF policy), T2/T3 next
+**Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/session.md`
+(decisions 4 and 6, risk row *local extractor reintroduces an SSRF surface*); Engram #4890, #4894, #4897.
+
+This is **U2 of three**: U1 (bounded tool chaining) is merged; **U3** (panel sub-agent delegation) is
+**not** started by this unit. Deep research is not a unit.
+
+> Base note: the handoff named `main = af0231b6`. At branch time `main` had advanced to `4b31796c`
+> (PR #346, `odd/inline-style-boundary`). `git diff --name-only af0231b6..4b31796c` touches only
+> `web/` and `odd/tasks/` — **zero** files under `app/`, `agent/`, `tests/` or `openspec/`. The target
+> area is byte-identical; the base drifted harmlessly forward.
+
+## Objective
+
+Give the panel assistant a **bounded single-URL reader**: `web.fetch`. `web.search` discovers sources
+and returns 200-character snippets; nothing in the house can read a page. U1 made the loop chainable
+precisely so `web.search → web.fetch → answer` becomes possible. This unit adds the second half of
+that chain and hardens it against the SSRF surface it necessarily reintroduces.
+
+## Problem — measured, not inferred
+
+**The reader does not exist, and neither does any URL or address validation.**
+
+Verified on the merged tree (`4b31796c`), not from memory:
+
+| Claim | Evidence |
+|---|---|
+| No page reader of any kind | No fetcher in `app/` other than the two search providers; `web.fetch` absent from `TOOL_REGISTRY` and the whitelist. |
+| No SSRF defence anywhere | Zero `ipaddress` usage in `app/`; no private/loopback/link-local check; no scheme allowlist for arbitrary URLs; no redirect policy. The only URL check is a string prefix test on **search results**: `url.startswith(("http://", "https://"))` (`app/chat/assistant/tools/search.py:88-89`). |
+| `urlparse` exists but not for this | `scripts/kb_calibration.py:60,514-525`, for database URLs. |
+| Redirects already unchecked where they exist | `DuckDuckGoSearch` uses `follow_redirects=True` (`search.py:160`) with no policy. |
+| The reusable sanitizer has a real hole | `_TextSanitizer` (`search.py:26-33`) keeps only `handle_data`, so tags are stripped — but `handle_data` also fires for the **body of `<script>` and `<style>`**, so raw JS/CSS would leak into page text. It is reusable, not sufficient. |
+| Snippets cannot ground a deep answer | `web.search` returns `{"title","url","snippet"}` only (`search.py:90-95`). A procedure, a price table or a full article cannot be answered from 200 characters. |
+| Failure translation already exists | `registry.py:618-625` turns a provider failure into `status="error"` + `evidence`; `nodes.py:811-828` surfaces it to the turn instead of an empty result. The reader inherits this path. |
+
+## Decisions (owner-confirmed, 2026-09-24)
+
+**D1 — Provenance: any public http(s) URL, with mandatory hardening (option A).**
+
+- Rejected **B** (only URLs returned by `web.search` this turn): it does not remove the risk — URLs from
+  a third-party index are attacker-influenceable content on arbitrary hosts, so every defence is still
+  mandatory — while it costs "read this link" entirely.
+- *Consequence*: the hardening below is the unit's core, not a garnish. If it is done well, A is as safe
+  as B and does twice the work.
+
+**D2 — A new tool, not a change to `web.search`.** `web.fetch`, the **23rd** entry, `read_only=True`.
+
+- `read_only=True` is forced, not chosen: a non-read-only plan at step 2 would be refused by the U1
+  write policy, and the `search → fetch` chain is the point of the unit.
+- Adding a tool grows the planner catalog by ~112 tokens/turn. **Catalog cost hygiene is out of scope** —
+  it is its own lane and needs a live A/B (already ruled out by the `assistant-web-search` record).
+
+**D3 — The reader owns its bound.** The serialized result MUST fit `_TOOL_EVIDENCE_LIMIT = 4_000`
+(`nodes.py:37`) with margin. No bound is raised; `_TOOL_EVIDENCE_LIMIT` was sized for snippets and stays.
+
+**D4 — No new dependency.** `httpx` and the standard-library `html.parser` already live in `search.py`.
+The extractor is local, per decision 4 of the source session.
+
+**D5 — The mandatory hardening set.**
+
+1. Scheme allowlist: `http`, `https` only. Nothing else, case-insensitive.
+2. No credentials in the URL (`user:pass@host`).
+3. Default ports only — `80` for `http`, `443` for `https`. Cheap, and it removes probing of internal
+   services on arbitrary ports.
+4. Resolve the host and validate **every** returned address: reject loopback, private, link-local,
+   multicast, reserved, unspecified, for IPv4 and IPv6. Resolving before checking is what collapses
+   alternate numeric encodings (decimal/octal/hex) and bracketed IPv6 into a form we can test.
+5. Redirects handled **manually** with a cap; every hop re-runs rules 1–4. `follow_redirects=False`.
+6. Byte cap on the body, enforced while reading (not only from `Content-Length`).
+7. Explicit timeouts (connect and total).
+8. Response content-type allowlist (`text/html`, `application/xhtml+xml`, `text/plain`).
+9. Failure is explicit: every rejection raises the reader's failure type and reaches the turn as
+   `status="error"`. An empty result is never faked.
+
+**D6 — The residual DNS-rebinding window is a recorded limitation, not a silent one.**
+
+Validating the resolved address and then letting the HTTP client resolve again leaves a TOCTOU window.
+T2 must evaluate closing it (connect to the validated address, or a validating network backend) and
+either implement it or record why not, with the residual window stated in this record. It is never
+silently ignored.
+
+## Contract
+
+1. `web.fetch(url)` returns bounded textual evidence: the final URL (after redirects), the page title
+   when present, and extracted text — with the source URL citable by the responder.
+2. The serialized result fits `_TOOL_EVIDENCE_LIMIT` with margin, proven by a test at the boundary.
+3. Every D5 rule is individually tested and individually refutable.
+4. `[]`-style silence does not exist here: a rejected or failed fetch is an explicit error state.
+5. `web.search` is untouched — name, shape, provider seam and tests all unchanged.
+6. The whitelist reports **23** tools and `assistant.capabilities` stays derived, not hand-maintained.
+7. The extractor never emits `<script>`/`<style>` bodies, and collapses whitespace.
+8. No bound is raised; no approval path, `resume_thread` or SDB behaviour changes.
+
+## Scope
+
+### In scope
+
+| File | Change |
+|---|---|
+| `app/chat/assistant/tools/fetch.py` (new) | SSRF policy, bounded fetch, local extraction |
+| `app/chat/assistant/tools/registry.py` | args model + `ToolDefinition(..., read_only=True, ...)` |
+| `agent/registry.yaml` | `web.fetch` in the assistant whitelist (22 → 23) |
+| `agent/personas/assistant.md` | extend the narrow web-evidence allowance to fetched page text + citation duty |
+| `agent/prompts/assistant_respond.md` | matching instruction |
+| `openspec/specs/assistant-tools/spec.md` | new requirement for the reader (AT-13) |
+| `tests/unit/test_assistant_web_fetch.py` (new) | reader tests: D5 rules, extraction, bounds, failure. A dedicated file, not an addition to the already-large `test_assistant_tools.py` |
+| `tests/integration/test_assistant_harness_guardrails.py` | a chained `web.search → web.fetch` turn grounded on page text and citing the URL; a blocked-URL turn surfacing an explicit error |
+| `odd/tasks/assistant-web-fetch.md` | this document |
+
+### Out of scope
+
+- **U3** — panel sub-agent delegation. **Do not start.**
+- Tool-catalog cost hygiene; lazy tool loading (already rejected 2026-09-17, still at 23 tools).
+- Retry/backoff for Brave's 1 rps Free limit — a separate recorded follow-up.
+- Persisting fetched content; storing pages; an extraction-quality arms race (readability heuristics,
+  boilerplate removal beyond script/style suppression).
+- Deploying to production.
+- Changing `web.search`, the approval mechanism, `resume_thread` or SDB.
+
+## Tasks (strict TDD — observed RED before each source change)
+
+- [x] **T1 — SSRF policy, RED + GREEN.** Pure, no network. Scheme allowlist; credentials rejected;
+  default ports only; every address validated for both families across loopback, private, link-local,
+  multicast, reserved and unspecified; alternate numeric forms and bracketed IPv6 collapse to a checked
+  address; a public address passes. **Done.** RED was import-level (`ImportError: cannot import name
+  'fetch'`) — it proves the module was missing, not the behaviour, and no behavioural RED is claimed
+  for this task. GREEN: 47 passed.
+  - **Measured during T1, and it changed the predicate**: `is_global` alone is not sufficient.
+    `224.0.0.1` (multicast) reports `is_global=True`, and `64:ff9b::7f00:1` (NAT64-encoded
+    `127.0.0.1`) reports it too. The policy is therefore `not is_global or is_multicast`, with NAT64
+    addresses unwrapped first. Both bypasses are pinned by tests.
+- [ ] **T2 — Bounded fetch, RED + GREEN.** Happy path via `respx`; manual redirects capped and
+  revalidated per hop; byte cap enforced while reading; timeouts; content-type allowlist; every failure
+  explicit. D6 evaluated here and recorded either way.
+- [ ] **T3 — Extraction and the evidence bound, RED + GREEN.** `<script>`/`<style>` bodies suppressed;
+  title captured; whitespace collapsed; serialized output bounded to fit `_TOOL_EVIDENCE_LIMIT` with a
+  test at the boundary.
+- [ ] **T4 — Registry and whitelist, RED + GREEN.** Args model and `ToolDefinition`; whitelist 22 → 23;
+  the tool-count, capabilities and known-tool assertions updated to the new contract, never weakened.
+- [ ] **T5 — Evidence contract.** Persona allowance + responder instruction, as narrow as the existing
+  web-search one. The phrases `tests/unit/test_assistant_config.py` pins MUST survive.
+- [ ] **T6 — Spec.** AT-13 for the reader, matching the file's existing requirement shape.
+- [ ] **T7 — Harness.** The chained turn, and the blocked-URL turn.
+- [ ] **T8 — Regression and measurement.** Full suite green; the serialized-payload size measured and
+  recorded against the 4,000 budget.
+
+## Acceptance criteria
+
+1. `web.fetch` reads a public page and returns citable, bounded text.
+2. Every D5 rule is individually tested, and a rejected URL produces an explicit error state — never an
+   empty result.
+3. The serialized result fits the existing evidence budget with margin, measured.
+4. `web.search`, the whitelist entries and the tool count move only as specified (22 → 23), and
+   `assistant.capabilities` stays derived.
+5. The pinned persona phrases survive.
+6. U2 changes nothing about U3, the approval mechanism, `resume_thread` or SDB; full suite green.
+
+## Checks
+
+```bash
+cp ../lumat-agent/infra/.env infra/.env     # a fresh worktree starts without it
+uv sync                                     # test-db.sh needs .venv/bin/python
+bash infra/test-db.sh up                    # port 5541 for this worktree
+eval "$(bash infra/test-db.sh env)"
+
+uv run pytest tests/unit/test_assistant_tools.py tests/unit/test_assistant_config.py
+uv run pytest tests/unit/test_agent_registry.py tests/unit/test_assistant_planner.py
+uv run pytest tests/integration/test_assistant_harness_guardrails.py tests/integration/test_assistant_chat.py
+uv run pytest tests/
+
+git status --short
+git diff --check
+```
+
+No linter, typechecker, pre-commit or hooks exist. **The tests are the verification.** A live fetch of a
+real public page is recorded as a separate evidence row, honestly marked if it could not be run.
+
+## Constraints
+
+- **Strict TDD: ON** — `openspec/config.yaml:38`, runner `uv run pytest tests/`.
+- One concern per commit, ≤5 files per commit, Conventional Commits.
+- **No `Co-Authored-By` and no AI attribution in commits.**
+- English artifacts.
+- No test may reach the network. `respx` (already a dependency, `pyproject.toml:33`) mocks HTTP.
+- Bounds are bounds: `_TOOL_EVIDENCE_LIMIT` and the other limits are not raised to make this fit.
+- Ponytail after the code exists: report findings, never remove authorized behaviour.
+
+## Delivery forecast
+
+Estimated **~450–550 authored lines** (reader module, unit tests, registry, whitelist, persona, prompt,
+spec, harness), excluding this record. That exceeds the ~400-line review budget, so this unit ships as
+**chained PRs** — three slices, each independently reviewable and each well under budget:
+
+| Slice | Content | Rationale |
+|---|---|---|
+| 1 | T1 + the pure SSRF policy module and its tests | Pure, network-free, refutable alone |
+| 2 | T2 + T3 + tests: bounded fetch, redirects, caps, extraction, evidence bound | The fetching behaviour, still unwired |
+| 3 | T4–T8: registry, whitelist, persona, prompt, spec, harness, regression | The wiring that makes it reachable |
+
+**Chain strategy**: `stacked-to-main` (owner-confirmed 2026-09-24). Each slice merges to `main` in
+order; the next slice's PR opens after the previous one merges. The slices are layers of one new
+module, so the strict order costs nothing. Recorded here before the first commit, as the budget rule
+requires.
+
+## Graph nodes consulted (Graph Check, Step 1)
+
+- `graphify query "assistant web fetch URL retrieval and tool registry"` → `assistant/tools/registry.py`,
+  `execute_tool()`, `get_tool()`, `SearchFailure`, `ToolValidationError`, `agent_registry.py`,
+  `tests/unit/test_assistant_tools.py`, `tests/integration/test_assistant_harness_guardrails.py`.
+- `graphify-out/GRAPH_REPORT.md` at the branch base; hubs: `assistant/tools/registry.py`, `nodes.py`,
+  `BraveSearch`, `execute_tool`, `Planner Tool Catalog`.
+- Direct reads during exploration: `search.py` (full), `registry.py:600-650`, `agent/registry.yaml:55-85`,
+  `openspec/specs/assistant-tools/spec.md:237-260`, `tests/unit/test_assistant_config.py`.
+- **Correction worth keeping**: a delegated map reported that `tests/unit/test_assistant_config.py` does
+  not exist. It does, and it pins the persona phrases. Verified directly — delegation output is a lead,
+  not a fact.
+
+## Progress
+
+- 2026-09-24 — U2 definition recovered from the source session (`session.md`, decisions 4/6 and the SSRF
+  risk row) and Engram #4890/#4894.
+- 2026-09-24 — Code surface mapped by a delegated read-only mapper; base drift checked and dismissed
+  with evidence; environment provisioned (test-db port 5541); Graph Check run.
+- 2026-09-24 — D1 (option A) confirmed with the owner. **This record written before the first source
+  change.**
+- 2026-09-24 — Chain strategy `stacked-to-main` confirmed with the owner before the first commit.
+- 2026-09-24 — **T1 done**, slice 1: `fetch.py` SSRF policy + `tests/unit/test_assistant_web_fetch.py`.
+  47 passed. Found and closed two real bypasses in the predicate (`is_global` on multicast and on
+  NAT64-encoded loopback) — see the T1 entry.
+
+## Next step
+
+T2 — the bounded fetch (manual revalidated redirects, byte cap, timeouts, content-type allowlist,
+explicit failures), including the D6 decision on the DNS-rebinding window.
