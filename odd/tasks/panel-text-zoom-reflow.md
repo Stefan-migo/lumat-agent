@@ -154,6 +154,8 @@ Forecast: two literal swaps plus contract assertions. Actual: **three literals a
 test lines** — well inside the ~400-line review budget → single PR, no chained slices.
 Label `type:bug`. Merge is the owner's decision.
 
+Delivered as **PR #355** — https://github.com/Stefan-migo/lumat-agent/pull/355
+
 Native review: `gentle-ai review assess --base-ref 92ec5c50 --committed-only` → risk
 **medium** (`executable_change` on `AgendaPage.test.tsx`), 5 changed paths, 186 changed
 lines, **`review_due: false`** with reason `under_budget`. No native review was due.
@@ -207,5 +209,4 @@ work, so the base is current rather than the stale `66625430`.
 
 ## Next step
 
-Unit complete locally with a clean tree. Delivery (push + pull request) is pending the
-owner's word, as is the merge.
+Unit complete and delivered as **PR #355**. Merge is the owner's decision, not this unit's.
