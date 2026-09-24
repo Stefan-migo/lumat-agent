@@ -193,10 +193,20 @@ security class.
 - [x] **T5** — Apply the new tokens to the existing primitives that need them. No
   redesign of call sites in this slice.
 
+### Slice 1 — correction pass (opened by independent verification)
+
+- [x] **T5b** — Remove the three tokens added without a real consumer
+  (`--elevation-flat`, `--icon-sm`, `--icon-lg`), per D11. `--elevation-flat` had
+  zero references anywhere; `--icon-sm`/`--icon-lg` were named only by this design
+  doc, and their real consumer (the `Icon` primitive) belongs to slice 2. Remove
+  their drift-guard assertions in lockstep and correct the icon-size line so it
+  does not name tokens that do not exist yet.
+
 ### Slice 2 — icon system (PR 2)
 
-- [ ] **T6** — Add the chosen icon family; build the `Icon` primitive on
-  `--icon-size-*` and `currentColor`.
+- [ ] **T6** — Add the chosen icon family; build the `Icon` primitive on the
+  `--icon-*` size scale and `currentColor`, adding `--icon-sm`/`--icon-lg` with
+  their new consumer.
 - [ ] **T7** — Replace the loose inline `<svg>` and close the icon gaps in the
   primitives with the adopted family.
 
@@ -231,7 +241,8 @@ security class.
 
 ## Progress
 
-Completed in three work-unit commits.
+Completed in three work-unit commits, then one bounded correction commit opened by
+independent verification.
 
 ### Evidence
 
@@ -241,6 +252,32 @@ Completed in three work-unit commits.
 - **Strict TDD:** the token/consumer contract was added first; focused Vitest was RED (`1 failed, 18 passed`) before source changes, then GREEN (`19 passed`).
 - **Font loader:** installed `@fontsource/inter` and imported four weights from `tokens.css`; Storybook output contains the Inter font assets.
 - **Verification:** `npm run test` — 84 files / 708 tests passed; `npx tsc -b` — exit 0; `npm run build-storybook` — built successfully (existing Storybook eval/chunk-size warnings only).
+
+### Slice 1 independent verification (FAIL → correction pass)
+
+An independent read-only verifier reviewed `git diff 1921f2d6...HEAD` against
+D1–D12 and the constraints. Result: **FAIL**, one item.
+
+- Items 1–9 PASS: scope containment; additive-only tokens (`--font-sans`
+  byte-identical); no hex outside `tokens.css`; amendment completeness; the font
+  collision resolved additively; security class untouched; the OpenSpec deltas
+  faithful; tests genuinely constrain the tokens; T5 restraint.
+- **Item 10 FAIL — D11.** Three new tokens had no real consumer:
+  `--elevation-flat` (zero references), `--icon-sm` and `--icon-lg` (named only by
+  `DESIGN_SYSTEM.md`; their consumer is slice 2's `Icon` primitive). Verified
+  independently by the orchestrator before acting. Fixed in T5b.
+- Non-blocking notes carried forward: the consumer assertions use broad `toContain`
+  substring matching; tighten them to selector-specific assertions when slice 2
+  touches them.
+
+### Correction pass evidence (T5b)
+
+- **RED:** removed the three declarations first;
+  `npx vitest run src/tokens/tokens.test.ts` → `1 failed | 18 passed`,
+  `AssertionError: expected undefined to be 'none'` (`--elevation-flat`), proving
+  the assertions were not vacuous.
+- **GREEN:** removed the three assertions and corrected the icon-size line;
+  `npm run test` → 84 files / 708 tests passed; `npx tsc -b` → exit 0.
 
 ## Size
 
@@ -252,6 +289,8 @@ Actual authored changed lines (additions + deletions):
   (61 additions, 1 deletion); T4 tokens, mirror, tests, and Inter package.
 - `0b45b2a5` — `feat(primitives): apply visual foundation tokens` — **58 lines**
   (32 additions, 26 deletions); T5 primitive consumers.
+- **T5b correction commit** — removes the three unconsumed tokens, their
+  assertions, and the icon-size doc line (~10 lines across 3 files).
 
 All commits remain below the 400-line review budget.
 

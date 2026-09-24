@@ -530,8 +530,9 @@ Dates, times, currencies, decimals, and percentages follow the active Chilean lo
 
 - Use Lucide as the single outline icon family. Icons are behavioural support,
   not decoration; critical icons always have visible text.
-- Default icon sizes are `--icon-sm` (16px), `--icon-md` (20px), and `--icon-lg`
-  (24px) with consistent optical weight.
+- Default icon sizes are 16px, 20px, and 24px with consistent optical weight.
+  `--icon-md` (20px) is the wired default; `--icon-sm` and `--icon-lg` land with
+  the `Icon` primitive.
 - Use logo facets as a subtle source for rails, dividers, and selected-state geometry, not as repeated background wallpaper.
 - Standard transitions use the existing 100/150/250ms tokens.
 - Animate opacity and transform where appropriate; avoid layout shift.
