@@ -88,6 +88,24 @@ re-evaluated at each iteration, and cap truncation recorded.**
 - **Honest limitation, recorded deliberately**: "discover and then act" write chains (e.g. search a
   customer → `memory.write`) are **not possible** in U1.
 
+**D4 — The loop is opt-in per turn, never automatic.** *(Added after the T1 baseline measurement exposed
+a contradiction between the two requirements it inherited.)*
+
+- The handoff's definition of done requires that **a normal single-tool turn is unchanged in cost and
+  shape**. An unconditional re-plan after every tool would contradict it: measured (T1), that re-plan costs
+  **~12,150 prompt chars ≈ 3,037 tokens and one provider round-trip on *every* tool turn** — the exact
+  central risk the source session flagged ("U1 changes cost and latency of ALL turns").
+- Therefore the **planner declares, in its own plan, that the turn needs a follow-up step**. Only then does
+  the graph take the back-edge and re-plan. A turn whose planner does not ask for a second step behaves
+  exactly as today: one planner call, one tool, one responder.
+- Consequence: the cost delta is paid **only on turns that actually chain**. A single-tool turn's cost is
+  unchanged by construction, not by hope.
+- Mechanism: an explicit field on the planner output (`PlannerOutput`, `state.py:27-38`, `extra="forbid"`)
+  documented in `agent/prompts/assistant_plan.md` so the planner can emit it. The field is part of the
+  planner contract, so it is validated and refused if malformed like every other plan field.
+- *Rejected*: an unconditional back-edge (violates the DoD and taxes every tool turn); inferring "needs
+  another step" from the tool result (a hidden policy, not agency, and untestable as a rule).
+
 ## Contract
 
 Observable behavior this unit must produce. Implementation shape is the implementer's choice within it.
@@ -96,9 +114,10 @@ Observable behavior this unit must produce. Implementation shape is the implemen
    plus a step counter (e.g. `tool_steps: int`). Keep the singular `tool_result` working: the responder
    path and `_render_tool_evidence()` (`nodes.py:580-588`) depend on it, and
    `tests/unit/test_assistant_tool_loop.py:48-95` covers it.
-2. **Bounded back-edge.** A conditional edge returns from tool execution to planning. The router is
-   deterministic and returns the finish path when: the step budget is exhausted, the plan is no longer a
-   tool, the cost mode is not `normal`, or step ≥ 2 proposes a write.
+2. **Bounded back-edge, opt-in (D4).** A conditional edge returns from tool execution to planning **only
+   when the plan asked for a follow-up step**. The router is deterministic and returns the finish path
+   when: the step budget is exhausted, the plan is no longer a tool, the cost mode is not `normal`, the
+   plan did not opt in, or step ≥ 2 proposes a write.
 3. **The back-edge must not re-enter `assemble_context`, `cortex_session_gate` or `sdb_trigger_gate`.**
    Those are per-turn gates; re-running them inside a loop changes unrelated behavior.
 4. **The planner must see prior results.** After a tool result the planner needs a bounded rendering of
@@ -164,12 +183,12 @@ Observable behavior this unit must produce. Implementation shape is the implemen
 
 - [x] **T1 — Baseline measurement, before any source change.** Recorded against unmodified `main`-derived
   code, before the first source edit. See *Baseline measurement (T1)* below.
-- [ ] **T2 — RED + GREEN, bounded cycle and accumulating state.** RED: a turn whose planner asks for a
-  second tool executes both and answers from the combined evidence; a third is refused at the cap; a
-  single-tool turn is byte-for-byte unchanged in behavior. Rewrite
-  `tests/unit/test_assistant_tool_loop.py:40-45` to assert the bounded cycle exists. GREEN: accumulate
-  results, add the counter, add the back-edge through a loop-head node that does not re-enter the
-  per-turn gates.
+- [ ] **T2 — RED + GREEN, bounded opt-in cycle and accumulating state.** RED: a planner that asks for a
+  follow-up step executes a second tool and the turn answers from the combined evidence; a third is
+  refused at the cap; a planner that does **not** ask keeps the turn at one planner call, one tool, one
+  responder (D4). Rewrite `tests/unit/test_assistant_tool_loop.py:40-45` to assert the bounded cycle
+  exists and is opt-in. GREEN: the planner opt-in field (model + prompt), the accumulating state, the
+  counter, and the back-edge through a loop-head node that does not re-enter the per-turn gates.
 - [ ] **T3 — RED + GREEN, cost gate per iteration.** RED: a turn that would chain is stopped when the cost
   mode turns `conservative` or `blocked` mid-loop, and answers with what it has. GREEN: re-evaluate the
   cost mode at the loop head.
@@ -245,10 +264,16 @@ network call and touches no database** (`session=None` short-circuits `panel_cos
 | Single-tool turn total | **14,647 prompt chars** ≈ 3,661 tok |
 | `respond`-plan turn | 1 planner call, no responder — see caveat |
 
-**The delta U1 introduces, per tool turn:** one **additional planner call** of ~12,150 prompt chars
-(≈3,037 tok), i.e. **+83% prompt characters** on a single-tool turn, plus one extra provider round-trip.
-Planner calls per tool turn go **1 → 2**. This is the number the after-measurement (T8) must confirm or
-correct.
+**What U1 costs, corrected by D4.** Because the loop is **opt-in**, a tool turn that does *not* ask for a
+follow-up step keeps its baseline shape exactly: **1 planner + 1 tool + 1 responder = 14,647 prompt chars**,
+unchanged. A turn that *does* chain pays **one extra planner call of ~12,150 prompt chars (≈3,037 tok) plus
+one provider round-trip** — that is the price of the second step, paid only when the planner asks for it.
+Planner calls: **1 → 2 on chaining turns only; 1 → 1 on normal turns.**
+
+An earlier draft of this record claimed the extra planner call landed on *every* tool turn. The measurement
+and the DoD contradicted each other; **D4 resolves it in favour of the DoD**, and T8 must verify that a
+non-chaining tool turn is byte-for-byte identical in call count and prompt characters.
+
 
 **Honest gaps in this baseline:**
 
