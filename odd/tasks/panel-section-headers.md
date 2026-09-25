@@ -3,7 +3,7 @@
 **Branch**: `odd/panel-section-headers`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-panel-section-headers`
 **Base**: `96ba8ca2` (= `main` at branch time)
-**Status**: implemented — pending native review and owner visual acceptance
+**Status**: implemented — native review approved; pending owner visual acceptance and delivery
 
 ## Objective
 
@@ -172,6 +172,22 @@ Known suite-load flakes (NOT caused by this unit, verified by isolation runs): `
 creates an appointment from the agenda and refreshes the visible period` and `AppShell (T6.4) >
 renders live data pages for every navigation view` can exceed the 5s per-test timeout under
 full-suite load. Both pass in isolation, and the orchestrator's full-suite run above was green.
+
+## Native review
+
+One bounded native review ran on the candidate (medium risk, 29 files, 322 changed lines), selected
+lens **review-reliability**.
+
+| Step | Outcome |
+| --- | --- |
+| Reviewer | `R3-001` — **CRITICAL, deterministic, introduced.** The `AdvancedDashboard` conversion rendered the metrics and the drilldown rows whenever `data` existed, including on a `denied`/`loading`/`error` state; the pre-conversion early returns withheld that content. |
+| Correction `2d0f309b` | Added a `showContent` guard (`data !== null && state !== "loading" && state !== "denied" && state !== "error"`) and tied the period subtitle to the same guard, so a non-renderable state never exposes content or period data. |
+| Regression test | `AdvancedDashboard.test.tsx` — "withholds metrics when the state is not renderable even if data is present". Observed **RED** before the guard (1 failed / 4 passed) and **GREEN** after (5 passed). |
+| Targeted validator | `original_criteria` passed, `correction_regression` passed |
+| Termination | `approved`; authority burned (`gentle-ai.review-acknowledged/v1`, revision `sha256:2ad7a812…`) |
+
+The post-correction worktree is the reviewed candidate (`2d0f309b`). The docs commit that records
+this review is a process record written after the receipt, not part of the reviewed tree.
 
 ## Open items
 
