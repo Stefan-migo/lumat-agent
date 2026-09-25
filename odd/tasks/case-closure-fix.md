@@ -197,6 +197,7 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 - `73fbdaed test(cases): cover case closure lifecycle`
 - `19d7134d fix(cases): synchronize status and closure timestamp`
 - `82779d40 fix(cases): keep closure invariant on re-escalation`
+- `f8d02c4c fix(cases): clear stale timestamp on open status`
 
 ## Next step
 
