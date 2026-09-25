@@ -110,7 +110,23 @@ def test_capture_in_progress_during_closed_hours_continues_capture(mock_openai_c
     assert OUT_OF_HOURS not in replies
 
 
-def test_open_hours_normal_question_keeps_normal_flow(mock_openai_chat):
+def test_open_hours_normal_question_keeps_normal_flow(mock_openai_chat, monkeypatch):
+    # `is_open_at` treats `close` as EXCLUSIVE, so no schedule expresses a full
+    # 24h day: "00:00-23:59" still leaves 23:59:00-23:59:59 closed. Against the
+    # real clock this test failed whenever it ran inside that minute (the CI
+    # merge of PR #355 landed at 23:58Z and hit it). Freeze the gate's clock at
+    # a mid-day instant instead of racing it.
+    frozen = datetime(2026, 3, 10, 15, 30, tzinfo=timezone.utc)
+
+    class _FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen.astimezone(tz) if tz is not None else frozen
+
+    from app.chat.nodes import closure_gate
+
+    monkeypatch.setattr(closure_gate, "datetime", _FrozenDatetime)
+
     with SessionLocal() as session:
         settings.set_setting(
             session,
