@@ -9,8 +9,9 @@ agent:
 # H2 multi-agent roster (AO-1). The `agent:` block above is IN TACT (AC-4);
 # `sub_agents:` is a NEW sibling key. Each sub-agent declares all six fields:
 # name / persona / tools_whitelist / memoria_scope / model /
-# temperature. Only research_triage has runtime wiring in slice 1; the other
-# four are data-only (declared, no runtime behavior).
+# temperature. research_triage has runtime wiring. customer_records is resolved
+# and validated by panel guardrails, but has no executable delegation span yet.
+# The remaining three sub-agents are data-only.
 sub_agents:
   research_triage:
     name: kb-research-triage

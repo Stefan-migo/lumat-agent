@@ -23,6 +23,7 @@ def test_resolves_customer_records_with_exact_read_only_scope():
     scope = resolve_delegation_scope("customer_records")
 
     assert scope.tools_whitelist == CUSTOMER_RECORD_TOOLS
+    assert scope.memoria_scope == "customer"
     assert all(TOOL_REGISTRY[name].read_only for name in scope.tools_whitelist)
     assert "return evidence" in scope.persona.lower()
 

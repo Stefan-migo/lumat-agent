@@ -16,6 +16,7 @@ class DelegationScope:
     key: str
     persona: str
     tools_whitelist: tuple[str, ...]
+    memoria_scope: str
 
 
 def resolve_delegation_scope(
@@ -43,4 +44,4 @@ def resolve_delegation_scope(
         persona = persona_path.read_text(encoding="utf-8")
     except OSError as exc:
         raise DelegationScopeError(f"sub-agent {key!r} persona is unavailable") from exc
-    return DelegationScope(key, persona, subagent.tools_whitelist)
+    return DelegationScope(key, persona, subagent.tools_whitelist, subagent.memoria_scope)
