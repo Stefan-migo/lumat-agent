@@ -226,13 +226,13 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 - Corrective graph query surfaced `get_or_create_case()`, `Case`, the handoff path, and `test_api_cases.py`; requested `create_handoff_case` → `case_is_open_expr` path returned no predicate node in the existing graph.
 - Graph check: queried the requested lifecycle area; the graph surfaced `list_open_cases`/`Case.closed_at`, `Dashboard()` urgent query, `routes/conversations.py`, `Case`, the existing closed-case test, and communities `test_api_cases.py`, `cases.py`, `routes/conversations.py`, `Dashboard.tsx`. Requested path `list_open_cases` → `update_case` returned no directed path.
 
-### Corrective unit (a) — implemented; review pending
+### Corrective unit (a) — implemented and reviewed
 
 - [x] T8 RED observed — both closed-case reactivation tests failed on stale non-null `closed_at` before implementation.
 - [x] T8 GREEN — classification and emergency writers route through `_apply_status`; `None` status is accepted and treated as open.
-- [x] T9 — `openspec/changes/case-closure-open-status/` contains proposal, `advanced-dashboards` spec delta, and tasks. The live spec remains unchanged.
+- [x] T9 — the archived `case-closure-open-status` change contains the proposal, `advanced-dashboards` spec delta, and completed tasks; its `AD-HOY-1` delta is synced into the live spec.
 - [x] Full suite green: `1466 passed, 2 warnings in 165.58s`.
-- [ ] Parent spot check, then a new native review (the burned receipt does not cover the changed candidate).
+- [x] Parent spot check (2 passed), then a new native review approved with zero findings; lineage `review-b2c7c2f6145c0c7b`.
 
 #### Corrective unit evidence
 
@@ -253,10 +253,11 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 - `1afcdb7e fix(cases): centralize all status transitions`
 - `aa9adb7b docs(openspec): define urgent cases by open status`
 - `586ad244 docs(odd): record case closure corrective evidence`
+- `0a66a60c docs(openspec): archive case closure status delta`
+- `6088ab89 docs(odd): record case closure delivery`
+- `dbf48883 docs(odd): reconcile archived change status`
 
-## Next step
+## Delivery outcome
 
-Corrective unit (a), tasks T8 and T9, is implemented and verified in commits `1afcdb7e` and
-`aa9adb7b`. The original closure unit and T7 re-escalation correction were reviewed with a
-burned receipt; this candidate still requires a parent spot check and a new native review before
-delivery. Do not push, open a PR, or run `rapso close` as part of this corrective unit.
+Delivered in PR #365, merged as merge commit `33f1feba`. The OpenSpec change was archived and
+the `AD-HOY-1` delta synced into the live specification.

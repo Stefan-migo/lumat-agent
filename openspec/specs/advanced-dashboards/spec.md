@@ -42,7 +42,7 @@ The dashboard MUST retain bounded trend and drill-down behavior and MUST render 
 - THEN zero-valued buckets and an explicit empty state appear
 ### Requirement: AD-HOY-1 — Operational HOY Projection
 
-One authenticated endpoint MUST return bounded projections for today’s appointments, active unanswered conversations, and open urgent cases. Unanswered MUST mean at least one inbound message and no outbound message after the latest inbound. Urgent MUST mean `escalated_at` is set or `emergency` is true, with `closed_at` null.
+One authenticated endpoint MUST return bounded projections for today’s appointments, active unanswered conversations, and open urgent cases. Unanswered MUST mean at least one inbound message and no outbound message after the latest inbound. Urgent MUST mean `escalated_at` is set or `emergency` is true, AND the case is still open: its status is NULL or is not one of `closed`, `cerrado`, `finalizado`, or `cancelado`.
 
 #### Scenario: Three projections (pytest)
 - GIVEN an authenticated admin or operador
@@ -58,6 +58,12 @@ One authenticated endpoint MUST return bounded projections for today’s appoint
 - GIVEN no appointments, unanswered conversations, or urgent cases
 - WHEN the endpoint and dashboard render
 - THEN each collection is empty and each section shows a truthful empty state
+
+#### Scenario: A reactivated case is urgent again (pytest)
+- GIVEN a case was closed and is reactivated with an open status and `escalated_at` set
+- WHEN the HOY endpoint is requested
+- THEN the reactivated case appears in the urgent cases projection
+
 ### Requirement: AD-HOY-2 — Failure and Authentication States
 
 The dashboard MUST show loading and recoverable error states. Anonymous requests MUST receive the existing JSON 401 contract; insufficient role access MUST receive JSON 403 and a permission state.
