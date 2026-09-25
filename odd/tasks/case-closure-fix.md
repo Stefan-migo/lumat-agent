@@ -228,11 +228,21 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 
 ### Corrective unit (a) — pending
 
-- [ ] T8 RED observed — a closed case re-activated by `classify_intent` (or `emergency`) must clear `closed_at`; the test fails against HEAD.
-- [ ] T8 GREEN — both writers route through `_apply_status`.
-- [ ] T9 — `openspec/changes/case-closure-open-status/` with proposal, `advanced-dashboards` spec delta, and tasks.
-- [ ] Full suite green.
+- [x] T8 RED observed — both closed-case reactivation tests failed on stale non-null `closed_at` before implementation.
+- [x] T8 GREEN — classification and emergency writers route through `_apply_status`; `None` status is accepted and treated as open.
+- [x] T9 — `openspec/changes/case-closure-open-status/` contains proposal, `advanced-dashboards` spec delta, and tasks. The live spec remains unchanged.
+- [x] Full suite green: `1466 passed, 2 warnings in 165.58s`.
 - [ ] Parent spot check, then a new native review (the burned receipt does not cover the changed candidate).
+
+#### Corrective unit evidence
+
+- T8 RED command: `eval "$(infra/test-db.sh env)" && uv run pytest tests/integration/test_chat_intent.py::test_classification_reopens_closed_case_and_restores_it_to_open_list tests/integration/test_emergency.py::test_emergency_reopens_closed_case_and_restores_it_to_open_list -q` — `2 failed`. The classification and emergency tests each failed at `assert case.closed_at is None` because the seeded close timestamp remained set after status changed to `abierto` / `escalado`.
+- T8 GREEN command: `eval "$(infra/test-db.sh env)" && uv run pytest tests/integration/test_chat_intent.py::test_classification_reopens_closed_case_and_restores_it_to_open_list tests/integration/test_emergency.py::test_emergency_reopens_closed_case_and_restores_it_to_open_list -q` — `2 passed`.
+- Focused command: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py tests/integration/test_emergency.py tests/integration/test_chat_intent.py -q` — `passed` (100%); captured output showed 74 test dots and no failure summary because the repository's pytest quiet setting suppresses it.
+- Full command: `eval "$(infra/test-db.sh env)" && uv run pytest tests/` — `1466 passed, 2 warnings in 165.58s`. Warnings: an un-awaited `_publish_all` coroutine in `test_startup_sweep_reprocesses_received` and fastembed's model pooling notice in `test_project_slug_is_normalized_and_unique`.
+- Final `rg -n "\.status\s*=" app/` audit: only `app/services/cases.py:45` assigns a `Case.status`. The two removed sites were `app/chat/nodes/classify_intent.py:108` and `app/chat/nodes/emergency.py:83`. Remaining assignments are to `Message` (`app/webhook/ingest.py`, `app/services/agent_chat.py`, `app/services/send.py`), `DomainEvent` (`app/ops/worker.py`), `Memory` (`app/services/tukulpan.py:630`), `Appointment` (`app/services/scheduling.py:108`), project records (`app/services/projects.py:244,308`), notification/operation/attempt records (`app/services/notifications.py`, `app/panel/api/routes/notifications.py`), and calendar sync records (`app/services/calendar.py`). Other matches are comparisons, not assignments.
+- Graph check before implementation: queries surfaced `_store_classification()` (`app/chat/nodes/classify_intent.py`), `emergency()` (`app/chat/nodes/emergency.py`), `Case` (`app/models.py`), `cases.py`, `test_chat_intent.py`, `test_emergency.py`, `AD-HOY-1 Operational HOY Projection` (`openspec/specs/advanced-dashboards/spec.md`), and `today_projection()` (`app/services/dashboard.py`). Path `emergency()` → `Case` traversed `get_or_create_case()`; `AD-HOY-1` → `today_projection()` had no directed path, and graph extraction has no `_apply_status()` node (path attempt reported no matching node). The existing graph report's hubs include `chat/graph.py`, `models.py`, `services/dashboard.py`, `test_emergency.py`, and `test_api_cases.py`.
+- `uv run ruff check ...` was attempted but could not run: `ruff` is not installed (`Failed to spawn: ruff`). `git diff --check` passed. No runtime harness was required: these integration tests execute the production graph and emergency node against the test database.
 
 ### Commits
 
@@ -240,10 +250,12 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 - `19d7134d fix(cases): synchronize status and closure timestamp`
 - `82779d40 fix(cases): keep closure invariant on re-escalation`
 - `f8d02c4c fix(cases): clear stale timestamp on open status`
+- `1afcdb7e fix(cases): centralize all status transitions`
+- `aa9adb7b docs(openspec): define urgent cases by open status`
 
 ## Next step
 
-Corrective unit (a), tasks T8 and T9, is authorized and pending: centralize the invariant at
-the two remaining writers and amend `AD-HOY-1` with an OpenSpec delta. The original closure
-unit and the T7 re-escalation correction are implemented and verified but were reviewed with a
-burned receipt; the candidate changes, so T8/T9 require a new native review before delivery.
+Corrective unit (a), tasks T8 and T9, is implemented and verified in commits `1afcdb7e` and
+`aa9adb7b`. The original closure unit and T7 re-escalation correction were reviewed with a
+burned receipt; this candidate still requires a parent spot check and a new native review before
+delivery. Do not push, open a PR, or run `rapso close` as part of this corrective unit.
