@@ -12,7 +12,7 @@ The SPA MUST expose operator-visible `Agenda` at `/panel/app/agenda` through nat
 
 The register MUST render chronological `Hoy` and `Próximas` sections in the request timezone when the visible calendar window contains today. When the visible window does not contain today and no day is selected, the register MUST present the window's visits in a single `Visitas del período` section. When the operator selects a day, the register MUST filter to that day and present it as a single dated section; clearing the selection MUST restore the window's section behavior.
 
-The agenda MUST NOT render availability blocks or create/edit/rebook controls.
+The agenda MUST NOT render availability blocks.
 
 #### Scenario: Operator opens agenda
 - GIVEN an authenticated operador
@@ -51,7 +51,7 @@ The agenda MUST represent loading, empty, error, permission, and stale states wi
 
 ### Requirement: AG-UI-3 — Authorized Cancellation
 
-The agenda MAY show cancellation only for `booked` appointments. It MUST require confirmation and a reason, use the existing action, show success/actionable failure, and refresh after completion. It MUST NOT offer creation, editing, or rebooking.
+The agenda MAY show cancellation only for `booked` appointments. It MUST require confirmation and a reason, use the existing action, show success/actionable failure, and refresh after completion. Creation and editing/rescheduling are allowed on the agenda. Editing/rescheduling MUST apply only to `booked` appointments. A `cancelled` appointment is terminal and MUST NOT be returned to `booked` from the agenda. Rebooking a cancelled appointment remains forbidden.
 
 #### Scenario: Cancel booked visit
 - GIVEN an authorized user selects a booked appointment
@@ -76,3 +76,34 @@ The agenda MUST show separate lifecycle/sync badges, offer `Retry calendar` only
 - GIVEN a booked appointment with failed provider sync
 - WHEN its row renders
 - THEN booked, failed, and retry remain separately visible
+
+### Requirement: AG-UI-5 — Per-Appointment Route and Detail Surface
+
+The SPA MUST expose a unique page per appointment at `/panel/app/agenda/:id` through native History API routing, reachable from the agenda. The detail surface MUST show the linked customer with a link to the customer record, the visit reason/service, the appointment status, and the linked case's conversation summary WHEN the case originates from a conversation. A manually created case has no conversation and therefore has no conversation summary.
+
+#### Scenario: Operator opens an appointment from the agenda
+- GIVEN an appointment is visible in the agenda
+- WHEN the operator opens it
+- THEN its unique detail page renders at `/panel/app/agenda/:id` with the linked customer, visit reason/service, and appointment status
+- AND the linked customer provides a link to the customer record
+
+#### Scenario: Appointment linked to a chatbot case
+- GIVEN an appointment is linked to a case originating from a conversation
+- WHEN the operator opens the appointment detail page
+- THEN the linked case's conversation summary is shown
+
+#### Scenario: Appointment linked to a manually created case
+- GIVEN an appointment is linked to a manually created case with no conversation
+- WHEN the operator opens the appointment detail page
+- THEN no conversation summary is shown
+- AND the detail page does not fail
+
+### Requirement: AG-UI-6 — Non-Active Register Filter
+
+The register MUST let the operator separate active visits from non-active visits (`cancelled`, `completed`, `no_show`) without deleting any record, so the default view stays visually clean.
+
+#### Scenario: Separate non-active visits
+- GIVEN the register contains active and non-active visits
+- WHEN the operator selects the non-active view
+- THEN `cancelled`, `completed`, and `no_show` visits are shown separately from active visits
+- AND no visit record is deleted
