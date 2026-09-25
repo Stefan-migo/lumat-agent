@@ -44,6 +44,37 @@ Measured baseline (dev DB `infra-db-1`, 2026-09-25): 3 cases, all `status='abier
 all `closed_at IS NULL`. **No legacy rows with a closing status and a NULL `closed_at`
 exist in dev.** Production was not inspected.
 
+### Incomplete centralization (post-review finding)
+
+The invariant "`closed_at` is consistent with the status" was centralized in 2 of its 4
+write sites. Two production paths still write `Case.status` directly:
+
+- `app/chat/nodes/classify_intent.py:108` — `_store_classification()` assigns
+  `case.status = result.get("status")` on every classified message (called at line 204).
+- `app/chat/nodes/emergency.py:83` — the emergency node assigns `case.status = "escalado"`.
+
+`get_or_create_case()` returns the conversation's latest case without filtering by status,
+so both paths reach a case the operator already closed. Consequence: a closed case
+(`status='cerrado'`, `closed_at=T`) plus one substantive inbound message re-activates the
+status to `abierto`/`escalado` while `closed_at` keeps `T`. The D1 sentence claiming our own
+code cannot produce that shape is false. Effects: the CSV export reports a close time for an
+open case, and re-closing keeps the stale time (`_apply_status` only stamps when
+`closed_at is None`). Under a `closed_at`-gated predicate the case would stay invisible — the
+same defect T7 fixed in handoff, still live.
+
+Note: `closure_gate.py` is the chat farewell gate and writes no case status; a bare
+"gracias" never reaches classification. Re-activation requires a substantive message, which
+matches the pre-unit behaviour of the conversation manager.
+
+### Decision (D2) — status stays the gate, and AD-HOY-1 is amended
+
+Owner decision (a): the status remains the source of truth and the live requirement
+`AD-HOY-1` is amended to define urgent as "the case is still open", instead of naming the
+`closed_at` column. Rationale: under a status gate a missed writer costs a stale timestamp;
+under a `closed_at` gate a missed writer loses the case from operations entirely. This unit
+already found 2 of 4 writers bypassing the invariant, so the graceful-degradation mode is the
+safe one. The amendment ships as an OpenSpec change alongside its consumer.
+
 ## Why
 
 The panel gives the operator a control whose effect is a lie. Beyond the panel, the same
@@ -88,8 +119,9 @@ status enters the closing set and clears it when the status leaves, so the colum
 real without ever becoming the gate.
 
 Consequence accepted: a contradictory row (`closed_at` set, status not closing) is treated
-as **open**. Our own code cannot produce that shape after this unit, and no production row
-has `closed_at` set at all today.
+as **open**. After the corrective unit (D2/T8) every `Case.status` writer goes through the
+shared helper, so our own code cannot produce that shape; before T8 it could, through
+`classify_intent` and `emergency`. No production row has `closed_at` set at all today.
 
 ## Constraints
 
@@ -159,12 +191,14 @@ suite decides whether anything else depended on the old rank.
 | T5 | GREEN: `conversations.py` drops its local tuple and ranks with the canonical predicate; full suite confirms no regression. | delegated (writer) |
 | T6 | Full suite `eval "$(infra/test-db.sh env)" && uv run pytest tests/`. | delegated per-action |
 | T7 | RED+GREEN: re-escalating a previously closed case reopens it; share the status transition helper with `create_handoff_case`, and make the open predicate status-only per D1. | corrective (writer) |
+| T8 | RED+GREEN: route `classify_intent._store_classification` and `emergency.emergency` through `_apply_status`, so a re-activated closed case clears `closed_at` on both paths. | delegated (writer) |
+| T9 | OpenSpec change `case-closure-open-status`: amend live `AD-HOY-1` so urgent means "the case is still open" by status (D2); ship with its consumer. | delegated (writer, same unit as T8) |
 
 ## Delivery
 
-Backend-only, three source files plus tests: well inside the ~400-line review budget →
-**single PR against `main`**, label `type:bug`, no chained slices. Merge is the owner's
-decision.
+Backend-only, three source files plus tests, plus one OpenSpec change directory for the
+`AD-HOY-1` amendment: well inside the ~400-line review budget → **single PR against `main`**,
+label `type:bug`, no chained slices. Merge is the owner's decision.
 
 ## Progress / Evidence
 
@@ -192,6 +226,14 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 - Corrective graph query surfaced `get_or_create_case()`, `Case`, the handoff path, and `test_api_cases.py`; requested `create_handoff_case` → `case_is_open_expr` path returned no predicate node in the existing graph.
 - Graph check: queried the requested lifecycle area; the graph surfaced `list_open_cases`/`Case.closed_at`, `Dashboard()` urgent query, `routes/conversations.py`, `Case`, the existing closed-case test, and communities `test_api_cases.py`, `cases.py`, `routes/conversations.py`, `Dashboard.tsx`. Requested path `list_open_cases` → `update_case` returned no directed path.
 
+### Corrective unit (a) — pending
+
+- [ ] T8 RED observed — a closed case re-activated by `classify_intent` (or `emergency`) must clear `closed_at`; the test fails against HEAD.
+- [ ] T8 GREEN — both writers route through `_apply_status`.
+- [ ] T9 — `openspec/changes/case-closure-open-status/` with proposal, `advanced-dashboards` spec delta, and tasks.
+- [ ] Full suite green.
+- [ ] Parent spot check, then a new native review (the burned receipt does not cover the changed candidate).
+
 ### Commits
 
 - `73fbdaed test(cases): cover case closure lifecycle`
@@ -201,4 +243,7 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 
 ## Next step
 
-The original closure unit and corrective re-escalation task are implemented and verified.
+Corrective unit (a), tasks T8 and T9, is authorized and pending: centralize the invariant at
+the two remaining writers and amend `AD-HOY-1` with an OpenSpec delta. The original closure
+unit and the T7 re-escalation correction are implemented and verified but were reviewed with a
+burned receipt; the candidate changes, so T8/T9 require a new native review before delivery.
