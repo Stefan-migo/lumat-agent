@@ -12,7 +12,8 @@ describe("planning sessions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Budget review" }));
     rerender(<PlanningSessions sessionSlug="budget-review-8" />);
     expect(await screen.findByText(/Hilo 8/)).toBeInTheDocument();
-    expect(screen.getByText("Cerrada")).toBeInTheDocument();
+    expect(screen.getByText(/Hilo 8 · Cerrada/)).toBeInTheDocument();
+    expect(screen.getByText(/Hilo 8 · Cerrada/).closest("p")?.querySelector(".badge")).toBeNull();
     expect(screen.getByText("Turno")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getByText("Última clasificación")).toBeInTheDocument();
