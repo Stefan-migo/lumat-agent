@@ -105,7 +105,8 @@ export function agendaTodayKey(timeZone: string) {
 
 /** Returns a localized month heading for an agenda anchor. */
 export function agendaMonthLabel(anchorDay: string, timeZone: string) {
-  return calendarFormat(timeZone, { month: 'long', year: 'numeric' }).format(localNoonForDay(anchorDay, timeZone));
+  const label = calendarFormat(timeZone, { month: 'long', year: 'numeric' }).format(localNoonForDay(anchorDay, timeZone));
+  return label[0].toLocaleUpperCase('es-CL') + label.slice(1);
 }
 
 /** Returns only the days belonging to the anchor's month. */

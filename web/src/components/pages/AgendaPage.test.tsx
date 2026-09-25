@@ -102,6 +102,42 @@ describe('AgendaPage', () => {
     expect(document.querySelectorAll('.data-region')).toHaveLength(1);
   });
 
+  it('places the primary create action in the page header', () => {
+    render(<AgendaPage data={[]} state="empty" />);
+    expect(screen.getByRole('banner').querySelector('.page-header__actions')).toContainElement(
+      screen.getByRole('button', { name: 'Nueva visita' }),
+    );
+  });
+
+  it('keeps calendar day and register surfaces aligned by CSS contract', () => {
+    const stylesheet = readFileSync(join(__dirname, '../primitives/primitives.css'), 'utf8');
+    const day = stylesheet.match(/\.agenda-calendar__day\s*\{([^}]*)\}/)?.[1] ?? '';
+    const cell = stylesheet.match(/\.agenda-calendar__cell\s*,\s*\.agenda-calendar__empty\s*\{([^}]*)\}/)?.[1] ?? '';
+    const calendar = stylesheet.match(/\.agenda-calendar\s*\{([^}]*)\}/)?.[1] ?? '';
+    const register = stylesheet.match(/\.agenda-page__section\s*\{([^}]*)\}/)?.[1] ?? '';
+    const count = stylesheet.match(/\.agenda-calendar__count\s*\{([^}]*)\}/)?.[1] ?? '';
+    const today = stylesheet.match(/\.agenda-calendar__day\[aria-current="date"\]\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(day).toMatch(/background:\s*var\(--(?!corp-surface\b)[\w-]+\)/);
+    expect(day).toMatch(/height:\s*[^;]+/);
+    expect(day).toMatch(/padding:\s*var\(--space-1\)/);
+    expect(cell).toMatch(/height:\s*[^;]+/);
+    expect(stylesheet).toMatch(/\.agenda-calendar\s*\{[^}]*background:\s*var\(--brand-bg-elevated\)/s);
+    expect(today).toMatch(/outline|box-shadow|border/);
+    expect(stylesheet).toMatch(/\.agenda-calendar__day\[aria-pressed="true"\]\s*\{[^}]*border-color:[^}]*box-shadow:\s*inset[^}]*var\(--brand-lime\)/s);
+    expect(count).toMatch(/white-space:\s*normal/);
+    expect(count).not.toMatch(/overflow:\s*hidden|text-overflow:\s*ellipsis/);
+    expect(calendar).toMatch(/padding:\s*var\(--space-4\)/);
+    expect(calendar).toMatch(/border-radius:\s*var\(--radius-lg\)/);
+    expect(calendar).toMatch(/background:\s*var\(--brand-bg-elevated\)/);
+    expect(calendar).not.toMatch(/box-shadow:/);
+    expect(stylesheet).toMatch(/\.agenda-calendar__table\s*\{[^}]*min-width:\s*calc\(var\(--space-8\) \* 10\)/s);
+    expect(register).toMatch(/padding:\s*var\(--space-4\)/);
+    expect(register).toMatch(/border-radius:\s*var\(--radius-lg\)/);
+    expect(register).toMatch(/background:\s*var\(--brand-bg-elevated\)/);
+    expect(register).not.toMatch(/box-shadow:/);
+    expect(stylesheet).toMatch(/\.agenda-page__section \.data-region\s*\{[^}]*background:\s*transparent/s);
+  });
+
   it('shows a labelled empty state and keeps the table wrapper mobile-safe', () => {
     const { container } = render(<AgendaPage data={[]} state="empty" />);
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
@@ -204,14 +240,14 @@ describe('AgendaPage', () => {
     await user.click(screen.getByRole('button', { name: /^domingo 6 de septiembre,/ }));
 
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
-    expect(screen.getByRole('table', { name: 'Calendario de septiembre de 2026' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Calendario de Septiembre de 2026' })).toBeInTheDocument();
   });
 
   it('shows the explicit empty state when today has no current or upcoming visits', () => {
     render(<AgendaPage data={[appointment({ local_start: '2026-09-04T10:00:00-04:00' })]} state="ready" timezone="America/Santiago" />);
 
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
-    expect(screen.getByRole('table', { name: 'Calendario de septiembre de 2026' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Calendario de Septiembre de 2026' })).toBeInTheDocument();
   });
 
   it('uses a single period section after navigating outside the current day', async () => {
@@ -233,7 +269,7 @@ describe('AgendaPage', () => {
     render(<AgendaPage timezone="America/Santiago" />);
 
     expect(await screen.findByText('No hay visitas')).toBeInTheDocument();
-    expect(screen.getByRole('table', { name: 'Calendario de septiembre de 2026' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Calendario de Septiembre de 2026' })).toBeInTheDocument();
   });
 
   it('creates an appointment from the agenda and refreshes the visible period', async () => {

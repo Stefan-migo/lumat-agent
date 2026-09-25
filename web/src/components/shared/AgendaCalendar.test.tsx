@@ -19,7 +19,7 @@ describe("AgendaCalendar", () => {
   it("renders a month table with aligned weekdays and empty adjacent cells", () => {
     const { container } = render(<AgendaCalendar {...baseProps} view="month" />);
 
-    expect(screen.getByRole("table", { name: "Calendario de septiembre de 2026" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Calendario de Septiembre de 2026" })).toBeInTheDocument();
     expect(screen.getAllByRole("columnheader")).toHaveLength(7);
     expect(screen.getAllByRole("cell", { hidden: true })).toHaveLength(35);
     expect(screen.getAllByRole("row")).toHaveLength(6);
@@ -67,9 +67,19 @@ describe("AgendaCalendar", () => {
 
     const selected = screen.getByRole("button", { name: /24 de septiembre.*2 visitas/ });
     expect(selected).toHaveAttribute("aria-pressed", "true");
+    expect(selected).toHaveAttribute("aria-pressed", "true");
     expect(document.querySelector(".agenda-calendar__today")).toHaveTextContent("Hoy");
+    expect(document.querySelectorAll(".agenda-calendar__today, .agenda-calendar__selected")).toHaveLength(1);
     fireEvent.click(selected);
     expect(onSelectDay).toHaveBeenCalledWith(null);
+  });
+
+  it("uses one status line when today and selection apply to the same day", () => {
+    render(<AgendaCalendar {...baseProps} />);
+    const day = screen.getByRole("button", { name: /24 de septiembre.*2 visitas/ });
+    expect(day.querySelectorAll(".agenda-calendar__today, .agenda-calendar__selected")).toHaveLength(1);
+    expect(day).toHaveAttribute("aria-current", "date");
+    expect(day).toHaveAttribute("aria-pressed", "true");
   });
 
   it("emits navigation and view changes", () => {
