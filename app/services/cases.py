@@ -22,13 +22,23 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.chat.state import ConversationState
 from app.models import Case, Customer, Message
 from app.services.audit import record_audit
 from app.services.events import publish_event
+
+CLOSING_CASE_STATUSES = frozenset({"closed", "cerrado", "finalizado", "cancelado"})
+
+
+def case_is_open_expr():
+    """Canonical predicate for an open case, including NULL-status cases."""
+    return and_(
+        Case.closed_at.is_(None),
+        or_(Case.status.is_(None), Case.status.not_in(CLOSING_CASE_STATUSES)),
+    )
 
 
 def get_or_create_case(session: Session, conversation_id: int, customer_id: int) -> Case:
@@ -133,7 +143,7 @@ def list_open_cases(session: Session, limit: int = 100) -> list[Case]:
         session.execute(
             select(Case, Customer)
             .join(Customer, Case.customer_id == Customer.id)
-            .where(Case.closed_at.is_(None))
+            .where(case_is_open_expr())
             .order_by(
                 Case.escalated_at.desc().nulls_last(),
                 Case.created_at.desc(),
@@ -163,7 +173,13 @@ def update_case(
     """
     before = {"status": case.status, "responsible_id": case.responsible_id}
     if status is not None:
+        was_closing = case.status in CLOSING_CASE_STATUSES
+        is_closing = status in CLOSING_CASE_STATUSES
         case.status = status
+        if is_closing and not was_closing and case.closed_at is None:
+            case.closed_at = datetime.now(timezone.utc)
+        elif was_closing and not is_closing:
+            case.closed_at = None
     if responsible_id is not _UNSET:
         case.responsible_id = responsible_id
     record_audit(

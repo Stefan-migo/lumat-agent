@@ -29,6 +29,7 @@ from app.panel.api.serializers import (
     to_today_case_dict,
     to_today_conversation_dict,
 )
+from app.services.cases import case_is_open_expr
 
 MAX_PERIOD = timedelta(days=31)
 
@@ -116,7 +117,7 @@ def today_projection(session, timezone_name: str) -> dict:
         select(Case, Customer.name)
         .join(Customer, Customer.id == Case.customer_id)
         .where(
-            Case.closed_at.is_(None),
+            case_is_open_expr(),
             (Case.escalated_at.is_not(None) | (Case.emergency.is_(True))),
         )
         .order_by(Case.escalated_at.is_(None), Case.escalated_at.desc(), Case.id)
