@@ -265,3 +265,24 @@ def test_delegation_span_returns_budgeted_provenance_evidence(monkeypatch):
     }
     assert len(result["evidence"]) <= result["delegation"]["cap"]
     assert "status" not in result
+
+
+def test_delegation_span_refuses_a_read_outside_the_worker_scope(monkeypatch):
+    from app.chat.assistant import nodes
+    from app.chat.assistant.delegation import resolve_delegation_scope
+
+    plans = iter([
+        {"kind": "tool", "tool": "customers.list", "arguments": {"limit": 5}, "summary": "list", "requires_approval": False},
+        {"kind": "respond", "summary": "done"},
+    ])
+    monkeypatch.setattr(nodes, "_delegation_plan", lambda *args, **kwargs: next(plans))
+    executed = []
+    monkeypatch.setattr(nodes, "execute_tool", lambda *args, **kwargs: executed.append(args[1]) or {"tool": args[1], "status": "completed", "result": []})
+
+    result = nodes.delegation_span(
+        {"content": "List every customer", "thread_id": 1},
+        resolve_delegation_scope("customer_records"),
+    )
+
+    assert result["delegation"]["decisions"] == [nodes.DELEGATION_TOOL_REFUSED]
+    assert executed == []
