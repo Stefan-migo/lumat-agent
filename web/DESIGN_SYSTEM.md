@@ -330,6 +330,16 @@ Breakpoints respond to content, not device names. Never hide emergency, handoff,
 
 `Asistente Lumat`, `Agenda`, `Automatizaciones`, and `Usuarios` do not yet have page-architecture sections here; their absence is not permission to improvise.
 
+### Page header
+
+Every page — top-level section, drill-down view, and compatibility route — renders one shared header through `PageFrame`/`PageHeader`. Do not restyle a header per page or add an opt-in class for it.
+
+- One page title per page, using the page-title role from **Typography**.
+- The header carries the leading lime rail (`--brand-lime`) as part of the shared rule.
+- Every page has a subtitle, rendered as plain text. Never wrap the subtitle in a badge, pill, or tinted chip.
+- The subtitle is always present. It must not disappear while loading, or on denied, error, or empty states; when no data-derived copy exists, use a stable descriptor of the section's job.
+- Data-derived copy (counts, statuses, freshness) may appear in the subtitle as plain text, but its absence must never remove the subtitle.
+
 ### Panel
 
 The dashboard answers four current questions:
