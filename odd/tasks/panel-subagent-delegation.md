@@ -3,7 +3,7 @@
 **Branch**: `odd/panel-subagent-delegation`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-panel-subagent-delegation`
 **Base**: `96ba8ca2` (= `main` at branch time, `docs(ops): record the v2026.09.6 deploy`)
-**Status**: **not started** — scope, mechanism and worker are decided and recorded; no source change exists yet. T1–T8 below are all open.
+**Status**: **slice 1 (T1 + T2) delivered as PR #359** — implemented, gate-corrected, independently verified, full suite green, **and carrying no native review receipt** (see *Review outcome — slice 1*). Slices 2 and 3 not started.
 **Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/` (decisions 6 and 7, open question *does U3 delegate through the existing `research_triage` pattern, or a new panel subgraph?*); Engram #4890, #4896.
 
 This is **U3 of three**: U1 (bounded tool chaining) is merged; U2 (local reader `web.fetch`) is merged. U3 was recorded as *"Not ready — do not start yet"* because it needed two decisions. Both were resolved before this document existed, and the resolution is recorded under **Decisions** below.
@@ -155,6 +155,8 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 | 2 | T3 + T4 | The mechanism: the bounded read-only span + the evidence handoff |
 | 3 | T5 + T6 + T7 + T8 | Wiring, cost accounting, spec AT-14 and the cross-domain harness |
 
+**Delivery record**: slice 1 → **PR #359** (`odd/panel-subagent-delegation` → `main`). Under `stacked-to-main` each slice merges to `main` in order; slice 2 opens only after #359 merges, and rebases onto the new `main` first.
+
 ## Review outcome — slice 1
 
 **The native review could not reach a terminal outcome, and no receipt, approval or authority was produced.** This is recorded plainly, because this slice ships with a broken review rather than a passed one.
@@ -203,4 +205,4 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 
 ## Next step
 
-Slice 1's code is complete and verified; **delivery is the owner's decision**. The next action is the owner's call to push `odd/panel-subagent-delegation` and open the slice-1 PR against `main`. After that merges, slice 2 (T3 + T4) rebases onto the new `main`.
+Slice 1 is delivered as **PR #359** and awaiting merge. Once it merges, slice 2 (T3 + T4 — the bounded read-only span and the evidence handoff) rebases onto the new `main` and opens its own PR.
