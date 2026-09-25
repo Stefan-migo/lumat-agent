@@ -74,6 +74,11 @@ describe("Dashboard operational surface", () => {
     expect(screen.getByText(message)).toBeInTheDocument();
   });
 
+  it("keeps the fallback subtitle visible while loading", () => {
+    render(<Dashboard state="loading" />);
+    expect(screen.getByText("Actividad reciente del negocio")).toBeInTheDocument();
+  });
+
   it.each([
     ["stale", "Los datos pueden estar desactualizados"],
     ["partial-error", "No pudimos cargar toda la actividad"],

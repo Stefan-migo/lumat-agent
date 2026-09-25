@@ -90,6 +90,7 @@ describe("ClientesList", () => {
     render(<ClientesList data={null} state="loading" />);
 
     expect(screen.getByRole("heading", { name: "Cargando clientes" })).toBeInTheDocument();
+    expect(screen.getByText("Clientes del negocio")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
