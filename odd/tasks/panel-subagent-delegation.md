@@ -3,7 +3,7 @@
 **Branch**: `odd/panel-subagent-delegation`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-panel-subagent-delegation`
 **Base**: `96ba8ca2` (= `main` at branch time, `docs(ops): record the v2026.09.6 deploy`)
-**Status**: **slice 1 (T1 + T2) delivered as PR #359** — implemented, gate-corrected, independently verified, full suite green, **and carrying no native review receipt** (see *Review outcome — slice 1*). Slices 2 and 3 not started.
+**Status**: **slice 2 (T3 + T4) implemented on `odd/panel-subagent-delegation-slice2`** — branched from `cc783af0`, writer-implemented, gate-corrected, full suite green, **no native review receipt and none due** (see *Review outcome — slice 2*). Slice 1 (T1 + T2) is merged as PR #359 (`d514d215`). Slice 3 not started.
 **Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/` (decisions 6 and 7, open question *does U3 delegate through the existing `research_triage` pattern, or a new panel subgraph?*); Engram #4890, #4896.
 
 This is **U3 of three**: U1 (bounded tool chaining) is merged; U2 (local reader `web.fetch`) is merged. U3 was recorded as *"Not ready — do not start yet"* because it needed two decisions. Both were resolved before this document existed, and the resolution is recorded under **Decisions** below.
@@ -96,8 +96,8 @@ Verified on `96ba8ca2`, not from memory:
 
 - [x] **T1 — Registry: give the declared worker a real scope, RED + GREEN.** Non-empty read-only whitelist for `customer_records` (`customers.search`, `conversations.search`, `appointments.upcoming`, `cases.list`, `memory.read`, `memory.search`); runtime resolution of a declared sub-agent; its persona expanded into a gathering contract. RED was **import-level only** (the new module did not exist) — recorded honestly, no behavioural RED claimed. **Done** (`376d32ff`).
 - [x] **T2 — Plan kind `delegate`, RED + GREEN.** Extend `PlannerOutput` (`extra="forbid"` already prevents sneaking fields); guardrails validates the named sub-agent as declared, read-only and non-empty. Until the span exists, a **valid** delegation terminates explicitly as `delegate_unavailable` and an invalid one as `delegate_refused` — both terminal, never a silent answer with no evidence. RED: both decisions absent, and a valid delegation routed to `respond_stream`. **Done** (`4ed428cf`, corrected in `2218cf7b`).
-- [ ] **T3 — The bounded read-only span, RED + GREEN.** The span runs scoped plan→execute read-only steps, refuses every write, and stops on its own cap. RED: cap observable at the boundary; a write at the span's first step is refused; a second read-only step is permitted.
-- [ ] **T4 — Evidence handoff, RED + GREEN.** The span's results enter `tool_results`/`evidence` with provenance and stay inside the existing tool-evidence budget. RED: evidence shape, provenance and bound.
+- [x] **T3 — The bounded read-only span, RED + GREEN.** The span runs scoped plan→execute read-only steps, refuses every write, and stops on its own cap. RED: cap observable at the boundary; a write at the span's first step is refused; a second read-only step is permitted. **Done** (`cbd6fda0`, corrected in `eb80186b`). RED was **seam-level only** (`AttributeError` on the still-absent `_delegation_plan`) — recorded honestly, no behavioural RED claimed. Contract #8 enforcement landed here: inside a customer-scoped span a `memory.read`/`memory.search` planned with `scope: "own"` is refused as `delegation_memory_scope_refused`, checked in the span before `execute_tool` runs.
+- [x] **T4 — Evidence handoff, RED + GREEN.** The span's results enter `tool_results`/`evidence` with provenance and stay inside the existing tool-evidence budget. RED: `KeyError: 'evidence'` — the span had no evidence handoff field. **Done** (`9765992d`, corrected in `eb80186b`). The bound is structural rather than rendered: the evidence list cannot exceed the span's own cap.
 - [ ] **T5 — Graph wiring + unchanged normal turns, RED + GREEN.** Conditional route from `guardrails`; `tool_steps` advances by exactly one for the whole span; a non-delegating turn is byte-identical in shape and cost.
 - [ ] **T6 — Cost accounting, RED + GREEN.** The span's LLM calls are counted by the existing cost path; an unaccounted call is a test failure. RED.
 - [ ] **T7 — Spec, AT-14.** Requirement with individually refutable scenarios.
@@ -155,7 +155,7 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 | 2 | T3 + T4 | The mechanism: the bounded read-only span + the evidence handoff |
 | 3 | T5 + T6 + T7 + T8 | Wiring, cost accounting, spec AT-14 and the cross-domain harness |
 
-**Delivery record**: slice 1 → **PR #359** (`odd/panel-subagent-delegation` → `main`). Under `stacked-to-main` each slice merges to `main` in order; slice 2 opens only after #359 merges, and rebases onto the new `main` first.
+**Delivery record**: slice 1 → **PR #359** (`odd/panel-subagent-delegation` → `main`, merged as `d514d215`). Slice 2 → `odd/panel-subagent-delegation-slice2` off `cc783af0`; **its PR number is recorded here before merge** — pending owner-authorized push.
 
 ## Review outcome — slice 1
 
@@ -182,12 +182,31 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 
 **Preserved state at slice close**: lineage `review-fbbdf054020eb792` remains `reviewing` with its single slot uncollected; no reviewer result, receipt, correction or approval exists; the candidate and working tree are unchanged; nothing is pushed.
 
+## Review outcome — slice 2
+
+**No native review was started, and native assessment says none was due.** The preflight ran and the provider offered a fresh candidate; the committed-work assessment then measured it as under budget.
+
+- Selectorless preflight (`review status --cwd <worktree> --contract gentle-ai.review-integration/v2 --agent opencode --next-transition`) → `applicability: unrelated`, next transition `execute` with reason `fresh_target_ready`, 2 paths (`app/chat/assistant/nodes.py`, `tests/unit/test_assistant_delegation.py`), target `sha256:1fa8983e…`, lineage `review-45ea91538dfb59bb` minted. **The returned START was not invoked, so nothing was frozen** — no transaction, no slot, no consent envelope.
+- `review assess --cwd <worktree> --base-ref cc783af0 --committed-only --json` → `risk: medium` (`executable_change` on `app/chat/assistant/nodes.py`), `changed_paths: 2`, `changed_lines: 160`, **`review_due: false`, `review_due_reason: under_budget`**.
+- Under the committed-work rule, `review_due: false` keeps the boundary pending and the work continues. Forcing a START instead would have burned a lineage in the environment whose immutable review transport is already known broken (*Review outcome — slice 1*), for a candidate native assessment had just measured as not due. `review mode status` reads `on (decided by global)`; nothing was disabled and RDD was not touched.
+
+**Verification achieved.** Tier `medium` on a full-size model, so writer self-verification is the verification of record:
+
+| Evidence | Result |
+|---|---|
+| Writer self-verification (focused suites) | `test_assistant_delegation.py` 16 passed · tool-loop/planner/registry 76 passed · harness guardrails 32 passed |
+| Parent-resolved full suite | `uv run pytest tests/` — **1,458 tests, 0 failures, exit 0** (1,458 progress marks, no `F`/`E`; the summary line does not render under this repo's `-q` config, the marks do) |
+| Parent adversarial readback of the diff | Two defects found and corrected in `eb80186b`: the span returned the router-consumed `status` value (pre-deciding `_after_execute`'s routing at `graph.py:94-95`), and it hand-rolled the evidence dict instead of reusing `make_evidence` (`app/chat/assistant/evidence.py:6`) |
+| Parent coverage check | Contract #2 (out-of-scope tool refused) was implemented but unpinned; the parent added one characterization test in `17a44e4b` — **no RED claimed**, that refusal path already existed |
+
 ## Graph nodes consulted (Graph Check, Step 1)
 
 - `graphify query "panel assistant subgraph delegation orchestrate research_triage context handoff"` → `orchestrate()` (`app/chat/nodes/orchestrate.py:102`), `_dispatch()` (`:46`), `app/chat/subgraphs/research_triage.py:54` (`_kb_check`), `app/chat/graph.py:204` (`build_graph()`), `app/chat/state.py:136` (`ConversationState`), `app/agent_registry.py:69` (`Assistant`), `:44` (`RegistryError`).
 - `graphify query "assistant graph state schema panel_cost_gate tool_loop bounded iteration"` → `build_assistant_graph()` (`app/chat/assistant/graph.py:114`), `run_assistant()` (`:167`), `plan_llm()` (`nodes.py:482`), `guardrails()` (`:574`), `execute()` (`:756`), `tool_loop_head()` (`:657`), `panel_cost_gate()` (`:439`), `parse_planner_output()` (`:195`), `retrieve_kb()` (`:706`), `bounded_fallback()` (`:163`), `AssistantState`, `app/services/costs.py:148,241`.
 - `graphify-out/GRAPH_REPORT.md`; hubs: `nodes.py`, `assistant/state.py`, `research_triage.py`, `agent_registry.py`, `test_routing_table.py`.
 - **Delegation output is a lead, not a fact.** A delegated mapper in this repo previously reported a file as non-existent that did exist. Every claim in *Problem* above was re-verified by the orchestrator with `file:line` before this document was written.
+- Slice 2 queries (`graphify query "assistant bounded tool loop guardrails tool_results evidence budget"`, `graphify query "assistant delegation customer_records sub-agent whitelist memory scope"`, `graphify path "guardrails" "tool_loop_head"`) → `resolve_delegation_scope()` / `DelegationScope` / `DelegationScopeError` (`app/chat/assistant/delegation.py:10,15,22`), `_after_guardrails()` (`app/chat/assistant/graph.py:75`), `_after_execute()` (`:94`), `_after_tool_loop()` (`:98`), `guardrails()` / `tool_loop_head()` / `parse_planner_output()` / `bounded_fallback()` / `_context_text()` / `_render_tool_evidence()` (`app/chat/assistant/nodes.py`), `_read_memory()` / `_search_memory()` / `_owned_agent_memory_or_raise()` (`app/chat/assistant/tools/registry.py:285,327,395`), `TOOL_REGISTRY` / `get_tool()` / `execute_tool()` (`:535,546`), `_build_assistant()` (`app/agent_registry.py:128`), `make_evidence()` (`app/chat/assistant/evidence.py:6`), `customer-records Sub-agent` (`agent/registry.yaml`), `collect_evidence()` / `plan_llm()` / `execute()` (`nodes.py`). `graphify path "guardrails" "tool_loop_head"` returns **no directed path** — the two are joined through `execute`, not directly.
+- The graph was refreshed once for this session (`graphify /home/stefan/repos/lumat-agent --update` → 7,939 nodes / 16,529 edges). `GRAPH_REPORT.md` still names commit `8e25037c` as its build base while `graph.json` is newer; the report is advisory, the graph is what was queried.
 
 ## Follow-ups (not this unit)
 
@@ -202,7 +221,13 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 - **Gatekeeper caught a real integration failure in the first attempt**, and it is worth keeping: the first pass shipped the `assistant_plan.md` delegation instruction while nothing executed a delegation, and `_after_guardrails` did not know the `delegate` decisions — so a validated delegation fell through to `respond_stream` (an answer with zero gathered evidence, forbidden by contract #1) and the `delegate_refused` refusal was silently discarded. One corrective round fixed all four findings: the prompt change moved to the wiring slice, both delegate decisions became terminal, the orphan `delegating` status was removed, and the refusal became a named constant.
 - **Lesson for the remaining slices**: a trust-boundary slice must not make the planner aware of a capability the graph cannot execute, and every new decision a node returns must have a consumer in the router.
 - **Slice 1 verified as far as this environment allows**: focused suites green, an independent verifier confirmed diff integrity and raised two findings (both fixed in `715c380e`), and the parent-resolved full suite is **1,455 tests / 0 failures / exit 0**. The native review receipt does not exist — see *Review outcome — slice 1*.
+- **Slice 2 (T3 + T4) implemented** on `odd/panel-subagent-delegation-slice2` off `cc783af0`: `cbd6fda0` (span), `9765992d` (evidence provenance), corrected in `eb80186b`, plus the parent's characterization test in `17a44e4b`. Files: `app/chat/assistant/nodes.py`, `tests/unit/test_assistant_delegation.py`. **158 authored lines** across the implementation commits — well inside the ~400-line review budget, which is exactly why native assessment measured it `under_budget`.
+- **The gate caught two real defects the writer missed**, and they are worth keeping: the span returned `status: "completed"`, a value the router already consumes (`_after_execute` routes `completed`/`degraded` into `tool_loop_head`), so an unwired span was pre-deciding the parent's routing; and it re-invented the `{tool, status, detail}` evidence shape instead of calling `make_evidence`. The same lesson as slice 1, one level down: **a component must return only what it owns.**
+- **The worker's REDs were honest but weak**: `AttributeError` on the absent `_delegation_plan` for T3 and `KeyError: 'evidence'` for T4. Neither demonstrates the behaviour failing, only the seam being absent. It is recorded as such rather than dressed up.
+- **Contract #8 is now enforced, not merely exposed**: `delegation.py` still only carries `memoria_scope`, but the span refuses a customer-scoped worker's `scope: "own"` memory read before execution (`delegation_memory_scope_refused`).
 
 ## Next step
 
-Slice 1 is delivered as **PR #359** and awaiting merge. Once it merges, slice 2 (T3 + T4 — the bounded read-only span and the evidence handoff) rebases onto the new `main` and opens its own PR.
+Slice 2 (T3 + T4) is implemented and committed on `odd/panel-subagent-delegation-slice2`, **not yet pushed and without a PR** — delivery is the owner's call. Once the owner authorizes it: push the branch, open the PR (`type:feature`), record its number in the *Delivery record* above as a docs-only commit, and merge to `main` under `stacked-to-main`. Slice 3 (T5 + T6 + T7 + T8 — graph wiring, cost accounting, AT-14 and the cross-domain harness) then rebases onto the new `main`.
+
+**Carry forward into slice 3:** the span is deliberately **not** graph-wired and returns no `status`, no `tool_steps` and no cost record. T5 owns the conditional route from `guardrails`, the single parent-step accounting and the consumers for every new decision; T6 owns counting the span's LLM calls (`_delegation_plan` currently calls the provider directly, bypassing the existing cost path). Both new state keys — `delegation` on the span result — are outside `AssistantState` and must be handled deliberately when the wiring lands.
