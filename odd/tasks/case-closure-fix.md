@@ -257,7 +257,7 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 - `6088ab89 docs(odd): record case closure delivery`
 - `dbf48883 docs(odd): reconcile archived change status`
 
-## Delivery
+## Delivery outcome
 
 Delivered in PR #365, merged as merge commit `33f1feba`. The OpenSpec change was archived and
 the `AD-HOY-1` delta synced into the live specification.
