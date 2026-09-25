@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import User
+from app.models import Customer, User
 from app.panel.api.deps import require_operator_json
 from app.panel.api.serializers import to_case_dict, to_customer_dict, to_user_dict
 from app.panel.deps import get_db
@@ -43,6 +43,12 @@ _UNSET = cases_service._UNSET
 class CaseUpdateBody(BaseModel):
     status: str | None = None
     responsible_id: int | None | object = _UNSET
+
+
+class ManualCaseBody(BaseModel):
+    customer_id: int
+    service: str
+    summary: str | None = None
 
 
 def _case_or_404(session: Session, case_id: int) -> cases_service.Case:
@@ -67,6 +73,22 @@ def cases_list(
         ],
         "users": [to_user_dict(u) for u in users],
     }
+
+
+@router.post("/cases")
+def case_create(
+    body: ManualCaseBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    """Create an open case entered directly by the operator."""
+    if session.get(Customer, body.customer_id) is None:
+        raise HTTPException(status_code=404, detail="customer not found")
+    case = cases_service.create_manual_case(
+        session, body.customer_id, body.service, summary=body.summary
+    )
+    session.commit()
+    return {"ok": True, "case": to_case_dict(case)}
 
 
 @router.post("/cases/{case_id}/update")
