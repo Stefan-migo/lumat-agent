@@ -155,6 +155,31 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 | 2 | T3 + T4 | The mechanism: the bounded read-only span + the evidence handoff |
 | 3 | T5 + T6 + T7 + T8 | Wiring, cost accounting, spec AT-14 and the cross-domain harness |
 
+## Review outcome — slice 1
+
+**The native review could not reach a terminal outcome, and no receipt, approval or authority was produced.** This is recorded plainly, because this slice ships with a broken review rather than a passed one.
+
+- The preflight froze the candidate cleanly (`status/v9`, `fresh_target_ready`, 9 paths matching the diff), but the first invocation failed with `operation_failed` / `fresh target START runtime lacks immutable review transport` (`retry_safe: true`); one retry succeeded.
+- Consent was relayed and granted; `review start --consent granted` created the transaction: lineage `review-fbbdf054020eb792`, state `reviewing`, one frozen lens slot (`review-reliability`), correction budget 200.
+- Every subsequent eligibility check refused with `immutable_review_transport_unsupported` (`retry_safe: false`, `next_action: stop`, `mutation_outcome: not_started`): the provider-issued lineage-bound STATUS (twice), the captured candidate-scoped decline invocation (once), and the selectorless STATUS against a second worktree.
+- **The supported-runtime list is not stable within one session and one repository**: one invocation reported `claude-code, opencode, codex`, a later one reported `claude-code, codex`. That contradiction is the strongest single piece of evidence. It was reported upstream as an occurrence on the canonical open tracker (`Gentleman-Programming/gentle-ai#4805`), confirmed by the created comment identity; no labels were changed on that issue.
+- The prescribed fallback (`review assess --base-ref 96ba8ca2 --committed-only --json`) returned `risk: high`, reason `unassessable`, `changed_paths: 0`.
+- `gentle-ai review mode disable` was **not** run; RDD remains enabled and untouched.
+
+**Verification actually achieved.** The tier for an unassessable outcome is writer self-verification plus an independent verifier:
+
+| Evidence | Result |
+|---|---|
+| Writer self-verification (focused suites) | `test_assistant_delegation.py` 13 passed · registry/planner/config 54 passed · assistant tools 71 passed · harness guardrails 32 passed |
+| Independent verifier (static inspection + diff integrity) | Integrity confirmed (9 paths, commits match, planner prompt clean, worktree clean, `git diff --check` clean); two findings raised, both fixed |
+| Parent-resolved full suite | `uv run pytest tests/` — **1,455 tests, 0 failures** (all progress marks, no `F`/`E`, no failure summary), **exit 0** |
+
+**Independent-verifier findings, both fixed in `715c380e`:**
+- The declared `memoria_scope: "customer"` was dropped from the resolved scope even though Contract #8 requires the span to honour it. It is now carried (`app/chat/assistant/delegation.py:19,47`) and pinned by a test. Enforcement stays in T3 — this slice exposes, it does not enforce.
+- The roster comment claimed `customer_records` had no runtime behaviour. It now states precisely what is wired (declaration, resolution, guardrail validation) and what is not (no executable delegation span).
+
+**Preserved state at slice close**: lineage `review-fbbdf054020eb792` remains `reviewing` with its single slot uncollected; no reviewer result, receipt, correction or approval exists; the candidate and working tree are unchanged; nothing is pushed.
+
 ## Graph nodes consulted (Graph Check, Step 1)
 
 - `graphify query "panel assistant subgraph delegation orchestrate research_triage context handoff"` → `orchestrate()` (`app/chat/nodes/orchestrate.py:102`), `_dispatch()` (`:46`), `app/chat/subgraphs/research_triage.py:54` (`_kb_check`), `app/chat/graph.py:204` (`build_graph()`), `app/chat/state.py:136` (`ConversationState`), `app/agent_registry.py:69` (`Assistant`), `:44` (`RegistryError`).
@@ -174,7 +199,8 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 - **Slice 1 (T1 + T2) implemented** on `odd/panel-subagent-delegation`: `376d32ff`, `4ed428cf`, corrected in `2218cf7b`. Files: `agent/registry.yaml`, `agent/personas/customer_records.md`, `app/chat/assistant/delegation.py` (new), `app/chat/assistant/state.py`, `app/chat/assistant/nodes.py`, `app/chat/assistant/graph.py`, `tests/unit/test_assistant_delegation.py` (new), `tests/unit/test_agent_registry.py`.
 - **Gatekeeper caught a real integration failure in the first attempt**, and it is worth keeping: the first pass shipped the `assistant_plan.md` delegation instruction while nothing executed a delegation, and `_after_guardrails` did not know the `delegate` decisions — so a validated delegation fell through to `respond_stream` (an answer with zero gathered evidence, forbidden by contract #1) and the `delegate_refused` refusal was silently discarded. One corrective round fixed all four findings: the prompt change moved to the wiring slice, both delegate decisions became terminal, the orphan `delegating` status was removed, and the refusal became a named constant.
 - **Lesson for the remaining slices**: a trust-boundary slice must not make the planner aware of a capability the graph cannot execute, and every new decision a node returns must have a consumer in the router.
+- **Slice 1 verified as far as this environment allows**: focused suites green, an independent verifier confirmed diff integrity and raised two findings (both fixed in `715c380e`), and the parent-resolved full suite is **1,455 tests / 0 failures / exit 0**. The native review receipt does not exist — see *Review outcome — slice 1*.
 
 ## Next step
 
-Run the native review preflight for slice 1; on approval, push the branch and open the slice-1 PR against `main`. Then slice 2 (T3 + T4) rebases onto the new `main`.
+Slice 1's code is complete and verified; **delivery is the owner's decision**. The next action is the owner's call to push `odd/panel-subagent-delegation` and open the slice-1 PR against `main`. After that merges, slice 2 (T3 + T4) rebases onto the new `main`.
