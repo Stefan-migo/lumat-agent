@@ -28,6 +28,21 @@ def test_resolves_customer_records_with_exact_read_only_scope():
     assert "return evidence" in scope.persona.lower()
 
 
+def test_panel_planner_catalog_matches_pre_delegation_bytes():
+    import hashlib
+
+    from app.chat.assistant.nodes import _planner_tool_catalog
+    from app.services.prompts import load_assistant_config
+
+    config = load_assistant_config()
+    catalog = _planner_tool_catalog(list(config.tools_whitelist))
+
+    # SHA-256 of the serialized assistant catalog at the pre-delegation baseline (96ba8ca2).
+    assert hashlib.sha256(catalog.encode("utf-8")).hexdigest() == (
+        "27bbace899ab056f8f031e0f9994ed8a629adb1ef93215eb800dc9b4a1537f39"
+    )
+
+
 def test_unknown_subagent_is_refused_explicitly():
     from app.chat.assistant.delegation import DelegationScopeError, resolve_delegation_scope
 
@@ -77,30 +92,33 @@ def test_unknown_tool_in_subagent_scope_is_refused_explicitly():
         resolve_delegation_scope("customer_records", registry=registry)
 
 
-def test_valid_delegate_scope_is_explicitly_not_executable_yet():
-    from app.chat.assistant.nodes import PANEL_DELEGATION_UNAVAILABLE, guardrails
-
-    result = guardrails(
-        {
-            "content": "Which customers have open cases?",
-            "planner": {"valid": True},
-            "plan": {
-                "kind": "delegate",
-                "sub_agent": "customer_records",
-                "summary": "Gather customer and case records.",
-            },
-        }
+def test_valid_delegate_routes_into_span_then_grounding(monkeypatch):
+    from app.chat.assistant import graph, nodes
+    plans = iter([
+        nodes.PlannerOutput(kind="tool", tool="customers.search", arguments={"query": "open cases"},
+                            summary="Gather customer evidence.", requires_approval=False),
+        nodes.PlannerOutput(kind="respond", summary="Done."),
+    ])
+    monkeypatch.setattr(nodes, "_delegation_plan", lambda *args, **kwargs: next(plans))
+    monkeypatch.setattr(nodes, "execute_tool", lambda *args, **kwargs: {
+        "tool": "customers.search", "status": "completed", "result": [{"name": "Ana"}],
+    })
+    result = nodes.guardrails(
+        {"content": "Which customers have open cases?", "planner": {"valid": True},
+         "plan": {"kind": "delegate", "sub_agent": "customer_records", "summary": "Gather."}}
     )
 
-    assert result["guardrails"]["decision"] == "delegate_unavailable"
-    assert result["guardrails"]["scope_valid"] is True
-    assert result["status"] == "completed"
-    assert result["response"] == PANEL_DELEGATION_UNAVAILABLE
+    state = {"content": "Which customers have open cases?", "plan": {"kind": "delegate", "sub_agent": "customer_records"}, **result}
+    assert graph._after_guardrails(state) == "delegation_span"
+    wired = nodes.delegation_node(state)
+    assert wired["delegation"]["steps"] == 1
+    assert wired["tool_steps"] == 1
+    assert wired["status"] == "completed"
+    assert wired["tool_results"][0]["result"] == [{"name": "Ana"}]
+    assert wired["evidence"]
 
 
 def test_valid_delegate_scope_routes_terminally_instead_of_answering_without_evidence():
-    from langgraph.graph import END
-
     from app.chat.assistant.graph import _after_guardrails
     from app.chat.assistant.nodes import guardrails
 
@@ -113,7 +131,7 @@ def test_valid_delegate_scope_routes_terminally_instead_of_answering_without_evi
     )
 
     state = {"plan": {"kind": "delegate"}, **result}
-    assert _after_guardrails(state) == END
+    assert _after_guardrails(state) == "delegation_span"
 
 
 @pytest.mark.parametrize(
@@ -170,11 +188,11 @@ def test_delegate_refusal_routes_terminally_without_responder():
     assert _after_guardrails({"plan": {"kind": "delegate"}, **result}) == END
 
 
-def test_planner_prompt_does_not_advertise_unavailable_delegation():
+def test_planner_prompt_advertises_executable_delegation():
     prompt = (Path(__file__).resolve().parents[2] / "agent" / "prompts" / "assistant_plan.md").read_text()
 
-    assert 'kind: "delegate"' not in prompt
-    assert "sub_agent: \"customer_records\"" not in prompt
+    assert 'kind: "delegate"' in prompt
+    assert 'sub_agent: "customer_records"' in prompt
 
 
 def test_planner_output_accepts_delegate_selector_and_forbids_other_extras():
@@ -286,3 +304,25 @@ def test_delegation_span_refuses_a_read_outside_the_worker_scope(monkeypatch):
 
     assert result["delegation"]["decisions"] == [nodes.DELEGATION_TOOL_REFUSED]
     assert executed == []
+
+
+def test_delegation_planner_accounts_for_llm_usage(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.chat.assistant import nodes
+    from app.chat.assistant.delegation import resolve_delegation_scope
+
+    completion = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content='{"kind":"respond","summary":"Done."}'))],
+        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=2),
+    )
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: completion)))
+    monkeypatch.setattr(nodes, "_assistant_client", lambda: client)
+    records = []
+    monkeypatch.setattr(nodes, "_record_usage", lambda *args: records.append(args))
+
+    nodes._delegation_plan({"content": "Gather", "run_id": "run-1"}, resolve_delegation_scope("customer_records"))
+
+    assert len(records) == 1
+    assert records[0][1] == "delegation:customer_records"
+    assert records[0][2] is completion

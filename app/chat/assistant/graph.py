@@ -9,6 +9,7 @@ from app.chat.assistant.nodes import (
     collect_evidence,
     cortex_session_gate,
     cortex_session_turn,
+    delegation_node,
     execute,
     guardrails,
     panel_cost_gate,
@@ -80,8 +81,10 @@ def _after_guardrails(state: AssistantState) -> str:
     if _is_terminal_plan_failure(state):
         return END
     decision = (state.get("guardrails") or {}).get("decision")
-    if decision in {"grounding_refusal", "loop_write_refused", "delegate_refused", "delegate_unavailable"}:
+    if decision in {"grounding_refusal", "loop_write_refused", "delegate_refused"}:
         return END
+    if decision == "delegate":
+        return "delegation_span"
     if decision == "retrieve_kb":
         return "retrieve_kb"
     return "execute_tool" if state.get("plan", {}).get("kind") == "tool" else "respond_stream"
@@ -127,6 +130,7 @@ def build_assistant_graph():
     builder.add_node("sdb_verify", sdb_verify)
     builder.add_node("sdb_deliver", sdb_deliver)
     builder.add_node("guardrails", guardrails)
+    builder.add_node("delegation_span", delegation_node)
     builder.add_node("retrieve_kb", retrieve_kb)
     builder.add_node("execute_tool", execute)
     builder.add_node("tool_loop_head", tool_loop_head)
@@ -155,7 +159,8 @@ def build_assistant_graph():
     builder.add_edge("sdb_execute", "sdb_verify")
     builder.add_edge("sdb_verify", "sdb_deliver")
     builder.add_edge("sdb_deliver", "evidence")
-    builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "retrieve_kb": "retrieve_kb", "respond_stream": "respond_stream", END: END})
+    builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "delegation_span": "delegation_span", "retrieve_kb": "retrieve_kb", "respond_stream": "respond_stream", END: END})
+    builder.add_edge("delegation_span", "respond_stream")
     builder.add_conditional_edges("retrieve_kb", _after_retrieve_kb, {"respond_stream": "respond_stream", END: END})
     builder.add_conditional_edges("execute_tool", _after_execute, {"tool_loop_head": "tool_loop_head", END: END})
     builder.add_conditional_edges("tool_loop_head", _after_tool_loop, {"plan_llm": "plan_llm", "respond_stream": "respond_stream"})

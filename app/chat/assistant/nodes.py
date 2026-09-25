@@ -55,7 +55,6 @@ PANEL_LOOP_WRITE_REFUSAL = (
     "Pídemela directamente y te pediré confirmación antes de ejecutarla."
 )
 PANEL_DELEGATION_REFUSAL = "I cannot safely delegate that request."
-PANEL_DELEGATION_UNAVAILABLE = "Delegation is not available yet."
 _SOCIAL_WORDS = frozenset({
     "adios", "buenas", "buenos", "bye", "chau", "como", "de", "dia", "días", "día",
     "dias", "estas", "esta", "excelente", "gracias", "hello", "hi", "hola", "hasta",
@@ -79,7 +78,15 @@ def _project_slug(state: AssistantState) -> str:
 
 def extension_hook_metadata() -> dict[str, str]:
     """Describe deferred extensions without loading or executing their internals."""
-    return {"sdb": "deferred", "panel_subagents": "not_implemented"}
+    from app.chat.assistant.delegation import DelegationScopeError, resolve_delegation_scope
+
+    try:
+        resolve_delegation_scope("customer_records")
+    except DelegationScopeError:
+        wired = False
+    else:
+        wired = True
+    return {"sdb": "deferred", "panel_subagents": "implemented" if wired else "not_implemented"}
 
 
 _PLANNING_COMMAND = re.compile(r"^/planning(?: ([^\s].*?))?$")
@@ -504,6 +511,7 @@ def _delegation_plan(state: AssistantState, scope) -> PlannerOutput:
         temperature=0,
         response_format={"type": "json_object"},
     )
+    _record_usage(state, f"delegation:{scope.key}", completion)
     raw = json.loads(_completion_text(completion))
     planner, valid, _ = parse_planner_output(raw)
     return planner if valid else bounded_fallback("delegation planner output invalid")
@@ -569,6 +577,15 @@ def delegation_span(state: AssistantState, scope) -> AssistantState:
             "decisions": decisions,
         },
     }
+
+
+def delegation_node(state: AssistantState) -> AssistantState:
+    """Resolve guardrail-validated plan scope at the LangGraph node boundary."""
+    from app.chat.assistant.delegation import resolve_delegation_scope
+
+    scope = resolve_delegation_scope((state.get("plan") or {}).get("sub_agent", ""))
+    result = delegation_span(state, scope)
+    return {**result, "tool_steps": state.get("tool_steps", 0) + 1, "status": "completed"}
 
 
 def plan_llm(state: AssistantState) -> AssistantState:
@@ -697,10 +714,8 @@ def guardrails(state: AssistantState) -> AssistantState:
                 "scope_valid": True,
                 "cost_allowed": True,
                 "approval_required": False,
-                "decision": "delegate_unavailable",
+                "decision": "delegate",
             },
-            "response": PANEL_DELEGATION_UNAVAILABLE,
-            "status": "completed",
         }
     tool_name = plan_data.get("tool")
     if plan_data.get("kind") != "tool" or not tool_name:

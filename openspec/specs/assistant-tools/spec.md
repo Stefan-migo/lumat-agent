@@ -286,3 +286,42 @@ The assistant MUST expose `web.fetch` as a read-only tool that reads one public 
 - GIVEN a page whose title and body exceed the evidence budget by an order of magnitude
 - WHEN the reader serializes its evidence
 - THEN the result fits the existing tool-evidence limit with margin
+
+### Requirement: AT-14 — Bounded Read-Only Sub-Agent Delegation
+
+The panel assistant MUST accept a validated `delegate` plan for the declared `customer_records` sub-agent and execute its bounded read-only span using only that sub-agent's resolved whitelist. The span MUST refuse writes and out-of-scope tools, honour the sub-agent's customer memory scope, count as exactly one parent tool step, and return structured results with sub-agent/tool provenance to the existing responder as evidence. The responder MUST answer from and cite that evidence; delegated planning usage MUST use the existing assistant LLM cost accounting path. Delegation MUST NOT add tools to the assistant planner catalog or change non-delegating turn behavior.
+
+#### Scenario: Delegated evidence reaches the responder
+- GIVEN a valid `delegate` plan for `customer_records` and successful read-only tool results
+- WHEN the assistant completes the graph turn
+- THEN the responder receives those results with `customer_records` and tool provenance, and its answer cites the gathered evidence
+
+#### Scenario: Worker scope rejects an unlisted tool
+- GIVEN a delegated plan whose tool is absent from the resolved `customer_records` whitelist
+- WHEN the delegation span evaluates that plan
+- THEN it records an explicit refusal and does not invoke that tool
+
+#### Scenario: Worker scope rejects writes
+- GIVEN a delegated plan for a registered write tool
+- WHEN the delegation span evaluates that plan
+- THEN it records a write-refusal decision and performs no mutation
+
+#### Scenario: Delegation uses one parent step
+- GIVEN a valid delegation whose internal span reaches its configured step cap
+- WHEN the span returns to the parent graph
+- THEN the parent `tool_steps` has increased by exactly one and the span has stopped
+
+#### Scenario: Customer memory reads keep customer scope
+- GIVEN a customer-records span planning `memory.read` or `memory.search` with `scope="own"`
+- WHEN the span validates the read
+- THEN it refuses the read before tool execution
+
+#### Scenario: Delegated planner usage is accounted
+- GIVEN a delegated planner completion with provider usage metadata
+- WHEN the span records that LLM call
+- THEN the existing assistant cost ledger contains one usage record for that delegated call
+
+#### Scenario: Assistant catalog and normal turns remain unchanged
+- GIVEN the existing assistant whitelist and a non-delegating plan
+- WHEN delegation capability is wired
+- THEN the serialized assistant planner catalog remains byte-identical to its pre-delegation value and the normal plan follows its existing state and cost path
