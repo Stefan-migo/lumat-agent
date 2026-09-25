@@ -166,7 +166,7 @@ describe('conversation inspector layout CSS contract', () => {
   });
 
   it('gives the inspector column a bounded responsive width', () => {
-    expect(css).toMatch(/\.conversation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(24rem, 1fr\)\s+minmax\(18rem, 24rem\);/);
+    expect(css).toMatch(/\.conversation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(384px, 1fr\)\s+minmax\(288px, 384px\);/);
   });
 
   it('allows inspector detail rows to wrap', () => {
