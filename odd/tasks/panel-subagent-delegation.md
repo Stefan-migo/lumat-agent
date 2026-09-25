@@ -155,7 +155,7 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 | 2 | T3 + T4 | The mechanism: the bounded read-only span + the evidence handoff |
 | 3 | T5 + T6 + T7 + T8 | Wiring, cost accounting, spec AT-14 and the cross-domain harness |
 
-**Delivery record**: slice 1 → **PR #359** (`odd/panel-subagent-delegation` → `main`, merged as `d514d215`). Slice 2 → **PR #360** (`odd/panel-subagent-delegation-slice2` → `main`, merged as `498e5346`). Slice 3 → `odd/panel-subagent-delegation-slice3` off `498e5346`; **its PR number is recorded here before merge** — pending owner-authorized push.
+**Delivery record**: slice 1 → **PR #359** (`odd/panel-subagent-delegation` → `main`, merged as `d514d215`). Slice 2 → **PR #360** (`odd/panel-subagent-delegation-slice2` → `main`, merged as `498e5346`). Slice 3 → **PR #364** (`odd/panel-subagent-delegation-slice3` → `main`), branched from `498e5346`.
 
 ## Review outcome — slice 1
 
@@ -208,7 +208,7 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 - The transaction froze cleanly: lineage **`review-7584730fa4dbaa68`**, state `reviewing`, revision `sha256:4c0731b0…`, one selected lens (`review-reliability`, order 0), correction budget 200, `lenses_required: true`.
 - The lens capture returned **`approved`**: no BLOCKER or CRITICAL findings, and **one advisory WARNING, deliberately non-blocking** — `R3-001` (`app/chat/assistant/nodes.py:579`, `inferential`, `introduced`): `delegation_node` resolves the worker scope without catching a scope-resolution failure, so a worker that became unresolvable between guardrail validation and the node would raise instead of producing the existing explicit refusal. The closure explicitly states that advisory findings open no correction and **must never reopen this review**; it is recorded below as follow-up work.
 - Acknowledgement ran exactly once: **`gentle-ai review-acknowledged/v1`, action `acknowledged`, `authority: "burned"`**, consuming revision `sha256:79eeab74…`. The lifecycle then stops — delivery is a separate human decision.
-- **Scope of the receipt**: it covers target `sha256:8e9a069c…` (11 paths, 405 lines). This record was edited *after* the acknowledgement to state the outcome truthfully, so the docs-only commits that follow are, by the ordering rule, outside that receipt — they are passive documentation and the only code the receipt covers is unchanged.
+- **Scope of the receipt**: it covers target `sha256:8e9a069c…` (11 paths, 405 lines). This record was edited *after* the acknowledgement to state the outcome truthfully, so the docs-only commits that follow are, by the ordering rule, outside that receipt. Measured against the reviewed boundary (`4391599f`, the last commit the receipt covers), that delta assesses as **`risk: passive`, `review_due: false`, `review_due_reason: passive`** — one path, 18 lines, documentation only.
 - `review mode status` reads `on (decided by global)`; RDD was never disabled.
 
 **Verification achieved.** Tier `medium`, and the native review above is the independent check:
@@ -256,6 +256,6 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 
 ## Next step
 
-All eight tasks are implemented. Slice 3 (T5 + T6 + T7 + T8) sits on `odd/panel-subagent-delegation-slice3` off `498e5346`, **not yet pushed and without a PR** — delivery is the owner's call. Once authorized: push, open the PR (`type:feature`), record its number in the *Delivery record* above as a docs-only commit, wait for CI, and merge under `stacked-to-main`. That merge closes U3.
+**The unit is complete.** All eight tasks are implemented, slice 3 is pushed as **PR #364** (`odd/panel-subagent-delegation-slice3` → `main`) and carries the unit's only native review receipt. What remains is delivery: CI green, the owner's merge decision, and then the post-merge housekeeping — the graph refresh at close, and the Rapsodia cleanup gap (the worktree's test DB container is not removed by `rapso worktree cleanup`; run `docker compose -p lumat-test-<worktree-basename> -f infra/docker-compose.yml --profile test down -v` by hand).
 
-**After U3 closes:** the graph refresh at delivery, the two cleanups noted at `rapso worktree cleanup` time (Rapsodia does not remove the worktree's test DB container — run `docker compose -p lumat-test-<worktree-basename> -f infra/docker-compose.yml --profile test down -v` by hand), and the sibling unit for per-customer drill-down reads.
+**Open after U3:** `R3-001` (unit follow-up #4), the sibling unit for per-customer drill-down reads, the duplicated `*.list` tool names and the catalog schema trim.
