@@ -189,6 +189,14 @@ lens **review-reliability**.
 The post-correction worktree is the reviewed candidate (`2d0f309b`). The docs commit that records
 this review is a process record written after the receipt, not part of the reviewed tree.
 
+## Follow-up change (owner visual review)
+
+Owner reviewed the running Storybook and asked to drop the calendar `<Icon>` from the Dashboard
+subtitle, leaving plain text. `8aee0caf` replaced the icon-plus-fragment `meta` with a plain
+template string, matching the other flattened subtitles. Full suite **746/746** green, build green.
+A second native review ran on the updated candidate (lineage `review-f3e1750ae6433344`, 30 files,
+358 lines, lens `review-reliability`): **approved with zero findings**; authority burned.
+
 ## Open items
 
 - The rail's visual weight at narrow widths and with long titles is an owner visual-acceptance
