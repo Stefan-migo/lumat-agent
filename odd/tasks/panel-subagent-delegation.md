@@ -72,6 +72,7 @@ Verified on `96ba8ca2`, not from memory:
 | `agent/registry.yaml` | real `tools_whitelist` for `customer_records`; roster comment updated to name the wired workers |
 | `agent/personas/customer_records.md` | expand the one-line persona into a gathering contract that returns evidence |
 | `app/agent_registry.py` | only if a resolver helper is needed; declaration/validation already exists |
+| `app/chat/assistant/delegation.py` (new) | the delegation-scope resolver: resolve a declared sub-agent for the panel span, expose its scope, and refuse a non-read-only scope |
 | `app/chat/assistant/state.py` | `PlannerOutput`: `delegate` kind + the sub-agent selector field |
 | `app/chat/assistant/graph.py` | the span node + its conditional route from `guardrails` |
 | `app/chat/assistant/nodes.py` | guardrails validation branch for `delegate`; the bounded read-only span; evidence handoff; cost accounting for the span's LLM calls |
@@ -144,7 +145,15 @@ No linter, typechecker, pre-commit or hooks exist. **The tests are the verificat
 
 ## Delivery forecast
 
-Estimated ~400–550 authored lines, at or above the ~400-line review budget. If it exceeds the budget, this ships as **chained PRs**; the chain strategy and slice boundaries are the owner's call and are recorded here before the first slice opens.
+Estimated ~400–550 authored lines, at or above the ~400-line review budget.
+
+**Delivery strategy: chained PRs — `stacked-to-main`** (owner-confirmed 2026-09-25). Each slice merges to `main` in order; the next slice's PR opens only after the previous one merges, and each slice rebases onto the new `main` before its PR.
+
+| Slice | Tasks | What it delivers |
+|---|---|---|
+| 1 | T1 + T2 | The trust boundary: the worker's real scope + the `delegate` plan kind validated in guardrails |
+| 2 | T3 + T4 | The mechanism: the bounded read-only span + the evidence handoff |
+| 3 | T5 + T6 + T7 + T8 | Wiring, cost accounting, spec AT-14 and the cross-domain harness |
 
 ## Graph nodes consulted (Graph Check, Step 1)
 
