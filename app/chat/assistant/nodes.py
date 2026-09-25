@@ -578,6 +578,37 @@ def guardrails(state: AssistantState) -> AssistantState:
         return {"approval": issue_approval(plan_data), "guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": True, "decision": "approval_pending"}, "status": "approval_pending"}
     if not state.get("planner", {}).get("valid", True):
         return {"guardrails": {"whitelisted": False, "arguments_valid": False, "cost_allowed": True, "approval_required": False, "decision": "fallback"}, "status": "responding"}
+    if plan_data.get("kind") == "delegate":
+        from app.chat.assistant.delegation import DelegationScopeError, resolve_delegation_scope
+
+        try:
+            scope = resolve_delegation_scope(plan_data.get("sub_agent", ""))
+        except DelegationScopeError as exc:
+            return {
+                "guardrails": {
+                    "whitelisted": False,
+                    "arguments_valid": False,
+                    "scope_valid": False,
+                    "cost_allowed": True,
+                    "approval_required": False,
+                    "decision": "delegate_refused",
+                    "reason": str(exc),
+                },
+                "response": "I cannot safely delegate that request.",
+                "status": "responding",
+            }
+        return {
+            "delegation": {"key": scope.key, "persona": scope.persona, "tools_whitelist": scope.tools_whitelist},
+            "guardrails": {
+                "whitelisted": True,
+                "arguments_valid": True,
+                "scope_valid": True,
+                "cost_allowed": True,
+                "approval_required": False,
+                "decision": "delegate",
+            },
+            "status": "delegating",
+        }
     tool_name = plan_data.get("tool")
     if plan_data.get("kind") != "tool" or not tool_name:
         decision = "respond" if _is_conversational_turn(state.get("content", "")) else "retrieve_kb"
