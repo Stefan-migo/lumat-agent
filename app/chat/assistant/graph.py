@@ -80,7 +80,7 @@ def _after_guardrails(state: AssistantState) -> str:
     if _is_terminal_plan_failure(state):
         return END
     decision = (state.get("guardrails") or {}).get("decision")
-    if decision in {"grounding_refusal", "loop_write_refused"}:
+    if decision in {"grounding_refusal", "loop_write_refused", "delegate_refused", "delegate_unavailable"}:
         return END
     if decision == "retrieve_kb":
         return "retrieve_kb"
