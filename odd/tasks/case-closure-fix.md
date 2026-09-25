@@ -226,7 +226,7 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 - Corrective graph query surfaced `get_or_create_case()`, `Case`, the handoff path, and `test_api_cases.py`; requested `create_handoff_case` → `case_is_open_expr` path returned no predicate node in the existing graph.
 - Graph check: queried the requested lifecycle area; the graph surfaced `list_open_cases`/`Case.closed_at`, `Dashboard()` urgent query, `routes/conversations.py`, `Case`, the existing closed-case test, and communities `test_api_cases.py`, `cases.py`, `routes/conversations.py`, `Dashboard.tsx`. Requested path `list_open_cases` → `update_case` returned no directed path.
 
-### Corrective unit (a) — pending
+### Corrective unit (a) — implemented; review pending
 
 - [x] T8 RED observed — both closed-case reactivation tests failed on stale non-null `closed_at` before implementation.
 - [x] T8 GREEN — classification and emergency writers route through `_apply_status`; `None` status is accepted and treated as open.
@@ -252,6 +252,7 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 - `f8d02c4c fix(cases): clear stale timestamp on open status`
 - `1afcdb7e fix(cases): centralize all status transitions`
 - `aa9adb7b docs(openspec): define urgent cases by open status`
+- `586ad244 docs(odd): record case closure corrective evidence`
 
 ## Next step
 
