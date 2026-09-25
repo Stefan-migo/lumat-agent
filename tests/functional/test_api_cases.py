@@ -267,6 +267,28 @@ def test_open_status_remains_listed_when_close_timestamp_is_set(client, make_use
     assert any(case["id"] == case_id for case in cases)
 
 
+def test_manual_case_creation_returns_and_lists_open_case(client, make_user):
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56988887777", name="Walk-in")
+        session.add(customer)
+        session.commit()
+        customer_id = customer.id
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.post(
+        "/panel/api/cases",
+        json={"customer_id": customer_id, "service": "calefont", "summary": "No enciende"},
+    )
+
+    assert response.status_code == 200
+    case_data = response.json()["case"]
+    assert case_data["conversation_id"] is None
+    assert case_data["service"] == "calefont"
+    listed = client.get("/panel/api/cases").json()["cases"]
+    assert any(item["id"] == case_data["id"] for item in listed)
+
+
 def test_cases_list_orders_by_escalated_at_within_same_status(client, make_user):
     """Among escalated cases, the newest escalation comes first."""
     def _mk(name):

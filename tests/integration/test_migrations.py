@@ -376,6 +376,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("029_memory_relation_resolution",),
         ("030_memory_visibility_global",),
         ("031_internal_chat_thread_project",),
+        ("032_case_conversation_nullable",),
     ]
 
 
@@ -405,6 +406,15 @@ def test_internal_chat_thread_title_is_nullable(migrated_db, admin_conn):
         "WHERE table_name = 'internal_chat_threads' AND column_name = 'title'"
     ).fetchone()
     assert column == ("character varying", 255, "YES")
+
+
+def test_cases_conversation_id_is_nullable(migrated_db, admin_conn):
+    """Cases created outside conversations do not require a conversation."""
+    column = admin_conn.execute(
+        "SELECT is_nullable FROM information_schema.columns "
+        "WHERE table_name = 'cases' AND column_name = 'conversation_id'"
+    ).fetchone()
+    assert column == ("YES",)
 
 
 # --- tables ----------------------------------------------------------------

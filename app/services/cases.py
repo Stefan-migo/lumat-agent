@@ -69,6 +69,21 @@ def get_or_create_case(session: Session, conversation_id: int, customer_id: int)
     return case
 
 
+def create_manual_case(
+    session: Session, customer_id: int, service: str, *, summary: str | None = None
+) -> Case:
+    """Create an open case entered by an operator, without a conversation."""
+    case = Case(conversation_id=None, customer_id=customer_id, service=service, summary=summary)
+    session.add(case)
+    session.flush()
+    publish_event(
+        session, event_type="case.created", entity_type="case", entity_id=case.id,
+        payload={"customer_id": customer_id, "conversation_id": None},
+        dedupe_key=f"case:{case.id}:created",
+    )
+    return case
+
+
 def build_deriva_bundle(
     session: Session,
     state: ConversationState,

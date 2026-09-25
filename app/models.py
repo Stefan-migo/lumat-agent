@@ -339,8 +339,8 @@ class Case(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    conversation_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("conversations.id"), nullable=False
+    conversation_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("conversations.id"), nullable=True
     )
     customer_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("customers.id"), nullable=False
