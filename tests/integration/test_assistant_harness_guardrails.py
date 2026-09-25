@@ -2,6 +2,7 @@
 
 import json
 import re
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -661,6 +662,122 @@ def test_memory_read_plan_derived_from_the_advertised_schema_survives_guardrails
 
     assert own["status"] == "executing"
     assert customer["status"] == "executing"
+
+
+def test_delegated_customer_gathering_answers_with_cross_domain_evidence(migrated_db, monkeypatch):
+    from app.chat.assistant.graph import run_assistant
+    from app.models import (
+        Appointment,
+        AppointmentStatus,
+        Case,
+        Conversation,
+        Customer,
+        InternalChatThread,
+        User,
+        UserRole,
+    )
+
+    now = datetime.now(timezone.utc)
+    appointment_start = now + timedelta(days=5)
+    with SessionLocal() as session:
+        user = User(username="delegate-harness-admin", password_hash="test", role=UserRole.ADMIN)
+        session.add(user)
+        session.flush()
+        customer = Customer(phone_e164="+56900009991", name="Ana Example")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add(conversation)
+        session.flush()
+        case = Case(
+            conversation_id=conversation.id,
+            customer_id=customer.id,
+            service="water-heater repair",
+            status="open",
+            summary="No hot water",
+        )
+        session.add(case)
+        session.flush()
+        appointment = Appointment(
+            service="water-heater repair",
+            customer_id=customer.id,
+            case_id=case.id,
+            technician_id=user.id,
+            local_start=appointment_start.replace(tzinfo=None),
+            timezone="UTC",
+            starts_at=appointment_start,
+            ends_at=appointment_start + timedelta(hours=1),
+            duration_minutes=60,
+            status=AppointmentStatus.BOOKED,
+        )
+        thread = InternalChatThread(user_id=user.id, title="Delegation integration")
+        session.add_all([appointment, thread])
+        session.flush()
+        thread_id, user_id, case_id, appointment_id, customer_id = (
+            thread.id, user.id, case.id, appointment.id, customer.id
+        )
+        session.commit()
+
+        plans = iter([
+            json.dumps({
+                "kind": "delegate", "sub_agent": "customer_records",
+                "summary": "Gather open cases and upcoming appointments.",
+            }),
+            json.dumps({
+                "kind": "tool", "tool": "cases.list", "arguments": {"limit": 10},
+                "summary": "Find open cases.", "requires_approval": False,
+            }),
+            json.dumps({
+                "kind": "tool", "tool": "appointments.upcoming", "arguments": {"limit": 10},
+                "summary": "Find upcoming appointments.", "requires_approval": False,
+            }),
+        ])
+        provider_calls = []
+        responder_text = (
+            f"Customer ID {customer_id} has an open water-heater repair case and an appointment in five days. "
+            "[cases.list] [appointments.upcoming]"
+        )
+
+        class Provider:
+            class chat:
+                class completions:
+                    @staticmethod
+                    def create(**kwargs):
+                        provider_calls.append(kwargs)
+                        if kwargs.get("stream"):
+                            return [SimpleNamespace(choices=[SimpleNamespace(
+                                delta=SimpleNamespace(content=responder_text)
+                            )])]
+                        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+                            content=next(plans)
+                        ))])
+
+        monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: Provider())
+        result = run_assistant(
+            thread_id=thread_id,
+            user_id=user_id,
+            content="Which customers have open cases and an appointment in the next 30 days?",
+            run_id="delegated-cross-domain",
+            session=session,
+            context={"items": [], "meta": {}},
+            on_token=lambda _token: None,
+        )
+
+    assert result["plan"]["kind"] == "delegate"
+    assert result["delegation"]["sub_agent"] == "customer_records"
+    assert result["delegation"]["steps"] == 2
+    assert [item["tool"] for item in result["tool_results"]] == ["cases.list", "appointments.upcoming"]
+    case_result = result["tool_results"][0]["result"]
+    appointment_result = result["tool_results"][1]["result"]
+    assert any(item["id"] == case_id and item["customer_id"] == customer_id for item in case_result)
+    assert any(item["id"] == appointment_id and item["customer_id"] == customer_id for item in appointment_result)
+    assert f"Customer ID {customer_id}" in result["response"]
+    assert "[cases.list]" in result["response"]
+    assert "[appointments.upcoming]" in result["response"]
+    responder_prompt = provider_calls[-1]["messages"][-1]["content"]
+    assert str(case_id) in responder_prompt and "water-heater repair" in responder_prompt
+    assert f'"id": {appointment_id}' in responder_prompt
+    assert f'"customer_id": {customer_id}' in responder_prompt
 
 
 def test_memory_read_still_rejects_an_entity_the_prompt_no_longer_orders():

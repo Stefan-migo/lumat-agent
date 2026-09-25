@@ -28,6 +28,21 @@ def test_resolves_customer_records_with_exact_read_only_scope():
     assert "return evidence" in scope.persona.lower()
 
 
+def test_panel_planner_catalog_matches_pre_delegation_bytes():
+    import hashlib
+
+    from app.chat.assistant.nodes import _planner_tool_catalog
+    from app.services.prompts import load_assistant_config
+
+    config = load_assistant_config()
+    catalog = _planner_tool_catalog(list(config.tools_whitelist))
+
+    # SHA-256 of the serialized assistant catalog at the pre-delegation baseline (96ba8ca2).
+    assert hashlib.sha256(catalog.encode("utf-8")).hexdigest() == (
+        "27bbace899ab056f8f031e0f9994ed8a629adb1ef93215eb800dc9b4a1537f39"
+    )
+
+
 def test_unknown_subagent_is_refused_explicitly():
     from app.chat.assistant.delegation import DelegationScopeError, resolve_delegation_scope
 
