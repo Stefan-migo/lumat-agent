@@ -127,6 +127,7 @@ describe("KbList page", () => {
   it("renders the page loading banner from its own data source", async () => {
     render(<KbList fetchDocuments={() => new Promise(() => undefined)} />);
     expect(await screen.findByRole("status")).toHaveTextContent("Cargando base de conocimientos");
+    expect(screen.getByText("Documentos de la base de conocimientos")).toBeInTheDocument();
   });
 
 });

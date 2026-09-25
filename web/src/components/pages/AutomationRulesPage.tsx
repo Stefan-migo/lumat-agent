@@ -43,7 +43,7 @@ export function AutomationRulesPage({ data: controlledData, state: controlledSta
     : state === "error" ? <div><StateMessage tone="danger" role="alert" title="No pudimos cargar las reglas" detail="Reintenta para recuperar las automatizaciones." /><button type="button" onClick={retry}>Reintentar</button></div>
     : null;
 
-  return <PageFrame title="Reglas de automatización" meta={data ? `${data.length} reglas` : undefined} state={stateMessage}>
+  return <PageFrame title="Reglas de automatización" meta={data ? `${data.length} reglas` : "Reglas de automatización"} state={stateMessage}>
     {user?.role === "admin" && onOpenCreate ? <Button onClick={onOpenCreate}>Crear regla</Button> : null}
     {state === "loading" || state === "error" || state === "denied" ? null : data?.length === 0 || state === "empty" ? <EmptyState title="No hay reglas de automatización" description="No hay reglas configuradas para mostrar." /> : <DataTable columns={columnsFor(onOpenRule)} rows={data ?? []} rowKey={(rule) => String(rule.id)} />}
   </PageFrame>;

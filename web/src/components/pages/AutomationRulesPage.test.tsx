@@ -36,6 +36,7 @@ describe('AutomationRulesPage', () => {
     const retry = vi.fn();
     const { rerender } = render(<AutomationRulesPage data={null} state="loading" onRetry={retry} />);
     expect(screen.getByRole('status')).toHaveTextContent('Cargando reglas');
+    expect(document.querySelector('.page-header p')).toHaveTextContent('Reglas de automatización');
     rerender(<AutomationRulesPage data={[]} state="empty" onRetry={retry} />);
     expect(screen.getByText('No hay reglas de automatización')).toBeInTheDocument();
     rerender(<AutomationRulesPage data={null} state="denied" onRetry={retry} />);
