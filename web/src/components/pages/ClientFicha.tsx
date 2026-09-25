@@ -88,7 +88,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const state: FichaState = controlledState ?? (controlledData ? "ready" : fetched.state);
 
   if (!data) {
-    return <PageFrame title="Ficha de cliente" state={stateMessage(state)}><EmptyState title="Cargando ficha" /></PageFrame>;
+    return <PageFrame title="Ficha de cliente" meta="Datos del cliente" state={stateMessage(state)}><EmptyState title="Cargando ficha" /></PageFrame>;
   }
 
   const { customer, history } = data;

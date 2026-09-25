@@ -140,7 +140,7 @@ export function CasesList({ data: controlledData, state: controlledState, onRetr
   };
 
   return (
-    <PageFrame title="Casos" meta={data ? `${cases.length} casos abiertos · ${unanswered} emergencias sin reconocer` : undefined} state={stateMessage(state, unanswered)}>
+    <PageFrame title="Casos" meta={data ? `${cases.length} casos abiertos · ${unanswered} emergencias sin reconocer` : "Casos abiertos y emergencias"} state={stateMessage(state, unanswered)}>
       {state === "loading" ? null : state === "empty" || (state === "ready" && data && cases.length === 0) ? (
         <EmptyState title="No hay registros" description="No existen casos abiertos pendientes o escalados." />
       ) : data ? (
