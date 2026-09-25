@@ -84,7 +84,7 @@ has `closed_at` set at all today.
 
 ## Constraints
 
-- **Strict TDD ON.** Runner: `uv run pytest tests/`. RED must be observed before GREEN.
+- **Strict TDD ON.** Runner: `eval "$(infra/test-db.sh env)" && uv run pytest tests/`. RED must be observed before GREEN.
 - **The predicate must be NULL-safe.** `Case.status` is nullable — `get_or_create_case`
   (`cases.py:34-51`) creates a bare case with no status until classification fills it. A
   bare `Case.status.not_in(CLOSING)` evaluates to SQL `NULL` for a NULL status and would
@@ -151,12 +151,29 @@ decision.
 
 ## Progress / Evidence
 
-- [ ] T1 RED observed
-- [ ] T2 RED observed
-- [ ] T3 GREEN observed
-- [ ] T4 dashboard coverage
-- [ ] T5 ranking unified + full suite
-- [ ] T6 suite green
+- [x] T1 RED observed — `test_case_update_closes_case_and_removes_it_from_open_list` failed because `closed_at` remained `None` after setting status to `cerrado`.
+- [x] T2 RED observed — added the missing assertion that the close request actually sets `closed_at`; the test then failed for the same reason. The initial T2 test design passed without exposing the bug and was corrected before implementation.
+- [x] T3 GREEN observed — canonical predicate, timestamp transitions, and open-list/dashboard queries implemented; focused cases/dashboard/conversation tests passed.
+- [x] T4 RED+GREEN — pre-implementation dashboard test failed because the canceled case remained urgent; the focused suite passed after implementation.
+- [x] T5 ranking unified + full suite — conversation ranking now uses the canonical predicate; the full suite passed with no reported regression from NULL-status ranking behavior.
+- [x] T6 suite green — `1462 passed, 2 warnings in 227.37s`.
+
+### Evidence
+
+The initial database setup failure recorded below was resolved by supplying the worktree-local `infra/.env` and exporting the test database environment as described in Constraints; all test evidence below is from after that resolution.
+
+- Focused command: `uv run pytest tests/functional/test_api_cases.py::test_case_update_closes_case_and_removes_it_from_open_list -q` — ERROR at fixture setup, not a behavioral RED; `db/migrate.sh` could not connect to PostgreSQL at `127.0.0.1:6066`.
+- `infra/test-db.sh up` could not start the worktree-isolated database because `infra/.env` is absent in this worktree. No environment file was copied from another worktree.
+- RED: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py::test_case_update_closes_case_and_removes_it_from_open_list tests/functional/test_api_cases.py::test_case_update_reopening_clears_close_time_and_restores_case -q` — `2 failed`, both at `assert _case_row(case_id).closed_at is not None` (`None is not None`).
+- T4 RED: pre-implementation `test_closed_case_is_excluded_from_dashboard_urgent_cases` failed at the final exclusion assertion (`assert False`).
+- GREEN: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py tests/functional/test_api_dashboard.py tests/functional/test_api_conversations.py -q` — `60 passed`.
+- Full suite: `eval "$(infra/test-db.sh env)" && uv run pytest tests/` — `1462 passed, 2 warnings in 227.37s`.
+- Graph check: queried the requested lifecycle area; the graph surfaced `list_open_cases`/`Case.closed_at`, `Dashboard()` urgent query, `routes/conversations.py`, `Case`, the existing closed-case test, and communities `test_api_cases.py`, `cases.py`, `routes/conversations.py`, `Dashboard.tsx`. Requested path `list_open_cases` → `update_case` returned no directed path.
+
+### Commits
+
+- `73fbdaed test(cases): cover case closure lifecycle`
+- `19d7134d fix(cases): synchronize status and closure timestamp`
 
 ## Next step
 
