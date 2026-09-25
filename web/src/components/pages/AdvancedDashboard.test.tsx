@@ -36,6 +36,25 @@ describe("AdvancedDashboard", () => {
     fetchMock.mockRestore();
   });
 
+  it("withholds metrics when the state is not renderable even if data is present", () => {
+    const body = {
+      period: { start: "2026-08-01", end: "2026-08-04", timezone: "UTC" },
+      metrics: { contacts: 7, cases: 3, appointments: 1, notification_health: {}, automation_outcomes: {} },
+      trend: [{ start: "2026-08-01", count: 5 }],
+      drilldown: [{ service: "gas", count: 4 }],
+    };
+    const { rerender } = render(<AdvancedDashboard state="denied" data={body} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("No tienes permiso para ver este panel");
+    expect(screen.queryByText("Contactos")).not.toBeInTheDocument();
+    expect(screen.queryByText("gas")).not.toBeInTheDocument();
+
+    rerender(<AdvancedDashboard state="loading" data={body} />);
+    expect(screen.queryByText("Contactos")).not.toBeInTheDocument();
+
+    rerender(<AdvancedDashboard state="error" data={body} />);
+    expect(screen.queryByText("Contactos")).not.toBeInTheDocument();
+  });
+
   it("renders loading, denied, and generic error states without page data", () => {
     const { rerender } = render(<AdvancedDashboard state="loading" data={null} />);
     expect(screen.getByRole("status")).toHaveTextContent("Cargando indicadores operacionales");

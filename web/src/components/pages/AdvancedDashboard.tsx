@@ -27,8 +27,9 @@ export function AdvancedDashboard({ data: controlledData, state: controlledState
         : !data
           ? <StateMessage tone="info" role="status" title="Sin actividad en este período" />
           : undefined;
-  return <PageFrame title="Indicadores operacionales" meta={data ? `${period.start} – ${period.end} · ${period.timezone}` : "Indicadores operacionales del período"} state={stateContent}>
-    {data ? <section className="advanced-dashboard">
+  const showContent = data !== null && state !== "loading" && state !== "denied" && state !== "error";
+  return <PageFrame title="Indicadores operacionales" meta={showContent ? `${period.start} – ${period.end} · ${period.timezone}` : "Indicadores operacionales del período"} state={stateContent}>
+    {showContent ? <section className="advanced-dashboard">
       <div className="kpi-grid">
         <StatCard label="Contactos" value={metrics.contacts} />
         <StatCard label="Casos" value={metrics.cases} />
