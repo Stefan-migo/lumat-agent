@@ -2142,6 +2142,7 @@
   border: 1px solid var(--corp-border);
   border-radius: var(--radius-lg);
   background: var(--brand-bg-elevated);
+  box-shadow: var(--elevation-raised);
 }
 .agenda-calendar__toolbar,
 .agenda-calendar__actions,
@@ -2152,7 +2153,7 @@
   gap: var(--space-2);
 }
 .agenda-calendar__toolbar { justify-content: space-between; }
-.agenda-calendar__toolbar h2 { margin: 0; font-size: var(--text-lg); }
+.agenda-calendar__toolbar h2 { margin: 0; font-size: var(--text-lg); text-transform: none; }
 .agenda-calendar__view-toggle { margin-left: var(--space-2); }
 .agenda-calendar__view-toggle [aria-pressed="true"] { border-color: var(--primary-700); background: var(--primary-100); color: var(--primary-800); }
 .agenda-calendar__table {
@@ -2169,18 +2170,19 @@
   text-align: center;
 }
 .agenda-calendar__cell,
-.agenda-calendar__empty { min-width: 0; min-height: calc(var(--space-8) * 2); }
-.agenda-calendar__cell { width: calc(100% / 7); }
+.agenda-calendar__empty { width: calc(100% / 7); height: calc(var(--space-8) * 3); min-width: 0; }
 .agenda-calendar__day {
   display: grid;
+  grid-template-rows: auto auto 1fr;
   align-content: start;
-  gap: var(--space-1);
+  gap: 0;
   min-width: 0;
-  min-height: calc(var(--space-8) * 2);
+  width: 100%;
+  height: 100%;
   padding: var(--space-2);
   border: 1px solid var(--corp-border);
   border-radius: var(--radius-sm);
-  background: var(--corp-surface);
+  background: var(--brand-bg);
   color: var(--corp-text);
   font: inherit;
   text-align: left;
@@ -2189,10 +2191,11 @@
 .agenda-calendar__day:hover { border-color: var(--primary-500); background: var(--corp-surface-hover); }
 .agenda-calendar__day:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .agenda-calendar__day[aria-selected="true"] { border-color: var(--primary-700); box-shadow: inset var(--space-1) 0 var(--brand-lime); }
+.agenda-calendar__day[aria-current="date"] { outline: 2px solid var(--brand-lime); outline-offset: -2px; }
 .agenda-calendar__number { font-weight: var(--weight-semibold); font-variant-numeric: var(--corp-value); }
 .agenda-calendar__count,
 .agenda-calendar__today,
-.agenda-calendar__selected { color: var(--corp-fg-muted); font-size: var(--text-xs); }
+.agenda-calendar__selected { color: var(--corp-fg-muted); font-size: var(--text-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agenda-calendar__today,
 .agenda-calendar__selected { font-weight: var(--weight-semibold); }
 .agenda-calendar__today::before { content: "• "; color: var(--brand-lime); }

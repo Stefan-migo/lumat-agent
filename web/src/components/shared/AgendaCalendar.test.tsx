@@ -67,9 +67,19 @@ describe("AgendaCalendar", () => {
 
     const selected = screen.getByRole("button", { name: /24 de septiembre.*2 visitas/ });
     expect(selected).toHaveAttribute("aria-pressed", "true");
+    expect(selected).toHaveAttribute("aria-selected", "true");
     expect(document.querySelector(".agenda-calendar__today")).toHaveTextContent("Hoy");
+    expect(document.querySelectorAll(".agenda-calendar__today, .agenda-calendar__selected")).toHaveLength(1);
     fireEvent.click(selected);
     expect(onSelectDay).toHaveBeenCalledWith(null);
+  });
+
+  it("uses one status line when today and selection apply to the same day", () => {
+    render(<AgendaCalendar {...baseProps} />);
+    const day = screen.getByRole("button", { name: /24 de septiembre.*2 visitas/ });
+    expect(day.querySelectorAll(".agenda-calendar__today, .agenda-calendar__selected")).toHaveLength(1);
+    expect(day).toHaveAttribute("aria-current", "date");
+    expect(day).toHaveAttribute("aria-selected", "true");
   });
 
   it("emits navigation and view changes", () => {
