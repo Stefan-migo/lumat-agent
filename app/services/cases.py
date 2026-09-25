@@ -39,13 +39,13 @@ def case_is_open_expr():
 
 
 def _apply_status(case: Case, status: str) -> None:
-    """Set status and synchronize the closure timestamp on status transitions."""
+    """Set status and keep the closure timestamp consistent with its state."""
     was_closing = case.status in CLOSING_CASE_STATUSES
     is_closing = status in CLOSING_CASE_STATUSES
     case.status = status
     if is_closing and not was_closing and case.closed_at is None:
         case.closed_at = datetime.now(timezone.utc)
-    elif was_closing and not is_closing:
+    elif not is_closing:
         case.closed_at = None
 
 

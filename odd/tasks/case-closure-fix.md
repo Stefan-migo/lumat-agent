@@ -134,7 +134,7 @@ def _apply_status(case: Case, status: str) -> None:
     case.status = status
     if is_closing and not was_closing and case.closed_at is None:
         case.closed_at = datetime.now(timezone.utc)
-    elif was_closing and not is_closing:
+    elif not is_closing:
         case.closed_at = None
 ```
 
@@ -173,7 +173,7 @@ decision.
 - [x] T3 GREEN observed — canonical predicate, timestamp transitions, and open-list/dashboard queries implemented; focused cases/dashboard/conversation tests passed.
 - [x] T4 RED+GREEN — pre-implementation dashboard test failed because the canceled case remained urgent; the focused suite passed after implementation.
 - [x] T5 ranking unified + full suite — conversation ranking now uses the canonical predicate; the full suite passed with no reported regression from NULL-status ranking behavior.
-- [x] T6 suite green — `1464 passed, 2 warnings in 188.80s` after the re-escalation correction.
+- [x] T6 suite green — `1464 passed, 2 warnings in 239.61s` after the re-escalation correction.
 - [x] T7 RED+GREEN — the new service-path re-escalation test failed before the correction because `closed_at` remained set and the case was absent from the open list; both the re-escalation and status-only predicate tests pass after the correction.
 
 ### Evidence
@@ -188,7 +188,7 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 - Full suite: `eval "$(infra/test-db.sh env)" && uv run pytest tests/` — `1462 passed, 2 warnings in 227.37s`.
 - T7 RED: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py::test_reescalating_closed_case_restores_it_to_open_list tests/functional/test_api_cases.py::test_open_status_remains_listed_when_close_timestamp_is_set -q` — `2 failed`; first, re-escalation left `closed_at` non-null, and second, an open status with `closed_at` set was omitted from the list.
 - T7 GREEN: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py tests/functional/test_api_dashboard.py tests/functional/test_api_conversations.py tests/integration/test_handoff.py -q` — passed.
-- Corrected full suite: `eval "$(infra/test-db.sh env)" && uv run pytest tests/` — `1464 passed, 2 warnings in 188.80s`.
+- Corrected full suite: `eval "$(infra/test-db.sh env)" && uv run pytest tests/` — `1464 passed, 2 warnings in 239.61s`.
 - Corrective graph query surfaced `get_or_create_case()`, `Case`, the handoff path, and `test_api_cases.py`; requested `create_handoff_case` → `case_is_open_expr` path returned no predicate node in the existing graph.
 - Graph check: queried the requested lifecycle area; the graph surfaced `list_open_cases`/`Case.closed_at`, `Dashboard()` urgent query, `routes/conversations.py`, `Case`, the existing closed-case test, and communities `test_api_cases.py`, `cases.py`, `routes/conversations.py`, `Dashboard.tsx`. Requested path `list_open_cases` → `update_case` returned no directed path.
 
