@@ -241,3 +241,26 @@ def test_customer_memory_scope_refuses_own_read_and_permits_customer_read(monkey
 
     assert nodes.DELEGATION_MEMORY_SCOPE_REFUSED in result["delegation"]["decisions"]
     assert [call["scope"] for call in executed] == ["customer"]
+
+
+def test_delegation_span_returns_budgeted_provenance_evidence(monkeypatch):
+    from app.chat.assistant import nodes
+    from app.chat.assistant.delegation import resolve_delegation_scope
+
+    monkeypatch.setattr(nodes, "_delegation_plan", lambda *args, **kwargs: {
+        "kind": "tool", "tool": "customers.search", "arguments": {"query": "Ana"},
+        "summary": "find", "requires_approval": False,
+    })
+    monkeypatch.setattr(nodes, "execute_tool", lambda *args, **kwargs: {
+        "tool": "customers.search", "status": "completed", "result": [{"name": "Ana"}],
+    })
+
+    result = nodes.delegation_span(
+        {"content": "Find Ana", "thread_id": 1},
+        resolve_delegation_scope("customer_records"),
+    )
+
+    assert result["evidence"][0]["provenance"] == {
+        "sub_agent": "customer_records", "step": 1, "tool": "customers.search",
+    }
+    assert len(nodes._render_tool_evidence(result)) <= nodes._TOOL_EVIDENCE_LIMIT

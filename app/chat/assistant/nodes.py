@@ -512,6 +512,7 @@ def _delegation_plan(state: AssistantState, scope) -> PlannerOutput:
 def delegation_span(state: AssistantState, scope) -> AssistantState:
     """Run a bounded read-only evidence span; it never creates a user-facing answer."""
     results = list(state.get("tool_results") or [])
+    evidence = list(state.get("evidence") or [])
     decisions: list[str] = []
     steps = 0
     while steps < DELEGATION_SPAN_MAX_STEPS:
@@ -547,9 +548,17 @@ def delegation_span(state: AssistantState, scope) -> AssistantState:
             )
         except (ToolExecutionError, ToolValidationError) as exc:
             result = {"tool": tool_name, "status": "error", "error": str(exc), "result": {"unavailable": True}}
-        results.append({**result, "provenance": {"sub_agent": scope.key, "step": steps, "tool": tool_name}})
+        provenance = {"sub_agent": scope.key, "step": steps, "tool": tool_name}
+        results.append({**result, "provenance": provenance})
+        evidence.append({
+            "tool": tool_name,
+            "status": result.get("status", "completed"),
+            "detail": "Delegated tool result",
+            "provenance": provenance,
+        })
     return {
         "tool_results": results,
+        "evidence": evidence,
         "delegation": {
             "sub_agent": scope.key,
             "steps": steps,
