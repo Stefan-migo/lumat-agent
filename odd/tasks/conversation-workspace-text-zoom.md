@@ -127,8 +127,9 @@ single PR against `main`, label `type:bug`, no chained slices. Merge is the owne
 decision.
 
 Native review: `gentle-ai review assess --base-ref 96ba8ca2 --committed-only` → risk
-**medium** (`executable_change` on the test file), 3 changed paths, 131 changed lines,
-**`review_due: false`** with reason `under_budget`. No native review was due.
+**medium** (`executable_change` on the test file), 3 changed paths, 215 changed lines (the
+code is one production line and two assertions; the rest is this record), **`review_due:
+false`** with reason `under_budget`. No native review was due.
 
 ## Progress / Evidence
 
