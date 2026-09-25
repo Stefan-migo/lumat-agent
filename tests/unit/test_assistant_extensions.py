@@ -1,6 +1,7 @@
 """Metadata-only assistant extension hooks and terminology migration contracts."""
 
 from pathlib import Path
+from dataclasses import replace
 
 from app.chat.assistant.nodes import extension_hook_metadata
 from app.chat.assistant.nodes import plan
@@ -34,6 +35,21 @@ def test_extension_hooks_expose_status_metadata_without_executable_hooks():
         }
     )
     assert state["extension_hooks"] == metadata
+
+
+def test_declared_but_inert_customer_worker_is_not_reported_as_implemented(monkeypatch):
+    from app.agent_registry import get_registry
+    from app.chat.assistant import delegation
+
+    registry = get_registry()
+    inert = replace(registry.sub_agents["customer_records"], tools_whitelist=())
+    monkeypatch.setattr(
+        delegation,
+        "get_registry",
+        lambda: replace(registry, sub_agents={**registry.sub_agents, "customer_records": inert}),
+    )
+
+    assert extension_hook_metadata()["panel_subagents"] == "not_implemented"
 
 
 def test_all_inventoried_lumat_sdb_consumers_use_guardrails_terminology(repo_root):

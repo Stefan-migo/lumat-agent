@@ -55,7 +55,6 @@ PANEL_LOOP_WRITE_REFUSAL = (
     "Pídemela directamente y te pediré confirmación antes de ejecutarla."
 )
 PANEL_DELEGATION_REFUSAL = "I cannot safely delegate that request."
-PANEL_DELEGATION_UNAVAILABLE = "Delegation is not available yet."
 _SOCIAL_WORDS = frozenset({
     "adios", "buenas", "buenos", "bye", "chau", "como", "de", "dia", "días", "día",
     "dias", "estas", "esta", "excelente", "gracias", "hello", "hi", "hola", "hasta",
@@ -79,9 +78,14 @@ def _project_slug(state: AssistantState) -> str:
 
 def extension_hook_metadata() -> dict[str, str]:
     """Describe deferred extensions without loading or executing their internals."""
-    from app.agent_registry import get_registry
+    from app.chat.assistant.delegation import DelegationScopeError, resolve_delegation_scope
 
-    wired = "customer_records" in get_registry().sub_agents
+    try:
+        resolve_delegation_scope("customer_records")
+    except DelegationScopeError:
+        wired = False
+    else:
+        wired = True
     return {"sdb": "deferred", "panel_subagents": "implemented" if wired else "not_implemented"}
 
 
