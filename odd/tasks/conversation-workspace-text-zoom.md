@@ -50,10 +50,9 @@ adding a new file).
 
 **Out:**
 
-- **The `height: clamp(30rem, calc(100dvh - 15rem), 46rem)`.** It also scales with the root
-  font-size (the `30rem` floor becomes 960px at 200%), so it is measured and reported — but
-  not changed unless the measurement shows *content loss* rather than a taller block that
-  the page scrolls. A vertical scroll is not the defect this unit is about.
+- ~~The `height: clamp(30rem, calc(100dvh - 15rem), 46rem)`~~ — **promoted into scope by the
+  owner** once the measurement showed the clamp's `30rem` floor doubling to 960px inside a
+  900px viewport. It is now the second literal of this unit; see D2.
 - The `≤63.99rem` single-column fallback and the `≤39.99rem` `display: block` override: both
   are viewport-scoped and correct at normal text size.
 - No JSX change.
@@ -96,6 +95,20 @@ a hope**: if any normal-size number moves, the swap is wrong and the unit stops.
 minimums become 384 + 288 = 672px against a 784px content box, so the grid fits with slack
 and the inspector survives.
 
+### Second literal — the height clamp (D2)
+
+`height: clamp(30rem, calc(100dvh - 15rem), 46rem)` →
+`height: clamp(480px, calc(100dvh - 15rem), 736px)`
+
+`30rem` is exactly 480px and `46rem` is exactly 736px at the default root, so this is also a
+zero-visual-change swap at normal text size.
+
+**The middle term stays in rem on purpose.** That `15rem` is a *typography-driven chrome
+allowance* — the shell header and titlebar genuinely grow with text zoom, which is exactly
+why the term was written in rem. It is not layout arithmetic. Only the floor and the ceiling
+become absolute, which is the same distinction the rail tokens and the column minimums
+follow.
+
 ## Tasks
 
 | ID | Task | Route |
@@ -122,7 +135,7 @@ Native review: `gentle-ai review assess --base-ref 96ba8ca2 --committed-only` �
 - [x] T1 baseline measurement
 - [x] T2 RED observed
 - [x] T3 GREEN observed
-- [x] T4 height clamp measured and reported (not changed, by scope)
+- [x] T4 height clamp promoted into scope, measured and fixed (9px residual left, by decision)
 - [x] T5 after-measurement
 - [x] T6 suite + build
 
@@ -152,23 +165,37 @@ swap:
 | 1024 | 100% | `384px 350px` | `734 / 734` | `999 vs 1000` |
 | 1440 | 100% | `766px 384px` | `1150 / 1150` | `1415 vs 1416` |
 
-- **T4 — the `height` clamp is measured and deliberately NOT changed.** It scales with the
-  root font-size exactly as the same class predicts: `clamp(30rem, calc(100dvh - 15rem),
-  46rem)` computes to `660px` at normal text and to **`960px` at 200%** (the `30rem` floor),
-  inside a 900px viewport. The workspace becomes taller than the viewport and the **page
-  scrolls vertically**. That is a genuine degradation of the clamp's "fit the viewport"
-  intent, but it is a scroll rather than lost content, and it is outside this unit's
-  authorization. Recorded as its own candidate.
+- **T4 — the `height` clamp was promoted into scope and fixed (D2).** Same Chromium harness,
+  viewport height 900:
+
+| Text size | Workspace height | Shell chrome above it | Document scroll height | Vertical overflow |
+|---|---:|---:|---:|---:|
+| 200% before | `960px` | 405px | 1389px | 489px |
+| 200% after | `480px` | 405px | 909px | **9px** |
+| 100% before | `660px` | 273px | 957px | 57px |
+| 100% after | `660px` | 273px | 957px | 57px |
+
+  The swap removed 480px of a 489px overflow. **The 9px residual is smaller than the 57px
+  that the same harness already overflows at normal text size**, so it is not a regression,
+  not content loss — only a scroll. Left in place deliberately: removing the floor entirely
+  (`dvh` bounds, a percentage floor) is a design decision the owner owns, and an invented
+  mechanism would be worse than a measured residual.
 - T2 RED: the contract assertion failed against the rem declaration — `1 failed, 19 passed`.
 - T3 GREEN: focused run, `20 tests` passed.
-- T6: `Test Files 87 passed (87)`, `Tests 742 passed (742)`; `npm run build` passed (`tsc -b`
-  + Vite, only the pre-existing chunk-size warning). Re-run independently by the
-  orchestrator: the same `87 / 742`.
+- T6: `npm run build` passed (`tsc -b` + Vite, only the pre-existing chunk-size warning).
+  The suite is contention-flaky. Two consecutive runs on this branch after the height change
+  reported `2 failed | 741 passed`, then `1 failed | 742 passed` — every failure a 5000ms
+  timeout in `AgendaPage.test.tsx`, the flake already documented in
+  `agenda-design-alignment`. An orchestrator re-run of **identical code** reported
+  `Test Files 87 passed (87)`, `Tests 743 passed (743)`, zero failures. Same code, different
+  outcome: contention, not this change (which touches one CSS declaration and one assertion,
+  and cannot reach an AgendaPage test).
 
 Commits:
 
 - `76c5c865` docs(odd): record the conversation-workspace-text-zoom unit
 - `6f782a57` fix(conversations): keep workspace columns stable at text zoom
+- `811f716e` fix(conversations): keep the workspace height stable at text zoom
 
 The contract test was **updated, not weakened**: `ConversationThread.test.tsx` already
 carried `'gives the inspector column a bounded responsive width'`, asserting the same
