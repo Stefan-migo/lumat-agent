@@ -31,6 +31,15 @@ The existing test `tests/functional/test_api_cases.py:161-186`
 **directly in the database**. Nothing proves the *API* can produce that state. That gap
 is the whole unit.
 
+### Newly reachable re-escalation defect
+
+The original fix made a previously unreachable defect reachable: after an operator closes
+a case, the conversation can escalate again. `create_handoff_case()` calls
+`get_or_create_case()`, which returns the latest case without filtering out closed rows;
+handoff then sets its status to `escalado` without clearing `closed_at`. With a timestamp-gated
+open predicate, that live re-escalated case remains hidden from the panel. The shared status
+transition helper must cover both `update_case()` and `create_handoff_case()`.
+
 Measured baseline (dev DB `infra-db-1`, 2026-09-25): 3 cases, all `status='abierto'`,
 all `closed_at IS NULL`. **No legacy rows with a closing status and a NULL `closed_at`
 exist in dev.** Production was not inspected.
@@ -85,11 +94,12 @@ has `closed_at` set at all today.
 ## Constraints
 
 - **Strict TDD ON.** Runner: `eval "$(infra/test-db.sh env)" && uv run pytest tests/`. RED must be observed before GREEN.
-- **The predicate must be NULL-safe.** `Case.status` is nullable — `get_or_create_case`
+- **The predicate must be NULL-safe and status-only.** `Case.status` is nullable — `get_or_create_case`
   (`cases.py:34-51`) creates a bare case with no status until classification fills it. A
   bare `Case.status.not_in(CLOSING)` evaluates to SQL `NULL` for a NULL status and would
-  silently **hide a brand-new open case**. Open must be expressed positively:
-  `and_(closed_at.is_(None), or_(status.is_(None), status.not_in(CLOSING)))`.
+  silently **hide a brand-new open case**. Open must be expressed positively as
+  `or_(status.is_(None), status.not_in(CLOSING))`; `closed_at` records transitions but is
+  not a closure gate.
 - `update_case`'s `status=None` contract means "keep": `closed_at` must not be touched
   when the body omits `status`.
 - Re-stamping on a no-op is wrong: closing an already-closed case must not move its
@@ -116,15 +126,21 @@ CLOSING_CASE_STATUSES = frozenset({"closed", "cerrado", "finalizado", "cancelado
 
 def case_is_open_expr():
     """Canonical 'this case is still open' predicate (NULL-safe)."""
-    return and_(
-        Case.closed_at.is_(None),
-        or_(Case.status.is_(None), Case.status.not_in(CLOSING_CASE_STATUSES)),
-    )
+    return or_(Case.status.is_(None), Case.status.not_in(CLOSING_CASE_STATUSES))
+
+def _apply_status(case: Case, status: str) -> None:
+    was_closing = case.status in CLOSING_CASE_STATUSES
+    is_closing = status in CLOSING_CASE_STATUSES
+    case.status = status
+    if is_closing and not was_closing and case.closed_at is None:
+        case.closed_at = datetime.now(timezone.utc)
+    elif was_closing and not is_closing:
+        case.closed_at = None
 ```
 
-`update_case` gains the transition stamp; `list_open_cases`, the dashboard filter and the
-conversation ranking all call `case_is_open_expr()`; `conversations.py` imports
-`CLOSING_CASE_STATUSES` instead of defining its own tuple.
+Call `_apply_status()` from both `update_case()` (only when status is provided) and
+`create_handoff_case()`. `list_open_cases`, the dashboard filter and the conversation ranking
+all call `case_is_open_expr()`; `conversations.py` no longer defines a local closing set.
 
 **Flagged behavior change for the writer to confirm, not assume:** the ranking's current
 expression treats a NULL-status case as *not* priority-1 (the `NOT IN` yields NULL and the
@@ -141,7 +157,8 @@ suite decides whether anything else depended on the old rank.
 | T3 | GREEN: canonical set + predicate; `update_case` stamp/clear; `list_open_cases` and the dashboard filter call the predicate. | delegated (writer, same unit as T1) |
 | T4 | RED+GREEN: a closed case is excluded from the dashboard's urgent cases. | delegated (writer) |
 | T5 | GREEN: `conversations.py` drops its local tuple and ranks with the canonical predicate; full suite confirms no regression. | delegated (writer) |
-| T6 | Full suite `uv run pytest tests/`. | delegated per-action |
+| T6 | Full suite `eval "$(infra/test-db.sh env)" && uv run pytest tests/`. | delegated per-action |
+| T7 | RED+GREEN: re-escalating a previously closed case reopens it; share the status transition helper with `create_handoff_case`, and make the open predicate status-only per D1. | corrective (writer) |
 
 ## Delivery
 
@@ -156,11 +173,12 @@ decision.
 - [x] T3 GREEN observed — canonical predicate, timestamp transitions, and open-list/dashboard queries implemented; focused cases/dashboard/conversation tests passed.
 - [x] T4 RED+GREEN — pre-implementation dashboard test failed because the canceled case remained urgent; the focused suite passed after implementation.
 - [x] T5 ranking unified + full suite — conversation ranking now uses the canonical predicate; the full suite passed with no reported regression from NULL-status ranking behavior.
-- [x] T6 suite green — `1462 passed, 2 warnings in 227.37s`.
+- [x] T6 suite green — `1464 passed, 2 warnings in 188.80s` after the re-escalation correction.
+- [x] T7 RED+GREEN — the new service-path re-escalation test failed before the correction because `closed_at` remained set and the case was absent from the open list; both the re-escalation and status-only predicate tests pass after the correction.
 
 ### Evidence
 
-The initial database setup failure recorded below was resolved by supplying the worktree-local `infra/.env` and exporting the test database environment as described in Constraints; all test evidence below is from after that resolution.
+The initial test DB setup was blocked until the owner supplied the worktree-local `infra/.env`; subsequent runs used the canonical test command in Constraints.
 
 - Focused command: `uv run pytest tests/functional/test_api_cases.py::test_case_update_closes_case_and_removes_it_from_open_list -q` — ERROR at fixture setup, not a behavioral RED; `db/migrate.sh` could not connect to PostgreSQL at `127.0.0.1:6066`.
 - `infra/test-db.sh up` could not start the worktree-isolated database because `infra/.env` is absent in this worktree. No environment file was copied from another worktree.
@@ -168,14 +186,18 @@ The initial database setup failure recorded below was resolved by supplying the 
 - T4 RED: pre-implementation `test_closed_case_is_excluded_from_dashboard_urgent_cases` failed at the final exclusion assertion (`assert False`).
 - GREEN: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py tests/functional/test_api_dashboard.py tests/functional/test_api_conversations.py -q` — `60 passed`.
 - Full suite: `eval "$(infra/test-db.sh env)" && uv run pytest tests/` — `1462 passed, 2 warnings in 227.37s`.
+- T7 RED: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py::test_reescalating_closed_case_restores_it_to_open_list tests/functional/test_api_cases.py::test_open_status_remains_listed_when_close_timestamp_is_set -q` — `2 failed`; first, re-escalation left `closed_at` non-null, and second, an open status with `closed_at` set was omitted from the list.
+- T7 GREEN: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py tests/functional/test_api_dashboard.py tests/functional/test_api_conversations.py tests/integration/test_handoff.py -q` — passed.
+- Corrected full suite: `eval "$(infra/test-db.sh env)" && uv run pytest tests/` — `1464 passed, 2 warnings in 188.80s`.
+- Corrective graph query surfaced `get_or_create_case()`, `Case`, the handoff path, and `test_api_cases.py`; requested `create_handoff_case` → `case_is_open_expr` path returned no predicate node in the existing graph.
 - Graph check: queried the requested lifecycle area; the graph surfaced `list_open_cases`/`Case.closed_at`, `Dashboard()` urgent query, `routes/conversations.py`, `Case`, the existing closed-case test, and communities `test_api_cases.py`, `cases.py`, `routes/conversations.py`, `Dashboard.tsx`. Requested path `list_open_cases` → `update_case` returned no directed path.
 
 ### Commits
 
 - `73fbdaed test(cases): cover case closure lifecycle`
 - `19d7134d fix(cases): synchronize status and closure timestamp`
+- `82779d40 fix(cases): keep closure invariant on re-escalation`
 
 ## Next step
 
-Unit not started. U2 (`client-ficha-case-surface`) is blocked on this: without it the
-ficha would show zombie cases as "active".
+The original closure unit and corrective re-escalation task are implemented and verified.
