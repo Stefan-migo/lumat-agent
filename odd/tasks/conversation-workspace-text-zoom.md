@@ -113,15 +113,68 @@ Two literal changes plus contract assertions: far inside the ~400-line review bu
 single PR against `main`, label `type:bug`, no chained slices. Merge is the owner's
 decision.
 
+Native review: `gentle-ai review assess --base-ref 96ba8ca2 --committed-only` → risk
+**medium** (`executable_change` on the test file), 3 changed paths, 131 changed lines,
+**`review_due: false`** with reason `under_budget`. No native review was due.
+
 ## Progress / Evidence
 
-- [ ] T1 baseline measurement
-- [ ] T2 RED observed
-- [ ] T3 GREEN observed
-- [ ] T4 height clamp reported
-- [ ] T5 after-measurement
-- [ ] T6 suite + build
+- [x] T1 baseline measurement
+- [x] T2 RED observed
+- [x] T3 GREEN observed
+- [x] T4 height clamp measured and reported (not changed, by scope)
+- [x] T5 after-measurement
+- [x] T6 suite + build
+
+**T1/T5 — real Chromium (system Chrome, viewport height 900), the conversation thread
+composed inside `PanelShell` in a Storybook served from this branch (port 6011).** Text zoom
+200% via `document.documentElement.style.fontSize = '32px'`.
+
+The premise held, and the failure mode was worse than a collapse: the container **clipped**.
+
+| Reading | Baseline 1024 / 200% | After 1024 / 200% |
+|---|---|---|
+| computed columns | `768px 576px` | `384px 350px` |
+| `.conversation-workspace` | `clientWidth 734`, `scrollWidth 1344` | `734 / 734` |
+| inspector right edge vs workspace right edge | **1609 vs 1000 — 609px past it, clipped** | `999 vs 1000` — inside |
+
+| Reading | Baseline 1280 / 200% | After 1280 / 200% |
+|---|---|---|
+| computed columns | `768px 576px` | `606px 384px` |
+| `.conversation-workspace` | `990 / 1344` | `990 / 990` |
+| inspector right edge vs workspace right edge | **1609 vs 1256 — 353px past it, clipped** | `1255 vs 1256` — inside |
+
+Normal text size — **identical before and after**, which is the whole justification for the
+swap:
+
+| Viewport | Zoom | Columns | Workspace | Inspector right vs workspace right |
+|---:|---:|---|---|---|
+| 1024 | 100% | `384px 350px` | `734 / 734` | `999 vs 1000` |
+| 1440 | 100% | `766px 384px` | `1150 / 1150` | `1415 vs 1416` |
+
+- **T4 — the `height` clamp is measured and deliberately NOT changed.** It scales with the
+  root font-size exactly as the same class predicts: `clamp(30rem, calc(100dvh - 15rem),
+  46rem)` computes to `660px` at normal text and to **`960px` at 200%** (the `30rem` floor),
+  inside a 900px viewport. The workspace becomes taller than the viewport and the **page
+  scrolls vertically**. That is a genuine degradation of the clamp's "fit the viewport"
+  intent, but it is a scroll rather than lost content, and it is outside this unit's
+  authorization. Recorded as its own candidate.
+- T2 RED: the contract assertion failed against the rem declaration — `1 failed, 19 passed`.
+- T3 GREEN: focused run, `20 tests` passed.
+- T6: `Test Files 87 passed (87)`, `Tests 742 passed (742)`; `npm run build` passed (`tsc -b`
+  + Vite, only the pre-existing chunk-size warning). Re-run independently by the
+  orchestrator: the same `87 / 742`.
+
+Commits:
+
+- `76c5c865` docs(odd): record the conversation-workspace-text-zoom unit
+- `6f782a57` fix(conversations): keep workspace columns stable at text zoom
+
+The contract test was **updated, not weakened**: `ConversationThread.test.tsx` already
+carried `'gives the inspector column a bounded responsive width'`, asserting the same
+`minmax` shape. The assertion now pins the px values instead of the rem ones, so the bound
+is still enforced.
 
 ## Next step
 
-Run T1. Nothing gets written until the collapse is measured.
+Unit complete locally with a clean tree. Push + pull request pending the owner's word.
