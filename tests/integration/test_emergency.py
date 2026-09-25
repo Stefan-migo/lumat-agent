@@ -17,6 +17,7 @@ the OpenAI chat mocked via respx (emergency paths must NOT call it).
 """
 
 import re
+from datetime import datetime, timezone
 
 import psycopg
 import pytest
@@ -37,6 +38,7 @@ from app.services.settings import DEFAULT_EMERGENCY_KEYWORDS, set_setting  # noq
 from app.chat.graph import run_conversation  # noqa: E402
 from app.chat.state import get_or_create_conversation  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
+from app.services.cases import list_open_cases  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
 ADMIN_DB_URL = admin_database_url()
@@ -269,6 +271,31 @@ def test_strong_hit_mid_capture_interrupts(mock_openai_chat, mock_meta_send):
             select(ConversationEvent).where(ConversationEvent.conversation_id == conv_id)
         ).all()
         assert any(e.event == "emergency" for e in events)
+
+
+def test_emergency_reopens_closed_case_and_restores_it_to_open_list(mock_openai_chat, mock_meta_send):
+    conv_id = _start_conversation()
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conv_id)
+        assert conversation is not None
+        case = Case(
+            conversation_id=conv_id,
+            customer_id=conversation.customer_id,
+            status="cerrado",
+            closed_at=datetime.now(timezone.utc),
+        )
+        session.add(case)
+        session.commit()
+        case_id = case.id
+
+    _turn(conv_id, "hay una fuga de gas en el calefont", "wamid.emreopen")
+
+    with SessionLocal() as session:
+        case = session.get(Case, case_id)
+        assert case is not None
+        assert case.status == "escalado"
+        assert case.closed_at is None
+        assert any(row.id == case_id for row, _customer in list_open_cases(session))
 
 
 def test_weak_hit_escalates_to_human(mock_openai_chat):

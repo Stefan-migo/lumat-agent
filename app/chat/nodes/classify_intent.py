@@ -29,7 +29,7 @@ from app.db import session_scope
 from app.models import ConversationEvent
 from app.services import prompts
 from app.services.audit import record_audit
-from app.services.cases import get_or_create_case
+from app.services.cases import _apply_status, get_or_create_case
 from app.services.costs import record_llm_cost
 from app.services.llm import CHAT_MODEL, openai_client
 from app.services.settings import get_scope_mode
@@ -105,7 +105,7 @@ def _store_classification(session, state: ConversationState, result: dict) -> di
     case = get_or_create_case(session, state.conversation_id, state.customer_id)
     case.service = result.get("service")
     case.priority = result.get("priority")
-    case.status = result.get("status")
+    _apply_status(case, result.get("status"))
     return {
         "case": {
             "id": case.id,

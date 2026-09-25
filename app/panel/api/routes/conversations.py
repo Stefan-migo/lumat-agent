@@ -24,6 +24,7 @@ from app.panel.api.deps import require_operator_json
 from app.panel.api.serializers import to_active_conversation_dict, to_conversation_dict, to_message_dict
 from app.panel.deps import get_db
 from app.services.conversations import assign, change_state, retry_operator_message, send_operator_message
+from app.services.cases import case_is_open_expr
 router = APIRouter(tags=["panel-api-conversations"])
 
 
@@ -88,17 +89,13 @@ def _conversation_payload(session: Session, conversation: Conversation) -> dict:
     )
 
 
-_CLOSED_CASE_STATUSES = ("closed", "cerrado", "finalizado", "cancelado")
-
-
 def _ranked_case_ids():
     priority = sql_case(
         (and_(Case.emergency.is_(True), Case.acknowledged_at.is_(None)), 0),
         (
             and_(
-                Case.closed_at.is_(None),
+                case_is_open_expr(),
                 Case.acknowledged_at.is_(None),
-                Case.status.not_in(_CLOSED_CASE_STATUSES),
             ),
             1,
         ),
