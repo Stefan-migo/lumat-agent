@@ -145,14 +145,14 @@ export function AutomationRuleDetailPage({ ruleId = null, user, data: controlled
   };
 
   const retry = onRetry ?? fetched.retry;
-  if (state === "loading") return <PageFrame title="Regla de automatización" state={<StateMessage tone="info" role="status" spinner title="Cargando regla" />}>{null}</PageFrame>;
-  if (state === "denied") return <PageFrame title="Regla de automatización" state={<StateMessage tone="danger" role="alert" title="No tienes permiso para ver la regla" />}>{null}</PageFrame>;
-  if (state === "error") return <PageFrame title="Regla de automatización" state={<div><StateMessage tone="danger" role="alert" title="No pudimos cargar la regla" /><button type="button" onClick={retry}>Reintentar</button></div>}>{null}</PageFrame>;
-  if (!isCreate && !rule) return <PageFrame title="Regla de automatización" state={<StateMessage tone="danger" role="alert" title="Regla no encontrada" />}>{null}</PageFrame>;
+  if (state === "loading") return <PageFrame title="Regla de automatización" meta="Define el evento y las acciones de la regla" state={<StateMessage tone="info" role="status" spinner title="Cargando regla" />}>{null}</PageFrame>;
+  if (state === "denied") return <PageFrame title="Regla de automatización" meta="Define el evento y las acciones de la regla" state={<StateMessage tone="danger" role="alert" title="No tienes permiso para ver la regla" />}>{null}</PageFrame>;
+  if (state === "error") return <PageFrame title="Regla de automatización" meta="Define el evento y las acciones de la regla" state={<div><StateMessage tone="danger" role="alert" title="No pudimos cargar la regla" /><button type="button" onClick={retry}>Reintentar</button></div>}>{null}</PageFrame>;
+  if (!isCreate && !rule) return <PageFrame title="Regla de automatización" meta="Define el evento y las acciones de la regla" state={<StateMessage tone="danger" role="alert" title="Regla no encontrada" />}>{null}</PageFrame>;
 
   const readOnly = user.role !== "admin" || !editing;
   const title = isCreate ? "Nueva regla de automatización" : rule?.name || "Regla de automatización";
-  return <PageFrame title={title} state={mutationError ? <StateMessage tone="danger" role="alert" title="No se pudo completar la acción" detail={mutationError} /> : undefined}>
+  return <PageFrame title={title} meta="Define el evento y las acciones de la regla" state={mutationError ? <StateMessage tone="danger" role="alert" title="No se pudo completar la acción" detail={mutationError} /> : undefined}>
     <div className="automation-rule-detail">
       {onBack ? <Button variant="secondary" onClick={onBack}>Volver a reglas</Button> : null}
       {!isCreate && rule ? <p>Estado: <strong>{rule.enabled ? "Habilitada" : "Deshabilitada"}</strong></p> : null}

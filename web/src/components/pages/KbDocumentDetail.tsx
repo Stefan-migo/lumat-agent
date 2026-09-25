@@ -105,12 +105,12 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
   };
 
   if (!doc) {
-    return <PageFrame title="Documento de base de conocimientos" actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a documentos</Button>} state={stateMessage(state)}>{state === "error" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}</PageFrame>;
+    return <PageFrame title="Documento de base de conocimientos" meta="Contenido y versiones del documento" actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a documentos</Button>} state={stateMessage(state)}>{state === "error" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}</PageFrame>;
   }
 
   if (!current) return null;
 
-  return <PageFrame title={current.title} actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a documentos</Button>} state={stateMessage(state)}>
+  return <PageFrame title={current.title} meta="Contenido y versiones del documento" actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a documentos</Button>} state={stateMessage(state)}>
     <div className="detail-region">
       <section className="detail-region__rail" aria-label="Identidad del documento">
         <Card title="Identidad">
