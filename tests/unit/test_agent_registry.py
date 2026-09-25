@@ -15,10 +15,8 @@ from __future__ import annotations
 import pytest
 
 
-# The known-tools set for slice 1 (design D5): the only tool the research
-# triage sub-agent uses. The reader fails fast on any whitelist entry outside
-# this set; the set grows in later slices.
-KNOWN_TOOLS = ["kb.retrieve"]
+# Keep the test's accepted tool set aligned with the registry's source of truth.
+from app.agent_registry import KNOWN_TOOLS
 
 
 def _load(repo_root):

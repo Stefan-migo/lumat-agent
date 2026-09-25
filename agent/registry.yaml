@@ -29,7 +29,13 @@ sub_agents:
   customer_records:
     name: customer-records
     persona: personas/customer_records.md
-    tools_whitelist: []
+    tools_whitelist:
+      - customers.search
+      - conversations.search
+      - appointments.upcoming
+      - cases.list
+      - memory.read
+      - memory.search
     memoria_scope: "customer"
     model: deepseek-chat
     temperature: 0
