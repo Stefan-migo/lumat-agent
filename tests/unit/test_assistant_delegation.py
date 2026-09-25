@@ -289,3 +289,25 @@ def test_delegation_span_refuses_a_read_outside_the_worker_scope(monkeypatch):
 
     assert result["delegation"]["decisions"] == [nodes.DELEGATION_TOOL_REFUSED]
     assert executed == []
+
+
+def test_delegation_planner_accounts_for_llm_usage(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.chat.assistant import nodes
+    from app.chat.assistant.delegation import resolve_delegation_scope
+
+    completion = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content='{"kind":"respond","summary":"Done."}'))],
+        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=2),
+    )
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: completion)))
+    monkeypatch.setattr(nodes, "_assistant_client", lambda: client)
+    records = []
+    monkeypatch.setattr(nodes, "_record_usage", lambda *args: records.append(args))
+
+    nodes._delegation_plan({"content": "Gather", "run_id": "run-1"}, resolve_delegation_scope("customer_records"))
+
+    assert len(records) == 1
+    assert records[0][1] == "delegation:customer_records"
+    assert records[0][2] is completion

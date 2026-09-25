@@ -507,6 +507,7 @@ def _delegation_plan(state: AssistantState, scope) -> PlannerOutput:
         temperature=0,
         response_format={"type": "json_object"},
     )
+    _record_usage(state, f"delegation:{scope.key}", completion)
     raw = json.loads(_completion_text(completion))
     planner, valid, _ = parse_planner_output(raw)
     return planner if valid else bounded_fallback("delegation planner output invalid")
