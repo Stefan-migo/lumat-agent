@@ -153,7 +153,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
     </div>
   );
 
-  return <PageFrame title="Panel" meta={data ? <><Icon icon={ICONS.calendar} size="sm" />Actividad de los últimos {data.window_days} días · Desde {data.window_start}</> : "Actividad reciente del negocio"} state={stateMessage(state, retry)}>
+  return <PageFrame title="Panel" meta={data ? `Actividad de los últimos ${data.window_days} días · Desde ${data.window_start}` : "Actividad reciente del negocio"} state={stateMessage(state, retry)}>
     {state === "ready" && data ? <div className="dashboard">
       {hasPartialError ? stateMessage("partial-error", retry) : null}
       <section className="dashboard__section" aria-labelledby="today-title">
