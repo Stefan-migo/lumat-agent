@@ -106,24 +106,27 @@ Backend/data plus the minimal web type. **No UI wiring** — no dialog redesign,
 ### WU4 — Regression and build
 
 - [x] Existing visit creation still works (whole suite green, appointments untouched)
-- [x] `uv run pytest tests/` — **1464 passed in 143.69s**
-- [x] `cd web && npm run build` — ✓ built in 5.28s
+- [x] `uv run pytest tests/` — **1476 passed in 161.94s** (after the rebase onto `main`)
+- [x] `cd web && npm run build` — ✓ built in 5.51s
 - [x] Work-unit commits (see below)
 
 ## Acceptance criteria
 
 - [x] The migration makes `cases.conversation_id` nullable.
 - [x] The five consumers tolerate null without breaking.
-- [x] `POST /cases` creates a case with `conversation_id null`, and it appears in `list_open_cases`.
+- [x] `POST /cases` creates a case with `conversation_id null`, and it appears in
+      `list_open_cases`. A `status=None` manual case counts as open under
+      `case_is_open_expr()` (`case-closure-fix`, #365).
 - [x] Existing visit creation still works.
 - [x] Backend tests green; web build green.
 
 ## Verification (observed)
 
-- `uv run pytest tests/ -o addopts='' -q` → `1464 passed in 143.69s (0:02:23)`
-- `cd web && npm run build` → `✓ built in 5.28s` (only the pre-existing chunk-size advisory)
-- Commits: `cd33edc3` (Case nullable + migration list), `4ac74987` (lock sync),
-  `b0b5c0bb` (consumers + regression pins)
+- `uv run pytest tests/ -o addopts='' -q` → `1476 passed in 161.94s (0:02:41)` (rebased branch)
+- `cd web && npm run build` → `✓ built in 5.51s` (only the pre-existing chunk-size advisory)
+- Before the rebase onto `main` (`33f1feba`): `1464 passed in 143.69s`, web `5.28s`
+- Commits (rebased): `64c75566` (Case nullable + migration list), `e297a25f` (lock sync),
+  `edcc1ebb` (consumers + regression pins), `ccb299b6` (POST /cases)
 
 ## Findings / follow-ups
 
@@ -132,9 +135,27 @@ Backend/data plus the minimal web type. **No UI wiring** — no dialog redesign,
 - The reminder sweep will send for any emergency case with `notified_at` set, including a
   manually created one. `create_manual_case` never sets `notified_at`, so this is not
   API-reachable today; the test pins characterization, not a product decision.
-- Branch is 11 commits behind `main` (`fae7e0a9`). `main` added no migrations (still `031`)
-  and did not touch the cases area, so the rebase is clean and `032` does not collide.
-- `POST /cases` does not reject an empty `service`; not required by the acceptance criteria.
+- Rebased onto `main` (`33f1feba`) before the PR — the branch was 25 commits behind. `main`
+  added no migrations (still `031`), so `032` does not collide.
+- `main`'s `case-closure-fix` (#365) changed `list_open_cases` from `closed_at IS NULL` to
+  `case_is_open_expr()` (status-based) and touched `app/services/cases.py` and
+  `tests/functional/test_api_cases.py`. The conflict was resolved keeping both test groups;
+  the manual case is created with `status=None`, which the new predicate treats as open, so it
+  still lists. Re-verified after the rebase: 1476 passed.
+- `POST /cases` does not reject an empty `service`; not required by the acceptance criteria
+  (`R3-001`, non-blocking advisory).
+
+## Native review receipt
+
+- Transaction `review-b5b759d414d48b77` — four lenses (`review-risk`, `review-resilience`,
+  `review-readability`, `review-reliability`), risk `high`, 11 paths / 318 lines.
+- Result **`approved`**; the only finding is the non-blocking advisory `R3-001` above.
+  Authority burned via `gentle-ai review acknowledge-approved` (`action: acknowledged`).
+- **Scope, stated honestly**: the receipt is bound to the **pre-rebase** candidate trees
+  (base `f62b80c3`). The branch was then rebased onto `main` (`33f1feba`) to open the PR, so
+  the reviewed authored delta is preserved but its tree binding no longer matches the rebased
+  commits. `main`'s changes came in underneath it; the conflict resolution above is the only
+  authored delta introduced after the receipt.
 
 ## Graph nodes consulted
 
@@ -150,8 +171,9 @@ Backend/data plus the minimal web type. **No UI wiring** — no dialog redesign,
 
 ## Progress
 
-- [x] WU1 done — `cd33edc3`
-- [x] WU2 done — `b0b5c0bb`
-- [x] WU3 done — `bce1ad6b`
-- [x] WU4 done — suite 1464 passed, web build green
-- [ ] Owner decision: rebase on `main`, push, open the PR
+- [x] WU1 done — `64c75566`
+- [x] WU2 done — `edcc1ebb`
+- [x] WU3 done — `ccb299b6`
+- [x] WU4 done — suite 1476 passed, web build green
+- [x] Rebased onto `main` (`33f1feba`)
+- [ ] Owner decision: push and open the PR
