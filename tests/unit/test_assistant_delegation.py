@@ -195,3 +195,49 @@ def test_delegate_plan_requires_selector():
 
     with pytest.raises(Exception):
         PlannerOutput.model_validate({"kind": "delegate", "summary": "Gather records."})
+
+
+def test_delegation_span_refuses_write_and_stops_at_its_own_cap(monkeypatch):
+    from app.chat.assistant import nodes
+    from app.chat.assistant.delegation import resolve_delegation_scope
+
+    plans = iter([
+        {"kind": "tool", "tool": "memory.write", "arguments": {}, "summary": "write", "requires_approval": False},
+        {"kind": "tool", "tool": "customers.search", "arguments": {"query": "Ana"}, "summary": "read", "requires_approval": False},
+        {"kind": "tool", "tool": "customers.search", "arguments": {"query": "Ana"}, "summary": "read", "requires_approval": False},
+    ])
+    monkeypatch.setattr(nodes, "_assistant_client", lambda: None)
+    monkeypatch.setattr(nodes, "_delegation_plan", lambda *args, **kwargs: next(plans))
+    executed = []
+    monkeypatch.setattr(nodes, "execute_tool", lambda *args, **kwargs: executed.append(args[1]) or {"tool": args[1], "status": "completed", "result": []})
+
+    result = nodes.delegation_span(
+        {"content": "Find Ana", "thread_id": 1},
+        resolve_delegation_scope("customer_records"),
+    )
+
+    assert result["delegation"]["decisions"][0] == nodes.DELEGATION_WRITE_REFUSED
+    assert result["delegation"]["cap"] == nodes.DELEGATION_SPAN_MAX_STEPS
+    assert result["delegation"]["steps"] == nodes.DELEGATION_SPAN_MAX_STEPS
+    assert executed == ["customers.search"]
+
+
+def test_customer_memory_scope_refuses_own_read_and_permits_customer_read(monkeypatch):
+    from app.chat.assistant import nodes
+    from app.chat.assistant.delegation import resolve_delegation_scope
+
+    plans = iter([
+        {"kind": "tool", "tool": "memory.read", "arguments": {"scope": "own"}, "summary": "own", "requires_approval": False},
+        {"kind": "tool", "tool": "memory.read", "arguments": {"scope": "customer", "entity_id": "customer-1"}, "summary": "customer", "requires_approval": False},
+    ])
+    monkeypatch.setattr(nodes, "_delegation_plan", lambda *args, **kwargs: next(plans))
+    executed = []
+    monkeypatch.setattr(nodes, "execute_tool", lambda *args, **kwargs: executed.append(args[2]) or {"tool": args[1], "status": "completed", "result": []})
+
+    result = nodes.delegation_span(
+        {"content": "Find memory", "thread_id": 1},
+        resolve_delegation_scope("customer_records"),
+    )
+
+    assert nodes.DELEGATION_MEMORY_SCOPE_REFUSED in result["delegation"]["decisions"]
+    assert [call["scope"] for call in executed] == ["customer"]
