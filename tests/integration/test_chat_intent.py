@@ -15,6 +15,7 @@ The chat LLM (gpt-4o-mini) is mocked via respx — no real API calls.
 """
 
 import json
+from datetime import datetime, timezone
 
 import httpx
 
@@ -27,12 +28,14 @@ from app.chat.state import ConversationState, get_or_create_conversation  # noqa
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
     Case,
+    Conversation,
     Message,
     MessageDirection,
     MessageStatus,
     MessageType,
 )
 from app.services.customers import get_or_create_customer  # noqa: E402
+from app.services.cases import list_open_cases  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
 ADMIN_DB_URL = admin_database_url()
@@ -204,6 +207,29 @@ def test_cm3_case_classification_stored(mock_chat):
     assert cases[0].service == "caldera"
     assert cases[0].priority == "media"
     assert cases[0].status == "abierto"
+
+
+def test_classification_reopens_closed_case_and_restores_it_to_open_list(mock_chat):
+    conv_id = _seed("mi calefont no enciende", wamid="wamid.reopen.classify")
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conv_id)
+        assert conversation is not None
+        case = Case(
+            conversation_id=conv_id,
+            customer_id=conversation.customer_id,
+            status="cerrado",
+            closed_at=datetime.now(timezone.utc),
+        )
+        session.add(case)
+        session.commit()
+
+    _run_graph(conv_id)
+
+    cases = _case_rows()
+    assert cases[0].status == "abierto"
+    assert cases[0].closed_at is None
+    with SessionLocal() as session:
+        assert any(row.id == cases[0].id for row, _customer in list_open_cases(session))
 
 
 def test_cm3_state_case_holds_classification(mock_chat):
