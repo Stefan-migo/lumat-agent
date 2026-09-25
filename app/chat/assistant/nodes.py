@@ -50,6 +50,8 @@ PANEL_LOOP_WRITE_REFUSAL = (
     "No puedo ejecutar esa acción dentro de una consulta de varios pasos. "
     "Pídemela directamente y te pediré confirmación antes de ejecutarla."
 )
+PANEL_DELEGATION_REFUSAL = "I cannot safely delegate that request."
+PANEL_DELEGATION_UNAVAILABLE = "Delegation is not available yet."
 _SOCIAL_WORDS = frozenset({
     "adios", "buenas", "buenos", "bye", "chau", "como", "de", "dia", "días", "día",
     "dias", "estas", "esta", "excelente", "gracias", "hello", "hi", "hola", "hasta",
@@ -594,8 +596,8 @@ def guardrails(state: AssistantState) -> AssistantState:
                     "decision": "delegate_refused",
                     "reason": str(exc),
                 },
-                "response": "I cannot safely delegate that request.",
-                "status": "responding",
+                "response": PANEL_DELEGATION_REFUSAL,
+                "status": "completed",
             }
         return {
             "delegation": {"key": scope.key, "persona": scope.persona, "tools_whitelist": scope.tools_whitelist},
@@ -605,9 +607,10 @@ def guardrails(state: AssistantState) -> AssistantState:
                 "scope_valid": True,
                 "cost_allowed": True,
                 "approval_required": False,
-                "decision": "delegate",
+                "decision": "delegate_unavailable",
             },
-            "status": "delegating",
+            "response": PANEL_DELEGATION_UNAVAILABLE,
+            "status": "completed",
         }
     tool_name = plan_data.get("tool")
     if plan_data.get("kind") != "tool" or not tool_name:

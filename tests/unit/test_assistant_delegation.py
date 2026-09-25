@@ -1,6 +1,7 @@
 """Trust-boundary tests for delegated assistant plans."""
 
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -75,8 +76,8 @@ def test_unknown_tool_in_subagent_scope_is_refused_explicitly():
         resolve_delegation_scope("customer_records", registry=registry)
 
 
-def test_guardrails_validates_and_routes_delegate_plan():
-    from app.chat.assistant.nodes import guardrails
+def test_valid_delegate_scope_is_explicitly_not_executable_yet():
+    from app.chat.assistant.nodes import PANEL_DELEGATION_UNAVAILABLE, guardrails
 
     result = guardrails(
         {
@@ -90,9 +91,28 @@ def test_guardrails_validates_and_routes_delegate_plan():
         }
     )
 
-    assert result["guardrails"]["decision"] == "delegate"
+    assert result["guardrails"]["decision"] == "delegate_unavailable"
     assert result["guardrails"]["scope_valid"] is True
-    assert result["status"] == "delegating"
+    assert result["status"] == "completed"
+    assert result["response"] == PANEL_DELEGATION_UNAVAILABLE
+
+
+def test_valid_delegate_scope_routes_terminally_instead_of_answering_without_evidence():
+    from langgraph.graph import END
+
+    from app.chat.assistant.graph import _after_guardrails
+    from app.chat.assistant.nodes import guardrails
+
+    result = guardrails(
+        {
+            "content": "Which customers have open cases?",
+            "planner": {"valid": True},
+            "plan": {"kind": "delegate", "sub_agent": "customer_records", "summary": "Gather records."},
+        }
+    )
+
+    state = {"plan": {"kind": "delegate"}, **result}
+    assert _after_guardrails(state) == END
 
 
 @pytest.mark.parametrize(
@@ -125,7 +145,35 @@ def test_guardrails_explicitly_refuses_invalid_delegate_scope(key, tools, expect
 
     assert result["guardrails"]["decision"] == "delegate_refused"
     assert expected_error in result["guardrails"]["reason"]
-    assert result["status"] == "responding"
+    assert result["status"] == "completed"
+    assert result["response"]
+
+
+def test_delegate_refusal_routes_terminally_without_responder():
+    from langgraph.graph import END
+
+    from app.chat.assistant.graph import _after_guardrails
+    from app.chat.assistant.nodes import PANEL_DELEGATION_REFUSAL, guardrails
+
+    result = guardrails(
+        {
+            "content": "Gather records",
+            "planner": {"valid": True},
+            "plan": {"kind": "delegate", "sub_agent": "missing", "summary": "Gather."},
+        }
+    )
+
+    assert result["guardrails"]["decision"] == "delegate_refused"
+    assert result["status"] == "completed"
+    assert result["response"] == PANEL_DELEGATION_REFUSAL
+    assert _after_guardrails({"plan": {"kind": "delegate"}, **result}) == END
+
+
+def test_planner_prompt_does_not_advertise_unavailable_delegation():
+    prompt = (Path(__file__).resolve().parents[2] / "agent" / "prompts" / "assistant_plan.md").read_text()
+
+    assert 'kind: "delegate"' not in prompt
+    assert "sub_agent: \"customer_records\"" not in prompt
 
 
 def test_planner_output_accepts_delegate_selector_and_forbids_other_extras():
