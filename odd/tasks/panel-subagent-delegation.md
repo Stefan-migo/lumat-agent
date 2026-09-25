@@ -76,7 +76,7 @@ Verified on `96ba8ca2`, not from memory:
 | `app/chat/assistant/state.py` | `PlannerOutput`: `delegate` kind + the sub-agent selector field |
 | `app/chat/assistant/graph.py` | the span node + its conditional route from `guardrails` |
 | `app/chat/assistant/nodes.py` | guardrails validation branch for `delegate`; the bounded read-only span; evidence handoff; cost accounting for the span's LLM calls |
-| `agent/prompts/assistant_plan.md` | how and when to emit a `delegate` plan |
+| `agent/prompts/assistant_plan.md` | how and when to emit a `delegate` plan — lands in the wiring slice (T5), never before the span exists |
 | `openspec/specs/assistant-tools/spec.md` | new requirement AT-14 |
 | `tests/unit/test_assistant_delegation.py` (new) | span bound, scope enforcement, write refusal, evidence shape, catalog invariance |
 | `tests/integration/test_assistant_harness_guardrails.py` | a real cross-domain delegated turn end to end |
@@ -94,8 +94,8 @@ Verified on `96ba8ca2`, not from memory:
 
 ## Tasks (strict TDD — observed RED before each source change)
 
-- [ ] **T1 — Registry: give the declared worker a real scope, RED + GREEN.** Non-empty read-only whitelist for `customer_records` (`customers.search`, `conversations.search`, `appointments.upcoming`, `cases.list`, `memory.read`, `memory.search`); runtime resolution of a declared sub-agent; its persona expanded into a gathering contract. RED: the resolver returns the declaration and its scope; a write tool in the whitelist is rejected.
-- [ ] **T2 — Plan kind `delegate`, RED + GREEN.** Extend `PlannerOutput` (`extra="forbid"` already prevents sneaking fields); guardrails validates the named sub-agent as declared, read-only and non-empty before routing. RED: an unknown sub-agent and an empty-scope sub-agent are each refused with an explicit decision.
+- [x] **T1 — Registry: give the declared worker a real scope, RED + GREEN.** Non-empty read-only whitelist for `customer_records` (`customers.search`, `conversations.search`, `appointments.upcoming`, `cases.list`, `memory.read`, `memory.search`); runtime resolution of a declared sub-agent; its persona expanded into a gathering contract. RED was **import-level only** (the new module did not exist) — recorded honestly, no behavioural RED claimed. **Done** (`376d32ff`).
+- [x] **T2 — Plan kind `delegate`, RED + GREEN.** Extend `PlannerOutput` (`extra="forbid"` already prevents sneaking fields); guardrails validates the named sub-agent as declared, read-only and non-empty. Until the span exists, a **valid** delegation terminates explicitly as `delegate_unavailable` and an invalid one as `delegate_refused` — both terminal, never a silent answer with no evidence. RED: both decisions absent, and a valid delegation routed to `respond_stream`. **Done** (`4ed428cf`, corrected in `2218cf7b`).
 - [ ] **T3 — The bounded read-only span, RED + GREEN.** The span runs scoped plan→execute read-only steps, refuses every write, and stops on its own cap. RED: cap observable at the boundary; a write at the span's first step is refused; a second read-only step is permitted.
 - [ ] **T4 — Evidence handoff, RED + GREEN.** The span's results enter `tool_results`/`evidence` with provenance and stay inside the existing tool-evidence budget. RED: evidence shape, provenance and bound.
 - [ ] **T5 — Graph wiring + unchanged normal turns, RED + GREEN.** Conditional route from `guardrails`; `tool_steps` advances by exactly one for the whole span; a non-delegating turn is byte-identical in shape and cost.
@@ -171,8 +171,10 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 ## Progress (condensed)
 
 - Exploration completed **before** this document existed: both U3 pre-decisions (delegation mechanism, context handoff) were resolved with `file:line` evidence, and the owner confirmed the worker (`customer_records`) and the delegation-only scope on 2026-09-25.
-- No source change yet. T1 is the first implementation task.
+- **Slice 1 (T1 + T2) implemented** on `odd/panel-subagent-delegation`: `376d32ff`, `4ed428cf`, corrected in `2218cf7b`. Files: `agent/registry.yaml`, `agent/personas/customer_records.md`, `app/chat/assistant/delegation.py` (new), `app/chat/assistant/state.py`, `app/chat/assistant/nodes.py`, `app/chat/assistant/graph.py`, `tests/unit/test_assistant_delegation.py` (new), `tests/unit/test_agent_registry.py`.
+- **Gatekeeper caught a real integration failure in the first attempt**, and it is worth keeping: the first pass shipped the `assistant_plan.md` delegation instruction while nothing executed a delegation, and `_after_guardrails` did not know the `delegate` decisions — so a validated delegation fell through to `respond_stream` (an answer with zero gathered evidence, forbidden by contract #1) and the `delegate_refused` refusal was silently discarded. One corrective round fixed all four findings: the prompt change moved to the wiring slice, both delegate decisions became terminal, the orphan `delegating` status was removed, and the refusal became a named constant.
+- **Lesson for the remaining slices**: a trust-boundary slice must not make the planner aware of a capability the graph cannot execute, and every new decision a node returns must have a consumer in the router.
 
 ## Next step
 
-Start at **T1** with strict TDD: observe RED on the registry scope/resolution before touching `agent/registry.yaml`.
+Run the native review preflight for slice 1; on approval, push the branch and open the slice-1 PR against `main`. Then slice 2 (T3 + T4) rebases onto the new `main`.
