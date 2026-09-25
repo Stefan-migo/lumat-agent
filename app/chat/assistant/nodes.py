@@ -550,12 +550,14 @@ def delegation_span(state: AssistantState, scope) -> AssistantState:
             result = {"tool": tool_name, "status": "error", "error": str(exc), "result": {"unavailable": True}}
         provenance = {"sub_agent": scope.key, "step": steps, "tool": tool_name}
         results.append({**result, "provenance": provenance})
-        evidence.append({
-            "tool": tool_name,
-            "status": result.get("status", "completed"),
-            "detail": "Delegated tool result",
-            "provenance": provenance,
-        })
+        evidence.append(
+            make_evidence(
+                tool=tool_name,
+                status=result.get("status", "completed"),
+                detail="Delegated tool result",
+            )
+            | {"provenance": provenance}
+        )
     return {
         "tool_results": results,
         "evidence": evidence,
@@ -566,7 +568,6 @@ def delegation_span(state: AssistantState, scope) -> AssistantState:
             "cap_reached": steps >= DELEGATION_SPAN_MAX_STEPS,
             "decisions": decisions,
         },
-        "status": "completed",
     }
 
 

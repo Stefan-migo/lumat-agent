@@ -263,4 +263,5 @@ def test_delegation_span_returns_budgeted_provenance_evidence(monkeypatch):
     assert result["evidence"][0]["provenance"] == {
         "sub_agent": "customer_records", "step": 1, "tool": "customers.search",
     }
-    assert len(nodes._render_tool_evidence(result)) <= nodes._TOOL_EVIDENCE_LIMIT
+    assert len(result["evidence"]) <= result["delegation"]["cap"]
+    assert "status" not in result
