@@ -169,6 +169,10 @@ describe('conversation inspector layout CSS contract', () => {
     expect(css).toMatch(/\.conversation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(384px, 1fr\)\s+minmax\(288px, 384px\);/);
   });
 
+  it('keeps the workspace height bounds stable at text zoom', () => {
+    expect(css).toMatch(/\.conversation-workspace\s*\{[^}]*height:\s*clamp\(480px, calc\(100dvh - 15rem\), 736px\);/);
+  });
+
   it('allows inspector detail rows to wrap', () => {
     expect(css).toMatch(/\.ai-agent-grammar__detail\s*\{[^}]*flex-wrap:\s*wrap;/);
   });
