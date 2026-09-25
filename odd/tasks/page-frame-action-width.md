@@ -44,10 +44,11 @@ named after the page frame, not after Agenda.
 
 **Out:**
 
-- **Not moving any action into `PageFrame.actions`.** `agenda-design-alignment` (PR #351,
-  decision D2) rejected this: there is no precedent for a primary create action in the
-  header — the header slot carries navigational actions (`Volver a clientes`,
-  `Volver a documentos`).
+- **Not moving any action into `PageFrame.actions` — SUPERSEDED 2026-09-25.** This scope
+  boundary followed `agenda-design-alignment` D2, which `agenda-visual-alignment` (PR #362)
+  reversed at the owner's request: `Nueva visita` now lives in `PageFrame.actions`. The guard
+  this unit shipped is unaffected — it protects a bare `.btn` in `.page-frame__content`
+  regardless of where a given page chooses to put its action.
 - No JSX change to `AgendaPage.tsx`, `AutomationRulesPage.tsx` or `KbDocumentDetail.tsx`.
 - `.page-frame__banner` children are **not** touched: the retry button at
   `ConversationThread.tsx:92` renders inside the banner, which is a distinct container
