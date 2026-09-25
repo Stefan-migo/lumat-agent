@@ -78,8 +78,14 @@ not Agenda — it belongs in its own unit.
   (border + elevated background + `--space-4` padding). `DESIGN_SYSTEM.md:277` says
   cards use `--radius-lg`; its grid sibling `.data-region` is `--radius-lg`; the
   Dashboard unit already made this same md→lg correction. Reversible in one line.
-- **D2 — `Nueva visita` stays in content.** No precedent for a primary create action
-  in `PageFrame.actions`; list pages keep theirs in content too.
+- **D2 — SUPERSEDED 2026-09-25 by `agenda-visual-alignment` (PR #362).** The original
+  decision was that `Nueva visita` stays in content, because there was no precedent for a
+  primary create action in `PageFrame.actions` and list pages keep theirs in content too.
+  **Current decision:** the owner asked for `justify-content: space-between` between the
+  title block and the primary action, so `Nueva visita` now lives in `PageFrame.actions`.
+  `.page-header` already implemented that layout (`primitives.css:761-769`); the page simply
+  never used it. Moving the list-page create actions out of content is a separate unit, so
+  those pages are now the deviation from the header precedent.
 - **D3 — no ≥1280 treatment added.** `DESIGN_SYSTEM.md:325` is descriptive, not
   normative; the two-column layout from `min-width: 64rem` upward is allowed.
 - **D4 — breakpoints stay rem literals.** See "Deviations rejected".
