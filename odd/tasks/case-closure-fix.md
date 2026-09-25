@@ -230,7 +230,7 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 
 - [x] T8 RED observed — both closed-case reactivation tests failed on stale non-null `closed_at` before implementation.
 - [x] T8 GREEN — classification and emergency writers route through `_apply_status`; `None` status is accepted and treated as open.
-- [x] T9 — `openspec/changes/case-closure-open-status/` contains proposal, `advanced-dashboards` spec delta, and tasks. The live spec remains unchanged.
+- [x] T9 — the archived `case-closure-open-status` change contains the proposal, `advanced-dashboards` spec delta, and completed tasks; its `AD-HOY-1` delta is synced into the live spec.
 - [x] Full suite green: `1466 passed, 2 warnings in 165.58s`.
 - [x] Parent spot check (2 passed), then a new native review approved with zero findings; lineage `review-b2c7c2f6145c0c7b`.
 
