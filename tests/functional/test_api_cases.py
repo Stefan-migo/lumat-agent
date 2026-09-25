@@ -186,6 +186,48 @@ def test_cases_list_skips_closed_cases(client, make_user):
     assert resp.json()["cases"] == [], "closed case must not appear (HH-4)"
 
 
+def test_case_update_closes_case_and_removes_it_from_open_list(client, make_user):
+    case_id = _seed_case(status="escalado")
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.post(f"/panel/api/cases/{case_id}/update", json={"status": "cerrado"})
+
+    assert response.status_code == 200
+    assert _case_row(case_id).closed_at is not None
+    cases = client.get("/panel/api/cases").json()["cases"]
+    assert all(case["id"] != case_id for case in cases)
+
+
+def test_case_update_reopening_clears_close_time_and_restores_case(client, make_user):
+    case_id = _seed_case(status="escalado")
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    closed = client.post(f"/panel/api/cases/{case_id}/update", json={"status": "cerrado"})
+    assert closed.status_code == 200
+    assert _case_row(case_id).closed_at is not None
+    reopened = client.post(f"/panel/api/cases/{case_id}/update", json={"status": "abierto"})
+
+    assert reopened.status_code == 200
+    assert _case_row(case_id).closed_at is None
+    cases = client.get("/panel/api/cases").json()["cases"]
+    assert any(case["id"] == case_id for case in cases)
+
+
+def test_closed_case_is_excluded_from_dashboard_urgent_cases(client, make_user):
+    case_id = _seed_case(status="escalado", emergency=True)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+    response = client.post(f"/panel/api/cases/{case_id}/update", json={"status": "cancelado"})
+    assert response.status_code == 200
+
+    dashboard = client.get("/panel/api/dashboard/today?timezone=America/Santiago")
+
+    assert dashboard.status_code == 200
+    assert all(case["id"] != case_id for case in dashboard.json()["urgent_cases"])
+
+
 def test_cases_list_orders_by_escalated_at_within_same_status(client, make_user):
     """Among escalated cases, the newest escalation comes first."""
     def _mk(name):
