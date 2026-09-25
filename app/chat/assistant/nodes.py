@@ -79,7 +79,10 @@ def _project_slug(state: AssistantState) -> str:
 
 def extension_hook_metadata() -> dict[str, str]:
     """Describe deferred extensions without loading or executing their internals."""
-    return {"sdb": "deferred", "panel_subagents": "not_implemented"}
+    from app.agent_registry import get_registry
+
+    wired = "customer_records" in get_registry().sub_agents
+    return {"sdb": "deferred", "panel_subagents": "implemented" if wired else "not_implemented"}
 
 
 _PLANNING_COMMAND = re.compile(r"^/planning(?: ([^\s].*?))?$")
@@ -571,6 +574,15 @@ def delegation_span(state: AssistantState, scope) -> AssistantState:
     }
 
 
+def delegation_node(state: AssistantState) -> AssistantState:
+    """Resolve guardrail-validated plan scope at the LangGraph node boundary."""
+    from app.chat.assistant.delegation import resolve_delegation_scope
+
+    scope = resolve_delegation_scope((state.get("plan") or {}).get("sub_agent", ""))
+    result = delegation_span(state, scope)
+    return {**result, "tool_steps": state.get("tool_steps", 0) + 1, "status": "completed"}
+
+
 def plan_llm(state: AssistantState) -> AssistantState:
     """Ask the configured provider for a strict plan on every production turn."""
     from app.services.prompts import load_assistant_config
@@ -697,10 +709,8 @@ def guardrails(state: AssistantState) -> AssistantState:
                 "scope_valid": True,
                 "cost_allowed": True,
                 "approval_required": False,
-                "decision": "delegate_unavailable",
+                "decision": "delegate",
             },
-            "response": PANEL_DELEGATION_UNAVAILABLE,
-            "status": "completed",
         }
     tool_name = plan_data.get("tool")
     if plan_data.get("kind") != "tool" or not tool_name:

@@ -168,6 +168,7 @@ class AssistantState(TypedDict, total=False):
     tool_result: dict | None
     tool_results: list[dict]
     tool_steps: int
+    delegation: dict
     cap_reached: bool
     evidence: list[dict]
     status: str

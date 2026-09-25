@@ -18,7 +18,7 @@ def test_extension_hooks_expose_status_metadata_without_executable_hooks():
 
     assert metadata == {
         "sdb": "deferred",
-        "panel_subagents": "not_implemented",
+        "panel_subagents": "implemented",
     }
     assert all(not callable(value) for value in metadata.values())
 
