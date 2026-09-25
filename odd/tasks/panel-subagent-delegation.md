@@ -155,7 +155,7 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 | 2 | T3 + T4 | The mechanism: the bounded read-only span + the evidence handoff |
 | 3 | T5 + T6 + T7 + T8 | Wiring, cost accounting, spec AT-14 and the cross-domain harness |
 
-**Delivery record**: slice 1 → **PR #359** (`odd/panel-subagent-delegation` → `main`, merged as `d514d215`). Slice 2 → `odd/panel-subagent-delegation-slice2` off `cc783af0`; **its PR number is recorded here before merge** — pending owner-authorized push.
+**Delivery record**: slice 1 → **PR #359** (`odd/panel-subagent-delegation` → `main`, merged as `d514d215`). Slice 2 → **PR #360** (`odd/panel-subagent-delegation-slice2` → `main`), rebased onto `cc783af0`.
 
 ## Review outcome — slice 1
 
@@ -187,7 +187,7 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 **No native review was started, and native assessment says none was due.** The preflight ran and the provider offered a fresh candidate; the committed-work assessment then measured it as under budget.
 
 - Selectorless preflight (`review status --cwd <worktree> --contract gentle-ai.review-integration/v2 --agent opencode --next-transition`) → `applicability: unrelated`, next transition `execute` with reason `fresh_target_ready`, 2 paths (`app/chat/assistant/nodes.py`, `tests/unit/test_assistant_delegation.py`), target `sha256:1fa8983e…`, lineage `review-45ea91538dfb59bb` minted. **The returned START was not invoked, so nothing was frozen** — no transaction, no slot, no consent envelope.
-- `review assess --cwd <worktree> --base-ref cc783af0 --committed-only --json` → `risk: medium` (`executable_change` on `app/chat/assistant/nodes.py`), `changed_paths: 2`, `changed_lines: 160`, **`review_due: false`, `review_due_reason: under_budget`**.
+- `review assess --cwd <worktree> --base-ref cc783af0 --committed-only --json` → `risk: medium` (`executable_change` on `app/chat/assistant/nodes.py`), **`review_due: false`, `review_due_reason: under_budget`**. Measured at `changed_paths: 2`, `changed_lines: 160` on the implementation commits, and `3` / `216` once the correction, the coverage test and this record landed — the same verdict both times.
 - Under the committed-work rule, `review_due: false` keeps the boundary pending and the work continues. Forcing a START instead would have burned a lineage in the environment whose immutable review transport is already known broken (*Review outcome — slice 1*), for a candidate native assessment had just measured as not due. `review mode status` reads `on (decided by global)`; nothing was disabled and RDD was not touched.
 
 **Verification achieved.** Tier `medium` on a full-size model, so writer self-verification is the verification of record:
@@ -228,6 +228,6 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 
 ## Next step
 
-Slice 2 (T3 + T4) is implemented and committed on `odd/panel-subagent-delegation-slice2`, **not yet pushed and without a PR** — delivery is the owner's call. Once the owner authorizes it: push the branch, open the PR (`type:feature`), record its number in the *Delivery record* above as a docs-only commit, and merge to `main` under `stacked-to-main`. Slice 3 (T5 + T6 + T7 + T8 — graph wiring, cost accounting, AT-14 and the cross-domain harness) then rebases onto the new `main`.
+Slice 2 (T3 + T4) is implemented, pushed and open as **PR #360** (`odd/panel-subagent-delegation-slice2` → `main`), awaiting CI and the owner's merge decision. Slice 3 (T5 + T6 + T7 + T8 — graph wiring, cost accounting, AT-14 and the cross-domain harness) then rebases onto the new `main`.
 
 **Carry forward into slice 3:** the span is deliberately **not** graph-wired and returns no `status`, no `tool_steps` and no cost record. T5 owns the conditional route from `guardrails`, the single parent-step accounting and the consumers for every new decision; T6 owns counting the span's LLM calls (`_delegation_plan` currently calls the provider directly, bypassing the existing cost path). Both new state keys — `delegation` on the span result — are outside `AssistantState` and must be handled deliberately when the wiring lands.
