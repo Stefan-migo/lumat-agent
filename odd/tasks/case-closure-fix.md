@@ -1,0 +1,164 @@
+# ODD — case-closure-fix
+
+## Objective
+
+Closing a case from the panel must actually close it: the case leaves the open-cases
+list and the dashboard, and the close is recorded with a timestamp. One canonical
+definition of "closed case" must serve every query in the codebase.
+
+## Problem
+
+Verified in code, not inferred:
+
+- `app/services/cases.py:150-184` — `update_case()` sets `status` and `responsible_id`
+  and **never touches `closed_at`**.
+- `app/services/cases.py:136` — `list_open_cases()` (which feeds `GET /panel/api/cases`)
+  filters on `Case.closed_at.is_(None)`, **not** on status.
+- `app/services/dashboard.py:119` — the urgent-cases query uses the same
+  `Case.closed_at.is_(None)` filter.
+- `app/panel/api/routes/conversations.py:91` — a third, status-based definition:
+  `_CLOSED_CASE_STATUSES = ("closed", "cerrado", "finalizado", "cancelado")`, used only
+  to rank which case a conversation shows.
+- `rg closed_at app/` returns **no assignment** anywhere. The column is read, serialized
+  and exported; it is never written.
+
+Consequence: an operator sets a case to "Cerrado" (the frontend offers it,
+`CasesList.tsx:24`, and paints it green, `toneMaps.ts:4`), and the case stays in
+`GET /cases` and in the dashboard forever.
+
+The existing test `tests/functional/test_api_cases.py:161-186`
+(`test_cases_list_skips_closed_cases`) proves the *filter* works by setting `closed_at`
+**directly in the database**. Nothing proves the *API* can produce that state. That gap
+is the whole unit.
+
+Measured baseline (dev DB `infra-db-1`, 2026-09-25): 3 cases, all `status='abierto'`,
+all `closed_at IS NULL`. **No legacy rows with a closing status and a NULL `closed_at`
+exist in dev.** Production was not inspected.
+
+## Why
+
+The panel gives the operator a control whose effect is a lie. Beyond the panel, the same
+defect pollutes the dashboard's urgent cases, and the three competing definitions mean
+the next change to "closed" will silently desync one of them — which is exactly how this
+bug was born.
+
+## Scope (authorized by the owner)
+
+**In:**
+
+- `app/services/cases.py` — the canonical closing-status set, the canonical open-case
+  predicate, `update_case` stamping/clearing `closed_at`, and `list_open_cases` using the
+  canonical predicate.
+- `app/services/dashboard.py` — the urgent-cases filter uses the canonical predicate.
+- `app/panel/api/routes/conversations.py` — the local `_CLOSED_CASE_STATUSES` tuple is
+  deleted; the ranking uses the canonical predicate.
+- `tests/functional/test_api_cases.py` — RED first, plus the dashboard/ranking coverage
+  the predicate now needs.
+
+**Out:**
+
+- **No migration and no backfill.** See D1.
+- No frontend change. The UI already offers "Cerrado"; nothing on the web side moves.
+- No new statuses. The closing set is exactly the four values already in use.
+- No change to the audit snapshot shape (`{"status", "responsible_id"}`): existing tests
+  pin it exactly (`test_api_cases.py:265-266`).
+- `app/services/tukulpan.py:967-977` (`_fires_oportunidad`, keyed on `case.status is None`)
+  is not a closure query and is not touched.
+- `app/panel/routes/export.py` only reads `closed_at` for the CSV; no change.
+
+## Decision (D1) — where the truth lives
+
+**The case status is the source of truth for closure; `closed_at` is the recorded
+timestamp of that transition.**
+
+Rationale: nothing in the codebase writes `closed_at` today, so the status is already the
+de facto truth — an operator's "Cerrado" is a status change, not a timestamp. Making the
+status canonical means legacy rows (closing status, `closed_at` NULL) are handled with no
+migration and **no fabricated timestamp**. `update_case` then stamps `closed_at` when the
+status enters the closing set and clears it when the status leaves, so the column becomes
+real without ever becoming the gate.
+
+Consequence accepted: a contradictory row (`closed_at` set, status not closing) is treated
+as **open**. Our own code cannot produce that shape after this unit, and no production row
+has `closed_at` set at all today.
+
+## Constraints
+
+- **Strict TDD ON.** Runner: `uv run pytest tests/`. RED must be observed before GREEN.
+- **The predicate must be NULL-safe.** `Case.status` is nullable — `get_or_create_case`
+  (`cases.py:34-51`) creates a bare case with no status until classification fills it. A
+  bare `Case.status.not_in(CLOSING)` evaluates to SQL `NULL` for a NULL status and would
+  silently **hide a brand-new open case**. Open must be expressed positively:
+  `and_(closed_at.is_(None), or_(status.is_(None), status.not_in(CLOSING)))`.
+- `update_case`'s `status=None` contract means "keep": `closed_at` must not be touched
+  when the body omits `status`.
+- Re-stamping on a no-op is wrong: closing an already-closed case must not move its
+  original close time. Stamp only when `closed_at is None`.
+- Operator-facing copy in Spanish; code, identifiers, comments, tests and docs in English.
+- Graph check before writing (see below).
+
+## Graph check
+
+`graphify query "case lifecycle close closed_at open cases list dashboard rank"` →
+nodes consulted: `list_open_cases` / `Case.closed_at` (`app/services/cases.py`),
+`Dashboard()` and the `urgent_cases` query (`app/services/dashboard.py`),
+`routes/conversations.py` and its `_CLOSED_CASE_STATUSES`,
+`closed_at set -> case excluded from the open list (HH-4)` —
+`tests/functional/test_api_cases.py:162` (the graph surfaced the exact test that hides
+this gap), `Case` (`app/models.py:334`), communities `test_api_cases.py`,
+`cases.py`, `routes/conversations.py`, `Dashboard.tsx`.
+
+## Expected fix shape
+
+```python
+# app/services/cases.py
+CLOSING_CASE_STATUSES = frozenset({"closed", "cerrado", "finalizado", "cancelado"})
+
+def case_is_open_expr():
+    """Canonical 'this case is still open' predicate (NULL-safe)."""
+    return and_(
+        Case.closed_at.is_(None),
+        or_(Case.status.is_(None), Case.status.not_in(CLOSING_CASE_STATUSES)),
+    )
+```
+
+`update_case` gains the transition stamp; `list_open_cases`, the dashboard filter and the
+conversation ranking all call `case_is_open_expr()`; `conversations.py` imports
+`CLOSING_CASE_STATUSES` instead of defining its own tuple.
+
+**Flagged behavior change for the writer to confirm, not assume:** the ranking's current
+expression treats a NULL-status case as *not* priority-1 (the `NOT IN` yields NULL and the
+`CASE WHEN` falls through). The canonical predicate treats it as open, so it becomes
+priority-1. That is the correct reading of a brand-new case, but it is a change — the full
+suite decides whether anything else depended on the old rank.
+
+## Tasks
+
+| ID | Task | Route |
+|----|------|-------|
+| T1 | RED: `POST /cases/{id}/update {"status":"cerrado"}` must stamp `closed_at` and drop the case from `GET /cases`. Must fail against today's code. | delegated (writer) |
+| T2 | RED: reopening (`status` back to a non-closing value) clears `closed_at` and the case returns to `GET /cases`. | delegated (writer, same unit as T1) |
+| T3 | GREEN: canonical set + predicate; `update_case` stamp/clear; `list_open_cases` and the dashboard filter call the predicate. | delegated (writer, same unit as T1) |
+| T4 | RED+GREEN: a closed case is excluded from the dashboard's urgent cases. | delegated (writer) |
+| T5 | GREEN: `conversations.py` drops its local tuple and ranks with the canonical predicate; full suite confirms no regression. | delegated (writer) |
+| T6 | Full suite `uv run pytest tests/`. | delegated per-action |
+
+## Delivery
+
+Backend-only, three source files plus tests: well inside the ~400-line review budget →
+**single PR against `main`**, label `type:bug`, no chained slices. Merge is the owner's
+decision.
+
+## Progress / Evidence
+
+- [ ] T1 RED observed
+- [ ] T2 RED observed
+- [ ] T3 GREEN observed
+- [ ] T4 dashboard coverage
+- [ ] T5 ranking unified + full suite
+- [ ] T6 suite green
+
+## Next step
+
+Unit not started. U2 (`client-ficha-case-surface`) is blocked on this: without it the
+ficha would show zombie cases as "active".
