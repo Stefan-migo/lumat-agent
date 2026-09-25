@@ -3,7 +3,7 @@
 **Branch**: `odd/panel-subagent-delegation`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-panel-subagent-delegation`
 **Base**: `96ba8ca2` (= `main` at branch time, `docs(ops): record the v2026.09.6 deploy`)
-**Status**: **slice 3 (T5 + T6 + T7 + T8) implemented on `odd/panel-subagent-delegation-slice3`** — branched from `498e5346`, writer-implemented, gate-corrected, full suite green, **no native review receipt** (see *Review outcome — slice 3*). Slice 1 (T1 + T2) is merged as PR #359 (`d514d215`); slice 2 (T3 + T4) is merged as PR #360 (`498e5346`). All eight tasks are implemented.
+**Status**: **slice 3 (T5 + T6 + T7 + T8) implemented on `odd/panel-subagent-delegation-slice3`** — branched from `498e5346`, writer-implemented, gate-corrected, full suite green, and carrying a **real native review receipt** (lineage `review-7584730fa4dbaa68`, `approved`, authority burned — see *Review outcome — slice 3*). Slice 1 (T1 + T2) is merged as PR #359 (`d514d215`); slice 2 (T3 + T4) is merged as PR #360 (`498e5346`). All eight tasks are implemented.
 **Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/` (decisions 6 and 7, open question *does U3 delegate through the existing `research_triage` pattern, or a new panel subgraph?*); Engram #4890, #4896.
 
 This is **U3 of three**: U1 (bounded tool chaining) is merged; U2 (local reader `web.fetch`) is merged. U3 was recorded as *"Not ready — do not start yet"* because it needed two decisions. Both were resolved before this document existed, and the resolution is recorded under **Decisions** below.
@@ -201,19 +201,24 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 
 ## Review outcome — slice 3
 
-**No native review was started.** The committed-work assessment decides this, and it is recorded with the numbers rather than asserted.
+**This slice carries a real native review receipt.** Unlike slices 1 and 2, the transaction reached `approved` and its authority was burned.
 
-- Selectorless preflight `review status --cwd <worktree> --contract gentle-ai.review-integration/v2 --agent opencode --next-transition` on the final candidate: the provider offered a fresh candidate (2 paths at that moment, `fresh_target_ready`, lineage minted). **The offered START was not invoked, so nothing was frozen** — no transaction, no slot, no consent envelope.
-- `review assess --cwd <worktree> --base-ref 498e5346 --committed-only --json`: `risk: medium` (`executable_change`), **`review_due: false`, `review_due_reason: under_budget`** at 365 authored lines across 10 paths — inside the ~400-line delivery budget. Same verdict, same mechanism as slice 2.
-- `review mode status` reads `on (decided by global)`; RDD was not disabled and not touched.
+- The first `review assess --cwd <worktree> --base-ref 498e5346 --committed-only --json`, taken before this record existed, returned `risk: medium`, 365 lines, **`review_due: false` / `under_budget`**. This record's own lines pushed the committed range to **405 lines across 11 paths**, and the same assessment then returned **`review_due: true`, `review_due_reason: slice_budget_reached`** — so the review became due and was taken.
+- The preflight (`review status --base-ref=498e5346 --committed-only=true --next-transition=true`) offered a fresh candidate; `review start --consent=relay` returned the typed `gentle-ai.review-integration.consent/v3` envelope (risk `medium`, 11 files, 405 lines, reason `executable_change` on `agent/prompts/assistant_plan.md`). It was relayed losslessly and the owner answered `granted`.
+- The transaction froze cleanly: lineage **`review-7584730fa4dbaa68`**, state `reviewing`, revision `sha256:4c0731b0…`, one selected lens (`review-reliability`, order 0), correction budget 200, `lenses_required: true`.
+- The lens capture returned **`approved`**: no BLOCKER or CRITICAL findings, and **one advisory WARNING, deliberately non-blocking** — `R3-001` (`app/chat/assistant/nodes.py:579`, `inferential`, `introduced`): `delegation_node` resolves the worker scope without catching a scope-resolution failure, so a worker that became unresolvable between guardrail validation and the node would raise instead of producing the existing explicit refusal. The closure explicitly states that advisory findings open no correction and **must never reopen this review**; it is recorded below as follow-up work.
+- Acknowledgement ran exactly once: **`gentle-ai review-acknowledged/v1`, action `acknowledged`, `authority: "burned"`**, consuming revision `sha256:79eeab74…`. The lifecycle then stops — delivery is a separate human decision.
+- **Scope of the receipt**: it covers target `sha256:8e9a069c…` (11 paths, 405 lines). This record was edited *after* the acknowledgement to state the outcome truthfully, so the docs-only commits that follow are, by the ordering rule, outside that receipt — they are passive documentation and the only code the receipt covers is unchanged.
+- `review mode status` reads `on (decided by global)`; RDD was never disabled.
 
-**Verification achieved.** Tier `medium` on a full-size model, so writer self-verification is the verification of record:
+**Verification achieved.** Tier `medium`, and the native review above is the independent check:
 
 | Evidence | Result |
 |---|---|
 | Writer self-verification (focused suites) | `test_assistant_delegation.py` 19 passed · tool-loop/planner/config/extensions 67 passed · harness + chat 88 passed |
 | Parent-resolved full suite | `uv run pytest tests/` — **1,464 tests, 0 failures, exit 0** (1,464 progress marks, no `F`/`E`) |
 | Parent adversarial readback of the diff | Three findings raised on the T5/T6 pass and all corrected in `bcfdb71c`: the required non-delegating-turn pin was missing, `PANEL_DELEGATION_UNAVAILABLE` survived as a dead constant now stating the opposite of the truth, and `panel_subagents` was derived from a declaration rather than from the span being executable |
+| Native review | **approved**, authority burned, one non-blocking advisory finding (`R3-001`) |
 
 ## Graph nodes consulted (Graph Check, Step 1)
 
@@ -230,6 +235,7 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 1. **Per-customer drill-down reads** — the sibling unit. `appointments.upcoming` has no customer filter and a fixed 30-day window (`registry.py:262-265`); `cases.list` is open-only (`:268-269`); `customers`/`conversations` are query+limit only. A read-only gather worker can correlate across global lists but cannot assemble one customer's dossier except from customer-scope memory.
 2. **Tool-catalog duplication** — `customers.search`/`customers.list` and `conversations.search`/`conversations.list` are two names each for one handler (`registry.py:510-513`, `:250-259`); `SearchArgs`, `QueryArgs`, `CapabilitiesArgs` are one shape repeated (`:50-64`). ~224 tokens/turn of pure duplication at the measured ~112 tokens/tool.
 3. **Catalog schema trim** — measured ~2,471 tokens/turn at the U1 baseline; there is still no post-U2 measurement. Decide before the whitelist grows again (`Engram #4899`, `#4901`).
+4. **`R3-001` — unguarded scope resolution at the delegation node** (`app/chat/assistant/nodes.py:579`, native review WARNING, `inferential`). `delegation_node` calls `resolve_delegation_scope` bare: a registry or persona that became unresolvable between guardrail validation and the node raises out of the turn instead of producing the existing explicit `delegate_refused`-style refusal. The window is one in-turn step, which is why the review declined to block, but the fix is cheap (resolve defensively and return the refusal) and belongs to a later change — **never to a re-run of this review**.
 
 ## Progress (condensed)
 
