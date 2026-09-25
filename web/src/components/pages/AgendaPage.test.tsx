@@ -49,6 +49,7 @@ describe('AgendaPage', () => {
     const retry = vi.fn();
     const { rerender } = render(<AgendaPage state="loading" data={null} onRetry={retry} />);
     expect(screen.getByRole('status')).toHaveTextContent('Cargando agenda');
+    expect(screen.getByText('Visitas de la agenda')).toBeInTheDocument();
 
     rerender(<AgendaPage state="denied" data={null} onRetry={retry} />);
     expect(screen.getByRole('alert')).toHaveTextContent('No tienes permiso');

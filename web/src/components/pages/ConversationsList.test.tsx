@@ -10,6 +10,11 @@ const queue = (items: ReturnType<typeof row>[], counts = { all: items.length, hu
 afterEach(() => vi.restoreAllMocks());
 
 describe('production conversations list', () => {
+  it('keeps the fallback subtitle visible while loading', () => {
+    render(<ConversationsList state="loading" />);
+    expect(screen.getByText('Cola de conversaciones')).toBeInTheDocument();
+  });
+
   it('loads filters and exposes production state and assignee fields', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(queue([row(4, 'human', 7)], { all: 1, human: 1, emergency: 0, case: 0, closed: 0 })), { status: 200 }));
     render(<ConversationsList />);

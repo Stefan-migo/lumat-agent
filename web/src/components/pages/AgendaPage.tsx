@@ -199,7 +199,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const showEmpty = data?.length === 0 || state === "empty" || renderedRows.length === 0;
 
   const field = (key: keyof typeof createForm, value: string) => setCreateForm((form) => ({ ...form, [key]: value }));
-  return <PageFrame title="Agenda" meta={data ? `${appointments.length} ${appointments.length === 1 ? "visita" : "visitas"}` : undefined} state={stateMessage(state, retry)}>
+  return <PageFrame title="Agenda" meta={data ? `${appointments.length} ${appointments.length === 1 ? "visita" : "visitas"}` : "Visitas de la agenda"} state={stateMessage(state, retry)}>
     <Button onClick={() => void openCreate()}>Nueva visita</Button>
     {createFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={createFeedback.title} /> : null}
     {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
