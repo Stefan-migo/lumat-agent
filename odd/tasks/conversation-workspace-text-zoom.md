@@ -131,6 +131,8 @@ Native review: `gentle-ai review assess --base-ref 96ba8ca2 --committed-only` â†
 code is one production line and two assertions; the rest is this record), **`review_due:
 false`** with reason `under_budget`. No native review was due.
 
+Delivered as **PR #357** â€” https://github.com/Stefan-migo/lumat-agent/pull/357
+
 ## Progress / Evidence
 
 - [x] T1 baseline measurement
@@ -205,4 +207,4 @@ is still enforced.
 
 ## Next step
 
-Unit complete locally with a clean tree. Push + pull request pending the owner's word.
+Unit complete and delivered as **PR #357**. Merge is the owner's decision, not this unit's.
