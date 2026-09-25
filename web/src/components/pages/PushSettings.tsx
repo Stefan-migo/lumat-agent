@@ -10,5 +10,5 @@ export function PushSettings({ supported = typeof window !== "undefined" && "Pus
   };
   const fallback = "Recibirás notificaciones por correo o WhatsApp.";
   const content = <><p>{!supported || permission === "unsupported" ? `Este navegador no admite push. ${fallback}` : permission === "denied" ? `Denegaste los avisos del navegador. ${fallback}` : permission === "granted" ? "Push activado." : "Activa avisos del navegador para recibir novedades."}</p>{supported && permission !== "unsupported" && permission !== "denied" ? <Button onClick={() => void enable()}>{permission === "granted" ? "Push activado" : "Activar push"}</Button> : null}</>;
-  return embedded ? <section>{content}</section> : <PageFrame title="Notificaciones push">{content}</PageFrame>;
+  return embedded ? <section>{content}</section> : <PageFrame title="Notificaciones push" meta="Avisos del navegador para este dispositivo">{content}</PageFrame>;
 }

@@ -34,7 +34,9 @@ describe("projects panel", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null }, artifacts: {} }), { status: 200 }));
     const back = vi.spyOn(window.history, "back").mockImplementation(() => undefined);
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
-    expect(await screen.findByText("Activo")).toBeInTheDocument();
+    expect(await screen.findByText("Run ops · Activo")).toBeInTheDocument();
+    expect(screen.getByText("Run ops · Activo").closest("p")).toBeInTheDocument();
+    expect(screen.getByText("Run ops · Activo").closest("p")?.querySelector(".badge")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Volver a proyectos" }));
     expect(back).toHaveBeenCalled();
   });

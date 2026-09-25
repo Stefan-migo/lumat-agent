@@ -150,7 +150,7 @@ export function TechnicianAgenda({ data: controlledData, state: controlledState,
       title="Agenda técnica"
       meta={loadedAt
         ? `${happening} ${happening === 1 ? 'visita' : 'visitas'}${cancelled > 0 ? ` · ${cancelled} ${cancelled === 1 ? 'cancelada' : 'canceladas'}` : ''} · Actualizado ${loadedAt}`
-        : undefined}
+        : "Visitas asignadas"}
       actions={<Button variant="secondary" disabled={loading} onClick={retry}>Actualizar</Button>}
       state={stateMessage(state, retry)}
     >

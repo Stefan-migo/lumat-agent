@@ -27,7 +27,7 @@ export function UserManagement({ currentUser }: UserManagementProps) {
   const data = useAsyncData(useCallback(fetchUsers, []), currentUser.role === "admin", refreshKey);
 
   if (currentUser.role !== "admin") {
-    return <PageFrame title="Usuarios" state={<StateMessage tone="danger" role="alert" title="No tienes permiso para ver este panel" />}>{null}</PageFrame>;
+    return <PageFrame title="Usuarios" meta="Administra el acceso al panel" state={<StateMessage tone="danger" role="alert" title="No tienes permiso para ver este panel" />}>{null}</PageFrame>;
   }
 
   const submit = async (event: React.FormEvent) => {

@@ -88,7 +88,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   return (
     <PageFrame
       title="Clientes"
-      meta={data ? `${data.length} ${data.length === 1 ? "cliente" : "clientes"}` : undefined}
+      meta={data ? `${data.length} ${data.length === 1 ? "cliente" : "clientes"}` : "Clientes del negocio"}
       state={stateMessage(state, retry)}
     >
       <section aria-label="Listado de clientes">
