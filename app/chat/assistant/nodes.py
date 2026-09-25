@@ -38,6 +38,10 @@ _TOOL_EVIDENCE_LIMIT = 4_000
 _KB_EVIDENCE_LIMIT = 4_000
 _PLANNER_FAILURE_EXCERPT_LIMIT = 1_000
 MAX_ASSISTANT_TOOL_STEPS = 2
+DELEGATION_SPAN_MAX_STEPS = 2
+DELEGATION_WRITE_REFUSED = "delegation_write_refused"
+DELEGATION_TOOL_REFUSED = "delegation_tool_refused"
+DELEGATION_MEMORY_SCOPE_REFUSED = "delegation_memory_scope_refused"
 PANEL_GROUNDING_REFUSAL = (
     "No encontré evidencia suficiente en la base de conocimiento para responder con seguridad. "
     "Reformula la consulta o aporta más contexto."
@@ -479,6 +483,92 @@ def _planner_tool_catalog(whitelist: list[str]) -> str:
         ],
         separators=(",", ":"),
     )
+
+
+def _delegation_plan(state: AssistantState, scope) -> PlannerOutput:
+    """Plan one delegated read against only the resolved sub-agent catalog."""
+    from app.chat.assistant.delegation import DelegationScope
+
+    if not isinstance(scope, DelegationScope):
+        raise TypeError("delegation requires a resolved DelegationScope")
+    prompt = (
+        f"{scope.persona}\n\nReturn one JSON tool plan or a respond plan. "
+        f"Available tools: {_planner_tool_catalog(list(scope.tools_whitelist))}\n"
+        f"Request: {state['content']}\nContext: {_context_text(state)}\n"
+        f"Prior delegated results: {_render_tool_evidence(state)}"
+    )
+    completion = _assistant_client().chat.completions.create(
+        model=getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL),
+        messages=[{"role": "system", "content": "Return evidence-gathering tool plans only."},
+                  {"role": "user", "content": prompt}],
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+    raw = json.loads(_completion_text(completion))
+    planner, valid, _ = parse_planner_output(raw)
+    return planner if valid else bounded_fallback("delegation planner output invalid")
+
+
+def delegation_span(state: AssistantState, scope) -> AssistantState:
+    """Run a bounded read-only evidence span; it never creates a user-facing answer."""
+    results = list(state.get("tool_results") or [])
+    evidence = list(state.get("evidence") or [])
+    decisions: list[str] = []
+    steps = 0
+    while steps < DELEGATION_SPAN_MAX_STEPS:
+        planner = _delegation_plan({**state, "tool_results": results}, scope)
+        if isinstance(planner, dict):
+            planner, _, _ = parse_planner_output(planner)
+        if planner.kind != "tool" or not planner.tool:
+            break
+        steps += 1
+        tool_name = planner.tool
+        try:
+            definition = get_tool(tool_name)
+        except ToolValidationError:
+            decisions.append(DELEGATION_TOOL_REFUSED)
+            continue
+        if not definition.read_only:
+            decisions.append(DELEGATION_WRITE_REFUSED)
+            continue
+        if tool_name not in scope.tools_whitelist:
+            decisions.append(DELEGATION_TOOL_REFUSED)
+            continue
+        arguments = planner.arguments
+        if tool_name in {"memory.read", "memory.search"} and scope.memoria_scope == "customer" and arguments.get("scope") != "customer":
+            decisions.append(DELEGATION_MEMORY_SCOPE_REFUSED)
+            continue
+        try:
+            result = execute_tool(
+                state.get("session"), tool_name, arguments,
+                whitelist=set(scope.tools_whitelist),
+                cost_allowed=True,
+                trusted_thread_id=state.get("thread_id"),
+                proyecto=_project_slug(state),
+            )
+        except (ToolExecutionError, ToolValidationError) as exc:
+            result = {"tool": tool_name, "status": "error", "error": str(exc), "result": {"unavailable": True}}
+        provenance = {"sub_agent": scope.key, "step": steps, "tool": tool_name}
+        results.append({**result, "provenance": provenance})
+        evidence.append(
+            make_evidence(
+                tool=tool_name,
+                status=result.get("status", "completed"),
+                detail="Delegated tool result",
+            )
+            | {"provenance": provenance}
+        )
+    return {
+        "tool_results": results,
+        "evidence": evidence,
+        "delegation": {
+            "sub_agent": scope.key,
+            "steps": steps,
+            "cap": DELEGATION_SPAN_MAX_STEPS,
+            "cap_reached": steps >= DELEGATION_SPAN_MAX_STEPS,
+            "decisions": decisions,
+        },
+    }
 
 
 def plan_llm(state: AssistantState) -> AssistantState:
