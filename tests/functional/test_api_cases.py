@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from app.db import SessionLocal  # noqa: E402
+from app.chat.state import ConversationState as ChatConversationState  # noqa: E402
 from app.models import (  # noqa: E402
     AuditLog,
     Case,
@@ -34,6 +35,7 @@ from app.models import (  # noqa: E402
     User,
     UserRole,
 )
+from app.services.cases import create_handoff_case  # noqa: E402
 
 
 def _seed_case(
@@ -226,6 +228,43 @@ def test_closed_case_is_excluded_from_dashboard_urgent_cases(client, make_user):
 
     assert dashboard.status_code == 200
     assert all(case["id"] != case_id for case in dashboard.json()["urgent_cases"])
+
+
+def test_reescalating_closed_case_restores_it_to_open_list(client, make_user):
+    case_id = _seed_case(status="escalado")
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    closed = client.post(f"/panel/api/cases/{case_id}/update", json={"status": "cerrado"})
+    assert closed.status_code == 200
+
+    with SessionLocal() as session:
+        case = session.get(Case, case_id)
+        state = ChatConversationState.from_db(session, case.conversation_id)
+        reescalated = create_handoff_case(
+            session, state, summary_text="The issue returned", reason="repeat_issue"
+        )
+        session.commit()
+        assert reescalated.id == case_id
+        assert reescalated.status == "escalado"
+        assert reescalated.closed_at is None
+
+    cases = client.get("/panel/api/cases").json()["cases"]
+    assert any(case["id"] == case_id for case in cases)
+
+
+def test_open_status_remains_listed_when_close_timestamp_is_set(client, make_user):
+    case_id = _seed_case(status="escalado")
+    with SessionLocal() as session:
+        case = session.get(Case, case_id)
+        case.closed_at = datetime.now(timezone.utc)
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    cases = client.get("/panel/api/cases").json()["cases"]
+
+    assert any(case["id"] == case_id for case in cases)
 
 
 def test_cases_list_orders_by_escalated_at_within_same_status(client, make_user):
