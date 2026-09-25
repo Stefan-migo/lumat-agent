@@ -69,8 +69,8 @@ export function AgendaCalendar({
           const count = visitCounts[day] ?? 0;
           const selected = selectedDay === day;
           const current = today === day;
-           return <td key={day} className="agenda-calendar__cell">
-             <button type="button" className="agenda-calendar__day" aria-label={`${agendaPeriodLabel(day, timezone)}, ${visitLabel(count)}`} aria-pressed={selected} aria-selected={selected} aria-current={current ? "date" : undefined} onClick={() => onSelectDay(selected ? null : day)}>
+          return <td key={day} className="agenda-calendar__cell">
+             <button type="button" className="agenda-calendar__day" aria-label={`${agendaPeriodLabel(day, timezone)}, ${visitLabel(count)}`} aria-pressed={selected} aria-current={current ? "date" : undefined} onClick={() => onSelectDay(selected ? null : day)}>
               <span className="agenda-calendar__number">{agendaDayNumber(day)}</span>
               <span className="agenda-calendar__count">{visitLabel(count)}</span>
               {current || selected ? <span className={current ? "agenda-calendar__today" : "agenda-calendar__selected"}>{current && selected ? "Hoy · Seleccionado" : current ? "Hoy" : "Seleccionado"}</span> : null}

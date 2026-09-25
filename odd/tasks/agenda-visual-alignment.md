@@ -35,7 +35,8 @@ per-appointment page (U5), the visit dialog redesign (U4), and any backend work.
   Aligning those pages is a separate future unit and is out of scope here.
 - **D2 — Keep day density and state accessible without relying on color.** Every day
   has only its number, textual visit count, and one combined status marker at most.
-  Today retains `aria-current="date"`; selection retains `aria-selected`.
+  Today retains `aria-current="date"`; selection is a toggle button exposed with
+  `aria-pressed` (not `aria-selected`, which is not supported on `role=button`).
 - **D3 — Reuse existing design tokens.** No new token is needed; use a non-white
   existing surface token for day cells and match the register's elevated surface.
 - **D4 — Capitalize the month label in `agendaMonthLabel`, not with CSS.** This avoids
@@ -49,7 +50,7 @@ per-appointment page (U5), the visit dialog redesign (U4), and any backend work.
 - CSS contract tests read the stylesheet with `readFileSync`; precedent:
   `web/src/components/pages/Dashboard.test.tsx:99-105`.
 - Every day cell has equal height in month and week views regardless of content.
-- Visit counts remain text; `aria-current` and `aria-selected` remain present.
+- Visit counts remain text; `aria-current` and `aria-pressed` remain present.
 - Day background cannot be pure white. Prefer an existing token.
 - Do not change specs, `openspec/`, backend files, or files outside this scope.
 - Operator-facing UI copy is Spanish; code, identifiers, comments, tests, docs, and
@@ -84,20 +85,33 @@ One reviewable ODD unit, split into atomic commits by behavior; no push or PR.
 
 ## Progress / Evidence
 
-- [x] T1 tests authored; focused RED could not be run: `vitest: command not found`
-  because this worktree has no `web/node_modules`.
-- [x] T2 implementation completed. GREEN is **not verified** for the same missing
-  dependency reason; no result is claimed.
-- [ ] T3 visual proof unavailable: Storybook dependencies and Chromium harness cannot
-  run without installed web dependencies; no geometry is fabricated.
-- [ ] T4 full suite and build attempted but blocked: `vitest: command not found` and
-  `tsc: command not found`.
+- [x] Initial focused run observed RED: `5 failed | 40 passed (45)` across three files.
+  The failures exposed stale lowercase month accessible-name expectations and the
+  grouped CSS-rule test extractor returning an empty match.
+- [x] Corrections: updated expected table names to `Calendario de Septiembre de 2026`,
+  fixed the grouped rule matcher, removed invalid `aria-selected` from the button,
+  restored the selected-style selector to `aria-pressed`, removed redundant
+  `text-transform: none`, restored day-cell spacing, and corrected JSX indentation.
+- [x] Focused GREEN observed: 3 files passed, 45 tests passed.
+- [x] Visual proof captured in Chromium via Storybook on port 6012, composing `AgendaPage`
+  inside `PanelShell`. Header: `Nueva visita` rect x=1303.47, y=119.34, w=112.53,
+  h=34.31; `.page-header` rect x=264, y=109, w=1152, h=55; button is contained by
+  the header. Month view representative cells (days 1, 2, 25 with two visits + today,
+  30) all measured 94px; week view days 21, 22, 25 (two visits + today), 27 all 94px.
+  Screenshot: `/tmp/opencode/agenda-u2.png`.
+- [x] Full `npm test` passed: 87 test files and 750 tests. Earlier parallel full-suite
+  attempts hit 5-second timeouts; the final uncontentended run passed without changing
+  any existing timeout or broadening scope.
+- [x] `npm run build` passed (`tsc -b` and Vite production build); Vite emitted only its
+  existing >500 kB chunk-size advisory.
+- [x] Temporary Storybook visual-proof story was deleted after the Chromium capture.
 
-`git diff --check` passed. No package installation was attempted; fetching dependencies
-would transfer remote files, which was not authorized.
+Correction-pass RED/GREEN evidence: initial focused run failed 5 tests (40 passed),
+then focused rerun passed all 45 tests. Full suite initially hit timing flakes; final
+standard full run passed all 750 tests. Chromium measurement confirms the action is in
+the header and representative month/week cells are all exactly 94px tall.
 
 ## Next step
 
-Install dependencies under explicit authorization, then run focused tests to observe
-RED and GREEN, the full suite, build, and shell-aware Chromium measurements. Review the
+Unit correction verified and ready for its single correction commit. Review the
 header-action precedent for list pages as a separate future unit.

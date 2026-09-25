@@ -112,14 +112,14 @@ describe('AgendaPage', () => {
   it('keeps calendar day and register surfaces aligned by CSS contract', () => {
     const stylesheet = readFileSync(join(__dirname, '../primitives/primitives.css'), 'utf8');
     const day = stylesheet.match(/\.agenda-calendar__day\s*\{([^}]*)\}/)?.[1] ?? '';
-    const cell = stylesheet.match(/\.agenda-calendar__cell\s*\{([^}]*)\}/)?.[1] ?? '';
+    const cell = stylesheet.match(/\.agenda-calendar__cell\s*,\s*\.agenda-calendar__empty\s*\{([^}]*)\}/)?.[1] ?? '';
     const today = stylesheet.match(/\.agenda-calendar__day\[aria-current="date"\]\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(day).toMatch(/background:\s*var\(--(?!corp-surface\b)[\w-]+\)/);
     expect(day).toMatch(/height:\s*[^;]+/);
     expect(cell).toMatch(/height:\s*[^;]+/);
     expect(stylesheet).toMatch(/\.agenda-calendar\s*\{[^}]*background:\s*var\(--brand-bg-elevated\)/s);
     expect(today).toMatch(/outline|box-shadow|border/);
-    expect(stylesheet).toMatch(/\.agenda-calendar__toolbar h2\s*\{[^}]*text-transform:\s*none/s);
+    expect(stylesheet).toMatch(/\.agenda-calendar__day\[aria-pressed="true"\]\s*\{[^}]*border-color:[^}]*box-shadow:\s*inset[^}]*var\(--brand-lime\)/s);
   });
 
   it('shows a labelled empty state and keeps the table wrapper mobile-safe', () => {
@@ -224,14 +224,14 @@ describe('AgendaPage', () => {
     await user.click(screen.getByRole('button', { name: /^domingo 6 de septiembre,/ }));
 
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
-    expect(screen.getByRole('table', { name: 'Calendario de septiembre de 2026' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Calendario de Septiembre de 2026' })).toBeInTheDocument();
   });
 
   it('shows the explicit empty state when today has no current or upcoming visits', () => {
     render(<AgendaPage data={[appointment({ local_start: '2026-09-04T10:00:00-04:00' })]} state="ready" timezone="America/Santiago" />);
 
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
-    expect(screen.getByRole('table', { name: 'Calendario de septiembre de 2026' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Calendario de Septiembre de 2026' })).toBeInTheDocument();
   });
 
   it('uses a single period section after navigating outside the current day', async () => {
@@ -253,7 +253,7 @@ describe('AgendaPage', () => {
     render(<AgendaPage timezone="America/Santiago" />);
 
     expect(await screen.findByText('No hay visitas')).toBeInTheDocument();
-    expect(screen.getByRole('table', { name: 'Calendario de septiembre de 2026' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Calendario de Septiembre de 2026' })).toBeInTheDocument();
   });
 
   it('creates an appointment from the agenda and refreshes the visible period', async () => {
