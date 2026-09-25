@@ -425,6 +425,26 @@ def test_ack_ignored_without_emergency_case():
     assert len([a for a in _audit_rows() if a.action == "case.acknowledged"]) == 0
 
 
+def test_ack_does_not_select_manual_emergency_case():
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, "+56912345678")
+        conv = get_or_create_conversation(session, customer, "+56912345678")
+        session.add(
+            Case(
+                conversation_id=None,
+                customer_id=customer.id,
+                status="escalado",
+                emergency=True,
+                acknowledged_at=None,
+            )
+        )
+        session.commit()
+
+        assert notify.acknowledge_emergency_if_ack(session, conv.id, "ok") is False
+
+    assert len([a for a in _audit_rows() if a.action == "case.acknowledged"]) == 0
+
+
 def test_ack_hooked_in_ingest_process_message(mock_meta_send):
     """The ack check lives in the webhook ingest flow (process_message)."""
     case_id, _, conv_id = _seed_case()
@@ -504,6 +524,33 @@ def test_reminder_skips_fresh_acked_and_capped_cases(monkeypatch):
         assert notify.send_pending_emergency_reminders(session) == 0
         session.commit()
     assert sent_emails == []
+
+
+def test_reminder_tolerates_manual_case_without_conversation(monkeypatch):
+    sent_emails: list = []
+    monkeypatch.setattr("app.services.notify.smtplib.SMTP", _capturing_smtp(sent_emails))
+    old = datetime.now(timezone.utc) - timedelta(minutes=20)
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, "+56912345678")
+        # create_manual_case never sets notified_at; this defensive row shape
+        # only pins that the sweep tolerates a null conversation reference.
+        session.add(
+            Case(
+                conversation_id=None,
+                customer_id=customer.id,
+                status="escalado",
+                emergency=True,
+                notified_at=old,
+                reminder_count=0,
+            )
+        )
+        session.commit()
+
+        assert notify.send_pending_emergency_reminders(session) == 1
+
+    assert len(sent_emails) == 1
+    body = message_from_string(sent_emails[0][2]).get_payload(decode=True).decode()
+    assert "Ubicación: sin ubicación" in body
 
 
 def test_sweep_received_triggers_reminders(monkeypatch):

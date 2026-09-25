@@ -297,6 +297,36 @@ def test_conversations_list_searches_paginates_and_selects_ranked_case(client, m
     assert row["case_status"] == "escalado"
 
 
+def test_conversations_queue_does_not_assign_manual_case(client, make_user):
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56977770001", name="Manual Case Client")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(
+            customer_id=customer.id, wa_phone=customer.phone_e164
+        )
+        manual_case = Case(
+            conversation_id=None,
+            customer_id=customer.id,
+            status="pendiente",
+            emergency=True,
+        )
+        session.add_all([conversation, manual_case])
+        session.commit()
+        manual_case_id = manual_case.id
+
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.get("/panel/api/conversations")
+
+    assert response.status_code == 200
+    rows = response.json()["items"]
+    assert rows
+    assert all(row["case_id"] != manual_case_id for row in rows)
+    assert all(row["case"]["id"] != manual_case_id for row in rows if row["case"])
+
+
 def test_conversation_detail_uses_same_selected_case_and_captured_data(client, make_user):
     with SessionLocal() as session:
         customer = Customer(phone_e164="+56966660000", name="Detail Client")

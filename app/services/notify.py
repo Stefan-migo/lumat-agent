@@ -377,7 +377,11 @@ def send_pending_emergency_reminders(session: Session) -> int:
     sent = 0
     for case in cases:
         customer = session.get(Customer, case.customer_id)
-        conversation = session.get(Conversation, case.conversation_id)
+        conversation = (
+            session.get(Conversation, case.conversation_id)
+            if case.conversation_id is not None
+            else None
+        )
         location = _customer_location(conversation) if conversation is not None else None
         subject = f"Recordatorio: emergencia sin confirmar - caso #{case.id}"
         body = (
