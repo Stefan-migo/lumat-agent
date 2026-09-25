@@ -3,7 +3,7 @@
 **Branch**: `odd/panel-section-headers`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-panel-section-headers`
 **Base**: `96ba8ca2` (= `main` at branch time)
-**Status**: in progress
+**Status**: implemented — pending native review and owner visual acceptance
 
 ## Objective
 
@@ -150,7 +150,28 @@ Typography is **already** compliant and needs no change — verified, not assume
 
 ## Verification evidence
 
-(pending)
+Orchestrator-run at `4ac76faa`:
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Web suite (of record) | `cd web && npx vitest run` | **87 files / 745 tests passed** (94.9s) |
+| Build / typecheck | `cd web && npm run build` | **built in 6.74s** (`tsc -b` + vite, existing >500 kB chunk warning only) |
+| Leftover opt-in classes | `grep -rn "dashboard-meta\|dashboard-header" web/src` | no matches |
+| Badge in a subtitle | `grep -rnE "meta=\{[^}]*<Badge" web/src/components/pages/*.tsx` | no matches |
+| Every `PageFrame` has a subtitle | AST-lite scan of `<PageFrame>` opening tags | 20 page components, **every tag carries `meta`** |
+| Raw `<h1>` outside `PageHeader` | `grep -rn "<h1" web/src/components/pages/*.tsx` | no matches |
+| Components without `PageFrame` | scan of `web/src/components/pages/*.tsx` | only `AssistantTabs.tsx` (tab nav) and `LoginAuth.tsx` (login screen) — neither is a panel section |
+
+TDD evidence: the CSS contract test was observed RED on `.page-header` missing `position: relative`
+before the rail moved to the base. The per-page loading-subtitle tests were observed RED
+(5 failed / 83 passed across the six covered files) before the fallbacks landed; the
+`AutomationRulesPage` assertion was tightened after its first version matched the page title
+instead of the subtitle.
+
+Known suite-load flakes (NOT caused by this unit, verified by isolation runs): `AgendaPage >
+creates an appointment from the agenda and refreshes the visible period` and `AppShell (T6.4) >
+renders live data pages for every navigation view` can exceed the 5s per-test timeout under
+full-suite load. Both pass in isolation, and the orchestrator's full-suite run above was green.
 
 ## Open items
 
