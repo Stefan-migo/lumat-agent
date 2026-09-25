@@ -299,8 +299,8 @@ class Message(Base):
     wamid: Mapped[str | None] = mapped_column(String(255))
     author_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     request_id: Mapped[str | None] = mapped_column(String(255))
-    conversation_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("conversations.id"), nullable=False
+    conversation_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("conversations.id"), nullable=True
     )
     direction: Mapped[MessageDirection] = mapped_column(
         pg_enum(MessageDirection, "message_direction"),

@@ -1,0 +1,1 @@
+ALTER TABLE cases ALTER COLUMN conversation_id DROP NOT NULL;

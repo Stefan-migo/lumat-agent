@@ -407,6 +407,15 @@ def test_internal_chat_thread_title_is_nullable(migrated_db, admin_conn):
     assert column == ("character varying", 255, "YES")
 
 
+def test_cases_conversation_id_is_nullable(migrated_db, admin_conn):
+    """Cases created outside conversations do not require a conversation."""
+    column = admin_conn.execute(
+        "SELECT is_nullable FROM information_schema.columns "
+        "WHERE table_name = 'cases' AND column_name = 'conversation_id'"
+    ).fetchone()
+    assert column == ("YES",)
+
+
 # --- tables ----------------------------------------------------------------
 
 def test_all_tables_exist(migrated_db, admin_conn):
