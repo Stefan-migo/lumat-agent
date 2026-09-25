@@ -93,11 +93,25 @@ One reviewable ODD unit, split into atomic commits by behavior; no push or PR.
   restored the selected-style selector to `aria-pressed`, removed redundant
   `text-transform: none`, restored day-cell spacing, and corrected JSX indentation.
 - [x] Focused GREEN observed: 3 files passed, 45 tests passed.
-- [x] Visual proof captured in Chromium via Storybook on port 6012, composing `AgendaPage`
-  inside `PanelShell`. Header: `Nueva visita` rect x=1303.47, y=119.34, w=112.53,
-  h=34.31; `.page-header` rect x=264, y=109, w=1152, h=55; button is contained by
-  the header. Month view representative cells (days 1, 2, 25 with two visits + today,
-  30) all measured 94px; week view days 21, 22, 25 (two visits + today), 27 all 94px.
+- [x] First visual review found the count was visibly ellipsized despite equal-height
+  cells. The fix removed truncation from `.agenda-calendar__count`, allowed its text to
+  wrap, reduced day-cell horizontal padding, and widened the table minimum to 320px.
+  Fixed cell height remains unchanged.
+- [x] Calendar and register surfaces now share 1px solid `var(--corp-border)`,
+  `var(--radius-lg)`, `var(--brand-bg-elevated)`, 16px padding, and no shadow. The
+  nested Agenda `.data-region` is transparent with no border/shadow to prevent a second
+  card inside the aligned register section.
+- [x] Second visual proof captured in Chromium via Storybook on port 6012, composing
+  `AgendaPage` inside `PanelShell`. Verbatim day-count text from Chromium:
+  `0 visitas`, `0 visitas`, `2 visitas`. Month view days 1, 2, 25 (two visits + today),
+  30 all measured 94px; week view days 21, 22, 25 (two visits + today), 27 all 94px.
+  Header: action rect x=1303.47, y=119.34, w=112.53, h=34.31; header rect x=264,
+  y=109, w=1152, h=55; the action is contained by the header.
+- [x] Browser-computed surfaces match: calendar rect x=264, y=216, w=481.69,
+  h=697.63; register rect x=765.69, y=216, w=650.31, h=341.81. Both computed
+  `border: 1px solid rgb(216, 221, 227)`, `border-radius: 12px`, identical elevated
+  background `color(srgb 0.921285 0.932861 0.905079 / 0.976471)`, `padding: 16px`,
+  and `box-shadow: none`.
   Screenshot: `/tmp/opencode/agenda-u2.png`.
 - [x] Full `npm test` passed: 87 test files and 750 tests. Earlier parallel full-suite
   attempts hit 5-second timeouts; the final uncontentended run passed without changing
@@ -111,7 +125,15 @@ then focused rerun passed all 45 tests. Full suite initially hit timing flakes; 
 standard full run passed all 750 tests. Chromium measurement confirms the action is in
 the header and representative month/week cells are all exactly 94px tall.
 
+Second correction-pass TDD: the new visual contract assertions first failed (`1 failed,
+22 passed`) because `.agenda-calendar__count` had no untruncated wrapping rule. After
+the CSS fix, focused tests passed (`3 files passed`, `45 tests passed`). The final
+standard `npm test` run passed all 87 files / 750 tests; earlier attempts hit existing
+5-second suite-contention timeouts. `npm run build` passed, with only Vite's large-chunk
+advisory.
+
 ## Next step
 
-Unit correction verified and ready for its single correction commit. Review the
-header-action precedent for list pages as a separate future unit.
+Second visual correction is measured and captured. Run full suite and build, refresh
+Engram, and create one correction commit. Review the header-action precedent for list
+pages as a separate future unit.
