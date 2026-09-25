@@ -102,6 +102,26 @@ describe('AgendaPage', () => {
     expect(document.querySelectorAll('.data-region')).toHaveLength(1);
   });
 
+  it('places the primary create action in the page header', () => {
+    render(<AgendaPage data={[]} state="empty" />);
+    expect(screen.getByRole('banner').querySelector('.page-header__actions')).toContainElement(
+      screen.getByRole('button', { name: 'Nueva visita' }),
+    );
+  });
+
+  it('keeps calendar day and register surfaces aligned by CSS contract', () => {
+    const stylesheet = readFileSync(join(__dirname, '../primitives/primitives.css'), 'utf8');
+    const day = stylesheet.match(/\.agenda-calendar__day\s*\{([^}]*)\}/)?.[1] ?? '';
+    const cell = stylesheet.match(/\.agenda-calendar__cell\s*\{([^}]*)\}/)?.[1] ?? '';
+    const today = stylesheet.match(/\.agenda-calendar__day\[aria-current="date"\]\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(day).toMatch(/background:\s*var\(--(?!corp-surface\b)[\w-]+\)/);
+    expect(day).toMatch(/height:\s*[^;]+/);
+    expect(cell).toMatch(/height:\s*[^;]+/);
+    expect(stylesheet).toMatch(/\.agenda-calendar\s*\{[^}]*background:\s*var\(--brand-bg-elevated\)/s);
+    expect(today).toMatch(/outline|box-shadow|border/);
+    expect(stylesheet).toMatch(/\.agenda-calendar__toolbar h2\s*\{[^}]*text-transform:\s*none/s);
+  });
+
   it('shows a labelled empty state and keeps the table wrapper mobile-safe', () => {
     const { container } = render(<AgendaPage data={[]} state="empty" />);
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
