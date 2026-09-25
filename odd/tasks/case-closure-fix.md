@@ -254,6 +254,8 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 - `aa9adb7b docs(openspec): define urgent cases by open status`
 - `586ad244 docs(odd): record case closure corrective evidence`
 - `0a66a60c docs(openspec): archive case closure status delta`
+- `6088ab89 docs(odd): record case closure delivery`
+- `dbf48883 docs(odd): reconcile archived change status`
 
 ## Delivery
 
