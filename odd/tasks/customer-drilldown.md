@@ -3,7 +3,7 @@
 **Branch**: `odd/customer-drilldown`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-customer-drilldown`
 **Base**: `2a85b675` (= `main` at branch time, merge of PR #370 `odd/agenda-visit-dialog`)
-**Status**: planning complete, implementation starting.
+**Status**: slice 1 delivered as **PR #371** (`odd/customer-drilldown` → `main`), CI green. Slice 2 not started.
 **Origin**: follow-up **#1** of `odd/tasks/panel-subagent-delegation.md` — the sibling unit for per-customer
 drill-down reads. Owner scope decision taken 2026-09-26 (see *Decision*).
 
@@ -136,6 +136,7 @@ order, and the next slice rebases onto the new `main` before its own PR.
 
 ## Next step
 
-Slice 1 is implemented, verified and committed on this branch (`e248c036` plus this record). Under
-`stacked-to-main` its PR opens and merges first; slice 2 — the delegated chain end to end, `AT-15` and the
-integration harness — then rebases onto the new `main` and opens its own PR.
+Slice 1 is implemented, verified and committed on this branch (`e248c036` plus this record) and delivered
+as **PR #371** (`odd/customer-drilldown` → `main`), CI green. Under `stacked-to-main` it merges first;
+slice 2 — the delegated chain end to end, `AT-15` and the integration harness — then rebases onto the new
+`main` and opens its own PR.
