@@ -148,34 +148,36 @@ The 2026-09-25 report assigned U6 = register filter (D3) + quick-action CRUD +
 
 ### WU1 — Contract amendment
 
-- [ ] RED observed: the new scenarios fail against `scheduling.close` / `reschedule`, which do
-      not exist (the contract is the record; the RED here is the absent capability, asserted by
-      WU2/WU4 tests).
-- [ ] `openspec/specs/agenda-calendar-ui/spec.md`: add **AG-UI-7 — Visit Outcome Registration**
+- [x] RED evidence is recorded under WU2/WU3; contract scenarios themselves do not execute.
+- [x] `openspec/specs/agenda-calendar-ui/spec.md`: add **AG-UI-7 — Visit Outcome Registration**
       with scenarios for `completed`, `no_show`, and the terminal rule.
-- [ ] Add to **AG-UI-3** the two reschedule scenarios (happy path re-runs validation; a
+- [x] Add to **AG-UI-3** the two reschedule scenarios (happy path re-runs validation; a
       non-`booked` row refuses) that its prose already authorizes.
 - **Verify**: the spec file reads coherently; no code and no test asserts an unimplemented
   requirement beyond WU2/WU4.
+- **Commit**: `79ed4cc2` — `docs(agenda): specify visit outcomes and rescheduling`.
 
 ### WU2 — Backend: close a booked visit
 
-- [ ] RED observed: the new service/route tests fail (no `scheduling.close`, 404 on the route).
-- [ ] `scheduling.close(session, appointment, *, outcome, actor)` — guard `BOOKED`, set
+- [x] RED observed in `tests/integration/test_scheduling.py`: `AttributeError: module 'app.services.scheduling' has no attribute 'close'` (3 failures, 3 passed).
+- [x] `scheduling.close(session, appointment, *, outcome, actor)` — guard `BOOKED`, set
       `AppointmentStatus.COMPLETED | NO_SHOW`, `flush`, `_history(action=...)`,
-      `record_audit(action="appointment.closed", after={"outcome": ...})`. No `publish_event`.
-- [ ] `POST /appointments/{id}/close` with `{"outcome": "completed" | "no_show"}`; 404 unknown id,
+      `record_audit(action=f"appointment.{outcome.value}", after={"outcome": ..., "reason": ...})`. No `publish_event`.
+- [x] `POST /appointments/{id}/close` with `{"outcome": "completed" | "no_show"}`; 404 unknown id,
       409 `invalid_lifecycle` on a non-`booked` row, 422 on an unknown outcome.
 - **Verify**: `uv run pytest tests/functional/test_api_scheduling.py tests/integration/test_scheduling.py -o addopts='' -q`.
+- **Commit**: `b999a666` — `feat(agenda): record booked visit outcomes`. Focused result: **20 passed in 3.77s**; full backend result: **1499 passed, 2 warnings in 270.81s**. Route tests were run after implementation; no separate route RED was observed.
 
 ### WU3 — Front: close actions in the register and the detail page
 
-- [ ] RED observed: the new Vitest assertions fail (no action, no api client).
-- [ ] `api.ts` — `closeAppointment(id, outcome)`.
-- [ ] `AgendaPage.tsx` — `Completar` and `No asistió` for `booked` rows only, with confirmation
+- [x] RED observed from `npx vitest run src/components/pages/AgendaPage.test.tsx src/components/pages/AppointmentDetail.test.tsx`: **4 failed | 36 passed**; exact initial failure `Unable to find an accessible element with the role "button" and name "Cerrar visita"`.
+- [x] `api.ts` — `closeAppointment(id, outcome)`.
+- [x] `AgendaPage.tsx` — `Completar` and `No asistió` for `booked` rows only, with confirmation
       and success/failure feedback reusing `ActionFeedback`.
-- [ ] `AppointmentDetail.tsx` — the same two actions plus `Reprogramar` (wired in WU5).
+- [x] `AppointmentDetail.tsx` — the same two outcome actions; rescheduling remains excluded for WU5.
+- [x] Storybook close-confirmation and terminal states with non-vacuous fact assertions.
 - **Verify**: focused Vitest + `cd web && npm test` + `cd web && npm run build`.
+- **Commits**: `06362764` — `feat(agenda): close booked visits from agenda and detail`; `fd7a1739` — `test(agenda): cover visit outcome story states`. Focused result: **57 passed (4 files)**; full web result: **799 passed (91 files)**; `npm run build` succeeded (`tsc -b && vite build`).
 
 ### WU4 — Backend: reschedule a booked visit
 
@@ -249,9 +251,9 @@ each independently mergeable.
 ## Progress
 
 - [x] WU0 — worktree, environment, baselines, and this record
-- [ ] WU1 — Contract amendment
-- [ ] WU2 — Backend: close a booked visit
-- [ ] WU3 — Front: close actions
+- [x] WU1 — Contract amendment
+- [x] WU2 — Backend: close a booked visit
+- [x] WU3 — Front: close actions
 - [ ] WU4 — Backend: reschedule
 - [ ] WU5 — Front: reschedule dialog
 - [ ] WU6 — Full verification and closure
