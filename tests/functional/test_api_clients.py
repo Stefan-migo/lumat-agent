@@ -255,7 +255,7 @@ def test_client_ficha_closed_case_is_not_open(client, make_user):
     assert case_payload["closed_at"] is not None
 
 
-def test_client_ficha_returns_chronological_visit_lifecycle_history(client, make_user):
+def test_client_ficha_omits_visit_history_but_keeps_appointments(client, make_user):
     customer_id = _seed_customer(messages=0)
     technician = make_user("history-tech", "history-pass", role="operador")
     with SessionLocal() as session:
@@ -284,8 +284,7 @@ def test_client_ficha_returns_chronological_visit_lifecycle_history(client, make
     assert response.status_code == 200
     history = response.json()["history"]
     assert len(history["appointments"]) == 1
-    assert [event["action"] for event in history["visit_history"]] == ["booked", "cancelled"]
-    assert history["visit_history"][1]["appointment_id"] == history["appointments"][0]["id"]
+    assert "visit_history" not in history
 
 
 def test_client_ficha_includes_notes(client, make_user):
