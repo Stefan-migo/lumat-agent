@@ -1,9 +1,9 @@
 # ODD Task: clients-crud
 
-Status: in progress
+Status: in progress — WU1, WU2 and WU3 delivered and merged; WU4 pending
 Worktree: `../lumat-agent-odd-clients-crud`
-Branch: `odd/clients-crud-wu3`
-Base: `1fdddcee` (main after WU2; this worktree started at `50bce481`, current `origin/main`)
+Branch: `odd/clients-crud-wu4` (WU3 shipped on `odd/clients-crud-wu3`, merged and deleted)
+Base: `93e38aef` (main after PR #386; WU1 shipped off `7fb8cd10`, WU2 off `2a5c53dd`, WU3 off `50bce481`)
 Depends on: nothing — U3 is independent of U1/U2
 Source: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md`
 Delivery strategy: `ask-on-risk`
@@ -298,6 +298,17 @@ before the first source commit (owner decision pending).
       just-merged `odd/agenda-register-actions-chain` (#383), so the merged-tree
       run was required, not optional. The bringing-level merge commit is covered
       by no review receipt and none is claimed.
+
+- [x] **PR #386 merged** as **`93e38aef`** (2026-09-26). The branch
+      `odd/clients-crud-wu3` was deleted (remote + local) and the worktree
+      reparked on `odd/clients-crud-wu4` off the merged `main`. Two
+      bring-level merges were required before the merge landed: `origin/main`
+      moved to `f5a6d68d` and then to `9eb48d8b` while this slice was in flight,
+      so the first green check was discarded as stale (it ran over a tree that
+      was not going to land) and a fresh CI run was produced over the real
+      `9eb48d8b`-merged tree. Both jobs (`test`, `panel`) and GitGuardian passed
+      on `173ad2f2`, the exact head that was merged. The bring-level merge
+      commits are covered by no review receipt and none is claimed.
 
 ### WU4 — frontend: ficha profile, consent and archive
 
