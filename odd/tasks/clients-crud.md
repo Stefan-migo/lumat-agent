@@ -321,9 +321,13 @@ before the first source commit (owner decision pending).
   tests passed**, exit 0; `cd web && npx tsc -b --noEmit` → exit 0;
   `cd web && npm run build` → exit 0 (Vite production build; existing >500 kB
   chunk advisory).
-- [ ] **Review measurement** — `gentle-ai review assess` over
-  `base-ref..HEAD --committed-only` before declaring the unit closed; a docs-only
-  commit can cross the budget on its own (handoff trap 10).
+- [x] **Review measurement** — `gentle-ai review assess --cwd . --agent opencode
+  --base-ref 93e38aef --committed-only --json` reports `risk: medium` (reason
+  `executable_change` on `web/src/api.test.ts`), `changed_paths: 7`,
+  `changed_lines: 304`, `review_due: false`, `review_due_reason: under_budget`.
+  Native RAR owns verification applicability, so **no review transaction was
+  started and no receipt exists** for this slice either — the same outcome as
+  WU2 and WU3. No PASS is authored here.
 
 ## Acceptance criteria
 
