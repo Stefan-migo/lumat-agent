@@ -312,13 +312,15 @@ before the first source commit (owner decision pending).
 
 ### WU4 — frontend: ficha profile, consent and archive
 
-- [ ] **T8 (fe)** — RED first in `ClientFicha`: the "Identidad" card gets a
+- [x] **T8 (fe)** — RED first in `ClientFicha`: the "Identidad" card gets a
   profile edit form in a `Dialog` (phone shown read-only); a consent control posts
   to `/clients/{id}/consent` and refetches; an "Archivar" / "Restaurar" control
   confirms with the D7 warning (open cases + future appointments) and refetches
   the ficha. Stories updated for the new states.
-- [ ] **WU4 verification of record** — `cd web && npm run test` +
-  `npx tsc -b --noEmit` + `npm run build`.
+- [x] **WU4 verification of record** — `cd web && npm run test` → **91 files / 820
+  tests passed**, exit 0; `cd web && npx tsc -b --noEmit` → exit 0;
+  `cd web && npm run build` → exit 0 (Vite production build; existing >500 kB
+  chunk advisory).
 - [ ] **Review measurement** — `gentle-ai review assess` over
   `base-ref..HEAD --committed-only` before declaring the unit closed; a docs-only
   commit can cross the budget on its own (handoff trap 10).
@@ -468,6 +470,38 @@ before the first source commit (owner decision pending).
       `role="alert"` line rendered when no dialog is open. WU3 re-verification
       after the fix: `cd web && npm run test` → **91 files / 807 tests passed**,
       exit 0; `npx tsc -b --noEmit` → exit 0; `npm run build` → exit 0.
+- [x] **WU4 Graph Check record** — completed by the orchestrator before this
+      implementation; no graph refresh was run. Nodes/communities consulted:
+      `ClientFicha.test.tsx`, `ficha` (story fixture), `ConsentBody`
+      (`app/panel/api/routes/clients.py:69`), `client_profile_update()` (`:161`),
+      `to_customer_dict()` (`app/panel/api/serializers.py:45`), `record_audit()`
+      (`app/services/audit.py:18`), `clients.py`, and community `types.ts`.
+- [x] **WU4 implemented** on `odd/clients-crud-wu4`. The consent helper and
+      contract test are in `8542b92b` (9 changed lines, 2 files); ficha controls,
+      tests, and stories are in `14c70165` (191 changed lines, 4 files); safe
+      Spanish error labels are in `07e17858` (5 changed lines, 1 file): **205
+      authored changed lines** total. Profile edits submit changed fields only,
+      reject blank changed values locally, and keep phone read-only; consent and
+      archive/restore refetch; D7 counts use loaded open cases and future booked
+      appointments. The archived state and restore action are visible on the ficha.
+- [x] **WU4 strict-TDD evidence** — before production edits,
+      `npm run test -- src/components/pages/ClientFicha.test.tsx` observed **5
+      failed / 22 passed**. REDs: `edits profile fields in a dialog without
+      allowing phone changes` — no accessible `Editar identidad` button;
+      `shows a local message rather than silently dropping a blank changed field`
+      — no accessible `Editar identidad` button; `updates consent and surfaces
+      failures beside its control` — no accessible `Cambiar consentimiento`
+      button; `warns with loaded open-case and future-appointment counts before
+      archiving` — no accessible `Archivar` button; `shows archived state and
+      offers restore with visible failure feedback` — `Cliente archivado` text
+      absent. After implementation, focused API/ficha/story tests passed (**3
+      files / 55 tests**), then full frontend verification passed (**91 files /
+      820 tests**). No RED evidence is claimed for the API helper test, which was
+      added after the initial component RED run.
+- [x] **WU4 Ponytail pass** — reused the existing `Dialog`, `Input`, `Button`,
+      `Badge`, and `LocalFeedback` primitives/conventions; added no dependencies,
+      component abstractions, or bespoke controls. No authorized behavior was
+      removed; no further same-behavior simplification was identified.
 
 ## Recovery
 
