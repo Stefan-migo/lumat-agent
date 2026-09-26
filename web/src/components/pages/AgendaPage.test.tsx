@@ -407,6 +407,32 @@ describe('AgendaPage', () => {
     await waitFor(() => expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({ customer_id: 10, case_id: 21, service: 'Instalación' })));
   });
 
+  it('does not create a manual case twice while the first request is pending', async () => {
+    const user = userEvent.setup();
+    let resolveCreateCase!: (value: { ok: true; case: never }) => void;
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
+    vi.mocked(fetchCases).mockResolvedValue({ cases: [] as never, users: [] });
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [] as never });
+    vi.mocked(createCase).mockReturnValue(new Promise((resolve) => { resolveCreateCase = resolve; }) as never);
+
+    render(<AgendaPage data={[]} state="empty" />);
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
+    const caseInput = screen.getByRole('combobox', { name: 'Caso' });
+    await user.type(caseInput, 'Instalación');
+    const createOption = screen.getByRole('option', { name: 'Crear «Instalación»' });
+    await user.click(createOption);
+    await waitFor(() => expect(createCase).toHaveBeenCalledTimes(1));
+    await user.click(caseInput);
+    const repeatedCreateOption = screen.queryByRole('option', { name: 'Crear «Instalación»' });
+    if (repeatedCreateOption) await user.click(repeatedCreateOption);
+    expect(createCase).toHaveBeenCalledTimes(1);
+
+    resolveCreateCase({ ok: true, case: { id: 21, service: 'Instalación', customer_id: 10 } as never });
+    await waitFor(() => expect(caseInput).toHaveValue('Instalación (#21)'));
+  });
+
   it('requires a customer before creating a manual case', async () => {
     const user = userEvent.setup();
     vi.mocked(fetchClients).mockResolvedValue({ clients: [] as never });

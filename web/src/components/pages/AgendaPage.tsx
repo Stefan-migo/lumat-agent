@@ -162,6 +162,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     }
   };
   const createManualCase = async (query: string) => {
+    if (createBusy) return;
     const customerId = Number(createForm.customer_id);
     if (!customerId) {
       setCreateFeedback({ tone: "danger", title: "Selecciona un cliente antes de crear un caso" });
@@ -241,7 +242,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     <Dialog open={createOpen} onClose={() => { if (!createBusy) setCreateOpen(false); }} title="Crear visita">
       <div className="agenda-create-form">
         <Select label="Cliente" value={createForm.customer_id} onChange={(event) => { field("customer_id", event.target.value); field("case_id", ""); }} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} />
-        <Combobox label="Caso" value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={(query) => void createManualCase(query)} options={cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} />
+        <Combobox label="Caso" value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={createBusy ? undefined : (query) => void createManualCase(query)} options={cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} />
         <Select label="Técnico" value={createForm.technician_id} onChange={(event) => field("technician_id", event.target.value)} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
         <Input label="Servicio" value={createForm.service} onChange={(event) => field("service", event.target.value)} />
         <Input label="Fecha local" type="date" value={createForm.local_date} onChange={(event) => field("local_date", event.target.value)} />
