@@ -325,3 +325,27 @@ The panel assistant MUST accept a validated `delegate` plan for the declared `cu
 - GIVEN the existing assistant whitelist and a non-delegating plan
 - WHEN delegation capability is wired
 - THEN the serialized assistant planner catalog remains byte-identical to its pre-delegation value and the normal plan follows its existing state and cost path
+
+### Requirement: AT-15 — Bounded Per-Customer Operational Drill-Down
+
+The assistant MUST provide a read-only per-customer operational drill-down containing that customer's cases, including closed cases, and appointments, including past appointments. Each list MUST respect its requested limit, and the serialized evidence MUST fit the existing evidence budget; the projection MUST exclude customer contact/consent fields, message content and `media_url`, and all `customer_notes` data. An out-of-scope read or execution failure MUST be represented as an explicit error state, never as silence or an empty successful result.
+
+#### Scenario: Closed cases and past appointments are included
+- GIVEN a customer with open and closed cases and future and past appointments
+- WHEN the operational drill-down is read for that customer
+- THEN both cases and both appointments are returned, including the closed case and past appointment
+
+#### Scenario: Per-list limits and evidence budget are enforced
+- GIVEN more cases or appointments than the requested per-list limit, with a combined result that could exceed the evidence budget
+- WHEN the operational drill-down is serialized as tool evidence
+- THEN neither list exceeds its requested limit and the evidence does not exceed the existing budget
+
+#### Scenario: Private customer and message data is excluded
+- GIVEN a customer with contact fields, consent data, messages with text and media URLs, and internal customer notes
+- WHEN the operational drill-down is returned
+- THEN it contains no phone, email, address, comuna, consent, message content, `media_url`, or `customer_notes` data
+
+#### Scenario: Out-of-scope reads and failures are explicit
+- GIVEN a request for a customer outside the resolved read scope or a failure while reading operational history
+- WHEN the drill-down is attempted
+- THEN the result reports an explicit error state rather than silence or an empty successful result
