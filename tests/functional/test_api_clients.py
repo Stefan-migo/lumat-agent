@@ -104,6 +104,8 @@ def test_clients_endpoints_require_login_401_json(client):
         ("get", "/panel/api/clients/1"),
         ("post", "/panel/api/clients/1/state"),
         ("post", "/panel/api/clients/1/notes"),
+        ("post", "/panel/api/clients/1/archive"),
+        ("post", "/panel/api/clients/1/unarchive"),
         ("post", "/panel/api/clients"),
         ("patch", "/panel/api/clients/1"),
         ("post", "/panel/api/clients/1/consent"),
