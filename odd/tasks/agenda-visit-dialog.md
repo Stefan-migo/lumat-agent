@@ -87,13 +87,37 @@ exist and need no change unless verification proves otherwise.
 - **Review boundary**: `review assess --base-ref 673d9fba --committed-only` → `medium`,
   `review_due: false`, `under_budget` (202 lines). Stays pending in the slice.
 
-### WU2 — Inline manual case creation (D4)
+### WU2 — Inline manual case creation (D4) — done (`bd2d4a5c`, `321d423b`)
 
-- [ ] `types.ts` + `api.ts` — a typed `createCase()` over `POST /cases`.
-- [ ] `Combobox.tsx` — an optional create affordance; existing callers unchanged.
-- [ ] `AgendaPage.tsx` — "Caso" becomes the Combobox with inline creation; the created case
-      is auto-selected and its service fills the field when the field is empty.
-- **Verify**: `cd web && npm test -- src/components/pages/AgendaPage.test.tsx src/components/primitives/Combobox.test.tsx`; `cd web && npm run build`
+- [x] RED: three cases — the Combobox create affordance (`Combobox.test.tsx`), the inline
+      creation flow, and the no-customer guard. The pre-existing appointment test also went
+      RED because a Combobox is not a native select.
+- [x] `types.ts` + `api.ts` — `ManualCaseRequest` and `createCase()` over `POST /panel/api/cases`.
+- [x] `Combobox.tsx` — optional `onCreate?: (query: string) => void`; renders
+      `Crear «query»` reusing the existing `combobox__option` row, activatable by click or
+      Enter. With the prop absent the component behaves exactly as before.
+- [x] `AgendaPage.tsx` — "Caso" is a Combobox; the creation path is customer-gated, selects the
+      returned case, fills `Servicio` only when that field is empty, and reports failures with
+      `role="alert"`.
+- **Verify**: `cd web && npm test -- src/components/pages/AgendaPage.test.tsx src/components/primitives/Combobox.test.tsx` — **37 passed**;
+  `cd web && npm test` — **755 passed** (87 files); `cd web && npm run build` — **built**.
+- **Review boundary**: `review assess --base-ref 673d9fba --committed-only` → `medium`,
+  `review_due: false`, `under_budget` (327 lines). Still pending in the slice.
+
+#### Decisions taken in WU2
+
+- **No summary input.** `ManualCaseRequest.summary` stays optional in the client and this flow
+  omits it: the dialog has no summary field and adding one is UI scope beyond D4.
+- **The customer is associated locally.** `to_case_dict` does not embed a customer, and the web
+  `Case.customer` is required (`types.ts:310`), so the created case gets the selected client
+  attached from the already-loaded `clients` list. Safe because the id comes from that same list.
+- **Switching the customer clears the case.** Otherwise a case belonging to another customer
+  could be submitted and rejected by `book()` as `unlinked_appointment`.
+- **One flaky failure in four full-suite runs** on the heaviest create-flow test — the caret sat
+  on the `it(...)` line, the signature of a timeout, and the test takes 1672 ms in isolation
+  against Vitest's 5 s default. Diagnosed as probable, not proven. Hardened with
+  `userEvent.setup({ delay: null })` plus an explicit 15 s timeout; the three later full runs
+  were green.
 
 ### WU3 — AG-UI-6 non-active register filter
 
@@ -123,8 +147,11 @@ exist and need no change unless verification proves otherwise.
 | WU1 | `cd web && npm test -- src/components/pages/AgendaPage.test.tsx` | 24 passed |
 | WU1 | `cd web && npm run build` | ✓ built in 5.77s |
 | WU1 | `git diff --check` | clean |
+| WU2 | `cd web && npm test -- src/components/pages/AgendaPage.test.tsx src/components/primitives/Combobox.test.tsx` | 37 passed |
+| WU2 | `cd web && npm test` | 755 passed (87 files) |
+| WU2 | `cd web && npm run build` | ✓ built in 17.43s |
 
-The full frontend suite, the backend suite, and the web build re-run are WU4.
+The backend suite and the closing full re-run are WU4.
 
 ## Graph nodes consulted
 
@@ -145,6 +172,6 @@ The full frontend suite, the backend suite, and the web build re-run are WU4.
 ## Progress
 
 - [x] WU1 done — `933686c9`
-- [ ] WU2 not started
+- [x] WU2 done — `bd2d4a5c`, `321d423b`
 - [ ] WU3 not started
 - [ ] WU4 not started
