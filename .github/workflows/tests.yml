@@ -46,3 +46,35 @@ jobs:
           python-version: "3.14"
       - run: uv sync --frozen
       - run: uv run pytest tests/
+
+  # The panel gate. `uv run pytest` only covers the Python side, so a TypeScript
+  # error can land with every check green — including one produced by the merge
+  # itself, which git merges textually clean and GitHub reports as "CLEAN". This
+  # job is the only thing that type-checks the frontend.
+  #
+  # Order matters: `build` (tsc -b) is the cheap type check and fails fast, so it
+  # runs before the slower behavioural suite. `npm ci` is deliberate — unlike a
+  # bare install it fails when package.json and the lockfile disagree, instead of
+  # silently rewriting the lockfile.
+  #
+  # Known flake: `npm test` carries one timeout-prone test (the AgendaPage
+  # manual-case flow). If it starts flaking here, split this job or harden that
+  # test — never delete the suite.
+  panel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      # web/package.json pins engines.node 22.22.2; match it so the gate runs the
+      # interpreter the project declares rather than whatever `latest` resolves to.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.2"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
