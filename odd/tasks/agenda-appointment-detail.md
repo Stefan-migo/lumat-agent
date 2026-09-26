@@ -175,12 +175,22 @@ require.
   test; the rerun was green. Same signature the U4 record diagnosed as a timeout; not proven, and not
   caused by this unit's changes.
 
-### WU3 — Reachability from the agenda and the ficha
+### WU3 — Reachability from the agenda and the ficha — done (`42c45d94`)
 
-- RED: the agenda offers a per-appointment action that navigates to
-  `/panel/app/agenda/:id` (keyboard operable, no new destructive control); each visit card
-  in `ClientFicha` links to the same route.
-- **Verify**: focused web tests.
+- [x] RED observed: `TestingLibraryElementError: Unable to find an accessible element with the role
+      "link" and name "Mantención"` (the ficha assertion failed the same way) → 2 failed, 46 passed.
+- [x] `AgendaPage.tsx` — the register's `Servicio` cell is now an anchor to
+      `pathForRoute({ view: 'agenda', appointmentId: row.id })`, following the idiom already used by
+      `ClientesList`/`KbList`/`CasesList`.
+- [x] `ClientFicha.tsx` — the visit card's service, date and status badge are wrapped in one anchor to
+      the same route; the calendar-retry `Button` stays **outside** the anchor, so no interactive
+      control is nested. The `<ol aria-label="Ciclo de vida de visitas">` block and `visitHistory` were
+      left untouched (owned by the parallel unit).
+- [x] No new CSS: `table__link` is reused on both surfaces.
+- **Verify**: focused `AgendaPage.test.tsx` + `ClientFicha.test.tsx` — **48 passed** (2 files);
+  `cd web && npm test` — **768 passed** (88 files); `cd web && npm run build` — built.
+- **Review boundary**: `review assess --base-ref d48385d8 --committed-only` → `medium`,
+  `review_due: false`, `under_budget` (5 paths / 100 lines). Stays pending in the slice.
 
 ### WU4 — Story coverage and full verification
 
@@ -252,7 +262,8 @@ accepted as ordinary repository policy; no `size:exception` label was requested.
 - [x] WU1 — Backend detail payload (`f4e708e6`) — focused 11 passed, full backend 1483 passed
 - [x] WU2 — Per-appointment route and detail page (`6cdf81f0`, `d48385d8`) — focused 36 passed,
       full web 766 passed, build green; native review `approved`, receipt below
-- [ ] WU3 — Reachability from the agenda and the ficha
+- [x] WU3 — Reachability from the agenda and the ficha (`42c45d94`) — focused 48 passed,
+      full web 768 passed, build green
 - [ ] WU4 — Story coverage and full verification
 - [ ] Owner decision: push and open the PR
 
@@ -267,3 +278,6 @@ accepted as ordinary repository policy; no `size:exception` label was requested.
 | WU2 | focused (panelRoutes + AppShell + AppointmentDetail) | 36 passed (3 files) |
 | WU2 | `cd web && npm test` | 766 passed (88 files) |
 | WU2 | `cd web && npm run build` | built |
+| WU3 | focused (AgendaPage + ClientFicha) | 48 passed (2 files) |
+| WU3 | `cd web && npm test` | 768 passed (88 files) |
+| WU3 | `cd web && npm run build` | built |
