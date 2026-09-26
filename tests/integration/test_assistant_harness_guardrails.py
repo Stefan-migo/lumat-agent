@@ -780,6 +780,148 @@ def test_delegated_customer_gathering_answers_with_cross_domain_evidence(migrate
     assert f'"customer_id": {customer_id}' in responder_prompt
 
 
+def test_delegated_customer_operational_history_uses_real_bounded_projection(migrated_db, monkeypatch):
+    from app.chat.assistant.graph import run_assistant
+    from app.models import (
+        Appointment,
+        AppointmentStatus,
+        Case,
+        Conversation,
+        Customer,
+        CustomerNote,
+        InternalChatThread,
+        Message,
+        MessageDirection,
+        User,
+        UserRole,
+    )
+
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        user = User(username="drilldown-harness-admin", password_hash="test", role=UserRole.ADMIN)
+        session.add(user)
+        session.flush()
+        customer = Customer(
+            phone_e164="+56900009992", name="Drilldown Example", email="private@example.test",
+            address="Private address", comuna="Private comuna", consent_status=True,
+        )
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add(conversation)
+        session.flush()
+        closed_case = Case(
+            conversation_id=conversation.id, customer_id=customer.id, service="closed service",
+            priority="high", status="closed", summary="Closed case summary",
+            created_at=now - timedelta(days=20), closed_at=now - timedelta(days=10),
+        )
+        open_case = Case(
+            conversation_id=conversation.id, customer_id=customer.id, service="open service",
+            priority="normal", status="open", summary="Open case summary",
+        )
+        session.add_all([closed_case, open_case])
+        session.flush()
+        past_start = now - timedelta(days=5)
+        future_start = now + timedelta(days=5)
+        past_appointment = Appointment(
+            service="closed service", customer_id=customer.id, case_id=closed_case.id,
+            technician_id=user.id, local_start=past_start.replace(tzinfo=None), timezone="UTC",
+            starts_at=past_start, ends_at=past_start + timedelta(hours=1), duration_minutes=60,
+            status=AppointmentStatus.COMPLETED,
+        )
+        future_appointment = Appointment(
+            service="open service", customer_id=customer.id, case_id=open_case.id,
+            technician_id=user.id, local_start=future_start.replace(tzinfo=None), timezone="UTC",
+            starts_at=future_start, ends_at=future_start + timedelta(hours=1), duration_minutes=60,
+            status=AppointmentStatus.BOOKED,
+        )
+        thread = InternalChatThread(user_id=user.id, title="Customer drill-down")
+        session.add_all([
+            past_appointment,
+            future_appointment,
+            thread,
+            Message(
+                conversation_id=conversation.id, direction=MessageDirection.INBOUND,
+                text="PRIVATE_MESSAGE_SENTINEL", media_url="https://private.example.test/media",
+            ),
+            CustomerNote(customer_id=customer.id, note="PRIVATE_NOTE_SENTINEL", author="admin"),
+        ])
+        session.flush()
+        thread_id, user_id, customer_id = thread.id, user.id, customer.id
+        closed_case_id, open_case_id = closed_case.id, open_case.id
+        past_appointment_id, future_appointment_id = past_appointment.id, future_appointment.id
+        session.commit()
+
+        plans = iter([
+            json.dumps({
+                "kind": "delegate", "sub_agent": "customer_records",
+                "summary": "Find this customer's operational history.",
+            }),
+            json.dumps({
+                "kind": "tool", "tool": "customers.search", "arguments": {"query": "Drilldown Example"},
+                "summary": "Resolve the customer.", "requires_approval": False,
+            }),
+            json.dumps({
+                "kind": "tool", "tool": "customers.operational_history",
+                "arguments": {"customer_id": customer_id, "limit": 10},
+                "summary": "Read all cases and appointments.", "requires_approval": False,
+            }),
+        ])
+        provider_calls = []
+
+        class Provider:
+            class chat:
+                class completions:
+                    @staticmethod
+                    def create(**kwargs):
+                        provider_calls.append(kwargs)
+                        if kwargs.get("stream"):
+                            return [SimpleNamespace(choices=[SimpleNamespace(
+                                delta=SimpleNamespace(content="Operational history gathered.")
+                            )])]
+                        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+                            content=next(plans)
+                        ))])
+
+        monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: Provider())
+        result = run_assistant(
+            thread_id=thread_id,
+            user_id=user_id,
+            content="Show this customer's cases and appointments.",
+            run_id="delegated-customer-operational-history",
+            session=session,
+            context={"items": [], "meta": {}},
+            on_token=lambda _token: None,
+        )
+
+    assert result["delegation"]["steps"] == 2
+    assert result["delegation"]["cap"] == 2
+    assert [item["tool"] for item in result["tool_results"]] == [
+        "customers.search", "customers.operational_history",
+    ]
+    assert result["tool_results"][0]["result"][0]["id"] == customer_id
+    drilldown = result["tool_results"][1]["result"]
+    cases = drilldown["cases"]
+    appointments = drilldown["appointments"]
+    assert {item["id"] for item in cases} == {closed_case_id, open_case_id}
+    assert {item["id"] for item in appointments} == {past_appointment_id, future_appointment_id}
+    assert next(item for item in cases if item["id"] == closed_case_id)["closed_at"] is not None
+    assert next(item for item in appointments if item["id"] == past_appointment_id)["starts_at"]
+    assert all({"created_at", "priority", "status", "summary"} <= item.keys() for item in cases)
+    assert all({"local_start", "timezone", "starts_at", "ends_at", "status"} <= item.keys()
+               for item in appointments)
+    serialized = json.dumps(result["tool_results"][1], ensure_ascii=False)
+    for forbidden in (
+        "phone_e164", "email", "address", "comuna", "consent_status", "media_url",
+        "PRIVATE_MESSAGE_SENTINEL", "PRIVATE_NOTE_SENTINEL",
+    ):
+        assert forbidden not in serialized
+    assert len(cases) <= 10
+    assert len(appointments) <= 10
+    assert len(serialized) <= 4_000
+    assert sum(not call.get("stream") for call in provider_calls) == 3
+
+
 def test_memory_read_still_rejects_an_entity_the_prompt_no_longer_orders():
     result = guardrails({
         "thread_id": 7,
