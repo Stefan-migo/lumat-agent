@@ -162,21 +162,52 @@ new dependency.
 
 ### Slice S2 — message limit + shared collapsible
 
-- [ ] **T6 (be)** — RED first: `customer_history` messages and the conversation
-  detail take a `limit` (latest N, ascending) and return the total; no limit
-  still supported for the full view.
-- [ ] **T7 (fe)** — RED first: a shared collapsible message list renders the last
-  10 with a "ver todos" expansion that refetches, used by the ficha and
-  `ConversationThread`.
-- [ ] **T8 (fe)** — stories + tests.
-- [ ] **S2 verification of record** — same suites.
+**Resolved before S2:** owner chose `stacked-to-main` (PR 1 = S1, PR 2 = S2) and
+chose to **keep** the ficha Mensajes table, fixing it with a `Conversación`
+column that links to `/panel/app/conversations/:id`, with the collapsible applied
+there too. The table is not dropped.
 
-### Pending decision before S2
+Backend contract (D5):
 
-Open question 3 of the handoff: does the ficha's Mensajes table survive? Today it
-flattens messages from all conversations with no conversation column
-(`ClientFicha.tsx:271-275`). S2 must resolve it (add a conversation column, or
-drop the table in favour of Conversaciones + its thread) **before** T7.
+- `customer_history(session, customer_id, messages_limit=None)` returns
+  `messages` and `messages_total`. A positive `messages_limit` returns the
+  **latest** N in ascending order (query DESC + limit, then reverse); no limit
+  keeps the full ascending list.
+- `GET /clients/{id}` gains an optional `messages_limit` query param.
+- `GET /conversations/{id}` gains the same param and returns `messages_total`.
+- The `limit=50` on the conversation **queue** is unrelated and stays.
+
+- [x] **T6 (be)** — `customer_history(session, customer_id, messages_limit=None)`
+      returns `messages_total` and, for a positive limit, the latest N reversed to
+      ascending; `GET /clients/{id}` and `GET /conversations/{id}` accept
+      `messages_limit` and the thread returns `messages_total`. RED observed (both
+      endpoints returned the full list), then GREEN. Commit `161651a8`.
+- [x] **T7a (fe)** — `web/src/components/shared/CollapsibleMessages.tsx`: a
+      presentational disclosure control (`total`/`previewCount`/`expanded`/`onToggle`)
+      that owns no fetch and no rendering. RED observed (module not resolvable), then
+      GREEN. Commit `061f062c`.
+- [x] **T7b (fe)** — the ficha requests `messages_limit=10` while collapsed, expands
+      through the hook's `retry()` (clearing the `refreshed` override first), and its
+      Mensajes table gains a `Conversación` link column. RED observed (link absent,
+      `messages_limit=10` missing), then GREEN. Commit `1047e0e1`.
+- [x] **T7c + T8 (fe)** — `getConversation(id, messagesLimit?)`; the thread requests
+      the last 10 and expands through `retry()`; `ConversationThread` and its fixtures
+      gain `messages_total`; a `ManyMessages` story shows the disclosure. RED observed
+      (initial call missing `messages_limit=10`), then GREEN. Commit `cdddc9db`.
+- [x] S2 verification of record: `uv run pytest tests/` → **1479 passed**;
+      `cd web && npm run test` → **89 files / 769 tests**; `npx tsc -b --noEmit` →
+      exit 0; `npm run build` → exit 0 (pre-existing >500 kB chunk warning).
+- [x] S2 code size `4a395f3e..HEAD`: **290 changed lines** (255 added, 35 deleted)
+      across `app/ tests/ web/` — under the ~400 review-focus budget.
+- [x] Unit code size `cf5f8171..HEAD`: **768 changed lines** (594 added, 174 deleted).
+      Delivery: `stacked-to-main`, PR 1 = S1 (~482, over budget by owner choice),
+      PR 2 = S2 (~290).
+
+Design note for the wiring: `useAsyncData` refetches only on `attempt`,
+`enabled` or `refreshKey` changes (it reads the fetcher through a ref), so the
+expand/collapse toggle must drive the refresh through the refresh key or an
+explicit `retry()` **after** the state commit — never by calling a memoised
+fetch closure captured in the current render.
 
 ## Acceptance criteria
 
