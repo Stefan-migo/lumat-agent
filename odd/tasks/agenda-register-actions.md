@@ -145,6 +145,7 @@ The 2026-09-25 report assigned U6 = register filter (D3) + quick-action CRUD +
       243.93s.
 - [x] Baseline web: `cd web && npm test` — **792 passed** (91 files), 92.95s.
 - [x] Graph check below.
+- [x] Slice B baseline/worktree: branch `odd/agenda-register-actions-chain`, base `8e5a978a`, backend **1506 passed**, web **799 passed (91 files)**.
 
 ### WU1 — Contract amendment
 
@@ -218,26 +219,104 @@ Also in this pass:
 
 ### WU4 — Backend: reschedule a booked visit
 
-- [ ] RED observed: self-overlap and DST/availability tests fail against the new route.
-- [ ] `_validate_slot(...)` extracted from `book`, with `exclude_appointment_id`; `book`
+- [x] RED observed: service self-overlap test failed with `AttributeError: module 'app.services.scheduling' has no attribute 'reschedule'`; route test failed with `assert 405 == 200` (`405 Method Not Allowed`).
+- [x] `_validate_slot(...)` extracted from `book`, with `exclude_appointment_id`; `book`
       switched to it with identical behaviour (its existing tests are the regression net).
-- [ ] `scheduling.reschedule(session, appointment, *, local_date, local_time, timezone_name,
+- [x] `scheduling.reschedule(session, appointment, *, local_date, local_time, timezone_name,
       duration_minutes, technician_id, actor)` — guard `BOOKED`, validate the new slot, update
       `local_start`/`timezone`/`starts_at`/`ends_at`/`duration_minutes`/`technician_id`, `flush`,
       `_history(action="rescheduled", details={"from": ..., "to": ...})`, `record_audit`.
-- [ ] `PATCH /appointments/{id}` — same error envelope as `book`
+- [x] `PATCH /appointments/{id}` — specific exception mapping before bare `ValueError`
       (`invalid_local_time`, `technician_unavailable`, `appointment_conflict`, `invalid_timezone`)
       plus `invalid_lifecycle`.
-- **Verify**: focused backend tests + the full backend suite.
+- **Verify**: focused backend **23 passed in 3.69s**; full backend **1508 passed, 2 warnings in 223.49s**.
+- **Commit**: `a2973185` — `feat(agenda): reschedule booked appointments`.
+- **RED coverage note**: RED was observed for missing service/route behavior and fixed. Separate RED runs were not captured for every specific error mapping (DST, availability, conflict, lifecycle, unknown ID, and 422); do not treat those cases as independently evidenced RED.
 
 ### WU5 — Front: reschedule dialog
 
-- [ ] RED observed: the dialog and client assertions fail.
-- [ ] `api.ts` — `rescheduleAppointment(id, body)`.
-- [ ] The `Reprogramar` dialog on `AgendaPage.tsx` (date, time, duration, technician) posting the
+- [x] RED observed: AgendaPage failed with `Unable to find an accessible element with the role "button" and name "Reprogramar"`.
+- [x] `api.ts` — `rescheduleAppointment(id, body)` using `patchJson` backed by `apiFetch`.
+- [x] The `Reprogramar` dialog on `AgendaPage.tsx` (date, time, duration, technician) posting the
       complete new slot, wired to `AppointmentDetail.tsx`.
-- [ ] Storybook stories for the new states (AG-UI-4).
-- **Verify**: focused Vitest + full web suite + build.
+- [x] Storybook reschedule-dialog stories and fact-preserving story tests for both surfaces (AG-UI-4).
+- **Verify**: focused Vitest **62 passed (4 files)**; full web **804 passed (91 files)**; `npm run build` succeeded (`tsc -b && vite build`); `git diff --check` clean.
+- **Commits**: `e1e8475a` — `feat(agenda): add reschedule action to register`; `47590059` — `feat(agenda): reschedule visits from detail`; `166f4226` — `test(agenda): cover rescheduling story states`.
+- **RED coverage note**: RED was observed for the missing Agenda action; detail's missing action was not independently run RED before implementation. The first full-web run had a transient unrelated `ConversationsList` empty-state failure; its isolated test and the second full suite passed.
+
+### WU4b — Post-writer normalization and the coverage the writer left out
+
+Slice B started from `main` at `8e5a978a` (Slice A merged as PR #380), on
+`odd/agenda-register-actions-chain`. Baseline re-measured on that base: backend
+**1506 passed**, web **799 passed** (91 files).
+
+The writer returned `success`, but reading the diff found two defects and a coverage hole.
+
+**Defect 1 — the register published its success through the close feedback state.**
+`AgendaPage` called `setCloseFeedback({ id, tone: "success", title: "Visita reprogramada" })`,
+so the message rendered correctly only because the close notice happens to render
+`closeFeedback.title` at page level. `rescheduleFeedback` had no `tone`, so it could never
+render its own success, and any later change to the close feedback would have silently
+broken the reschedule notice. It now owns a toned notice, rendered at page level for success
+and inside the dialog for failure.
+
+**Defect 2 — the dialog submitted without validating, and mislabelled the failure.**
+`Number(rescheduleForm.technician_id)` on an empty select is `0`, so an unset technician
+reached the API as `technician_id: 0`. That is a valid integer, so nothing rejected it until
+the FK constraint fired, and the service's `IntegrityError` translation reported it as
+`appointment_conflict` — "an overlapping booking" for a missing field. Both surfaces now guard
+the slot and answer with `Completa todos los campos de la reprogramación` before any request.
+
+Also normalized:
+
+- `AppointmentDetail` did not use `composeAgendaTime`, so the two surfaces of the same action
+  validated the local time differently: the register rejected DST gaps and folds client-side
+  and sent `HH:MM:SS`, the detail page sent `HH:MM` and learned about a gap only from the
+  backend. Both now go through the shared helper the create flow already uses.
+- `AppointmentDetail`'s test named "offers rescheduling only for booked appointments" asserted
+  only the booked case; it now also asserts the action is absent on a terminal visit.
+- The new `RescheduleDialog` story's `play` function was exercised by **no test** — the story
+  test rendered `ConversationSummary.args` instead. It now runs the real play and asserts the
+  dialog opens on the story's own slot while the appointment facts survive.
+- Two duplicate `within` imports from `@testing-library/react` were merged.
+
+**Coverage hole — nine required behaviours, two tests.** The writer added one service test
+(the self-overlap pin) and one route happy path. Every error branch I named was untested,
+including the whole exception-mapping block, which is the part of the diff most likely to be
+wrong. Added:
+
+- service: a slot taken by another booked appointment, a terminal appointment, both DST
+  rejections (`2026-09-06 00:30` nonexistent, `2026-04-04 23:30` ambiguous), and an
+  unavailable technician window;
+- route: terminal (`409 invalid_lifecycle`), unknown id (`404`), both DST rejections
+  (`400 invalid_local_time`), unknown timezone (`400 invalid_timezone`), `duration_minutes: 0`
+  (`422`), a conflicting slot (`409 appointment_conflict`), and an unavailable window
+  (`409 technician_unavailable`).
+
+**RED evidence, produced honestly.** The writer could not show RED for the cases it did not
+individually run, so the gap was closed at two levels instead of being papered over:
+
+1. *Behaviour absent.* Restoring the pre-slice `scheduling.py` and `routes/appointments.py`
+   over the working copy and re-running the reschedule tests gives
+   `AttributeError: module 'app.services.scheduling' has no attribute 'reschedule'` and a route
+   failure — the tests are not vacuous against the feature's absence.
+2. *Mapping non-vacuous (mutation).* Deleting the reschedule route's four specific handlers so
+   only the bare `except ValueError` remains makes exactly two of the new tests fail —
+   `test_reschedule_maps_slot_errors_to_actionable_codes` and
+   `test_reschedule_reports_conflict_and_unavailable_slots` — with
+   `assert 'invalid_lifecycle' == 'appointment_conflict'`. The happy path and the
+   lifecycle/404 tests still passed, as they should. That is the evidence the writer's two
+   tests could not provide.
+3. The missing-technician defect was observed RED first, through the real UI path:
+   `AssertionError: expected "spy" to not be called at all, but actually been called 1 times`.
+
+**Verify after normalization**: focused backend **31 passed** (both files); full backend
+**1516 passed, 2 warnings in 231.86s** (baseline 1506 + 10); focused web **63 passed**
+(4 files); full web **805 passed** (91 files); `npm run build` succeeded; `git diff --check`
+clean.
+
+**Commits**: `be8a0045` — `fix(agenda): validate the reschedule slot and keep its feedback
+honest`; `eaf3003e` — `test(agenda): cover the reschedule error mapping and the dialog story`.
 
 ### WU6 — Full verification and closure
 
@@ -309,6 +388,7 @@ as the whole-unit estimate that justified chaining.
 - [x] WU2 — Backend: close a booked visit
 - [x] WU3 — Front: close actions
 - [x] WU3b — Post-writer normalization (`cb336531`); Slice A ready for review
-- [ ] WU4 — Backend: reschedule
-- [ ] WU5 — Front: reschedule dialog
+- [x] WU4 — Backend: reschedule (`a2973185`)
+- [x] WU5 — Front: reschedule dialog (`e1e8475a`, `47590059`, `166f4226`)
+- [x] WU4b — Post-writer normalization and the missing coverage (`be8a0045`, `eaf3003e`)
 - [ ] WU6 — Full verification and closure

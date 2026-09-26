@@ -1,14 +1,17 @@
 import { useCallback, useState } from 'react';
-import { closeAppointment, getAppointment } from '../../api';
+import { closeAppointment, fetchUsers, getAppointment, rescheduleAppointment } from '../../api';
 import { useAsyncData, type AsyncDataState } from '../../hooks/useAsyncData';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
 import { Badge } from '../primitives/Badge';
 import { Button } from '../primitives/Button';
 import { Dialog } from '../primitives/Dialog';
+import { Input } from '../primitives/Input';
+import { Select } from '../primitives/Select';
 import { Card } from '../primitives/Card';
 import { PageFrame } from '../shared/PageFrame';
 import { StateMessage } from '../shared/StateMessage';
 import { appointmentStatusLabel, appointmentStatusTone } from '../shared/toneMaps';
+import { composeAgendaTime } from '../shared/agendaTime';
 import { pathForRoute } from '../domain/panelRoutes';
 
 export interface AppointmentDetailProps {
@@ -29,6 +32,9 @@ function stateMessage(state: AsyncDataState) {
 
 export function AppointmentDetail({ appointmentId, data: controlledData, state: controlledState, onRetry }: AppointmentDetailProps) {
   const [closeOpen, setCloseOpen] = useState(false);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [technicians, setTechnicians] = useState<{ id: number; username: string }[]>([]);
+  const [rescheduleForm, setRescheduleForm] = useState({ local_date: '', local_time: '', duration_minutes: '60', technician_id: '' });
   const [mutating, setMutating] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; title: string; detail?: string } | null>(null);
   const fetchDetail = useCallback(() => {
@@ -54,6 +60,25 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
       setMutating(false);
     }
   };
+  const reschedule = async () => {
+    if (!detail || mutating) return;
+    if (!rescheduleForm.technician_id || !rescheduleForm.local_date || !rescheduleForm.local_time || Number(rescheduleForm.duration_minutes) <= 0) {
+      setFeedback({ tone: 'danger', title: 'Completa todos los campos de la reprogramación' });
+      return;
+    }
+    setMutating(true);
+    setFeedback(null);
+    try {
+      await rescheduleAppointment(detail.appointment.id, { ...composeAgendaTime(rescheduleForm.local_date, rescheduleForm.local_time, detail.appointment.timezone), duration_minutes: Number(rescheduleForm.duration_minutes), technician_id: Number(rescheduleForm.technician_id) });
+      setRescheduleOpen(false);
+      setFeedback({ tone: 'success', title: 'Visita reprogramada' });
+      await retry();
+    } catch (error) {
+      setFeedback({ tone: 'danger', title: 'No se pudo reprogramar la visita', detail: error instanceof Error ? error.message : 'Intenta nuevamente.' });
+    } finally {
+      setMutating(false);
+    }
+  };
 
   if (!detail) {
     return <PageFrame title="Detalle de visita" meta="Datos y ciclo de vida de la visita" state={stateMessage(state)}>
@@ -62,7 +87,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
   }
 
   const { appointment, customer, conversation_summary: summary } = detail;
-  return <PageFrame title="Detalle de visita" meta="Datos y ciclo de vida de la visita" actions={<><Button variant="secondary" onClick={() => window.history.back()}>Volver a la agenda</Button>{appointment.status === 'booked' ? <Button variant="secondary" onClick={() => { setFeedback(null); setCloseOpen(true); }}>Cerrar visita</Button> : null}</>} state={stateMessage(state)}>
+  return <PageFrame title="Detalle de visita" meta="Datos y ciclo de vida de la visita" actions={<><Button variant="secondary" onClick={() => window.history.back()}>Volver a la agenda</Button>{appointment.status === 'booked' ? <><Button variant="secondary" onClick={() => { const start = appointment.local_start; setRescheduleForm({ local_date: start.slice(0, 10), local_time: start.slice(11, 16), duration_minutes: String(appointment.duration_minutes ?? 60), technician_id: String(appointment.technician_id ?? '') }); setFeedback(null); setRescheduleOpen(true); void fetchUsers().then((response) => setTechnicians(response.users.filter((user) => user.role === 'tecnico'))); }}>Reprogramar</Button><Button variant="secondary" onClick={() => { setFeedback(null); setCloseOpen(true); }}>Cerrar visita</Button></> : null}</>} state={stateMessage(state)}>
     {feedback?.tone === 'success' ? <StateMessage tone="success" role="status" title={feedback.title} /> : null}
     <div className="detail-region">
       <section className="detail-region__rail" aria-label="Datos de la visita">
@@ -93,6 +118,14 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
       {feedback?.tone === 'danger' ? <StateMessage tone="danger" role="alert" title={feedback.title} detail={feedback.detail} /> : null}
       <Button variant="secondary" disabled={mutating} onClick={() => void close('completed')}>Completar</Button>
       <Button variant="secondary" disabled={mutating} onClick={() => void close('no_show')}>No asistió</Button>
+    </Dialog>
+    <Dialog open={rescheduleOpen} onClose={() => { if (!mutating) setRescheduleOpen(false); }} title="Reprogramar visita">
+      <Input label="Fecha local" type="date" value={rescheduleForm.local_date} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_date: event.target.value }))} />
+      <Input label="Hora local" type="time" value={rescheduleForm.local_time} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_time: event.target.value }))} />
+      <Input label="Duración (minutos)" type="number" min="1" value={rescheduleForm.duration_minutes} onChange={(event) => setRescheduleForm((form) => ({ ...form, duration_minutes: event.target.value }))} />
+      <Select label="Técnico" value={rescheduleForm.technician_id} onChange={(event) => setRescheduleForm((form) => ({ ...form, technician_id: event.target.value }))} options={[{ value: '', label: 'Selecciona un técnico' }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
+      {feedback?.tone === 'danger' ? <StateMessage tone="danger" role="alert" title={feedback.title} detail={feedback.detail} /> : null}
+      <Button variant="secondary" disabled={mutating} onClick={() => void reschedule()}>{mutating ? 'Reprogramando…' : 'Confirmar reprogramación'}</Button>
     </Dialog>
   </PageFrame>;
 }

@@ -12,6 +12,7 @@ from app.models import (
     Case,
     Conversation,
     Customer,
+    TechnicianAvailability,
     User,
 )
 
@@ -334,3 +335,100 @@ def test_close_rejects_non_booked_and_unknown_appointments(client, make_user):
     missing = client.post("/panel/api/appointments/999999999/close", json={"outcome": "completed"})
     assert missing.status_code == 404
     assert missing.json()["detail"] == "appointment not found"
+
+
+def test_operator_can_reschedule_appointment_through_patch(client, make_user):
+    make_user("reschedule-oper", "reschedule-pass", role="operador")
+    with SessionLocal() as session:
+        appointment_id, *_ = _appointment_detail_rows(session)
+        technician_id = session.get(Appointment, appointment_id).technician_id
+    assert client.post("/panel/api/login", json={"username": "reschedule-oper", "password": "reschedule-pass"}).status_code == 200
+
+    response = client.patch(f"/panel/api/appointments/{appointment_id}", json={
+        "local_date": "2035-12-15", "local_time": "10:30", "timezone": "America/Santiago",
+        "duration_minutes": 90, "technician_id": technician_id,
+    })
+
+    assert response.status_code == 200
+    assert response.json()["appointment"]["local_start"].startswith("2035-12-15T10:30:00")
+
+
+def _reschedule_setup(client, make_user):
+    make_user("reschedule-oper", "reschedule-pass", role="operador")
+    with SessionLocal() as session:
+        appointment_id, *_ = _appointment_detail_rows(session)
+        technician_id = session.get(Appointment, appointment_id).technician_id
+    assert client.post("/panel/api/login", json={"username": "reschedule-oper", "password": "reschedule-pass"}).status_code == 200
+    return appointment_id, technician_id
+
+
+def _reschedule_body(technician_id, **overrides):
+    body = {"local_date": "2026-07-16", "local_time": "11:00", "timezone": "America/Santiago", "duration_minutes": 60, "technician_id": technician_id}
+    body.update(overrides)
+    return body
+
+
+def test_reschedule_rejects_terminal_and_unknown_appointments(client, make_user):
+    appointment_id, technician_id = _reschedule_setup(client, make_user)
+    with SessionLocal() as session:
+        session.query(Appointment).filter_by(id=appointment_id).update({"status": AppointmentStatus.CANCELLED})
+        session.commit()
+
+    refused = client.patch(f"/panel/api/appointments/{appointment_id}", json=_reschedule_body(technician_id))
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == {"code": "invalid_lifecycle", "message": "only booked appointments can be rescheduled"}
+
+    missing = client.patch("/panel/api/appointments/999999999", json=_reschedule_body(technician_id))
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "appointment not found"
+
+
+def test_reschedule_maps_slot_errors_to_actionable_codes(client, make_user):
+    appointment_id, technician_id = _reschedule_setup(client, make_user)
+    url = f"/panel/api/appointments/{appointment_id}"
+
+    for moment in ({"local_date": "2026-09-06", "local_time": "00:30"}, {"local_date": "2026-04-04", "local_time": "23:30"}):
+        response = client.patch(url, json=_reschedule_body(technician_id, **moment))
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "invalid_local_time"
+
+    unknown_zone = client.patch(url, json=_reschedule_body(technician_id, timezone="not/a-zone"))
+    assert unknown_zone.status_code == 400
+    assert unknown_zone.json()["detail"]["code"] == "invalid_timezone"
+
+    assert client.patch(url, json=_reschedule_body(technician_id, duration_minutes=0)).status_code == 422
+
+
+def test_reschedule_reports_conflict_and_unavailable_slots(client, make_user):
+    appointment_id, technician_id = _reschedule_setup(client, make_user)
+    url = f"/panel/api/appointments/{appointment_id}"
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56900000009", name="Otra Cliente")
+        session.add(customer)
+        session.flush()
+        case = Case(customer_id=customer.id, service="calefont")
+        session.add(case)
+        session.flush()
+        session.add(Appointment(
+            service="calefont", customer_id=customer.id, case_id=case.id, technician_id=technician_id,
+            local_start=datetime(2026, 7, 16, 10, 30), timezone="America/Santiago",
+            starts_at=datetime(2026, 7, 16, 14, 30, tzinfo=timezone.utc),
+            ends_at=datetime(2026, 7, 16, 15, 30, tzinfo=timezone.utc), duration_minutes=60,
+        ))
+        session.commit()
+
+    conflict = client.patch(url, json=_reschedule_body(technician_id))
+    assert conflict.status_code == 409
+    assert conflict.json()["detail"]["code"] == "appointment_conflict"
+
+    with SessionLocal() as session:
+        session.add(TechnicianAvailability(
+            technician_id=technician_id,
+            starts_at=datetime(2026, 7, 20, 8, tzinfo=timezone.utc),
+            ends_at=datetime(2026, 7, 20, 12, tzinfo=timezone.utc),
+        ))
+        session.commit()
+
+    unavailable = client.patch(url, json=_reschedule_body(technician_id, local_date="2026-07-18", local_time="10:00"))
+    assert unavailable.status_code == 409
+    assert unavailable.json()["detail"]["code"] == "technician_unavailable"

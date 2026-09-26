@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   AppointmentDetailStory,
@@ -8,10 +8,12 @@ import {
   Completed,
   ConversationWithoutSummary,
   ManualCase,
+  RescheduleDialog,
   Error,
 } from "./AppointmentDetail.stories";
+import { fetchUsers } from "../../api";
 
-vi.mock("../../api", () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn() }));
+vi.mock("../../api", () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn(), fetchUsers: vi.fn(), rescheduleAppointment: vi.fn() }));
 
 describe("AppointmentDetail stories", () => {
   it("shows the conversation summary when available", () => {
@@ -47,6 +49,19 @@ describe("AppointmentDetail stories", () => {
     rerender(<AppointmentDetailStory {...(Completed.args ?? {})} />);
     expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cerrar visita" })).not.toBeInTheDocument();
+  });
+
+  it("covers the reschedule story dialog while keeping the appointment facts", async () => {
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 4, username: "Tech", role: "tecnico", active: true }] as never });
+    const { container } = render(<AppointmentDetailStory {...(RescheduleDialog.args ?? {})} />);
+    expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Marcela Fuentes" })).toHaveAttribute("href", "/panel/app/clients/12");
+    await act(async () => {
+      await RescheduleDialog.play?.({ canvasElement: container } as Parameters<NonNullable<typeof RescheduleDialog.play>>[0]);
+    });
+    const dialog = await screen.findByRole("dialog", { name: "Reprogramar visita" });
+    expect(within(dialog).getByLabelText("Fecha local")).toHaveValue("2026-09-28");
+    await waitFor(() => expect(screen.getByText("Mantención de calefón")).toBeInTheDocument());
   });
 
   it("wires the error story retry action", async () => {
