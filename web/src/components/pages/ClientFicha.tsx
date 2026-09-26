@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { addClientNote, ApiError, apiFetch, changeClientState, resolveMemoryRelation } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { Appointment, ClientFichaResponse, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse, VisitHistoryEvent } from "../../types";
+import type { Appointment, ClientFichaResponse, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -93,7 +93,6 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
 
   const { customer, history } = data;
   const appointments = history.appointments ?? [];
-  const visitHistory = history.visit_history ?? [];
   const retryCalendar = async (appointmentId: number) => {
     setRetryingCalendarId(appointmentId);
     try {
@@ -245,13 +244,6 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
                   ))}
                 </ul>
               ) : <EmptyState title="No hay visitas" />}
-              {visitHistory.length ? (
-                <ol aria-label="Ciclo de vida de visitas">
-                  {visitHistory.map((event: VisitHistoryEvent) => (
-                    <li key={event.id}>{formatDateTime(event.created_at)} · {event.action === "cancelled" ? "Cancelada" : "Agendada"} · {event.actor}</li>
-                  ))}
-                </ol>
-              ) : null}
             </section>
 
             <section aria-labelledby="ficha-conversations-heading" className="client-ficha__history-block">

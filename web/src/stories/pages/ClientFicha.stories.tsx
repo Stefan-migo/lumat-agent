@@ -29,10 +29,6 @@ const ficha: ClientFichaResponse = {
     cases: [{ id: 8, conversation_id: 41, service: "Reparación calefón", priority: "alta", status: "abierto", summary: "El equipo no enciende" }],
     messages: [{ id: 91, conversation_id: 41, direction: "inbound", msg_type: "text", text: "Hola, mi calefón no enciende hace dos días", media_url: null, created_at: "2026-07-15T12:00:00Z" }],
     appointments: [appointment],
-    visit_history: [
-      { id: 1, appointment_id: 4, action: "booked", status: "booked", to_status: "booked", actor: "operador", created_at: "2026-07-15T12:05:00Z" },
-      { id: 2, appointment_id: 4, action: "cancelled", status: "cancelled", to_status: "cancelled", actor: "operador", created_at: "2026-07-16T09:30:00Z" },
-    ],
   },
   notes: [{ id: 3, customer_id: customer.id, note: "Confirmar por WhatsApp antes de la visita.", author: "operador", created_at: null }],
   memo: memories.find((memory) => memory.topic_key === "customer_memo")?.contenido ?? "",

@@ -411,7 +411,6 @@ export interface ClientFichaResponse {
       created_at: string | null;
     }>;
     appointments?: Appointment[];
-    visit_history?: VisitHistoryEvent[];
   };
   notes: CustomerNote[];
   /** CR-7: latest customer_memo (empty string when none yet). */
@@ -501,16 +500,4 @@ export interface TechnicianAppointment {
 
 export interface TechnicianAgendaResponse {
   appointments: TechnicianAppointment[];
-}
-
-export interface VisitHistoryEvent {
-  id: number;
-  appointment_id: number;
-  actor: string;
-  action: string;
-  from_status?: string | null;
-  to_status: string;
-  status: string;
-  details?: Record<string, unknown> | null;
-  created_at: string | null;
 }

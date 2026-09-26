@@ -10,10 +10,7 @@ const customer = clients[0];
 const fichaResponse: ClientFichaResponse = {
   customer,
   history: {
-    conversations: [], cases: [], messages: [], appointments: [], visit_history: [
-      { id: 1, appointment_id: 4, action: "booked", status: "booked", to_status: "booked", actor: "oper", created_at: "2026-07-15T12:00:00Z" },
-      { id: 2, appointment_id: 4, action: "cancelled", status: "cancelled", to_status: "cancelled", actor: "oper", created_at: "2026-07-15T13:00:00Z" },
-    ],
+    conversations: [], cases: [], messages: [], appointments: [],
   },
   notes: [],
   memo: "Acta de cierre de Marcela",
@@ -86,7 +83,7 @@ describe("ClientFicha page", () => {
     expect(screen.getByText("Todavía no hay memo para este cliente.")).toBeInTheDocument();
   });
 
-  it("renders chronological visit lifecycle and actionable integration failures", async () => {
+  it("renders appointments and actionable integration failures", async () => {
     const user = userEvent.setup();
     const onRetryCalendar = vi.fn();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
@@ -96,11 +93,8 @@ describe("ClientFicha page", () => {
       history: { ...fichaResponse.history, appointments: [failedCalendarAppointment] },
     }} memories={[]} onRetryCalendar={onRetryCalendar} />);
     expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
-    // The approved appointment label is "Reservada" (DS StatusBadge table); the visit
-    // lifecycle line keeps its own "Agendada"/"Cancelada" wording.
+    // The approved appointment label is "Reservada" (DS StatusBadge table).
     expect(screen.getByText("Reservada")).toBeInTheDocument();
-    expect(screen.getByText(/Agendada/)).toBeInTheDocument();
-    expect(screen.getByText(/Cancelada/)).toBeInTheDocument();
     expect(screen.getByText("Historial de visitas ordenado cronológicamente")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toContainElement(screen.getByRole("heading", { name: "No se pudo sincronizar el calendario" }));
     await user.click(screen.getByRole("button", { name: "Reintentar calendario" }));

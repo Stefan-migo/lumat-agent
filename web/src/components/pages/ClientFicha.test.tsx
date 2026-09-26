@@ -28,7 +28,6 @@ const ficha: ClientFichaResponse = {
    cases: [{ id: 2, conversation_id: 1, service: "Reparación", priority: "alta", status: "open", summary: "Calefón" }],
     messages: [{ id: 3, conversation_id: 1, direction: "inbound", msg_type: "text", text: "Necesito ayuda", media_url: null, created_at: "2026-07-15T12:00:00Z" }],
     appointments: [],
-    visit_history: [],
   },
   notes: [{ id: 4, customer_id: 7, note: "Confirmar por WhatsApp", author: "operador", created_at: null }],
   memo: "Prefiere contacto por la tarde.",
@@ -66,7 +65,7 @@ describe("ClientFicha page grammar", () => {
   });
 
   it("retains operational cards, memory and note content, badges, and history tables", () => {
-    render(<ClientFicha data={ficha} memories={memories} />);
+    const { container } = render(<ClientFicha data={ficha} memories={memories} />);
 
     expect(screen.getByRole("heading", { name: "Memo del cliente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Memorias del cliente" })).toBeInTheDocument();
@@ -79,6 +78,7 @@ describe("ClientFicha page grammar", () => {
     expect(screen.getByRole("heading", { name: "Conversaciones" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Casos" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Mensajes" })).toBeInTheDocument();
+    expect(container.querySelector('ol[aria-label="Ciclo de vida de visitas"]')).toBeNull();
   });
 
   it("posts state changes and notes, then refreshes ficha and memories", async () => {
