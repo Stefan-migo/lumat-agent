@@ -428,6 +428,16 @@ before the first source commit (owner decision pending).
       than a divergent inline fetch, retains controlled props and `useAsyncData`,
       reads ficha counts only after the operator requests archiving, and uses the
       existing `Dialog`, `Input`, `Button`, `Badge`, and `DataTable` primitives.
+- [x] **WU3 readback fix** — the orchestrator's diff readback found that
+      `restore()` set the error state but the error only rendered inside the two
+      `Dialog`s, so a failed unarchive from a row action failed **silently**.
+      Fixed under strict TDD in `dd244577` (`fix(clients): surface restore
+      failures in the list`): RED first
+      (`ClientesList > surfaces a failed restore to the operator instead of
+      failing silently` — `findByRole("alert")` not found), then a visible
+      `role="alert"` line rendered when no dialog is open. WU3 re-verification
+      after the fix: `cd web && npm run test` → **91 files / 807 tests passed**,
+      exit 0; `npx tsc -b --noEmit` → exit 0; `npm run build` → exit 0.
 
 ## Recovery
 
@@ -441,5 +451,6 @@ before the first source commit (owner decision pending).
   before continuing.
 - Session of record:
   `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/`.
-- Handoff of record: `.rapsodia-code/handoffs/2026-09-26-clientes-u3-u4.md`
-  (Engram `#5112`).
+- Handoff of record: Engram **#5135**
+  (`odd/clientes-crm/handoff-u3-wu3-wu4`); `.rapsodia-code/handoffs/2026-09-26-clientes-u3-u4.md`
+  and Engram **#5112** remain valid only for U4 `cases-page`.
