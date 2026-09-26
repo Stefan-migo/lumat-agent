@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { addClientNote, ApiError, apiFetch, changeClientState, resolveMemoryRelation } from "../../api";
+import { addClientNote, ApiError, apiFetch, changeClientState, postJson, resolveMemoryRelation } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { Appointment, ClientFichaResponse, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse, VisitHistoryEvent } from "../../types";
+import type { Appointment, ClientFichaResponse, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -9,6 +9,7 @@ import { Card } from "../primitives/Card";
 import { Select } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
 import { DataTable, type Column } from "../shared/DataTable";
+import { CaseActions } from "../shared/CaseActions";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
@@ -72,6 +73,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [mutation, setMutation] = useState<"state" | "note" | null>(null);
   const [stateFeedback, setStateFeedback] = useState<Feedback | null>(null);
   const [noteFeedback, setNoteFeedback] = useState<Feedback | null>(null);
+  const [caseFeedback, setCaseFeedback] = useState<Feedback | null>(null);
   const fetchFicha = useCallback(async () => {
     if (customerId === undefined) throw new Error("customer id is required");
     const [ficha, memoryResponse, pendingResponse] = await Promise.all([
@@ -92,8 +94,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   }
 
   const { customer, history } = data;
+  const activeCase = history.cases.filter((row) => row.is_open).at(-1) ?? null;
+  const archivedCases = history.cases.filter((row) => row.id !== activeCase?.id);
   const appointments = history.appointments ?? [];
-  const visitHistory = history.visit_history ?? [];
   const retryCalendar = async (appointmentId: number) => {
     setRetryingCalendarId(appointmentId);
     try {
@@ -108,10 +111,20 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     const next = await fetchFicha();
     setRefreshed(next);
   };
-  const safeError = (error: unknown, action: "estado" | "nota") => {
+  const safeError = (error: unknown, action: "estado" | "nota" | "caso") => {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return { title: `No tienes permiso para guardar ${action}` };
     if (error instanceof ApiError && (error.status === 400 || error.status === 422)) return { title: `Revisa el ${action} e inténtalo de nuevo` };
     return { title: `No pudimos guardar ${action}`, detail: "Inténtalo nuevamente." };
+  };
+  const updateCase = async (caseId: number, status: string, responsibleId: number | null) => {
+    setCaseFeedback(null);
+    try { await postJson(`/panel/api/cases/${caseId}/update`, { status, responsible_id: responsibleId }); await refresh(); }
+    catch (error) { setCaseFeedback({ tone: "danger", ...safeError(error, "caso") }); }
+  };
+  const acknowledgeCase = async (caseId: number) => {
+    setCaseFeedback(null);
+    try { await postJson(`/panel/api/cases/${caseId}/ack`); await refresh(); }
+    catch (error) { setCaseFeedback({ tone: "danger", ...safeError(error, "caso") }); }
   };
   const saveState = async () => {
     if (customerId === undefined || !selectedState || mutation) return;
@@ -200,6 +213,21 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
         </section>
 
         <div className="detail-region__main">
+          <Card title="Caso activo">
+            {activeCase ? <>
+              <dl className="detail-region__facts">
+                <div><dt>#</dt><dd>#{activeCase.id}</dd></div>
+                <div><dt>Servicio</dt><dd>{activeCase.service}</dd></div>
+                <div><dt>Prioridad</dt><dd>{activeCase.priority}</dd></div>
+                <div><dt>Estado</dt><dd><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge></dd></div>
+                <div><dt>Responsable</dt><dd>{data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"}</dd></div>
+                <div><dt>Resumen</dt><dd>{activeCase.summary ?? "—"}</dd></div>
+              </dl>
+              {activeCase.emergency ? <Badge tone={activeCase.ack_by === null ? "danger" : "warning"}>{activeCase.ack_by === null ? "Emergencia sin reconocer" : `Emergencia reconocida por ${activeCase.ack_by}`}</Badge> : null}
+              <CaseActions target={activeCase} users={data.users} onUpdate={updateCase} onAcknowledge={acknowledgeCase} />
+              <LocalFeedback feedback={caseFeedback} />
+            </> : <EmptyState title="Sin caso activo" />}
+          </Card>
           <Card title="Memo del cliente">
             <p>{data.memo || "Todavía no hay memo para este cliente."}</p>
           </Card>
@@ -245,13 +273,6 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
                   ))}
                 </ul>
               ) : <EmptyState title="No hay visitas" />}
-              {visitHistory.length ? (
-                <ol aria-label="Ciclo de vida de visitas">
-                  {visitHistory.map((event: VisitHistoryEvent) => (
-                    <li key={event.id}>{formatDateTime(event.created_at)} · {event.action === "cancelled" ? "Cancelada" : "Agendada"} · {event.actor}</li>
-                  ))}
-                </ol>
-              ) : null}
             </section>
 
             <section aria-labelledby="ficha-conversations-heading" className="client-ficha__history-block">
@@ -262,9 +283,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             </section>
 
             <section aria-labelledby="ficha-cases-heading" className="client-ficha__history-block">
-              <h3 id="ficha-cases-heading">Casos</h3>
-              <div className={surfaceClass(history.cases.length)}>
-                <DataTable columns={caseColumns} rows={history.cases} rowKey={(row) => String(row.id)} />
+              <h3 id="ficha-cases-heading">Casos anteriores</h3>
+              <div className={surfaceClass(archivedCases.length)}>
+                <DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} />
               </div>
             </section>
 

@@ -398,10 +398,19 @@ export interface ClientFichaResponse {
     cases: Array<{
       id: number;
       conversation_id: number | null;
+      customer_id: number | null;
+      created_at: string | null;
       service: string;
       priority: string;
       status: string;
+      emergency: boolean;
+      responsible_id: number | null;
       summary: string | null;
+      escalated_at: string | null;
+      closed_at: string | null;
+      acknowledged_at: string | null;
+      ack_by: string | null;
+      is_open: boolean;
     }>;
     messages: Array<{
       id: number;
@@ -413,12 +422,12 @@ export interface ClientFichaResponse {
       created_at: string | null;
     }>;
     appointments?: Appointment[];
-    visit_history?: VisitHistoryEvent[];
   };
   notes: CustomerNote[];
   /** CR-7: latest customer_memo (empty string when none yet). */
   memo: string;
   states: CustomerState[];
+  users: UserRef[];
 }
 
 export interface Appointment {
@@ -503,16 +512,4 @@ export interface TechnicianAppointment {
 
 export interface TechnicianAgendaResponse {
   appointments: TechnicianAppointment[];
-}
-
-export interface VisitHistoryEvent {
-  id: number;
-  appointment_id: number;
-  actor: string;
-  action: string;
-  from_status?: string | null;
-  to_status: string;
-  status: string;
-  details?: Record<string, unknown> | null;
-  created_at: string | null;
 }

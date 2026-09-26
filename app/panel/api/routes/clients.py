@@ -32,6 +32,7 @@ from app.panel.api.serializers import (
     to_memory_dict,
     to_memory_relation_dict,
     to_note_dict,
+    to_user_dict,
 )
 from app.panel.deps import get_db
 from app.services import customers
@@ -130,6 +131,10 @@ def client_ficha(
         ],
         "memo": memo.contenido if memo is not None else "",
         "states": [s.value for s in CustomerState],
+        "users": [
+            to_user_dict(u)
+            for u in session.scalars(select(User).order_by(User.username)).all()
+        ],
     }
 
 

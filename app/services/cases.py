@@ -38,6 +38,10 @@ def case_is_open_expr():
     return or_(Case.status.is_(None), Case.status.not_in(CLOSING_CASE_STATUSES))
 
 
+def case_is_open(case: Case) -> bool:
+    return case.status is None or case.status not in CLOSING_CASE_STATUSES
+
+
 def set_case_status(case: Case, status: str | None) -> None:
     """Set status and synchronize the closure timestamp; NULL status is open."""
     was_closing = case.status in CLOSING_CASE_STATUSES
