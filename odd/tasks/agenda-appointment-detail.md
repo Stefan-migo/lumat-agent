@@ -104,7 +104,10 @@ require.
 - `addopts = "-q"` in `pyproject.toml`: a second `-q` yields `-qq` and suppresses the
   summary line. Use `-o addopts='' -q` to see the count.
 - The detail payload is **additive**: `{"appointment": {...}}` keeps every current key; the
-  new keys are `customer`, `case`, `conversation_summary`.
+  new keys are `customer`, `case`, `conversation_summary`. `appointment` keeps the exact
+  `to_appointment_dict` shape, `history` included. `customer` and `case` are **always
+  present** (`Appointment.customer_id` and `Appointment.case_id` are `NOT NULL`,
+  `app/models.py`); only `case.conversation_id` and `conversation_summary` can be `null`.
 - Never add an appointment DELETE or any hard delete.
 - Operator-facing UI copy stays **Spanish**. Code, comments, docs, and commit messages are
   **English**.
@@ -181,8 +184,9 @@ merges second resolves a small conflict in the visit-cards region.
 
 Forecast **~500 authored lines** (additions + deletions) across backend, web, and stories —
 over the ~400-line review budget, so the native review will run on this slice.
-`delivery_strategy: ask-on-risk`; the chain strategy is the owner's call before the first
-commit.
+`delivery_strategy: single-pr` (**owner decision, this session**): one PR against `main`,
+matching U3/U4 exactly; no chained slices and no chain strategy. The ~500-line size is
+accepted as ordinary repository policy; no `size:exception` label was requested.
 
 ## Acceptance criteria
 
