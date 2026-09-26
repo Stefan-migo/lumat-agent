@@ -3,7 +3,7 @@
 **Branch**: `odd/customers-search-pii`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-customers-search-pii`
 **Base**: `2a5c53dd` (= `main` = `origin/main` at branch time, PR #378)
-**Status**: complete — delivered as **PR #382** (`odd/customers-search-pii` → `main`); merge is the owner's decision.
+**Status**: merged — PR #382 (`50bce481`, 2026-09-26). Worktree and test DB torn down.
 
 ## Objective
 
