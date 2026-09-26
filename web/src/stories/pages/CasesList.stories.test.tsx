@@ -43,7 +43,7 @@ describe("CasesList page story (T4.2, R-PRD-PG-6)", () => {
     expect(actionRow).not.toHaveAttribute("style");
 
     // Service + Summary
-    expect(within(row).getByText(first.service)).toBeInTheDocument();
+    expect(within(row).getByText(first.service ?? "—")).toBeInTheDocument();
     expect(within(row).getByText(first.summary!)).toBeInTheDocument();
 
     // Status badge: approved Spanish label wired per caseStatusTone
@@ -170,7 +170,7 @@ describe("CasesList API behavior", () => {
 
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
     expect(screen.getByText(`#${casesData.cases[0].id}`)).toBeInTheDocument();
-    expect(screen.getByText(casesData.cases[0].service)).toBeInTheDocument();
+    expect(screen.getByText(casesData.cases[0].service ?? "—")).toBeInTheDocument();
   });
 
   it("POSTs an update and refetches the cases list", async () => {

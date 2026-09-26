@@ -1,12 +1,14 @@
 import { useCallback, useState } from "react";
-import { ApiError, cancelAppointment, createAppointment, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from "../../api";
+import { ApiError, cancelAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AgendaAppointment, Case, Customer, AdminUser } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
+import { Combobox } from "../primitives/Combobox";
 import { Dialog } from "../primitives/Dialog";
 import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
+import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
@@ -62,6 +64,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const [view, setView] = useState<AgendaCalendarView>("month");
   const [anchor, setAnchor] = useState(() => agendaTodayKey(timezone));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [registerView, setRegisterView] = useState("active");
   const periodDays = view === "month" ? agendaMonthDays(anchor, timezone) : agendaWeekDays(anchor, timezone);
   const from = periodDays[0];
   const to = periodDays[periodDays.length - 1];
@@ -126,7 +129,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     const customerId = Number(createForm.customer_id);
     const caseId = Number(createForm.case_id);
     const technicianId = Number(createForm.technician_id);
-    if (!customerId || !caseId || !technicianId || !createForm.service.trim() || !createForm.local_date || !createForm.local_time || Number(createForm.duration_minutes) <= 0) {
+    if (!customerId || !caseId || !technicianId || !createForm.service?.trim() || !createForm.local_date || !createForm.local_time || Number(createForm.duration_minutes) <= 0) {
       setCreateFeedback({ tone: "danger", title: "Completa todos los campos de la visita" });
       return;
     }
@@ -158,16 +161,39 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       setCreateBusy(false);
     }
   };
+  const createManualCase = async (query: string) => {
+    if (createBusy) return;
+    const customerId = Number(createForm.customer_id);
+    if (!customerId) {
+      setCreateFeedback({ tone: "danger", title: "Selecciona un cliente antes de crear un caso" });
+      return;
+    }
+    setCreateBusy(true);
+    setCreateFeedback(null);
+    try {
+      const response = await createCase({ customer_id: customerId, service: query });
+      const createdCase = { ...response.case, customer: clients.find((client) => client.id === customerId)! };
+      setCases((items) => [...items, createdCase]);
+      field("case_id", String(response.case.id));
+      if (!createForm.service.trim()) field("service", query);
+    } catch (error) {
+      setCreateFeedback({ tone: "danger", title: "No se pudo crear el caso", detail: error instanceof Error ? error.message : undefined });
+    } finally {
+      setCreateBusy(false);
+    }
+  };
   const sortedAppointments = [...appointments].sort((a, b) => a.local_start.localeCompare(b.local_start));
   const visitCounts = appointments.reduce<Record<string, number>>((counts, row) => {
     const day = localDate(row.local_start);
     counts[day] = (counts[day] ?? 0) + 1;
     return counts;
   }, {});
-  const todayRows = sortedAppointments.filter((row) => localDate(row.local_start) === today);
-  const upcomingRows = sortedAppointments.filter((row) => localDate(row.local_start) > today);
-  const periodRows = sortedAppointments;
-  const selectedRows = selectedDay ? sortedAppointments.filter((row) => localDate(row.local_start) === selectedDay) : null;
+  const nonActiveRows = sortedAppointments.filter((row) => ["cancelled", "completed", "no_show"].includes(row.status));
+  const activeRows = sortedAppointments.filter((row) => !["cancelled", "completed", "no_show"].includes(row.status));
+  const todayRows = activeRows.filter((row) => localDate(row.local_start) === today);
+  const upcomingRows = activeRows.filter((row) => localDate(row.local_start) > today);
+  const periodRows = activeRows;
+  const selectedRows = registerView === "active" && selectedDay ? activeRows.filter((row) => localDate(row.local_start) === selectedDay) : null;
   const containsToday = periodDays.includes(today);
   const actions = (row: AgendaAppointment) => <>
     {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setCancelTarget(row); setCancelFeedback(null); }}>Cancelar visita</Button> : null}
@@ -190,12 +216,14 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     setView(nextView);
     setSelectedDay(null);
   };
-  const register = selectedRows
-    ? section(agendaPeriodLabel(selectedDay ?? "", timezone), selectedRows)
-    : containsToday
-      ? <>{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</>
-      : section("Visitas del período", periodRows);
-  const renderedRows = selectedRows ?? (containsToday ? [...todayRows, ...upcomingRows] : periodRows);
+  const register = registerView === "non-active"
+    ? section("Visitas no activas", nonActiveRows)
+    : selectedRows
+      ? section(agendaPeriodLabel(selectedDay ?? "", timezone), selectedRows)
+      : containsToday
+        ? <>{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</>
+        : section("Visitas del período", periodRows);
+  const renderedRows = registerView === "non-active" ? nonActiveRows : selectedRows ?? (containsToday ? [...todayRows, ...upcomingRows] : periodRows);
   const showEmpty = data?.length === 0 || state === "empty" || renderedRows.length === 0;
 
   const field = (key: keyof typeof createForm, value: string) => setCreateForm((form) => ({ ...form, [key]: value }));
@@ -203,7 +231,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     {createFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={createFeedback.title} /> : null}
     {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
       <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
-      {showEmpty ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : <section aria-label="Registro de agenda">{register}</section>}
+      <section aria-label="Registro de agenda"><Tabs tabs={[{ id: "active", label: "Activas" }, { id: "non-active", label: "No activas" }]} activeTab={registerView} onTabChange={setRegisterView} ariaLabel="Filtro del registro de visitas">{() => showEmpty ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : register}</Tabs></section>
     </div>}
     <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title={cancelTarget ? `Cancelar visita de ${cancelTarget.customer_name ?? "cliente"} — ${cancelTarget.service}` : "Cancelar visita"}>
       <p>La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.</p>
@@ -212,16 +240,18 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void cancel()}>Confirmar cancelación</Button>
     </Dialog>
     <Dialog open={createOpen} onClose={() => { if (!createBusy) setCreateOpen(false); }} title="Crear visita">
-      <Select label="Cliente" value={createForm.customer_id} onChange={(event) => field("customer_id", event.target.value)} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} />
-      <Select label="Caso" value={createForm.case_id} onChange={(event) => { field("case_id", event.target.value); const selected = cases.find((item) => item.id === Number(event.target.value)); if (selected && !createForm.service) field("service", selected.service); }} options={[{ value: "", label: "Selecciona un caso" }, ...cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service} (#${item.id})` }))]} />
-      <Select label="Técnico" value={createForm.technician_id} onChange={(event) => field("technician_id", event.target.value)} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
-      <Input label="Servicio" value={createForm.service} onChange={(event) => field("service", event.target.value)} />
-      <Input label="Fecha local" type="date" value={createForm.local_date} onChange={(event) => field("local_date", event.target.value)} />
-      <Input label="Hora local" type="time" value={createForm.local_time} onChange={(event) => field("local_time", event.target.value)} />
-      <Input label="Duración (minutos)" type="number" min="1" value={createForm.duration_minutes} onChange={(event) => field("duration_minutes", event.target.value)} />
-      <Input label="Zona horaria" value={timezone} readOnly />
-      {createFeedback?.tone === "danger" ? <StateMessage tone="danger" role="alert" title={createFeedback.title} detail={createFeedback.detail} /> : null}
-      <Button variant="secondary" disabled={createBusy} onClick={() => void create()}>{createBusy ? "Creando…" : "Crear visita"}</Button>
+      <div className="agenda-create-form">
+        <Select label="Cliente" value={createForm.customer_id} onChange={(event) => { field("customer_id", event.target.value); field("case_id", ""); }} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} />
+        <Combobox label="Caso" value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={createBusy ? undefined : (query) => void createManualCase(query)} options={cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} />
+        <Select label="Técnico" value={createForm.technician_id} onChange={(event) => field("technician_id", event.target.value)} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
+        <Input label="Servicio" value={createForm.service} onChange={(event) => field("service", event.target.value)} />
+        <Input label="Fecha local" type="date" value={createForm.local_date} onChange={(event) => field("local_date", event.target.value)} />
+        <Input label="Hora local" type="time" value={createForm.local_time} onChange={(event) => field("local_time", event.target.value)} />
+        <Input label="Duración (minutos)" type="number" min="1" value={createForm.duration_minutes} onChange={(event) => field("duration_minutes", event.target.value)} />
+        <Input label="Zona horaria" value={timezone} readOnly />
+        {createFeedback?.tone === "danger" ? <StateMessage tone="danger" role="alert" title={createFeedback.title} detail={createFeedback.detail} /> : null}
+        <Button variant="secondary" disabled={createBusy} onClick={() => void create()}>{createBusy ? "Creando…" : "Crear visita"}</Button>
+      </div>
     </Dialog>
   </PageFrame>;
 }

@@ -75,9 +75,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Data: Story = { args: { data: DATA, state: "ready", width: 1280 } };
+export const CreateVisit: Story = { args: { data: [], state: "empty", width: 1280 } };
 export const Loading: Story = { args: { data: null, state: "loading", width: 1280 } };
 export const Empty: Story = { args: { data: [], state: "empty", width: 1280 } };
-export const SectionEmpty: Story = { args: { data: [DATA[2]], state: "ready", width: 1280 } };
+export const SectionEmpty: Story = { args: { data: [{ ...DATA[2], status: "booked" }], state: "ready", width: 1280 } };
 export const Error: Story = { args: { data: null, state: "error", width: 1280 } };
 export const Forbidden: Story = { args: { data: null, state: "denied", width: 1280 } };
 export const Stale: Story = { args: { data: DATA, state: "stale", width: 1280 } };

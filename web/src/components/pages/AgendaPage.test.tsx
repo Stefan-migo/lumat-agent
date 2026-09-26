@@ -5,7 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgendaPage } from './AgendaPage';
 import type { AgendaAppointment } from '../../types';
-import { cancelAppointment, createAppointment, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from '../../api';
+import { cancelAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from '../../api';
 import { appointmentStatusLabel, appointmentSyncLabel } from '../shared/toneMaps';
 
 vi.mock('../../api', () => ({
@@ -13,6 +13,7 @@ vi.mock('../../api', () => ({
   cancelAppointment: vi.fn(),
   retryCalendarSync: vi.fn(),
   createAppointment: vi.fn(),
+  createCase: vi.fn(),
   fetchClients: vi.fn(),
   fetchCases: vi.fn(),
   fetchUsers: vi.fn(),
@@ -163,11 +164,57 @@ describe('AgendaPage', () => {
 
     await waitFor(() => expect(cancelAppointment).toHaveBeenCalledWith(1, 'Cliente avisó'));
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('tab', { name: 'No activas' }));
     expect(await screen.findByText('Cancelada')).toBeInTheDocument();
   });
 
-  it('does not offer cancellation or issue a request for non-booked rows', () => {
+  it('does not offer cancellation or issue a request for non-booked rows', async () => {
     render(<AgendaPage data={[appointment({ status: 'completed' }), appointment({ id: 2, status: 'no_show' }), appointment({ id: 3, status: 'cancelled' })]} state="ready" />);
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'No activas' }));
+    expect(screen.getAllByText('Mantención')).toHaveLength(3);
+    expect(screen.queryByRole('button', { name: 'Cancelar visita' })).not.toBeInTheDocument();
+    expect(cancelAppointment).not.toHaveBeenCalled();
+  });
+
+  it('separates active and non-active visits in a keyboard-operable client-side register view', async () => {
+    const user = userEvent.setup();
+    const rows = [appointment(), appointment({ id: 2, status: 'cancelled', service: 'Cancelled service' }), appointment({ id: 3, status: 'completed', service: 'Completed service' }), appointment({ id: 4, status: 'no_show', service: 'No-show service' })];
+    render(<AgendaPage data={rows} state="ready" />);
+
+    expect(screen.getByRole('tab', { name: 'Activas' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Mantención')).toBeInTheDocument();
+    expect(screen.queryByText('Cancelled service')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Activas' }));
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByText('Cancelled service')).toBeInTheDocument();
+    expect(screen.getByText('Completed service')).toBeInTheDocument();
+    expect(screen.getByText('No-show service')).toBeInTheDocument();
+    expect(screen.queryByText('Mantención')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Visitas no activas', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Hoy' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Próximas' })).not.toBeInTheDocument();
+  });
+
+  it('does not issue a request when switching register views', async () => {
+    const user = userEvent.setup();
+    render(<AgendaPage data={[appointment()]} state="ready" />);
+    vi.mocked(listAppointments).mockClear();
+    await user.click(screen.getByRole('tab', { name: 'No activas' }));
+    expect(listAppointments).not.toHaveBeenCalled();
+  });
+
+  it('shows the labelled empty state when the selected register view has no rows', async () => {
+    const user = userEvent.setup();
+    render(<AgendaPage data={[appointment()]} state="ready" />);
+    await user.click(screen.getByRole('tab', { name: 'No activas' }));
+    expect(screen.getByText('No hay visitas')).toBeInTheDocument();
+  });
+
+  it('does not offer cancellation for completed, no-show, or cancelled visits in the non-active view', async () => {
+    const user = userEvent.setup();
+    render(<AgendaPage data={[appointment({ status: 'completed' }), appointment({ id: 2, status: 'no_show' }), appointment({ id: 3, status: 'cancelled' })]} state="ready" />);
+    await user.click(screen.getByRole('tab', { name: 'No activas' }));
+    expect(screen.getAllByText('Mantención')).toHaveLength(3);
     expect(screen.queryByRole('button', { name: 'Cancelar visita' })).not.toBeInTheDocument();
     expect(cancelAppointment).not.toHaveBeenCalled();
   });
@@ -273,7 +320,7 @@ describe('AgendaPage', () => {
   });
 
   it('creates an appointment from the agenda and refreshes the visible period', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
     vi.mocked(fetchCases).mockResolvedValue({ cases: [{ id: 20, service: 'Mantención', customer: { id: 10, name: 'Camila Soto' } }] as never, users: [] });
     vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: 'Luis', role: 'tecnico', active: true }] as never });
@@ -284,7 +331,8 @@ describe('AgendaPage', () => {
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Cliente'), '10');
-    await user.selectOptions(screen.getByLabelText('Caso'), '20');
+    await user.type(screen.getByLabelText('Caso'), 'Mantención');
+    await user.click(screen.getByRole('option', { name: 'Mantención (#20)' }));
     await user.selectOptions(screen.getByLabelText('Técnico'), '30');
     await user.type(screen.getByLabelText('Servicio'), 'Maintenance');
     await user.clear(screen.getByLabelText('Fecha local'));
@@ -297,6 +345,106 @@ describe('AgendaPage', () => {
 
     await waitFor(() => expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({ customer_id: 10, case_id: 20, technician_id: 30, timezone: 'America/Santiago', local_time: '10:00:00' })));
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
+  }, 15000);
+
+  it('shows validation instead of throwing when the selected case has no service', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
+    vi.mocked(fetchCases).mockResolvedValue({ cases: [{ id: 20, service: null, customer: { id: 10, name: 'Camila Soto' } }] as never, users: [] });
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: 'Luis', role: 'tecnico', active: true }] as never });
+    vi.mocked(createAppointment).mockResolvedValue({ ok: true, appointment: {} as never });
+
+    render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
+    await user.type(screen.getByLabelText('Caso'), 'Caso sin servicio');
+    await user.click(screen.getByRole('option', { name: 'Caso sin servicio (#20)' }));
+    expect(screen.getByLabelText('Servicio')).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: 'Caso' })).toHaveValue('Caso sin servicio (#20)');
+    expect(screen.getByRole('combobox', { name: 'Caso' })).not.toHaveValue(expect.stringContaining('null'));
+    const form = screen.getByLabelText('Cliente').closest('.agenda-create-form');
+    expect(form).toBeInTheDocument();
+    expect(form?.children.length).toBeGreaterThan(1);
+    const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+    expect(css).toMatch(/\.agenda-create-form\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--space-3\)/s);
+    await user.selectOptions(screen.getByLabelText('Técnico'), '30');
+    await user.clear(screen.getByLabelText('Fecha local'));
+    await user.type(screen.getByLabelText('Fecha local'), '2026-09-05');
+    await user.clear(screen.getByLabelText('Hora local'));
+    await user.type(screen.getByLabelText('Hora local'), '10:00');
+    await user.click(screen.getByRole('button', { name: 'Crear visita' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Completa todos los campos de la visita');
+    expect(createAppointment).not.toHaveBeenCalled();
+  });
+
+  it('creates and selects a manual case inline, then uses it to create the visit', async () => {
+    const user = userEvent.setup();
+    const createdCase = { id: 21, service: 'Instalación', customer_id: 10 };
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
+    vi.mocked(fetchCases).mockResolvedValue({ cases: [] as never, users: [] });
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: 'Luis', role: 'tecnico', active: true }] as never });
+    vi.mocked(createCase).mockResolvedValue({ ok: true, case: createdCase as never });
+    vi.mocked(createAppointment).mockResolvedValue({ ok: true, appointment: {} as never });
+
+    render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
+    const caseInput = screen.getByRole('combobox', { name: 'Caso' });
+    await user.type(caseInput, 'Instalación');
+    expect(screen.getByRole('option', { name: 'Crear «Instalación»' })).toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: 'Crear «Instalación»' }));
+
+    expect(createCase).toHaveBeenCalledWith({ customer_id: 10, service: 'Instalación' });
+    await waitFor(() => expect(caseInput).toHaveValue('Instalación (#21)'));
+    expect(screen.getByLabelText('Servicio')).toHaveValue('Instalación');
+    await user.selectOptions(screen.getByLabelText('Técnico'), '30');
+    await user.clear(screen.getByLabelText('Fecha local'));
+    await user.type(screen.getByLabelText('Fecha local'), '2026-09-05');
+    await user.click(screen.getByRole('button', { name: 'Crear visita' }));
+    await waitFor(() => expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({ customer_id: 10, case_id: 21, service: 'Instalación' })));
+  });
+
+  it('does not create a manual case twice while the first request is pending', async () => {
+    const user = userEvent.setup();
+    let resolveCreateCase!: (value: { ok: true; case: never }) => void;
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
+    vi.mocked(fetchCases).mockResolvedValue({ cases: [] as never, users: [] });
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [] as never });
+    vi.mocked(createCase).mockReturnValue(new Promise((resolve) => { resolveCreateCase = resolve; }) as never);
+
+    render(<AgendaPage data={[]} state="empty" />);
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
+    const caseInput = screen.getByRole('combobox', { name: 'Caso' });
+    await user.type(caseInput, 'Instalación');
+    const createOption = screen.getByRole('option', { name: 'Crear «Instalación»' });
+    await user.click(createOption);
+    await waitFor(() => expect(createCase).toHaveBeenCalledTimes(1));
+    await user.click(caseInput);
+    const repeatedCreateOption = screen.queryByRole('option', { name: 'Crear «Instalación»' });
+    if (repeatedCreateOption) await user.click(repeatedCreateOption);
+    expect(createCase).toHaveBeenCalledTimes(1);
+
+    resolveCreateCase({ ok: true, case: { id: 21, service: 'Instalación', customer_id: 10 } as never });
+    await waitFor(() => expect(caseInput).toHaveValue('Instalación (#21)'));
+  });
+
+  it('requires a customer before creating a manual case', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [] as never });
+    vi.mocked(fetchCases).mockResolvedValue({ cases: [] as never, users: [] });
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [] as never });
+    render(<AgendaPage data={[]} state="empty" />);
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    await user.type(screen.getByRole('combobox', { name: 'Caso' }), 'Instalación');
+    await user.click(screen.getByRole('option', { name: 'Crear «Instalación»' }));
+    expect(createCase).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent(/cliente/i);
   });
 
   it('keeps the agenda calendar CSS contract aligned with the design system', () => {

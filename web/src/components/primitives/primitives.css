@@ -101,6 +101,10 @@
   display: grid;
   gap: var(--space-1);
 }
+.agenda-create-form {
+  display: grid;
+  gap: var(--space-3);
+}
 .field__label {
   font-family: var(--font-ui);
   font-size: var(--text-sm);

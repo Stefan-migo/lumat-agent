@@ -13,10 +13,11 @@ export interface ComboboxProps {
   placeholder?: string;
   disabled?: boolean;
   emptyLabel?: string;
+  onCreate?: (query: string) => void;
 }
 
 export function Combobox({
-  value, onChange, options, label, id, placeholder, disabled = false,
+  value, onChange, options, label, id, placeholder, disabled = false, onCreate,
   emptyLabel = "Sin coincidencias",
 }: ComboboxProps) {
   const autoId = useId();
@@ -56,6 +57,10 @@ export function Combobox({
     } else if (event.key === "Enter" && open && activeMatch) {
       event.preventDefault();
       choose(activeMatch.option);
+    } else if (event.key === "Enter" && open && onCreate && text.trim() && !matches.length) {
+      event.preventDefault();
+      onCreate(text.trim());
+      setOpen(false);
     }
   };
 
@@ -65,7 +70,8 @@ export function Combobox({
     if (option && typeof option.scrollIntoView === "function") option.scrollIntoView({ block: "nearest" });
   }, [activeMatch?.index, inputId]);
 
-  const showList = !disabled && open && matches.length > 0;
+  const canCreate = Boolean(onCreate && text.trim() && !matches.length);
+  const showList = !disabled && open && (matches.length > 0 || canCreate);
   return (
     <FieldShell label={label} id={inputId} disabled={disabled}>
       <div className="combobox">
@@ -109,6 +115,11 @@ export function Combobox({
                 </li>
               );
             })}
+            {canCreate ? (
+              <li role="option" aria-selected="false" className="combobox__option" onMouseDown={(event) => event.preventDefault()} onClick={() => { onCreate?.(text.trim()); setOpen(false); }}>
+                Crear «{text.trim()}»
+              </li>
+            ) : null}
           </ul>
         ) : text && !matches.length && !disabled ? (
           <span className="combobox__empty">{emptyLabel}</span>
