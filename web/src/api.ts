@@ -9,12 +9,14 @@
 export class ApiError extends Error {
   readonly status: number;
   readonly detail: string;
+  readonly structuredDetail?: { code?: string; message?: string; customer_id?: number; [key: string]: unknown };
 
-  constructor(status: number, detail: string) {
+  constructor(status: number, detail: string, structuredDetail?: ApiError['structuredDetail']) {
     super(detail);
     this.name = 'ApiError';
     this.status = status;
     this.detail = detail;
+    this.structuredDetail = structuredDetail;
   }
 }
 
@@ -34,15 +36,18 @@ export async function apiFetch<T>(
   if (!res.ok) {
     const raw = await res.text().catch(() => '');
     let detail = raw.trim();
+    let structuredDetail: ApiError['structuredDetail'];
     try {
       const payload = JSON.parse(raw) as { detail?: unknown };
       if (typeof payload.detail === 'string') {
         detail = payload.detail;
+      } else if (payload.detail && typeof payload.detail === 'object' && !Array.isArray(payload.detail)) {
+        structuredDetail = payload.detail as NonNullable<ApiError['structuredDetail']>;
       }
     } catch {
       // keep the raw text when the body is not JSON
     }
-    throw new ApiError(res.status, detail || `${res.status} ${res.statusText}`.trim());
+    throw new ApiError(res.status, detail || `${res.status} ${res.statusText}`.trim(), structuredDetail);
   }
 
   return (await res.json()) as T;
@@ -55,7 +60,7 @@ export function postJson<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility } from './types';
+import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse } from './types';
 export const uploadKbDocument = (title: string, file: File, visibility: KbVisibility) => {
   const body = new FormData();
   body.append('title', title);
@@ -141,7 +146,18 @@ export function retryCalendarSync(id: number) {
   return postJson<{ ok: boolean; calendar: { status: string; error: string | null } }>(`/panel/api/appointments/${id}/calendar/sync`);
 }
 export const createAppointment = (body: AppointmentCreateRequest) => postJson<AppointmentMutationResponse>('/panel/api/appointments', body);
-export const fetchClients = () => apiFetch<{ clients: Customer[] }>('/panel/api/clients');
+export function fetchClients({ includeArchived = false, query = '' }: { includeArchived?: boolean; query?: string } = {}) {
+  const params = new URLSearchParams();
+  if (query) params.set('q', query);
+  if (includeArchived) params.set('include_archived', 'true');
+  const search = params.toString();
+  return apiFetch<{ clients: Customer[] }>(`/panel/api/clients${search ? `?${search}` : ''}`);
+}
+export const createCustomer = (body: CustomerCreateRequest) => postJson<CustomerMutationResponse>('/panel/api/clients', body);
+export const updateCustomerProfile = (id: number, body: CustomerProfileUpdateRequest) => apiFetch<CustomerMutationResponse>(`/panel/api/clients/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const archiveCustomer = (id: number) => postJson<CustomerMutationResponse>(`/panel/api/clients/${id}/archive`);
+export const unarchiveCustomer = (id: number) => postJson<CustomerMutationResponse>(`/panel/api/clients/${id}/unarchive`);
+export const getClientFicha = (id: number) => apiFetch<ClientFichaResponse>(`/panel/api/clients/${id}`);
 export const fetchCases = () => apiFetch<CasesResponse>('/panel/api/cases');
 export const createCase = (body: ManualCaseRequest) => postJson<{ ok: true; case: Case }>('/panel/api/cases', body);
 export const changeClientState = (id: number, state: CustomerState) => postJson<ClientStateMutationResponse>(`/panel/api/clients/${id}/state`, { state });
