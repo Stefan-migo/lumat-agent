@@ -109,4 +109,22 @@ describe("Combobox (CST-PRIM-7)", () => {
     expect(screen.getByRole("combobox", { name: "País" })).toBeDisabled();
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
+
+  it("shows and activates the create affordance for a non-matching query", async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+    render(<Combobox label="Caso" value={null} onChange={() => {}} options={options} onCreate={onCreate} />);
+    const input = screen.getByRole("combobox", { name: "Caso" });
+    await user.type(input, "Instalación");
+    await user.click(screen.getByRole("option", { name: "Crear «Instalación»" }));
+    expect(onCreate).toHaveBeenCalledWith("Instalación");
+  });
+
+  it("does not show a create affordance when onCreate is absent", async () => {
+    const user = userEvent.setup();
+    render(<Combobox label="País" value={null} onChange={() => {}} options={options} />);
+    await user.type(screen.getByRole("combobox", { name: "País" }), "zzz");
+    expect(screen.getByText("Sin coincidencias")).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /Crear/ })).not.toBeInTheDocument();
+  });
 });
