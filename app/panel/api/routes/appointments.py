@@ -6,9 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.models import User
+from app.models import Case, Conversation, Customer, User
 from app.panel.api.deps import require_operator_json
-from app.panel.api.serializers import to_agenda_dict, to_appointment_dict
+from app.panel.api.serializers import (
+    to_agenda_dict,
+    to_appointment_detail_dict,
+    to_appointment_dict,
+)
 from app.panel.deps import get_db
 from app.services import scheduling
 
@@ -73,7 +77,15 @@ def get_appointment(appointment_id: int, session: Session = Depends(get_db), cur
     appointment = session.get(scheduling.Appointment, appointment_id)
     if appointment is None:
         raise HTTPException(status_code=404, detail="appointment not found")
-    return {"appointment": to_appointment_dict(appointment)}
+    customer = session.get(Customer, appointment.customer_id)
+    case = session.get(Case, appointment.case_id)
+    conversation = session.get(Conversation, case.conversation_id) if case.conversation_id is not None else None
+    return to_appointment_detail_dict(
+        appointment,
+        customer=customer,
+        case=case,
+        conversation_summary=conversation.summary if conversation is not None else None,
+    )
 
 
 @router.post("/appointments/{appointment_id}/cancel")

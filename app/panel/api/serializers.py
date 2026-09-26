@@ -206,6 +206,17 @@ def to_appointment_dict(appointment: Appointment) -> dict:
     }
 
 
+def to_appointment_detail_dict(
+    appointment: Appointment, *, customer: Customer, case: Case, conversation_summary
+) -> dict:
+    return {
+        "appointment": to_appointment_dict(appointment),
+        "customer": {"id": customer.id, "name": customer.name},
+        "case": {"id": case.id, "conversation_id": case.conversation_id},
+        "conversation_summary": conversation_summary,
+    }
+
+
 def to_technician_appointment_dict(
     appointment: Appointment, *, customer: Customer, case: Case
 ) -> dict:
