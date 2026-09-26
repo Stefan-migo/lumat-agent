@@ -192,12 +192,26 @@ require.
 - **Review boundary**: `review assess --base-ref d48385d8 --committed-only` → `medium`,
   `review_due: false`, `under_budget` (5 paths / 100 lines). Stays pending in the slice.
 
-### WU4 — Story coverage and full verification
+### WU4 — Story coverage and full verification — done (`071084ea`)
 
-- Story for the detail page covering the named states (with a conversation summary, without
-  one, and the manual-case path), plus a non-vacuous interaction test.
-- **Verify**: full `cd web && npm test`, `cd web && npm run build`, and
-  `uv run pytest tests/ -o addopts='' -q`.
+- [x] RED observed: `Failed to resolve import "./AppointmentDetail.stories" from
+      "src/stories/pages/AppointmentDetail.stories.test.tsx"` → 1 failed, no tests.
+- [x] `AppointmentDetail.stories.tsx` — six stories: `ConversationSummary` (data, summary shown),
+      `ConversationWithoutSummary` (data, `conversation_id` set but summary `null`),
+      `ManualCase` (data, `conversation_id: null`), `Loading`, `Error`, `Denied`.
+- [x] `AppointmentDetail.stories.test.tsx` — non-vacuous: `it.each` over **both** no-summary variants
+      asserts the summary is absent *and* the appointment's facts survive (customer link with the
+      right `href`, service, status); the summary is asserted present in variant 1; the audit trail
+      renders from `history`; the error story's retry action is wired and observable.
+- [x] The story wrapper mirrors the existing per-page `maxWidth` wrapper byte-for-byte
+      (`KbDocumentDetail.stories.tsx:9`, `AutomationRuleDetailPage.stories.tsx:26`,
+      `AgendaPage.stories.tsx:58`). The `inline-style-boundary` policy targets production code, not
+      stories.
+- **Verify**: focused story test — **5 passed**; `cd web && npm test` — **773 passed** (89 files);
+  `cd web && npm run build` — built; closing backend `uv run pytest tests/ -o addopts='' -q` —
+  **1483 passed** in 274.01s; `git diff --check` — clean.
+- **Review boundary**: `review assess --base-ref d48385d8 --committed-only` → `medium`,
+  `review_due: false`, `under_budget` (7 paths / 240 lines). No second review was due.
 
 ## Native review receipt
 
@@ -209,8 +223,28 @@ require.
 - Authority burned via `gentle-ai review acknowledge-approved` → `review-acknowledged/v1`,
   `authority: burned`, `consumed_revision: sha256:ec9b6e8e…`.
 - **Scope, stated honestly**: the receipt covers the candidate at WU2 (551 lines). WU3, WU4 and
-  the later doc commits are the delta after the acknowledgement and are measured from the new
-  boundary (`d48385d8`).
+  the later doc commits are the delta after the acknowledgement; measured from the new boundary
+  (`d48385d8`) they are **7 paths / 240 lines**, `under_budget`, `review_due: false` — the native
+  authority judged no second review due. The PR therefore ships a body reviewed in bulk (551 lines)
+  plus a measured, authority-cleared delta.
+
+## Spec check (read-only, against the live contract)
+
+AG-UI-5 is satisfied scenario by scenario, without launching an SDD phase:
+
+- *Operator opens an appointment from the agenda* → WU2 routes and renders the page; WU3 makes the
+  register's `Servicio` cell and the ficha's visit cards link to it; the `AppShell` test asserts the
+  deep link renders and that the customer link carries the customer route in its `href`.
+- *Appointment linked to a chatbot case* → WU1 resolves `Conversation.summary` through
+  `Case.conversation_id`; WU2 renders it; WU4's `ConversationSummary` story and test assert it is
+  visible.
+- *Appointment linked to a manually created case* → WU1 proves `conversation_summary: null` with a
+  passing 200; WU4's `ManualCase` story and test assert no summary **and** that the page still renders
+  its facts. The extra state the handoff missed — a conversation whose summary is still `null` — is
+  covered by `ConversationWithoutSummary` and its own assertion.
+- AG-UI-2 → loading/denied/error states are implemented through `StateMessage` and asserted.
+- AG-UI-4 → six stories covering the named states of this surface.
+- AG-UI-1/AG-UI-3 → untouched; no appointment action was added beyond navigation.
 
 ## Parallel work (do not duplicate)
 
@@ -264,7 +298,8 @@ accepted as ordinary repository policy; no `size:exception` label was requested.
       full web 766 passed, build green; native review `approved`, receipt below
 - [x] WU3 — Reachability from the agenda and the ficha (`42c45d94`) — focused 48 passed,
       full web 768 passed, build green
-- [ ] WU4 — Story coverage and full verification
+- [x] WU4 — Story coverage and full verification (`071084ea`) — focused 5 passed, full web 773 passed,
+      build green, closing backend 1483 passed
 - [ ] Owner decision: push and open the PR
 
 ## Verification (observed)
@@ -281,3 +316,8 @@ accepted as ordinary repository policy; no `size:exception` label was requested.
 | WU3 | focused (AgendaPage + ClientFicha) | 48 passed (2 files) |
 | WU3 | `cd web && npm test` | 768 passed (88 files) |
 | WU3 | `cd web && npm run build` | built |
+| WU4 | `cd web && npm test -- src/stories/pages/AppointmentDetail.stories.test.tsx` | 5 passed |
+| WU4 | `cd web && npm test` | 773 passed (89 files) |
+| WU4 | `cd web && npm run build` | built |
+| WU4 | `uv run pytest tests/ -o addopts='' -q` | 1483 passed in 274.01s |
+| WU4 | `git diff --check` | clean |
