@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
@@ -49,6 +49,25 @@ class StateBody(BaseModel):
 
 class NoteBody(BaseModel):
     note: str
+
+
+class CreateCustomerBody(BaseModel):
+    phone: str
+    name: str | None = None
+    email: str | None = None
+    comuna: str | None = None
+    address: str | None = None
+
+
+class CustomerProfileBody(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    comuna: str | None = None
+    address: str | None = None
+
+
+class ConsentBody(BaseModel):
+    consent: bool
 
 
 class MemoryBody(BaseModel):
@@ -107,6 +126,97 @@ def clients_list(
         session, q, limit=100, include_archived=include_archived
     )
     return {"clients": [to_customer_dict(c) for c in found], "query": q or ""}
+
+
+@router.post("/clients", status_code=status.HTTP_201_CREATED)
+def client_create(
+    body: CreateCustomerBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    try:
+        customer = customers.create_customer(
+            session,
+            body.phone,
+            name=body.name,
+            email=body.email,
+            comuna=body.comuna,
+            address=body.address,
+            actor=current.username,
+        )
+    except customers.PhoneAlreadyExists as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "phone_exists", "message": str(exc), "customer_id": exc.customer_id},
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail={"code": "invalid_phone", "message": str(exc)}
+        )
+    session.commit()
+    return {"customer": to_customer_dict(customer)}
+
+
+@router.patch("/clients/{customer_id}")
+def client_profile_update(
+    customer_id: int,
+    body: CustomerProfileBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    customer = _customer_or_404(session, customer_id)
+    provided = body.model_fields_set
+    changes = {
+        field: getattr(body, field)
+        for field in ("name", "email", "comuna", "address")
+        if field in provided
+    }
+    if any(value is not None and not value.strip() for value in changes.values()):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "empty_profile_field", "message": "profile fields cannot be empty"},
+        )
+    before = {field: getattr(customer, field) for field, value in changes.items()
+              if value is not None and getattr(customer, field) != value}
+    after = {field: changes[field] for field in before}
+    if changes:
+        customers.update_captured_data(session, customer, **changes)
+    if before:
+        record_audit(
+            session,
+            actor=current.username,
+            action="customer.profile_updated",
+            entity="customer",
+            entity_id=str(customer.id),
+            before=before,
+            after=after,
+        )
+    session.commit()
+    return {"customer": to_customer_dict(customer)}
+
+
+@router.post("/clients/{customer_id}/consent")
+def client_consent_update(
+    customer_id: int,
+    body: ConsentBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    customer = _customer_or_404(session, customer_id)
+    before = customer.consent_status
+    if before != body.consent:
+        customers.record_consent(session, customer, consent=body.consent)
+        record_audit(
+            session,
+            actor=current.username,
+            action="customer.consent_updated",
+            entity="customer",
+            entity_id=str(customer.id),
+            before={"consent_status": before},
+            after={"consent_status": body.consent},
+        )
+    session.commit()
+    return {"customer": to_customer_dict(customer)}
 
 
 @router.get("/clients/{customer_id}")

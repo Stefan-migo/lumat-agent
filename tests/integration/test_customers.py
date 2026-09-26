@@ -397,3 +397,47 @@ def test_get_or_create_auto_unarchives_archived_customer_once():
         assert audit.actor == "system"
         assert audit.before["archived_at"] is not None
         assert audit.after == {"archived_at": None}
+
+
+def test_create_customer_sets_defaults_and_audits_operator():
+    from app.models import AuditLog
+
+    with SessionLocal() as session:
+        customer = customers.create_customer(
+            session, "+56 9 1234 5678", name="Ana", actor="operador1"
+        )
+        session.commit()
+        assert customer.phone_e164 == "+56912345678"
+        assert customer.name == "Ana"
+        assert customer.state == CustomerState.NUEVO
+        assert customer.consent_status is False
+        audit = session.scalar(
+            select(AuditLog).where(AuditLog.action == "customer.created")
+        )
+        assert audit.actor == "operador1"
+        assert audit.entity_id == str(customer.id)
+        assert audit.after == {"phone_e164": "+56912345678", "channel": "panel"}
+
+
+def test_create_customer_rejects_duplicate_without_adopting_existing():
+    with SessionLocal() as session:
+        existing = customers.get_or_create_customer(session, "56912345678")
+        with pytest.raises(customers.PhoneAlreadyExists) as exc_info:
+            customers.create_customer(session, "+56 9 1234 5678", actor="operador1")
+        assert exc_info.value.customer_id == existing.id
+        assert customers.get_or_create_customer(session, "56912345678").id == existing.id
+
+
+def test_create_customer_rejects_archived_duplicate():
+    with SessionLocal() as session:
+        existing = customers.get_or_create_customer(session, "56912345678")
+        customers.archive_customer(session, existing, actor="operador1")
+        with pytest.raises(customers.PhoneAlreadyExists) as exc_info:
+            customers.create_customer(session, "56912345678", actor="operador1")
+        assert exc_info.value.customer_id == existing.id
+
+
+def test_create_customer_rejects_unrecognized_phone():
+    with SessionLocal() as session:
+        with pytest.raises(ValueError, match="^phone cannot be normalized to E.164$"):
+            customers.create_customer(session, "   ", actor="operador1")
