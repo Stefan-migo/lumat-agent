@@ -218,7 +218,39 @@ drop the table in favour of Conversaciones + its thread) **before** T7.
       `serializers.py`. Note: `graphify-out/graph.json` was built 09:38, before
       the 09:52 `set_case_status` rename on main; the rename is public-only and
       does not touch the files this unit reads.
-- [ ] T1 …
+- [x] T1 — backend payload: `case_is_open()` added next to `case_is_open_expr()`
+      (`app/services/cases.py:41`); `customer_history` cases carry the full field set
+      + `is_open` (`app/services/customers.py:282-297`); `GET /clients/{id}` returns
+      `users` (`app/panel/api/routes/clients.py:131-138`). RED observed (missing
+      `users`; missing extended keys; `KeyError: 'is_open'`), then GREEN. Commit
+      `6eb21ace`. Parent correction: `summary` had been dropped from the case dict and
+      was restored (ClientFicha renders it); the local `customers -> cases` import is
+      documented — a top-level import cycles through `app.chat.state`.
+- [x] T2 — trail removal, two commits. **T2a** backend: `visit_history` removed from
+      `customer_history`; the functional test now asserts the appointment survives and
+      the field is gone. RED observed, then GREEN. Commit `4a9f3fb2`. **T2b**
+      frontend: the `<ol>`, the `visitHistory` variable, the `VisitHistoryEvent` type
+      and the story fixture removed. RED observed (`<ol aria-label="Ciclo de vida de
+      visitas">` still present), then GREEN; `tsc -b --noEmit` exit 0. Commit
+      `f8e2ea2a`.
+- [x] T3 — `CaseActions` promoted to `web/src/components/shared/CaseActions.tsx`
+      with the minimal `CaseActionTarget` (no `customer` requirement) and
+      `CASE_STATUSES`; `CasesList` consumes it. RED observed (module not resolvable),
+      then GREEN. Commit `871e54a6`.
+- [x] T4 + T5 — "Caso activo" block as the first child of `.detail-region__main`,
+      wired to the shared `CaseActions` with `updateCase`/`acknowledgeCase` posting to
+      `/cases/{id}/update` and `/ack` and refetching the ficha; local error feedback
+      via the existing `LocalFeedback` (not `CasesList`'s unhandled rejection). The
+      Casos table is the archive (`archivedCases`, heading "Casos anteriores"). Types
+      and the story matrix (incl. an unanswered emergency) updated. RED observed,
+      then GREEN. Commit `4a395f3e`.
+- [x] S1 verification of record: `uv run pytest tests/` → **1477 passed**;
+      `cd web && npm run test` → **88 files / 759 tests**; `npx tsc -b --noEmit` →
+      exit 0; `npm run build` → exit 0 (pre-existing >500 kB chunk warning).
+- [x] S1 code size `cf5f8171..HEAD`: **482 changed lines** (341 added, 141 deleted)
+      across `app/ tests/ web/`. Over the ~400 review-focus heuristic; the
+      `ask-on-risk` strategy applies before S2. Owner decision requested.
+- [ ] T6 …
 
 ## Recovery
 
