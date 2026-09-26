@@ -109,6 +109,7 @@ def clients_list(
 @router.get("/clients/{customer_id}")
 def client_ficha(
     customer_id: int,
+    messages_limit: int | None = None,
     session: Session = Depends(get_db),
     current: User = Depends(require_operator_json),
 ) -> dict:
@@ -125,7 +126,7 @@ def client_ficha(
     )
     return {
         "customer": to_customer_dict(customer),
-        "history": customers.customer_history(session, customer_id),
+        "history": customers.customer_history(session, customer_id, messages_limit),
         "notes": [
             to_note_dict(n) for n in customers.list_notes(session, customer_id)
         ],

@@ -10,7 +10,7 @@ const customer = clients[0];
 const fichaResponse: ClientFichaResponse = {
   customer,
   history: {
-    conversations: [], cases: [], messages: [], appointments: [],
+    conversations: [], cases: [], messages: [], messages_total: 0, appointments: [],
   },
     notes: [],
   users: [],

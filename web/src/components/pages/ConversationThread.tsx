@@ -9,6 +9,7 @@ import { Textarea } from "../primitives/Textarea";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
+import { CollapsibleMessages } from "../shared/CollapsibleMessages";
 import { conversationLabel } from "../shared/toneMaps";
 import { realtimeClient, type ConnectionStatus } from "../../realtime";
 
@@ -39,6 +40,7 @@ function displayCapturedValue(value: unknown) {
   return typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "—");
 }
 const formatRecency = (value: string | null) => value ? new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
+const MESSAGE_PREVIEW = 10;
 
 function ConversationContext({ conversation }: { conversation: NonNullable<ThreadData["conversation"]> }) {
   const customer = conversation.customer;
@@ -51,17 +53,19 @@ function ConversationContext({ conversation }: { conversation: NonNullable<Threa
 }
 export function ConversationThread({ conversationId, data: controlledData, state: controlledState, customerName, refreshKey = 0, onMutate, onBack, interactive = false }: ConversationThreadProps) {
   const [text, setText] = useState("");
+  const [messagesExpanded, setMessagesExpanded] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [connection, setConnection] = useState<ConnectionStatus>("disconnected");
   const [liveActivity, setLiveActivity] = useState<Array<{ event: string; cause?: string | null; actor?: string | null }>>([]);
-  const fetchThread = useCallback(async () => { if (conversationId === undefined) throw new Error("conversation id is required"); return getConversation(conversationId); }, [conversationId, refreshKey]);
+  const fetchThread = useCallback(async () => { if (conversationId === undefined) throw new Error("conversation id is required"); return getConversation(conversationId, messagesExpanded ? undefined : MESSAGE_PREVIEW); }, [conversationId, messagesExpanded, refreshKey]);
   const fetched = useAsyncData(fetchThread, controlledData === undefined, refreshKey);
   const data = controlledData ?? fetched.data;
   const state = controlledState ?? (controlledData !== undefined ? "ready" : fetched.state);
   const conversation = data?.conversation;
   const messages = data?.messages ?? [];
   const refresh = fetched.retry;
+  const toggleMessages = () => { setMessagesExpanded((value) => !value); refresh(); };
   useEffect(() => {
     if (controlledData !== undefined || conversationId === undefined) return;
     const unsubscribe = realtimeClient.subscribe((event) => {
@@ -94,7 +98,7 @@ export function ConversationThread({ conversationId, data: controlledData, state
          <main className="ai-agent-grammar__main" aria-label="Conversación">
           {conversation ? <header className="ai-agent-grammar__header"><div role="status" aria-label={conversationLabel(conversation.state)}><StatusBadge status={conversation.state as "bot" | "human" | "closed"} /></div><div className="ai-agent-grammar__header-actions">{interactive ? stateControls : null}{conversation.case && conversation.emergency && !conversation.acknowledged_at && conversation.case_id != null ? <Button variant="secondary" className="emergency-action" disabled={busy} onClick={() => void mutate(() => acknowledgeCase(conversation.case_id!))}>Reconocer emergencia</Button> : null}</div><span className="ai-agent-grammar__freshness">Actualizado {formatRecency(conversation.last_message_at)}</span><span className={`ai-agent-grammar__window${windowOpen ? "" : " ai-agent-grammar__window--closed"}`}>{windowOpen ? "Respuesta disponible" : "Fuera de la ventana de 24 horas"}</span></header> : null}
          <section className="ai-agent-grammar__thread-area" aria-label="Mensajes de la conversación">
-          <div className="ai-agent-grammar__bubbles">{messages.map((message) => <MessageBubble key={message.id} message={message} customerId={conversation?.customer_id ?? 0} customerName={customerName} />)}</div>
+           <CollapsibleMessages total={data.messages_total ?? messages.length} expanded={messagesExpanded} onToggle={toggleMessages}><div className="ai-agent-grammar__bubbles">{messages.map((message) => <MessageBubble key={message.id} message={message} customerId={conversation?.customer_id ?? 0} customerName={customerName} />)}</div></CollapsibleMessages>
           {liveActivity.length > 0 ? <div className="ai-agent-grammar__activity-list" aria-label="Actividad persistida">{liveActivity.map((activity, index) => <div className="ai-agent-grammar__activity" role="status" key={`${activity.event}-${index}`}><span aria-hidden="true">✦</span><span className="ai-agent-grammar__activity-chip">{activity.event}{activity.cause ? `: ${activity.cause}` : ""}{activity.actor ? ` · ${activity.actor}` : ""}</span></div>)}</div> : null}
          {!interactive ? <NoReplyNote /> : null}
          {conversation?.state === "human" ? <div className="ai-agent-grammar__handoff" aria-label="Traspaso a atención humana">La conversación está en atención humana.</div> : null}

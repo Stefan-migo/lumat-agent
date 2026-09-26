@@ -285,6 +285,7 @@ export type DeliveryStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'unknow
 export interface ConversationThread {
   conversation: Conversation;
   messages: Message[];
+  messages_total: number;
 }
 
 export interface UserRef {
@@ -421,6 +422,7 @@ export interface ClientFichaResponse {
       media_url: string | null;
       created_at: string | null;
     }>;
+    messages_total: number;
     appointments?: Appointment[];
   };
   notes: CustomerNote[];
