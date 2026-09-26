@@ -7,7 +7,9 @@ Base: `7fb8cd10` (main, after U1 `case-closure-fix` and U2 `client-ficha-case-su
 Depends on: nothing — U3 is independent of U1/U2
 Source: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md`
 Delivery strategy: `ask-on-risk`
-Chain strategy: pending owner decision (forecast exceeds the ~400-line budget)
+Chain strategy: `stacked-to-main` (owner decision 2026-09-26) —
+PR 1 = WU1 (archive backend), PR 2 = WU2 (create/profile/consent backend),
+PR 3 = WU3 (api layer + list page), PR 4 = WU4 (ficha profile/consent/archive)
 
 ## Objective
 
