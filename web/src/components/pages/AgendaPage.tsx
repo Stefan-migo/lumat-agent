@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ApiError, cancelAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from "../../api";
+import { ApiError, cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AgendaAppointment, Case, Customer, AdminUser } from "../../types";
 import { Badge } from "../primitives/Badge";
@@ -51,9 +51,11 @@ const columns: Column<AgendaAppointment>[] = [
 export function AgendaPage({ data: controlledData, state: controlledState, onRetry, timezone = Intl.DateTimeFormat().resolvedOptions().timeZone }: AgendaPageProps) {
   const [updatedData, setUpdatedData] = useState<AgendaAppointment[] | null>(null);
   const [cancelTarget, setCancelTarget] = useState<AgendaAppointment | null>(null);
+  const [closeTarget, setCloseTarget] = useState<AgendaAppointment | null>(null);
   const [reason, setReason] = useState("");
   const [mutatingId, setMutatingId] = useState<number | null>(null);
   const [cancelFeedback, setCancelFeedback] = useState<ActionFeedback | null>(null);
+  const [closeFeedback, setCloseFeedback] = useState<ActionFeedback | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<ActionFeedback | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
@@ -95,6 +97,22 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       setCancelFeedback({ id: appointmentId, tone: "success", title: "Visita cancelada" });
     } catch (error) {
       setCancelFeedback({ id: appointmentId, tone: "danger", title: "No se pudo cancelar la visita", detail: error instanceof Error ? error.message : undefined });
+    } finally {
+      setMutatingId(null);
+    }
+  };
+  const close = async (outcome: "completed" | "no_show") => {
+    if (!closeTarget || mutatingId !== null) return;
+    const appointmentId = closeTarget.id;
+    setMutatingId(appointmentId);
+    setCloseFeedback(null);
+    try {
+      await closeAppointment(appointmentId, outcome);
+      setCloseTarget(null);
+      await refreshAgenda();
+      setCloseFeedback({ id: appointmentId, tone: "success", title: outcome === "completed" ? "Visita completada" : "Visita marcada como no asistida" });
+    } catch (error) {
+      setCloseFeedback({ id: appointmentId, tone: "danger", title: "No se pudo registrar el resultado", detail: error instanceof Error ? error.message : "Intenta nuevamente." });
     } finally {
       setMutatingId(null);
     }
@@ -198,6 +216,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const containsToday = periodDays.includes(today);
   const actions = (row: AgendaAppointment) => <>
     {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setCancelTarget(row); setCancelFeedback(null); }}>Cancelar visita</Button> : null}
+    {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setCloseTarget(row); setCloseFeedback(null); }}>Cerrar visita</Button> : null}
     {row.sync.status === "pending" || row.sync.status === "failed" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void retrySync(row.id)} aria-label="Reintentar calendario">Reintentar calendario</Button> : null}
     {cancelFeedback?.id === row.id && cancelFeedback.tone === "success" ? <span role="status"><Badge tone="success">{cancelFeedback.title}</Badge></span> : null}
     {syncFeedback?.id === row.id ? <span role={syncFeedback.tone === "danger" ? "alert" : "status"}><Badge tone={syncFeedback.tone}>{syncFeedback.title}{syncFeedback.detail ? `: ${syncFeedback.detail}` : null}</Badge></span> : null}
@@ -230,6 +249,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const field = (key: keyof typeof createForm, value: string) => setCreateForm((form) => ({ ...form, [key]: value }));
   return <PageFrame title="Agenda" meta={data ? `${appointments.length} ${appointments.length === 1 ? "visita" : "visitas"}` : "Visitas de la agenda"} actions={<Button onClick={() => void openCreate()}>Nueva visita</Button>} state={stateMessage(state, retry)}>
     {createFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={createFeedback.title} /> : null}
+    {closeFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={closeFeedback.title} /> : null}
     {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
       <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
       <section aria-label="Registro de agenda"><Tabs tabs={[{ id: "active", label: "Activas" }, { id: "non-active", label: "No activas" }]} activeTab={registerView} onTabChange={setRegisterView} ariaLabel="Filtro del registro de visitas">{() => showEmpty ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : register}</Tabs></section>
@@ -239,6 +259,12 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       <Textarea id="cancel-reason" label="Motivo de cancelación" value={reason} onChange={(event) => setReason(event.target.value)} />
       {cancelTarget && cancelFeedback?.id === cancelTarget.id && cancelFeedback.tone === "danger" ? <StateMessage tone="danger" role="alert" title={cancelFeedback.title} detail={cancelFeedback.detail} /> : null}
       <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void cancel()}>Confirmar cancelación</Button>
+    </Dialog>
+    <Dialog open={closeTarget !== null} onClose={() => { if (mutatingId === null) setCloseTarget(null); }} title={closeTarget ? `Cerrar visita de ${closeTarget.customer_name ?? "cliente"} — ${closeTarget.service}` : "Cerrar visita"}>
+      <p>Registra el resultado de la visita. Esta acción no se puede revertir desde la agenda.</p>
+      {closeTarget && closeFeedback?.id === closeTarget.id && closeFeedback.tone === "danger" ? <StateMessage tone="danger" role="alert" title={closeFeedback.title} detail={closeFeedback.detail} /> : null}
+      <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void close("completed")}>Completar</Button>
+      <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void close("no_show")}>No asistió</Button>
     </Dialog>
     <Dialog open={createOpen} onClose={() => { if (!createBusy) setCreateOpen(false); }} title="Crear visita">
       <div className="agenda-create-form">

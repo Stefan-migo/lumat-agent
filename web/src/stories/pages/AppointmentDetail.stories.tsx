@@ -58,6 +58,12 @@ export const ConversationWithoutSummary: Story = {
 export const ManualCase: Story = {
   args: { appointmentId: 41, data: detail(null, null), state: "ready", width: 960 },
 };
+export const CloseActions: Story = {
+  args: { appointmentId: 41, data: detail(null, null), state: "ready", width: 960 },
+};
+export const Completed: Story = {
+  args: { appointmentId: 41, data: { ...detail(null, null), appointment: { ...appointment, status: "completed" } }, state: "ready", width: 960 },
+};
 export const Loading: Story = { args: { appointmentId: 41, data: null, state: "loading", width: 960 } };
 export const Error: Story = { args: { appointmentId: 41, data: null, state: "error", width: 960 } };
 export const Denied: Story = { args: { appointmentId: 41, data: null, state: "denied", width: 960 } };

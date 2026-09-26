@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { cancelAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from "../../api";
+import { cancelAppointment, closeAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from "../../api";
 import {
   AgendaPageStory,
   CancelConfirmation,
+  CloseConfirmation,
   CreateVisit,
   Data,
   Empty,
@@ -20,6 +21,7 @@ import {
 
 vi.mock("../../api", () => ({
   cancelAppointment: vi.fn(),
+  closeAppointment: vi.fn(),
   listAppointments: vi.fn(),
   retryCalendarSync: vi.fn(),
   createCase: vi.fn(),
@@ -45,7 +47,8 @@ describe("AgendaPage Storybook state matrix", () => {
     await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("tab", { name: "No activas" }));
     expect(screen.getByText("Cancelada")).toBeInTheDocument();
     expect(screen.getByText("Completada")).toBeInTheDocument();
-    expect(screen.getByText("No asistió")).toBeInTheDocument();
+    expect(screen.getAllByText("No asistió").length).toBeGreaterThan(0);
+    expect(screen.getByText("Visita de diagnóstico")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Reintentar calendario" })).toHaveLength(1);
     await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("tab", { name: "Activas" }));
     expect(screen.getByText("Calendario con error")).toBeInTheDocument();
@@ -86,6 +89,25 @@ describe("AgendaPage Storybook state matrix", () => {
       await CancelConfirmation.play?.({ canvasElement: confirmationContainer } as Parameters<NonNullable<typeof CancelConfirmation.play>>[0]);
     });
     expect(screen.getAllByRole("dialog", { name: "Cancelar visita de Camila Soto — Mantención de calefón" })).toHaveLength(1);
+  });
+
+  it("covers the outcome confirmation while preserving the appointment facts", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    vi.mocked(closeAppointment).mockResolvedValue({ ok: true, appointment: Data.args!.data![0] });
+    vi.mocked(listAppointments).mockResolvedValue({ appointments: Data.args!.data! });
+    const { container } = render(<AgendaPageStory data={Data.args?.data} state="ready" />);
+    expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
+    expect(screen.getByText("Camila Soto")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cerrar visita" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Esta acción no se puede revertir");
+    await user.click(screen.getByRole("button", { name: "Completar" }));
+    await waitFor(() => expect(closeAppointment).toHaveBeenCalledWith(1, "completed"));
+    const { container: storyContainer } = render(<AgendaPageStory data={Data.args?.data} state="ready" />);
+    await act(async () => {
+      await CloseConfirmation.play?.({ canvasElement: storyContainer } as Parameters<NonNullable<typeof CloseConfirmation.play>>[0]);
+    });
+    expect(container.querySelector(".data-region")).toBeInTheDocument();
+    expect(screen.getAllByText("Mantención de calefón").length).toBeGreaterThan(0);
   });
 
   it("covers the expanded create dialog and inline manual-case affordance", async () => {

@@ -1,9 +1,12 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from app.db import SessionLocal
 from app.models import (
     Appointment,
     AppointmentCalendarSync,
+    AppointmentHistory,
     AppointmentStatus,
     AuditLog,
     Case,
@@ -297,3 +300,37 @@ def test_appointment_detail_unknown_id_is_not_found(client, make_user):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "appointment not found"
+
+
+@pytest.mark.parametrize("outcome", ["completed", "no_show"])
+def test_operator_can_close_booked_appointment_and_unknown_outcome_is_rejected(client, make_user, outcome):
+    make_user("close-oper", "close-pass", role="operador")
+    with SessionLocal() as session:
+        appointment_id, *_ = _appointment_detail_rows(session)
+    assert client.post("/panel/api/login", json={"username": "close-oper", "password": "close-pass"}).status_code == 200
+
+    response = client.post(f"/panel/api/appointments/{appointment_id}/close", json={"outcome": outcome, "reason": "finished"})
+    assert response.status_code == 200
+    assert response.json()["appointment"]["status"] == outcome
+    assert client.post(f"/panel/api/appointments/{appointment_id}/close", json={"outcome": "unknown"}).status_code == 422
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        history = session.query(AppointmentHistory).filter_by(appointment_id=appointment_id).order_by(AppointmentHistory.id).all()
+        assert [entry.action for entry in history] == [outcome]
+        assert session.query(AuditLog).filter_by(action=f"appointment.{outcome}", entity_id=str(appointment_id)).count() == 1
+
+
+def test_close_rejects_non_booked_and_unknown_appointments(client, make_user):
+    make_user("close-oper", "close-pass", role="operador")
+    with SessionLocal() as session:
+        appointment_id, *_ = _appointment_detail_rows(session)
+        session.query(Appointment).filter_by(id=appointment_id).update({"status": AppointmentStatus.CANCELLED})
+        session.commit()
+    assert client.post("/panel/api/login", json={"username": "close-oper", "password": "close-pass"}).status_code == 200
+
+    refused = client.post(f"/panel/api/appointments/{appointment_id}/close", json={"outcome": "no_show"})
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == {"code": "invalid_lifecycle", "message": "only booked appointments can be closed"}
+    missing = client.post("/panel/api/appointments/999999999/close", json={"outcome": "completed"})
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "appointment not found"
