@@ -2,7 +2,7 @@
 
 **Branch**: `odd/delegation-scope-guard`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-delegation-scope-guard`
-**Base**: `673d9fba` (= `main` at branch time)
+**Base**: `cf5f8171` (= `main` at branch time, `refactor/case-status-public-name`)
 **Status**: implemented, verified, full suite green. Delivery (push, PR, merge) is the owner's decision.
 **Origin**: follow-up **#4** of `odd/tasks/panel-subagent-delegation.md` (`R3-001`), an advisory
 `review-reliability` WARNING from the slice-3 native review of that unit; Engram handoff
@@ -15,7 +15,11 @@ delegation node must run on the read-only scope `guardrails` already validated, 
 
 ## Problem — measured, not inferred
 
-Verified on `673d9fba`, not from memory:
+Verified on the branch base `cf5f8171` (read on this worktree), not from memory:
+
+> Base note: the R3-001 handoff named `main = fae7e0a9`. `main` advanced to `cf5f8171` (PR #368,
+> `refactor/case-status-public-name`) by branch time — another actor is working this repo concurrently.
+> The branch is cut from that base and the full suite below was measured on it.
 
 | Claim | Evidence |
 |---|---|
