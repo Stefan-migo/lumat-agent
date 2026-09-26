@@ -116,7 +116,7 @@ describe("ClientFicha page grammar", () => {
     vi.mocked(postJson).mockRejectedValue(new ApiError(500, "private error"));
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
     await user.click(screen.getByRole("button", { name: "Actualizar" }));
-    expect(await screen.findByRole("heading", { name: "No pudimos guardar caso" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "No pudimos guardar el caso" })).toBeInTheDocument();
   });
 
   it("posts state changes and notes, then refreshes ficha and memories", async () => {
@@ -184,7 +184,7 @@ describe("ClientFicha page grammar", () => {
     expect(save).toBeDisabled();
     reject(new ApiError(500, "database password leaked"));
 
-    expect(await screen.findByRole("heading", { name: "No pudimos guardar estado" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "No pudimos guardar el estado" })).toBeInTheDocument();
     expect(screen.getByRole("alert")).not.toHaveTextContent("database password leaked");
   });
 
@@ -236,7 +236,7 @@ describe("ClientFicha customer controls", () => {
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
     await user.click(screen.getByRole("button", { name: "Cambiar consentimiento" }));
     expect(updateCustomerConsent).toHaveBeenCalledWith(7, false);
-    expect(await screen.findByRole("heading", { name: "No pudimos guardar consentimiento" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "No pudimos guardar el consentimiento" })).toBeInTheDocument();
   });
 
   it("warns with loaded open-case and future-appointment counts before archiving", async () => {
@@ -255,6 +255,16 @@ describe("ClientFicha customer controls", () => {
     expect(await screen.findByRole("heading", { name: "Cliente archivado" })).toBeInTheDocument();
   });
 
+  it("shows an archive failure once, with a readable label", async () => {
+    const user = userEvent.setup();
+    vi.mocked(archiveCustomer).mockRejectedValue(new ApiError(500, "private"));
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+    await user.click(screen.getByRole("button", { name: "Archivar" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirmar archivo" }));
+    expect(await screen.findAllByRole("heading", { name: "No pudimos guardar el archivo" })).toHaveLength(1);
+  });
+
   it("shows archived state and offers restore with visible failure feedback", async () => {
     const user = userEvent.setup();
     vi.mocked(unarchiveCustomer).mockRejectedValue(new ApiError(500, "private"));
@@ -262,7 +272,7 @@ describe("ClientFicha customer controls", () => {
     expect(screen.getByText("Cliente archivado")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Restaurar" }));
     expect(unarchiveCustomer).toHaveBeenCalledWith(7);
-    expect(await screen.findByRole("heading", { name: "No pudimos guardar archivo" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "No pudimos guardar el archivo" })).toBeInTheDocument();
   });
 });
 

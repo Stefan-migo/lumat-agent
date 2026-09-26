@@ -130,7 +130,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     const labels = { estado: "el estado", nota: "la nota", caso: "el caso", identidad: "la identidad", consentimiento: "el consentimiento", archivo: "el archivo" };
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return { title: `No tienes permiso para guardar ${labels[action]}` };
     if (error instanceof ApiError && (error.status === 400 || error.status === 422)) return { title: `Revisa ${labels[action]} e inténtalo de nuevo` };
-    return { title: `No pudimos guardar ${action}`, detail: "Inténtalo nuevamente." };
+    return { title: `No pudimos guardar ${labels[action]}`, detail: "Inténtalo nuevamente." };
   };
   const updateCase = async (caseId: number, status: string, responsibleId: number | null) => {
     setCaseFeedback(null);
@@ -252,9 +252,10 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={openProfile}>Editar identidad</Button>
               <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={() => { setConsentFeedback(null); void saveConsent(); }}>Cambiar consentimiento</Button>
               <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={() => customer.archived_at ? void saveArchive() : setArchiveOpen(true)}>{customer.archived_at ? "Restaurar" : "Archivar"}</Button>
-              <LocalFeedback feedback={profileFeedback} />
               <LocalFeedback feedback={consentFeedback} />
-              <LocalFeedback feedback={archiveFeedback} />
+              {/* The dialog owns the surface while it is open, so the same failure never renders twice. */}
+              {profileOpen ? null : <LocalFeedback feedback={profileFeedback} />}
+              {archiveOpen ? null : <LocalFeedback feedback={archiveFeedback} />}
             </div>
             <dl className="detail-region__facts">
               <div><dt>Teléfono</dt><dd>{customer.phone_e164 ?? "—"}</dd></div>
