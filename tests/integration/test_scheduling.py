@@ -3,7 +3,7 @@ from datetime import date, time
 import pytest
 
 from app.db import SessionLocal
-from app.models import Appointment, AppointmentStatus, Case, Conversation, Customer, TechnicianAvailability, User
+from app.models import Appointment, AppointmentHistory, AppointmentStatus, AuditLog, Case, Conversation, Customer, TechnicianAvailability, User
 from app.services import scheduling
 
 
@@ -52,6 +52,40 @@ def test_booking_rejects_unlinked_case_and_overlapping_active_appointment():
                 technician_id=technician.id, local_date=date(2026, 7, 15), local_time=time(10),
                 timezone_name="America/Santiago", duration_minutes=60, actor="oper",
             )
+
+
+@pytest.mark.parametrize("outcome", [AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW])
+def test_close_records_outcome_history_and_audit(outcome):
+    with SessionLocal() as session:
+        customer, case, technician = _linked_rows(session)
+        appointment = scheduling.book(
+            session, service="calefont", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=date(2026, 7, 15), local_time=time(10),
+            timezone_name="America/Santiago", duration_minutes=60, actor="oper",
+        )
+
+        closed = scheduling.close(session, appointment, outcome=outcome, actor="oper", reason="visit ended")
+        session.flush()
+
+        assert closed.status is outcome
+        history = session.query(AppointmentHistory).filter_by(appointment_id=closed.id).order_by(AppointmentHistory.id).all()
+        assert [entry.action for entry in history] == ["booked", outcome.value]
+        assert history[-1].from_status is AppointmentStatus.BOOKED
+        assert session.query(AuditLog).filter_by(action=f"appointment.{outcome.value}").count() == 1
+
+
+def test_close_rejects_non_booked_appointment():
+    with SessionLocal() as session:
+        customer, case, technician = _linked_rows(session)
+        appointment = scheduling.book(
+            session, service="calefont", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=date(2026, 7, 15), local_time=time(10),
+            timezone_name="America/Santiago", duration_minutes=60, actor="oper",
+        )
+        scheduling.close(session, appointment, outcome=AppointmentStatus.COMPLETED, actor="oper")
+
+        with pytest.raises(ValueError, match="only booked appointments can be closed"):
+            scheduling.close(session, appointment, outcome=AppointmentStatus.NO_SHOW, actor="oper")
 
 
 def test_configured_availability_rejects_outside_block():

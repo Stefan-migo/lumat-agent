@@ -1,12 +1,13 @@
 """Authenticated local scheduling operations (AP-10/11)."""
 
 from datetime import date, datetime, time
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.models import Case, Conversation, Customer, User
+from app.models import AppointmentStatus, Case, Conversation, Customer, User
 from app.panel.api.deps import require_operator_json
 from app.panel.api.serializers import (
     to_agenda_dict,
@@ -31,6 +32,11 @@ class AppointmentBody(BaseModel):
 
 
 class CancelBody(BaseModel):
+    reason: str | None = None
+
+
+class CloseBody(BaseModel):
+    outcome: Literal["completed", "no_show"]
     reason: str | None = None
 
 
@@ -95,6 +101,19 @@ def cancel_appointment(appointment_id: int, body: CancelBody, session: Session =
         raise HTTPException(status_code=404, detail="appointment not found")
     try:
         scheduling.cancel(session, appointment, actor=current.username, reason=body.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": "invalid_lifecycle", "message": str(exc)}) from exc
+    session.commit()
+    return {"ok": True, "appointment": to_appointment_dict(appointment)}
+
+
+@router.post("/appointments/{appointment_id}/close")
+def close_appointment(appointment_id: int, body: CloseBody, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
+    appointment = session.get(scheduling.Appointment, appointment_id)
+    if appointment is None:
+        raise HTTPException(status_code=404, detail="appointment not found")
+    try:
+        scheduling.close(session, appointment, outcome=AppointmentStatus(body.outcome), actor=current.username, reason=body.reason)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail={"code": "invalid_lifecycle", "message": str(exc)}) from exc
     session.commit()
