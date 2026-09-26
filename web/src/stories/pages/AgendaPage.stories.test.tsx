@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { cancelAppointment, closeAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from "../../api";
+import { cancelAppointment, closeAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
 import {
   AgendaPageStory,
   CancelConfirmation,
@@ -22,6 +22,7 @@ import {
 vi.mock("../../api", () => ({
   cancelAppointment: vi.fn(),
   closeAppointment: vi.fn(),
+  rescheduleAppointment: vi.fn(),
   listAppointments: vi.fn(),
   retryCalendarSync: vi.fn(),
   createCase: vi.fn(),
@@ -108,6 +109,20 @@ describe("AgendaPage Storybook state matrix", () => {
     });
     expect(container.querySelector(".data-region")).toBeInTheDocument();
     expect(screen.getAllByText("Mantención de calefón").length).toBeGreaterThan(0);
+  });
+
+  it("covers rescheduling while preserving appointment facts", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: "Luis", role: "tecnico", active: true }] as never });
+    vi.mocked(rescheduleAppointment).mockResolvedValue({ ok: true, appointment: {} });
+    render(<AgendaPageStory data={Data.args?.data} state="ready" />);
+    expect(screen.getByText("Camila Soto")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Reprogramar" }));
+    const dialog = screen.getByRole("dialog", { name: "Reprogramar visita" });
+    expect(within(dialog).getByLabelText("Fecha local")).toHaveValue("2026-09-05");
+    expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirmar reprogramación" }));
+    await waitFor(() => expect(rescheduleAppointment).toHaveBeenCalled());
   });
 
   it("covers the expanded create dialog and inline manual-case affordance", async () => {

@@ -40,6 +40,14 @@ class CloseBody(BaseModel):
     reason: str | None = None
 
 
+class RescheduleBody(BaseModel):
+    local_date: date
+    local_time: time
+    timezone: str
+    duration_minutes: int = Field(gt=0)
+    technician_id: int
+
+
 @router.get("/appointments")
 def list_appointments(from_date: date = Query(alias="from"), to_date: date = Query(alias="to"), timezone_name: str = Query(alias="timezone"), session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
     try:
@@ -114,6 +122,27 @@ def close_appointment(appointment_id: int, body: CloseBody, session: Session = D
         raise HTTPException(status_code=404, detail="appointment not found")
     try:
         scheduling.close(session, appointment, outcome=AppointmentStatus(body.outcome), actor=current.username, reason=body.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": "invalid_lifecycle", "message": str(exc)}) from exc
+    session.commit()
+    return {"ok": True, "appointment": to_appointment_dict(appointment)}
+
+
+@router.patch("/appointments/{appointment_id}")
+def reschedule_appointment(appointment_id: int, body: RescheduleBody, session: Session = Depends(get_db), current: User = Depends(require_operator_json)) -> dict:
+    appointment = session.get(scheduling.Appointment, appointment_id)
+    if appointment is None:
+        raise HTTPException(status_code=404, detail="appointment not found")
+    try:
+        scheduling.reschedule(session, appointment, local_date=body.local_date, local_time=body.local_time, timezone_name=body.timezone, duration_minutes=body.duration_minutes, technician_id=body.technician_id, actor=current.username)
+    except scheduling.Unavailable as exc:
+        raise HTTPException(status_code=409, detail={"code": "technician_unavailable", "message": str(exc)}) from exc
+    except scheduling.AppointmentConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": "appointment_conflict", "message": str(exc)}) from exc
+    except scheduling.InvalidTimezone as exc:
+        raise HTTPException(status_code=400, detail={"code": "invalid_timezone", "message": str(exc)}) from exc
+    except (scheduling.NonexistentLocalTime, scheduling.AmbiguousLocalTime) as exc:
+        raise HTTPException(status_code=400, detail={"code": "invalid_local_time", "message": str(exc)}) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail={"code": "invalid_lifecycle", "message": str(exc)}) from exc
     session.commit()

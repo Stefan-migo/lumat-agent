@@ -59,6 +59,9 @@ export function postJson<T>(path: string, body?: unknown): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
+export function patchJson<T>(path: string, body: unknown): Promise<T> {
+  return apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+}
 
 import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse } from './types';
 export const uploadKbDocument = (title: string, file: File, visibility: KbVisibility) => {
@@ -141,6 +144,9 @@ export function cancelAppointment(id: number, reason?: string) {
 }
 export function closeAppointment(id: number, outcome: "completed" | "no_show") {
   return postJson<{ ok: true; appointment: unknown }>(`/panel/api/appointments/${id}/close`, { outcome });
+}
+export function rescheduleAppointment(id: number, body: { local_date: string; local_time: string; timezone: string; duration_minutes: number; technician_id: number }) {
+  return patchJson<{ ok: true; appointment: unknown }>(`/panel/api/appointments/${id}`, body);
 }
 export function retryCalendarSync(id: number) {
   return postJson<{ ok: boolean; calendar: { status: string; error: string | null } }>(`/panel/api/appointments/${id}/calendar/sync`);

@@ -640,11 +640,105 @@ def test_web_search_sanitizes_html_and_entities_in_text_fields():
 
 @pytest.mark.parametrize("status", [401, 403, 429, 500, 503])
 @respx.mock
-def test_web_search_provider_failures_are_explicit(status):
+def test_web_search_provider_failures_are_explicit(status, monkeypatch):
+    monkeypatch.setattr("time.sleep", lambda _seconds: None)
     respx.get("https://api.search.brave.com/res/v1/web/search").respond(status)
 
     with pytest.raises(SearchFailure):
         BraveSearch(api_key="test-key").search("safe query")
+
+
+def _search_hit() -> dict:
+    return {
+        "web": {
+            "results": [
+                {
+                    "title": "Calefont",
+                    "url": "https://example.test/result",
+                    "description": "un resultado",
+                }
+            ]
+        }
+    }
+
+
+@respx.mock
+def test_web_search_rate_limit_waits_and_retries_once(monkeypatch):
+    slept = []
+    monkeypatch.setattr("time.sleep", slept.append)
+    route = respx.get("https://api.search.brave.com/res/v1/web/search")
+    route.side_effect = [
+        httpx.Response(429, headers={"Retry-After": "1"}),
+        httpx.Response(200, json=_search_hit()),
+    ]
+
+    results = BraveSearch(api_key="test-key").search("safe query")
+
+    assert len(route.calls) == 2
+    assert slept == [1.0]
+    assert results[0]["url"] == "https://example.test/result"
+
+
+@respx.mock
+def test_web_search_rate_limit_wait_is_capped(monkeypatch):
+    slept = []
+    monkeypatch.setattr("time.sleep", slept.append)
+    route = respx.get("https://api.search.brave.com/res/v1/web/search")
+    route.side_effect = [
+        httpx.Response(429, headers={"Retry-After": "99"}),
+        httpx.Response(200, json=_search_hit()),
+    ]
+
+    BraveSearch(api_key="test-key").search("safe query")
+
+    assert len(route.calls) == 2
+    assert slept == [2.0]
+
+
+@respx.mock
+def test_web_search_rate_limit_without_header_uses_the_default_wait(monkeypatch):
+    slept = []
+    monkeypatch.setattr("time.sleep", slept.append)
+    route = respx.get("https://api.search.brave.com/res/v1/web/search")
+    route.side_effect = [
+        httpx.Response(429),
+        httpx.Response(200, json=_search_hit()),
+    ]
+
+    BraveSearch(api_key="test-key").search("safe query")
+
+    assert len(route.calls) == 2
+    assert slept == [1.0]
+
+
+@respx.mock
+def test_web_search_rate_limit_that_persists_fails_after_one_retry(monkeypatch):
+    slept = []
+    monkeypatch.setattr("time.sleep", slept.append)
+    route = respx.get("https://api.search.brave.com/res/v1/web/search")
+    route.side_effect = [
+        httpx.Response(429, headers={"Retry-After": "1"}),
+        httpx.Response(429, headers={"Retry-After": "1"}),
+    ]
+
+    with pytest.raises(SearchFailure, match="rate-limited"):
+        BraveSearch(api_key="test-key").search("safe query")
+
+    assert len(route.calls) == 2
+    assert slept == [1.0]
+
+
+@respx.mock
+def test_web_search_non_rate_limit_failure_does_not_retry(monkeypatch):
+    slept = []
+    monkeypatch.setattr("time.sleep", slept.append)
+    route = respx.get("https://api.search.brave.com/res/v1/web/search").respond(500)
+
+    with pytest.raises(SearchFailure):
+        BraveSearch(api_key="test-key").search("safe query")
+
+    assert len(route.calls) == 1
+    assert slept == []
 
 
 @respx.mock

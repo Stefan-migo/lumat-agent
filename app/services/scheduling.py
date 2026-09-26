@@ -72,22 +72,29 @@ def _history(session: Session, appointment: Appointment, *, actor: str, action: 
     session.add(AppointmentHistory(appointment_id=appointment.id, actor=actor, action=action, from_status=previous, to_status=appointment.status, details=details))
 
 
+def _validate_slot(session: Session, *, customer_id: int, technician_id: int, local_date: date, local_time: time, timezone_name: str, duration_minutes: int, exclude_appointment_id: int | None = None) -> tuple[datetime, datetime]:
+    starts, ends = local_interval(local_date, local_time, timezone_name, duration_minutes)
+    configured = session.scalar(select(TechnicianAvailability.id).where(TechnicianAvailability.technician_id == technician_id)) is not None
+    if configured and not availability(session, technician_id, starts, ends):
+        raise Unavailable("technician is not available for the requested interval")
+    statement = select(Appointment).where(
+        Appointment.status == AppointmentStatus.BOOKED,
+        ((Appointment.technician_id == technician_id) | (Appointment.customer_id == customer_id)),
+        Appointment.starts_at < ends, Appointment.ends_at > starts,
+    )
+    if exclude_appointment_id is not None:
+        statement = statement.where(Appointment.id != exclude_appointment_id)
+    if session.scalar(statement) is not None:
+        raise AppointmentConflict("technician or customer has an overlapping booking")
+    return starts, ends
+
+
 def book(session: Session, *, service: str, customer_id: int, case_id: int, technician_id: int, local_date: date, local_time: time, timezone_name: str, duration_minutes: int, actor: str) -> Appointment:
     customer = session.get(Customer, customer_id)
     case = session.get(Case, case_id)
     if customer is None or case is None or case.customer_id != customer_id:
         raise UnlinkedAppointment("appointment requires a valid customer and matching case")
-    starts, ends = local_interval(local_date, local_time, timezone_name, duration_minutes)
-    configured = session.scalar(select(TechnicianAvailability.id).where(TechnicianAvailability.technician_id == technician_id)) is not None
-    if configured and not availability(session, technician_id, starts, ends):
-        raise Unavailable("technician is not available for the requested interval")
-    overlap = session.scalar(select(Appointment).where(
-        Appointment.status == AppointmentStatus.BOOKED,
-        ((Appointment.technician_id == technician_id) | (Appointment.customer_id == customer_id)),
-        Appointment.starts_at < ends, Appointment.ends_at > starts,
-    ))
-    if overlap is not None:
-        raise AppointmentConflict("technician or customer has an overlapping booking")
+    starts, ends = _validate_slot(session, customer_id=customer_id, technician_id=technician_id, local_date=local_date, local_time=local_time, timezone_name=timezone_name, duration_minutes=duration_minutes)
     appointment = Appointment(service=service, customer_id=customer_id, case_id=case_id, technician_id=technician_id, local_start=datetime.combine(local_date, local_time), timezone=timezone_name, starts_at=starts, ends_at=ends, duration_minutes=duration_minutes)
     session.add(appointment)
     try:
@@ -124,6 +131,30 @@ def close(session: Session, appointment: Appointment, *, outcome: AppointmentSta
     session.flush()
     _history(session, appointment, actor=actor, action=outcome.value, previous=previous, details={"reason": reason} if reason else None)
     record_audit(session, actor=actor, action=f"appointment.{outcome.value}", entity="appointment", entity_id=str(appointment.id), after={"outcome": outcome.value, "reason": reason})
+    return appointment
+
+
+def reschedule(session: Session, appointment: Appointment, *, local_date: date, local_time: time, timezone_name: str, duration_minutes: int, technician_id: int, actor: str) -> Appointment:
+    if appointment.status is not AppointmentStatus.BOOKED:
+        raise ValueError("only booked appointments can be rescheduled")
+    starts, ends = _validate_slot(session, customer_id=appointment.customer_id, technician_id=technician_id, local_date=local_date, local_time=local_time, timezone_name=timezone_name, duration_minutes=duration_minutes, exclude_appointment_id=appointment.id)
+    previous = appointment.status
+    from_start = appointment.local_start.isoformat()
+    from_technician_id = appointment.technician_id
+    appointment.local_start = datetime.combine(local_date, local_time)
+    appointment.timezone = timezone_name
+    appointment.starts_at = starts
+    appointment.ends_at = ends
+    appointment.duration_minutes = duration_minutes
+    appointment.technician_id = technician_id
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        session.rollback()
+        raise AppointmentConflict("technician or customer has an overlapping booking") from exc
+    details = {"from_start": from_start, "to_start": appointment.local_start.isoformat(), "from_technician_id": from_technician_id, "to_technician_id": technician_id}
+    _history(session, appointment, actor=actor, action="rescheduled", previous=previous, details=details)
+    record_audit(session, actor=actor, action="appointment.rescheduled", entity="appointment", entity_id=str(appointment.id), after=details)
     return appointment
 
 
