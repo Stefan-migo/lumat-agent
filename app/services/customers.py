@@ -77,6 +77,14 @@ class InvalidStateTransition(ValueError):
     """Raised when a customer state change violates the CR-3 lifecycle."""
 
 
+class PhoneAlreadyExists(ValueError):
+    """Raised when a panel create request uses an existing customer's phone."""
+
+    def __init__(self, customer_id: int) -> None:
+        self.customer_id = customer_id
+        super().__init__(f"phone already belongs to customer {customer_id}")
+
+
 # ---------------------------------------------------------------------------
 # E.164 normalization (canonical location; ingest.py re-exports)
 # ---------------------------------------------------------------------------
@@ -138,6 +146,46 @@ def get_or_create_customer(session: Session, phone: str) -> Customer:
             before={"archived_at": archived_at.isoformat()},
             after={"archived_at": None},
         )
+    return customer
+
+
+def create_customer(
+    session: Session,
+    phone: str,
+    *,
+    name: str | None = None,
+    email: str | None = None,
+    comuna: str | None = None,
+    address: str | None = None,
+    actor: str,
+) -> Customer:
+    """Create a panel customer, rejecting phone identities already in use."""
+    phone_e164 = normalize_phone_e164(phone)
+    if not phone_e164:
+        raise ValueError("phone cannot be normalized to E.164")
+    existing = session.scalar(select(Customer).where(Customer.phone_e164 == phone_e164))
+    if existing is not None:
+        raise PhoneAlreadyExists(existing.id)
+
+    customer = Customer(
+        phone_e164=phone_e164,
+        state=CustomerState.NUEVO,
+        consent_status=False,
+        name=name,
+        email=email,
+        comuna=comuna,
+        address=address,
+    )
+    session.add(customer)
+    session.flush()
+    record_audit(
+        session,
+        actor=actor,
+        action="customer.created",
+        entity="customer",
+        entity_id=str(customer.id),
+        after={"phone_e164": phone_e164, "channel": "panel"},
+    )
     return customer
 
 
