@@ -93,7 +93,7 @@ def _customer_row(customer_id: int) -> Customer:
 
 
 # ---------------------------------------------------------------------------
-# PDW-AUTH-1 — unauthenticated: 401 JSON, no redirect (all four endpoints)
+# PDW-AUTH-1 — unauthenticated: 401 JSON, no redirect
 # ---------------------------------------------------------------------------
 
 
@@ -104,6 +104,9 @@ def test_clients_endpoints_require_login_401_json(client):
         ("get", "/panel/api/clients/1"),
         ("post", "/panel/api/clients/1/state"),
         ("post", "/panel/api/clients/1/notes"),
+        ("post", "/panel/api/clients"),
+        ("patch", "/panel/api/clients/1"),
+        ("post", "/panel/api/clients/1/consent"),
     ]:
         resp = getattr(client, method)(path, follow_redirects=False)
         assert resp.status_code == 401, f"{method.upper()} {path} must be 401"
@@ -113,6 +116,106 @@ def test_clients_endpoints_require_login_401_json(client):
         )
         assert resp.json() == {"detail": "unauthorized"}
         assert "access-control-allow-origin" not in resp.headers, "no CORS (D1)"
+
+
+def test_create_client_conflict_returns_existing_id_including_archived(client, make_user):
+    from app.services import customers
+
+    customer_id = _seed_customer(phone="+56912345678")
+    archived_id = _seed_customer(phone="+56933334444")
+    with SessionLocal() as session:
+        customers.archive_customer(session, session.get(Customer, archived_id), actor="oper")
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    existing = client.post("/panel/api/clients", json={"phone": "912345678"})
+    archived = client.post("/panel/api/clients", json={"phone": "56933334444"})
+
+    assert existing.status_code == 409
+    assert existing.json()["detail"]["code"] == "phone_exists"
+    assert existing.json()["detail"]["customer_id"] == customer_id
+    assert archived.status_code == 409
+    assert archived.json()["detail"]["customer_id"] == archived_id
+
+
+def test_create_client_validates_phone_and_returns_new_ficha(client, make_user):
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    created = client.post("/panel/api/clients", json={"phone": "+56 9 1234 5678"})
+    missing = client.post("/panel/api/clients", json={})
+    invalid = client.post("/panel/api/clients", json={"phone": "  "})
+
+    assert created.status_code == 201
+    assert created.json()["customer"]["state"] == "nuevo"
+    assert created.json()["customer"]["consent_status"] is False
+    assert missing.status_code == invalid.status_code == 422
+
+
+def test_update_client_profile_audits_changed_fields_and_preserves_phone(client, make_user):
+    customer_id = _seed_customer()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.patch(
+        f"/panel/api/clients/{customer_id}",
+        json={"name": "Updated", "email": "a@example.com", "comuna": "Centro",
+              "address": "Street 1", "phone": "+56999999999"},
+    )
+    empty = client.patch(f"/panel/api/clients/{customer_id}", json={"name": "  "})
+    omitted = client.patch(f"/panel/api/clients/{customer_id}", json={"name": "Again"})
+
+    assert response.status_code == 200
+    ficha = response.json()["customer"]
+    assert (ficha["name"], ficha["email"], ficha["comuna"], ficha["address"]) == (
+        "Updated", "a@example.com", "Centro", "Street 1"
+    )
+    assert ficha["phone_e164"] == "+56911112222"
+    assert empty.status_code == 400
+    assert omitted.json()["customer"]["email"] == "a@example.com"
+    with SessionLocal() as session:
+        audit = session.scalar(
+            select(AuditLog).where(AuditLog.action == "customer.profile_updated")
+        )
+    assert audit.actor == "oper"
+    assert audit.before == {"name": "Ana Martínez", "email": None, "comuna": None, "address": None}
+    assert audit.after == {"name": "Updated", "email": "a@example.com", "comuna": "Centro", "address": "Street 1"}
+
+
+def test_update_client_empty_patch_is_not_audited(client, make_user):
+    customer_id = _seed_customer()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.patch(f"/panel/api/clients/{customer_id}", json={})
+
+    assert response.status_code == 200
+    with SessionLocal() as session:
+        assert session.scalar(
+            select(AuditLog).where(AuditLog.action == "customer.profile_updated")
+        ) is None
+
+
+def test_client_consent_is_audited_once_and_idempotent(client, make_user):
+    customer_id = _seed_customer()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    changed = client.post(f"/panel/api/clients/{customer_id}/consent", json={"consent": True})
+    consent_at = changed.json()["customer"]["consent_at"]
+    repeated = client.post(f"/panel/api/clients/{customer_id}/consent", json={"consent": True})
+
+    assert changed.status_code == repeated.status_code == 200
+    assert repeated.json()["customer"]["consent_at"] == consent_at
+    with SessionLocal() as session:
+        audits = session.scalars(
+            select(AuditLog).where(AuditLog.action == "customer.consent_updated")
+        ).all()
+    assert len(audits) == 1
+    assert audits[0].actor == "oper"
+    assert audits[0].before == {"consent_status": False}
+    assert audits[0].after == {"consent_status": True}
 
 
 # ---------------------------------------------------------------------------
