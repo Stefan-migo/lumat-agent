@@ -3,7 +3,7 @@
 **Branch**: `odd/assistant-closeout`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-closeout`
 **Base**: `50bce481` (= `main` = `origin/main` at branch time, merge of PR #382)
-**Status**: complete — implementation and checks green; push and PR are the owner's decision.
+**Status**: complete — delivered as **PR #384** (`odd/assistant-closeout` → `main`); merge is the owner's decision.
 
 ## Objective
 
