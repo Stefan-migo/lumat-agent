@@ -1,8 +1,11 @@
 # ODD: customer-drilldown
 
-**Branch**: `odd/customer-drilldown`
-**Worktree**: `/home/stefan/repos/lumat-agent-odd-customer-drilldown`
-**Base**: `2a85b675` (= `main` at branch time, merge of PR #370 `odd/agenda-visit-dialog`)
+**Branch (slice 1, merged and cleaned)**: `odd/customer-drilldown`
+**Worktree (slice 1, cleaned)**: `/home/stefan/repos/lumat-agent-odd-customer-drilldown`
+**Base (slice 1)**: `2a85b675` (= `main` at branch time, merge of PR #370 `odd/agenda-visit-dialog`)
+**Branch (slice 2, live)**: `odd/customer-drilldown-chain`
+**Worktree (slice 2, live)**: `/home/stefan/repos/lumat-agent-odd-customer-drilldown-chain`
+**Base (slice 2)**: `120d34b9` (= `main`, merge of PR #371 `odd/customer-drilldown`)
 **Status**: slice 1 delivered as **PR #371** (`odd/customer-drilldown` → `main`), CI green. Slice 2 implemented and verified locally on `odd/customer-drilldown-chain`; pending owner push/PR.
 **Origin**: follow-up **#1** of `odd/tasks/panel-subagent-delegation.md` — the sibling unit for per-customer
 drill-down reads. Owner scope decision taken 2026-09-26 (see *Decision*).
