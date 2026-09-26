@@ -154,6 +154,12 @@ order, and the next slice rebases onto the new `main` before its own PR.
   `tool_results`; `delegation_node()` calls the span with guardrail-validated scope; `run_assistant()` runs
   the real graph; `_after_guardrails()` routes delegated plans to the span; `execute_tool()` dispatches the
   scoped tools. The corresponding unit and integration test communities were consulted.
+- Native assessment of the slice-2 range: `risk: medium` (`executable_change`, the spec path), **260 lines**,
+  4 paths, **`review_due: false`** (`under_budget`). No review started — the same verdict as slice 1.
+- Parent readback after the writer returned: 4 paths changed (spec, unit test, integration test, this record),
+  commits `7e070ebe` · `f060ff70` · `f1b15dde` · `a0cbc6ba` · `88e8ac50`; `uv.lock` untouched at every commit.
+  The header now names both the cleaned slice-1 branch/worktree and the live slice-2 ones.
+- Parent spot check re-ran the delegation unit suite and the integration harness together: **`57 passed`, exit 0**.
 
 ## Next step
 
