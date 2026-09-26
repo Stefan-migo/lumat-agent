@@ -2,7 +2,7 @@
 
 **Branch**: `odd/customer-drilldown`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-customer-drilldown`
-**Base**: `3c179b5a` (= `main` at branch time, merge of PR #369)
+**Base**: `2a85b675` (= `main` at branch time, merge of PR #370 `odd/agenda-visit-dialog`)
 **Status**: planning complete, implementation starting.
 **Origin**: follow-up **#1** of `odd/tasks/panel-subagent-delegation.md` — the sibling unit for per-customer
 drill-down reads. Owner scope decision taken 2026-09-26 (see *Decision*).
@@ -14,7 +14,8 @@ ones) and their visits (including past ones) — instead of only being able to c
 
 ## Problem — measured, not inferred
 
-Verified on `3c179b5a`, not from memory:
+Verified on the branch base `2a85b675`, not from memory (the readings were taken at `3c179b5a`; PR #370
+between them touched only `web/` and its own agenda record):
 
 | Claim | Evidence |
 |---|---|
@@ -102,8 +103,8 @@ order, and the next slice rebases onto the new `main` before its own PR.
 
 | Slice | Content | Files |
 |---|---|---|
-| 1 | The read capability: the by-customer cases query, the tool, the whitelists, the unit tests, the recomputed catalog hash | `app/services/cases.py`, `app/chat/assistant/tools/registry.py`, `agent/registry.yaml`, `tests/unit/test_assistant_tools.py`, `tests/unit/test_assistant_delegation.py` |
-| 2 | The delegated chain end to end: `AT-15`, the two-step chain test and the integration harness | `openspec/specs/assistant-tools/spec.md`, `tests/unit/test_assistant_delegation.py`, `tests/integration/test_assistant_harness_guardrails.py`, this record |
+| 1 | The read capability: the by-customer cases query, the tool, the whitelists, the unit tests, the recomputed catalog hash, this record | `app/services/cases.py`, `app/chat/assistant/tools/registry.py`, `agent/registry.yaml`, `tests/unit/test_assistant_tools.py`, `tests/unit/test_assistant_delegation.py`, `odd/tasks/customer-drilldown.md` |
+| 2 | The delegated chain end to end: `AT-15`, the two-step chain test and the integration harness | `openspec/specs/assistant-tools/spec.md`, `tests/unit/test_assistant_delegation.py`, `tests/integration/test_assistant_harness_guardrails.py`, this record (updated) |
 
 ## Constraints
 
@@ -118,7 +119,23 @@ order, and the next slice rebases onto the new `main` before its own PR.
 - A narrow read-only mapper produced the initial map; every decisive line above was re-verified by the
   orchestrator against the working tree.
 
+## Progress
+
+- **Slice 1 implemented** (`e248c036`): `list_cases_for_customer` in `app/services/cases.py`; `OperationalHistoryArgs`
+  + `_operational_history` + the `TOOL_REGISTRY` entry in `registry.py`; the tool added to both whitelists in
+  `agent/registry.yaml`; unit tests for args validation, the projection and its forbidden set, the bound, and
+  the service seams. Strict TDD: the observed RED was
+  `ToolValidationError: unknown assistant tool: customers.operational_history`.
+- Planner catalog hash recomputed: `27bbace8…` → `e522ed87…` (recorded in the commit body).
+- Verification: focused `151 passed` exit 0; full suite **`1484 passed`, exit 0** (320s). Parent spot check
+  re-ran `test_assistant_tools.py` + `test_assistant_delegation.py` + `test_agent_registry.py`: exit 0.
+- Native assessment of this range: `risk: medium` (`configuration_change`), 233 lines, 6 paths,
+  **`review_due: false`** (`under_budget`). No review started.
+- Noted, not fixed: the unit test's rows are `SimpleNamespace` stubs, so they cannot prove the real ORM field
+  names; slice 2's integration harness runs the handler against the real database and closes that gap.
+
 ## Next step
 
-Implement with strict TDD. The instrumented run is owned by one bounded writer; verification is the full
-suite plus the focused assistant suites.
+Slice 1 is implemented, verified and committed on this branch (`e248c036` plus this record). Under
+`stacked-to-main` its PR opens and merges first; slice 2 — the delegated chain end to end, `AT-15` and the
+integration harness — then rebases onto the new `main` and opens its own PR.
