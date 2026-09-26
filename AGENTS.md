@@ -60,6 +60,38 @@ Step 5: FINALIZE — mem_save + rapso close --message "<summary>"
 ```
 <!-- rapso:end -->
 
+## Pre-merge integration check (MANDATORY discipline)
+
+`main` is shared, and a PR can be green while still landing a broken tree. Two ways get
+past the checks we have:
+
+1. **A semantic merge.** Git merges textually clean and GitHub reports `CLEAN`, while the
+   combined tree does not compile — two branches adding the same import is the canonical
+   case. `mergeable: CLEAN` says nothing about semantics.
+2. **A stale green check.** If the base branch moves after the check ran, the tree that
+   actually lands was never tested.
+
+Before merging any PR, the human — or the agent, on the owner's explicit authorization —
+MUST:
+
+- ensure the branch contains the current head of the base branch; merging `origin/main`
+  into the branch is enough, and it forces a fresh CI run over the real tree;
+- for a branch that touches a file another in-flight branch also touches, run the local
+  integration over the merged tree before pushing: the frontend suite, `npm run build`,
+  and the backend suite.
+
+The frontend type check is not optional: in this repository `tsc -b` lives only inside
+`npm run build`, and a green Vitest suite does **not** prove the tree type-checks.
+
+This is deliberately **report-only and fail-closed**. Nothing here auto-merges, auto-fixes,
+pushes, or edits the working tree: it produces evidence and stops. The merge decision stays
+human.
+
+**Limitation, stated honestly.** This repository has no branch protection (private, no
+GitHub Pro), so no check can block a merge — `gh pr merge` works with a red check. The
+discipline above is evidence, not enforcement. Enforcement would need branch protection or
+a local hook, and a hook is bypassable and does not cover GitHub's merge.
+
 ## Reporting Rapsodia Defects
 
 Rapsodia is a tool you are USING, not the project you are working on.
