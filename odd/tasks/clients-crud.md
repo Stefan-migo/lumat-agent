@@ -223,7 +223,7 @@ before the first source commit (owner decision pending).
 
 ### WU2 — create, profile update and consent, backend vertical
 
-- [ ] **T4 (be)** — RED first in `tests/functional/test_api_clients.py`:
+- [x] **T4 (be)** — RED first in `tests/functional/test_api_clients.py`:
   `POST /clients` returns `201` with the new ficha for a fresh phone, `409` with
   `{"code": "phone_exists", "customer_id": <id>}` for an existing phone
   (archived included), `422` for a missing or non-normalizable phone; the created
@@ -231,11 +231,24 @@ before the first source commit (owner decision pending).
   updates name/email/comuna/address, ignores an omitted field, rejects an empty
   string with `400`, and **cannot** change the phone; `POST /clients/{id}/consent`
   flips consent with `customer.consent_updated` in the audit carrying the actor.
-- [ ] **T5 (be)** — a `create_customer` service function that raises a typed
+  Delivered as `2f2487ad` and `fb57ff30`.
+- [x] **T5 (be)** — a `create_customer` service function that raises a typed
   conflict carrying the existing id (the route maps it to `409`, following the
-  exception-to-409 pattern of `routes/appointments.py:64-66`); the three routes;
+  exception-to-409 pattern of `routes/appointments.py:56-70`); the three routes;
   route-level `record_audit` for the profile update (D4).
-- [ ] **WU2 verification of record** — full `uv run pytest tests/`.
+- [x] **WU2 verification of record** — full `uv run pytest tests/` → **1508
+  passed**, exit 0 (1499 at the WU2 base, +9 tests). Slice code diff
+  `2a5c53dd..HEAD` over `app/ tests/`: **309 changed lines** (307 added, 2
+  deleted), 4 files.
+- [x] **WU2 native review: not applicable — `under_budget`.** `gentle-ai review
+  assess` over `2a5c53dd..HEAD --committed-only` reports `risk: medium` (reason
+  `executable_change` on `app/panel/api/routes/clients.py`), `changed_lines: 311`,
+  `review_due: false`, `review_due_reason: under_budget`. Native RAR owns
+  verification applicability, so **no review transaction was started** and no
+  receipt exists for this slice. The orchestrator does not author PASS and does
+  not manufacture a review RAR declares inapplicable. Independent checks that do
+  exist: the parent read the entire production diff against the contract, reran
+  the full suite, and CI runs both the `test` and `panel` jobs on the PR.
 
 ### WU3 — frontend: api layer + list page
 
@@ -354,9 +367,32 @@ before the first source commit (owner decision pending).
       that freeze and is **not** covered by it. Neither is any merge commit that
       brings the branch level with `main` before merge. No coverage is claimed
       for either.
-- [ ] T4 … — WU2 (create / profile / consent backend). Starts as its own branch
-      off `main` **after PR #378 merges** (`stacked-to-main`); the worktree
-      `../lumat-agent-odd-clients-crud` is reused.
+- [x] **WU2 implemented** on branch `odd/clients-crud-wu2` off the merged `main`
+      (`2a5c53dd`). Commits `2f2487ad` (service + integration tests), `fb57ff30`
+      (routes + functional tests), `e89db7fa` (login-contract coverage). The
+      contract was followed, including the two ordering hazards it named:
+      `PhoneAlreadyExists` subclasses `ValueError`, so the route must catch it
+      **first**, or the `409` degrades into a `422`; and `create_customer`'s
+      duplicate lookup deliberately does **not** filter `archived_at`, because the
+      phone is the identity and a phone held by an archived record is still taken.
+- [x] **Coverage gap found in WU1 and fixed here.** `test_clients_endpoints_require_login_401_json`
+      claims to cover "every clients endpoint" but WU1 never added
+      `POST /{id}/archive` and `POST /{id}/unarchive` to its list. The runtime
+      behaviour was already correct (`require_operator_json` is a route
+      dependency); only the enumerated contract was incomplete. Both are now in
+      the list, committed **before** this slice's assessment so they sit inside
+      whatever coverage the slice has.
+- [x] **Graph refreshed** to `2a5c53dd` — the post-merge refresh the Rapsodia
+      policy owns, triggered by the verified merge SHA of PR #378 on `main`.
+      `graphify <root> --update` then `graphify cluster-only <root>`;
+      `GRAPH_REPORT.md` now reads `Built from commit: 2a5c53dd`. **Honest note:**
+      the Graphify guidance states the incremental update has no API cost; it
+      actually consumed ~74.8k input / ~30.3k output tokens (~US$0.019) on this
+      repo, and the report only regenerates with the separate `cluster-only` step.
+      `odd/tasks/clients-crud.md` is included in the graph corpus now that it is
+      on `main`.
+- [ ] T6 … — WU3 (frontend: api layer + list page). New branch off `main` after
+      PR 2 merges (`stacked-to-main`).
 
 ## Recovery
 
