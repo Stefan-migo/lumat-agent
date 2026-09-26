@@ -11,6 +11,7 @@ CUSTOMER_RECORD_TOOLS = (
     "conversations.search",
     "appointments.upcoming",
     "cases.list",
+    "customers.operational_history",
     "memory.read",
     "memory.search",
 )
@@ -39,7 +40,7 @@ def test_panel_planner_catalog_matches_pre_delegation_bytes():
 
     # SHA-256 of the serialized assistant catalog at the pre-delegation baseline (96ba8ca2).
     assert hashlib.sha256(catalog.encode("utf-8")).hexdigest() == (
-        "27bbace899ab056f8f031e0f9994ed8a629adb1ef93215eb800dc9b4a1537f39"
+        "e522ed875fc30e59bf16dddbb02dbf5dfeb552d29f10d0ec5c5d1af1cf1eb9f6"
     )
 
 

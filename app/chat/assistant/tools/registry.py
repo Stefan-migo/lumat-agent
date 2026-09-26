@@ -73,6 +73,12 @@ class CasesArgs(BaseModel):
     limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
 
 
+class OperationalHistoryArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    customer_id: int = Field(gt=0)
+    limit: int = Field(default=10, ge=1, le=MAX_ITEMS)
+
+
 class KbArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(min_length=1, max_length=500)
@@ -267,6 +273,30 @@ def _upcoming_appointments(session, args: AppointmentArgs):
 
 def _open_cases(session, args: CasesArgs):
     return [case for case, _customer in cases.list_open_cases(session, args.limit)]
+
+
+def _operational_history(session, args: OperationalHistoryArgs):
+    def json_value(item):
+        if item is None:
+            return None
+        if isinstance(item, Enum):
+            return item.value
+        if isinstance(item, datetime):
+            return item.isoformat()
+        return item
+
+    case_fields = ("id", "service", "priority", "status", "summary", "created_at", "closed_at")
+    appointment_fields = ("id", "service", "status", "starts_at", "ends_at", "local_start", "timezone")
+    return {
+        "cases": [
+            {field: json_value(getattr(row, field)) for field in case_fields}
+            for row in cases.list_cases_for_customer(session, args.customer_id, args.limit)[:args.limit]
+        ],
+        "appointments": [
+            {field: json_value(getattr(row, field)) for field in appointment_fields}
+            for row in scheduling.list_for_customer(session, args.customer_id)[:args.limit]
+        ],
+    }
 
 
 def _retrieve_kb(session, args: KbArgs):
@@ -512,6 +542,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "conversations.search": ToolDefinition("conversations.search", QueryArgs, True, _search_conversations, "Search panel conversations."),
     "conversations.list": ToolDefinition("conversations.list", QueryArgs, True, _search_conversations, "List panel conversations."),
     "appointments.upcoming": ToolDefinition("appointments.upcoming", AppointmentArgs, True, _upcoming_appointments, "List upcoming appointments."),
+    "customers.operational_history": ToolDefinition("customers.operational_history", OperationalHistoryArgs, True, _operational_history, "Read one customer's cases (including closed) and appointments (including past)."),
     "cases.list": ToolDefinition("cases.list", CasesArgs, True, _open_cases, "List open cases."),
     "kb.retrieve": ToolDefinition("kb.retrieve", KbArgs, True, _retrieve_kb, "Retrieve grounded knowledge-base results."),
     "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory, "Read scoped memory."),
