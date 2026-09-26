@@ -11,6 +11,7 @@ import { Card } from '../primitives/Card';
 import { PageFrame } from '../shared/PageFrame';
 import { StateMessage } from '../shared/StateMessage';
 import { appointmentStatusLabel, appointmentStatusTone } from '../shared/toneMaps';
+import { composeAgendaTime } from '../shared/agendaTime';
 import { pathForRoute } from '../domain/panelRoutes';
 
 export interface AppointmentDetailProps {
@@ -61,10 +62,14 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
   };
   const reschedule = async () => {
     if (!detail || mutating) return;
+    if (!rescheduleForm.technician_id || !rescheduleForm.local_date || !rescheduleForm.local_time || Number(rescheduleForm.duration_minutes) <= 0) {
+      setFeedback({ tone: 'danger', title: 'Completa todos los campos de la reprogramación' });
+      return;
+    }
     setMutating(true);
     setFeedback(null);
     try {
-      await rescheduleAppointment(detail.appointment.id, { ...rescheduleForm, duration_minutes: Number(rescheduleForm.duration_minutes), technician_id: Number(rescheduleForm.technician_id), timezone: detail.appointment.timezone });
+      await rescheduleAppointment(detail.appointment.id, { ...composeAgendaTime(rescheduleForm.local_date, rescheduleForm.local_time, detail.appointment.timezone), duration_minutes: Number(rescheduleForm.duration_minutes), technician_id: Number(rescheduleForm.technician_id) });
       setRescheduleOpen(false);
       setFeedback({ tone: 'success', title: 'Visita reprogramada' });
       await retry();

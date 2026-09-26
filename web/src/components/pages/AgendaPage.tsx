@@ -54,7 +54,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const [closeTarget, setCloseTarget] = useState<AgendaAppointment | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<AgendaAppointment | null>(null);
   const [rescheduleForm, setRescheduleForm] = useState({ local_date: "", local_time: "", duration_minutes: "60", technician_id: "" });
-  const [rescheduleFeedback, setRescheduleFeedback] = useState<{ title: string; detail?: string } | null>(null);
+  const [rescheduleFeedback, setRescheduleFeedback] = useState<{ tone: "success" | "danger"; title: string; detail?: string } | null>(null);
   const [reason, setReason] = useState("");
   const [mutatingId, setMutatingId] = useState<number | null>(null);
   const [cancelFeedback, setCancelFeedback] = useState<ActionFeedback | null>(null);
@@ -122,16 +122,19 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   };
   const reschedule = async () => {
     if (!rescheduleTarget || mutatingId !== null) return;
+    if (!rescheduleForm.technician_id || !rescheduleForm.local_date || !rescheduleForm.local_time || Number(rescheduleForm.duration_minutes) <= 0) {
+      setRescheduleFeedback({ tone: "danger", title: "Completa todos los campos de la reprogramación" });
+      return;
+    }
     setMutatingId(rescheduleTarget.id);
     setRescheduleFeedback(null);
     try {
       await rescheduleAppointment(rescheduleTarget.id, { ...composeAgendaTime(rescheduleForm.local_date, rescheduleForm.local_time, rescheduleTarget.timezone), duration_minutes: Number(rescheduleForm.duration_minutes), technician_id: Number(rescheduleForm.technician_id) });
-      const id = rescheduleTarget.id;
       setRescheduleTarget(null);
       await refreshAgenda();
-      setCloseFeedback({ id, tone: "success", title: "Visita reprogramada" });
+      setRescheduleFeedback({ tone: "success", title: "Visita reprogramada" });
     } catch (error) {
-      setRescheduleFeedback({ title: "No se pudo reprogramar la visita", detail: error instanceof Error ? error.message : "Intenta nuevamente." });
+      setRescheduleFeedback({ tone: "danger", title: "No se pudo reprogramar la visita", detail: error instanceof Error ? error.message : "Intenta nuevamente." });
     } finally {
       setMutatingId(null);
     }
@@ -270,6 +273,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   return <PageFrame title="Agenda" meta={data ? `${appointments.length} ${appointments.length === 1 ? "visita" : "visitas"}` : "Visitas de la agenda"} actions={<Button onClick={() => void openCreate()}>Nueva visita</Button>} state={stateMessage(state, retry)}>
     {createFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={createFeedback.title} /> : null}
     {closeFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={closeFeedback.title} /> : null}
+    {rescheduleFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={rescheduleFeedback.title} /> : null}
     {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
       <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
       <section aria-label="Registro de agenda"><Tabs tabs={[{ id: "active", label: "Activas" }, { id: "non-active", label: "No activas" }]} activeTab={registerView} onTabChange={setRegisterView} ariaLabel="Filtro del registro de visitas">{() => showEmpty ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : register}</Tabs></section>
@@ -292,7 +296,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
         <Input label="Hora local" type="time" value={rescheduleForm.local_time} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_time: event.target.value }))} />
         <Input label="Duración (minutos)" type="number" min="1" value={rescheduleForm.duration_minutes} onChange={(event) => setRescheduleForm((form) => ({ ...form, duration_minutes: event.target.value }))} />
         <Select label="Técnico" value={rescheduleForm.technician_id} onChange={(event) => setRescheduleForm((form) => ({ ...form, technician_id: event.target.value }))} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
-        {rescheduleFeedback ? <StateMessage tone="danger" role="alert" title={rescheduleFeedback.title} detail={rescheduleFeedback.detail} /> : null}
+        {rescheduleFeedback?.tone === "danger" ? <StateMessage tone="danger" role="alert" title={rescheduleFeedback.title} detail={rescheduleFeedback.detail} /> : null}
         <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void reschedule()}>{mutatingId === rescheduleTarget?.id ? "Reprogramando…" : "Confirmar reprogramación"}</Button>
       </div> : null}
     </Dialog>

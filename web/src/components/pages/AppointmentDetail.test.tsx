@@ -65,8 +65,10 @@ describe('AppointmentDetail', () => {
   });
 
   it('offers rescheduling only for booked appointments', () => {
-    render(<AppointmentDetail data={detail} />);
+    const { rerender } = render(<AppointmentDetail data={detail} />);
     expect(screen.getByRole('button', { name: 'Reprogramar' })).toBeInTheDocument();
+    rerender(<AppointmentDetail data={{ ...detail, appointment: { ...detail.appointment, status: 'completed' } }} />);
+    expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
   });
 
   it('defaults and submits a complete replacement slot', async () => {
@@ -79,7 +81,7 @@ describe('AppointmentDetail', () => {
     expect(dialog.querySelector('input[type="date"]')).toHaveValue('2026-09-26');
     await user.click(screen.getByRole('button', { name: 'Confirmar reprogramación' }));
     await waitFor(() => expect(rescheduleAppointment).toHaveBeenCalledWith(7, {
-      local_date: '2026-09-26', local_time: '10:00', duration_minutes: 60,
+      local_date: '2026-09-26', local_time: '10:00:00', duration_minutes: 60,
       technician_id: 4, timezone: 'America/Santiago',
     }));
   });

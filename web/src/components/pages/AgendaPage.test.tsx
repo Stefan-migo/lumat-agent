@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { within } from '@testing-library/react';
 import { AgendaPage } from './AgendaPage';
 import type { AgendaAppointment } from '../../types';
 import { cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, rescheduleAppointment, retryCalendarSync } from '../../api';
@@ -234,6 +233,16 @@ describe('AgendaPage', () => {
     expect(within(dialog).getByLabelText('Duración (minutos)')).toHaveValue(60);
     await user.click(screen.getByRole('button', { name: 'Confirmar reprogramación' }));
     await waitFor(() => expect(rescheduleAppointment).toHaveBeenCalledWith(1, { local_date: '2026-09-05', local_time: '10:00:00', timezone: 'America/Santiago', duration_minutes: 60, technician_id: 30 }));
+  });
+
+  it('refuses a replacement slot with no technician instead of sending an unlinked slot', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [] as never });
+    render(<AgendaPage data={[appointment({ technician_id: null })]} state="ready" />);
+    await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar reprogramación' }));
+    expect(rescheduleAppointment).not.toHaveBeenCalled();
+    expect(within(screen.getByRole('dialog', { name: 'Reprogramar visita' })).getByRole('alert')).toHaveTextContent('Completa todos los campos');
   });
 
   it('separates active and non-active visits in a keyboard-operable client-side register view', async () => {
