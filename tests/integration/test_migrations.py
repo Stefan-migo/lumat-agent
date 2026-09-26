@@ -377,6 +377,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("030_memory_visibility_global",),
         ("031_internal_chat_thread_project",),
         ("032_case_conversation_nullable",),
+        ("033_customer_archived_at",),
     ]
 
 
