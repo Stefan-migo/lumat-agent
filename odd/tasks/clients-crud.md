@@ -199,24 +199,27 @@ Forecast at planning time: **~1150–1400 authored lines** across backend, front
 and tests — well over the ~400 review-focus budget, so the chain strategy applies
 before the first source commit (owner decision pending).
 
-### WU1 — archive, backend vertical
+### WU1 — archive, backend vertical — DELIVERED as PR #378
 
-- [ ] **T1 (be)** — RED first in `tests/integration/test_customers.py` and
+- [x] **T1 (be)** — RED first in `tests/integration/test_customers.py` and
   `tests/functional/test_api_clients.py`: `search_customers` excludes an archived
   customer by default and includes it with `include_archived=True`;
   `archive_customer` / `unarchive_customer` set and clear `archived_at` and write
   `customer.archived` / `customer.unarchived` audit rows; an inbound
   `get_or_create_customer` on an archived phone clears `archived_at` and writes
   `customer.auto_unarchived`.
-- [ ] **T2 (be)** — the schema and the service: migration
+- [x] **T2 (be)** — the schema and the service: migration
   `033_customer_archived_at.sql`, `Customer.archived_at`, the `search_customers`
   parameter, the two archive functions and the auto-unarchive branch in
-  `get_or_create_customer`. Commit split so each commit stays ≤5 files:
-  (a) migration + model, (b) service + tests.
-- [ ] **T3 (be)** — the routes and the payload: `POST /clients/{id}/archive`,
+  `get_or_create_customer`. Delivered as two commits: `68744267` (migration +
+  model) and `f181e8c6` (service + tests).
+- [x] **T3 (be)** — the routes and the payload: `POST /clients/{id}/archive`,
   `POST /clients/{id}/unarchive` (audited, actor from `require_operator_json`),
   `include_archived` on `GET /clients`, and `archived_at` in `to_customer_dict`.
-- [ ] **WU1 verification of record** — full `uv run pytest tests/`.
+  Commit `c5b43049`.
+- [x] **WU1 verification of record** — full `uv run pytest tests/` → **1499
+  passed**, exit 0. Slice branch `odd/clients-crud` pushed; PR **#378** (base
+  `main`, label `type:feature`).
 
 ### WU2 — create, profile update and consent, backend vertical
 
@@ -335,7 +338,25 @@ before the first source commit (owner decision pending).
       migration, not a new requirement, so it was authorized and fixed inline.
 - [x] WU1 verification of record: `uv run pytest tests/` → **1499 passed**
       (229.49s), exit 0 — up from the 1493 baseline (+6 new tests).
-- [ ] T4 …
+- [x] **WU1 native review** — lineage `review-252398aaefabd88a`, risk tier
+      `high` (reason `process_boundary` / `shell_process` on
+      `tests/integration/test_migrations.py`, i.e. a test that spawns
+      `db/migrate.sh` — not production code). Four lenses (risk, resilience,
+      readability, reliability), **zero findings**, `approved`, authority
+      **burned** (`gentle-ai.review-acknowledged/v1`). Owner granted the review
+      through the consent envelope; the owner also chose `stacked-to-main` and
+      Q2 = "warn, do not block" earlier in the session.
+- [x] **PR #378** opened — `feat(clients): archive customers without deleting
+      them`, base `main`, label `type:feature`. Branch `odd/clients-crud`.
+- [x] **Coverage caveat (recorded, and stated in the PR):** the receipt freezes
+      the candidate `7fb8cd10..e5e1cfe4` (`candidate_tree` `acd4d413`). This
+      docs-only commit — the one that records the PR number — lands **after**
+      that freeze and is **not** covered by it. Neither is any merge commit that
+      brings the branch level with `main` before merge. No coverage is claimed
+      for either.
+- [ ] T4 … — WU2 (create / profile / consent backend). Starts as its own branch
+      off `main` **after PR #378 merges** (`stacked-to-main`); the worktree
+      `../lumat-agent-odd-clients-crud` is reused.
 
 ## Recovery
 
