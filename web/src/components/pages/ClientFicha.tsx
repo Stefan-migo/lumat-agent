@@ -3,6 +3,7 @@ import { addClientNote, ApiError, apiFetch, changeClientState, postJson, resolve
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
+import { pathForRoute } from "../domain/panelRoutes";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
@@ -10,6 +11,7 @@ import { Select } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
 import { DataTable, type Column } from "../shared/DataTable";
 import { CaseActions } from "../shared/CaseActions";
+import { CollapsibleMessages } from "../shared/CollapsibleMessages";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
@@ -26,6 +28,7 @@ import {
 
 const DATE_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short" });
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" });
+const MESSAGE_PREVIEW = 10;
 
 const formatDate = (value: string | null | undefined) => (value ? DATE_FORMAT.format(new Date(value)) : "—");
 const formatDateTime = (value: string | null | undefined) => (value ? DATE_TIME_FORMAT.format(new Date(value)) : "—");
@@ -67,6 +70,7 @@ function surfaceClass(rowCount: number) {
 
 export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, isSaving = false, onRetryCalendar, state: controlledState }: ClientFichaProps) {
   const [retryingCalendarId, setRetryingCalendarId] = useState<number | null>(null);
+  const [messagesExpanded, setMessagesExpanded] = useState(false);
   const [refreshed, setRefreshed] = useState<{ ficha: ClientFichaResponse; memories: Memory[]; pendingRelations: MemoryRelation[] } | null>(null);
   const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
   const [note, setNote] = useState("");
@@ -77,12 +81,12 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const fetchFicha = useCallback(async () => {
     if (customerId === undefined) throw new Error("customer id is required");
     const [ficha, memoryResponse, pendingResponse] = await Promise.all([
-      apiFetch<ClientFichaResponse>(`/panel/api/clients/${customerId}`),
+      apiFetch<ClientFichaResponse>(`/panel/api/clients/${customerId}${messagesExpanded ? "" : `?messages_limit=${MESSAGE_PREVIEW}`}`),
       apiFetch<MemoriesResponse>(`/panel/api/clients/${customerId}/memories`),
       apiFetch<PendingMemoryRelationsResponse>(`/panel/api/clients/${customerId}/memory-relations/pending`),
     ]);
     return { ficha, memories: memoryResponse.memories, pendingRelations: pendingResponse.relations };
-  }, [customerId]);
+  }, [customerId, messagesExpanded]);
   const fetched = useAsyncData(fetchFicha, controlledData === undefined && controlledState === undefined);
   const data = refreshed?.ficha ?? controlledData ?? fetched.data?.ficha;
   const memories = refreshed?.memories ?? controlledMemories ?? fetched.data?.memories ?? [];
@@ -148,6 +152,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     await resolveMemoryRelation(customerId, relationId, relation);
     await refresh();
   };
+  const toggleMessages = () => { setRefreshed(null); setMessagesExpanded((value) => !value); fetched.retry(); };
   const conversationColumns: Column<(typeof history.conversations)[number]>[] = [
     { key: "id", header: "#", render: (row) => `#${row.id}` },
     { key: "state", header: "Estado", render: (row) => conversationLabel(row.state) },
@@ -162,6 +167,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     { key: "summary", header: "Resumen", render: (row) => row.summary ?? "—" },
   ];
   const messageColumns: Column<(typeof history.messages)[number]>[] = [
+    { key: "conversation", header: "Conversación", render: (row) => <a className="table__link" href={pathForRoute({ view: "conversations", conversationId: row.conversation_id })}>#{row.conversation_id}</a> },
     { key: "id", header: "#", render: (row) => `#${row.id}` },
     { key: "direction", header: "Dirección", render: (row) => directionLabel(row.direction) },
     { key: "msg_type", header: "Tipo", render: (row) => row.msg_type },
@@ -292,7 +298,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             <section aria-labelledby="ficha-messages-heading" className="client-ficha__history-block">
               <h3 id="ficha-messages-heading">Mensajes</h3>
               <div className={surfaceClass(history.messages.length)}>
-                <DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} />
+                <CollapsibleMessages total={history.messages_total} expanded={messagesExpanded} onToggle={toggleMessages}>
+                  <DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} />
+                </CollapsibleMessages>
               </div>
             </section>
           </section>

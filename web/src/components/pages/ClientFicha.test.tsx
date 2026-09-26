@@ -30,6 +30,7 @@ const ficha: ClientFichaResponse = {
       { id: 1, conversation_id: 1, customer_id: 7, created_at: "2026-07-14T12:00:00Z", service: "Gasfitería", priority: "normal", status: "cerrado", summary: "Llave", emergency: false, responsible_id: null, escalated_at: null, closed_at: "2026-07-14T14:00:00Z", acknowledged_at: null, ack_by: null, is_open: false },
     ],
     messages: [{ id: 3, conversation_id: 1, direction: "inbound", msg_type: "text", text: "Necesito ayuda", media_url: null, created_at: "2026-07-15T12:00:00Z" }],
+    messages_total: 12,
     appointments: [],
   },
   users: [{ id: 9, username: "operador" }],
@@ -105,7 +106,7 @@ describe("ClientFicha page grammar", () => {
     await user.selectOptions(screen.getByLabelText("Responsable caso 2"), "");
     await user.click(screen.getByRole("button", { name: "Actualizar" }));
     expect(postJson).toHaveBeenCalledWith("/panel/api/cases/2/update", { status: "cerrado", responsible_id: null });
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7"));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10"));
     await user.click(screen.getByRole("button", { name: "Reconocer" }));
     expect(postJson).toHaveBeenCalledWith("/panel/api/cases/2/ack");
   });
@@ -132,7 +133,7 @@ describe("ClientFicha page grammar", () => {
 
     expect(changeClientState).toHaveBeenCalledWith(7, "pendiente");
     expect(addClientNote).toHaveBeenCalledWith(7, "Llamar mañana");
-    expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7");
+    expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10");
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7/memories");
     expect(await screen.findByRole("heading", { name: "Nota agregada" })).toBeInTheDocument();
   });
@@ -289,5 +290,45 @@ describe("ClientFicha slice 2 — product register", () => {
     await user.click(screen.getByRole("button", { name: "Volver a clientes" }));
 
     expect(back).toHaveBeenCalledTimes(1);
+  });
+
+  it("links each message to its conversation and offers expansion when more than ten exist", () => {
+    render(<ClientFicha data={ficha} memories={memories} />);
+
+    expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute("href", "/panel/app/conversations/1");
+    expect(screen.getByRole("button", { name: "Ver todos (12)" })).toBeInTheDocument();
+  });
+
+  it("loads a ten-message preview and fetches the full list when expanded", async () => {
+    const user = userEvent.setup();
+    const allMessages = Array.from({ length: 12 }, (_, index) => ({
+      ...ficha.history.messages[0], id: index + 1, text: `Mensaje ${index + 1}`,
+    }));
+    vi.mocked(apiFetch).mockImplementation(async (path) => {
+      if (path.endsWith("/memories")) return { memories };
+      if (path.endsWith("/pending")) return { relations: [] };
+      return {
+        ...ficha,
+        history: {
+          ...ficha.history,
+          messages: path.includes("messages_limit=10") ? allMessages.slice(-10) : allMessages,
+        },
+      };
+    });
+
+    render(<ClientFicha customerId={7} memories={memories} />);
+    expect(await screen.findByText("Mensaje 3")).toBeInTheDocument();
+    expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10");
+    await user.click(screen.getByRole("button", { name: "Ver todos (12)" }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7"));
+    expect(await screen.findByText("Mensaje 1")).toBeInTheDocument();
+    expect(screen.getByText("Mensaje 12")).toBeInTheDocument();
+  });
+
+  it("hides the disclosure control when ten or fewer messages exist", () => {
+    render(<ClientFicha data={{ ...ficha, history: { ...ficha.history, messages_total: 10 } }} memories={memories} />);
+
+    expect(screen.queryByRole("button", { name: /Ver todos/ })).not.toBeInTheDocument();
   });
 });

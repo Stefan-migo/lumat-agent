@@ -419,6 +419,7 @@ export interface ClientFichaResponse {
       media_url: string | null;
       created_at: string | null;
     }>;
+    messages_total: number;
     appointments?: Appointment[];
   };
   notes: CustomerNote[];
