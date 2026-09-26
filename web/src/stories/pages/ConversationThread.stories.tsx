@@ -20,10 +20,13 @@ const interactiveConversation = {
 };
 export type ConversationThreadState = "ready" | "loading" | "empty";
 export function ConversationThreadView({ state = "ready" }: { state?: ConversationThreadState }) {
-  return <ConversationThread data={{ conversation, messages: state === "empty" ? [] : messages }} state={state === "loading" ? "loading" : "ready"} customerName={customerName} />;
+  return <ConversationThread data={{ conversation, messages: state === "empty" ? [] : messages, messages_total: messages.length }} state={state === "loading" ? "loading" : "ready"} customerName={customerName} />;
 }
 export function InteractiveConversationThreadView() {
-  return <ConversationThread data={{ conversation: interactiveConversation, messages }} state="ready" customerName={customerName} interactive />;
+  return <ConversationThread data={{ conversation: interactiveConversation, messages, messages_total: messages.length }} state="ready" customerName={customerName} interactive />;
+}
+export function ConversationThreadWithManyMessagesView() {
+  return <ConversationThread data={{ conversation, messages, messages_total: 12 }} state="ready" customerName={customerName} />;
 }
 export function ConversationThreadBubbles() {
   return <PageFrame title={`# ${conversation.id}`} meta={customerName(conversation.customer_id)}>
@@ -35,11 +38,12 @@ export function ConversationThreadBubbles() {
 }
 export { NoReplyNote };
 
-const meta = { title: "pages/ConversationThread", parameters: { layout: "fullscreen" }, excludeStories: ["ConversationThreadView", "InteractiveConversationThreadView", "ConversationThreadBubbles", "NoReplyNote"] } satisfies Meta;
+const meta = { title: "pages/ConversationThread", parameters: { layout: "fullscreen" }, excludeStories: ["ConversationThreadView", "InteractiveConversationThreadView", "ConversationThreadWithManyMessagesView", "ConversationThreadBubbles", "NoReplyNote"] } satisfies Meta;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = { render: () => <ConversationThreadView /> };
 export const Interactive: Story = { render: () => <InteractiveConversationThreadView /> };
+export const ManyMessages: Story = { render: () => <ConversationThreadWithManyMessagesView /> };
 export const Loading: Story = { render: () => <ConversationThreadView state="loading" /> };
 export const Empty: Story = { render: () => <ConversationThreadView state="empty" /> };
 export const BubbleVariant: Story = { render: () => <ConversationThreadBubbles /> };

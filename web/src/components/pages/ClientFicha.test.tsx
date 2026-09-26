@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApiError, apiFetch, addClientNote, changeClientState, resolveMemoryRelation } from "../../api";
+import { ApiError, apiFetch, addClientNote, changeClientState, postJson, resolveMemoryRelation } from "../../api";
 import { ClientFicha } from "./ClientFicha";
 import type { ClientFichaResponse, Memory } from "../../types";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), resolveMemoryRelation: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn() };
 });
 
 const ficha: ClientFichaResponse = {
@@ -25,11 +25,15 @@ const ficha: ClientFichaResponse = {
   },
   history: {
     conversations: [{ id: 1, state: "human", summary: "Coordinar visita", created_at: "2026-07-15T12:00:00Z", closed_at: null }],
-   cases: [{ id: 2, conversation_id: 1, service: "Reparación", priority: "alta", status: "open", summary: "Calefón" }],
+    cases: [
+      { id: 2, conversation_id: 1, customer_id: 7, created_at: "2026-07-15T12:00:00Z", service: "Reparación", priority: "alta", status: "open", summary: "Calefón", emergency: true, responsible_id: 9, escalated_at: null, closed_at: null, acknowledged_at: null, ack_by: null, is_open: true },
+      { id: 1, conversation_id: 1, customer_id: 7, created_at: "2026-07-14T12:00:00Z", service: "Gasfitería", priority: "normal", status: "cerrado", summary: "Llave", emergency: false, responsible_id: null, escalated_at: null, closed_at: "2026-07-14T14:00:00Z", acknowledged_at: null, ack_by: null, is_open: false },
+    ],
     messages: [{ id: 3, conversation_id: 1, direction: "inbound", msg_type: "text", text: "Necesito ayuda", media_url: null, created_at: "2026-07-15T12:00:00Z" }],
+    messages_total: 12,
     appointments: [],
-    visit_history: [],
   },
+  users: [{ id: 9, username: "operador" }],
   notes: [{ id: 4, customer_id: 7, note: "Confirmar por WhatsApp", author: "operador", created_at: null }],
   memo: "Prefiere contacto por la tarde.",
   states: ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"],
@@ -66,7 +70,7 @@ describe("ClientFicha page grammar", () => {
   });
 
   it("retains operational cards, memory and note content, badges, and history tables", () => {
-    render(<ClientFicha data={ficha} memories={memories} />);
+    const { container } = render(<ClientFicha data={ficha} memories={memories} />);
 
     expect(screen.getByRole("heading", { name: "Memo del cliente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Memorias del cliente" })).toBeInTheDocument();
@@ -77,8 +81,42 @@ describe("ClientFicha page grammar", () => {
     expect(screen.getAllByRole("table")).toHaveLength(4);
     expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Conversaciones" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Casos" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Casos anteriores" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Mensajes" })).toBeInTheDocument();
+    expect(container.querySelector('ol[aria-label="Ciclo de vida de visitas"]')).toBeNull();
+  });
+
+  it("renders active case facts and keeps it out of the archive", () => {
+    render(<ClientFicha data={ficha} memories={memories} />);
+    expect(screen.getByRole("heading", { name: "Caso activo" })).toBeInTheDocument();
+    expect(screen.getByText("Emergencia sin reconocer")).toBeInTheDocument();
+    expect(screen.getAllByText("operador").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Estado caso 2")).toBeInTheDocument();
+    const archive = screen.getByRole("region", { name: "Casos anteriores" });
+    expect(within(archive).queryByText("#2")).not.toBeInTheDocument();
+    expect(within(archive).getByText("#1")).toBeInTheDocument();
+  });
+
+  it("updates and acknowledges an active case, then refetches the ficha", async () => {
+    const user = userEvent.setup();
+    vi.mocked(postJson).mockResolvedValue({ ok: true });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+    await user.selectOptions(screen.getByLabelText("Estado caso 2"), "cerrado");
+    await user.selectOptions(screen.getByLabelText("Responsable caso 2"), "");
+    await user.click(screen.getByRole("button", { name: "Actualizar" }));
+    expect(postJson).toHaveBeenCalledWith("/panel/api/cases/2/update", { status: "cerrado", responsible_id: null });
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10"));
+    await user.click(screen.getByRole("button", { name: "Reconocer" }));
+    expect(postJson).toHaveBeenCalledWith("/panel/api/cases/2/ack");
+  });
+
+  it("shows local feedback when a case update fails", async () => {
+    const user = userEvent.setup();
+    vi.mocked(postJson).mockRejectedValue(new ApiError(500, "private error"));
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+    await user.click(screen.getByRole("button", { name: "Actualizar" }));
+    expect(await screen.findByRole("heading", { name: "No pudimos guardar caso" })).toBeInTheDocument();
   });
 
   it("posts state changes and notes, then refreshes ficha and memories", async () => {
@@ -95,7 +133,7 @@ describe("ClientFicha page grammar", () => {
 
     expect(changeClientState).toHaveBeenCalledWith(7, "pendiente");
     expect(addClientNote).toHaveBeenCalledWith(7, "Llamar mañana");
-    expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7");
+    expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10");
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7/memories");
     expect(await screen.findByRole("heading", { name: "Nota agregada" })).toBeInTheDocument();
   });
@@ -216,7 +254,7 @@ describe("ClientFicha slice 2 — product register", () => {
 
     expect(screen.getByRole("region", { name: "Visitas" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Conversaciones" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Casos" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Casos anteriores" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Mensajes" })).toBeInTheDocument();
   });
 
@@ -265,5 +303,45 @@ describe("ClientFicha slice 2 — product register", () => {
     await user.click(screen.getByRole("button", { name: "Volver a clientes" }));
 
     expect(back).toHaveBeenCalledTimes(1);
+  });
+
+  it("links each message to its conversation and offers expansion when more than ten exist", () => {
+    render(<ClientFicha data={ficha} memories={memories} />);
+
+    expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute("href", "/panel/app/conversations/1");
+    expect(screen.getByRole("button", { name: "Ver todos (12)" })).toBeInTheDocument();
+  });
+
+  it("loads a ten-message preview and fetches the full list when expanded", async () => {
+    const user = userEvent.setup();
+    const allMessages = Array.from({ length: 12 }, (_, index) => ({
+      ...ficha.history.messages[0], id: index + 1, text: `Mensaje ${index + 1}`,
+    }));
+    vi.mocked(apiFetch).mockImplementation(async (path) => {
+      if (path.endsWith("/memories")) return { memories };
+      if (path.endsWith("/pending")) return { relations: [] };
+      return {
+        ...ficha,
+        history: {
+          ...ficha.history,
+          messages: path.includes("messages_limit=10") ? allMessages.slice(-10) : allMessages,
+        },
+      };
+    });
+
+    render(<ClientFicha customerId={7} memories={memories} />);
+    expect(await screen.findByText("Mensaje 3")).toBeInTheDocument();
+    expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10");
+    await user.click(screen.getByRole("button", { name: "Ver todos (12)" }));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7"));
+    expect(await screen.findByText("Mensaje 1")).toBeInTheDocument();
+    expect(screen.getByText("Mensaje 12")).toBeInTheDocument();
+  });
+
+  it("hides the disclosure control when ten or fewer messages exist", () => {
+    render(<ClientFicha data={{ ...ficha, history: { ...ficha.history, messages_total: 10 } }} memories={memories} />);
+
+    expect(screen.queryByRole("button", { name: /Ver todos/ })).not.toBeInTheDocument();
   });
 });

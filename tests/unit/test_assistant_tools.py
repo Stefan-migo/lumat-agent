@@ -44,6 +44,67 @@ def test_registry_exposes_typed_bounded_tools():
     assert get_tool("automation.create_rule").read_only is False
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"customer_id": 0},
+        {"customer_id": 1, "limit": MAX_ITEMS + 1},
+        {"customer_id": 1, "unexpected": True},
+    ],
+)
+def test_operational_history_args_reject_invalid_input(payload):
+    with pytest.raises(ValueError):
+        get_tool("customers.operational_history").args_model.model_validate(payload)
+
+
+def test_operational_history_projects_bounded_service_results(monkeypatch):
+    tool = get_tool("customers.operational_history")
+
+    case_fields = {
+        "id": 3, "service": "repair", "priority": "high", "status": "closed",
+        "summary": "Completed", "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+        "closed_at": None, "customer_id": 99, "internal": "excluded",
+    }
+    appointment_fields = {
+        "id": 4, "service": "inspection", "status": "completed",
+        "starts_at": datetime(2025, 1, 2, tzinfo=timezone.utc),
+        "ends_at": datetime(2025, 1, 2, 1, tzinfo=timezone.utc),
+        "local_start": "2025-01-02T10:00", "timezone": "America/Santiago",
+        "customer_id": 99, "message_text": "excluded", "media_url": "excluded",
+    }
+    case_rows = [SimpleNamespace(**case_fields) for _ in range(3)]
+    appointment_rows = [SimpleNamespace(**appointment_fields) for _ in range(3)]
+    calls = []
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.cases.list_cases_for_customer",
+        lambda session, customer_id, limit: calls.append(("cases", customer_id, limit)) or case_rows,
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.scheduling.list_for_customer",
+        lambda session, customer_id: calls.append(("appointments", customer_id)) or appointment_rows,
+    )
+
+    result = tool.handler(SimpleNamespace(), tool.args_model(customer_id=7, limit=2))
+
+    assert calls == [("cases", 7, 2), ("appointments", 7)]
+    assert len(result["cases"]) == len(result["appointments"]) == 2
+    assert set(result) == {"cases", "appointments"}
+    assert set(result["cases"][0]) == {
+        "id", "service", "priority", "status", "summary", "created_at", "closed_at"
+    }
+    assert set(result["appointments"][0]) == {
+        "id", "service", "status", "starts_at", "ends_at", "local_start", "timezone"
+    }
+    assert result["cases"][0]["created_at"] == "2025-01-01T00:00:00+00:00"
+    assert result["cases"][0]["closed_at"] is None
+    assert result["appointments"][0]["starts_at"] == "2025-01-02T00:00:00+00:00"
+    forbidden = {"customer_id", "name", "phone", "email", "address", "comuna", "consent",
+                 "message_text", "media_url", "customer_notes"}
+    assert not forbidden.intersection(result["cases"][0])
+    assert not forbidden.intersection(result["appointments"][0])
+
+
 def test_registry_exposes_the_single_url_reader_as_a_read_only_tool():
     schemas = tool_schemas()
     assert "web.fetch" in schemas

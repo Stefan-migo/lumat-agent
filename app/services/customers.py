@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -221,13 +221,19 @@ def search_customers(session: Session, query: str | None = None, limit: int = 10
 # ---------------------------------------------------------------------------
 
 
-def customer_history(session: Session, customer_id: int) -> dict:
+def customer_history(
+    session: Session, customer_id: int, messages_limit: int | None = None
+) -> dict:
     """Complete linked history: conversations, cases, messages (CR-5).
 
     Returns dicts (not ORM objects) so the panel can render plain data.
     Messages are flattened across all the customer's conversations and sorted
     chronologically.
     """
+    # Local import: a top-level `customers -> cases` import cycles through
+    # `app.chat.state` (which imports `get_or_create_customer` from this module).
+    from app.services.cases import case_is_open
+
     conversations = session.scalars(
         select(Conversation)
         .where(Conversation.customer_id == customer_id)
@@ -238,33 +244,33 @@ def customer_history(session: Session, customer_id: int) -> dict:
         .where(Case.customer_id == customer_id)
         .order_by(Case.id)
     ).all()
-    messages = session.scalars(
+    messages_total = session.scalar(
+        select(func.count(Message.id))
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .where(Conversation.customer_id == customer_id)
+    )
+    messages_query = (
         select(Message)
         .join(Conversation, Message.conversation_id == Conversation.id)
         .where(Conversation.customer_id == customer_id)
-        .order_by(Message.created_at, Message.id)
-    ).all()
+    )
+    if messages_limit is not None and messages_limit > 0:
+        messages = list(
+            session.scalars(
+                messages_query.order_by(Message.created_at.desc(), Message.id.desc())
+                .limit(messages_limit)
+            )
+        )
+        messages.reverse()
+    else:
+        messages = list(
+            session.scalars(messages_query.order_by(Message.created_at, Message.id))
+        )
     appointments = session.scalars(
         select(Appointment)
         .where(Appointment.customer_id == customer_id)
         .order_by(Appointment.starts_at, Appointment.id)
     ).all()
-    visit_history = [
-        {
-            "id": event.id,
-            "appointment_id": event.appointment_id,
-            "actor": event.actor,
-            "action": event.action,
-            "from_status": event.from_status.value if event.from_status else None,
-            "to_status": event.to_status.value,
-            "status": event.to_status.value,
-            "details": event.details,
-            "created_at": event.created_at,
-        }
-        for appointment in appointments
-        for event in appointment.history
-    ]
-    visit_history.sort(key=lambda event: (event["created_at"], event["id"]))
     return {
         "conversations": [
             {
@@ -280,10 +286,19 @@ def customer_history(session: Session, customer_id: int) -> dict:
             {
                 "id": ca.id,
                 "conversation_id": ca.conversation_id,
+                "customer_id": ca.customer_id,
+                "created_at": ca.created_at,
                 "service": ca.service,
                 "priority": ca.priority,
                 "status": ca.status,
                 "summary": ca.summary,
+                "emergency": ca.emergency,
+                "responsible_id": ca.responsible_id,
+                "escalated_at": ca.escalated_at,
+                "closed_at": ca.closed_at,
+                "acknowledged_at": ca.acknowledged_at,
+                "ack_by": ca.ack_by,
+                "is_open": case_is_open(ca),
             }
             for ca in cases
         ],
@@ -299,6 +314,7 @@ def customer_history(session: Session, customer_id: int) -> dict:
             }
             for m in messages
         ],
+        "messages_total": messages_total,
         "appointments": [
             {
                 "id": a.id,
@@ -315,7 +331,6 @@ def customer_history(session: Session, customer_id: int) -> dict:
             }
             for a in appointments
         ],
-        "visit_history": visit_history,
     }
 
 

@@ -38,6 +38,10 @@ def case_is_open_expr():
     return or_(Case.status.is_(None), Case.status.not_in(CLOSING_CASE_STATUSES))
 
 
+def case_is_open(case: Case) -> bool:
+    return case.status is None or case.status not in CLOSING_CASE_STATUSES
+
+
 def set_case_status(case: Case, status: str | None) -> None:
     """Set status and synchronize the closure timestamp; NULL status is open."""
     was_closing = case.status in CLOSING_CASE_STATUSES
@@ -172,6 +176,18 @@ def list_open_cases(session: Session, limit: int = 100) -> list[Case]:
                 Case.created_at.desc(),
                 Case.id.desc(),
             )
+            .limit(limit)
+        ).all()
+    )
+
+
+def list_cases_for_customer(session: Session, customer_id: int, limit: int) -> list[Case]:
+    """Return a bounded customer case history, including closed cases."""
+    return list(
+        session.scalars(
+            select(Case)
+            .where(Case.customer_id == customer_id)
+            .order_by(Case.created_at.desc(), Case.id.desc())
             .limit(limit)
         ).all()
     )

@@ -1,11 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { apiFetch, postJson } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Case, CasesResponse, UserRef } from "../../types";
 import { Badge } from "../primitives/Badge";
-import { Button } from "../primitives/Button";
-import { Select } from "../primitives/Select";
 import { DataTable, type Column } from "../shared/DataTable";
+import { CaseActions } from "../shared/CaseActions";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
@@ -21,73 +20,10 @@ export interface CasesListProps {
   onOpenClient?: (id: number) => void;
 }
 
-const CASE_STATUSES = ["abierto", "en_evaluacion", "escalado", "cerrado"];
-
 const responsibleLabel = (id: number | null, users: UserRef[]): string => {
   const user = users.find((candidate) => candidate.id === id);
   return user ? user.username : "—";
 };
-
-function CaseActions({
-  c,
-  users,
-  onUpdate,
-  onAcknowledge,
-}: {
-  c: Case;
-  users: UserRef[];
-  onUpdate?: (caseId: number, status: string, responsibleId: number | null) => Promise<void>;
-  onAcknowledge?: (caseId: number) => Promise<void>;
-}) {
-  const [status, setStatus] = useState(c.status);
-  const [responsibleId, setResponsibleId] = useState(c.responsible_id === null ? "" : String(c.responsible_id));
-  const [busy, setBusy] = useState(false);
-  const emergencyUnanswered = c.emergency && c.ack_by === null;
-  const run = async (action: (() => Promise<void>) | undefined) => {
-    if (!action) return;
-    setBusy(true);
-    try {
-      await action();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="cases-list__actions">
-      <Select
-        label="Estado"
-        aria-label={`Estado caso ${c.id}`}
-        value={status}
-        onChange={(event) => setStatus(event.target.value)}
-        options={CASE_STATUSES.map((value) => ({ value, label: caseStatusLabel(value) }))}
-        size="sm"
-      />
-      <Select
-        label="Responsable"
-        aria-label={`Responsable caso ${c.id}`}
-        value={responsibleId}
-        onChange={(event) => setResponsibleId(event.target.value)}
-        options={[{ value: "", label: "Sin asignar" }, ...users.map((user) => ({ value: String(user.id), label: user.username }))]}
-        size="sm"
-      />
-      <div className="table__actions">
-        <Button
-          variant="secondary"
-          disabled={busy}
-          onClick={() => run(onUpdate ? () => onUpdate(c.id, status, responsibleId ? Number(responsibleId) : null) : undefined)}
-        >
-          Actualizar
-        </Button>
-        {emergencyUnanswered ? (
-          <Button variant="secondary" disabled={busy} onClick={() => run(onAcknowledge ? () => onAcknowledge(c.id) : undefined)}>
-            Reconocer
-          </Button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
 
 function EmergencyCell({ c }: { c: Case }) {
   if (!c.emergency) return <span>—</span>;
@@ -148,7 +84,7 @@ export function CasesList({ data: controlledData, state: controlledState, onRetr
           columns={columns.map((column) => column.key === "responsible" ? { ...column, render: (c: Case) => responsibleLabel(c.responsible_id, users) } : column.key === "customer" && onOpenClient ? { ...column, render: (c: Case) => <a className="table__link" href={pathForRoute({ view: "clients", clientId: c.customer.id })} onClick={(event) => { event.preventDefault(); onOpenClient(c.customer.id); }}>{c.customer.name ?? "—"}</a> } : column)}
           rows={cases}
           rowKey={(c) => String(c.id)}
-          actions={(c) => <CaseActions c={c} users={users} onUpdate={controlledData === undefined ? updateCase : undefined} onAcknowledge={controlledData === undefined ? acknowledgeCase : undefined} />}
+          actions={(c) => <CaseActions target={c} users={users} onUpdate={controlledData === undefined ? updateCase : undefined} onAcknowledge={controlledData === undefined ? acknowledgeCase : undefined} />}
         />
       ) : null}
     </PageFrame>

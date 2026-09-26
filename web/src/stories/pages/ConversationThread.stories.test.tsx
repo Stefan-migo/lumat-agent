@@ -1,22 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ConversationThread } from "../../components/pages/ConversationThread";
-import { ConversationThreadBubbles, ConversationThreadView, InteractiveConversationThreadView } from "./ConversationThread.stories";
+import { ConversationThreadBubbles, ConversationThreadView, ConversationThreadWithManyMessagesView, InteractiveConversationThreadView } from "./ConversationThread.stories";
 import { conversations, messages } from "./_shared/mockData/conversations";
 
 const conversation = conversations[0];
 describe("ConversationThread", () => {
   it("loads a read-only thread from the thread endpoint", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ conversation, messages }), { status: 200 }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ conversation, messages, messages_total: messages.length }), { status: 200 }));
     render(<ConversationThread conversationId={conversation.id} />);
     expect(await screen.findByText(messages[0].text!)).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith(`/panel/api/conversations/${conversation.id}`, expect.objectContaining({ credentials: "include" }));
+    expect(fetchMock).toHaveBeenCalledWith(`/panel/api/conversations/${conversation.id}?messages_limit=10`, expect.objectContaining({ credentials: "include" }));
     expect(screen.getAllByText(/canal automático/i).length).toBeGreaterThan(0);
     fetchMock.mockRestore();
   });
 
   it("renders directional bubbles and no reply controls", () => {
-    render(<ConversationThread data={{ conversation, messages }} />);
+    render(<ConversationThread data={{ conversation, messages, messages_total: messages.length }} />);
     expect(screen.queryAllByRole("table")).toHaveLength(0);
     expect(screen.getAllByText(/Marcela Fuentes|Lumat/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("textbox")).toBeNull();
@@ -24,7 +24,7 @@ describe("ConversationThread", () => {
   });
 
   it("renders the empty thread state", () => {
-    render(<ConversationThread data={{ conversation, messages: [] }} />);
+    render(<ConversationThread data={{ conversation, messages: [], messages_total: 0 }} />);
     expect(screen.getByText("No hay registros")).toBeInTheDocument();
   });
 
@@ -43,6 +43,11 @@ describe("ConversationThread", () => {
     expect(screen.getByRole("button", { name: "Devolver al agente" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cerrar conversación" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reconocer emergencia" })).toBeInTheDocument();
+  });
+
+  it("shows the message disclosure in the many-messages story", () => {
+    render(<ConversationThreadWithManyMessagesView />);
+    expect(screen.getByRole("button", { name: "Ver todos (12)" })).toBeInTheDocument();
   });
 
   it("renders the interactive story inspector content", () => {
