@@ -119,18 +119,49 @@ exist and need no change unless verification proves otherwise.
   `userEvent.setup({ delay: null })` plus an explicit 15 s timeout; the three later full runs
   were green.
 
-### WU3 — AG-UI-6 non-active register filter
+### WU3 — AG-UI-6 non-active register filter — done (`423eb812`)
 
-- [ ] Separate active from non-active visits by status (`cancelled`, `completed`,
-      `no_show`); default view stays active; nothing is deleted.
-- **Verify**: `cd web && npm test -- src/components/pages/AgendaPage.test.tsx`; `cd web && npm run build`
+- [x] RED: five cases (default excludes non-active, the non-active view and its label, no
+      request on switch, keyboard operation, empty state). The pre-existing non-booked
+      cancellation test also went RED because its rows left the default view.
+- [x] The register splits on `cancelled`/`completed`/`no_show`. Default view is **Activas**;
+      non-active rows render under their own **Visitas no activas** section, never the
+      `Hoy`/`Próximas` headings. The filter is client-side over the loaded period and deletes
+      nothing. `Tabs` is reused; the calendar counts and the header total are untouched.
+- [x] The pre-existing non-booked test now drives the non-active view and asserts the three
+      rows are present before checking no cancellation control is offered — it can no longer
+      pass vacuously.
+- **Verify**: focused **39 passed**; `cd web && npm test` — **759 passed**;
+  `cd web && npm run build` — **built**.
+- **Review boundary**: `review assess --base-ref 673d9fba --committed-only` → `medium`,
+  **`review_due: true`** / `slice_budget_reached` (441 lines). The consolidated review ran
+  here.
 
-### WU4 — Story coverage and full verification
+### WU4 — Story coverage and full verification — done (`9f6f0793`)
 
-- [ ] Storybook states for the create dialog and the register filter.
-- [ ] Full `cd web && npm test` and `cd web && npm run build`.
-- [ ] Backend regression `uv run pytest tests/`.
-- **Verify**: the three commands above, observed.
+- [x] `CreateVisit` story plus a non-vacuous interaction test: the dialog opens with its fields
+      grouped in `.agenda-create-form`, `Caso` is the combobox, and a non-matching query offers
+      the inline create affordance without issuing a request. The register filter is exercised
+      by the existing lifecycle story, which now inspects both views.
+- [x] Full `cd web && npm test` — **760 passed** (87 files); `cd web && npm run build` — **built**.
+- [x] Backend regression `uv run pytest tests/ -o addopts='' -q` — **1476 passed**.
+- **Verify**: the three commands above, observed. The worktree needed `uv sync`,
+  `infra/.env` copied from the main worktree (gitignored) and `infra/test-db.sh up` first.
+
+## Native review receipt
+
+- Transaction `review-00292df36b4f7e6c` — risk `medium`, **one** selected lens
+  (`review-reliability`), correction budget 200, 11 paths / 441 lines.
+- Result **`approved`**. Authority burned via `gentle-ai review acknowledge-approved`
+  (`action: acknowledged`).
+- One advisory finding, deliberately non-blocking: **`R3-001`**
+  (`web/src/components/pages/AgendaPage.tsx:166-181`) — inline case creation has no
+  pending guard, so repeated activation while the request is in flight can POST twice and
+  append two cases. `createBusy` only disables the appointment submit button. Recorded as
+  separate later work; the closure states it opens no correction and must not reopen this
+  review.
+- **Scope, stated honestly**: the receipt covers the candidate at WU3 (441 lines). `WU4`
+  (`9f6f0793`) is a story/test-only delta committed after the acknowledgement.
 
 ## Acceptance criteria
 
@@ -150,8 +181,14 @@ exist and need no change unless verification proves otherwise.
 | WU2 | `cd web && npm test -- src/components/pages/AgendaPage.test.tsx src/components/primitives/Combobox.test.tsx` | 37 passed |
 | WU2 | `cd web && npm test` | 755 passed (87 files) |
 | WU2 | `cd web && npm run build` | ✓ built in 17.43s |
+| WU3 | focused (AgendaPage + stories) | 39 passed |
+| WU3 | `cd web && npm test` | 759 passed (87 files) |
+| WU4 | `cd web && npm test` | 760 passed (87 files) |
+| WU4 | `cd web && npm run build` | ✓ built in 17.32s |
+| WU4 | `uv run pytest tests/ -o addopts='' -q` | 1476 passed in 229.64s |
 
-The backend suite and the closing full re-run are WU4.
+The backend suite is unchanged by this unit (no `app/`, `db/` or `tests/` file was touched);
+it ran as the closing safety net.
 
 ## Graph nodes consulted
 
@@ -173,5 +210,6 @@ The backend suite and the closing full re-run are WU4.
 
 - [x] WU1 done — `933686c9`
 - [x] WU2 done — `bd2d4a5c`, `321d423b`
-- [ ] WU3 not started
-- [ ] WU4 not started
+- [x] WU3 done — `423eb812`
+- [x] WU4 done — `9f6f0793`; web 760 passed, web build green, backend 1476 passed
+- [ ] Owner decision: push and open the PR
