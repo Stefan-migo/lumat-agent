@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { apiFetch } from "../../api";
+import { ApiError, fetchClients, createCustomer, getClientFicha, archiveCustomer, unarchiveCustomer } from "../../api";
 import { ClientesList } from "./ClientesList";
 import type { Customer } from "../../types";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, apiFetch: vi.fn() };
+  return { ...actual, fetchClients: vi.fn(), createCustomer: vi.fn(), getClientFicha: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn() };
 });
 
 const customers: Customer[] = [
@@ -109,8 +109,8 @@ describe("ClientesList", () => {
   // and the recovery actually clears the search field.
   it("distinguishes a filtered-empty result and offers the search recovery", async () => {
     const user = userEvent.setup();
-    vi.mocked(apiFetch).mockImplementation(async (path: string) =>
-      String(path).includes("q=") ? { clients: [] } : { clients: customers },
+    vi.mocked(fetchClients).mockImplementation(async ({ query = "" } = {}) =>
+      ({ clients: query ? [] : customers }),
     );
 
     render(<ClientesList />);
@@ -224,20 +224,74 @@ describe("ClientesList", () => {
   });
 
   it("fetches the list on mount through the panel API", async () => {
-    vi.mocked(apiFetch).mockResolvedValue({ clients: customers });
+    vi.mocked(fetchClients).mockResolvedValue({ clients: customers });
 
     render(<ClientesList />);
 
     expect(await screen.findByText("Marcela Fuentes")).toBeInTheDocument();
-    expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients");
+    expect(fetchClients).toHaveBeenCalledWith({ includeArchived: false, query: "" });
+  });
+
+  it("opens the create dialog and offers ficha navigation for a duplicate phone", async () => {
+    const user = userEvent.setup();
+    const onOpenClient = vi.fn();
+    vi.mocked(createCustomer).mockRejectedValue(Object.assign(new ApiError(409, "Duplicate", { code: "phone_exists", message: "Duplicate", customer_id: 9 })));
+    render(<ClientesList data={customers} state="ready" onOpenClient={onOpenClient} />);
+    await user.click(screen.getByRole("button", { name: "Nuevo cliente" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("Teléfono")).toBeRequired();
+    await user.type(screen.getByLabelText("Teléfono"), "+56912345678");
+    await user.click(screen.getByRole("button", { name: "Crear cliente" }));
+    await user.click(await screen.findByRole("button", { name: "Abrir la ficha existente" }));
+    expect(onOpenClient).toHaveBeenCalledWith(9);
+    expect(screen.queryByText("phone_exists")).not.toBeInTheDocument();
+  });
+
+  it("loads D7 counts once before confirming archive and supports unarchive", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getClientFicha).mockResolvedValue({ customer: customers[0], history: { cases: [{ is_open: true }, { is_open: false }], appointments: [{ starts_at: "2099-01-01", status: "booked" }] } } as never);
+    vi.mocked(archiveCustomer).mockResolvedValue({ customer: customers[0] });
+    render(<ClientesList data={[{ ...customers[0], archived_at: null }]} state="ready" />);
+    await user.click(screen.getByRole("button", { name: "Archivar Marcela Fuentes" }));
+    expect(getClientFicha).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/1 caso abierto y 1 visita futura/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirmar archivo" }));
+    expect(archiveCustomer).toHaveBeenCalledWith(1);
+
+    render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
+    await user.click(screen.getByRole("button", { name: "Restaurar Marcela Fuentes" }));
+    expect(unarchiveCustomer).toHaveBeenCalledWith(1);
+  });
+
+  it("surfaces a failed restore to the operator instead of failing silently", async () => {
+    const user = userEvent.setup();
+    vi.mocked(unarchiveCustomer).mockRejectedValue(new Error("offline"));
+    render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
+    await user.click(screen.getByRole("button", { name: "Restaurar Marcela Fuentes" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos restaurar");
+  });
+
+  it("shows the archived filter and marks archived customers", () => {
+    render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
+    expect(screen.getByRole("checkbox", { name: "Mostrar archivados" })).toBeInTheDocument();
+    expect(screen.getByText("Archivado")).toBeInTheDocument();
+  });
+
+  it("requests archived clients only after enabling the toggle", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: customers });
+    render(<ClientesList />);
+    await screen.findByText("Marcela Fuentes");
+    await user.click(screen.getByRole("checkbox", { name: "Mostrar archivados" }));
+    await waitFor(() => expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: true, query: "" }));
   });
 
   // T2 — clearing the search must return to the unfiltered list. Today the refetch only
   // fires for a non-empty query, so a cleared search leaves the filtered result on screen.
   it("resets the list when the search is cleared", async () => {
     const user = userEvent.setup();
-    vi.mocked(apiFetch).mockImplementation(async (path: string) =>
-      String(path).includes("q=marcela") ? { clients: [customers[0]] } : { clients: customers },
+    vi.mocked(fetchClients).mockImplementation(async ({ query = "" } = {}) =>
+      ({ clients: query.toLowerCase() === "marcela" ? [customers[0]] : customers }),
     );
 
     render(<ClientesList />);
@@ -249,6 +303,6 @@ describe("ClientesList", () => {
 
     await user.clear(search);
     await waitFor(() => expect(screen.getByText("Pedro Soto")).toBeInTheDocument());
-    expect(apiFetch).toHaveBeenLastCalledWith("/panel/api/clients");
+    expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: false, query: "" });
   });
 });

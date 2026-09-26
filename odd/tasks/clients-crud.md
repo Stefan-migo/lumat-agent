@@ -2,8 +2,8 @@
 
 Status: in progress
 Worktree: `../lumat-agent-odd-clients-crud`
-Branch: `odd/clients-crud`
-Base: `7fb8cd10` (main, after U1 `case-closure-fix` and U2 `client-ficha-case-surface`)
+Branch: `odd/clients-crud-wu3`
+Base: `1fdddcee` (main after WU2; this worktree started at `50bce481`, current `origin/main`)
 Depends on: nothing — U3 is independent of U1/U2
 Source: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md`
 Delivery strategy: `ask-on-risk`
@@ -99,8 +99,8 @@ dependency; `tokens.css` values; hard/soft **delete** of a customer.
 ## Authorized scope
 
 - Worktree: `/home/stefan/repos/lumat-agent-odd-clients-crud`
-- Branch: `odd/clients-crud`
-- Base: `7fb8cd10`
+- Branch: `odd/clients-crud-wu3`
+- Base: `1fdddcee` (worktree start: `50bce481`)
 - Files: as listed in Scope.
 
 ## Constraints
@@ -252,18 +252,52 @@ before the first source commit (owner decision pending).
 
 ### WU3 — frontend: api layer + list page
 
-- [ ] **T6 (fe)** — RED first: `ApiError` exposes the parsed structured detail
+- [x] **T6 (fe)** — RED first: `ApiError` exposes the parsed structured detail
   (D6); `listClients` takes `includeArchived`; `createCustomer`,
   `updateCustomerProfile`, `archiveCustomer`, `unarchiveCustomer` exist with the
   routes above.
-- [ ] **T7 (fe)** — RED first in `ClientesList`: a "Nuevo cliente" action opens a
+- [x] **T7 (fe)** — RED first in `ClientesList`: a "Nuevo cliente" action opens a
   create form in the existing `Dialog` primitive (phone required; a duplicate
   phone surfaces "abrir la ficha existente" and navigates to it); a "Mostrar
   archivados" toggle drives `include_archived`; an archived row is visibly
   marked; the row archive action fetches the ficha once and confirms with the D7
   counts.
-- [ ] **WU3 verification of record** — `cd web && npm run test` +
-  `npx tsc -b --noEmit` + `npm run build`.
+- [x] **WU3 verification of record** — `cd web && npm run test` → **91 files / 806
+  tests passed**, exit 0; `cd web && npx tsc -b --noEmit` → exit 0;
+  `cd web && npm run build` → exit 0 (Vite production build; existing >500 kB
+  chunk advisory). The first full-suite attempt exceeded its 120-second command
+  timeout and the next run exposed unrelated intermittent timeouts; isolated
+  reruns passed, and the subsequent complete suite passed. Focused WU3 tests:
+  **60 passed**. RED evidence: T6 `apiFetch > preserves structured conflict
+  detail additively` lacked `structuredDetail`; `client API contracts > lists
+  clients with encoded search and archive filters` called the unfiltered path;
+  `client API contracts > uses the customer CRUD routes and payloads` failed
+  because `createCustomer` was not a function. T7 `ClientesList > opens the
+  create dialog and offers ficha navigation for a duplicate phone` could not
+  find `Nuevo cliente`; `ClientesList > loads D7 counts once before confirming
+  archive and supports unarchive` could not find the row archive action; and
+  `ClientesList > shows the archived filter and marks archived customers` could
+  not find the archived filter checkbox. Strict TDD RED was observed before the
+  production edits; the focused tests and full suite then passed.
+- [x] **WU3 native review: not applicable — `under_budget`.** `gentle-ai review
+  assess --cwd . --agent opencode --base-ref 50bce481 --committed-only --json`
+  reports `risk: medium` (reason `executable_change` on `web/src/api.test.ts`),
+  `changed_lines: 301`, `changed_paths: 7`, `review_due: false`,
+  `review_due_reason: under_budget`. Native RAR owns verification applicability,
+  so **no review transaction was started** and **no receipt exists** for this
+  slice. The orchestrator does not author PASS and does not manufacture a review
+  RAR declares inapplicable. The orchestrator did re-run the full frontend suite
+  and both type/build gates itself as a spot check.
+
+- [x] **PR #386 opened** — `feat(clients): create and archive customers from the
+      clients list`, base `main`, label `type:feature`, branch
+      `odd/clients-crud-wu3`. Opened after merging the then-current `origin/main`
+      (`f5a6d68d`) into the branch; the full local integration over the merged
+      tree passed (frontend **813 tests**, `tsc` exit 0, `npm run build` exit 0,
+      backend **1533 passed**). The branch intersects `web/src/api.ts` with the
+      just-merged `odd/agenda-register-actions-chain` (#383), so the merged-tree
+      run was required, not optional. The bringing-level merge commit is covered
+      by no review receipt and none is claimed.
 
 ### WU4 — frontend: ficha profile, consent and archive
 
@@ -397,13 +431,37 @@ before the first source commit (owner decision pending).
       flight (#379, #380); the base `2a5c53dd` stayed an ancestor and
       `git merge-tree --write-tree origin/main HEAD` reported a clean merge
       before the push.
-- [ ] T6 … — WU3 (frontend: api layer + list page). New branch off `main` after
-      PR 2 merges (`stacked-to-main`).
+- [x] **WU3 implemented** on `odd/clients-crud-wu3`, starting at `50bce481`.
+      T6/T7 delivered in commits `aa793758` (API types, structured conflict
+      payload, list and mutation functions; 60 changed lines across 3 files) and
+      `1f09748b` (create/archive list workflows and tests; 160 changed lines
+      across 3 files). Total authored code diff: **220 changed lines**, 6 files.
+- [x] **WU3 Graph Check record** — the orchestrator completed the graph check
+      before this implementation; no graph refresh was run. Nodes consulted:
+      `ClientesList.tsx`, `ClientFicha.tsx`, `api.ts`, `apiFetch()`, `postJson()`,
+      `types.ts`, `useAsyncData.ts`, `Button.tsx`, `Dialog.tsx`,
+      `app/panel/api/serializers.py` (`to_customer_dict`), and
+      `shared/StateMessage.tsx`. Communities: `ClientesList.tsx`,
+      `ClientFicha.tsx`, `types.ts`, `useAsyncData`, and `pages/CasesList.tsx`.
+- [x] **WU3 implementation details** — the page now uses `fetchClients` rather
+      than a divergent inline fetch, retains controlled props and `useAsyncData`,
+      reads ficha counts only after the operator requests archiving, and uses the
+      existing `Dialog`, `Input`, `Button`, `Badge`, and `DataTable` primitives.
+- [x] **WU3 readback fix** — the orchestrator's diff readback found that
+      `restore()` set the error state but the error only rendered inside the two
+      `Dialog`s, so a failed unarchive from a row action failed **silently**.
+      Fixed under strict TDD in `dd244577` (`fix(clients): surface restore
+      failures in the list`): RED first
+      (`ClientesList > surfaces a failed restore to the operator instead of
+      failing silently` — `findByRole("alert")` not found), then a visible
+      `role="alert"` line rendered when no dialog is open. WU3 re-verification
+      after the fix: `cd web && npm run test` → **91 files / 807 tests passed**,
+      exit 0; `npx tsc -b --noEmit` → exit 0; `npm run build` → exit 0.
 
 ## Recovery
 
 - Worktree: `/home/stefan/repos/lumat-agent-odd-clients-crud`,
-  branch `odd/clients-crud`, base `7fb8cd10`.
+  branch `odd/clients-crud-wu3`, base `1fdddcee` (started at `50bce481`).
 - Test DB: `bash infra/test-db.sh up|down|env`, project
   `lumat-test-lumat-agent-odd-clients-crud`, port `5702`.
 - `graphify-out/` is gitignored and absent from this worktree: query the graph
@@ -412,5 +470,6 @@ before the first source commit (owner decision pending).
   before continuing.
 - Session of record:
   `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/`.
-- Handoff of record: `.rapsodia-code/handoffs/2026-09-26-clientes-u3-u4.md`
-  (Engram `#5112`).
+- Handoff of record: Engram **#5135**
+  (`odd/clientes-crm/handoff-u3-wu3-wu4`); `.rapsodia-code/handoffs/2026-09-26-clientes-u3-u4.md`
+  and Engram **#5112** remain valid only for U4 `cases-page`.

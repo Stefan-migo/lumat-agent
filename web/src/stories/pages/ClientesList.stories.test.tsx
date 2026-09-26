@@ -215,7 +215,7 @@ describe("ClientesList API behavior", () => {
     });
 
     await waitFor(() => {
-      expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Marcela%20Fuentes")).toBe(true);
+      expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Marcela+Fuentes")).toBe(true);
     });
   });
 });

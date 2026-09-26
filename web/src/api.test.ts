@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, archiveCustomer, unarchiveCustomer } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -57,6 +57,40 @@ describe('apiFetch', () => {
       status: 500,
       detail: 'Internal Server Error',
     });
+  });
+
+  it('preserves structured conflict detail additively', async () => {
+    const detail = { code: 'phone_exists', message: 'Phone exists', customer_id: 42 };
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ detail }), { status: 409 }));
+
+    await expect(apiFetch('/panel/api/clients')).rejects.toMatchObject({
+      status: 409,
+      detail: JSON.stringify({ detail }),
+      structuredDetail: detail,
+    });
+  });
+});
+
+describe('client API contracts', () => {
+  beforeEach(() => { globalThis.fetch = vi.fn(); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('lists clients with encoded search and archive filters', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ clients: [] }), { status: 200 }));
+    await fetchClients({ includeArchived: true, query: 'Ana Fuentes' });
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/clients?q=Ana+Fuentes&include_archived=true', expect.anything());
+  });
+
+  it('uses the customer CRUD routes and payloads', async () => {
+    vi.mocked(globalThis.fetch).mockImplementation(async () => new Response(JSON.stringify({ customer: {} }), { status: 200 }));
+    await createCustomer({ phone: '+56912345678' });
+    await updateCustomerProfile(4, { name: 'Ana' });
+    await archiveCustomer(4);
+    await unarchiveCustomer(4);
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/panel/api/clients', expect.objectContaining({ method: 'POST', body: JSON.stringify({ phone: '+56912345678' }) }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/panel/api/clients/4', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ name: 'Ana' }) }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(3, '/panel/api/clients/4/archive', expect.objectContaining({ method: 'POST' }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(4, '/panel/api/clients/4/unarchive', expect.objectContaining({ method: 'POST' }));
   });
 });
 

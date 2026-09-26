@@ -65,7 +65,12 @@ export interface Customer {
   consent_status: boolean;
   consent_at: string | null;
   created_at: string | null;
+  archived_at?: string | null;
 }
+
+export interface CustomerCreateRequest { phone: string; }
+export interface CustomerProfileUpdateRequest { name?: string | null; email?: string | null; comuna?: string | null; address?: string | null; }
+export interface CustomerMutationResponse { customer: Customer; }
 
 export interface CustomerNote {
   id: number;
