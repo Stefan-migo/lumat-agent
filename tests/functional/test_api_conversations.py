@@ -361,7 +361,7 @@ def test_conversation_returns_metadata_and_messages_chronological(client, make_u
 
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body.keys()) == {"conversation", "messages"}
+    assert set(body.keys()) == {"conversation", "messages", "messages_total"}
     # conversation metadata: snake_case service keys, ISO-8601, no ORM leak
     conversation = body["conversation"]
     assert conversation["id"] == conversation_id
@@ -393,6 +393,37 @@ def test_conversation_returns_metadata_and_messages_chronological(client, make_u
     media_message = messages[2]
     assert media_message["media_url"] == "https://example.com/media/photo.jpg"
     assert media_message["msg_type"] == "image"
+
+
+def test_conversation_limits_to_latest_messages_and_reports_total(client, make_user):
+    _, conversation_id = _seed_conversation()
+    with SessionLocal() as session:
+        conversation = session.get(Conversation, conversation_id)
+        session.add_all(
+            [
+                Message(
+                    conversation_id=conversation.id,
+                    direction=MessageDirection.INBOUND,
+                    msg_type=MessageType.TEXT,
+                    text=f"extra {index}",
+                )
+                for index in range(2)
+            ]
+        )
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    limited = client.get(
+        f"/panel/api/conversations/{conversation_id}", params={"messages_limit": 2}
+    )
+    full = client.get(f"/panel/api/conversations/{conversation_id}")
+
+    assert limited.status_code == 200
+    body = limited.json()
+    assert [message["text"] for message in body["messages"]] == ["extra 0", "extra 1"]
+    assert body["messages_total"] == 5
+    assert len(full.json()["messages"]) == 5
 
 
 def test_conversation_reply_window_is_closed_without_recent_customer_message(client, make_user):

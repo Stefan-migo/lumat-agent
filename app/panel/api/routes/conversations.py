@@ -282,19 +282,30 @@ def retry_message(conversation_id: int, message_id: int, body: RetryCommand, ses
 @router.get("/conversations/{conversation_id}")
 def conversation_thread(
     conversation_id: int,
+    messages_limit: int | None = None,
     session: Session = Depends(get_db),
     current: User = Depends(require_operator_json),
 ) -> dict:
     """Conversation metadata + chronological messages (media as URL links)."""
     conversation = _conversation_or_404(session, conversation_id)
-    messages = list(
-        session.scalars(
-            select(Message)
-            .where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at, Message.id)
-        )
+    messages_query = select(Message).where(Message.conversation_id == conversation_id)
+    messages_total = session.scalar(
+        select(func.count(Message.id)).where(Message.conversation_id == conversation_id)
     )
+    if messages_limit is not None and messages_limit > 0:
+        messages = list(
+            session.scalars(
+                messages_query.order_by(Message.created_at.desc(), Message.id.desc())
+                .limit(messages_limit)
+            )
+        )
+        messages.reverse()
+    else:
+        messages = list(
+            session.scalars(messages_query.order_by(Message.created_at, Message.id))
+        )
     return {
         "conversation": _conversation_payload(session, conversation),
         "messages": [to_message_dict(m) for m in messages],
+        "messages_total": messages_total,
     }

@@ -236,6 +236,27 @@ def test_client_ficha_returns_full_payload(client, make_user):
     ]
 
 
+def test_client_ficha_limits_to_latest_messages_and_reports_total(client, make_user):
+    customer_id = _seed_customer(messages=4)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    limited = client.get(
+        f"/panel/api/clients/{customer_id}", params={"messages_limit": 2}
+    )
+    full = client.get(f"/panel/api/clients/{customer_id}")
+
+    assert limited.status_code == 200
+    history = limited.json()["history"]
+    assert [message["text"] for message in history["messages"]] == [
+        "message 2", "message 3"
+    ]
+    assert history["messages_total"] == 4
+    assert [message["text"] for message in full.json()["history"]["messages"]] == [
+        "message 0", "message 1", "message 2", "message 3"
+    ]
+
+
 def test_client_ficha_closed_case_is_not_open(client, make_user):
     from app.services.cases import set_case_status
 

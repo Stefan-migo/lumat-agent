@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -221,7 +221,9 @@ def search_customers(session: Session, query: str | None = None, limit: int = 10
 # ---------------------------------------------------------------------------
 
 
-def customer_history(session: Session, customer_id: int) -> dict:
+def customer_history(
+    session: Session, customer_id: int, messages_limit: int | None = None
+) -> dict:
     """Complete linked history: conversations, cases, messages (CR-5).
 
     Returns dicts (not ORM objects) so the panel can render plain data.
@@ -242,12 +244,28 @@ def customer_history(session: Session, customer_id: int) -> dict:
         .where(Case.customer_id == customer_id)
         .order_by(Case.id)
     ).all()
-    messages = session.scalars(
+    messages_total = session.scalar(
+        select(func.count(Message.id))
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .where(Conversation.customer_id == customer_id)
+    )
+    messages_query = (
         select(Message)
         .join(Conversation, Message.conversation_id == Conversation.id)
         .where(Conversation.customer_id == customer_id)
-        .order_by(Message.created_at, Message.id)
-    ).all()
+    )
+    if messages_limit is not None and messages_limit > 0:
+        messages = list(
+            session.scalars(
+                messages_query.order_by(Message.created_at.desc(), Message.id.desc())
+                .limit(messages_limit)
+            )
+        )
+        messages.reverse()
+    else:
+        messages = list(
+            session.scalars(messages_query.order_by(Message.created_at, Message.id))
+        )
     appointments = session.scalars(
         select(Appointment)
         .where(Appointment.customer_id == customer_id)
@@ -296,6 +314,7 @@ def customer_history(session: Session, customer_id: int) -> dict:
             }
             for m in messages
         ],
+        "messages_total": messages_total,
         "appointments": [
             {
                 "id": a.id,
