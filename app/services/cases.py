@@ -177,6 +177,18 @@ def list_open_cases(session: Session, limit: int = 100) -> list[Case]:
     )
 
 
+def list_cases_for_customer(session: Session, customer_id: int, limit: int) -> list[Case]:
+    """Return a bounded customer case history, including closed cases."""
+    return list(
+        session.scalars(
+            select(Case)
+            .where(Case.customer_id == customer_id)
+            .order_by(Case.created_at.desc(), Case.id.desc())
+            .limit(limit)
+        ).all()
+    )
+
+
 _UNSET = object()  # sentinel: distinguish "keep" from "explicitly clear"
 
 
