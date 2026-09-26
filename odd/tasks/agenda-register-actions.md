@@ -179,6 +179,43 @@ The 2026-09-25 report assigned U6 = register filter (D3) + quick-action CRUD +
 - **Verify**: focused Vitest + `cd web && npm test` + `cd web && npm run build`.
 - **Commits**: `06362764` — `feat(agenda): close booked visits from agenda and detail`; `fd7a1739` — `test(agenda): cover visit outcome story states`. Focused result: **57 passed (4 files)**; full web result: **799 passed (91 files)**; `npm run build` succeeded (`tsc -b && vite build`).
 
+### WU3b — Post-writer normalization and the RED the writer could not show
+
+The writer returned `partial`: it ran the route tests after writing the endpoint, so no
+route-level RED was observed. Rather than accept a fabricated RED or let the gap stand, the
+missing evidence was produced by restoring the pre-implementation route file
+(`git show 8aa539a3:app/panel/api/routes/appointments.py`) over the working copy and running
+the two route tests:
+
+- `uv run pytest tests/functional/test_api_scheduling.py -o addopts='' -q -k close` →
+  **3 failed** (both parametrized happy paths and the refusal test), each with
+  `assert 404 == 409` / `404 Not Found` — the route genuinely did not exist. The route file
+  was restored immediately afterwards.
+
+Two real defects found by reading the diff, and fixed:
+
+1. **Duplicate success feedback.** `AgendaPage` rendered the outcome success both as a row
+   badge and as a page-level `StateMessage`. Since the row leaves the `Activas` view on
+   refresh, the row badge was the invisible one; it was removed, keeping the page-level
+   message that mirrors `createFeedback`.
+2. **A failure the operator could never read.** `AppointmentDetail` kept its dialog open on
+   failure but rendered the error at the page top, behind the modal. The error now renders
+   inside the dialog, exactly as `AgendaPage`'s cancel and close dialogs already did.
+
+Also in this pass:
+
+- The `reason` parameter reached the audit log but **not** the appointment's own history,
+  diverging from `cancel`. It now lands in `_history(details={"reason": ...})` and is pinned
+  by an assertion, so the parameter has an observable effect instead of being half-wired.
+- The service-level `invalid outcome` guard (unreachable from the API, which rejects through
+  `Literal` first) was pinned by a new test; RED was observed by temporarily removing the
+  guard — `Failed: DID NOT RAISE ValueError` — and the guard was restored.
+
+- **Commit**: `cb336531` — `fix(agenda): keep the visit outcome feedback visible and traceable`.
+- **Verify after normalization**: focused backend **21 passed**; full backend **1500 passed,
+  2 warnings in 248.62s** (baseline 1493 + 7); focused web **57 passed (4 files)**; full web
+  **799 passed (91 files)**; `npm run build` succeeded; `git diff --check` clean.
+
 ### WU4 — Backend: reschedule a booked visit
 
 - [ ] RED observed: self-overlap and DST/availability tests fail against the new route.
@@ -212,9 +249,26 @@ The 2026-09-25 report assigned U6 = register filter (D3) + quick-action CRUD +
 
 Forecast **~800–950 authored lines** (additions + deletions) across backend service/routes, web
 api/pages, tests, stories and the contract — roughly double the ~400-line review budget.
-The chain strategy is the owner's call this session and is recorded here once answered; the
-natural split boundary is Slice A (WU1–WU3, close a visit) and Slice B (WU4–WU5, reschedule),
-each independently mergeable.
+
+**Owner decision, this session: `delivery_strategy: chained`, `chain_strategy: stacked-to-main`.**
+Two PRs, each merged to `main` in order, each with its own native review inside the ~400-line
+budget. The split boundary is Slice A and Slice B:
+
+- **Slice A — PR #1** = WU1 + WU2 + WU3 + WU3b: the contract amendment, the backend close
+  transition, and the register/detail close actions. Range `28fd4ad3..cb336531`.
+- **Slice B — PR #2** = WU4 + WU5 + WU6: `_validate_slot`, `reschedule`, `PATCH /appointments/{id}`,
+  and the reschedule dialog. Branched from `main` after Slice A merges.
+
+Slice A's actual size is measured in its own review receipt below; the ~800–950 forecast stays
+as the whole-unit estimate that justified chaining.
+
+## Non-goals carried out of the slice
+
+- **Reschedule does not notify the customer.** `automation.ALLOWED_EVENTS`
+  (`app/services/automation.py:15`) has no reschedule member. Deferred; a follow-up decides whether
+  a new event type and template are warranted.
+- **A `no_show` reason is not captured in the UI.** The service accepts an optional `reason` for
+  parity with `cancel`, but no surface sends one and no product decision asked for it.
 
 ## Acceptance criteria
 
@@ -254,6 +308,7 @@ each independently mergeable.
 - [x] WU1 — Contract amendment
 - [x] WU2 — Backend: close a booked visit
 - [x] WU3 — Front: close actions
+- [x] WU3b — Post-writer normalization (`cb336531`); Slice A ready for review
 - [ ] WU4 — Backend: reschedule
 - [ ] WU5 — Front: reschedule dialog
 - [ ] WU6 — Full verification and closure
