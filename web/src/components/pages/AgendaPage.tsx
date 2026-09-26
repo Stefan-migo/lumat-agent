@@ -126,7 +126,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     const customerId = Number(createForm.customer_id);
     const caseId = Number(createForm.case_id);
     const technicianId = Number(createForm.technician_id);
-    if (!customerId || !caseId || !technicianId || !createForm.service.trim() || !createForm.local_date || !createForm.local_time || Number(createForm.duration_minutes) <= 0) {
+    if (!customerId || !caseId || !technicianId || !createForm.service?.trim() || !createForm.local_date || !createForm.local_time || Number(createForm.duration_minutes) <= 0) {
       setCreateFeedback({ tone: "danger", title: "Completa todos los campos de la visita" });
       return;
     }
@@ -212,16 +212,18 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void cancel()}>Confirmar cancelación</Button>
     </Dialog>
     <Dialog open={createOpen} onClose={() => { if (!createBusy) setCreateOpen(false); }} title="Crear visita">
-      <Select label="Cliente" value={createForm.customer_id} onChange={(event) => field("customer_id", event.target.value)} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} />
-      <Select label="Caso" value={createForm.case_id} onChange={(event) => { field("case_id", event.target.value); const selected = cases.find((item) => item.id === Number(event.target.value)); if (selected && !createForm.service) field("service", selected.service); }} options={[{ value: "", label: "Selecciona un caso" }, ...cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service} (#${item.id})` }))]} />
-      <Select label="Técnico" value={createForm.technician_id} onChange={(event) => field("technician_id", event.target.value)} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
-      <Input label="Servicio" value={createForm.service} onChange={(event) => field("service", event.target.value)} />
-      <Input label="Fecha local" type="date" value={createForm.local_date} onChange={(event) => field("local_date", event.target.value)} />
-      <Input label="Hora local" type="time" value={createForm.local_time} onChange={(event) => field("local_time", event.target.value)} />
-      <Input label="Duración (minutos)" type="number" min="1" value={createForm.duration_minutes} onChange={(event) => field("duration_minutes", event.target.value)} />
-      <Input label="Zona horaria" value={timezone} readOnly />
-      {createFeedback?.tone === "danger" ? <StateMessage tone="danger" role="alert" title={createFeedback.title} detail={createFeedback.detail} /> : null}
-      <Button variant="secondary" disabled={createBusy} onClick={() => void create()}>{createBusy ? "Creando…" : "Crear visita"}</Button>
+      <div className="agenda-create-form">
+        <Select label="Cliente" value={createForm.customer_id} onChange={(event) => field("customer_id", event.target.value)} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} />
+        <Select label="Caso" value={createForm.case_id} onChange={(event) => { field("case_id", event.target.value); const selected = cases.find((item) => item.id === Number(event.target.value)); if (selected?.service && !createForm.service) field("service", selected.service); }} options={[{ value: "", label: "Selecciona un caso" }, ...cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))]} />
+        <Select label="Técnico" value={createForm.technician_id} onChange={(event) => field("technician_id", event.target.value)} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
+        <Input label="Servicio" value={createForm.service} onChange={(event) => field("service", event.target.value)} />
+        <Input label="Fecha local" type="date" value={createForm.local_date} onChange={(event) => field("local_date", event.target.value)} />
+        <Input label="Hora local" type="time" value={createForm.local_time} onChange={(event) => field("local_time", event.target.value)} />
+        <Input label="Duración (minutos)" type="number" min="1" value={createForm.duration_minutes} onChange={(event) => field("duration_minutes", event.target.value)} />
+        <Input label="Zona horaria" value={timezone} readOnly />
+        {createFeedback?.tone === "danger" ? <StateMessage tone="danger" role="alert" title={createFeedback.title} detail={createFeedback.detail} /> : null}
+        <Button variant="secondary" disabled={createBusy} onClick={() => void create()}>{createBusy ? "Creando…" : "Crear visita"}</Button>
+      </div>
     </Dialog>
   </PageFrame>;
 }

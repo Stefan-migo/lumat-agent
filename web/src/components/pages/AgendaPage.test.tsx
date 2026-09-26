@@ -299,6 +299,37 @@ describe('AgendaPage', () => {
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
   });
 
+  it('shows validation instead of throwing when the selected case has no service', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
+    vi.mocked(fetchCases).mockResolvedValue({ cases: [{ id: 20, service: null, customer: { id: 10, name: 'Camila Soto' } }] as never, users: [] });
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: 'Luis', role: 'tecnico', active: true }] as never });
+    vi.mocked(createAppointment).mockResolvedValue({ ok: true, appointment: {} as never });
+
+    render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
+    await user.selectOptions(screen.getByLabelText('Caso'), '20');
+    expect(screen.getByLabelText('Servicio')).toHaveValue('');
+    expect(screen.getByRole('option', { name: 'Caso sin servicio (#20)' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /null/ })).not.toBeInTheDocument();
+    const form = screen.getByLabelText('Cliente').closest('.agenda-create-form');
+    expect(form).toBeInTheDocument();
+    expect(form?.children.length).toBeGreaterThan(1);
+    const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+    expect(css).toMatch(/\.agenda-create-form\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--space-3\)/s);
+    await user.selectOptions(screen.getByLabelText('Técnico'), '30');
+    await user.clear(screen.getByLabelText('Fecha local'));
+    await user.type(screen.getByLabelText('Fecha local'), '2026-09-05');
+    await user.clear(screen.getByLabelText('Hora local'));
+    await user.type(screen.getByLabelText('Hora local'), '10:00');
+    await user.click(screen.getByRole('button', { name: 'Crear visita' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Completa todos los campos de la visita');
+    expect(createAppointment).not.toHaveBeenCalled();
+  });
+
   it('keeps the agenda calendar CSS contract aligned with the design system', () => {
     const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
     expect(css).not.toMatch(/\.agenda-calendar__weekday\s*\{[^}]*text-transform:\s*uppercase/s);

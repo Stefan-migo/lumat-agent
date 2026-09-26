@@ -297,7 +297,7 @@ export interface Case {
   conversation_id: number | null;
   customer_id: number | null;
   created_at: string | null;
-  service: string;
+  service: string | null;
   priority: string;
   status: string;
   emergency: boolean;
