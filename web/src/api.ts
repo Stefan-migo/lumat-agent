@@ -74,7 +74,7 @@ export function searchKb({ q, topK, minSim }: { q: string; topK: number; minSim:
   return apiFetch<KbSearchResponse>(`/panel/api/kb/search?${params.toString()}`);
 }
 
-import type { ActiveConversationsResponse, AdminUser, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse, ProjectsResponse, ProjectDetailResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest } from './types';
+import type { ActiveConversationsResponse, AdminUser, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentDetail, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse, ProjectsResponse, ProjectDetailResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; q?: string; limit?: number; offset?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -130,6 +130,7 @@ export function listAppointments(from: string, to: string, timezone: string): Pr
   const params = new URLSearchParams({ from, to, timezone });
   return apiFetch<AgendaResponse>(`/panel/api/appointments?${params.toString()}`);
 }
+export const getAppointment = (id: number) => apiFetch<AppointmentDetail>(`/panel/api/appointments/${id}`);
 export function cancelAppointment(id: number, reason?: string) {
   return postJson<{ ok: true; appointment: unknown }>(`/panel/api/appointments/${id}/cancel`, { reason });
 }
