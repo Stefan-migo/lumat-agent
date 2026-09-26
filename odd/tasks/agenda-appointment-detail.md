@@ -4,6 +4,7 @@ Status: in progress
 Worktree: `../lumat-agent-odd-agenda-appointment-detail`
 Branch: `odd/agenda-appointment-detail`
 Depends on: `agenda-visit-dialog` (PR #370, merged `2a85b675`)
+Inherits from: `client-ficha-case-surface` (parallel, in flight — see "Parallel work")
 
 ## Objective
 
@@ -13,6 +14,9 @@ The surface shows the linked customer **with a link to the customer record**, th
 reason/service, the appointment status, and the linked case's **conversation summary when
 the case originates from a conversation**. A manually created case has no conversation, so
 no summary is shown and the page must not fail.
+
+It is also the structural home for the **per-appointment audit trail**, which the client
+ficha stops owning (owner decision `visit-trail-out-of-ficha`, 2026-09-25).
 
 ## Problem
 
@@ -35,6 +39,11 @@ no summary is shown and the page must not fail.
    `appointmentId`, and `pathForRoute` (`:48-71`) has no branch for it.
 4. **The front has no single-appointment fetch.** `web/src/api.ts` exposes
    `listAppointments` (`:129-132`) but no `getAppointment(id)`.
+5. **The audit trail has no home until this page exists.** `to_appointment_dict` already
+   returns `history` (`serializers.py:199-205`) and `GET /appointments/{id}` already serves
+   it, while the ficha's `customer_history` never did (`app/services/customers.py:302-317`).
+   The ficha's flattened `<ol aria-label="Ciclo de vida de visitas">` was a workaround for
+   the missing page. The owner decided the trail belongs here.
 
 ## Why (approved decisions)
 
@@ -56,6 +65,11 @@ no summary is shown and the page must not fail.
   (b) a conversation whose `summary` is still `None`. Both render no summary, and neither
   may fail the page. This is the requirement's core, and it is stated here because the
   handoff only named layer (a).
+- **The audit trail and the ficha card link belong to this unit** (decision
+  `visit-trail-out-of-ficha`, 2026-09-25): the ficha drops the flattened `<ol>` and each
+  visit card becomes a link to `/panel/app/agenda/:id` once the route exists. The `<ol>` and
+  the `visit_history` payload field are removed by the parallel unit
+  `odd/client-ficha-case-surface` (`f8e2ea2a`, `4a9f3fb2`), **not here**.
 
 ## Scope
 
@@ -67,13 +81,18 @@ no summary is shown and the page must not fail.
 - `web/src/components/domain/panelRoutes.ts`, `AppShell.tsx`, `PanelShell.tsx`: route
   parsing and rendering.
 - `web/src/types.ts`, `web/src/api.ts`: `AppointmentDetail` type and `getAppointment(id)`.
-- A new `AppointmentDetail` page component.
-- Reachability from the agenda (a row action that navigates to the detail route).
+- A new `AppointmentDetail` page component, including the per-appointment audit trail
+  rendered from `appointment.history`.
+- Reachability from the agenda, and `ClientFicha.tsx`: each visit card links to
+  `/panel/app/agenda/:id`.
 - Storybook coverage for the named states (AG-UI-4).
 
 **Out:** any change to `to_appointment_dict` or its list/create/cancel/dashboard callers;
 edit/reschedule/cancel actions on the detail page; a new `GET /cases/{id}` route; customer
-full CRUD; appointment row deletion.
+full CRUD; appointment row deletion; removing the ficha's `<ol>` trail or the
+`visit_history` payload field (owned by `odd/client-ficha-case-surface`); the
+`PATCH /appointments/{id}` mentioned in the 2026-09-25 handoff, which AG-UI-5 does not
+require.
 
 ## Constraints
 
@@ -129,15 +148,17 @@ full CRUD; appointment row deletion.
 - RED: renders the customer name as a link to `/panel/app/clients/:id`, the service, and
   the status; shows the conversation summary when present; shows **no** summary and does
   **not** fail for a manual case; shows **no** summary when the conversation has none;
-  carries loading/error/denied states.
+  renders the per-appointment audit trail from `history` (actor, action, from/to status,
+  details, timestamp); carries loading/error/denied states.
 - `AppointmentDetail.tsx` mirroring `KbDocumentDetail.tsx` / `ClientFicha.tsx`
   (`useAsyncData`, controlled-data support), `types.ts`, `api.ts`.
 - **Verify**: focused web tests, then `npm run build`.
 
-### WU4 — Reachability from the agenda
+### WU4 — Reachability from the agenda and the ficha
 
 - RED: the agenda offers a per-appointment action that navigates to
-  `/panel/app/agenda/:id` (keyboard operable, no new destructive control).
+  `/panel/app/agenda/:id` (keyboard operable, no new destructive control); each visit card
+  in `ClientFicha` links to the same route.
 - **Verify**: focused web tests.
 
 ### WU5 — Story coverage and full verification
@@ -146,6 +167,15 @@ full CRUD; appointment row deletion.
   one, and the manual-case path), plus a non-vacuous interaction test.
 - **Verify**: full `cd web && npm test`, `cd web && npm run build`, and
   `uv run pytest tests/ -o addopts='' -q`.
+
+## Parallel work (do not duplicate)
+
+`odd/client-ficha-case-surface` (worktree `../lumat-agent-odd-client-ficha-case-surface`,
+base `cf5f8171`, head `871e54a6`) is in flight on `ClientFicha.tsx` and already removed the
+flattened `<ol>` trail (`f8e2ea2a`) and the `visit_history` payload field (`4a9f3fb2`). Its
+task doc lists the per-appointment page as explicitly **out** of its scope. This unit must
+not touch `visit_history` or the `<ol>`. Both branches edit `ClientFicha.tsx`, so whichever
+merges second resolves a small conflict in the visit-cards region.
 
 ## Delivery
 
@@ -157,7 +187,8 @@ commit.
 ## Acceptance criteria
 
 - `/panel/app/agenda/:id` renders the linked customer with a working link to the ficha, the
-  reason/service, and the status; it is reachable from the agenda.
+  reason/service, the status, and the per-appointment audit trail; it is reachable from the
+  agenda and from the ficha's visit cards.
 - A chatbot case shows its conversation summary.
 - A manually created case shows no summary and the page does not fail.
 - A conversation-born case with no generated summary shows nothing and does not fail.
@@ -182,10 +213,11 @@ commit.
 
 ## Progress
 
+- [x] WU0 — worktree, environment, base baselines, and this record (`425cc724`)
 - [ ] WU1 — Backend detail payload
 - [ ] WU2 — SPA route plumbing
 - [ ] WU3 — AppointmentDetail page
-- [ ] WU4 — Reachability from the agenda
+- [ ] WU4 — Reachability from the agenda and the ficha
 - [ ] WU5 — Story coverage and full verification
 - [ ] Owner decision: push and open the PR
 
