@@ -82,7 +82,10 @@ what the bot can see (see D2).
 **In (backend):** `db/migrations/033_customer_archived_at.sql` (new),
 `app/models.py`, `app/services/customers.py`,
 `app/panel/api/routes/clients.py`, `app/panel/api/serializers.py`,
-`tests/functional/test_api_clients.py`, `tests/integration/test_customers.py`.
+`tests/functional/test_api_clients.py`, `tests/integration/test_customers.py`,
+`tests/integration/test_migrations.py` (its `schema_migrations` registry is a
+hardcoded expected list, so adding a migration requires extending it — see
+Constraints).
 
 **In (frontend):** `web/src/api.ts`, `web/src/types.ts`,
 `web/src/components/pages/ClientesList.tsx`,
@@ -108,6 +111,9 @@ dependency; `tokens.css` values; hard/soft **delete** of a customer.
 - Migrations are plain SQL files applied by `./db/migrate.sh` (sorted, tracked in
   `schema_migrations`, one transaction per file). There is no Alembic. The test
   suite applies them through the `migrated_db` fixture (`tests/conftest.py:100`).
+  **Adding a migration also requires extending the hardcoded expected version list
+  in `tests/integration/test_migrations.py` (`test_schema_migrations_records_version`
+  around `:344-382`)**; otherwise the full suite fails on that registry.
 - Artifacts in English. Conventional commits, no AI attribution. Merge commits,
   never squash.
 - UI copy stays neutral Chilean Spanish; no raw backend identifier reaches the
@@ -306,7 +312,30 @@ before the first source commit (owner decision pending).
       exists, together with `Input`, `FieldShell`, `Select`, `Button`, `Textarea`,
       `Combobox`, `Badge`, `StatusBadge`. The create form and the archive confirm
       reuse them; nothing is invented.
-- [ ] T1 …
+- [x] **Graph freshness caveat (recorded):** `graphify-out/` is shared by every
+      worktree and a concurrent actor refreshed the top-level
+      `GRAPH_REPORT.md` mid-session: it read `Built from commit: 7fb8cd10` at plan
+      time and `28fd4ad3` afterwards (another branch's tip). The dated snapshot
+      `graphify-out/2026-09-26/GRAPH_REPORT.md` still records `7fb8cd10`, which is
+      this branch's base, and is the report of record for this unit. The nodes this
+      unit depends on (`Customer`, `search_customers`, `record_audit`, `clients.py`,
+      `serializers.py`) are unchanged across both commits, so the query results stay
+      valid — but a graph check taken from the shared top-level file can silently
+      describe someone else's branch.
+- [x] T1/T2/T3 (WU1) — archive backend vertical. RED observed (no
+      `archive_customer`; archived records still listed; archive routes missing),
+      then GREEN. Commits `68744267` (migration + model), `f181e8c6` (service +
+      tests), `c5b43049` (routes + serializer + tests). WU1 code diff
+      `7fb8cd10...HEAD` over `app/ db/ tests/`: **203 changed lines** (201 added,
+      2 deleted), 7 files.
+- [x] Migration registry updated — `tests/integration/test_migrations.py` gains
+      `("033_customer_archived_at",)`. This was the writer's single suite failure
+      (`1498 passed, 1 failed`) and it was **outside the originally authorized
+      list**; it is a mechanical, already-understood consequence of adding a
+      migration, not a new requirement, so it was authorized and fixed inline.
+- [x] WU1 verification of record: `uv run pytest tests/` → **1499 passed**
+      (229.49s), exit 0 — up from the 1493 baseline (+6 new tests).
+- [ ] T4 …
 
 ## Recovery
 
