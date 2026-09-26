@@ -160,8 +160,15 @@ exist and need no change unless verification proves otherwise.
   append two cases. `createBusy` only disables the appointment submit button. Recorded as
   separate later work; the closure states it opens no correction and must not reopen this
   review.
-- **Scope, stated honestly**: the receipt covers the candidate at WU3 (441 lines). `WU4`
-  (`9f6f0793`) is a story/test-only delta committed after the acknowledgement.
+- **`R3-001` closed afterwards as exactly that separate work** (`478535b7`), which the closure
+  permits and which does not reopen the review. RED reproduced the defect
+  (`expected "spy" to be called 1 times, but got 2 times`); the fix makes `createManualCase`
+  bail while `createBusy` and withdraws the Combobox create affordance for the duration of the
+  request.
+- **Scope, stated honestly**: the receipt covers the candidate at WU3 (441 lines). The two
+  commits after the acknowledgement — `9f6f0793` (stories) and `478535b7` (R3-001) — are the
+  measured delta; from the reviewed boundary (`423eb812`), `review assess` returns
+  `under_budget`, `review_due: false`.
 
 ## Acceptance criteria
 
@@ -186,6 +193,8 @@ exist and need no change unless verification proves otherwise.
 | WU4 | `cd web && npm test` | 760 passed (87 files) |
 | WU4 | `cd web && npm run build` | ✓ built in 17.32s |
 | WU4 | `uv run pytest tests/ -o addopts='' -q` | 1476 passed in 229.64s |
+| R3-001 | focused (AgendaPage + Combobox) | 42 passed |
+| R3-001 | `cd web && npm test` | 761 passed (87 files) |
 
 The backend suite is unchanged by this unit (no `app/`, `db/` or `tests/` file was touched);
 it ran as the closing safety net.
@@ -212,4 +221,5 @@ it ran as the closing safety net.
 - [x] WU2 done — `bd2d4a5c`, `321d423b`
 - [x] WU3 done — `423eb812`
 - [x] WU4 done — `9f6f0793`; web 760 passed, web build green, backend 1476 passed
+- [x] R3-001 closed — `478535b7` (post-receipt, as the separate work the closure allows)
 - [ ] Owner decision: push and open the PR
