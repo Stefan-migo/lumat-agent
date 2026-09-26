@@ -1,6 +1,6 @@
 # ODD Task: agenda-manual-case
 
-Status: complete (pending owner push/PR)
+Status: merged — PR #367 (`673d9fba`).
 Worktree: `../lumat-agent-odd-agenda-manual-case`
 Branch: `odd/agenda-manual-case`
 Depends on: `agenda-crud-contract` (PR #361, merged `9cf2bf6a`)
@@ -176,4 +176,4 @@ Backend/data plus the minimal web type. **No UI wiring** — no dialog redesign,
 - [x] WU3 done — `ccb299b6`
 - [x] WU4 done — suite 1476 passed, web build green
 - [x] Rebased onto `main` (`33f1feba`)
-- [ ] Owner decision: push and open the PR
+- [x] PR #367 merged (`673d9fba`).
