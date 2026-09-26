@@ -219,7 +219,6 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setCloseTarget(row); setCloseFeedback(null); }}>Cerrar visita</Button> : null}
     {row.sync.status === "pending" || row.sync.status === "failed" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void retrySync(row.id)} aria-label="Reintentar calendario">Reintentar calendario</Button> : null}
     {cancelFeedback?.id === row.id && cancelFeedback.tone === "success" ? <span role="status"><Badge tone="success">{cancelFeedback.title}</Badge></span> : null}
-    {closeFeedback?.id === row.id && closeFeedback.tone === "success" ? <span role="status"><Badge tone="success">{closeFeedback.title}</Badge></span> : null}
     {syncFeedback?.id === row.id ? <span role={syncFeedback.tone === "danger" ? "alert" : "status"}><Badge tone={syncFeedback.tone}>{syncFeedback.title}{syncFeedback.detail ? `: ${syncFeedback.detail}` : null}</Badge></span> : null}
   </>;
   const section = (title: string, rows: AgendaAppointment[]) => rows.length > 0 ? (

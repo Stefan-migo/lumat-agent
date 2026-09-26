@@ -122,7 +122,7 @@ def close(session: Session, appointment: Appointment, *, outcome: AppointmentSta
     previous = appointment.status
     appointment.status = outcome
     session.flush()
-    _history(session, appointment, actor=actor, action=outcome.value, previous=previous)
+    _history(session, appointment, actor=actor, action=outcome.value, previous=previous, details={"reason": reason} if reason else None)
     record_audit(session, actor=actor, action=f"appointment.{outcome.value}", entity="appointment", entity_id=str(appointment.id), after={"outcome": outcome.value, "reason": reason})
     return appointment
 

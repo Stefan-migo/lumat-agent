@@ -64,7 +64,6 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
   const { appointment, customer, conversation_summary: summary } = detail;
   return <PageFrame title="Detalle de visita" meta="Datos y ciclo de vida de la visita" actions={<><Button variant="secondary" onClick={() => window.history.back()}>Volver a la agenda</Button>{appointment.status === 'booked' ? <Button variant="secondary" onClick={() => { setFeedback(null); setCloseOpen(true); }}>Cerrar visita</Button> : null}</>} state={stateMessage(state)}>
     {feedback?.tone === 'success' ? <StateMessage tone="success" role="status" title={feedback.title} /> : null}
-    {feedback?.tone === 'danger' ? <StateMessage tone="danger" role="alert" title={feedback.title} detail={feedback.detail} /> : null}
     <div className="detail-region">
       <section className="detail-region__rail" aria-label="Datos de la visita">
         <Card title="Visita">
@@ -91,6 +90,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
     </div>
     <Dialog open={closeOpen} onClose={() => { if (!mutating) setCloseOpen(false); }} title="Cerrar visita">
       <p>Registra el resultado de la visita. Esta acción no se puede revertir desde la agenda.</p>
+      {feedback?.tone === 'danger' ? <StateMessage tone="danger" role="alert" title={feedback.title} detail={feedback.detail} /> : null}
       <Button variant="secondary" disabled={mutating} onClick={() => void close('completed')}>Completar</Button>
       <Button variant="secondary" disabled={mutating} onClick={() => void close('no_show')}>No asistió</Button>
     </Dialog>

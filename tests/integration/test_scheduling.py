@@ -71,6 +71,7 @@ def test_close_records_outcome_history_and_audit(outcome):
         history = session.query(AppointmentHistory).filter_by(appointment_id=closed.id).order_by(AppointmentHistory.id).all()
         assert [entry.action for entry in history] == ["booked", outcome.value]
         assert history[-1].from_status is AppointmentStatus.BOOKED
+        assert history[-1].details == {"reason": "visit ended"}
         assert session.query(AuditLog).filter_by(action=f"appointment.{outcome.value}").count() == 1
 
 
@@ -86,6 +87,20 @@ def test_close_rejects_non_booked_appointment():
 
         with pytest.raises(ValueError, match="only booked appointments can be closed"):
             scheduling.close(session, appointment, outcome=AppointmentStatus.NO_SHOW, actor="oper")
+
+
+def test_close_rejects_an_outcome_that_is_not_a_visit_outcome():
+    with SessionLocal() as session:
+        customer, case, technician = _linked_rows(session)
+        appointment = scheduling.book(
+            session, service="calefont", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=date(2026, 7, 15), local_time=time(10),
+            timezone_name="America/Santiago", duration_minutes=60, actor="oper",
+        )
+
+        with pytest.raises(ValueError, match="invalid outcome"):
+            scheduling.close(session, appointment, outcome=AppointmentStatus.CANCELLED, actor="oper")
+        assert appointment.status is AppointmentStatus.BOOKED
 
 
 def test_configured_availability_rejects_outside_block():
