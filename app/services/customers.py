@@ -228,6 +228,10 @@ def customer_history(session: Session, customer_id: int) -> dict:
     Messages are flattened across all the customer's conversations and sorted
     chronologically.
     """
+    # Local import: a top-level `customers -> cases` import cycles through
+    # `app.chat.state` (which imports `get_or_create_customer` from this module).
+    from app.services.cases import case_is_open
+
     conversations = session.scalars(
         select(Conversation)
         .where(Conversation.customer_id == customer_id)
@@ -280,10 +284,19 @@ def customer_history(session: Session, customer_id: int) -> dict:
             {
                 "id": ca.id,
                 "conversation_id": ca.conversation_id,
+                "customer_id": ca.customer_id,
+                "created_at": ca.created_at,
                 "service": ca.service,
                 "priority": ca.priority,
                 "status": ca.status,
                 "summary": ca.summary,
+                "emergency": ca.emergency,
+                "responsible_id": ca.responsible_id,
+                "escalated_at": ca.escalated_at,
+                "closed_at": ca.closed_at,
+                "acknowledged_at": ca.acknowledged_at,
+                "ack_by": ca.ack_by,
+                "is_open": case_is_open(ca),
             }
             for ca in cases
         ],

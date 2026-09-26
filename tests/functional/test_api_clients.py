@@ -206,7 +206,9 @@ def test_client_ficha_returns_full_payload(client, make_user):
 
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body.keys()) == {"customer", "history", "notes", "memo", "states"}
+    assert set(body.keys()) == {"customer", "history", "notes", "memo", "states", "users"}
+    assert all(set(user) == {"id", "username"} for user in body["users"])
+    assert {user["username"] for user in body["users"]} >= {"oper"}
     # customer: snake_case service keys, ISO-8601 datetimes, no ORM leak
     customer = body["customer"]
     assert customer["id"] == customer_id
@@ -218,13 +220,39 @@ def test_client_ficha_returns_full_payload(client, make_user):
     history = body["history"]
     assert len(history["conversations"]) == 1
     assert len(history["cases"]) == 1
-    assert history["cases"][0]["service"] == "calefont"
+    case = history["cases"][0]
+    assert case["service"] == "calefont"
+    assert set(case) == {
+        "id", "conversation_id", "customer_id", "created_at", "service",
+        "priority", "status", "summary", "emergency", "responsible_id",
+        "escalated_at", "closed_at", "acknowledged_at", "ack_by", "is_open",
+    }
+    assert case["is_open"] is True
     assert [m["text"] for m in history["messages"]] == ["message 0", "message 1"]
     # states: full lifecycle as strings
     assert body["states"] == [
         "nuevo", "contactado", "pendiente", "agendado",
         "en_evaluacion", "finalizado", "cancelado", "postventa",
     ]
+
+
+def test_client_ficha_closed_case_is_not_open(client, make_user):
+    from app.services.cases import set_case_status
+
+    customer_id = _seed_customer()
+    with SessionLocal() as session:
+        case = session.scalar(select(Case).where(Case.customer_id == customer_id))
+        set_case_status(case, "cerrado")
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.get(f"/panel/api/clients/{customer_id}")
+
+    assert response.status_code == 200
+    case_payload = response.json()["history"]["cases"][0]
+    assert case_payload["is_open"] is False
+    assert case_payload["closed_at"] is not None
 
 
 def test_client_ficha_returns_chronological_visit_lifecycle_history(client, make_user):
