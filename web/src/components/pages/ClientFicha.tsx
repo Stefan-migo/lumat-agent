@@ -127,8 +127,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     setRefreshed(next);
   };
   const safeError = (error: unknown, action: "estado" | "nota" | "caso" | "identidad" | "consentimiento" | "archivo") => {
-    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return { title: `No tienes permiso para guardar ${action}` };
-    if (error instanceof ApiError && (error.status === 400 || error.status === 422)) return { title: `Revisa el ${action} e inténtalo de nuevo` };
+    const labels = { estado: "el estado", nota: "la nota", caso: "el caso", identidad: "la identidad", consentimiento: "el consentimiento", archivo: "el archivo" };
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return { title: `No tienes permiso para guardar ${labels[action]}` };
+    if (error instanceof ApiError && (error.status === 400 || error.status === 422)) return { title: `Revisa ${labels[action]} e inténtalo de nuevo` };
     return { title: `No pudimos guardar ${action}`, detail: "Inténtalo nuevamente." };
   };
   const updateCase = async (caseId: number, status: string, responsibleId: number | null) => {
