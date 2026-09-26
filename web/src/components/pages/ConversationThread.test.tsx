@@ -10,7 +10,24 @@ const migratedConversation = (id: number, state: Conversation['state'] = 'human'
 const conversations = [migratedConversation(101, 'bot'), migratedConversation(102, 'closed', '2026-08-02T08:15:00-04:00'), migratedConversation(103), migratedConversation(105, 'human', '2026-08-10T14:30:00-04:00')];
 const messages: Message[] = [{ id: 1, conversation_id: 101, direction: 'inbound', msg_type: 'text', text: 'Hello', media_url: null, created_at: '2026-08-20T08:15:00-04:00' }, { id: 2, conversation_id: 101, direction: 'outbound', msg_type: 'text', text: 'Reply', media_url: null, created_at: '2026-08-20T08:16:00-04:00' }];
 
-const thread = { conversation: { id: 9, customer_id: 4, wa_phone: '+5694', state: 'human', responsible_id: 7, version: 2, summary: 'Help', latest_inbound_at: '2026-08-27T10:00:00Z', reply_window_open: true, delivery_summary: { failed: 0, pending: 0, sending: 0, sent: 0, unknown: 0 }, last_message_at: '2026-08-27T10:00:00Z', created_at: '2026-08-27T09:00:00Z', closed_at: null }, messages: [{ id: 1, conversation_id: 9, direction: 'inbound' as const, msg_type: 'text', text: 'Hola', media_url: null, delivery_status: null, delivery_error: null, delivery_attempts: 0, last_attempt_at: null, delivered_at: null, created_at: '2026-08-27T09:00:00Z' }] };
+const thread = { conversation: { id: 9, customer_id: 4, wa_phone: '+5694', state: 'human', responsible_id: 7, version: 2, summary: 'Help', latest_inbound_at: '2026-08-27T10:00:00Z', reply_window_open: true, delivery_summary: { failed: 0, pending: 0, sending: 0, sent: 0, unknown: 0 }, last_message_at: '2026-08-27T10:00:00Z', created_at: '2026-08-27T09:00:00Z', closed_at: null }, messages: [{ id: 1, conversation_id: 9, direction: 'inbound' as const, msg_type: 'text', text: 'Hola', media_url: null, delivery_status: null, delivery_error: null, delivery_attempts: 0, last_attempt_at: null, delivered_at: null, created_at: '2026-08-27T09:00:00Z' }], messages_total: 1 };
+
+it('loads a bounded preview and fetches the full thread when expanded', async () => {
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ...thread, messages_total: 12 }), { status: 200 }));
+  const user = userEvent.setup();
+  render(<ConversationThread conversationId={9} />);
+
+  expect(await screen.findByText('Hola')).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations/9?messages_limit=10', expect.anything());
+  await user.click(screen.getByRole('button', { name: 'Ver todos (12)' }));
+  expect(await screen.findByRole('button', { name: 'Ver menos' })).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations/9', expect.anything());
+});
+
+it('does not show message disclosure for ten or fewer messages', () => {
+  render(<ConversationThread data={{ ...thread, messages_total: 10 }} />);
+  expect(screen.queryByRole('button', { name: /Ver todos/ })).not.toBeInTheDocument();
+});
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -220,18 +237,18 @@ it('keeps the thread usable without optional case or captured data', () => {
 
 describe('migrated InboxThread scenarios', () => {
   it('keeps reply-window truthfulness and directional message ownership', () => {
-    render(<ConversationThread data={{ conversation: { ...conversations[2], customer: { id: 1, name: 'Marcela Fuentes', phone_e164: null } }, messages }} state="ready" interactive customerName={() => 'Marcela Fuentes'} />);
+    render(<ConversationThread data={{ conversation: { ...conversations[2], customer: { id: 1, name: 'Marcela Fuentes', phone_e164: null } }, messages, messages_total: messages.length }} state="ready" interactive customerName={() => 'Marcela Fuentes'} />);
     expect(screen.getByLabelText(/mensaje entrante de marcela/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/mensaje saliente de lumat/i)).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /respuesta/i })).toBeEnabled();
   });
 
   it('preserves enabled, closed, bot, and stale composer scenarios', () => {
-    const { rerender } = render(<ConversationThread data={{ conversation: conversations[2], messages }} state="ready" interactive />);
+    const { rerender } = render(<ConversationThread data={{ conversation: conversations[2], messages, messages_total: messages.length }} state="ready" interactive />);
     expect(screen.getByRole('textbox', { name: /respuesta/i })).toBeEnabled();
-    rerender(<ConversationThread data={{ conversation: { ...conversations[1], last_message_at: '2026-08-01T08:15:00-04:00', reply_window_open: false }, messages }} state="ready" interactive />);
+    rerender(<ConversationThread data={{ conversation: { ...conversations[1], last_message_at: '2026-08-01T08:15:00-04:00', reply_window_open: false }, messages, messages_total: messages.length }} state="ready" interactive />);
     expect(screen.getByRole('status', { name: 'Cerrada' })).toBeInTheDocument();
-    rerender(<ConversationThread data={{ conversation: conversations[2], messages }} state="stale" interactive />);
+    rerender(<ConversationThread data={{ conversation: conversations[2], messages, messages_total: messages.length }} state="stale" interactive />);
     expect(screen.getAllByRole('status').some((status) => /desactualizados/i.test(status.textContent ?? ''))).toBe(true);
   });
 });
