@@ -34,7 +34,7 @@ from app.models import (
     Customer,
 )
 from app.services.audit import record_audit
-from app.services.cases import _apply_status, get_or_create_case
+from app.services.cases import set_case_status, get_or_create_case
 from app.services.notify import send_emergency_notification
 from app.services.settings import (
     DEFAULT_EMERGENCY_CONTACTS,
@@ -80,7 +80,7 @@ def emergency(state: ConversationState) -> dict:
             )
         case = get_or_create_case(session, state.conversation_id, state.customer_id)
         case.emergency = True
-        _apply_status(case, "escalado")
+        set_case_status(case, "escalado")
         case.escalated_at = datetime.now(timezone.utc)
         session.add(
             ConversationEvent(

@@ -38,7 +38,7 @@ def case_is_open_expr():
     return or_(Case.status.is_(None), Case.status.not_in(CLOSING_CASE_STATUSES))
 
 
-def _apply_status(case: Case, status: str | None) -> None:
+def set_case_status(case: Case, status: str | None) -> None:
     """Set status and synchronize the closure timestamp; NULL status is open."""
     was_closing = case.status in CLOSING_CASE_STATUSES
     is_closing = status in CLOSING_CASE_STATUSES
@@ -137,7 +137,7 @@ def create_handoff_case(
     """Escalate the conversation's case with the deriva bundle (HH-2)."""
     case = get_or_create_case(session, state.conversation_id, state.customer_id)
     case.summary = summary_text
-    _apply_status(case, "escalado")
+    set_case_status(case, "escalado")
     case.escalated_at = datetime.now(timezone.utc)
     case.bundle = build_deriva_bundle(
         session, state, summary_text=summary_text, reason=reason
@@ -196,7 +196,7 @@ def update_case(
     """
     before = {"status": case.status, "responsible_id": case.responsible_id}
     if status is not None:
-        _apply_status(case, status)
+        set_case_status(case, status)
     if responsible_id is not _UNSET:
         case.responsible_id = responsible_id
     record_audit(
