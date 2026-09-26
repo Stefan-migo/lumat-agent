@@ -328,6 +328,19 @@ before the first source commit (owner decision pending).
   Native RAR owns verification applicability, so **no review transaction was
   started and no receipt exists** for this slice either — the same outcome as
   WU2 and WU3. No PASS is authored here.
+- [x] **WU4 backend suite, and an honest flake record** — `uv run pytest tests/`
+  hung and failed on the first run with a 120s timeout in
+  `tests/integration/test_agent_chat_realtime.py::test_internal_chat_uses_sse_preview_instead_of_realtime_tokens`
+  (an assistant SSE test, unrelated to this branch, which touches no Python
+  file). That test passes in isolation (**4 passed in 1.77s**) and the complete
+  suite then passed on a re-run: **1533 passed**, 2 warnings, exit 0. Recorded as
+  an **intermittent hang under the full suite**, not a deterministic failure.
+- [x] **PR #387 opened** — `feat(clients): edit profile, consent and archive from
+  the client ficha`, base `main`, label `type:feature`, branch
+  `odd/clients-crud-wu4`. The branch already contained the then-current
+  `origin/main` (`93e38aef`), so no bringing-level merge was required and the
+  tree tested is the tree that lands. This is the last slice of the chain: merging
+  it closes `clients-crud` 4 of 4.
 
 ## Acceptance criteria
 
