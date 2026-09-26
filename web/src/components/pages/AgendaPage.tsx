@@ -17,6 +17,7 @@ import { StateMessage } from "../shared/StateMessage";
 import { AgendaTimeError, agendaMonthDays, agendaPeriodLabel, agendaShiftPeriod, agendaTodayKey, agendaWeekDays, composeAgendaTime, formatAgendaSlot } from "../shared/agendaTime";
 import { AgendaCalendar, type AgendaCalendarView } from "../shared/AgendaCalendar";
 import { appointmentStatusLabel, appointmentStatusTone, appointmentSyncLabel, appointmentSyncTone } from "../shared/toneMaps";
+import { pathForRoute } from "../domain/panelRoutes";
 
 export type AgendaPageState = AsyncDataState | "stale";
 
@@ -41,7 +42,7 @@ function stateMessage(state: AgendaPageState, retry: () => void) {
 
 const columns: Column<AgendaAppointment>[] = [
   { key: "time", header: "Hora", render: (row) => formatAgendaSlot(row.starts_at, row.timezone) },
-  { key: "service", header: "Servicio", render: (row) => row.service },
+  { key: "service", header: "Servicio", render: (row) => <a className="table__link" href={pathForRoute({ view: "agenda", appointmentId: row.id })}>{row.service}</a> },
   { key: "customer", header: "Cliente", render: (row) => row.customer_name ?? "—" },
   { key: "technician", header: "Técnico", render: (row) => row.technician_name ?? "—" },
   { key: "status", header: "Estado", render: (row) => <div><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge><br /><Badge tone={appointmentSyncTone(row.sync.status)}>{appointmentSyncLabel(row.sync.status)}</Badge>{row.sync.error ? <small>{row.sync.error}</small> : null}</div> },

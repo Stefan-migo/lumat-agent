@@ -22,6 +22,7 @@ import {
   customerStateTone,
   directionLabel,
 } from "../shared/toneMaps";
+import { pathForRoute } from "../domain/panelRoutes";
 
 const DATE_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short" });
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" });
@@ -230,9 +231,11 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
                 <ul className="client-ficha__visits data-region">
                   {appointments.map((appointment: Appointment) => (
                     <li key={appointment.id}>
-                      <span>{appointment.service}</span>
-                      <span>{formatDateTime(appointment.starts_at)}</span>
-                      <Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge>
+                      <a className="table__link" href={pathForRoute({ view: "agenda", appointmentId: appointment.id })}>
+                        <span>{appointment.service}</span>
+                        <span>{formatDateTime(appointment.starts_at)}</span>
+                        <Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge>
+                      </a>
                       {appointment.calendar_error ? (
                         <>
                           <StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`} />

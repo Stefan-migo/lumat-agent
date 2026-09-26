@@ -228,6 +228,19 @@ describe("ClientFicha slice 2 — product register", () => {
     expect(screen.getAllByText(/\d{2}-\d{2}-\d{2}/).length).toBeGreaterThan(0);
   });
 
+  it("links each visit to its appointment detail and keeps calendar retry outside the link", async () => {
+    const user = userEvent.setup();
+    const visit = { id: 42, service: "Reparación", customer_id: 7, case_id: 2, technician_id: 3, local_start: "2026-07-15T12:00:00Z", timezone: "UTC", starts_at: "2026-07-15T12:00:00Z", ends_at: "2026-07-15T13:00:00Z", duration_minutes: 60, status: "booked", calendar_error: "Proveedor no disponible" };
+    render(<ClientFicha data={{ ...ficha, history: { ...ficha.history, appointments: [visit] } }} memories={memories} onRetryCalendar={vi.fn()} />);
+
+    const link = screen.getByRole("link", { name: /Reparación/ });
+    expect(link).toHaveAttribute("href", "/panel/app/agenda/42");
+    const retry = screen.getByRole("button", { name: "Reintentar calendario" });
+    expect(retry.closest("a")).toBeNull();
+    await user.click(retry);
+    expect(apiFetch).toHaveBeenCalledWith("/panel/api/appointments/42/calendar/sync", { method: "POST" });
+  });
+
   // T15 — the layout decision: two regions with a summary rail.
   it("composes the ficha into a summary rail plus a main region, with no conversation component", () => {
     const { container } = render(<ClientFicha data={ficha} memories={memories} />);
