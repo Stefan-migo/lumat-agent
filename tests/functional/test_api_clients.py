@@ -175,6 +175,57 @@ def test_clients_search_no_matches_returns_empty_list(client, make_user):
     assert body["query"] == "zzz-nobody"
 
 
+def test_clients_list_includes_archived_only_when_requested(client, make_user):
+    active_id = _seed_customer(name="Active")
+    archived_id = _seed_customer(name="Archived", phone="+56933334444")
+    with SessionLocal() as session:
+        session.get(Customer, archived_id).archived_at = datetime.now().astimezone()
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    default = client.get("/panel/api/clients")
+    included = client.get("/panel/api/clients", params={"include_archived": True})
+
+    assert {row["id"] for row in default.json()["clients"]} == {active_id}
+    archived = next(row for row in included.json()["clients"] if row["id"] == archived_id)
+    assert datetime.fromisoformat(archived["archived_at"])
+
+
+def test_archive_and_unarchive_routes_audit_actor_and_return_ficha(client, make_user):
+    customer_id = _seed_customer()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    archived = client.post(f"/panel/api/clients/{customer_id}/archive")
+    assert archived.status_code == 200
+    assert archived.json()["customer"]["archived_at"] is not None
+    with SessionLocal() as session:
+        archive_audit = session.scalar(
+            select(AuditLog).where(AuditLog.action == "customer.archived")
+        )
+    assert archive_audit.actor == "oper"
+
+    unarchived = client.post(f"/panel/api/clients/{customer_id}/unarchive")
+    assert unarchived.status_code == 200
+    assert unarchived.json()["customer"]["archived_at"] is None
+    with SessionLocal() as session:
+        unarchive_audit = session.scalar(
+            select(AuditLog).where(AuditLog.action == "customer.unarchived")
+        )
+    assert unarchive_audit.actor == "oper"
+
+
+def test_archive_route_missing_customer_returns_404(client, make_user):
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.post("/panel/api/clients/999999/archive")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "customer not found"}
+
+
 def test_clients_list_caps_at_limit_100(client, make_user):
     """search_customers limit=100 honored by the API wrapper."""
     with SessionLocal() as session:
