@@ -164,11 +164,57 @@ describe('AgendaPage', () => {
 
     await waitFor(() => expect(cancelAppointment).toHaveBeenCalledWith(1, 'Cliente avisó'));
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('tab', { name: 'No activas' }));
     expect(await screen.findByText('Cancelada')).toBeInTheDocument();
   });
 
-  it('does not offer cancellation or issue a request for non-booked rows', () => {
+  it('does not offer cancellation or issue a request for non-booked rows', async () => {
     render(<AgendaPage data={[appointment({ status: 'completed' }), appointment({ id: 2, status: 'no_show' }), appointment({ id: 3, status: 'cancelled' })]} state="ready" />);
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'No activas' }));
+    expect(screen.getAllByText('Mantención')).toHaveLength(3);
+    expect(screen.queryByRole('button', { name: 'Cancelar visita' })).not.toBeInTheDocument();
+    expect(cancelAppointment).not.toHaveBeenCalled();
+  });
+
+  it('separates active and non-active visits in a keyboard-operable client-side register view', async () => {
+    const user = userEvent.setup();
+    const rows = [appointment(), appointment({ id: 2, status: 'cancelled', service: 'Cancelled service' }), appointment({ id: 3, status: 'completed', service: 'Completed service' }), appointment({ id: 4, status: 'no_show', service: 'No-show service' })];
+    render(<AgendaPage data={rows} state="ready" />);
+
+    expect(screen.getByRole('tab', { name: 'Activas' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Mantención')).toBeInTheDocument();
+    expect(screen.queryByText('Cancelled service')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Activas' }));
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByText('Cancelled service')).toBeInTheDocument();
+    expect(screen.getByText('Completed service')).toBeInTheDocument();
+    expect(screen.getByText('No-show service')).toBeInTheDocument();
+    expect(screen.queryByText('Mantención')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Visitas no activas', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Hoy' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Próximas' })).not.toBeInTheDocument();
+  });
+
+  it('does not issue a request when switching register views', async () => {
+    const user = userEvent.setup();
+    render(<AgendaPage data={[appointment()]} state="ready" />);
+    vi.mocked(listAppointments).mockClear();
+    await user.click(screen.getByRole('tab', { name: 'No activas' }));
+    expect(listAppointments).not.toHaveBeenCalled();
+  });
+
+  it('shows the labelled empty state when the selected register view has no rows', async () => {
+    const user = userEvent.setup();
+    render(<AgendaPage data={[appointment()]} state="ready" />);
+    await user.click(screen.getByRole('tab', { name: 'No activas' }));
+    expect(screen.getByText('No hay visitas')).toBeInTheDocument();
+  });
+
+  it('does not offer cancellation for completed, no-show, or cancelled visits in the non-active view', async () => {
+    const user = userEvent.setup();
+    render(<AgendaPage data={[appointment({ status: 'completed' }), appointment({ id: 2, status: 'no_show' }), appointment({ id: 3, status: 'cancelled' })]} state="ready" />);
+    await user.click(screen.getByRole('tab', { name: 'No activas' }));
+    expect(screen.getAllByText('Mantención')).toHaveLength(3);
     expect(screen.queryByRole('button', { name: 'Cancelar visita' })).not.toBeInTheDocument();
     expect(cancelAppointment).not.toHaveBeenCalled();
   });

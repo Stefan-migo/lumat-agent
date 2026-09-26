@@ -33,15 +33,18 @@ describe("AgendaPage Storybook state matrix", () => {
 
   afterEach(() => vi.useRealTimers());
 
-  it("covers production-shaped lifecycle and independent sync data", () => {
+  it("covers production-shaped lifecycle and independent sync data across register views", async () => {
     render(<AgendaPageStory data={Data.args?.data} state="ready" />);
 
     expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
+    await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("tab", { name: "No activas" }));
     expect(screen.getByText("Cancelada")).toBeInTheDocument();
     expect(screen.getByText("Completada")).toBeInTheDocument();
     expect(screen.getByText("No asistió")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Reintentar calendario" })).toHaveLength(1);
+    await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("tab", { name: "Activas" }));
     expect(screen.getByText("Calendario con error")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Reintentar calendario" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Reintentar calendario" })).toHaveLength(1);
   });
 
   it.each([
@@ -80,7 +83,7 @@ describe("AgendaPage Storybook state matrix", () => {
     expect(screen.getAllByRole("dialog", { name: "Cancelar visita de Camila Soto — Mantención de calefón" })).toHaveLength(1);
   });
 
-  it("does not render an empty Hoy section", () => {
+  it("does not render an empty Hoy section for an upcoming active visit", () => {
     render(<AgendaPageStory {...(SectionEmpty.args ?? {})} />);
     expect(screen.queryByRole("heading", { name: "Hoy", level: 2 })).not.toBeInTheDocument();
     expect(screen.getByText("Instalación de cocina")).toBeInTheDocument();

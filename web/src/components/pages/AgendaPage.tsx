@@ -8,6 +8,7 @@ import { Combobox } from "../primitives/Combobox";
 import { Dialog } from "../primitives/Dialog";
 import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
+import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
 import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
@@ -63,6 +64,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const [view, setView] = useState<AgendaCalendarView>("month");
   const [anchor, setAnchor] = useState(() => agendaTodayKey(timezone));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [registerView, setRegisterView] = useState("active");
   const periodDays = view === "month" ? agendaMonthDays(anchor, timezone) : agendaWeekDays(anchor, timezone);
   const from = periodDays[0];
   const to = periodDays[periodDays.length - 1];
@@ -185,10 +187,12 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     counts[day] = (counts[day] ?? 0) + 1;
     return counts;
   }, {});
-  const todayRows = sortedAppointments.filter((row) => localDate(row.local_start) === today);
-  const upcomingRows = sortedAppointments.filter((row) => localDate(row.local_start) > today);
-  const periodRows = sortedAppointments;
-  const selectedRows = selectedDay ? sortedAppointments.filter((row) => localDate(row.local_start) === selectedDay) : null;
+  const nonActiveRows = sortedAppointments.filter((row) => ["cancelled", "completed", "no_show"].includes(row.status));
+  const activeRows = sortedAppointments.filter((row) => !["cancelled", "completed", "no_show"].includes(row.status));
+  const todayRows = activeRows.filter((row) => localDate(row.local_start) === today);
+  const upcomingRows = activeRows.filter((row) => localDate(row.local_start) > today);
+  const periodRows = activeRows;
+  const selectedRows = registerView === "active" && selectedDay ? activeRows.filter((row) => localDate(row.local_start) === selectedDay) : null;
   const containsToday = periodDays.includes(today);
   const actions = (row: AgendaAppointment) => <>
     {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setCancelTarget(row); setCancelFeedback(null); }}>Cancelar visita</Button> : null}
@@ -211,12 +215,14 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     setView(nextView);
     setSelectedDay(null);
   };
-  const register = selectedRows
-    ? section(agendaPeriodLabel(selectedDay ?? "", timezone), selectedRows)
-    : containsToday
-      ? <>{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</>
-      : section("Visitas del período", periodRows);
-  const renderedRows = selectedRows ?? (containsToday ? [...todayRows, ...upcomingRows] : periodRows);
+  const register = registerView === "non-active"
+    ? section("Visitas no activas", nonActiveRows)
+    : selectedRows
+      ? section(agendaPeriodLabel(selectedDay ?? "", timezone), selectedRows)
+      : containsToday
+        ? <>{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</>
+        : section("Visitas del período", periodRows);
+  const renderedRows = registerView === "non-active" ? nonActiveRows : selectedRows ?? (containsToday ? [...todayRows, ...upcomingRows] : periodRows);
   const showEmpty = data?.length === 0 || state === "empty" || renderedRows.length === 0;
 
   const field = (key: keyof typeof createForm, value: string) => setCreateForm((form) => ({ ...form, [key]: value }));
@@ -224,7 +230,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     {createFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={createFeedback.title} /> : null}
     {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
       <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
-      {showEmpty ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : <section aria-label="Registro de agenda">{register}</section>}
+      <section aria-label="Registro de agenda"><Tabs tabs={[{ id: "active", label: "Activas" }, { id: "non-active", label: "No activas" }]} activeTab={registerView} onTabChange={setRegisterView} ariaLabel="Filtro del registro de visitas">{() => showEmpty ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : register}</Tabs></section>
     </div>}
     <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title={cancelTarget ? `Cancelar visita de ${cancelTarget.customer_name ?? "cliente"} — ${cancelTarget.service}` : "Cancelar visita"}>
       <p>La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.</p>
