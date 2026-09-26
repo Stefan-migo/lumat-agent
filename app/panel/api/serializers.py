@@ -54,6 +54,7 @@ def to_customer_dict(customer: Customer) -> dict:
         "state": customer.state.value,
         "consent_status": customer.consent_status,
         "consent_at": _iso(customer.consent_at),
+        "archived_at": _iso(customer.archived_at),
         "created_at": _iso(customer.created_at),
     }
 

@@ -98,11 +98,14 @@ def _ficha_memory_or_404(
 @router.get("/clients")
 def clients_list(
     q: str | None = None,
+    include_archived: bool = False,
     session: Session = Depends(get_db),
     current: User = Depends(require_operator_json),
 ) -> dict:
     """Search/list customers (AP-3), wrapped and capped at 100."""
-    found = customers.search_customers(session, q, limit=100)
+    found = customers.search_customers(
+        session, q, limit=100, include_archived=include_archived
+    )
     return {"clients": [to_customer_dict(c) for c in found], "query": q or ""}
 
 
@@ -156,6 +159,30 @@ def client_state_change(
         raise HTTPException(status_code=400, detail=str(exc))
     session.commit()
     return {"ok": True, "state": customer.state.value}
+
+
+@router.post("/clients/{customer_id}/archive")
+def client_archive(
+    customer_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    customer = _customer_or_404(session, customer_id)
+    customers.archive_customer(session, customer, actor=current.username)
+    session.commit()
+    return {"customer": to_customer_dict(customer)}
+
+
+@router.post("/clients/{customer_id}/unarchive")
+def client_unarchive(
+    customer_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    customer = _customer_or_404(session, customer_id)
+    customers.unarchive_customer(session, customer, actor=current.username)
+    session.commit()
+    return {"customer": to_customer_dict(customer)}
 
 
 @router.post("/clients/{customer_id}/notes")

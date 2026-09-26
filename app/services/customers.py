@@ -126,6 +126,18 @@ def get_or_create_customer(session: Session, phone: str) -> Customer:
             entity_id=str(customer.id),
             after={"phone_e164": phone_e164, "channel": "whatsapp"},
         )
+    elif customer.archived_at is not None:
+        archived_at = customer.archived_at
+        customer.archived_at = None
+        record_audit(
+            session,
+            actor="system",
+            action="customer.auto_unarchived",
+            entity="customer",
+            entity_id=str(customer.id),
+            before={"archived_at": archived_at.isoformat()},
+            after={"archived_at": None},
+        )
     return customer
 
 
@@ -195,7 +207,13 @@ def list_notes(session: Session, customer_id: int) -> list[CustomerNote]:
 # ---------------------------------------------------------------------------
 
 
-def search_customers(session: Session, query: str | None = None, limit: int = 100) -> list[Customer]:
+def search_customers(
+    session: Session,
+    query: str | None = None,
+    limit: int = 100,
+    *,
+    include_archived: bool = False,
+) -> list[Customer]:
     """List customers, optionally filtered by name or phone (AP-3).
 
     `query` matches case-insensitively against the name, or as a digit
@@ -203,6 +221,8 @@ def search_customers(session: Session, query: str | None = None, limit: int = 10
     -> newest-first list. Used by the panel clients view.
     """
     statement = select(Customer).order_by(Customer.created_at.desc(), Customer.id.desc())
+    if not include_archived:
+        statement = statement.where(Customer.archived_at.is_(None))
     q = (query or "").strip()
     if q:
         digits = "".join(ch for ch in q if ch.isdigit())
@@ -214,6 +234,39 @@ def search_customers(session: Session, query: str | None = None, limit: int = 10
         else:
             statement = statement.where(name_clause)
     return list(session.scalars(statement.limit(limit)))
+
+
+def archive_customer(session: Session, customer: Customer, *, actor: str) -> Customer:
+    """Archive a customer record once, retaining its first archive timestamp."""
+    if customer.archived_at is None:
+        customer.archived_at = datetime.now(timezone.utc)
+        record_audit(
+            session,
+            actor=actor,
+            action="customer.archived",
+            entity="customer",
+            entity_id=str(customer.id),
+            before={"archived_at": None},
+            after={"archived_at": customer.archived_at.isoformat()},
+        )
+    return customer
+
+
+def unarchive_customer(session: Session, customer: Customer, *, actor: str) -> Customer:
+    """Restore a customer record once; an active record is left unchanged."""
+    if customer.archived_at is not None:
+        archived_at = customer.archived_at
+        customer.archived_at = None
+        record_audit(
+            session,
+            actor=actor,
+            action="customer.unarchived",
+            entity="customer",
+            entity_id=str(customer.id),
+            before={"archived_at": archived_at.isoformat()},
+            after={"archived_at": None},
+        )
+    return customer
 
 
 # ---------------------------------------------------------------------------

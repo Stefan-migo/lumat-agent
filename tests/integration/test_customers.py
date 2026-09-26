@@ -335,3 +335,65 @@ def test_cr6_consent_withdrawn():
         session.commit()
         stored = session.get(Customer, customer.id)
         assert stored.consent_status is False
+
+
+def test_archived_customer_hidden_by_default_and_included_on_request():
+    with SessionLocal() as session:
+        active = customers.get_or_create_customer(session, "56912345678")
+        archived = customers.get_or_create_customer(session, "56987654321")
+        customers.archive_customer(session, archived, actor="operador1")
+        session.commit()
+
+        assert [c.id for c in customers.search_customers(session)] == [active.id]
+        assert {c.id for c in customers.search_customers(session, include_archived=True)} == {
+            active.id, archived.id
+        }
+
+
+def test_archive_and_unarchive_are_audited_and_idempotent():
+    from app.models import AuditLog
+
+    with SessionLocal() as session:
+        customer = customers.get_or_create_customer(session, "56912345678")
+        customers.archive_customer(session, customer, actor="operador1")
+        archived_at = customer.archived_at
+        customers.archive_customer(session, customer, actor="operador2")
+        assert customer.archived_at == archived_at
+        customers.unarchive_customer(session, customer, actor="operador1")
+        customers.unarchive_customer(session, customer, actor="operador2")
+        session.commit()
+
+        audits = session.scalars(
+            select(AuditLog).where(AuditLog.entity_id == str(customer.id))
+        ).all()
+        assert [(row.action, row.actor, row.before, row.after) for row in audits] == [
+            ("customer.auto_created", "system", None,
+             {"phone_e164": "+56912345678", "channel": "whatsapp"}),
+            ("customer.archived", "operador1", {"archived_at": None},
+             {"archived_at": archived_at.isoformat()}),
+            ("customer.unarchived", "operador1",
+             {"archived_at": archived_at.isoformat()}, {"archived_at": None}),
+        ]
+
+
+def test_get_or_create_auto_unarchives_archived_customer_once():
+    from app.models import AuditLog
+
+    with SessionLocal() as session:
+        customer = customers.get_or_create_customer(session, "56912345678")
+        customers.archive_customer(session, customer, actor="operador1")
+        session.commit()
+        customer_id = customer.id
+
+    with SessionLocal() as session:
+        customer = customers.get_or_create_customer(session, "56912345678")
+        session.commit()
+        assert customer.id == customer_id
+        assert customer.archived_at is None
+        audit = session.scalar(
+            select(AuditLog).where(AuditLog.action == "customer.auto_unarchived")
+        )
+        assert audit is not None
+        assert audit.actor == "system"
+        assert audit.before["archived_at"] is not None
+        assert audit.after == {"archived_at": None}
