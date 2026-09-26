@@ -1,9 +1,10 @@
-import { useCallback } from 'react';
-import { getAppointment } from '../../api';
+import { useCallback, useState } from 'react';
+import { closeAppointment, getAppointment } from '../../api';
 import { useAsyncData, type AsyncDataState } from '../../hooks/useAsyncData';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
 import { Badge } from '../primitives/Badge';
 import { Button } from '../primitives/Button';
+import { Dialog } from '../primitives/Dialog';
 import { Card } from '../primitives/Card';
 import { PageFrame } from '../shared/PageFrame';
 import { StateMessage } from '../shared/StateMessage';
@@ -27,6 +28,9 @@ function stateMessage(state: AsyncDataState) {
 }
 
 export function AppointmentDetail({ appointmentId, data: controlledData, state: controlledState, onRetry }: AppointmentDetailProps) {
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [mutating, setMutating] = useState(false);
+  const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; title: string; detail?: string } | null>(null);
   const fetchDetail = useCallback(() => {
     if (appointmentId === undefined) throw new Error('appointment id is required');
     return getAppointment(appointmentId);
@@ -35,6 +39,21 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
   const detail = controlledData ?? fetched.data;
   const state = controlledState ?? (controlledData !== undefined ? 'ready' : fetched.state);
   const retry = onRetry ?? fetched.retry;
+  const close = async (outcome: 'completed' | 'no_show') => {
+    if (!detail || mutating) return;
+    setMutating(true);
+    setFeedback(null);
+    try {
+      await closeAppointment(detail.appointment.id, outcome);
+      setCloseOpen(false);
+      setFeedback({ tone: 'success', title: outcome === 'completed' ? 'Visita completada' : 'Visita marcada como no asistida' });
+      await retry();
+    } catch (error) {
+      setFeedback({ tone: 'danger', title: 'No se pudo registrar el resultado', detail: error instanceof Error ? error.message : 'Intenta nuevamente.' });
+    } finally {
+      setMutating(false);
+    }
+  };
 
   if (!detail) {
     return <PageFrame title="Detalle de visita" meta="Datos y ciclo de vida de la visita" state={stateMessage(state)}>
@@ -43,7 +62,8 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
   }
 
   const { appointment, customer, conversation_summary: summary } = detail;
-  return <PageFrame title="Detalle de visita" meta="Datos y ciclo de vida de la visita" actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a la agenda</Button>} state={stateMessage(state)}>
+  return <PageFrame title="Detalle de visita" meta="Datos y ciclo de vida de la visita" actions={<><Button variant="secondary" onClick={() => window.history.back()}>Volver a la agenda</Button>{appointment.status === 'booked' ? <Button variant="secondary" onClick={() => { setFeedback(null); setCloseOpen(true); }}>Cerrar visita</Button> : null}</>} state={stateMessage(state)}>
+    {feedback?.tone === 'success' ? <StateMessage tone="success" role="status" title={feedback.title} /> : null}
     <div className="detail-region">
       <section className="detail-region__rail" aria-label="Datos de la visita">
         <Card title="Visita">
@@ -68,5 +88,11 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
         </Card>
       </div>
     </div>
+    <Dialog open={closeOpen} onClose={() => { if (!mutating) setCloseOpen(false); }} title="Cerrar visita">
+      <p>Registra el resultado de la visita. Esta acción no se puede revertir desde la agenda.</p>
+      {feedback?.tone === 'danger' ? <StateMessage tone="danger" role="alert" title={feedback.title} detail={feedback.detail} /> : null}
+      <Button variant="secondary" disabled={mutating} onClick={() => void close('completed')}>Completar</Button>
+      <Button variant="secondary" disabled={mutating} onClick={() => void close('no_show')}>No asistió</Button>
+    </Dialog>
   </PageFrame>;
 }

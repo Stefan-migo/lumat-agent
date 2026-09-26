@@ -134,6 +134,9 @@ export const getAppointment = (id: number) => apiFetch<AppointmentDetail>(`/pane
 export function cancelAppointment(id: number, reason?: string) {
   return postJson<{ ok: true; appointment: unknown }>(`/panel/api/appointments/${id}/cancel`, { reason });
 }
+export function closeAppointment(id: number, outcome: "completed" | "no_show") {
+  return postJson<{ ok: true; appointment: unknown }>(`/panel/api/appointments/${id}/close`, { outcome });
+}
 export function retryCalendarSync(id: number) {
   return postJson<{ ok: boolean; calendar: { status: string; error: string | null } }>(`/panel/api/appointments/${id}/calendar/sync`);
 }

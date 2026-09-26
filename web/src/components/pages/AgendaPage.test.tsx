@@ -5,12 +5,13 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgendaPage } from './AgendaPage';
 import type { AgendaAppointment } from '../../types';
-import { cancelAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from '../../api';
+import { cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from '../../api';
 import { appointmentStatusLabel, appointmentSyncLabel } from '../shared/toneMaps';
 
 vi.mock('../../api', () => ({
   listAppointments: vi.fn(),
   cancelAppointment: vi.fn(),
+  closeAppointment: vi.fn(),
   retryCalendarSync: vi.fn(),
   createAppointment: vi.fn(),
   createCase: vi.fn(),
@@ -182,6 +183,41 @@ describe('AgendaPage', () => {
     expect(screen.getAllByText('Mantención')).toHaveLength(3);
     expect(screen.queryByRole('button', { name: 'Cancelar visita' })).not.toBeInTheDocument();
     expect(cancelAppointment).not.toHaveBeenCalled();
+  });
+
+  it('closes booked visits with confirmation, feedback, and register refresh', async () => {
+    const user = userEvent.setup();
+    const completed = appointment({ status: 'completed' });
+    vi.mocked(closeAppointment).mockResolvedValue({ ok: true, appointment: completed });
+    vi.mocked(listAppointments).mockResolvedValue({ appointments: [completed] });
+    render(<AgendaPage data={[appointment()]} state="ready" />);
+
+    expect(screen.getByRole('button', { name: 'Cerrar visita' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cerrar visita' }));
+    await user.click(screen.getByRole('button', { name: 'Completar' }));
+    await waitFor(() => expect(closeAppointment).toHaveBeenCalledWith(1, 'completed'));
+    await waitFor(() => expect(listAppointments).toHaveBeenCalled());
+    expect(await screen.findByText('Visita completada')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'No activas' }));
+    expect(screen.getByText('Completada')).toBeInTheDocument();
+  });
+
+  it('sends no-show outcome and shows actionable failure feedback', async () => {
+    const user = userEvent.setup();
+    vi.mocked(closeAppointment).mockRejectedValue(new Error('Intenta nuevamente'));
+    render(<AgendaPage data={[appointment()]} state="ready" />);
+    await user.click(screen.getByRole('button', { name: 'Cerrar visita' }));
+    await user.click(screen.getByRole('button', { name: 'No asistió' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Intenta nuevamente');
+    expect(closeAppointment).toHaveBeenCalledWith(1, 'no_show');
+  });
+
+  it('does not show close actions for terminal visits', async () => {
+    const user = userEvent.setup();
+    render(<AgendaPage data={[appointment({ status: 'completed' })]} state="ready" />);
+    await user.click(screen.getByRole('tab', { name: 'No activas' }));
+    expect(screen.queryByRole('button', { name: 'Cerrar visita' })).not.toBeInTheDocument();
+    expect(closeAppointment).not.toHaveBeenCalled();
   });
 
   it('separates active and non-active visits in a keyboard-operable client-side register view', async () => {

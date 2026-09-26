@@ -1,7 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { AppointmentDetail } from './AppointmentDetail';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
+import { closeAppointment } from '../../api';
+
+vi.mock('../../api', () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn() }));
 
 const detail: AppointmentDetailData = {
   appointment: {
@@ -16,6 +20,30 @@ const detail: AppointmentDetailData = {
 };
 
 describe('AppointmentDetail', () => {
+  it('offers confirmed outcomes for booked appointments and reports success', async () => {
+    const user = userEvent.setup();
+    vi.mocked(closeAppointment).mockResolvedValue({ ok: true, appointment: {} });
+    render(<AppointmentDetail data={detail} />);
+    await user.click(screen.getByRole('button', { name: 'Cerrar visita' }));
+    await user.click(screen.getByRole('button', { name: 'Completar' }));
+    await waitFor(() => expect(closeAppointment).toHaveBeenCalledWith(7, 'completed'));
+    expect(await screen.findByRole('status')).toHaveTextContent('Visita completada');
+  });
+
+  it('supports no-show and surfaces failure; terminal visits have no outcome action', async () => {
+    const user = userEvent.setup();
+    vi.mocked(closeAppointment).mockRejectedValue(new Error('Intenta nuevamente'));
+    render(<AppointmentDetail data={detail} />);
+    await user.click(screen.getByRole('button', { name: 'Cerrar visita' }));
+    await user.click(screen.getByRole('button', { name: 'No asistió' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Intenta nuevamente');
+    expect(closeAppointment).toHaveBeenCalledWith(7, 'no_show');
+
+    cleanup();
+    render(<AppointmentDetail data={{ ...detail, appointment: { ...detail.appointment, status: 'completed' } }} />);
+    expect(screen.queryByRole('button', { name: 'Cerrar visita' })).not.toBeInTheDocument();
+  });
+
   it('renders appointment facts, customer link, and its audit trail without a conversation summary', () => {
     render(<AppointmentDetail data={detail} />);
 
