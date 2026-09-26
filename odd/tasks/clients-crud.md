@@ -502,11 +502,34 @@ before the first source commit (owner decision pending).
       `Badge`, and `LocalFeedback` primitives/conventions; added no dependencies,
       component abstractions, or bespoke controls. No authorized behavior was
       removed; no further same-behavior simplification was identified.
+- [x] **WU4 readback fix** — the orchestrator's diff readback found two defects
+      and closed them under strict TDD in `7ada1bec`
+      (`fix(clients): render ficha mutation errors once and with the right
+      label`): (1) `safeError`'s generic fallback still interpolated the raw
+      action token (`No pudimos guardar consentimiento`), because `07e17858`
+      localised only the 401/403 and 400/422 branches and left the third — the
+      new actions inherited it, and three tests had the broken string baked in as
+      their expectation; (2) `profileFeedback` and `archiveFeedback` rendered
+      twice at once (in the card and inside the open `Dialog`), so a single
+      failure produced two messages. Fix: the generic fallback now uses the
+      localised label, and the card surface is suppressed while its dialog owns
+      it. RED first: `shows an archive failure once, with a readable label`
+      failed to find the heading, and the corrected expectations for
+      `updates consent and surfaces failures beside its control`,
+      `shows local feedback when a case update fails` and
+      `shows safe mutation errors and disables controls while saving` failed
+      against the old strings. Re-verification after the fix: `cd web && npm run
+      test` → **91 files / 821 tests passed**, exit 0; `npx tsc -b --noEmit` →
+      exit 0; `npm run build` → exit 0. This also corrects two pre-existing
+      user-facing strings (`No pudimos guardar caso` / `…estado`) that were not
+      grammatical Spanish; that change is deliberate and its assertions were
+      updated with it.
 
 ## Recovery
 
 - Worktree: `/home/stefan/repos/lumat-agent-odd-clients-crud`,
-  branch `odd/clients-crud-wu3`, base `1fdddcee` (started at `50bce481`).
+  branch `odd/clients-crud-wu4` (WU3 shipped and merged as `93e38aef`; WU4 is the
+  fourth and last slice of the chain), base `93e38aef`.
 - Test DB: `bash infra/test-db.sh up|down|env`, project
   `lumat-test-lumat-agent-odd-clients-crud`, port `5702`.
 - `graphify-out/` is gitignored and absent from this worktree: query the graph
