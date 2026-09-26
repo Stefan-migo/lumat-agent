@@ -145,6 +145,7 @@ The 2026-09-25 report assigned U6 = register filter (D3) + quick-action CRUD +
       243.93s.
 - [x] Baseline web: `cd web && npm test` — **792 passed** (91 files), 92.95s.
 - [x] Graph check below.
+- [x] Slice B baseline/worktree: branch `odd/agenda-register-actions-chain`, base `8e5a978a`, backend **1506 passed**, web **799 passed (91 files)**.
 
 ### WU1 — Contract amendment
 
@@ -218,26 +219,30 @@ Also in this pass:
 
 ### WU4 — Backend: reschedule a booked visit
 
-- [ ] RED observed: self-overlap and DST/availability tests fail against the new route.
-- [ ] `_validate_slot(...)` extracted from `book`, with `exclude_appointment_id`; `book`
+- [x] RED observed: service self-overlap test failed with `AttributeError: module 'app.services.scheduling' has no attribute 'reschedule'`; route test failed with `assert 405 == 200` (`405 Method Not Allowed`).
+- [x] `_validate_slot(...)` extracted from `book`, with `exclude_appointment_id`; `book`
       switched to it with identical behaviour (its existing tests are the regression net).
-- [ ] `scheduling.reschedule(session, appointment, *, local_date, local_time, timezone_name,
+- [x] `scheduling.reschedule(session, appointment, *, local_date, local_time, timezone_name,
       duration_minutes, technician_id, actor)` — guard `BOOKED`, validate the new slot, update
       `local_start`/`timezone`/`starts_at`/`ends_at`/`duration_minutes`/`technician_id`, `flush`,
       `_history(action="rescheduled", details={"from": ..., "to": ...})`, `record_audit`.
-- [ ] `PATCH /appointments/{id}` — same error envelope as `book`
+- [x] `PATCH /appointments/{id}` — specific exception mapping before bare `ValueError`
       (`invalid_local_time`, `technician_unavailable`, `appointment_conflict`, `invalid_timezone`)
       plus `invalid_lifecycle`.
-- **Verify**: focused backend tests + the full backend suite.
+- **Verify**: focused backend **23 passed in 3.69s**; full backend **1508 passed, 2 warnings in 223.49s**.
+- **Commit**: `a2973185` — `feat(agenda): reschedule booked appointments`.
+- **RED coverage note**: RED was observed for missing service/route behavior and fixed. Separate RED runs were not captured for every specific error mapping (DST, availability, conflict, lifecycle, unknown ID, and 422); do not treat those cases as independently evidenced RED.
 
 ### WU5 — Front: reschedule dialog
 
-- [ ] RED observed: the dialog and client assertions fail.
-- [ ] `api.ts` — `rescheduleAppointment(id, body)`.
-- [ ] The `Reprogramar` dialog on `AgendaPage.tsx` (date, time, duration, technician) posting the
+- [x] RED observed: AgendaPage failed with `Unable to find an accessible element with the role "button" and name "Reprogramar"`.
+- [x] `api.ts` — `rescheduleAppointment(id, body)` using `patchJson` backed by `apiFetch`.
+- [x] The `Reprogramar` dialog on `AgendaPage.tsx` (date, time, duration, technician) posting the
       complete new slot, wired to `AppointmentDetail.tsx`.
-- [ ] Storybook stories for the new states (AG-UI-4).
-- **Verify**: focused Vitest + full web suite + build.
+- [x] Storybook reschedule-dialog stories and fact-preserving story tests for both surfaces (AG-UI-4).
+- **Verify**: focused Vitest **62 passed (4 files)**; full web **804 passed (91 files)**; `npm run build` succeeded (`tsc -b && vite build`); `git diff --check` clean.
+- **Commits**: `e1e8475a` — `feat(agenda): add reschedule action to register`; `47590059` — `feat(agenda): reschedule visits from detail`; `166f4226` — `test(agenda): cover rescheduling story states`.
+- **RED coverage note**: RED was observed for the missing Agenda action; detail's missing action was not independently run RED before implementation. The first full-web run had a transient unrelated `ConversationsList` empty-state failure; its isolated test and the second full suite passed.
 
 ### WU6 — Full verification and closure
 
@@ -309,6 +314,6 @@ as the whole-unit estimate that justified chaining.
 - [x] WU2 — Backend: close a booked visit
 - [x] WU3 — Front: close actions
 - [x] WU3b — Post-writer normalization (`cb336531`); Slice A ready for review
-- [ ] WU4 — Backend: reschedule
-- [ ] WU5 — Front: reschedule dialog
+- [x] WU4 — Backend: reschedule (`a2973185`)
+- [x] WU5 — Front: reschedule dialog (`e1e8475a`, `47590059`, `166f4226`)
 - [ ] WU6 — Full verification and closure
