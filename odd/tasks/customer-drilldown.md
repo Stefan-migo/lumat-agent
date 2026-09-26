@@ -6,7 +6,7 @@
 **Branch (slice 2, live)**: `odd/customer-drilldown-chain`
 **Worktree (slice 2, live)**: `/home/stefan/repos/lumat-agent-odd-customer-drilldown-chain`
 **Base (slice 2)**: `120d34b9` (= `main`, merge of PR #371 `odd/customer-drilldown`)
-**Status**: slice 1 delivered as **PR #371** (`odd/customer-drilldown` → `main`), CI green. Slice 2 implemented and verified locally on `odd/customer-drilldown-chain`; pending owner push/PR.
+**Status**: slice 1 delivered as **PR #371** (`odd/customer-drilldown` → `main`), CI green. Slice 2 delivered as **PR #372** (`odd/customer-drilldown-chain` → `main`), CI green; the merge is the owner's decision.
 **Origin**: follow-up **#1** of `odd/tasks/panel-subagent-delegation.md` — the sibling unit for per-customer
 drill-down reads. Owner scope decision taken 2026-09-26 (see *Decision*).
 
@@ -163,5 +163,7 @@ order, and the next slice rebases onto the new `main` before its own PR.
 
 ## Next step
 
-Slice 2 is implemented and verified locally on `odd/customer-drilldown-chain`. The PR is the owner's
-decision; do not push or open one from this unit.
+Slice 2 is delivered as **PR #372** (`odd/customer-drilldown-chain` → `main`), CI green and labelled
+`type:chore` (spec + tests, no production behaviour change). The **merge is the owner's decision**; nothing
+else is pending on this unit. Under `stacked-to-main`, once #372 merges the unit is closed and the branch and
+its worktree can be cleaned up.
