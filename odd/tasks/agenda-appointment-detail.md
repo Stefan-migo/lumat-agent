@@ -125,46 +125,56 @@ require.
 
 ## Work units
 
-### WU1 — Backend detail payload
+### WU1 — Backend detail payload — done (`f4e708e6`)
 
-- RED (functional API tests): a case from a conversation with a summary exposes
-  `conversation_summary`; a manual case exposes `conversation_summary: null`; a
-  conversation-born case whose `summary` is `None` exposes `null`; the payload embeds
-  `customer {id, name}` and `case {id, conversation_id}`; an unknown id still 404s with
-  `"appointment not found"`.
-- Add `to_appointment_detail_dict(appointment, *, customer, case, conversation_summary)`.
-- Wire only the `GET /appointments/{appointment_id}` route; leave `to_appointment_dict` and
-  its callers byte-identical.
-- **Verify**: focused appointment tests, then the full backend suite.
+- [x] RED observed: `KeyError: 'conversation_summary'` ×3 —
+      `test_appointment_detail_embeds_conversation_summary_and_related_records`,
+      `test_appointment_detail_manual_case_has_no_conversation_summary`,
+      `test_appointment_detail_conversation_without_summary_is_successful` → 3 failed, 8 passed.
+- [x] `to_appointment_detail_dict(appointment, *, customer, case, conversation_summary)` added to
+      `app/panel/api/serializers.py`, composing on `to_appointment_dict` so it stays byte-identical.
+      The extra keys are siblings of `appointment`.
+- [x] Only `get_appointment` changed in `app/panel/api/routes/appointments.py`: loads the customer
+      and the case, resolves `Conversation.summary` only when `case.conversation_id` is set, else
+      `None`; the 404 `"appointment not found"` is preserved. Create, cancel, list and the dashboard
+      are untouched.
+- [x] A fourth test pins `to_appointment_dict`'s exact key set, so a future widening of the shared
+      serializer fails loudly.
+- **Verify**: `uv run pytest tests/functional/test_api_scheduling.py -o addopts='' -q` — **11 passed**;
+  `uv run pytest tests/ -o addopts='' -q` — **1483 passed** (baseline 1479 + 4), 2 warnings, 195.45s.
+- **Review boundary**: `review assess --base-ref 2a85b675 --committed-only` → `medium`,
+  `review_due: false`, `under_budget` (4 paths / 357 lines, the task doc included). Stays pending
+  in the slice; the boundary does not advance.
 
-### WU2 — SPA route plumbing
+### WU2 — Per-appointment route and detail page
 
-- RED (AppShell / panelRoutes tests): `/panel/app/agenda/7` parses to
+Route plumbing and the page are one unit: the route has nothing to render until the page
+exists, and the page is unreachable until the route parses.
+
+- RED (panelRoutes / AppShell / page tests): `/panel/app/agenda/7` parses to
   `{ view: 'agenda', appointmentId: 7 }`; `pathForRoute` round-trips it; a non-positive or
-  non-integer id falls back; `/panel/app/agenda` still renders the register.
-- `PanelRoute.appointmentId`, the `pathForRoute` branch, the parse branch and the
-  allowlist, plus the `PanelShell`/`AppShell` render switch.
-- **Verify**: focused web tests, then `npm run build`.
-
-### WU3 — AppointmentDetail page
-
-- RED: renders the customer name as a link to `/panel/app/clients/:id`, the service, and
-  the status; shows the conversation summary when present; shows **no** summary and does
-  **not** fail for a manual case; shows **no** summary when the conversation has none;
-  renders the per-appointment audit trail from `history` (actor, action, from/to status,
-  details, timestamp); carries loading/error/denied states.
+  non-integer id falls back; `/panel/app/agenda` still renders the register; the page renders
+  the customer name as a link to `/panel/app/clients/:id`, the service, and the status; shows
+  the conversation summary when present; shows **no** summary and does **not** fail for a
+  manual case; shows **no** summary when the conversation has none; renders the
+  per-appointment audit trail from `history` (actor, action, from/to status, details,
+  timestamp); carries loading/error/denied states.
+- `PanelRoute.appointmentId`, the `pathForRoute` branch, the parse branch and the allowlist,
+  plus the `PanelShell`/`AppShell` render switch.
 - `AppointmentDetail.tsx` mirroring `KbDocumentDetail.tsx` / `ClientFicha.tsx`
-  (`useAsyncData`, controlled-data support), `types.ts`, `api.ts`.
-- **Verify**: focused web tests, then `npm run build`.
+  (`useAsyncData`, controlled-data support), `types.ts`, `api.ts` (`getAppointment(id)`).
+- No inline styles: reuse the primitives and the existing stylesheet conventions
+  (`web/DESIGN_SYSTEM.md`).
+- **Verify**: focused web tests, then `cd web && npm run build`.
 
-### WU4 — Reachability from the agenda and the ficha
+### WU3 — Reachability from the agenda and the ficha
 
 - RED: the agenda offers a per-appointment action that navigates to
   `/panel/app/agenda/:id` (keyboard operable, no new destructive control); each visit card
   in `ClientFicha` links to the same route.
 - **Verify**: focused web tests.
 
-### WU5 — Story coverage and full verification
+### WU4 — Story coverage and full verification
 
 - Story for the detail page covering the named states (with a conversation summary, without
   one, and the manual-case path), plus a non-vacuous interaction test.
@@ -218,11 +228,10 @@ accepted as ordinary repository policy; no `size:exception` label was requested.
 ## Progress
 
 - [x] WU0 — worktree, environment, base baselines, and this record (`425cc724`)
-- [ ] WU1 — Backend detail payload
-- [ ] WU2 — SPA route plumbing
-- [ ] WU3 — AppointmentDetail page
-- [ ] WU4 — Reachability from the agenda and the ficha
-- [ ] WU5 — Story coverage and full verification
+- [x] WU1 — Backend detail payload (`f4e708e6`) — focused 11 passed, full backend 1483 passed
+- [ ] WU2 — Per-appointment route and detail page
+- [ ] WU3 — Reachability from the agenda and the ficha
+- [ ] WU4 — Story coverage and full verification
 - [ ] Owner decision: push and open the PR
 
 ## Verification (observed)
@@ -231,3 +240,5 @@ accepted as ordinary repository policy; no `size:exception` label was requested.
 |---|---|---|
 | base | `uv run pytest tests/ -o addopts='' -q` | 1479 passed in 216.08s |
 | base | `cd web && npm test` | 761 passed (87 files) |
+| WU1 | `uv run pytest tests/functional/test_api_scheduling.py -o addopts='' -q` | 11 passed in 2.41s |
+| WU1 | `uv run pytest tests/ -o addopts='' -q` | 1483 passed in 195.45s |
