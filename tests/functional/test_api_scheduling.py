@@ -334,3 +334,19 @@ def test_close_rejects_non_booked_and_unknown_appointments(client, make_user):
     missing = client.post("/panel/api/appointments/999999999/close", json={"outcome": "completed"})
     assert missing.status_code == 404
     assert missing.json()["detail"] == "appointment not found"
+
+
+def test_operator_can_reschedule_appointment_through_patch(client, make_user):
+    make_user("reschedule-oper", "reschedule-pass", role="operador")
+    with SessionLocal() as session:
+        appointment_id, *_ = _appointment_detail_rows(session)
+        technician_id = session.get(Appointment, appointment_id).technician_id
+    assert client.post("/panel/api/login", json={"username": "reschedule-oper", "password": "reschedule-pass"}).status_code == 200
+
+    response = client.patch(f"/panel/api/appointments/{appointment_id}", json={
+        "local_date": "2035-12-15", "local_time": "10:30", "timezone": "America/Santiago",
+        "duration_minutes": 90, "technician_id": technician_id,
+    })
+
+    assert response.status_code == 200
+    assert response.json()["appointment"]["local_start"].startswith("2035-12-15T10:30:00")

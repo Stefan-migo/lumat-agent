@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, datetime, time
 
 import pytest
 
@@ -131,3 +131,34 @@ def test_configured_availability_rejects_outside_block():
                 technician_id=technician.id, local_date=date(2026, 7, 15), local_time=time(10, 30),
                 timezone_name="America/Santiago", duration_minutes=30, actor="oper",
             )
+
+
+def test_reschedule_allows_new_slot_that_overlaps_its_previous_slot():
+    with SessionLocal() as session:
+        customer, case, technician = _linked_rows(session)
+        appointment = scheduling.book(
+            session, service="calefont", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=date(2026, 7, 15), local_time=time(10),
+            timezone_name="America/Santiago", duration_minutes=60, actor="oper",
+        )
+
+        moved = scheduling.reschedule(
+            session, appointment, local_date=date(2026, 7, 15), local_time=time(10, 30),
+            timezone_name="America/Santiago", duration_minutes=60,
+            technician_id=technician.id, actor="oper",
+        )
+
+        assert moved.local_start == datetime(2026, 7, 15, 10, 30)
+        assert moved.duration_minutes == 60
+        session.flush()
+        history = session.query(AppointmentHistory).filter_by(appointment_id=moved.id).order_by(AppointmentHistory.id).all()
+        assert history[-1].action == "rescheduled"
+        assert history[-1].from_status is AppointmentStatus.BOOKED
+        assert history[-1].to_status is AppointmentStatus.BOOKED
+        assert history[-1].details == {
+            "from_start": "2026-07-15T10:00:00",
+            "to_start": "2026-07-15T10:30:00",
+            "from_technician_id": technician.id,
+            "to_technician_id": technician.id,
+        }
+        assert session.query(AuditLog).filter_by(action="appointment.rescheduled", entity_id=str(moved.id)).count() == 1
