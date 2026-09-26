@@ -289,6 +289,16 @@ before the first source commit (owner decision pending).
   RAR declares inapplicable. The orchestrator did re-run the full frontend suite
   and both type/build gates itself as a spot check.
 
+- [x] **PR #386 opened** — `feat(clients): create and archive customers from the
+      clients list`, base `main`, label `type:feature`, branch
+      `odd/clients-crud-wu3`. Opened after merging the then-current `origin/main`
+      (`f5a6d68d`) into the branch; the full local integration over the merged
+      tree passed (frontend **813 tests**, `tsc` exit 0, `npm run build` exit 0,
+      backend **1533 passed**). The branch intersects `web/src/api.ts` with the
+      just-merged `odd/agenda-register-actions-chain` (#383), so the merged-tree
+      run was required, not optional. The bringing-level merge commit is covered
+      by no review receipt and none is claimed.
+
 ### WU4 — frontend: ficha profile, consent and archive
 
 - [ ] **T8 (fe)** — RED first in `ClientFicha`: the "Identidad" card gets a
