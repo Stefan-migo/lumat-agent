@@ -146,26 +146,34 @@ require.
   `review_due: false`, `under_budget` (4 paths / 357 lines, the task doc included). Stays pending
   in the slice; the boundary does not advance.
 
-### WU2 — Per-appointment route and detail page
+### WU2 — Per-appointment route and detail page — done (`6cdf81f0`, `d48385d8`)
 
-Route plumbing and the page are one unit: the route has nothing to render until the page
-exists, and the page is unreachable until the route parses.
-
-- RED (panelRoutes / AppShell / page tests): `/panel/app/agenda/7` parses to
-  `{ view: 'agenda', appointmentId: 7 }`; `pathForRoute` round-trips it; a non-positive or
-  non-integer id falls back; `/panel/app/agenda` still renders the register; the page renders
-  the customer name as a link to `/panel/app/clients/:id`, the service, and the status; shows
-  the conversation summary when present; shows **no** summary and does **not** fail for a
-  manual case; shows **no** summary when the conversation has none; renders the
-  per-appointment audit trail from `history` (actor, action, from/to status, details,
-  timestamp); carries loading/error/denied states.
-- `PanelRoute.appointmentId`, the `pathForRoute` branch, the parse branch and the allowlist,
-  plus the `PanelShell`/`AppShell` render switch.
-- `AppointmentDetail.tsx` mirroring `KbDocumentDetail.tsx` / `ClientFicha.tsx`
-  (`useAsyncData`, controlled-data support), `types.ts`, `api.ts` (`getAppointment(id)`).
-- No inline styles: reuse the primitives and the existing stylesheet conventions
-  (`web/DESIGN_SYSTEM.md`).
-- **Verify**: focused web tests, then `cd web && npm run build`.
+- [x] RED observed: `expected { view: 'dashboard' } to deeply equal { view: 'agenda', appointmentId: 1 }`,
+      `expected '/panel/app/agenda' to be '/panel/app/agenda/7'`, and
+      `Failed to resolve import "./AppointmentDetail"`. The pre-existing malformed-path test also went
+      RED because `/panel/app/agenda/1` used to fall back to the dashboard.
+- [x] `panelRoutes.ts` — `PanelRoute.appointmentId`, the `pathForRoute` branch mirroring `kb`, and
+      `'agenda'` in the 4-segment allowlist. `/panel/app/agenda` still parses to the register.
+- [x] `AppShell.tsx` — `appointmentId !== null ? <AppointmentDetail …/> : <AgendaPage />`. `PanelShell`
+      needed **no** change: it already treats Agenda as the shell view.
+- [x] `types.ts` (`AppointmentHistoryEntry`, `AppointmentDetail`), `api.ts` (`getAppointment(id)`).
+- [x] `AppointmentDetail.tsx` mirrors `KbDocumentDetail`/`ClientFicha`: `useAsyncData` with
+      controlled-data support, `StateMessage` loading/denied/error, customer name as a link built
+      from `pathForRoute` (never a hardcoded path), status through the existing
+      `appointmentStatusLabel`/`appointmentStatusTone`, the summary rendered only when non-null, and
+      the audit trail from `appointment.history`.
+- [x] No new CSS: the page reuses the existing `detail-region*` layout classes
+      (`primitives.css:355-441`, including their responsive rule) already used by `ClientFicha` and
+      `KbDocumentDetail`.
+- **Verify**: focused `panelRoutes.test.ts` + `AppShell.test.tsx` + `AppointmentDetail.test.tsx` —
+  **36 passed** (3 files); `cd web && npm test` — **766 passed** (88 files); `cd web && npm run build`
+  — built.
+- **Review boundary**: `review assess --base-ref 2a85b675 --committed-only` → `medium`,
+  **`review_due: true`** / `slice_budget_reached` (12 paths / 551 lines). The consolidated review ran
+  here.
+- **Flake note**: one full-suite run timed out the pre-existing `AgendaPage.test.tsx` manual-case
+  test; the rerun was green. Same signature the U4 record diagnosed as a timeout; not proven, and not
+  caused by this unit's changes.
 
 ### WU3 — Reachability from the agenda and the ficha
 
@@ -180,6 +188,19 @@ exists, and the page is unreachable until the route parses.
   one, and the manual-case path), plus a non-vacuous interaction test.
 - **Verify**: full `cd web && npm test`, `cd web && npm run build`, and
   `uv run pytest tests/ -o addopts='' -q`.
+
+## Native review receipt
+
+- Transaction `review-58f45e62d3fee4de` — risk `medium`, **one** selected lens
+  (`review-reliability`), correction budget 200, 12 paths / 551 lines, reviewed range
+  `a98b6c06` (base) → `0524e2f8` (candidate, = HEAD `d48385d8`).
+- Result **`approved`** with **zero findings**: the lens inspected every manifest path and
+  recorded no blocker, critical, warning, or suggestion.
+- Authority burned via `gentle-ai review acknowledge-approved` → `review-acknowledged/v1`,
+  `authority: burned`, `consumed_revision: sha256:ec9b6e8e…`.
+- **Scope, stated honestly**: the receipt covers the candidate at WU2 (551 lines). WU3, WU4 and
+  the later doc commits are the delta after the acknowledgement and are measured from the new
+  boundary (`d48385d8`).
 
 ## Parallel work (do not duplicate)
 
@@ -229,7 +250,8 @@ accepted as ordinary repository policy; no `size:exception` label was requested.
 
 - [x] WU0 — worktree, environment, base baselines, and this record (`425cc724`)
 - [x] WU1 — Backend detail payload (`f4e708e6`) — focused 11 passed, full backend 1483 passed
-- [ ] WU2 — Per-appointment route and detail page
+- [x] WU2 — Per-appointment route and detail page (`6cdf81f0`, `d48385d8`) — focused 36 passed,
+      full web 766 passed, build green; native review `approved`, receipt below
 - [ ] WU3 — Reachability from the agenda and the ficha
 - [ ] WU4 — Story coverage and full verification
 - [ ] Owner decision: push and open the PR
@@ -242,3 +264,6 @@ accepted as ordinary repository policy; no `size:exception` label was requested.
 | base | `cd web && npm test` | 761 passed (87 files) |
 | WU1 | `uv run pytest tests/functional/test_api_scheduling.py -o addopts='' -q` | 11 passed in 2.41s |
 | WU1 | `uv run pytest tests/ -o addopts='' -q` | 1483 passed in 195.45s |
+| WU2 | focused (panelRoutes + AppShell + AppointmentDetail) | 36 passed (3 files) |
+| WU2 | `cd web && npm test` | 766 passed (88 files) |
+| WU2 | `cd web && npm run build` | built |
