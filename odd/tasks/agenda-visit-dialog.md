@@ -70,15 +70,22 @@ exist and need no change unless verification proves otherwise.
 
 ## Work units
 
-### WU1 — Null-safe case service + dialog field rhythm
+### WU1 — Null-safe case service + dialog field rhythm — done (`933686c9`)
 
-- [ ] RED: a test that selects a case whose `service` is `null`, submits, and asserts no
-      throw plus a visible outcome (validation message or a successful request).
-- [ ] `web/src/types.ts` — `Case.service: string | null`.
-- [ ] `AgendaPage.tsx` — the service copy at `:216` must not inject `null`, and the
-      validation at `:129` must be null-safe; the case label must not render `null (#id)`.
-- [ ] Dialog — group the fields in a container with vertical gap.
-- **Verify**: `cd web && npm test -- src/components/pages/AgendaPage.test.tsx`; `cd web && npm run build`
+- [x] RED: `shows validation instead of throwing when the selected case has no service` —
+      observed `TypeError: Cannot read properties of null (reading 'trim')` at
+      `AgendaPage.tsx:129`, with no alert rendered and no request issued.
+- [x] `web/src/types.ts` — `Case.service: string | null`.
+- [x] `AgendaPage.tsx` — the service copy is guarded (`selected?.service &&`) and the
+      validation is null-safe (`createForm.service?.trim()`); a service-less case is labelled
+      `Caso sin servicio (#id)` instead of `null (#id)`.
+- [x] Dialog — the fields sit in `.agenda-create-form` (`display: grid;
+      gap: var(--space-3)`) in `primitives.css`, next to `.field`.
+- **Verify**: `cd web && npm test -- src/components/pages/AgendaPage.test.tsx` — **24 passed**;
+  `cd web && npm run build` — **built**. The widened `Case.service` flagged two
+  `CasesList.stories.test.tsx` assertions, both made null-safe.
+- **Review boundary**: `review assess --base-ref 673d9fba --committed-only` → `medium`,
+  `review_due: false`, `under_budget` (202 lines). Stays pending in the slice.
 
 ### WU2 — Inline manual case creation (D4)
 
@@ -111,7 +118,13 @@ exist and need no change unless verification proves otherwise.
 
 ## Verification (observed)
 
-_(filled as each work unit lands)_
+| Work unit | Command | Result |
+|---|---|---|
+| WU1 | `cd web && npm test -- src/components/pages/AgendaPage.test.tsx` | 24 passed |
+| WU1 | `cd web && npm run build` | ✓ built in 5.77s |
+| WU1 | `git diff --check` | clean |
+
+The full frontend suite, the backend suite, and the web build re-run are WU4.
 
 ## Graph nodes consulted
 
@@ -131,7 +144,7 @@ _(filled as each work unit lands)_
 
 ## Progress
 
-- [ ] WU1 not started
+- [x] WU1 done — `933686c9`
 - [ ] WU2 not started
 - [ ] WU3 not started
 - [ ] WU4 not started
