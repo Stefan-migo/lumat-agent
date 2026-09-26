@@ -119,6 +119,65 @@ def test_valid_delegate_routes_into_span_then_grounding(monkeypatch):
     assert wired["evidence"]
 
 
+def test_customer_drilldown_chain_uses_two_step_span_cap(monkeypatch):
+    from app.chat.assistant import graph, nodes
+
+    plans = iter([
+        nodes.PlannerOutput(
+            kind="tool", tool="customers.search", arguments={"query": "Ana"},
+            summary="Find the customer.", requires_approval=False,
+        ),
+        nodes.PlannerOutput(
+            kind="tool", tool="customers.operational_history", arguments={"customer_id": 42},
+            summary="Read the customer's operational history.", requires_approval=False,
+        ),
+        nodes.PlannerOutput(kind="respond", summary="Evidence gathered."),
+    ])
+    planner_states = []
+
+    def plan(state, _scope):
+        planner_states.append({**state, "tool_results": list(state["tool_results"])})
+        return next(plans)
+
+    executed = []
+
+    def execute_tool(_session, tool_name, arguments, **_kwargs):
+        executed.append((tool_name, arguments))
+        return {
+            "tool": tool_name,
+            "status": "completed",
+            "result": {"source": tool_name, "customer_id": 42},
+        }
+
+    monkeypatch.setattr(nodes, "_delegation_plan", plan)
+    monkeypatch.setattr(nodes, "execute_tool", execute_tool)
+    validated = nodes.guardrails({
+        "content": "Show Ana's cases and appointments.",
+        "planner": {"valid": True},
+        "plan": {"kind": "delegate", "sub_agent": "customer_records", "summary": "Gather."},
+    })
+    state = {
+        "content": "Show Ana's cases and appointments.",
+        "plan": {"kind": "delegate", "sub_agent": "customer_records"},
+        **validated,
+    }
+
+    assert graph._after_guardrails(state) == "delegation_span"
+    result = nodes.delegation_node(state)
+
+    assert result["delegation"]["steps"] == 2
+    assert result["delegation"]["cap"] == 2
+    assert result["delegation"]["cap_reached"] is True
+    assert [name for name, _ in executed] == ["customers.search", "customers.operational_history"]
+    assert result["tool_results"][0]["provenance"]["step"] == 1
+    assert result["tool_results"][1]["provenance"]["step"] == 2
+    assert result["tool_results"][0]["result"]["source"] == "customers.search"
+    assert result["tool_results"][1]["result"]["source"] == "customers.operational_history"
+    assert len(result["evidence"]) == 2
+    assert len(planner_states) == 2
+    assert planner_states[1]["tool_results"] == [result["tool_results"][0]]
+
+
 def test_valid_delegate_scope_routes_terminally_instead_of_answering_without_evidence():
     from app.chat.assistant.graph import _after_guardrails
     from app.chat.assistant.nodes import guardrails
