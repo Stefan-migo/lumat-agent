@@ -61,6 +61,13 @@ export const ManualCase: Story = {
 export const CloseActions: Story = {
   args: { appointmentId: 41, data: detail(null, null), state: "ready", width: 960 },
 };
+export const RescheduleDialog: Story = {
+  args: { appointmentId: 41, data: detail(null, null), state: "ready", width: 960 },
+  play: async ({ canvasElement }) => {
+    const button = Array.from(canvasElement.querySelectorAll("button")).find((item) => item.textContent === "Reprogramar");
+    button?.click();
+  },
+};
 export const Completed: Story = {
   args: { appointmentId: 41, data: { ...detail(null, null), appointment: { ...appointment, status: "completed" } }, state: "ready", width: 960 },
 };

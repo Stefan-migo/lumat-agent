@@ -96,6 +96,13 @@ export const CloseConfirmation: Story = {
     button?.click();
   },
 };
+export const RescheduleDialog: Story = {
+  args: { data: DATA, state: "ready", width: 1280 },
+  play: async ({ canvasElement }) => {
+    const button = Array.from(canvasElement.querySelectorAll("button")).find((item) => item.textContent === "Reprogramar");
+    button?.click();
+  },
+};
 export const SyncFailure: Story = {
   args: { data: [DATA[0]], state: "ready", width: 640 },
   parameters: { viewport: { defaultViewport: "bp-sm" } },

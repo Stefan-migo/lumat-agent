@@ -11,7 +11,7 @@ import {
   Error,
 } from "./AppointmentDetail.stories";
 
-vi.mock("../../api", () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn() }));
+vi.mock("../../api", () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn(), fetchUsers: vi.fn(), rescheduleAppointment: vi.fn() }));
 
 describe("AppointmentDetail stories", () => {
   it("shows the conversation summary when available", () => {
@@ -47,6 +47,12 @@ describe("AppointmentDetail stories", () => {
     rerender(<AppointmentDetailStory {...(Completed.args ?? {})} />);
     expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cerrar visita" })).not.toBeInTheDocument();
+  });
+
+  it("provides the reschedule story with the appointment facts intact", () => {
+    render(<AppointmentDetailStory {...(ConversationSummary.args ?? {})} />);
+    expect(screen.getByRole("button", { name: "Reprogramar" })).toBeInTheDocument();
+    expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
   });
 
   it("wires the error story retry action", async () => {
