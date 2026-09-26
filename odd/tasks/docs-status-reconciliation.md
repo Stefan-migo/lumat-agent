@@ -3,7 +3,7 @@
 **Branch**: `odd/docs-status-reconciliation`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-docs-status-reconciliation`
 **Base**: `28fd4ad3` (= `main` = `origin/main` at branch time)
-**Status**: complete
+**Status**: complete — delivered as **PR #379** (`odd/docs-status-reconciliation` → `main`); merge is the owner's decision.
 
 ## Objective
 
@@ -84,8 +84,11 @@ are created; no code is touched.
 - 2026-09-26 — Commit 1 `34c0f9e1` — `docs(odd): reconcile assistant tool-family status lines with merged PRs`.
 - 2026-09-26 — Commit 2 `d0b805a9` — `docs(odd): reconcile delegation and memory status lines with merged PRs`.
 - 2026-09-26 — Commit 3 `bf49df5c` — `docs(odd): reconcile agenda and memory-relations status lines with merged PRs`.
-- 2026-09-26 — Commit 4 pending — this reconciliation task record.
+- 2026-09-26 — Commit 4 `b1407c8d` — `docs(odd): record status reconciliation progress`.
+- 2026-09-26 — Opened **PR #379** against `main` (docs-only, `type:docs`, base `28fd4ad3`).
 
 ## Next step
 
-Complete; see commit hashes above.
+Delivered as **PR #379**. Native assess on the frozen candidate returned `risk: passive`,
+`review_due: false` (172 changed lines, 14 paths). Merge is the owner's decision; CI (`tests.yml`)
+runs the backend and panel jobs on the PR.
