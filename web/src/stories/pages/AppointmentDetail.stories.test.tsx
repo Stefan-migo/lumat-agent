@@ -1,0 +1,47 @@
+import { describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import {
+  AppointmentDetailStory,
+  ConversationSummary,
+  ConversationWithoutSummary,
+  ManualCase,
+  Error,
+} from "./AppointmentDetail.stories";
+
+vi.mock("../../api", () => ({ getAppointment: vi.fn() }));
+
+describe("AppointmentDetail stories", () => {
+  it("shows the conversation summary when available", () => {
+    render(<AppointmentDetailStory {...(ConversationSummary.args ?? {})} />);
+    expect(screen.getByRole("heading", { name: "Resumen de la conversación" })).toBeInTheDocument();
+    expect(screen.getByText("La clienta solicita revisar el calefón antes del invierno.")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["conversation without a generated summary", ConversationWithoutSummary],
+    ["a manually created case", ManualCase],
+  ])("keeps the appointment intact for %s without a summary", (_name, story) => {
+    render(<AppointmentDetailStory {...(story.args ?? {})} />);
+    expect(screen.queryByRole("heading", { name: "Resumen de la conversación" })).toBeNull();
+    expect(screen.queryByText("La clienta solicita revisar el calefón antes del invierno.")).toBeNull();
+    const customer = screen.getByRole("link", { name: "Marcela Fuentes" });
+    expect(customer).toHaveAttribute("href", "/panel/app/clients/12");
+    expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
+    expect(screen.getByText("Reservada")).toBeInTheDocument();
+  });
+
+  it("renders the audit trail from appointment history", () => {
+    render(<AppointmentDetailStory {...(ConversationSummary.args ?? {})} />);
+    expect(screen.getByRole("heading", { name: "Historial de la visita" })).toBeInTheDocument();
+    expect(screen.getByText(/ana · booked · — → booked/)).toBeInTheDocument();
+  });
+
+  it("wires the error story retry action", async () => {
+    const onRetry = vi.fn();
+    const user = userEvent.setup();
+    render(<AppointmentDetailStory {...(Error.args ?? {})} onRetry={onRetry} />);
+    await user.click(screen.getByRole("button", { name: "Reintentar" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+});
