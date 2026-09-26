@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ClientFicha } from "../../components/pages/ClientFicha";
-import { ClientFichaView, NoMemo, ClientFichaCalendarFailure, ClientFichaLoading, ClientFichaError, ClientFichaDenied } from "./ClientFicha.stories";
+import { ClientFichaView, NoMemo, ClientFichaCalendarFailure, ClientFichaLoading, ClientFichaError, ClientFichaDenied, UnansweredEmergency } from "./ClientFicha.stories";
 import { clients } from "./_shared/mockData/clients";
 import type { ClientFichaResponse } from "../../types";
 
@@ -12,7 +12,8 @@ const fichaResponse: ClientFichaResponse = {
   history: {
     conversations: [], cases: [], messages: [], appointments: [],
   },
-  notes: [],
+    notes: [],
+  users: [],
   memo: "Acta de cierre de Marcela",
   states: ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"],
 };
@@ -113,6 +114,12 @@ describe("ClientFicha state matrix stories", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("No se pudo sincronizar el calendario");
     expect(screen.getByRole("button", { name: "Reintentar calendario" })).toBeInTheDocument();
+  });
+
+  it("shows acknowledge control for an unanswered emergency story", () => {
+    render(<UnansweredEmergency />);
+    expect(screen.getByText("Emergencia sin reconocer")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reconocer" })).toBeInTheDocument();
   });
 
   it("renders the loading state without a payload and without a request", () => {
