@@ -320,9 +320,67 @@ honest`; `eaf3003e` — `test(agenda): cover the reschedule error mapping and th
 
 ### WU6 — Full verification and closure
 
-- [ ] Backend suite + web suite + `npm run build` on the frozen tree.
-- [ ] Spec check scenario by scenario; acceptance criteria below.
-- [ ] `ponytail:` ledger harvested; doc updated after each task.
+- [x] **Both slices merged**: Slice A → PR #380 (merge `8e5a978a`), Slice B → PR #383
+      (merge `f5a6d68d`).
+- [x] **Frozen-tree verification, Slice B**: backend **1516 passed** (baseline 1506 + 10); web
+      **805 passed** (91 files); `npm run build` ✓; `git diff --check` clean.
+- [x] **Trial merge over the base #383 landed on** (`origin/main` `a67cb7cd`): merge clean, **no
+      conflicts**; backend **1533 passed**, web **805 passed**, `npm run build` ✓. The merged tree
+      was hashed before the merge was aborted, and the merge commit that landed carries the same
+      tree — `e1972866516b22a6e5625312c4430d76a9856de7` — so the tree that was verified is exactly
+      the tree that shipped. This mattered here: `origin/main` moved three times during the unit,
+      so the GitHub check attached to the PR was already stale against the final base.
+- [x] **Spec check, scenario by scenario** (read-only, against the live contract):
+      - **`AG-UI-7 — Visit Outcome Registration`** (new in WU1). *Mark a booked visit as
+        completed* and *as a no-show*: `POST /appointments/{id}/close` guards `BOOKED`, writes
+        `AppointmentHistory` + `record_audit`, answers 200, and the refreshed row carries the new
+        status. *A terminal outcome is not re-openable*: a second close on a terminal row is
+        refused with 409 `invalid_lifecycle`, and no reopen action exists in either surface.
+      - **`AG-UI-3`** (amended in WU1). *Reschedule a booked visit*: `PATCH /appointments/{id}`
+        re-runs `local_interval` (timezone + DST), technician availability and overlap, audits the
+        transition, and the row shows the new slot. *Reschedule a non-booked visit*: asserted on
+        the appointment page, **structurally but not explicitly on the register** — see the
+        residual gap below.
+      - **`AG-UI-6 — Non-Active Register Filter`**: satisfied by U5 (`423eb812`) and untouched.
+        This unit verified it and did not rebuild it; the partition and the `Activas` /
+        `No activas` tabs are unchanged by both slices.
+      - **`AG-UI-2` / `AG-UI-4`**: the new actions carry the shared state contract and story
+        coverage on both surfaces.
+- [x] Acceptance criteria: all met, with the one residual assertion gap recorded below.
+- [x] `ponytail:` ledger: neither slice left a `ponytail:` comment. The two simplifications found
+      were reported instead of applied — the reschedule form duplicated across the two surfaces
+      (extracting it would change structure) and the `reason` on `close` that no surface sends
+      (kept, because D-U6-1 named parity with `cancel`).
+
+#### Native review receipts
+
+Reproduced here because the freeze rule forbids touching a source or doc path after START, so
+the receipts shipped in the PR bodies instead.
+
+| Slice | PR | Lineage | Risk | Lenses | Size | Result | Consumed revision |
+|---|---|---|---|---|---|---|---|
+| A | #380 | `review-e2db61b9862c7b72` | medium | 1 (`review-reliability`) | 15 paths / 650 lines | **approved**, zero blockers | `sha256:7da512551b6f038d7b41c80f1eaf6277f657042f3416c4325fbe6a87365950e7` |
+| B | #383 | `review-2ac28a54addee497` | medium | 1 (`review-reliability`) | 14 paths / 589 lines | **approved**, zero blockers | `sha256:8e03f2791bbc58f52c912215d6ef33501774678eb259a7346def618e944caadc` |
+
+Both burned authority with `gentle-ai review acknowledge-approved` (`authority: burned`).
+
+#### Residual gap and follow-ups
+
+- **`AG-UI-3` is only structurally covered on the register.** `AgendaPage` renders `Reprogramar`
+  under the same `row.status === "booked"` conditional as cancel and close, and the register's
+  terminal-row tests assert the absence of `Cancelar visita` and `Cerrar visita` — but not of
+  `Reprogramar`. A mutation that always rendered it would not be caught. The appointment page
+  does assert absence. Left unfixed on purpose: Slice B's receipt is burned, the provider opened
+  no correction for that candidate, and an assertion-only change would have forced a new review.
+- `R3-001` (Slice A) — the `CloseConfirmation` story test renders the story twice and asserts
+  against the container of the first render.
+- `R3-001` (Slice B) — `app/services/scheduling.py` maps any `IntegrityError` to
+  `AppointmentConflict`, in `reschedule` and in the pre-existing `book`.
+- A reschedule does not notify the customer (`automation.ALLOWED_EVENTS` has no member), and
+  neither `cancel` nor `reschedule` updates `AppointmentCalendarSync`, so an exported calendar
+  can keep the previous time.
+- A pre-existing, non-deterministic flake in the full web suite: seen three times across this
+  unit, each on a different untouched file, always green in isolation.
 
 ## Delivery
 
@@ -391,4 +449,9 @@ as the whole-unit estimate that justified chaining.
 - [x] WU4 — Backend: reschedule (`a2973185`)
 - [x] WU5 — Front: reschedule dialog (`e1e8475a`, `47590059`, `166f4226`)
 - [x] WU4b — Post-writer normalization and the missing coverage (`be8a0045`, `eaf3003e`)
-- [ ] WU6 — Full verification and closure
+- [x] WU6 — Full verification and closure; **unit closed**
+
+**Unit closed 2026-09-26.** `main` at the Slice B merge `f5a6d68d`. U6 `agenda-register-actions`
+was the last unit of the Agenda redesign; with Slice A (#380) and Slice B (#383) merged, the
+family U1–U6 is complete. Follow-ups from this unit are listed under WU6 and are deliberately
+not part of it.
