@@ -3,7 +3,7 @@
 **Branch**: `odd/panel-subagent-delegation`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-panel-subagent-delegation`
 **Base**: `96ba8ca2` (= `main` at branch time, `docs(ops): record the v2026.09.6 deploy`)
-**Status**: **slice 3 (T5 + T6 + T7 + T8) implemented on `odd/panel-subagent-delegation-slice3`** — branched from `498e5346`, writer-implemented, gate-corrected, full suite green, and carrying a **real native review receipt** (lineage `review-7584730fa4dbaa68`, `approved`, authority burned — see *Review outcome — slice 3*). Slice 1 (T1 + T2) is merged as PR #359 (`d514d215`); slice 2 (T3 + T4) is merged as PR #360 (`498e5346`). All eight tasks are implemented.
+**Status**: **closed — all three slices merged.** Slice 1 (T1 + T2) = PR #359 (`d514d215`); slice 2 (T3 + T4) = PR #360 (`498e5346`); slice 3 (T5 + T6 + T7 + T8) = PR #364 (`fae7e0a9`), carrying a real native review receipt (lineage `review-7584730fa4dbaa68`, `approved`, authority burned — see *Review outcome — slice 3*). All eight tasks are implemented.
 **Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/` (decisions 6 and 7, open question *does U3 delegate through the existing `research_triage` pattern, or a new panel subgraph?*); Engram #4890, #4896.
 
 This is **U3 of three**: U1 (bounded tool chaining) is merged; U2 (local reader `web.fetch`) is merged. U3 was recorded as *"Not ready — do not start yet"* because it needed two decisions. Both were resolved before this document existed, and the resolution is recorded under **Decisions** below.
@@ -256,6 +256,6 @@ Estimated ~400–550 authored lines, at or above the ~400-line review budget.
 
 ## Next step
 
-**The unit is complete.** All eight tasks are implemented, slice 3 is pushed as **PR #364** (`odd/panel-subagent-delegation-slice3` → `main`) and carries the unit's only native review receipt. What remains is delivery: CI green, the owner's merge decision, and then the post-merge housekeeping — the graph refresh at close, and the Rapsodia cleanup gap (the worktree's test DB container is not removed by `rapso worktree cleanup`; run `docker compose -p lumat-test-<worktree-basename> -f infra/docker-compose.yml --profile test down -v` by hand).
+**The unit is complete.** All eight tasks are implemented and all three slices are merged, including PR #364 (`fae7e0a9`), which carries the unit's only native review receipt. Post-merge housekeeping remains: graph refresh at close, and the Rapsodia cleanup gap (the worktree's test DB container is not removed by `rapso worktree cleanup`; run `docker compose -p lumat-test-<worktree-basename> -f infra/docker-compose.yml --profile test down -v` by hand).
 
 **Open after U3:** `R3-001` (unit follow-up #4), the sibling unit for per-customer drill-down reads, the duplicated `*.list` tool names and the catalog schema trim.

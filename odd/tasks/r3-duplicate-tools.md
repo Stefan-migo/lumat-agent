@@ -3,7 +3,7 @@
 **Branch**: `odd/r3-duplicate-tools`
 **Worktree**: `../lumat-agent-odd-r3-duplicate-tools`
 **Base**: `c6f7b534`
-**Status**: implemented and verified (native review pending)
+**Status**: merged — PR #251 (`a57b353e`).
 
 ## Objective
 
@@ -98,10 +98,9 @@ One more fact shapes the fix: the payload order follows the YAML whitelist order
 
 ## Review (native RDD)
 
-_Not started. Filled in at the delivery boundary._
+Completed at the delivery boundary; PR #251 is merged.
 
 ## Next step
 
-Implemented and verified. Native review runs on the committed candidate; the outcome is recorded in
-the PR body and in Engram (`odd/r3-duplicate-tools/outcome`), never as a post-freeze commit on this
-branch (`pattern/rdd-receipt-policy`).
+Implemented, verified, and merged. The native review outcome is recorded in the PR body and in Engram
+(`odd/r3-duplicate-tools/outcome`), never as a post-freeze commit on this branch (`pattern/rdd-receipt-policy`).

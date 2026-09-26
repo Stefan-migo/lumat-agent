@@ -3,7 +3,7 @@
 **Branch**: `odd/memory-content-dedup`
 **Worktree**: `../lumat-agent-odd-memory-content-dedup`
 **Base**: `a57b353e`
-**Status**: implemented and verified (native review pending)
+**Status**: merged — PR #252 (`a1c457c2`).
 
 ## Objective
 
@@ -205,7 +205,7 @@ Anything else needs an explicit report before it is touched.
 - [x] Follow-up round for that advisory: an existing key rewritten with a sibling's content raised
       `UniqueViolation` from the new index. RED reproduced, then fixed by folding the sibling into the
       written key. Spec gained the scenario and this record the decision.
-- [ ] Delivery: native RDD review runs on the frozen candidate at the delivery boundary.
+- [x] Delivery: native RDD review completed and PR #252 merged.
 
 ## Verification evidence
 
@@ -319,10 +319,9 @@ $ eval "$(infra/test-db.sh env)" && uv run pytest tests/
 
 ## Review (native RDD)
 
-_Not started. Filled in at the delivery boundary._
+Completed at the delivery boundary; PR #252 is merged.
 
 ## Next step
 
-Implemented and verified. Native review runs on the committed candidate; the outcome is recorded in
-the PR body and in Engram (`odd/memory-content-dedup/outcome`), never as a post-freeze commit on this
-branch (`pattern/rdd-receipt-policy`).
+Implemented, verified, and merged. The native review outcome is recorded in the PR body and in Engram
+(`odd/memory-content-dedup/outcome`), never as a post-freeze commit on this branch (`pattern/rdd-receipt-policy`).
