@@ -114,6 +114,19 @@ def cancel(session: Session, appointment: Appointment, *, actor: str, reason: st
     return appointment
 
 
+def close(session: Session, appointment: Appointment, *, outcome: AppointmentStatus, actor: str, reason: str | None = None) -> Appointment:
+    if appointment.status is not AppointmentStatus.BOOKED:
+        raise ValueError("only booked appointments can be closed")
+    if outcome not in (AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW):
+        raise ValueError("invalid outcome")
+    previous = appointment.status
+    appointment.status = outcome
+    session.flush()
+    _history(session, appointment, actor=actor, action=outcome.value, previous=previous, details={"reason": reason} if reason else None)
+    record_audit(session, actor=actor, action=f"appointment.{outcome.value}", entity="appointment", entity_id=str(appointment.id), after={"outcome": outcome.value, "reason": reason})
+    return appointment
+
+
 def availability(session: Session, technician_id: int, starts_at: datetime, ends_at: datetime) -> bool:
     if ends_at <= starts_at:
         raise ValueError("availability interval must be positive")

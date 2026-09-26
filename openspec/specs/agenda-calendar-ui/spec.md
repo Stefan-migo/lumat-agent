@@ -63,6 +63,17 @@ The agenda MAY show cancellation only for `booked` appointments. It MUST require
 - WHEN the row renders
 - THEN cancellation is unavailable and no request is issued
 
+#### Scenario: Reschedule a booked visit
+- GIVEN an authorized user selects a booked appointment
+- WHEN they submit a replacement slot
+- THEN timezone/DST, availability, and overlap validation run again
+- AND the reschedule is audited and the refreshed row shows the new slot
+
+#### Scenario: Reschedule a non-booked visit
+- GIVEN status is `completed`, `no_show`, or `cancelled`
+- WHEN the row renders
+- THEN rescheduling is unavailable and no request is issued
+
 ### Requirement: AG-UI-4 — Sync Retry and Storybook Coverage
 
 The agenda MUST show separate lifecycle/sync badges, offer `Retry calendar` only for `pending`/`failed`, refresh after retry, and provide Storybook coverage for data, loading, empty, error, permission, stale, cancel-confirmation, sync-failure/retry, keyboard, mobile, month and week calendar views, a selected day, and an empty period.
@@ -107,3 +118,22 @@ The register MUST let the operator separate active visits from non-active visits
 - WHEN the operator selects the non-active view
 - THEN `cancelled`, `completed`, and `no_show` visits are shown separately from active visits
 - AND no visit record is deleted
+
+### Requirement: AG-UI-7 — Visit Outcome Registration
+
+The agenda MUST let an operator record the outcome of a `booked` visit as `completed` or `no_show`, audited, without deleting any record. Only a `booked` visit MAY receive an outcome. `completed`, `no_show`, and `cancelled` are terminal and MUST NOT return to `booked` from the agenda. Both outcome actions MUST require confirmation and MUST show success or an actionable failure.
+
+#### Scenario: Mark a booked visit as completed
+- GIVEN an authorized user selects a booked appointment
+- WHEN they confirm that the visit was completed
+- THEN the outcome is audited and the refreshed row shows `completed`
+
+#### Scenario: Mark a booked visit as a no-show
+- GIVEN an authorized user selects a booked appointment
+- WHEN they confirm that the customer did not attend
+- THEN the outcome is audited and the refreshed row shows `no_show`
+
+#### Scenario: A terminal outcome is not re-openable
+- GIVEN status is `completed`, `no_show`, or `cancelled`
+- WHEN the row renders
+- THEN no action returns it to `booked`
