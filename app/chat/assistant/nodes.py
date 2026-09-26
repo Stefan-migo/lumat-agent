@@ -580,10 +580,17 @@ def delegation_span(state: AssistantState, scope) -> AssistantState:
 
 
 def delegation_node(state: AssistantState) -> AssistantState:
-    """Resolve guardrail-validated plan scope at the LangGraph node boundary."""
-    from app.chat.assistant.delegation import resolve_delegation_scope
+    """Run the delegated span on the read-only scope guardrails already validated.
 
-    scope = resolve_delegation_scope((state.get("plan") or {}).get("sub_agent", ""))
+    Guardrails resolves the scope and carries it in ``state["delegation"]``; resolving it
+    again here would reopen a window where a registry or persona change between the two
+    nodes lets ``DelegationScopeError`` escape the turn instead of ending it. The graph
+    reaches this node only through the ``delegate`` decision, which is set in the same
+    branch that writes the carried scope, so it is always present.
+    """
+    from app.chat.assistant.delegation import DelegationScope
+
+    scope = DelegationScope(**state["delegation"])
     result = delegation_span(state, scope)
     return {**result, "tool_steps": state.get("tool_steps", 0) + 1, "status": "completed"}
 
@@ -707,7 +714,15 @@ def guardrails(state: AssistantState) -> AssistantState:
                 "status": "completed",
             }
         return {
-            "delegation": {"key": scope.key, "persona": scope.persona, "tools_whitelist": scope.tools_whitelist},
+            # The delegation node consumes this scope before delegation_span overwrites
+            # `delegation` with its run summary, so it must carry every field the span
+            # enforces -- including the worker's memoria_scope.
+            "delegation": {
+                "key": scope.key,
+                "persona": scope.persona,
+                "tools_whitelist": scope.tools_whitelist,
+                "memoria_scope": scope.memoria_scope,
+            },
             "guardrails": {
                 "whitelisted": True,
                 "arguments_valid": True,

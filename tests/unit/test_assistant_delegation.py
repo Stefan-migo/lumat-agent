@@ -188,6 +188,100 @@ def test_delegate_refusal_routes_terminally_without_responder():
     assert _after_guardrails({"plan": {"kind": "delegate"}, **result}) == END
 
 
+def test_guardrails_carries_a_complete_scope_including_memory_scope():
+    """The scope guardrails validated must travel complete, or the node loses memory scope."""
+    from app.chat.assistant.nodes import guardrails
+
+    result = guardrails(
+        {
+            "content": "Gather records",
+            "planner": {"valid": True},
+            "plan": {"kind": "delegate", "sub_agent": "customer_records", "summary": "Gather."},
+        }
+    )
+
+    carried = result["delegation"]
+    assert carried["key"] == "customer_records"
+    assert set(carried["tools_whitelist"]) == set(CUSTOMER_RECORD_TOOLS)
+    assert carried["persona"]
+    assert carried["memoria_scope"] == "customer"
+
+
+def test_delegation_node_uses_the_guardrail_validated_scope_without_re_resolving(monkeypatch):
+    """R3-001: the registry or persona can stop resolving between guardrails and the node.
+
+    The node must consume the scope guardrails already validated instead of resolving it
+    again, so a resolver failure can no longer escape the turn.
+    """
+    from app.chat.assistant import delegation, nodes
+
+    plans = iter([
+        nodes.PlannerOutput(
+            kind="tool", tool="customers.search", arguments={"query": "open cases"},
+            summary="Gather customer evidence.", requires_approval=False,
+        ),
+        nodes.PlannerOutput(kind="respond", summary="Done."),
+    ])
+    monkeypatch.setattr(nodes, "_delegation_plan", lambda *args, **kwargs: next(plans))
+    monkeypatch.setattr(nodes, "execute_tool", lambda *args, **kwargs: {
+        "tool": "customers.search", "status": "completed", "result": [{"name": "Ana"}],
+    })
+    validated = nodes.guardrails(
+        {
+            "content": "Which customers have open cases?",
+            "planner": {"valid": True},
+            "plan": {"kind": "delegate", "sub_agent": "customer_records", "summary": "Gather."},
+        }
+    )
+    state = {
+        "content": "Which customers have open cases?",
+        "plan": {"kind": "delegate", "sub_agent": "customer_records"},
+        **validated,
+    }
+
+    def _registry_broke_after_guardrails(*args, **kwargs):
+        raise delegation.DelegationScopeError("registry became unresolvable after guardrails")
+
+    monkeypatch.setattr(delegation, "resolve_delegation_scope", _registry_broke_after_guardrails)
+
+    wired = nodes.delegation_node(state)
+
+    assert wired["status"] == "completed"
+    assert wired["delegation"]["steps"] == 1
+    assert wired["tool_steps"] == 1
+    assert wired["tool_results"][0]["result"] == [{"name": "Ana"}]
+    assert wired["evidence"]
+
+
+def test_delegation_node_preserves_the_customer_memory_scope_from_carried_state(monkeypatch):
+    """Regression guard: the carried scope must still enforce the worker's memory scope."""
+    from app.chat.assistant import nodes
+
+    plans = iter([
+        {"kind": "tool", "tool": "memory.read", "arguments": {"scope": "own"}, "summary": "own", "requires_approval": False},
+        {"kind": "respond", "summary": "done"},
+    ])
+    monkeypatch.setattr(nodes, "_delegation_plan", lambda *args, **kwargs: next(plans))
+    executed = []
+    monkeypatch.setattr(
+        nodes, "execute_tool",
+        lambda *args, **kwargs: executed.append(args[1]) or {"tool": args[1], "status": "completed", "result": []},
+    )
+    validated = nodes.guardrails(
+        {
+            "content": "What do I know?",
+            "planner": {"valid": True},
+            "plan": {"kind": "delegate", "sub_agent": "customer_records", "summary": "Gather."},
+        }
+    )
+    state = {"content": "What do I know?", "plan": {"kind": "delegate", "sub_agent": "customer_records"}, **validated}
+
+    wired = nodes.delegation_node(state)
+
+    assert nodes.DELEGATION_MEMORY_SCOPE_REFUSED in wired["delegation"]["decisions"]
+    assert executed == []
+
+
 def test_planner_prompt_advertises_executable_delegation():
     prompt = (Path(__file__).resolve().parents[2] / "agent" / "prompts" / "assistant_plan.md").read_text()
 
