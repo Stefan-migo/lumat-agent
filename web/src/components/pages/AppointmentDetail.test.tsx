@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { AppointmentDetail } from './AppointmentDetail';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
-import { closeAppointment } from '../../api';
+import { closeAppointment, fetchUsers, rescheduleAppointment } from '../../api';
 
-vi.mock('../../api', () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn() }));
+vi.mock('../../api', () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn(), fetchUsers: vi.fn(), rescheduleAppointment: vi.fn() }));
 
 const detail: AppointmentDetailData = {
   appointment: {
@@ -62,6 +62,26 @@ describe('AppointmentDetail', () => {
   it('shows a conversation summary only when present', () => {
     render(<AppointmentDetail data={{ ...detail, case: { id: 3, conversation_id: 44 }, conversation_summary: 'El cliente pide una reparación.' }} />);
     expect(screen.getByText('El cliente pide una reparación.')).toBeInTheDocument();
+  });
+
+  it('offers rescheduling only for booked appointments', () => {
+    render(<AppointmentDetail data={detail} />);
+    expect(screen.getByRole('button', { name: 'Reprogramar' })).toBeInTheDocument();
+  });
+
+  it('defaults and submits a complete replacement slot', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 4, username: 'Tech', role: 'tecnico', active: true }] as never });
+    vi.mocked(rescheduleAppointment).mockResolvedValue({ ok: true, appointment: {} });
+    render(<AppointmentDetail data={detail} />);
+    await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+    const dialog = screen.getByRole('dialog', { name: 'Reprogramar visita' });
+    expect(dialog.querySelector('input[type="date"]')).toHaveValue('2026-09-26');
+    await user.click(screen.getByRole('button', { name: 'Confirmar reprogramación' }));
+    await waitFor(() => expect(rescheduleAppointment).toHaveBeenCalledWith(7, {
+      local_date: '2026-09-26', local_time: '10:00', duration_minutes: 60,
+      technician_id: 4, timezone: 'America/Santiago',
+    }));
   });
 
   it('renders loading, denied, error, and retry states', () => {
