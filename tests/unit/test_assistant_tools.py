@@ -105,6 +105,25 @@ def test_operational_history_projects_bounded_service_results(monkeypatch):
     assert not forbidden.intersection(result["appointments"][0])
 
 
+@pytest.mark.parametrize("tool_name", ["customers.search", "customers.list"])
+def test_customer_search_tools_project_only_public_fields(monkeypatch, tool_name):
+    customer = SimpleNamespace(
+        id=7, name="Example", state="nuevo", phone_e164="+56912345678",
+        email="private@example.test", address="Private address", comuna="Private comuna",
+        consent_status=True, consent_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.customers.search_customers",
+        lambda *_args: [customer],
+    )
+
+    result = execute_tool(SimpleNamespace(), tool_name, {})["result"]
+
+    assert set(result[0]) == {"id", "name", "state"}
+    forbidden = {"phone_e164", "email", "address", "comuna", "consent_status", "consent_at"}
+    assert not forbidden.intersection(result[0])
+
+
 def test_registry_exposes_the_single_url_reader_as_a_read_only_tool():
     schemas = tool_schemas()
     assert "web.fetch" in schemas

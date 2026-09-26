@@ -922,6 +922,44 @@ def test_delegated_customer_operational_history_uses_real_bounded_projection(mig
     assert sum(not call.get("stream") for call in provider_calls) == 3
 
 
+def test_customer_search_real_database_payload_excludes_private_fields(migrated_db):
+    from app.models import Customer
+
+    with SessionLocal() as session:
+        customer = Customer(
+            phone_e164="+56900009993", name="PII Search Example", email="private@example.test",
+            address="Private address", comuna="Private comuna", consent_status=True,
+        )
+        second_customer = Customer(
+            phone_e164="+56900009994", name="PII Search Example Two", email="second@example.test",
+            address="Second private address", comuna="Second private comuna", consent_status=True,
+        )
+        session.add_all([customer, second_customer])
+        session.flush()
+        customer_id = customer.id
+        payload = execute_tool(
+            session, "customers.search", {"query": "PII Search Example"},
+            whitelist={"customers.search"},
+        )
+        phone_match = execute_tool(
+            session, "customers.search", {"query": "00009993"},
+            whitelist={"customers.search"},
+        )["result"]
+        bounded = execute_tool(
+            session, "customers.search", {"query": "PII Search", "limit": 1},
+            whitelist={"customers.search"},
+        )["result"]
+
+    assert payload["status"] == "completed"
+    assert {"id": customer_id, "name": "PII Search Example", "state": "nuevo"} in payload["result"]
+    assert all(set(row) == {"id", "name", "state"} for row in payload["result"])
+    serialized = json.dumps(payload, ensure_ascii=False)
+    for forbidden in ("phone_e164", "email", "address", "comuna", "consent_status", "consent_at"):
+        assert forbidden not in serialized
+    assert [row["id"] for row in phone_match] == [customer_id]
+    assert len(bounded) == 1
+
+
 def test_memory_read_still_rejects_an_entity_the_prompt_no_longer_orders():
     result = guardrails({
         "thread_id": 7,

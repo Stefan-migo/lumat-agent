@@ -254,7 +254,18 @@ def _plain(value: Any) -> Any:
 
 
 def _search_customers(session, args: SearchArgs):
-    return customers.search_customers(session, args.query, args.limit)
+    def json_value(item):
+        if isinstance(item, Enum):
+            return item.value
+        if isinstance(item, datetime):
+            return item.isoformat()
+        return item
+
+    fields = ("id", "name", "state")
+    return [
+        {field: json_value(getattr(row, field)) for field in fields}
+        for row in customers.search_customers(session, args.query, args.limit)
+    ]
 
 
 def _search_conversations(session, args: QueryArgs):
