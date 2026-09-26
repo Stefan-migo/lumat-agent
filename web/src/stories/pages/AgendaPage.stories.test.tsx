@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { cancelAppointment, listAppointments, retryCalendarSync } from "../../api";
+import { cancelAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from "../../api";
 import {
   AgendaPageStory,
   CancelConfirmation,
+  CreateVisit,
   Data,
   Empty,
   Error,
@@ -21,6 +22,10 @@ vi.mock("../../api", () => ({
   cancelAppointment: vi.fn(),
   listAppointments: vi.fn(),
   retryCalendarSync: vi.fn(),
+  createCase: vi.fn(),
+  fetchCases: vi.fn(),
+  fetchClients: vi.fn(),
+  fetchUsers: vi.fn(),
 }));
 
 describe("AgendaPage Storybook state matrix", () => {
@@ -81,6 +86,28 @@ describe("AgendaPage Storybook state matrix", () => {
       await CancelConfirmation.play?.({ canvasElement: confirmationContainer } as Parameters<NonNullable<typeof CancelConfirmation.play>>[0]);
     });
     expect(screen.getAllByRole("dialog", { name: "Cancelar visita de Camila Soto — Mantención de calefón" })).toHaveLength(1);
+  });
+
+  it("covers the expanded create dialog and inline manual-case affordance", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: "Camila Soto" }] as never });
+    vi.mocked(fetchCases).mockResolvedValue({ cases: [], users: [] });
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: "Luis", role: "tecnico", active: true }] as never });
+
+    render(<AgendaPageStory {...(CreateVisit.args ?? {})} />);
+    await user.click(screen.getByRole("button", { name: "Nueva visita" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Crear visita" });
+    const form = dialog.querySelector(".agenda-create-form");
+    expect(form).toBeInTheDocument();
+    expect(form).not.toHaveAttribute("hidden");
+    expect(form?.children.length).toBeGreaterThan(1);
+    expect(screen.getByRole("combobox", { name: "Caso" })).toBeInTheDocument();
+    await user.type(screen.getByRole("combobox", { name: "Caso" }), "Walk-in case");
+    expect(screen.getByRole("option", { name: "Crear «Walk-in case»" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Servicio")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Crear visita" })).toBeInTheDocument();
+    expect(createCase).not.toHaveBeenCalled();
   });
 
   it("does not render an empty Hoy section for an upcoming active visit", () => {
