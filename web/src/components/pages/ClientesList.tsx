@@ -148,6 +148,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
     }
   };
   const restore = async (customer: Customer) => {
+    setDialogError("");
     try {
       await unarchiveCustomer(customer.id);
       refresh();
@@ -170,6 +171,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
           <Button variant="secondary" href="/panel/export/clients.csv">Exportar clientes CSV</Button>
           <Button variant="secondary" href="/panel/export/cases.csv">Exportar casos CSV</Button>
         </div>
+        {dialog === null && dialogError ? <p role="alert">{dialogError}</p> : null}
         {state === "loading" ? null : data && data.length > 0 ? (
           <div className="data-region">
             <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} actions={(customer) => customer.archived_at ? <Button variant="secondary" onClick={() => void restore(customer)}>Restaurar {customer.name ?? "cliente"}</Button> : <Button variant="secondary" onClick={() => void openArchive(customer)}>Archivar {customer.name ?? "cliente"}</Button>} />

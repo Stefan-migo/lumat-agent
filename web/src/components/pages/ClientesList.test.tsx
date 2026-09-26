@@ -263,6 +263,14 @@ describe("ClientesList", () => {
     expect(unarchiveCustomer).toHaveBeenCalledWith(1);
   });
 
+  it("surfaces a failed restore to the operator instead of failing silently", async () => {
+    const user = userEvent.setup();
+    vi.mocked(unarchiveCustomer).mockRejectedValue(new Error("offline"));
+    render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
+    await user.click(screen.getByRole("button", { name: "Restaurar Marcela Fuentes" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos restaurar");
+  });
+
   it("shows the archived filter and marks archived customers", () => {
     render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
     expect(screen.getByRole("checkbox", { name: "Mostrar archivados" })).toBeInTheDocument();
