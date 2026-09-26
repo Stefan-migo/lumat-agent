@@ -391,6 +391,12 @@ before the first source commit (owner decision pending).
       repo, and the report only regenerates with the separate `cluster-only` step.
       `odd/tasks/clients-crud.md` is included in the graph corpus now that it is
       on `main`.
+- [x] **PR #381** opened — `feat(clients): create clients and edit their profile
+      and consent`, base `main`, label `type:feature`. Branch
+      `odd/clients-crud-wu2`. `main` moved twice more while this slice was in
+      flight (#379, #380); the base `2a5c53dd` stayed an ancestor and
+      `git merge-tree --write-tree origin/main HEAD` reported a clean merge
+      before the push.
 - [ ] T6 … — WU3 (frontend: api layer + list page). New branch off `main` after
       PR 2 merges (`stacked-to-main`).
 
