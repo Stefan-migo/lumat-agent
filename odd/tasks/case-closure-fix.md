@@ -261,3 +261,8 @@ The initial test DB setup was blocked until the owner supplied the worktree-loca
 
 Delivered in PR #365, merged as merge commit `33f1feba`. The OpenSpec change was archived and
 the `AD-HOY-1` delta synced into the live specification.
+
+Follow-up: the shared helper was renamed `_apply_status` → `set_case_status`, because it is
+imported across `cases`, `classify_intent` and `emergency`, so a module-private name no longer
+matched its role. The `_apply_status` references earlier in this document record the name as it
+stood at the time; the archived OpenSpec artifacts keep theirs unchanged for the same reason.
