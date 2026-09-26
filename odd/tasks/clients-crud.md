@@ -279,6 +279,15 @@ before the first source commit (owner decision pending).
   `ClientesList > shows the archived filter and marks archived customers` could
   not find the archived filter checkbox. Strict TDD RED was observed before the
   production edits; the focused tests and full suite then passed.
+- [x] **WU3 native review: not applicable — `under_budget`.** `gentle-ai review
+  assess --cwd . --agent opencode --base-ref 50bce481 --committed-only --json`
+  reports `risk: medium` (reason `executable_change` on `web/src/api.test.ts`),
+  `changed_lines: 301`, `changed_paths: 7`, `review_due: false`,
+  `review_due_reason: under_budget`. Native RAR owns verification applicability,
+  so **no review transaction was started** and **no receipt exists** for this
+  slice. The orchestrator does not author PASS and does not manufacture a review
+  RAR declares inapplicable. The orchestrator did re-run the full frontend suite
+  and both type/build gates itself as a spot check.
 
 ### WU4 — frontend: ficha profile, consent and archive
 
