@@ -3,7 +3,7 @@
 **Branch**: `odd/customer-drilldown`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-customer-drilldown`
 **Base**: `2a85b675` (= `main` at branch time, merge of PR #370 `odd/agenda-visit-dialog`)
-**Status**: slice 1 delivered as **PR #371** (`odd/customer-drilldown` → `main`), CI green. Slice 2 not started.
+**Status**: slice 1 delivered as **PR #371** (`odd/customer-drilldown` → `main`), CI green. Slice 2 implemented and verified locally on `odd/customer-drilldown-chain`; pending owner push/PR.
 **Origin**: follow-up **#1** of `odd/tasks/panel-subagent-delegation.md` — the sibling unit for per-customer
 drill-down reads. Owner scope decision taken 2026-09-26 (see *Decision*).
 
@@ -116,6 +116,7 @@ order, and the next slice rebases onto the new `main` before its own PR.
 ## Graph nodes consulted (Graph Check, Step 1)
 
 - `graphify query "panel assistant delegated worker per-customer drill-down reads appointments cases conversations customer detail tool registry whitelist"` → `app/models.py:218` `Customer`, `:334` `Case`, `app/services/dashboard.py:225` `drilldown()`, `registry.py` `execute_tool`, `agent_registry.py` `Registry`, `test_delegated_customer_gathering_answers_with_cross_domain_evidence()`.
+- Parent Graph Check: `graphify query "assistant delegation node worker span two step chain customers.search operational_history tool execution execute_tool planner"` → `execute_tool()` (`app/chat/assistant/tools/registry.py:546`), `resolve_delegation_scope()` (`delegation.py:22`), `DelegationScopeError` (`delegation.py:10`), `DelegationScope` (`delegation.py:15`), `plan()` (`nodes.py:223`), `_after_guardrails()` (`graph.py:76`), `run_assistant()` (`graph.py:172`), `get_tool()` (`registry.py:535`); communities `tests/unit/test_assistant_delegation.py` and `tests/integration/test_assistant_harness_guardrails.py`.
 - A narrow read-only mapper produced the initial map; every decisive line above was re-verified by the
   orchestrator against the working tree.
 
@@ -133,10 +134,25 @@ order, and the next slice rebases onto the new `main` before its own PR.
   **`review_due: false`** (`under_budget`). No review started.
 - Noted, not fixed: the unit test's rows are `SimpleNamespace` stubs, so they cannot prove the real ORM field
   names; slice 2's integration harness runs the handler against the real database and closes that gap.
+- **Slice 2 implemented** on `odd/customer-drilldown-chain`: appended AT-15 with closed/past inclusion,
+  per-list and evidence bounds, private-data exclusions, and explicit error-state scenarios; added a real
+  two-step delegation-cap test and a real-database `run_assistant` integration test for ORM fields and the
+  forbidden projection. No production code or bounds changed.
+- Strict TDD evidence: T2 initially failed at its final assertion because its recorded planner state kept
+  the loop's subsequently-mutated result list (observed `Left contains one more item: ...customers.operational_history`);
+  the test now records a list snapshot and passes. This was a test-observation defect, not a production RED.
+  T3 passed on its first run (`1 passed, 33 deselected`), so it is explicitly a no-RED characterization/
+  verification test; no failure was manufactured.
+- Slice 2 focused verification: delegation `23 passed`; integration harness `34 passed`; tools + registry
+  `94 passed`. Full suite: **`1486 passed`, exit 0** (234.18s), a measured delta of **+2 tests** from the
+  slice-1 baseline of 1484. The full run reported two warnings: an unawaited `_publish_all` coroutine and
+  the existing fastembed pooling advisory.
+- Graph nodes/edges consulted for slice 2: `delegation_span()` calls `_delegation_plan()` with accumulated
+  `tool_results`; `delegation_node()` calls the span with guardrail-validated scope; `run_assistant()` runs
+  the real graph; `_after_guardrails()` routes delegated plans to the span; `execute_tool()` dispatches the
+  scoped tools. The corresponding unit and integration test communities were consulted.
 
 ## Next step
 
-Slice 1 is implemented, verified and committed on this branch (`e248c036` plus this record) and delivered
-as **PR #371** (`odd/customer-drilldown` → `main`), CI green. Under `stacked-to-main` it merges first;
-slice 2 — the delegated chain end to end, `AT-15` and the integration harness — then rebases onto the new
-`main` and opens its own PR.
+Slice 2 is implemented and verified locally on `odd/customer-drilldown-chain`. The PR is the owner's
+decision; do not push or open one from this unit.
