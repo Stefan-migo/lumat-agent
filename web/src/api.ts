@@ -161,6 +161,7 @@ export function fetchClients({ includeArchived = false, query = '' }: { includeA
 }
 export const createCustomer = (body: CustomerCreateRequest) => postJson<CustomerMutationResponse>('/panel/api/clients', body);
 export const updateCustomerProfile = (id: number, body: CustomerProfileUpdateRequest) => apiFetch<CustomerMutationResponse>(`/panel/api/clients/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const updateCustomerConsent = (id: number, consent: boolean) => postJson<CustomerMutationResponse>(`/panel/api/clients/${id}/consent`, { consent });
 export const archiveCustomer = (id: number) => postJson<CustomerMutationResponse>(`/panel/api/clients/${id}/archive`);
 export const unarchiveCustomer = (id: number) => postJson<CustomerMutationResponse>(`/panel/api/clients/${id}/unarchive`);
 export const getClientFicha = (id: number) => apiFetch<ClientFichaResponse>(`/panel/api/clients/${id}`);
