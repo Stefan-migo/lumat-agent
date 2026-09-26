@@ -4,12 +4,14 @@ import userEvent from "@testing-library/user-event";
 import {
   AppointmentDetailStory,
   ConversationSummary,
+  CloseActions,
+  Completed,
   ConversationWithoutSummary,
   ManualCase,
   Error,
 } from "./AppointmentDetail.stories";
 
-vi.mock("../../api", () => ({ getAppointment: vi.fn() }));
+vi.mock("../../api", () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn() }));
 
 describe("AppointmentDetail stories", () => {
   it("shows the conversation summary when available", () => {
@@ -35,6 +37,16 @@ describe("AppointmentDetail stories", () => {
     render(<AppointmentDetailStory {...(ConversationSummary.args ?? {})} />);
     expect(screen.getByRole("heading", { name: "Historial de la visita" })).toBeInTheDocument();
     expect(screen.getByText(/ana · booked · — → booked/)).toBeInTheDocument();
+  });
+
+  it("keeps appointment facts alongside close controls and hides controls for completed visits", () => {
+    const { rerender } = render(<AppointmentDetailStory {...(CloseActions.args ?? {})} />);
+    expect(screen.getByRole("button", { name: "Cerrar visita" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Marcela Fuentes" })).toHaveAttribute("href", "/panel/app/clients/12");
+    expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
+    rerender(<AppointmentDetailStory {...(Completed.args ?? {})} />);
+    expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cerrar visita" })).not.toBeInTheDocument();
   });
 
   it("wires the error story retry action", async () => {
