@@ -3,7 +3,7 @@
 **Branch**: `odd/customers-search-pii`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-customers-search-pii`
 **Base**: `2a5c53dd` (= `main` = `origin/main` at branch time, PR #378)
-**Status**: complete
+**Status**: complete — delivered as **PR #382** (`odd/customers-search-pii` → `main`); merge is the owner's decision.
 
 ## Objective
 
@@ -120,7 +120,12 @@ git status --short && git diff --check
 - 2026-09-26 — T4 verification: targeted unit suites `119 passed`; guardrails integration `35 passed`; full `uv run pytest tests/` `1502 passed, 2 warnings in 252.61s (0:04:12)`.
 - 2026-09-26 — Behavior commit: `280134f6` (`fix(assistant): limit customer search fields`).
 - 2026-09-26 — Task record committed separately after implementation and verification.
+- 2026-09-26 — Merged `origin/main` (`8e5a978a`, PR #380) into the branch: the update did not touch the
+  target files; focused tests re-run green over the merged tree.
+- 2026-09-26 — Opened **PR #382** against `main` (label `type:bug`, base `8e5a978a`).
 
 ## Next step
 
-Owner decides whether to push/open a PR; no remote operations were performed.
+Delivered as **PR #382**. Native assess: `risk: medium` (`executable_change`), 196 changed lines / 4 paths,
+`review_due: false` (`under_budget`). Merge is the owner's decision; CI (`tests.yml`) runs the backend and
+panel jobs on the PR. Cleanup (worktree + test DB) follows the merge.
