@@ -315,6 +315,8 @@ export interface CasesResponse {
   users: UserRef[];
 }
 
+export interface ManualCaseRequest { customer_id: number; service: string; summary?: string; }
+
 export type DocFormat = 'pdf' | 'md' | 'csv';
 export type KbVisibility = 'customer' | 'internal';
 

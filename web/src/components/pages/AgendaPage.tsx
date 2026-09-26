@@ -1,9 +1,10 @@
 import { useCallback, useState } from "react";
-import { ApiError, cancelAppointment, createAppointment, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from "../../api";
+import { ApiError, cancelAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AgendaAppointment, Case, Customer, AdminUser } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
+import { Combobox } from "../primitives/Combobox";
 import { Dialog } from "../primitives/Dialog";
 import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
@@ -158,6 +159,26 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       setCreateBusy(false);
     }
   };
+  const createManualCase = async (query: string) => {
+    const customerId = Number(createForm.customer_id);
+    if (!customerId) {
+      setCreateFeedback({ tone: "danger", title: "Selecciona un cliente antes de crear un caso" });
+      return;
+    }
+    setCreateBusy(true);
+    setCreateFeedback(null);
+    try {
+      const response = await createCase({ customer_id: customerId, service: query });
+      const createdCase = { ...response.case, customer: clients.find((client) => client.id === customerId)! };
+      setCases((items) => [...items, createdCase]);
+      field("case_id", String(response.case.id));
+      if (!createForm.service.trim()) field("service", query);
+    } catch (error) {
+      setCreateFeedback({ tone: "danger", title: "No se pudo crear el caso", detail: error instanceof Error ? error.message : undefined });
+    } finally {
+      setCreateBusy(false);
+    }
+  };
   const sortedAppointments = [...appointments].sort((a, b) => a.local_start.localeCompare(b.local_start));
   const visitCounts = appointments.reduce<Record<string, number>>((counts, row) => {
     const day = localDate(row.local_start);
@@ -213,8 +234,8 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     </Dialog>
     <Dialog open={createOpen} onClose={() => { if (!createBusy) setCreateOpen(false); }} title="Crear visita">
       <div className="agenda-create-form">
-        <Select label="Cliente" value={createForm.customer_id} onChange={(event) => field("customer_id", event.target.value)} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} />
-        <Select label="Caso" value={createForm.case_id} onChange={(event) => { field("case_id", event.target.value); const selected = cases.find((item) => item.id === Number(event.target.value)); if (selected?.service && !createForm.service) field("service", selected.service); }} options={[{ value: "", label: "Selecciona un caso" }, ...cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))]} />
+        <Select label="Cliente" value={createForm.customer_id} onChange={(event) => { field("customer_id", event.target.value); field("case_id", ""); }} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} />
+        <Combobox label="Caso" value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={(query) => void createManualCase(query)} options={cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} />
         <Select label="Técnico" value={createForm.technician_id} onChange={(event) => field("technician_id", event.target.value)} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
         <Input label="Servicio" value={createForm.service} onChange={(event) => field("service", event.target.value)} />
         <Input label="Fecha local" type="date" value={createForm.local_date} onChange={(event) => field("local_date", event.target.value)} />
