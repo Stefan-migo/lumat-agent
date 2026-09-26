@@ -3,7 +3,7 @@
 **Branch**: `odd/docs-status-reconciliation`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-docs-status-reconciliation`
 **Base**: `28fd4ad3` (= `main` = `origin/main` at branch time)
-**Status**: complete — delivered as **PR #379** (`odd/docs-status-reconciliation` → `main`); merge is the owner's decision.
+**Status**: merged — PR #379 (`d2546396`, 2026-09-26). Worktree and branches cleaned.
 
 ## Objective
 

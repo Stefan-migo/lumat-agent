@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from html.parser import HTMLParser
 from urllib.parse import quote_plus
 
@@ -17,6 +18,21 @@ MAX_TITLE_LENGTH = 100
 MAX_SNIPPET_LENGTH = 200
 MAX_URL_LENGTH = 300
 BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
+
+# Brave's free tier allows one request per second. Wait out a single burst instead of failing
+# the whole turn, but never block longer than the cap: the budget on the catalog and the turn
+# deadline matter more than one search.
+_RATE_LIMIT_RETRY_DEFAULT_SECONDS = 1.0
+_RATE_LIMIT_RETRY_CAP_SECONDS = 2.0
+
+
+def _rate_limit_delay_seconds(retry_after: str | None) -> float:
+    """Seconds to wait before one rate-limit retry: the header, capped, else the default."""
+    try:
+        requested = float(retry_after)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        requested = _RATE_LIMIT_RETRY_DEFAULT_SECONDS
+    return max(0.0, min(requested, _RATE_LIMIT_RETRY_CAP_SECONDS))
 
 
 class SearchFailure(RuntimeError):
@@ -61,12 +77,21 @@ class BraveSearch:
 
         request = self.client or httpx.Client(timeout=5.0)
         owned = self.client is None
-        try:
-            response = request.get(
+
+        def fetch() -> httpx.Response:
+            return request.get(
                 BRAVE_SEARCH_URL,
                 headers={"X-Subscription-Token": api_key},
                 params={"q": query, "count": min(max(limit, 0), MAX_RESULTS), "country": "cl", "search_lang": "es"},
             )
+
+        try:
+            response = fetch()
+            if response.status_code == 429:
+                time.sleep(_rate_limit_delay_seconds(response.headers.get("Retry-After")))
+                response = fetch()
+                if response.status_code == 429:
+                    raise SearchFailure("search provider rate-limited the request")
             response.raise_for_status()
             try:
                 payload = response.json()
