@@ -3,7 +3,7 @@
 **Branch**: `odd/delegation-scope-guard`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-delegation-scope-guard`
 **Base**: `cf5f8171` (= `main` at branch time, `refactor/case-status-public-name`)
-**Status**: implemented, verified, full suite green. Delivered as **PR #369** (`odd/delegation-scope-guard` → `main`). Merge is the owner's decision.
+**Status**: merged — PR #369 (`3c179b5a`). Implemented, verified, full suite green.
 **Origin**: follow-up **#4** of `odd/tasks/panel-subagent-delegation.md` (`R3-001`), an advisory
 `review-reliability` WARNING from the slice-3 native review of that unit; Engram handoff
 `handoff/panel-subagent-delegation-r3-001` (#5054).
@@ -150,5 +150,5 @@ formatter, typechecker, pre-commit or hooks exist. **The tests are the verificat
 
 ## Next step
 
-Delivered as **PR #369** (`odd/delegation-scope-guard` → `main`, one `type:bug` label). What remains is
-the owner's merge decision. No native review is due for this range (`medium`, `under_budget`).
+Merged as **PR #369** (`3c179b5a`, one `type:bug` label). No native review was due for this range
+(`medium`, `under_budget`).

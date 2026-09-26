@@ -4,7 +4,7 @@
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-tool-chaining-slice2`
 (the slice 1 worktree was removed after its merge)
 **Base**: `e16b3ff8` (slice 1) · `6b3214bd` (= `main` after PR #339, slice 2)
-**Status**: slice 1 merged · slice 2 in progress (T4–T8 done, T9 outstanding)
+**Status**: slice 1 merged — PR #339 (`6b3214bd`) · slice 2 merged — PR #343 (`1d57f516`); T4–T9 closed.
 **Origin**: `.rapsodia-code/sessions/ready-for-odd/2026-09-24-panel-agency-and-web-grounding/`
 (Engram `handoff/panel-agency-to-u1-tool-chaining`)
 
@@ -529,14 +529,14 @@ main ──●──────────────●───────
        │              │
        └ PR #339 ─────┘  (slice 1: the bounded loop — merged)
                       │
-                      └ PR #2 ──▶  (slice 2: observable + proven)
+                       └ PR #343 ──▶  (slice 2: observable + proven — merged)
                           📍 here
 ```
 
 | Slice | PR | Tasks | Content | Status |
 |---|---|---|---|---|
 | 1 | #339 → `main` (`6b3214bd`) | T1, T2, T3 | The loop exists and is safe: baseline measurement, planner opt-in, accumulating state, bounded back-edge, cap, write refusal, per-iteration cost gate | **merged** — CI green, RDD `approved` |
-| 2 | #2 → `main` after #1 | T4, T5, T6, T7, T8, T9 | The loop is observable and proven: user-visible write refusal, newest-evidence truncation declared to the planner, persisted `cap_reached`/`tool_steps`, end-to-end chained turn answering from combined evidence, chaining-cost delta | **ready for review** |
+| 2 | #343 → `main` after #1 (`1d57f516`) | T4, T5, T6, T7, T8, T9 | The loop is observable and proven: user-visible write refusal, newest-evidence truncation declared to the planner, persisted `cap_reached`/`tool_steps`, end-to-end chained turn answering from combined evidence, chaining-cost delta | **merged** — PR #343 (`1d57f516`), CI green |
 
 **Slice 2 carries one inherited defect: R3-001.** The slice 1 review found that the looped-write refusal
 is enforced but invisible: `tool_loop_head` sets a canned `response` and routes with `status: completed`
@@ -620,10 +620,8 @@ not silently ignored.
 
 ## Next step
 
-**T9 — full suite green + native RDD review + PR #2.** Run the full suite (`uv run pytest tests/`),
-re-running on the documented intermittent stall rather than diagnosing it; push the branch (nothing of slice
-2 exists on the remote yet — that is the first durability step); run the native RDD review on the frozen
-candidate; then open PR #2 against `main` as a **single PR** (351 authored lines, under the 400 budget).
+**T9 closed**: full suite green, native RDD review approved, and PR #343 merged as `1d57f516` (351 authored
+lines, under the 400 budget).
 
 There is no rebase to do: `main` is at `f0330667` and `6b3214bd` is its ancestor. Any edit to this record
 after the review starts would invalidate the frozen candidate, so the record is complete before the review

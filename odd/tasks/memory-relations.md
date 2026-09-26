@@ -3,7 +3,7 @@
 **Branch**: `odd/memory-relations`
 **Worktree**: `../lumat-agent-odd-memory-relations`
 **Base**: `0de327d4`
-**Status**: scoped — not started
+**Status**: merged — PR #271 (`06768699`, 2026-09-20). The unit scoped here landed with `app/services/relations.py`, migration `029_memory_relation_resolution.sql`, the memory spec and tests in the same pull request.
 
 ## Objective
 

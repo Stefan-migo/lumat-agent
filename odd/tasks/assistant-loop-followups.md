@@ -3,7 +3,7 @@
 **Branch**: `odd/assistant-loop-followups`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-loop-followups`
 **Base**: `1d57f516` (= `main`, PR #343 merged)
-**Status**: complete — waiting on the native review and the PR decision
+**Status**: merged — PR #344 (`af0231b6`).
 **Origin**: Engram `handoff/slice2-assistant-tool-chaining` (#4932), open follow-ups after U1.
 
 This is a **follow-up unit**, not a start of U2 or U3. U2 (local page reader + SSRF) and U3
@@ -168,4 +168,4 @@ under the 400-line budget → **single PR**, no chaining.
 
 ## Next step
 
-The native review on the frozen candidate, then the PR decision (single PR, 107 authored lines).
+Completed: native review approved and PR #344 (`af0231b6`) merged (single PR, 107 authored lines).

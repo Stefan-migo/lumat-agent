@@ -1,6 +1,6 @@
 # ODD Task: agenda-visit-dialog
 
-Status: in progress
+Status: merged — PR #370 (`2a85b675`).
 Worktree: `../lumat-agent-odd-agenda-visit-dialog`
 Branch: `odd/agenda-visit-dialog`
 Depends on: `agenda-manual-case` (PR #367, merged `673d9fba`)
@@ -222,4 +222,4 @@ it ran as the closing safety net.
 - [x] WU3 done — `423eb812`
 - [x] WU4 done — `9f6f0793`; web 760 passed, web build green, backend 1476 passed
 - [x] R3-001 closed — `478535b7` (post-receipt, as the separate work the closure allows)
-- [ ] Owner decision: push and open the PR
+- [x] PR #370 merged (`2a85b675`).

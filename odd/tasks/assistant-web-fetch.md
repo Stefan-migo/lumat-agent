@@ -3,9 +3,7 @@
 **Branch**: `odd/assistant-web-fetch`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-web-fetch`
 **Base**: `4b31796c` (= `main` at branch time)
-**Status**: slices 1 and 2 shipped as PR #348 and PR #349, **both merged**. Slice 3 is **complete and
-open as PR #352** on `odd/assistant-web-fetch-slice3` — T4–T8 done, full suite 1,440 green, native review
-**`approved`** with zero findings and authority burned — awaiting its merge
+**Status**: all three slices merged — PR #348 (`3d0b80f7`), PR #349 (`5320dbb8`), PR #352 (`66625430`). T4–T8 done, full suite 1,440 green, native review **`approved`** with zero findings and authority burned.
 **Origin**: `.rapsodia-code/sessions/archived/2026-09-24-panel-agency-and-web-grounding/session.md`
 (decisions 4 and 6, risk row *local extractor reintroduces an SSRF surface*); Engram #4890, #4894, #4897.
 
@@ -403,9 +401,8 @@ requires.
 
 ## Next step
 
-Slice 3 is **complete, reviewed and open as PR #352** (`approved`, zero findings, authority burned).
-Delivery is the owner's: merging the PR is ordinary repository policy and no review decision depends on
-it. Nothing else is outstanding on this unit.
+Slice 3 is **complete, reviewed and merged as PR #352** (`66625430`; `approved`, zero findings, authority
+burned). Nothing else is outstanding on this unit.
 
 **After the merge**: refresh Graphify once (`graphify <root> --update`) per the delivery/cleanup rule,
 and U3 (panel sub-agent delegation) remains unstarted and out of this unit's scope.

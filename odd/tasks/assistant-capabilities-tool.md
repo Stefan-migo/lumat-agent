@@ -3,7 +3,7 @@
 **Branch**: `odd/assistant-capabilities-tool`
 **Worktree**: `../lumat-agent-odd-assistant-capabilities-tool`
 **Base**: `d4b58554` (= `main` at branch time)
-**Status**: in progress
+**Status**: merged — PR #312 (`959e93a4`).
 
 ## Objective
 
@@ -300,10 +300,9 @@ before the symbol exists. No behavioural RED is claimed because none was observe
 
 ## Next step
 
-**Delivered.** The branch is pushed and **PR #312** is open against `main` with the single label
-`type:feature`; CI green (`test` 1m57s, GitGuardian pass). The native review is approved and its authority
-is burned (lineage `review-cceb220da065c897`, risk medium, one consolidated lens). The merge remains the
-human's decision under ordinary repository policy.
+**Delivered.** PR #312 (`959e93a4`) is merged. CI was green (`test` 1m57s, GitGuardian pass). The native
+review is approved and its authority is burned (lineage `review-cceb220da065c897`, risk medium, one
+consolidated lens).
 
 The review's advisory finding is **not** fixed here and is recorded as deferred debt, to be resolved
 together with the sibling finding from `odd/memory-correction-tools` in one follow-up unit
