@@ -448,6 +448,23 @@ export interface Appointment {
   calendar_error?: string | null;
 }
 
+export interface AppointmentHistoryEntry {
+  id: number;
+  actor: string;
+  action: string;
+  from_status: string | null;
+  to_status: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface AppointmentDetail {
+  appointment: Appointment & { history: AppointmentHistoryEntry[] };
+  customer: { id: number; name: string | null };
+  case: { id: number; conversation_id: number | null };
+  conversation_summary: string | null;
+}
+
 export type AppointmentSyncStatus = 'pending' | 'synced' | 'failed';
 
 export interface AgendaAppointment {

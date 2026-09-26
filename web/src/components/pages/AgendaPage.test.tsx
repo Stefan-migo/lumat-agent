@@ -74,6 +74,14 @@ describe('AgendaPage', () => {
     expect(screen.getByText('Mantención')).toBeInTheDocument();
   });
 
+  it('links the register service to its appointment detail route', () => {
+    render(<AgendaPage data={[appointment({ id: 42 })]} state="ready" />);
+    const link = screen.getByRole('link', { name: 'Mantención' });
+    expect(link).toHaveAttribute('href', '/panel/app/agenda/42');
+    link.focus();
+    expect(link).toHaveFocus();
+  });
+
   it('uses singular and plural visit counts', () => {
     const { rerender } = render(<AgendaPage data={[appointment()]} state="ready" />);
     expect(screen.getByText('1 visita', { selector: 'p' })).toBeInTheDocument();

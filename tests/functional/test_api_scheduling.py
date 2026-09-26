@@ -202,3 +202,98 @@ def test_appointments_range_uses_dst_aware_local_bounds(client, make_user):
     row = response.json()["appointments"][0]
     assert row["local_start"] == "2026-03-08T03:30:00-04:00"
     assert row["starts_at"] == "2026-03-08T07:30:00+00:00"
+
+
+def _appointment_detail_rows(session, *, with_conversation=True, summary="Conversation summary"):
+    technician = User(username="detail-tech", password_hash="unused")
+    customer = Customer(phone_e164="+56933333333", name="Detail Customer")
+    session.add_all([technician, customer])
+    session.flush()
+    conversation = None
+    if with_conversation:
+        conversation = Conversation(
+            customer_id=customer.id, wa_phone=customer.phone_e164, summary=summary
+        )
+        session.add(conversation)
+        session.flush()
+    case = Case(
+        customer_id=customer.id,
+        conversation_id=conversation.id if conversation else None,
+        service="calefont",
+    )
+    session.add(case)
+    session.flush()
+    appointment = Appointment(
+        service="calefont", customer_id=customer.id, case_id=case.id,
+        technician_id=technician.id,
+        local_start=datetime(2026, 7, 15, 10), timezone="America/Santiago",
+        starts_at=datetime(2026, 7, 15, 14, tzinfo=timezone.utc),
+        ends_at=datetime(2026, 7, 15, 15, tzinfo=timezone.utc), duration_minutes=60,
+    )
+    session.add(appointment)
+    session.commit()
+    return appointment.id, customer.id, customer.name, case.id, case.conversation_id
+
+
+def _get_appointment_detail(client, make_user, appointment_setup):
+    make_user("detail-oper", "detail-pass", role="operador")
+    with SessionLocal() as session:
+        appointment_id, *expected = appointment_setup(session)
+    assert client.post(
+        "/panel/api/login", json={"username": "detail-oper", "password": "detail-pass"}
+    ).status_code == 200
+    return client.get(f"/panel/api/appointments/{appointment_id}"), expected
+
+
+def test_appointment_detail_embeds_conversation_summary_and_related_records(client, make_user):
+    response, expected = _get_appointment_detail(
+        client, make_user, lambda session: _appointment_detail_rows(session)
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    customer_id, customer_name, case_id, conversation_id = expected
+    assert payload["conversation_summary"] == "Conversation summary"
+    assert payload["customer"] == {"id": customer_id, "name": customer_name}
+    assert payload["case"] == {"id": case_id, "conversation_id": conversation_id}
+    assert conversation_id is not None
+    assert set(payload["appointment"]) == {
+        "id", "service", "customer_id", "case_id", "technician_id", "local_start",
+        "timezone", "starts_at", "ends_at", "duration_minutes", "status", "history",
+    }
+
+
+def test_appointment_detail_manual_case_has_no_conversation_summary(client, make_user):
+    response, expected = _get_appointment_detail(
+        client, make_user,
+        lambda session: _appointment_detail_rows(session, with_conversation=False),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["conversation_summary"] is None
+    assert payload["case"]["conversation_id"] is None
+    assert payload["customer"]["id"] == expected[0]
+
+
+def test_appointment_detail_conversation_without_summary_is_successful(client, make_user):
+    response, expected = _get_appointment_detail(
+        client, make_user,
+        lambda session: _appointment_detail_rows(session, summary=None),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["conversation_summary"] is None
+    assert response.json()["case"]["conversation_id"] == expected[3]
+
+
+def test_appointment_detail_unknown_id_is_not_found(client, make_user):
+    make_user("detail-oper", "detail-pass", role="operador")
+    assert client.post(
+        "/panel/api/login", json={"username": "detail-oper", "password": "detail-pass"}
+    ).status_code == 200
+
+    response = client.get("/panel/api/appointments/999999999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "appointment not found"

@@ -13,6 +13,7 @@ import { ConversationsList } from '../pages/ConversationsList';
 import { ConversationThread } from '../pages/ConversationThread';
 import { KbList } from '../pages/KbList';
 import { KbDocumentDetail } from '../pages/KbDocumentDetail';
+import { AppointmentDetail } from '../pages/AppointmentDetail';
 import { Settings } from '../pages/Settings';
 import { NotificationCenter } from '../pages/NotificationCenter';
 import { PushSettings } from '../pages/PushSettings';
@@ -108,10 +109,11 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const clientId = route.clientId ?? null;
   const conversationId = route.conversationId ?? null;
   const kbDocId = route.kbDocId ?? null;
+  const appointmentId = route.appointmentId ?? null;
 
   const page = view === 'dashboard' ? <Dashboard role={user.role} onNavigate={navigate} />
       : view === 'advanced-dashboard' ? <AdvancedDashboard />
-      : view === 'agenda' ? <AgendaPage />
+      : view === 'agenda' ? appointmentId !== null ? <AppointmentDetail appointmentId={appointmentId} /> : <AgendaPage />
       : view === 'automation-rules' ? route.automationRuleId !== undefined || creatingAutomationRule ? <AutomationRuleDetailPage ruleId={creatingAutomationRule ? null : route.automationRuleId} user={user} onCreated={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} onBack={() => { setCreatingAutomationRule(false); window.history.back(); }} /> : <AutomationRulesPage user={user} onOpenCreate={navigateToCreateAutomationRule} onOpenRule={(id) => navigateToRoute({ view: 'automation-rules', automationRuleId: id })} />
       : view === 'clients' ? clientId !== null ? <ClientFicha customerId={clientId} /> : <ClientesList onOpenClient={(id) => navigateToRoute({ view: 'clients', clientId: id })} />
        : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList currentUserId={user.id} initialQueueTab={route.conversationTab === 'cases' ? 'case' : 'all'} refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />

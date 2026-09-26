@@ -161,6 +161,24 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
+  it('renders appointment details from the appointment route', async () => {
+    window.history.replaceState({}, '', '/panel/app/agenda/7');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      if (path === '/panel/api/appointments/7') return new Response(JSON.stringify({
+        appointment: { id: 7, service: 'Reparación de calefón', customer_id: 2, case_id: 3, technician_id: 4, local_start: '2026-09-26T10:00:00', timezone: 'America/Santiago', starts_at: '2026-09-26T13:00:00Z', ends_at: '2026-09-26T14:00:00Z', duration_minutes: 60, status: 'booked', history: [] },
+        customer: { id: 2, name: 'Ana' }, case: { id: 3, conversation_id: null }, conversation_summary: null,
+      }), { status: 200 });
+      return new Response(JSON.stringify({ notifications: [] }), { status: 200 });
+    });
+
+    render(<AppShell user={operador} />);
+    expect(await screen.findByText('Reparación de calefón')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ana' })).toHaveAttribute('href', '/panel/app/clients/2');
+    expect(fetchMock).toHaveBeenCalledWith('/panel/api/appointments/7', expect.anything());
+    fetchMock.mockRestore();
+  });
+
   it('deep-links to AdvancedDashboard without exposing a visible navigation item', async () => {
     window.history.replaceState({}, '', '/panel/app/advanced-dashboard');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {

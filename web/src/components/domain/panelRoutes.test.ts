@@ -54,8 +54,18 @@ describe('panel routes', () => {
   });
 
   it('falls back safely from malformed agenda paths', () => {
-    expect(parsePanelPath('/panel/app/agenda/1')).toEqual({ view: 'dashboard' });
+    expect(parsePanelPath('/panel/app/agenda/1')).toEqual({ view: 'agenda', appointmentId: 1 });
     expect(parsePanelPath('/panel/app/%E0%A4%A')).toEqual({ view: 'dashboard' });
+  });
+
+  it('builds and parses positive appointment detail routes while preserving the register route', () => {
+    expect(pathForRoute({ view: 'agenda', appointmentId: 7 })).toBe('/panel/app/agenda/7');
+    expect(parsePanelPath('/panel/app/agenda/7')).toEqual({ view: 'agenda', appointmentId: 7 });
+    expect(parsePanelPath('/panel/app/agenda')).toEqual({ view: 'agenda' });
+    expect(pathForRoute({ view: 'agenda', appointmentId: 0 })).toBe('/panel/app/agenda');
+    expect(pathForRoute({ view: 'agenda', appointmentId: 1.5 })).toBe('/panel/app/agenda');
+    expect(parsePanelPath('/panel/app/agenda/0')).toEqual({ view: 'dashboard' });
+    expect(parsePanelPath('/panel/app/agenda/1.5')).toEqual({ view: 'dashboard' });
   });
 
   it('resolves bookmarked cases to the unified conversations route', () => {
