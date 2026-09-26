@@ -3,7 +3,7 @@
 **Branch**: `odd/assistant-web-search`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-assistant-web-search`
 **Base**: `05983dae` (= `main` at branch time)
-**Status**: in progress
+**Status**: merged — PR #329 (`a94a98b4`).
 
 ## Objective
 
@@ -378,5 +378,4 @@ The implementation uses the standard-library `HTMLParser` already present in thi
 
 ## Next step
 
-T1–T8 are complete in this worktree. Delivery (push, PR, merge) is the human's decision under ordinary
-repository policy.
+T1–T8 are complete and merged as PR #329 (`a94a98b4`).

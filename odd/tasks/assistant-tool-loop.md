@@ -3,7 +3,7 @@
 **Branch**: `odd/assistant-tool-loop`
 **Worktree**: `../lumat-agent-odd-assistant-tool-loop`
 **Base**: `153c3275` (= `origin/main` at branch time)
-**Status**: scoped — not started
+**Status**: merged — PR #275 (`01f8ceda`).
 **Reported by**: the owner, by hand, against the live dev panel (2026-09-21)
 
 ## Objective
