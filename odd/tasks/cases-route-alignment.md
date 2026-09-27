@@ -1,6 +1,6 @@
 # ODD Task: cases-route-alignment
 
-Status: in progress — WU1 delivered and merged (PR #392 → 059a275a); WU2 in progress
+Status: WU1 delivered and merged (PR #392 → 059a275a); WU2 delivered
 Worktree: `../lumat-agent-odd-cases-route-alignment`
 Branch: `odd/cases-route-alignment-wu2`
 Base: `059a275a` (= `main` after the WU1 merge)
@@ -217,16 +217,25 @@ hard to review split by file. Proposed slices below; the chain strategy is the o
 
 ### WU2 — remove the retired surface (T4, T5)
 
-- [ ] **T4** — RED first: assert the app tree mounts no `CasesList` (the surface is retired) and
+- [x] **T4** — RED first: assert the app tree mounts no `CasesList` (the surface is retired) and
   that the destructive test edits fail on the current tree; then delete
   `components/pages/CasesList.tsx`, `stories/pages/CasesList.stories.tsx`,
   `stories/pages/CasesList.stories.test.tsx`, the `PanelLinks.test.tsx` import/render and the
-  `style-boundary.test.ts` entry, and drop the `CasesList` CSS section in `primitives.css`.
-- [ ] **T5** — Reconcile the three living specs that name it (`panel-app/spec.md:61`,
+  `style-boundary.test.ts` entry. The live action CSS was renamed to `.case-actions` under D8.
+  Commit `c93f786f` (removal); class rename commit `d5cffdc1`.
+- [x] **T5** — Reconcile the three living specs that name it (`panel-app/spec.md:61`,
   `panel-design-system/spec.md:742`, `corp-components/spec.md:21`) so they describe the tree
-  that exists after the removal.
-- [ ] **WU2 verification of record** — `cd web && npm run test` (count must drop by the removed
-  story tests, and every remaining test must pass), `npx tsc -b --noEmit`, `npm run build`.
+  that exists after the removal. Commit `a9c1dcb9`.
+- [x] **WU2 verification of record** — `cd web && npm run test` → **90 files passed / 822 tests
+  passed**, exit 0; the flaky `ConversationsList` test did **not** appear. `npx tsc -b --noEmit` →
+  exit 0 (no output); `npm run build` → exit 0 (Vite built successfully; existing >500 kB
+  chunk warning); `git diff --check` → clean. Count fell by **15** (837 − 822), matching the
+  prediction exactly (14 story tests + 1 PanelLinks test).
+- [x] **WU2 readback** — `.case-actions` has no test asserting its class name (D8); the focused
+  `CaseActions.test.tsx` passed but does not pin the class, so coverage remains an explicit
+  follow-up if the owner wants it. `rg -n "CasesList" openspec/specs/` returned only
+  `panel-app/spec.md:164` and `:169`, preserving PNL-APP-21. Out-of-scope stale references in
+  the unarchived `panel-grammar-global` change remain a flagged follow-up.
 - [ ] **WU2 review measurement** — same command with `--base-ref` at the WU1 boundary.
 
 ## Acceptance criteria
