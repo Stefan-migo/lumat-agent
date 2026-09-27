@@ -3,7 +3,7 @@
 **Branch**: `odd/docs-status-reconciliation-2`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-docs-status-reconciliation-2`
 **Base**: `e8717201` (= `main` = `origin/main`)
-**Status**: complete — pending owner push/PR.
+**Status**: complete — delivered as **PR #389** (`odd/docs-status-reconciliation-2` → `main`); merge is the owner's decision.
 
 ## Objective
 
@@ -77,5 +77,5 @@ Substantial, one concern (delivery-status truth). Route: **delegated direct** �
 
 ## Next step
 
-Native assess on the committed candidate returned `risk: passive`, `review_due: false` (127 changed lines,
-23 paths); no native review is due. Owner decides whether to push/open a PR. No push or PR was performed.
+Native assess on the committed candidate returned `risk: passive`, `review_due: false`; no native review is
+due. Delivered as **PR #389**; merge is the owner's decision.
