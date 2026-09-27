@@ -13,9 +13,9 @@ This is the **second wave**. The first wave, `docs-status-reconciliation` (PR #3
 
 ## Problem (verified)
 
-The in-scope family was audited against merge history. Each hash below was verified with `git merge-base --is-ancestor <sha> origin/main` (exit 0). Prior status text is preserved here verbatim as evidence; the original task records and their historical logs remain otherwise intact.
+The in-scope family was audited against merge history. Each hash below was verified with `git merge-base --is-ancestor <sha> origin/main` (exit 0). Prior status text is quoted as evidence; a quote ending in an ellipsis is elided, because those original lines wrapped across several source lines. The original task records and their historical logs remain otherwise intact.
 
-| Doc | Status verbatim | Verified reality |
+| Doc | Status as recorded | Verified reality |
 |---|---|---|
 | `assistant-closeout.md` | `complete — delivered as **PR #384** (\`odd/assistant-closeout\` → \`main\`); merge is the owner's decision.` | PR #384, merge `a67cb7cd` |
 | `memory-correction-tools.md` | `in progress` | PR #311, merge `1af0574c` |
@@ -38,7 +38,7 @@ The in-scope family was audited against merge history. Each hash below was verif
 | `r3-empty-corpus-accepted.md` | `implemented and verified; native review approved with no findings and its authority burned` | PR #260, merge `f0338c1d` |
 | `r3-env-db-guard.md` | `implemented and verified; native review approved and its authority burned` | PR #259, merge `0d8fed79` |
 | `r3-malformed-port.md` | `implemented and verified; native review approved and its authority burned` | PR #262, merge `57213a44` |
-| `planner-failure-observability.md` | `implemented by \`3d14aa46\` and \`53f02b04\`; acceptance criterion 8 was left unmet and is` | PR #278, merge `c58c24f7`; AC8 remains unmet |
+| `planner-failure-observability.md` | `implemented by \`3d14aa46\` and \`53f02b04\`; acceptance criterion 8 was left unmet and is…` | PR #278, merge `c58c24f7`; **AC8 was completed on 2026-09-22 by `planner-snapshot-staleness` (PR #289, merge `b9bd8a6f`)** |
 
 ## Route and delegation
 
@@ -48,14 +48,14 @@ Substantial, one concern (delivery-status truth). Route: **delegated direct** �
 
 - [x] **T1 — Enumerate** the full requested assistant/planner/memory/r3/panel/delegation family and both agenda docs, plus the first-wave reconciliation record.
 - [x] **T2 — Verify delivery** using merge history and ancestry against `origin/main`; leave consistent records untouched.
-- [x] **T3 — Correct drift** in false and incomplete status claims while preserving review evidence and AC8's unmet state.
+- [x] **T3 — Correct drift** in false and incomplete status claims while preserving review evidence and each unit's own recorded state.
 - [x] **T4 — Verify** every corrected merge hash, docs-only scope, whitespace, and worktree state.
 - [x] **T5 — Commit** in focused work units; no tests run because no code changed.
 
 ## Acceptance criteria
 
 1. Every corrected status states the verified PR number and merge hash.
-2. Review lineage remains present; `planner-failure-observability` still visibly records unmet AC8 and is not declared complete.
+2. Review lineage remains present; `planner-failure-observability` is recorded as merged with its AC8 noted as completed by `planner-snapshot-staleness` (PR #289).
 3. Other records that are consistent, lack a status line, or cannot be confidently tied to a delivery are left untouched.
 4. Diff touches only `odd/tasks/*.md`; English artifacts; Conventional Commits; no attribution.
 5. No test run: zero code files changed.
@@ -72,8 +72,31 @@ Substantial, one concern (delivery-status truth). Route: **delegated direct** �
 
 - Graph Check: ran `graphify query "assistant tool loop planner memory status"` from the main worktree; read `graphify-out/GRAPH_REPORT.md` (graph built from `e8717201`). Consulted query nodes `Planner failure visibility`, `Assistant`, `Memory`, `test_assistant_tool_loop.py`, and `ToolValidationError`, plus the report's `Panel assistant agency ODD units (U1/U2/tooling)` community and god-node list. The query output did not enumerate explicit edges; no edge claims are made.
 - Audited all 56 in-scope task docs; 22 status lines required reconciliation. PR #379's first-wave docs remain unchanged.
-- Verified all 22 merge commits as ancestors of `origin/main`; AC8 remains explicitly unmet for `planner-failure-observability`.
+- Verified all 22 merge commits as ancestors of `origin/main`.
 - Documentation-only: no tests run.
+
+## Correction (2026-09-27)
+
+The first revision of this record claimed that `planner-failure-observability`'s acceptance criterion 8 was
+**still unmet**. That was false. The original `Status`, before PR #389, reads over three source lines:
+
+```
+**Status**: implemented by `3d14aa46` and `53f02b04`; acceptance criterion 8 was left unmet and is
+completed by `odd/tasks/planner-snapshot-staleness.md` (2026-09-22). This line read
+`scoped — not started` until then, which was false.
+```
+
+AC8 was completed on 2026-09-22 by `planner-snapshot-staleness` (PR #289, merge `b9bd8a6f`). That unit's own
+record declares itself "the unconsummated acceptance criterion of a work unit that is already implemented:
+`odd/tasks/planner-failure-observability.md`, criterion 8", and its first acceptance criterion is the
+inherited AC8.
+
+**Root cause.** The evidence table quoted only the *first line* of that three-line sentence as "verbatim",
+cutting it at `and is`. A truncated quote of a wrapped line is not a verbatim quote, and a negative claim
+("X is still unmet") was asserted from it without reading the whole file.
+
+**Lesson.** A quote ending in an ellipsis is elided and is shorter than the original statement. Treat it as a
+pointer to the source, never as the source.
 
 ## Next step
 
