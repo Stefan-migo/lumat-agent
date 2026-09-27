@@ -3,7 +3,7 @@
 **Branch**: `odd/panel-section-headers`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-panel-section-headers`
 **Base**: `96ba8ca2` (= `main` at branch time)
-**Status**: implemented — native review approved; pending owner visual acceptance and delivery
+**Status**: merged — PR #358 (`8e25037c`). Native review approved; owner visual acceptance and delivery were pending before merge.
 
 ## Objective
 

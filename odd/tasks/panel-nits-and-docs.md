@@ -2,7 +2,7 @@
 
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-panel-nits-and-docs`
 **Branch**: `odd/panel-nits-and-docs` (base `main` @ `b43712dd`)
-**Status**: in progress
+**Status**: merged — PR #227 (`8605b1c6`).
 
 ## Objective
 

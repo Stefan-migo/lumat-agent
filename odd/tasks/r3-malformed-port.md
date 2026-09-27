@@ -3,7 +3,7 @@
 **Branch**: `odd/r3-malformed-port`
 **Worktree**: `../lumat-agent-odd-r3-malformed-port`
 **Base**: `26b463a2`
-**Status**: implemented and verified; native review approved and its authority burned
+**Status**: merged — PR #262 (`57213a44`). Implemented and verified; native review approved and its authority burned.
 **Advisory**: `R3-malformed-port` (WARNING, `evidence_class: deterministic`,
 `causal_disposition: introduced`, non-blocking) returned by the native review of PR #259.
 
@@ -124,4 +124,3 @@ git diff --name-only -- app/ web/ db/ agent/ openspec/   # must be empty
 ## Delivery
 
 Human decision pending. Reviewed candidate is uncommitted in the worktree as of the review.
-

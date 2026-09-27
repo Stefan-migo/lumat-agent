@@ -3,7 +3,7 @@
 **Branch**: `odd/r3-env-db-guard`
 **Worktree**: `../lumat-agent-odd-r3-env-db-guard`
 **Base**: `0b9f3c2e`
-**Status**: implemented and verified; native review approved and its authority burned
+**Status**: merged — PR #259 (`0d8fed79`). Implemented and verified; native review approved and its authority burned.
 **Advisory**: `R3-env-database-mismatch` (WARNING, `evidence_class: deterministic`,
 `causal_disposition: introduced`, non-blocking) from native review `review-ba9c8a35d22602f6`.
 

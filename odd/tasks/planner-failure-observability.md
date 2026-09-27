@@ -3,7 +3,7 @@
 **Branch**: `odd/planner-failure-observability`
 **Worktree**: `../lumat-agent-odd-planner-failure-observability`
 **Base**: `01f8ceda` (= `origin/main` at branch time)
-**Status**: implemented by `3d14aa46` and `53f02b04`; acceptance criterion 8 was left unmet and is
+**Status**: merged — PR #278 (`c58c24f7`). Implemented by `3d14aa46` and `53f02b04`; acceptance criterion 8 was left unmet and is
 completed by `odd/tasks/planner-snapshot-staleness.md` (2026-09-22). This line read
 `scoped — not started` until then, which was false.
 **Discovered by**: the owner, by hand, testing the panel assistant (2026-09-21)

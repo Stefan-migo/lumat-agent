@@ -3,7 +3,7 @@
 **Branch**: `odd/memory-decay-ttl`
 **Worktree**: `../lumat-agent-odd-memory-decay-ttl`
 **Base**: `0b9f3c2e`
-**Status**: completed
+**Status**: merged — PR #261 (`26b463a2`).
 
 ## Objective
 
