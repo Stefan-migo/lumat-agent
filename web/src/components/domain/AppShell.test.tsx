@@ -228,21 +228,62 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
-  it('updates the queue tab from browser history and writes tab changes to the URL', async () => {
+  it('updates the queue tab from explicit popstate routes and writes tab changes to the URL', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ notifications: [], items: [], total: 0, offset: 0, limit: 20, counts: { all: 0, human: 0, emergency: 0, case: 0, closed: 0 } }), { status: 200 }));
     window.history.replaceState({}, '', '/panel/app/conversations');
     const user = userEvent.setup();
     render(<AppShell user={operador} />);
     await user.click(screen.getByRole('tab', { name: /casos/i }));
     expect(window.location.pathname).toBe('/panel/app/cases');
+    expect(screen.getByRole('tab', { name: /casos/i })).toHaveAttribute('aria-selected', 'true');
     await user.click(screen.getByRole('tab', { name: /cerradas/i }));
-    expect(window.location.pathname).toBe('/panel/app/conversations');
-    window.history.back();
-    window.dispatchEvent(new PopStateEvent('popstate'));
-    await waitFor(() => expect(screen.getByRole('tab', { name: /cerradas/i })).toHaveAttribute('aria-selected', 'true'));
-    window.history.back();
+    expect(`${window.location.pathname}${window.location.search}`).toBe('/panel/app/conversations?tab=closed');
+    expect(screen.getByRole('tab', { name: /cerradas/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /todas/i })).toHaveAttribute('aria-selected', 'false');
+    window.history.replaceState({}, '', '/panel/app/cases');
     window.dispatchEvent(new PopStateEvent('popstate'));
     await waitFor(() => expect(screen.getByRole('tab', { name: /casos/i })).toHaveAttribute('aria-selected', 'true'));
+    window.history.replaceState({}, '', '/panel/app/conversations?tab=closed');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(() => expect(screen.getByRole('tab', { name: /cerradas/i })).toHaveAttribute('aria-selected', 'true'));
+    vi.restoreAllMocks();
+  });
+
+  it('pushes one history entry per change when leaving Casos', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ notifications: [], items: [], total: 0, offset: 0, limit: 20, counts: { all: 0, human: 0, emergency: 0, case: 0, closed: 0 } }), { status: 200 }));
+    window.history.replaceState({}, '', '/panel/app/cases');
+    const pushState = vi.spyOn(window.history, 'pushState');
+    const user = userEvent.setup();
+    render(<AppShell user={operador} />);
+
+    await user.click(screen.getByRole('tab', { name: /cerradas/i }));
+    expect(pushState).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('tab', { name: /cerradas/i })).toHaveAttribute('aria-selected', 'true');
+    pushState.mockClear();
+    await user.click(screen.getByRole('tab', { name: /humanas/i }));
+    expect(pushState).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('tab', { name: /humanas/i })).toHaveAttribute('aria-selected', 'true');
+    pushState.mockRestore();
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    ['/panel/app/conversations', 'case', 'Casos'],
+    ['/panel/app/conversations', 'human', 'Humanas'],
+  ])('keeps tab %s addressable after selection and remount', async (startPath, tab, label) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ notifications: [], items: [], total: 0, offset: 0, limit: 20, counts: { all: 0, human: 0, emergency: 0, case: 0, closed: 0 } }), { status: 200 }));
+    window.history.replaceState({}, '', startPath);
+    const user = userEvent.setup();
+    const first = render(<AppShell user={operador} />);
+    await user.click(screen.getByRole('tab', { name: new RegExp(label, 'i') }));
+    expect(screen.getByRole('tab', { name: new RegExp(label, 'i') })).toHaveAttribute('aria-selected', 'true');
+    const selectedUrl = `${window.location.pathname}${window.location.search}`;
+    expect(selectedUrl).toBe(tab === 'case' ? '/panel/app/cases' : '/panel/app/conversations?tab=human');
+    first.unmount();
+
+    window.history.replaceState({}, '', selectedUrl);
+    render(<AppShell user={operador} />);
+    expect(screen.getByRole('tab', { name: new RegExp(label, 'i') })).toHaveAttribute('aria-selected', 'true');
     vi.restoreAllMocks();
   });
 

@@ -132,7 +132,7 @@ describe("PWA shell", () => {
       expect(parsePanelPath(pathname).view).toBe(view);
       expect(pathForView(view)).toBe(pathname);
     }
-    expect(parsePanelPath("/panel/app/cases")).toEqual({ view: "conversations", conversationTab: "cases" });
+    expect(parsePanelPath("/panel/app/cases")).toEqual({ view: "conversations", conversationTab: "case" });
     expect(parsePanelPath("/panel/app/advanced-dashboard").view).toBe("advanced-dashboard");
   });
 });
