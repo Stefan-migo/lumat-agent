@@ -19,10 +19,17 @@ The in-scope family was audited against merge history. Each hash below was verif
 |---|---|---|
 | `assistant-closeout.md` | `complete — delivered as **PR #384** (\`odd/assistant-closeout\` → \`main\`); merge is the owner's decision.` | PR #384, merge `a67cb7cd` |
 | `memory-correction-tools.md` | `in progress` | PR #311, merge `1af0574c` |
+| `memory-axes.md` | `complete, verified, RDD-approved (lineage \`review-970417edde559528\`, authority burned)` | PR #242, merge `5a7297c3` |
+| `memory-read-binding.md` | `complete, verified, RDD-approved (lineage \`review-0c539927b0989fcd\`, authority burned)` | PR #243, merge `b38e33bd` |
+| `memory-decay-ttl.md` | `completed` | PR #261, merge `26b463a2` |
+| `memory-write-conflict.md` | `completed` | PR #258, merge `0b9f3c2e` |
 | `planner-failure-visibility.md` | `in progress` | PR #291, merge `f031721b` |
 | `planner-snapshot-staleness.md` | `in progress` | PR #289, merge `b9bd8a6f` |
 | `memory-write-topic-contract.md` | `implemented and verified; native review approved and its authority burned` | PR #286, merge `515b755b` |
 | `panel-memory-read-scope.md` | `implemented and verified end to end; native review approved and its authority burned` | PR #287, merge `be84dd5a` |
+| `panel-nits-and-docs.md` | `in progress` | PR #227, merge `8605b1c6` |
+| `panel-section-headers.md` | `implemented — native review approved; pending owner visual acceptance and delivery` | PR #358, merge `8e25037c` |
+| `panel-ws-disconnect.md` | `fix implemented and proven; checks green; the cancellation leak registered as its own unit` | PR #267, merge `0de327d4` |
 | `planner-arguments-null.md` | `implemented and verified; native review approved and its authority burned` | PR #282, merge `84f231a3` |
 | `planner-instrumentation-guard.md` | `implemented and verified; native review approved and its authority burned` | PR #279, merge `7340bc99` |
 | `r3-001.md` | `implemented and verified; native review approved and its authority burned` | PR #264, merge `5c5f4af2` |
@@ -64,8 +71,8 @@ Substantial, one concern (delivery-status truth). Route: **delegated direct** �
 ## Progress
 
 - Graph Check: ran `graphify query "assistant tool loop planner memory status"` from the main worktree; read `graphify-out/GRAPH_REPORT.md` (graph built from `e8717201`). Consulted query nodes `Planner failure visibility`, `Assistant`, `Memory`, `test_assistant_tool_loop.py`, and `ToolValidationError`, plus the report's `Panel assistant agency ODD units (U1/U2/tooling)` community and god-node list. The query output did not enumerate explicit edges; no edge claims are made.
-- Audited all 56 in-scope task docs; 15 status lines required reconciliation. PR #379's first-wave docs remain unchanged.
-- Verified all 15 merge commits as ancestors of `origin/main`; AC8 remains explicitly unmet for `planner-failure-observability`.
+- Audited all 56 in-scope task docs; 22 status lines required reconciliation. PR #379's first-wave docs remain unchanged.
+- Verified all 22 merge commits as ancestors of `origin/main`; AC8 remains explicitly unmet for `planner-failure-observability`.
 - Documentation-only: no tests run.
 
 ## Next step
