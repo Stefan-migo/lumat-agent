@@ -77,4 +77,5 @@ Substantial, one concern (delivery-status truth). Route: **delegated direct** â€
 
 ## Next step
 
-Owner decides whether to push/open a PR. No push or PR was performed by this writer.
+Native assess on the committed candidate returned `risk: passive`, `review_due: false` (127 changed lines,
+23 paths); no native review is due. Owner decides whether to push/open a PR. No push or PR was performed.
