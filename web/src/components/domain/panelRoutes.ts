@@ -2,7 +2,7 @@ import type { PanelView } from './PanelShell';
 
 export type PanelRoute = {
   view: PanelView;
-  conversationTab?: 'conversations' | 'cases';
+  conversationTab?: 'all' | 'human' | 'emergency' | 'case' | 'closed';
   clientId?: number;
   conversationId?: number;
   automationRuleId?: number;
@@ -42,12 +42,16 @@ const panelViews = new Set<PanelView>([
 ]);
 
 export function pathForView(view: PanelView): string {
-  if (view === 'cases') return PANEL_ROUTES.conversations;
+  if (view === 'cases') return COMPATIBILITY_ROUTES.cases!;
   return PANEL_ROUTES[view as keyof typeof PANEL_ROUTES] ?? COMPATIBILITY_ROUTES[view] ?? PANEL_BASE_PATH;
 }
 
 export function pathForRoute(route: PanelRoute): string {
+  if (route.view === 'conversations' && route.conversationTab === 'case') return COMPATIBILITY_ROUTES.cases!;
   const base = pathForView(route.view);
+  if (route.view === 'conversations' && route.conversationTab && route.conversationTab !== 'all') {
+    return `${base}?tab=${route.conversationTab}`;
+  }
   if (route.view === 'clients' && route.clientId !== undefined && Number.isSafeInteger(route.clientId) && route.clientId > 0) {
     return `${base}/${route.clientId}`;
   }
@@ -102,7 +106,11 @@ export function parsePanelPath(pathname: string): PanelRoute {
   const view = segments[2] as PanelView;
   if (!panelViews.has(view)) return fallback();
   if (segments.length === 3) {
-    if (view === 'cases') return { view: 'conversations', conversationTab: 'cases' };
+    if (view === 'cases') return { view: 'conversations', conversationTab: 'case' };
+    if (view === 'conversations') {
+      const tab = query.get('tab');
+      return { view, conversationTab: tab && ['all', 'human', 'emergency', 'case', 'closed'].includes(tab) ? tab as PanelRoute['conversationTab'] : 'all' };
+    }
     if (view === 'chat') {
       const projectSlug = query.get('proyecto') || undefined;
       const threadId = query.get('thread_id') ? positiveId(query.get('thread_id')!) : null;

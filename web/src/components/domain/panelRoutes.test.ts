@@ -31,10 +31,10 @@ describe('panel routes', () => {
     expect(pathForView('users')).toBe('/panel/app/users');
     expect(parsePanelPath('/panel/app/users')).toEqual({ view: 'users' });
     expect(parsePanelPath('/panel/app/projects')).toEqual({ view: 'projects' });
-    expect(pathForRoute({ view: 'cases' })).toBe('/panel/app/conversations');
+    expect(pathForRoute({ view: 'cases' })).toBe('/panel/app/cases');
     expect(pathForRoute({ view: 'advanced-dashboard' })).toBe('/panel/app/advanced-dashboard');
     expect(parsePanelPath('/panel/app/advanced-dashboard')).toEqual({ view: 'advanced-dashboard' });
-    expect(parsePanelPath('/panel/app/cases')).toEqual({ view: 'conversations', conversationTab: 'cases' });
+    expect(parsePanelPath('/panel/app/cases')).toEqual({ view: 'conversations', conversationTab: 'case' });
   });
 
   it('builds and parses positive client and conversation drill-down IDs', () => {
@@ -46,10 +46,10 @@ describe('panel routes', () => {
 
   it('normalizes valid paths and safely falls back for invalid paths or IDs', () => {
     expect(parsePanelPath('/panel/app/clients/42/')).toEqual({ view: 'clients', clientId: 42 });
-    expect(parsePanelPath('/panel/app//conversations')).toEqual({ view: 'conversations' });
+    expect(parsePanelPath('/panel/app//conversations')).toEqual({ view: 'conversations', conversationTab: 'all' });
     expect(parsePanelPath('/panel/app/clients/0')).toEqual({ view: 'dashboard' });
     expect(parsePanelPath('/other/app/clients')).toEqual({ view: 'dashboard' });
-    expect(parsePanelPath('/panel/app/conversations?surface=cases')).toEqual({ view: 'conversations' });
+    expect(parsePanelPath('/panel/app/conversations?surface=cases')).toEqual({ view: 'conversations', conversationTab: 'all' });
     expect(parsePanelPath('/panel/app/unknown?view=settings#ignored')).toEqual({ view: 'dashboard' });
   });
 
@@ -69,8 +69,26 @@ describe('panel routes', () => {
   });
 
   it('resolves bookmarked cases to the unified conversations route', () => {
-    expect(pathForRoute({ view: 'conversations', conversationTab: 'cases' })).toBe('/panel/app/conversations');
-    expect(parsePanelPath('/panel/app/conversations')).toEqual({ view: 'conversations' });
+    expect(pathForRoute({ view: 'conversations', conversationTab: 'case' })).toBe('/panel/app/cases');
+    expect(pathForView('cases')).toBe('/panel/app/cases');
+    expect(pathForRoute(parsePanelPath('/panel/app/cases'))).toBe('/panel/app/cases');
+    expect(parsePanelPath('/panel/app/conversations')).toEqual({ view: 'conversations', conversationTab: 'all' });
+  });
+
+  it.each([
+    ['all', '/panel/app/conversations'],
+    ['human', '/panel/app/conversations?tab=human'],
+    ['emergency', '/panel/app/conversations?tab=emergency'],
+    ['case', '/panel/app/cases'],
+    ['closed', '/panel/app/conversations?tab=closed'],
+  ] as const)('round-trips queue tab %s', (tab, path) => {
+    const route = { view: 'conversations', conversationTab: tab } as const;
+    expect(pathForRoute(route)).toBe(path);
+    expect(parsePanelPath(path)).toEqual(route);
+  });
+
+  it.each(['', 'unknown', 'HUMAN', '%ZZ'])('defaults malformed queue tab %s to all', (tab) => {
+    expect(parsePanelPath(`/panel/app/conversations?tab=${tab}`)).toEqual({ view: 'conversations', conversationTab: 'all' });
   });
 
   it('builds and parses canonical automation rule list and detail routes', () => {
