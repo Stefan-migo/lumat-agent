@@ -3,7 +3,7 @@
 **Branch**: `odd/panel-ws-disconnect`
 **Worktree**: `../lumat-agent-odd-panel-ws-disconnect`
 **Base**: `5c5f4af2`
-**Status**: fix implemented and proven; checks green; the cancellation leak registered as its own unit
+**Status**: merged — PR #267 (`0de327d4`). Fix implemented and proven; checks green; the cancellation leak registered as its own unit.
 
 ## Objective
 
