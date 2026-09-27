@@ -3,7 +3,7 @@
 **Branch**: `odd/memory-correction-tools`
 **Worktree**: `../lumat-agent-odd-memory-correction-tools`
 **Base**: `d4b58554` (= `main` at branch time)
-**Status**: in progress
+**Status**: merged — PR #311 (`1af0574c`).
 
 ## Objective
 
