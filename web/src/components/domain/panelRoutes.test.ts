@@ -31,7 +31,7 @@ describe('panel routes', () => {
     expect(pathForView('users')).toBe('/panel/app/users');
     expect(parsePanelPath('/panel/app/users')).toEqual({ view: 'users' });
     expect(parsePanelPath('/panel/app/projects')).toEqual({ view: 'projects' });
-    expect(pathForRoute({ view: 'cases' })).toBe('/panel/app/conversations');
+    expect(pathForRoute({ view: 'cases' })).toBe('/panel/app/cases');
     expect(pathForRoute({ view: 'advanced-dashboard' })).toBe('/panel/app/advanced-dashboard');
     expect(parsePanelPath('/panel/app/advanced-dashboard')).toEqual({ view: 'advanced-dashboard' });
     expect(parsePanelPath('/panel/app/cases')).toEqual({ view: 'conversations', conversationTab: 'cases' });
@@ -69,7 +69,9 @@ describe('panel routes', () => {
   });
 
   it('resolves bookmarked cases to the unified conversations route', () => {
-    expect(pathForRoute({ view: 'conversations', conversationTab: 'cases' })).toBe('/panel/app/conversations');
+    expect(pathForRoute({ view: 'conversations', conversationTab: 'cases' })).toBe('/panel/app/cases');
+    expect(pathForView('cases')).toBe('/panel/app/cases');
+    expect(pathForRoute(parsePanelPath('/panel/app/cases'))).toBe('/panel/app/cases');
     expect(parsePanelPath('/panel/app/conversations')).toEqual({ view: 'conversations' });
   });
 

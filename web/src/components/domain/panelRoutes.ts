@@ -42,11 +42,12 @@ const panelViews = new Set<PanelView>([
 ]);
 
 export function pathForView(view: PanelView): string {
-  if (view === 'cases') return PANEL_ROUTES.conversations;
+  if (view === 'cases') return COMPATIBILITY_ROUTES.cases!;
   return PANEL_ROUTES[view as keyof typeof PANEL_ROUTES] ?? COMPATIBILITY_ROUTES[view] ?? PANEL_BASE_PATH;
 }
 
 export function pathForRoute(route: PanelRoute): string {
+  if (route.view === 'conversations' && route.conversationTab === 'cases') return COMPATIBILITY_ROUTES.cases!;
   const base = pathForView(route.view);
   if (route.view === 'clients' && route.clientId !== undefined && Number.isSafeInteger(route.clientId) && route.clientId > 0) {
     return `${base}/${route.clientId}`;
