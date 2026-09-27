@@ -3,7 +3,7 @@
 **Branch**: `odd/r3-empty-corpus-accepted`
 **Worktree**: `../lumat-agent-odd-r3-empty-corpus-accepted`
 **Base**: `0d8fed79`
-**Status**: implemented and verified; native review approved with no findings and its authority burned
+**Status**: merged — PR #260 (`f0338c1d`). Implemented and verified; native review approved with no findings and its authority burned.
 **Advisory**: `R3-empty-corpus-accepted` (WARNING) from native review `review-ba9c8a35d22602f6`, the
 sibling of the `R3-env-database-mismatch` advisory closed by PR #259.
 
