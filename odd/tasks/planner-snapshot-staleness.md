@@ -3,7 +3,7 @@
 **Branch**: `odd/planner-snapshot-staleness`
 **Worktree**: `../lumat-agent-odd-planner-snapshot-staleness`
 **Base**: `e0e109f2` (= `origin/main` at branch time)
-**Status**: in progress
+**Status**: merged — PR #289 (`b9bd8a6f`).
 **Source**: the owner asked to close three pendings after the panel memory-read fix (#287). This is the
 first, and it turns out to be the **unconsummated acceptance criterion** of a work unit that is already
 implemented: `odd/tasks/planner-failure-observability.md`, criterion 8, *"A valid plan records no failure

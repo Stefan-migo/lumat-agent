@@ -3,7 +3,7 @@
 **Branch**: `odd/planner-failure-visibility`
 **Worktree**: `../lumat-agent-odd-planner-failure-visibility`
 **Base**: `b9bd8a6f` (= `origin/main` at branch time)
-**Status**: in progress
+**Status**: merged — PR #291 (`f031721b`).
 **Source**: the third pending the owner asked to close after the panel memory-read fix (#287) and the
 planner-snapshot fix (#289). The owner chose option **A** on 2026-09-22: show the failure and do not
 answer. `planner-failure-observability` had already named this path and left it out of scope on purpose —
