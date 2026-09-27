@@ -3,7 +3,7 @@
 **Branch**: `odd/r3-deferred-warnings`
 **Worktree**: `../lumat-agent-odd-r3-deferred-warnings`
 **Base**: `959e93a4` (= `main` at branch time)
-**Status**: complete — native review approved (lineage `review-ec730c06ffe3d86e`)
+**Status**: merged — PR #313 (`28b72cf4`). Native review approved (lineage `review-ec730c06ffe3d86e`).
 
 ## Objective
 

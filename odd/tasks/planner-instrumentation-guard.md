@@ -3,7 +3,7 @@
 **Branch**: `odd/planner-instrumentation-guard`
 **Worktree**: `../lumat-agent-odd-planner-instrumentation-guard`
 **Base**: `53bbe320` (= `origin/main` at branch time)
-**Status**: implemented and verified; native review approved and its authority burned
+**Status**: merged — PR #279 (`7340bc99`). Implemented and verified; native review approved and its authority burned.
 **Source**: advisory finding `R3-001` from the native review of PR #278, handoff Engram #4582.
 
 ## Slug note

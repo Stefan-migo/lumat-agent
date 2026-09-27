@@ -3,7 +3,7 @@
 **Branch**: `odd/planner-arguments-null`
 **Worktree**: `../lumat-agent-odd-planner-arguments-null`
 **Base**: `53bbe320` (= `origin/main` at branch time)
-**Status**: implemented and verified; native review approved and its authority burned
+**Status**: merged — PR #282 (`84f231a3`). Implemented and verified; native review approved and its authority burned.
 **Source**: item 1 of handoff Engram #4582, resolved by the reproduction recorded in Engram #4587.
 
 ## Objective

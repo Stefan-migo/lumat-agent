@@ -3,7 +3,7 @@
 **Branch**: `odd/memory-write-topic-contract`
 **Worktree**: `../lumat-agent-odd-memory-write-topic-contract`
 **Base**: `0e053d44` (= `origin/main` at branch time)
-**Status**: implemented and verified; native review approved and its authority burned
+**Status**: merged — PR #286 (`515b755b`). Implemented and verified; native review approved and its authority burned.
 **Source**: the measured follow-up from the planner root-cause work (Engram #4587) and the persona work
 (Engram #4592). This is the last blocker for the owner's original scenario end to end.
 

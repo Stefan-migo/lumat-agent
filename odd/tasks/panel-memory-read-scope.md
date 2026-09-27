@@ -3,7 +3,7 @@
 **Branch**: `odd/panel-memory-read-scope`
 **Worktree**: `../lumat-agent-odd-panel-memory-read-scope`
 **Base**: `515b755b` (= `origin/main` at branch time)
-**Status**: implemented and verified end to end; native review approved and its authority burned
+**Status**: merged — PR #287 (`be84dd5a`). Implemented and verified end to end; native review approved and its authority burned.
 **Source**: Engram #4598 (`handoff/panel-memory-read-scope`), the single entry point left by the session
 that merged #279, #282, #284 and #286. This is the fifth defect of the same class.
 
