@@ -1,8 +1,8 @@
 # ODD Task: clients-crud
 
-Status: in progress — WU1, WU2 and WU3 delivered and merged; WU4 pending
-Worktree: `../lumat-agent-odd-clients-crud`
-Branch: `odd/clients-crud-wu4` (WU3 shipped on `odd/clients-crud-wu3`, merged and deleted)
+Status: complete — WU1, WU2, WU3 and WU4 delivered and merged (PRs #378, #381, #386, #387); worktree, branches and test database cleaned up
+Worktree: `../lumat-agent-odd-clients-crud` (removed after the WU4 merge)
+Branch: `odd/clients-crud-wu4` (merged `3c73ea0e`, deleted remote + local; WU3 shipped on `odd/clients-crud-wu3`, merged `93e38aef`, deleted)
 Base: `93e38aef` (main after PR #386; WU1 shipped off `7fb8cd10`, WU2 off `2a5c53dd`, WU3 off `50bce481`)
 Depends on: nothing — U3 is independent of U1/U2
 Source: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md`
@@ -339,8 +339,12 @@ before the first source commit (owner decision pending).
   the client ficha`, base `main`, label `type:feature`, branch
   `odd/clients-crud-wu4`. The branch already contained the then-current
   `origin/main` (`93e38aef`), so no bringing-level merge was required and the
-  tree tested is the tree that lands. This is the last slice of the chain: merging
-  it closes `clients-crud` 4 of 4.
+  tree tested is the tree that lands.
+- [x] **PR #387 merged** as **`3c73ea0e`** (2026-09-27). `origin/main` had not
+  moved since `93e38aef`, so the green CI attached to the exact head `27357219`
+  was **not stale** and the tree that was tested is the tree that landed. The
+  branch contained the current `main` head, so no bringing-level merge was needed
+  and none is claimed. This closes `clients-crud` **4 of 4**.
 
 ## Acceptance criteria
 
@@ -542,17 +546,58 @@ before the first source commit (owner decision pending).
       grammatical Spanish; that change is deliberate and its assertions were
       updated with it.
 
+## Closure
+
+- [x] **Unit closed 2026-09-27.** All four slices are on `main`: WU1 → PR #378
+      (`odd/clients-crud`), WU2 → PR #381 (`odd/clients-crud-wu2`), WU3 → PR #386
+      (`odd/clients-crud-wu3`, merge `93e38aef`), WU4 → PR #387
+      (`odd/clients-crud-wu4`, merge `3c73ea0e`). The `stacked-to-main` chain the
+      owner chose on 2026-09-26 shipped every slice to `main`.
+- [x] **Acceptance criteria**: met. Criteria 1–3 and 6–8 are covered by the merged
+      tests and the per-slice verification of record; 4 (archived hidden by default,
+      visible behind the toggle) and 5 (auto-unarchive on re-contact) are covered by
+      the WU1 backend tests and the WU3/WU4 UI tests. No criterion is claimed without
+      a merged test behind it.
+- [x] **Cleanup after the merge** (2026-09-27): worktree
+      `/home/stefan/repos/lumat-agent-odd-clients-crud` removed, branch
+      `odd/clients-crud-wu4` deleted (remote + local), test database
+      `lumat-test-lumat-agent-odd-clients-crud` torn down with its volume.
+
+### Residual gaps and follow-ups (recorded, not silently dropped)
+
+- **Verification records are per-slice and unequal.** WU1 carries a native review
+  receipt (lineage `review-252398aaefabd88a`, high risk, four lenses, zero findings,
+  authority burned). WU2, WU3 and WU4 were each measured `under_budget` (medium,
+  ~300 changed lines) so **no review transaction ran and no receipt exists** for
+  them; their evidence is the full-suite re-run plus the orchestrator's diff
+  readback, not a native PASS. No PASS is authored for them here.
+- **Docs commits after each assessment are uncovered.** The commits that record a
+  PR number, a review assessment or a readback fix land after the assessed
+  candidate and are covered by no receipt and no claim.
+- **D2 ceiling**: the assistant cannot find an archived record — an operator asking
+  about one gets "not found". The fix, if it ever matters, is a tool-schema
+  parameter, not a change to the filter.
+- **D4 ceiling**: a profile field cannot be **cleared** through the API —
+  `update_captured_data` treats `None` as "do not touch" and the bot's capture node
+  depends on that meaning. An empty string is a `400`, not a silent ignore.
+- **D9 ceiling**: no index on `archived_at`; revisit with
+  `(archived_at, created_at DESC)` if `customers` grows past tens of thousands.
+- **Backend flake (unrelated to this unit)**: an intermittent full-suite hang in
+  `tests/integration/test_agent_chat_realtime.py::test_internal_chat_uses_sse_preview_instead_of_realtime_tokens`
+  (pytest-timeout, 120s). Not deterministic; passes in isolation. WU4 touches no
+  Python file; recorded as its own discovery.
+- **Out of scope by design**: U4 `cases-page` (needs the Q1 placement decision) and
+  U5 `agenda-redesign` are separate units, untouched here.
+
 ## Recovery
 
-- Worktree: `/home/stefan/repos/lumat-agent-odd-clients-crud`,
-  branch `odd/clients-crud-wu4` (WU3 shipped and merged as `93e38aef`; WU4 is the
-  fourth and last slice of the chain), base `93e38aef`.
-- Test DB: `bash infra/test-db.sh up|down|env`, project
-  `lumat-test-lumat-agent-odd-clients-crud`, port `5702`.
-- `graphify-out/` is gitignored and absent from this worktree: query the graph
-  from `/home/stefan/repos/lumat-agent`. Refresh once at session close.
-- On resume: read this file and reconcile the checkbox state against `git log`
-  before continuing.
+- **Nothing to resume.** The unit is closed: all four slices are merged to `main`
+  and the worktree, its branches and its test database were removed on 2026-09-27.
+- Test DB (historical): `bash infra/test-db.sh up|down|env`, project
+  `lumat-test-lumat-agent-odd-clients-crud`, port `5702` — torn down at close.
+- `graphify-out/` is gitignored: query the graph from `/home/stefan/repos/lumat-agent`.
+  The graph was refreshed once at session close, per the Rapsodia policy.
+- This file is the record of the unit; nothing in it is a pending task.
 - Session of record:
   `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/`.
 - Handoff of record: Engram **#5135**
