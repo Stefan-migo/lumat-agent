@@ -92,4 +92,12 @@ describe('production conversations list', () => {
     await user.click(screen.getByRole('button', { name: /reconocer/i }));
     expect(onRetry).toHaveBeenCalledTimes(2);
   });
+
+  it('posts emergency acknowledgement to the case acknowledgement route', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const emergency = row(8, 'bot', null, { emergency: true, case_id: 44, acknowledged_at: null });
+    render(<ConversationsList data={queue([emergency])} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: /reconocer/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/cases/44/ack', expect.anything()));
+  });
 });
