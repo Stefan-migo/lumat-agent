@@ -75,6 +75,11 @@ export function ClientFichaDenied() {
   return <ClientFicha data={ficha} memories={memories} state="denied" />;
 }
 
+/** Archived customer with the restore action available. Exported for tests. */
+export function ArchivedClientFicha() {
+  return <ClientFicha data={{ ...ficha, customer: { ...customer, archived_at: "2026-09-01T12:00:00Z" } }} memories={memories} />;
+}
+
 const meta = {
   title: "pages/ClientFicha",
   parameters: {
@@ -87,7 +92,7 @@ const meta = {
       },
     },
   },
-  excludeStories: ["ClientFichaView", "NoMemo", "ClientFichaCalendarFailure", "ClientFichaLoading", "ClientFichaError", "ClientFichaDenied", "UnansweredEmergency"],
+  excludeStories: ["ClientFichaView", "NoMemo", "ClientFichaCalendarFailure", "ClientFichaLoading", "ClientFichaError", "ClientFichaDenied", "UnansweredEmergency", "ArchivedClientFicha"],
 } satisfies Meta;
 
 export default meta;
@@ -100,3 +105,4 @@ export const CalendarSyncFailure: Story = { render: () => <ClientFichaCalendarFa
 export const Loading: Story = { render: () => <ClientFichaLoading /> };
 export const ErrorState: Story = { render: () => <ClientFichaError /> };
 export const Denied: Story = { render: () => <ClientFichaDenied /> };
+export const Archived: Story = { render: () => <ArchivedClientFicha /> };

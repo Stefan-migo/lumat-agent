@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, archiveCustomer, unarchiveCustomer } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -91,6 +91,12 @@ describe('client API contracts', () => {
     expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/panel/api/clients/4', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ name: 'Ana' }) }));
     expect(globalThis.fetch).toHaveBeenNthCalledWith(3, '/panel/api/clients/4/archive', expect.objectContaining({ method: 'POST' }));
     expect(globalThis.fetch).toHaveBeenNthCalledWith(4, '/panel/api/clients/4/unarchive', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('posts consent updates to the customer consent route', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ customer: {} }), { status: 200 }));
+    await updateCustomerConsent(4, true);
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/clients/4/consent', expect.objectContaining({ method: 'POST', body: JSON.stringify({ consent: true }) }));
   });
 });
 

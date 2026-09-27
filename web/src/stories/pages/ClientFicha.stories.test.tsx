@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ClientFicha } from "../../components/pages/ClientFicha";
-import { ClientFichaView, NoMemo, ClientFichaCalendarFailure, ClientFichaLoading, ClientFichaError, ClientFichaDenied, UnansweredEmergency } from "./ClientFicha.stories";
+import { ClientFichaView, NoMemo, ClientFichaCalendarFailure, ClientFichaLoading, ClientFichaError, ClientFichaDenied, UnansweredEmergency, ArchivedClientFicha } from "./ClientFicha.stories";
 import { clients } from "./_shared/mockData/clients";
 import type { ClientFichaResponse } from "../../types";
 
@@ -109,6 +109,12 @@ describe("ClientFicha page", () => {
 });
 
 describe("ClientFicha state matrix stories", () => {
+  it("renders archived customers with an available restore action", () => {
+    render(<ArchivedClientFicha />);
+    expect(screen.getByText("Cliente archivado")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Restaurar" })).toBeInTheDocument();
+  });
+
   it("renders the calendar-sync failure with its retry control", () => {
     render(<ClientFichaCalendarFailure />);
 

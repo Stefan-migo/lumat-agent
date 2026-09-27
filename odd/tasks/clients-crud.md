@@ -1,9 +1,9 @@
 # ODD Task: clients-crud
 
-Status: in progress
+Status: in progress — WU1, WU2 and WU3 delivered and merged; WU4 pending
 Worktree: `../lumat-agent-odd-clients-crud`
-Branch: `odd/clients-crud-wu3`
-Base: `1fdddcee` (main after WU2; this worktree started at `50bce481`, current `origin/main`)
+Branch: `odd/clients-crud-wu4` (WU3 shipped on `odd/clients-crud-wu3`, merged and deleted)
+Base: `93e38aef` (main after PR #386; WU1 shipped off `7fb8cd10`, WU2 off `2a5c53dd`, WU3 off `50bce481`)
 Depends on: nothing — U3 is independent of U1/U2
 Source: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md`
 Delivery strategy: `ask-on-risk`
@@ -299,18 +299,48 @@ before the first source commit (owner decision pending).
       run was required, not optional. The bringing-level merge commit is covered
       by no review receipt and none is claimed.
 
+- [x] **PR #386 merged** as **`93e38aef`** (2026-09-26). The branch
+      `odd/clients-crud-wu3` was deleted (remote + local) and the worktree
+      reparked on `odd/clients-crud-wu4` off the merged `main`. Two
+      bring-level merges were required before the merge landed: `origin/main`
+      moved to `f5a6d68d` and then to `9eb48d8b` while this slice was in flight,
+      so the first green check was discarded as stale (it ran over a tree that
+      was not going to land) and a fresh CI run was produced over the real
+      `9eb48d8b`-merged tree. Both jobs (`test`, `panel`) and GitGuardian passed
+      on `173ad2f2`, the exact head that was merged. The bring-level merge
+      commits are covered by no review receipt and none is claimed.
+
 ### WU4 — frontend: ficha profile, consent and archive
 
-- [ ] **T8 (fe)** — RED first in `ClientFicha`: the "Identidad" card gets a
+- [x] **T8 (fe)** — RED first in `ClientFicha`: the "Identidad" card gets a
   profile edit form in a `Dialog` (phone shown read-only); a consent control posts
   to `/clients/{id}/consent` and refetches; an "Archivar" / "Restaurar" control
   confirms with the D7 warning (open cases + future appointments) and refetches
   the ficha. Stories updated for the new states.
-- [ ] **WU4 verification of record** — `cd web && npm run test` +
-  `npx tsc -b --noEmit` + `npm run build`.
-- [ ] **Review measurement** — `gentle-ai review assess` over
-  `base-ref..HEAD --committed-only` before declaring the unit closed; a docs-only
-  commit can cross the budget on its own (handoff trap 10).
+- [x] **WU4 verification of record** — `cd web && npm run test` → **91 files / 820
+  tests passed**, exit 0; `cd web && npx tsc -b --noEmit` → exit 0;
+  `cd web && npm run build` → exit 0 (Vite production build; existing >500 kB
+  chunk advisory).
+- [x] **Review measurement** — `gentle-ai review assess --cwd . --agent opencode
+  --base-ref 93e38aef --committed-only --json` reports `risk: medium` (reason
+  `executable_change` on `web/src/api.test.ts`), `changed_paths: 7`,
+  `changed_lines: 304`, `review_due: false`, `review_due_reason: under_budget`.
+  Native RAR owns verification applicability, so **no review transaction was
+  started and no receipt exists** for this slice either — the same outcome as
+  WU2 and WU3. No PASS is authored here.
+- [x] **WU4 backend suite, and an honest flake record** — `uv run pytest tests/`
+  hung and failed on the first run with a 120s timeout in
+  `tests/integration/test_agent_chat_realtime.py::test_internal_chat_uses_sse_preview_instead_of_realtime_tokens`
+  (an assistant SSE test, unrelated to this branch, which touches no Python
+  file). That test passes in isolation (**4 passed in 1.77s**) and the complete
+  suite then passed on a re-run: **1533 passed**, 2 warnings, exit 0. Recorded as
+  an **intermittent hang under the full suite**, not a deterministic failure.
+- [x] **PR #387 opened** — `feat(clients): edit profile, consent and archive from
+  the client ficha`, base `main`, label `type:feature`, branch
+  `odd/clients-crud-wu4`. The branch already contained the then-current
+  `origin/main` (`93e38aef`), so no bringing-level merge was required and the
+  tree tested is the tree that lands. This is the last slice of the chain: merging
+  it closes `clients-crud` 4 of 4.
 
 ## Acceptance criteria
 
@@ -457,11 +487,66 @@ before the first source commit (owner decision pending).
       `role="alert"` line rendered when no dialog is open. WU3 re-verification
       after the fix: `cd web && npm run test` → **91 files / 807 tests passed**,
       exit 0; `npx tsc -b --noEmit` → exit 0; `npm run build` → exit 0.
+- [x] **WU4 Graph Check record** — completed by the orchestrator before this
+      implementation; no graph refresh was run. Nodes/communities consulted:
+      `ClientFicha.test.tsx`, `ficha` (story fixture), `ConsentBody`
+      (`app/panel/api/routes/clients.py:69`), `client_profile_update()` (`:161`),
+      `to_customer_dict()` (`app/panel/api/serializers.py:45`), `record_audit()`
+      (`app/services/audit.py:18`), `clients.py`, and community `types.ts`.
+- [x] **WU4 implemented** on `odd/clients-crud-wu4`. The consent helper and
+      contract test are in `8542b92b` (9 changed lines, 2 files); ficha controls,
+      tests, and stories are in `14c70165` (191 changed lines, 4 files); safe
+      Spanish error labels are in `07e17858` (5 changed lines, 1 file): **205
+      authored changed lines** total. Profile edits submit changed fields only,
+      reject blank changed values locally, and keep phone read-only; consent and
+      archive/restore refetch; D7 counts use loaded open cases and future booked
+      appointments. The archived state and restore action are visible on the ficha.
+- [x] **WU4 strict-TDD evidence** — before production edits,
+      `npm run test -- src/components/pages/ClientFicha.test.tsx` observed **5
+      failed / 22 passed**. REDs: `edits profile fields in a dialog without
+      allowing phone changes` — no accessible `Editar identidad` button;
+      `shows a local message rather than silently dropping a blank changed field`
+      — no accessible `Editar identidad` button; `updates consent and surfaces
+      failures beside its control` — no accessible `Cambiar consentimiento`
+      button; `warns with loaded open-case and future-appointment counts before
+      archiving` — no accessible `Archivar` button; `shows archived state and
+      offers restore with visible failure feedback` — `Cliente archivado` text
+      absent. After implementation, focused API/ficha/story tests passed (**3
+      files / 55 tests**), then full frontend verification passed (**91 files /
+      820 tests**). No RED evidence is claimed for the API helper test, which was
+      added after the initial component RED run.
+- [x] **WU4 Ponytail pass** — reused the existing `Dialog`, `Input`, `Button`,
+      `Badge`, and `LocalFeedback` primitives/conventions; added no dependencies,
+      component abstractions, or bespoke controls. No authorized behavior was
+      removed; no further same-behavior simplification was identified.
+- [x] **WU4 readback fix** — the orchestrator's diff readback found two defects
+      and closed them under strict TDD in `7ada1bec`
+      (`fix(clients): render ficha mutation errors once and with the right
+      label`): (1) `safeError`'s generic fallback still interpolated the raw
+      action token (`No pudimos guardar consentimiento`), because `07e17858`
+      localised only the 401/403 and 400/422 branches and left the third — the
+      new actions inherited it, and three tests had the broken string baked in as
+      their expectation; (2) `profileFeedback` and `archiveFeedback` rendered
+      twice at once (in the card and inside the open `Dialog`), so a single
+      failure produced two messages. Fix: the generic fallback now uses the
+      localised label, and the card surface is suppressed while its dialog owns
+      it. RED first: `shows an archive failure once, with a readable label`
+      failed to find the heading, and the corrected expectations for
+      `updates consent and surfaces failures beside its control`,
+      `shows local feedback when a case update fails` and
+      `shows safe mutation errors and disables controls while saving` failed
+      against the old strings. Re-verification after the fix: `cd web && npm run
+      test` → **91 files / 821 tests passed**, exit 0; `npx tsc -b --noEmit` →
+      exit 0; `npm run build` → exit 0. This also corrects two pre-existing
+      user-facing strings (`No pudimos guardar caso` / `…estado`) that were not
+      grammatical Spanish; that change is deliberate and its assertions were
+      updated with it.
 
 ## Recovery
 
 - Worktree: `/home/stefan/repos/lumat-agent-odd-clients-crud`,
-  branch `odd/clients-crud-wu3`, base `1fdddcee` (started at `50bce481`).
+  branch `odd/clients-crud-wu4` (WU3 shipped and merged as `93e38aef`; WU4 is the
+  fourth and last slice of the chain), base `93e38aef`.
 - Test DB: `bash infra/test-db.sh up|down|env`, project
   `lumat-test-lumat-agent-odd-clients-crud`, port `5702`.
 - `graphify-out/` is gitignored and absent from this worktree: query the graph

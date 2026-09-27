@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApiError, apiFetch, addClientNote, changeClientState, postJson, resolveMemoryRelation } from "../../api";
+import { ApiError, apiFetch, addClientNote, changeClientState, postJson, resolveMemoryRelation, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer } from "../../api";
 import { ClientFicha } from "./ClientFicha";
 import type { ClientFichaResponse, Memory } from "../../types";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn() };
 });
 
 const ficha: ClientFichaResponse = {
@@ -116,7 +116,7 @@ describe("ClientFicha page grammar", () => {
     vi.mocked(postJson).mockRejectedValue(new ApiError(500, "private error"));
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
     await user.click(screen.getByRole("button", { name: "Actualizar" }));
-    expect(await screen.findByRole("heading", { name: "No pudimos guardar caso" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "No pudimos guardar el caso" })).toBeInTheDocument();
   });
 
   it("posts state changes and notes, then refreshes ficha and memories", async () => {
@@ -184,7 +184,7 @@ describe("ClientFicha page grammar", () => {
     expect(save).toBeDisabled();
     reject(new ApiError(500, "database password leaked"));
 
-    expect(await screen.findByRole("heading", { name: "No pudimos guardar estado" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "No pudimos guardar el estado" })).toBeInTheDocument();
     expect(screen.getByRole("alert")).not.toHaveTextContent("database password leaked");
   });
 
@@ -199,6 +199,83 @@ describe("ClientFicha page grammar", () => {
   });
 });
 
+describe("ClientFicha customer controls", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("edits profile fields in a dialog without allowing phone changes", async () => {
+    const user = userEvent.setup();
+    vi.mocked(updateCustomerProfile).mockResolvedValue({ customer: ficha.customer });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("button", { name: "Editar identidad" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByLabelText("Teléfono")).toHaveAttribute("readonly");
+    await user.clear(within(dialog).getByLabelText("Nombre"));
+    await user.type(within(dialog).getByLabelText("Nombre"), "Marcela Rojas");
+    await user.click(within(dialog).getByRole("button", { name: "Guardar cambios" }));
+
+    expect(updateCustomerProfile).toHaveBeenCalledWith(7, { name: "Marcela Rojas" });
+    expect(await screen.findByRole("heading", { name: "Identidad guardada" })).toBeInTheDocument();
+  });
+
+  it("shows a local message rather than silently dropping a blank changed field", async () => {
+    const user = userEvent.setup();
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+    await user.click(screen.getByRole("button", { name: "Editar identidad" }));
+    const dialog = screen.getByRole("dialog");
+    await user.clear(within(dialog).getByLabelText("Nombre"));
+    await user.click(within(dialog).getByRole("button", { name: "Guardar cambios" }));
+    expect(updateCustomerProfile).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("No puedes dejar vacío un campo editado");
+  });
+
+  it("updates consent and surfaces failures beside its control", async () => {
+    const user = userEvent.setup();
+    vi.mocked(updateCustomerConsent).mockRejectedValue(new ApiError(500, "private"));
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+    await user.click(screen.getByRole("button", { name: "Cambiar consentimiento" }));
+    expect(updateCustomerConsent).toHaveBeenCalledWith(7, false);
+    expect(await screen.findByRole("heading", { name: "No pudimos guardar el consentimiento" })).toBeInTheDocument();
+  });
+
+  it("warns with loaded open-case and future-appointment counts before archiving", async () => {
+    const user = userEvent.setup();
+    const futureStart = new Date(Date.now() + 86_400_000).toISOString();
+    const futureAppointment = { id: 44, service: "Reparación", customer_id: 7, case_id: 2, technician_id: 3, local_start: futureStart, timezone: "UTC", starts_at: futureStart, ends_at: futureStart, duration_minutes: 60, status: "booked" };
+    vi.mocked(archiveCustomer).mockResolvedValue({ customer: ficha.customer });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={{ ...ficha, history: { ...ficha.history, appointments: [futureAppointment] } }} memories={memories} />);
+    await user.click(screen.getByRole("button", { name: "Archivar" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("1 caso abierto");
+    expect(dialog).toHaveTextContent("1 visita futura");
+    await user.click(within(dialog).getByRole("button", { name: "Confirmar archivo" }));
+    expect(archiveCustomer).toHaveBeenCalledWith(7);
+    expect(await screen.findByRole("heading", { name: "Cliente archivado" })).toBeInTheDocument();
+  });
+
+  it("shows an archive failure once, with a readable label", async () => {
+    const user = userEvent.setup();
+    vi.mocked(archiveCustomer).mockRejectedValue(new ApiError(500, "private"));
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+    await user.click(screen.getByRole("button", { name: "Archivar" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirmar archivo" }));
+    expect(await screen.findAllByRole("heading", { name: "No pudimos guardar el archivo" })).toHaveLength(1);
+  });
+
+  it("shows archived state and offers restore with visible failure feedback", async () => {
+    const user = userEvent.setup();
+    vi.mocked(unarchiveCustomer).mockRejectedValue(new ApiError(500, "private"));
+    render(<ClientFicha customerId={7} data={{ ...ficha, customer: { ...ficha.customer, archived_at: "2026-09-01T00:00:00Z" } }} memories={memories} />);
+    expect(screen.getByText("Cliente archivado")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Restaurar" }));
+    expect(unarchiveCustomer).toHaveBeenCalledWith(7);
+    expect(await screen.findByRole("heading", { name: "No pudimos guardar el archivo" })).toBeInTheDocument();
+  });
+});
+
 describe("ClientFicha slice 2 — product register", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.restoreAllMocks());
@@ -209,7 +286,7 @@ describe("ClientFicha slice 2 — product register", () => {
 
     expect(container.querySelector("select")).toHaveClass("field__control");
     expect(container.querySelector("textarea")).toHaveClass("field__control");
-    expect(container.querySelectorAll("button:not(.btn)")).toHaveLength(0);
+    expect(container.querySelectorAll("button:not(.btn):not(.dialog__close)")).toHaveLength(0);
   });
 
   // T11 — no raw backend identifier on the surface.
@@ -224,11 +301,11 @@ describe("ClientFicha slice 2 — product register", () => {
     render(<ClientFicha data={ficha} memories={memories} />);
 
     const summary = screen.getByRole("region", { name: "Resumen del cliente" });
-    expect(within(summary).getByText("Teléfono")).toBeInTheDocument();
+    expect(within(summary).getByText("Teléfono", { selector: "dt" })).toBeInTheDocument();
     expect(within(summary).getByText("+56912345678")).toBeInTheDocument();
-    expect(within(summary).getByText("Comuna")).toBeInTheDocument();
+    expect(within(summary).getByText("Comuna", { selector: "dt" })).toBeInTheDocument();
     expect(within(summary).getByText("Ñuñoa")).toBeInTheDocument();
-    expect(within(summary).getByText("Consentimiento")).toBeInTheDocument();
+    expect(within(summary).getByText("Consentimiento", { selector: "dt" })).toBeInTheDocument();
   });
 
   // T13 — feedback at the locus of the action.

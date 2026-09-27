@@ -1,12 +1,14 @@
-import { useCallback, useState } from "react";
-import { addClientNote, ApiError, apiFetch, changeClientState, postJson, resolveMemoryRelation } from "../../api";
+import { useCallback, useState, type FormEvent } from "react";
+import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, postJson, resolveMemoryRelation, unarchiveCustomer, updateCustomerConsent, updateCustomerProfile } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { Appointment, ClientFichaResponse, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
+import type { Appointment, ClientFichaResponse, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
 import { pathForRoute } from "../domain/panelRoutes";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
+import { Dialog } from "../primitives/Dialog";
+import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
 import { DataTable, type Column } from "../shared/DataTable";
@@ -78,6 +80,13 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [stateFeedback, setStateFeedback] = useState<Feedback | null>(null);
   const [noteFeedback, setNoteFeedback] = useState<Feedback | null>(null);
   const [caseFeedback, setCaseFeedback] = useState<Feedback | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [profile, setProfile] = useState({ name: "", email: "", comuna: "", address: "" });
+  const [profileFeedback, setProfileFeedback] = useState<Feedback | null>(null);
+  const [consentFeedback, setConsentFeedback] = useState<Feedback | null>(null);
+  const [archiveFeedback, setArchiveFeedback] = useState<Feedback | null>(null);
+  const [customerMutation, setCustomerMutation] = useState<"profile" | "consent" | "archive" | null>(null);
   const fetchFicha = useCallback(async () => {
     if (customerId === undefined) throw new Error("customer id is required");
     const [ficha, memoryResponse, pendingResponse] = await Promise.all([
@@ -101,6 +110,8 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const activeCase = history.cases.filter((row) => row.is_open).at(-1) ?? null;
   const archivedCases = history.cases.filter((row) => row.id !== activeCase?.id);
   const appointments = history.appointments ?? [];
+  const openCaseCount = history.cases.filter((row) => row.is_open).length;
+  const futureAppointmentCount = appointments.filter((appointment) => appointment.status === "booked" && new Date(appointment.starts_at).getTime() > Date.now()).length;
   const retryCalendar = async (appointmentId: number) => {
     setRetryingCalendarId(appointmentId);
     try {
@@ -115,10 +126,11 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     const next = await fetchFicha();
     setRefreshed(next);
   };
-  const safeError = (error: unknown, action: "estado" | "nota" | "caso") => {
-    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return { title: `No tienes permiso para guardar ${action}` };
-    if (error instanceof ApiError && (error.status === 400 || error.status === 422)) return { title: `Revisa el ${action} e inténtalo de nuevo` };
-    return { title: `No pudimos guardar ${action}`, detail: "Inténtalo nuevamente." };
+  const safeError = (error: unknown, action: "estado" | "nota" | "caso" | "identidad" | "consentimiento" | "archivo") => {
+    const labels = { estado: "el estado", nota: "la nota", caso: "el caso", identidad: "la identidad", consentimiento: "el consentimiento", archivo: "el archivo" };
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return { title: `No tienes permiso para guardar ${labels[action]}` };
+    if (error instanceof ApiError && (error.status === 400 || error.status === 422)) return { title: `Revisa ${labels[action]} e inténtalo de nuevo` };
+    return { title: `No pudimos guardar ${labels[action]}`, detail: "Inténtalo nuevamente." };
   };
   const updateCase = async (caseId: number, status: string, responsibleId: number | null) => {
     setCaseFeedback(null);
@@ -146,6 +158,56 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     try { await addClientNote(customerId, note.trim()); await refresh(); setNote(""); setNoteFeedback({ tone: "success", title: "Nota agregada" }); }
     catch (error) { setNoteFeedback({ tone: "danger", ...safeError(error, "nota") }); }
     finally { setMutation(null); }
+  };
+  const openProfile = () => {
+    setProfile({ name: customer.name ?? "", email: customer.email ?? "", comuna: customer.comuna ?? "", address: customer.address ?? "" });
+    setProfileFeedback(null);
+    setProfileOpen(true);
+  };
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (customerId === undefined || customerMutation) return;
+    setProfileFeedback(null);
+    const fields = ["name", "email", "comuna", "address"] as const;
+    const changed = fields.filter((field) => profile[field].trim() !== (customer[field] ?? ""));
+    if (changed.some((field) => !profile[field].trim())) {
+      setProfileFeedback({ tone: "danger", title: "No puedes dejar vacío un campo editado", detail: "El panel no permite borrar estos datos." });
+      return;
+    }
+    const body = Object.fromEntries(changed.map((field) => [field, profile[field].trim()])) as CustomerProfileUpdateRequest;
+    if (!changed.length) { setProfileOpen(false); return; }
+    setCustomerMutation("profile");
+    try {
+      await updateCustomerProfile(customerId, body);
+      await refresh();
+      setProfileOpen(false);
+      setProfileFeedback({ tone: "success", title: "Identidad guardada" });
+    } catch (error) { setProfileFeedback({ tone: "danger", ...safeError(error, "identidad") }); }
+    finally { setCustomerMutation(null); }
+  };
+  const saveConsent = async () => {
+    if (customerId === undefined || customerMutation) return;
+    setConsentFeedback(null);
+    setCustomerMutation("consent");
+    try {
+      await updateCustomerConsent(customerId, !customer.consent_status);
+      await refresh();
+      setConsentFeedback({ tone: "success", title: "Consentimiento actualizado" });
+    } catch (error) { setConsentFeedback({ tone: "danger", ...safeError(error, "consentimiento") }); }
+    finally { setCustomerMutation(null); }
+  };
+  const saveArchive = async () => {
+    if (customerId === undefined || customerMutation) return;
+    setArchiveFeedback(null);
+    setCustomerMutation("archive");
+    try {
+      if (customer.archived_at) await unarchiveCustomer(customerId);
+      else await archiveCustomer(customerId);
+      await refresh();
+      setArchiveOpen(false);
+      setArchiveFeedback({ tone: "success", title: customer.archived_at ? "Cliente restaurado" : "Cliente archivado" });
+    } catch (error) { setArchiveFeedback({ tone: "danger", ...safeError(error, "archivo") }); }
+    finally { setCustomerMutation(null); }
   };
   const resolveRelation = async (relationId: number, relation: MemoryRelationKind) => {
     if (customerId === undefined) return;
@@ -185,6 +247,16 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
       <div className="detail-region">
         <section className="detail-region__rail" aria-label="Resumen del cliente">
           <Card title="Identidad">
+            <div className="client-ficha__customer-controls">
+              {customer.archived_at ? <Badge tone="warning">Cliente archivado</Badge> : null}
+              <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={openProfile}>Editar identidad</Button>
+              <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={() => { setConsentFeedback(null); void saveConsent(); }}>Cambiar consentimiento</Button>
+              <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={() => customer.archived_at ? void saveArchive() : setArchiveOpen(true)}>{customer.archived_at ? "Restaurar" : "Archivar"}</Button>
+              <LocalFeedback feedback={consentFeedback} />
+              {/* The dialog owns the surface while it is open, so the same failure never renders twice. */}
+              {profileOpen ? null : <LocalFeedback feedback={profileFeedback} />}
+              {archiveOpen ? null : <LocalFeedback feedback={archiveFeedback} />}
+            </div>
             <dl className="detail-region__facts">
               <div><dt>Teléfono</dt><dd>{customer.phone_e164 ?? "—"}</dd></div>
               <div><dt>Correo</dt><dd>{customer.email ?? "—"}</dd></div>
@@ -195,6 +267,24 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             </dl>
             <div><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div>
           </Card>
+
+          <Dialog open={profileOpen} onClose={() => setProfileOpen(false)} title="Editar identidad">
+            <form onSubmit={(event) => void saveProfile(event)}>
+              <Input label="Nombre" value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} />
+              <Input label="Correo" type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
+              <Input label="Comuna" value={profile.comuna} onChange={(event) => setProfile({ ...profile, comuna: event.target.value })} />
+              <Input label="Dirección" value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} />
+              <Input label="Teléfono" value={customer.phone_e164 ?? "—"} readOnly />
+              <LocalFeedback feedback={profileFeedback} />
+              <Button type="submit" disabled={customerMutation !== null}>{customerMutation === "profile" ? "Guardando…" : "Guardar cambios"}</Button>
+            </form>
+          </Dialog>
+          <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} title="Archivar cliente">
+            <p>Vas a archivar a {customer.name ?? customer.phone_e164 ?? "este cliente"}.</p>
+            <p>Tiene {openCaseCount} {openCaseCount === 1 ? "caso abierto" : "casos abiertos"} y {futureAppointmentCount} {futureAppointmentCount === 1 ? "visita futura" : "visitas futuras"}. Puedes continuar; estos trabajos seguirán registrados.</p>
+            <LocalFeedback feedback={archiveFeedback} />
+            <Button disabled={customerMutation !== null} onClick={() => void saveArchive()}>{customerMutation === "archive" ? "Guardando…" : "Confirmar archivo"}</Button>
+          </Dialog>
 
           <Card title="Estado">
             <div className="client-ficha__state-control">
