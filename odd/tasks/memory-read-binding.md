@@ -3,7 +3,7 @@
 **Work unit:** #7 of the Tukulpan/Engram series (reported defect carried over from WU#4)
 **Source:** `odd/tasks/memory-axes.md` → "Explicitly out of scope" → *"a `panel` read may target `thread:{any id}` … gets its own work unit"*
 **Worktree:** `../lumat-agent-odd-memory-read-binding` · branch `odd/memory-read-binding` · base `5a7297c3`
-**Status:** complete, verified, RDD-approved (lineage `review-0c539927b0989fcd`, authority burned)
+**Status**: merged — PR #243 (`b38e33bd`). Complete, verified, RDD-approved (lineage `review-0c539927b0989fcd`, authority burned).
 
 ---
 

@@ -3,7 +3,7 @@
 **Branch**: `odd/memory-write-conflict`
 **Worktree**: `../lumat-agent-odd-memory-write-conflict`
 **Base**: `481f9cd9`
-**Status**: completed
+**Status**: merged — PR #258 (`0b9f3c2e`).
 
 ## Objective
 

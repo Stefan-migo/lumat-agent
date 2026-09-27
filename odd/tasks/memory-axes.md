@@ -3,7 +3,7 @@
 **Work unit:** #4 of the Tukulpan/Engram series (decisions D2 / D2a)
 **Source session:** `.rapsodia-code/sessions/ready-for-odd/2026-09-17-memoria-tukulpan-vs-engram/report.md`
 **Worktree:** `../lumat-agent-odd-memory-axes` · branch `odd/memory-axes` · base `745cf0b4`
-**Status:** complete, verified, RDD-approved (lineage `review-970417edde559528`, authority burned)
+**Status**: merged — PR #242 (`5a7297c3`). Complete, verified, RDD-approved (lineage `review-970417edde559528`, authority burned).
 
 ---
 
