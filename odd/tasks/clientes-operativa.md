@@ -1,9 +1,9 @@
 # ODD Task: clientes-operativa
 
-Status: in progress — WU1 merged to `main` (PR #401 → `c2163ff6`). D1 decided: option A. Next: WU2 (equipment). WU3/WU4 still blocked on D2-D4.
-Worktree: `../lumat-agent-odd-clientes-operativa`
-Branch: `odd/clientes-operativa`
-Base: `c4ad6fe2` (main, 2026-09-28)
+Status: in progress — WU1 merged to `main` (PR #401 → `c2163ff6`). D1 decided: option A. D5 resolved: promotion shape. **WU2 (equipment) in progress.** WU3/WU4 still blocked on D2-D4.
+Worktree: `../lumat-agent-odd-clientes-operativa` (one worktree, one branch per work unit)
+Branch: `odd/clientes-operativa-wu2`
+Base: `c2163ff6` (main, 2026-09-28; merge of WU1)
 Depends on: nothing
 Source: scope comparison `.rapsodia-code/sessions/archived/2026-08-07-reunion-cierre/propuesta-final-lumatagent.md` vs the owner's own-investment decision of 2026-09-28
 Delivery strategy: `ask-on-risk`
@@ -87,6 +87,7 @@ PR #400) scoped assistant memory and project namespaces (`db/migrations/034_proj
 | D2 | **Amount semantics**: what the field means (quoted value? invoiced value?) and its currency | WU3 | Nullable numeric, currency CLP (Lumat is Chilean), meaning "value of the service for this case". Flag if it should be USD or carry both. |
 | D3 | **Merge rules**: which record survives (oldest? richest? most activity?) and what happens to conflicting scalar fields | WU4 | Survivor = the record with more activity; empty survivor fields filled from the loser; conflicting non-empty fields prefer the survivor and are recorded in the audit row. |
 | D4 | **Merge in or out of this unit** | WU4 sequencing | **Out — its own unit.** Four FK reassignments plus memory re-keying is not the same size as the other three, and a failure corrupts customer history. |
+| D5 | **Equipment promotion shape** — **DECIDED 2026-09-28: promote the captured text verbatim** | WU2 | The capture asks one open question and stores a single `equipment` string (`capture.py:30`). Parsing it into marca/modelo/antigüedad would invent data. Chosen: the row keeps the verbatim answer in `details`, `equipment_type` is pre-filled from the capture intent when it names an appliance (calefont/caldera/calefaccion), and marca/modelo/antigüedad are operator-editable in the ficha. Rejected: restructuring the capture into per-field questions — it changes customer-facing behaviour and its tests, out of proportion to WU2. |
 
 WU1 is unblocked and needs none of these.
 
@@ -114,9 +115,13 @@ Queried from the principal worktree (`graphify-out/2026-09-28/`).
 | T1.1 | WU1 | RED: the client list renders a stage control and changing it calls `changeClientState` and refreshes the row | delegated (writer) |
 | T1.2 | WU1 | GREEN: implement the row control reusing `Dialog` + `Select` and the existing endpoint | delegated (writer, same unit as T1.1) |
 | T1.3 | WU1 | Verification: `npm test` (web) and `npm run build` (`tsc -b`) green | delegated per-action |
-| T2.1 | WU2 | Schema + migration `035` for the chosen equipment shape (D1) | blocked on D1 |
-| T2.2 | WU2 | Capture path promotes the free-text equipment answer into structured rows | blocked on D1 |
-| T2.3 | WU2 | Ficha renders and edits equipment; API serializer + endpoint | blocked on D1 |
+| T2.1 | WU2 | Migration `035`: `customer_equipment` table — FK `customer_id` NOT NULL and indexed, nullable `equipment_type`/`brand`/`model`/`age`/`details`, partial unique `source_conversation_id` (promotion idempotency), timestamps, grants | delegated (writer, backend) |
+| T2.2 | WU2 | `CustomerEquipment` model beside `Customer`/`CustomerNote` | delegated (same writer) |
+| T2.3 | WU2 | Service: list/create/update/delete a customer's equipment, audited with `record_audit` (the `set_customer_state` pattern) | delegated (same writer) |
+| T2.4 | WU2 | Promotion: on the consent turn, upsert the captured equipment into a row keyed by `source_conversation_id`; `equipment_type` pre-filled from the capture intent when it names an appliance | delegated (same writer) |
+| T2.5 | WU2 | API under the customer: list/create/update/delete with `require_operator_json`, response shape mirroring `clients.py` | delegated (same writer) |
+| T2.6 | WU2 | Ficha equipment section — view, add, edit — reusing `Dialog` + `Input`/`Select` | delegated (writer, frontend) |
+| T2.7 | WU2 | Tests: backend functional (`test_api_clients.py` pattern) plus promotion idempotency (retry/recapture yields one row); frontend (`ClientFicha.test.tsx` pattern) | delegated per side |
 | T4.1 | WU4 | Merge service: reassign the four FKs and re-key memories, single transaction, audited | blocked on D3/D4 |
 
 ## Delivery
@@ -153,9 +158,12 @@ strategy, one PR per work unit.
       **90 files / 823 tests**, `npm run build` (includes `tsc -b`) passed, and both CI jobs
       (`test`, `panel`) green. The merged branch was deleted (local and remote) and the
       worktree was reparked to `odd/clientes-operativa-wu2` off the updated `main`.
-- [ ] WU2 — **option A**, `CustomerEquipment` table; migration `035`. Needs a worktree-local
-      `infra/.env` before the backend suite can run here (absent today; present only in the
-      principal worktree)
+- [ ] **WU2 planned** — the row is `customer_equipment`, migration `035`, dto/in shape frozen
+      by D5. Promotion lands on the consent turn (`_apply_consent_and_customer`) and is keyed by
+      `source_conversation_id` under a partial unique index, so a retried or recaptured flow
+      upserts instead of duplicating. The worktree now carries its own `infra/.env` and `.venv`
+      (`uv sync`, Python 3.14), and `bash infra/test-db.sh env` resolves the isolated DB on port
+      **6304**.
 - [ ] WU3 — blocked on D2
 - [ ] WU4 — blocked on D3/D4
 
@@ -165,7 +173,9 @@ Pending.
 
 ## Recovery
 
-- Nothing to resume beyond the task list above; the worktree and branch are live at base `c4ad6fe2`.
+- Nothing to resume beyond the task list above; the worktree and branch are live at base `c2163ff6`.
+- The branch is `odd/clientes-operativa-wu2`; the work-unit-1 branch `odd/clientes-operativa` no
+  longer exists (local or remote) after PR #401 — one worktree, one branch per work unit.
 - Note for the next session: another session is actively merging to `main`
   (`usuarios-aislamiento` WU1 landed as PR #400 during planning). `git fetch origin`
   immediately before any merge.
