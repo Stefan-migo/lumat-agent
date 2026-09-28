@@ -5,7 +5,7 @@ Worktree: `../lumat-agent-odd-usuarios-aislamiento`
 Branch: `odd/usuarios-aislamiento`
 Base: `16ba9cbf` (main)
 Depends on: nothing
-Source: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-usuarios-aislamiento/report.md`
+Source: `.rapsodia-code/sessions/archived/2026-09-25-usuarios-aislamiento/report.md` (archived when this unit was opened)
 Delivery strategy: `ask-on-risk`
 Chain strategy: `stacked-to-main` (owner decision 2026-09-28)
 
