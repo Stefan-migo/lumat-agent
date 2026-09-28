@@ -47,6 +47,7 @@ EXPECTED_TABLES = {
     "settings",
     "audit_log",
     "customer_notes",  # 002_customer_notes.sql (CR-4 internal staff notes)
+    "customer_equipment",  # 035_customer_equipment.sql (D5)
     "memories",  # 009_memory.sql (MEM-1 persistent memory layer)
     "memory_relations",
     "memory_observations",
@@ -459,7 +460,8 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("032_case_conversation_nullable",),
         ("033_customer_archived_at",),
         ("034_project_owners",),
-        ("035_memory_owner_dedup",),
+        ("035_customer_equipment",),
+        ("036_memory_owner_dedup",),
     ]
 
 
@@ -669,6 +671,28 @@ def test_app_role_full_crud_on_business_tables(migrated_db, app_conn):
         "SELECT name FROM customers WHERE phone_e164 = '+56922222222'"
     ).fetchone()
     assert row == ("Test",)
+
+
+def test_app_role_full_crud_on_customer_equipment(migrated_db, app_conn):
+    app_conn.execute(
+        "INSERT INTO customers (phone_e164) VALUES ('+56922222223')"
+    )
+    customer_id = app_conn.execute(
+        "SELECT id FROM customers WHERE phone_e164 = '+56922222223'"
+    ).fetchone()[0]
+    app_conn.execute(
+        "INSERT INTO customer_equipment (customer_id, details) VALUES (%s, 'capture')",
+        (customer_id,),
+    )
+    app_conn.execute(
+        "UPDATE customer_equipment SET brand = 'Bosch' WHERE customer_id = %s",
+        (customer_id,),
+    )
+    row = app_conn.execute(
+        "SELECT brand FROM customer_equipment WHERE customer_id = %s", (customer_id,)
+    ).fetchone()
+    assert row == ("Bosch",)
+    app_conn.execute("DELETE FROM customer_equipment WHERE customer_id = %s", (customer_id,))
 
 
 # --- enums ----------------------------------------------------------------

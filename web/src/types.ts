@@ -68,6 +68,19 @@ export interface Customer {
   archived_at?: string | null;
 }
 
+export interface CustomerEquipment {
+  id: number;
+  customer_id: number;
+  equipment_type: string | null;
+  brand: string | null;
+  model: string | null;
+  age: string | null;
+  details: string | null;
+  source_conversation_id: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface CustomerCreateRequest { phone: string; }
 export interface CustomerProfileUpdateRequest { name?: string | null; email?: string | null; comuna?: string | null; address?: string | null; }
 export interface CustomerMutationResponse { customer: Customer; }

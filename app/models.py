@@ -404,6 +404,38 @@ class CustomerNote(Base):
     created_at: Mapped[datetime] = _ts()
 
 
+class CustomerEquipment(Base):
+    """Customer equipment ficha; migration 035, with verbatim D5 capture details."""
+
+    __tablename__ = "customer_equipment"
+    __table_args__ = (
+        Index("idx_customer_equipment_customer_id", "customer_id"),
+        Index(
+            "uq_customer_equipment_source_conversation",
+            "source_conversation_id",
+            unique=True,
+            postgresql_where="source_conversation_id IS NOT NULL",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    customer_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("customers.id"), nullable=False
+    )
+    equipment_type: Mapped[str | None] = mapped_column(String(50))
+    brand: Mapped[str | None] = mapped_column(String(100))
+    model: Mapped[str | None] = mapped_column(String(100))
+    age: Mapped[str | None] = mapped_column(String(100))
+    details: Mapped[str | None] = mapped_column(Text)
+    source_conversation_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("conversations.id")
+    )
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class ConversationEvent(Base):
     __tablename__ = "conversation_events"
     __table_args__ = (
