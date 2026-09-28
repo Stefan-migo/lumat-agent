@@ -1,6 +1,8 @@
 from datetime import date, datetime, time
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal
 from app.models import Appointment, AppointmentHistory, AppointmentStatus, AuditLog, Case, Conversation, Customer, TechnicianAvailability, User
@@ -52,6 +54,20 @@ def test_booking_rejects_unlinked_case_and_overlapping_active_appointment():
                 technician_id=technician.id, local_date=date(2026, 7, 15), local_time=time(10),
                 timezone_name="America/Santiago", duration_minutes=60, actor="oper",
             )
+
+
+def test_booking_does_not_report_a_missing_technician_as_a_conflict():
+    with SessionLocal() as session:
+        customer, case, _technician = _linked_rows(session)
+        with pytest.raises(Exception) as raised:
+            scheduling.book(
+                session, service="calefont", customer_id=customer.id, case_id=case.id,
+                technician_id=0, local_date=date(2026, 7, 15), local_time=time(10),
+                timezone_name="America/Santiago", duration_minutes=60, actor="oper",
+            )
+        assert not isinstance(raised.value, scheduling.AppointmentConflict)
+        assert isinstance(raised.value, IntegrityError)
+        assert session.execute(text("SELECT 1")).scalar_one() == 1
 
 
 @pytest.mark.parametrize("outcome", [AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW])

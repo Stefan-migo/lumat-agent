@@ -11,7 +11,25 @@ from sqlalchemy.orm import Session
 
 from app.models import Appointment, AppointmentCalendarSync, AppointmentHistory, AppointmentStatus, Case, Customer, TechnicianAvailability, User
 from app.services.audit import record_audit
+from app.services.calendar import ICSProvider, synchronize as synchronize_calendar
 from app.services.events import publish_event
+
+
+_OVERLAP_CONSTRAINTS = {
+    "appointments_technician_no_overlap",
+    "appointments_customer_no_overlap",
+}
+
+
+def _is_overlap_violation(exc: IntegrityError) -> bool:
+    return getattr(getattr(exc.orig, "diag", None), "constraint_name", None) in _OVERLAP_CONSTRAINTS
+
+
+def _sync_existing_calendar(session: Session, appointment: Appointment, *, actor: str) -> None:
+    if session.scalar(select(AppointmentCalendarSync.id).where(
+        AppointmentCalendarSync.appointment_id == appointment.id
+    )) is not None:
+        synchronize_calendar(session, appointment, provider=ICSProvider(), actor=actor)
 
 
 class NonexistentLocalTime(ValueError):
@@ -101,7 +119,9 @@ def book(session: Session, *, service: str, customer_id: int, case_id: int, tech
         session.flush()
     except IntegrityError as exc:
         session.rollback()
-        raise AppointmentConflict("technician or customer has an overlapping booking") from exc
+        if _is_overlap_violation(exc):
+            raise AppointmentConflict("technician or customer has an overlapping booking") from exc
+        raise
     _history(session, appointment, actor=actor, action="booked", previous=None)
     record_audit(session, actor=actor, action="appointment.booked", entity="appointment", entity_id=str(appointment.id), after={"customer_id": customer_id, "case_id": case_id, "technician_id": technician_id})
     publish_event(session, event_type="appointment.booked", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": customer_id, "case_id": case_id, "recipient": customer.phone_e164, "service": service}, dedupe_key=f"appointment:{appointment.id}:booked")
@@ -116,6 +136,7 @@ def cancel(session: Session, appointment: Appointment, *, actor: str, reason: st
     session.flush()
     _history(session, appointment, actor=actor, action="cancelled", previous=previous, details={"reason": reason} if reason else None)
     record_audit(session, actor=actor, action="appointment.cancelled", entity="appointment", entity_id=str(appointment.id), after={"reason": reason})
+    _sync_existing_calendar(session, appointment, actor=actor)
     customer = session.get(Customer, appointment.customer_id)
     publish_event(session, event_type="appointment.cancelled", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": appointment.customer_id, "case_id": appointment.case_id, "recipient": customer.phone_e164 if customer else None, "reason": reason}, dedupe_key=f"appointment:{appointment.id}:cancelled")
     return appointment
@@ -151,10 +172,13 @@ def reschedule(session: Session, appointment: Appointment, *, local_date: date, 
         session.flush()
     except IntegrityError as exc:
         session.rollback()
-        raise AppointmentConflict("technician or customer has an overlapping booking") from exc
+        if _is_overlap_violation(exc):
+            raise AppointmentConflict("technician or customer has an overlapping booking") from exc
+        raise
     details = {"from_start": from_start, "to_start": appointment.local_start.isoformat(), "from_technician_id": from_technician_id, "to_technician_id": technician_id}
     _history(session, appointment, actor=actor, action="rescheduled", previous=previous, details=details)
     record_audit(session, actor=actor, action="appointment.rescheduled", entity="appointment", entity_id=str(appointment.id), after=details)
+    _sync_existing_calendar(session, appointment, actor=actor)
     return appointment
 
 

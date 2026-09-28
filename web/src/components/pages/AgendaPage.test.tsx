@@ -286,6 +286,8 @@ describe('AgendaPage', () => {
     expect(screen.getAllByText('Mantención')).toHaveLength(3);
     expect(screen.queryByRole('button', { name: 'Cancelar visita' })).not.toBeInTheDocument();
     expect(cancelAppointment).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
+    expect(rescheduleAppointment).not.toHaveBeenCalled();
   });
 
   it('retries pending and failed calendar sync from keyboard-operable actions', async () => {
