@@ -436,6 +436,16 @@ semantics; service and route tests must establish those.
   in the prior handoff and is documented here. Delivery decision (owner, 2026-09-28): WU2 ships
   as a **single PR with maintainer-approved `size:exception`** (the slice is ~668 changed lines
   over the ~400 review budget); it is not split.
+- WU2 full-slice native review (owner-granted on the whole PR slice), lineage
+  `review-b2bdde6e4c280287`: **approved**, authority **burned**
+  (`gentle-ai.review-acknowledged/v1`, consumed revision
+  `sha256:e27d17aec90de75770233a96888c8462bf3bb414bb514f3181c7a8a053c55138`). Candidate is the
+  branch's own work against current `origin/main`: 22 paths, 840 changed lines, tier `high`,
+  correction budget 200, four lenses (risk, resilience, readability, reliability), **zero
+  findings**, no correction opened. This is the WU2 PR-slice review, distinct from the earlier
+  U2.1–U2.3 review (`review-016eba14e5434eaa`); it was run because the merged-main range made
+  the slice over the review budget and high-risk (`tests/integration/test_migrations.py`
+  `shell_process`). Review is now closed; push/PR/merge remain separate owner decisions.
 - [x] WU2 — owner-aware memory, thread/project binding, and tools (U2.1–U2.4 delivered).
 - [ ] WU3 — owner-filtered panel API and project selection/creation.
 - [ ] WU4 — cross-user isolation suite and final gate.
@@ -456,13 +466,12 @@ complete. Record merged PRs, exact test results, migration evidence, and cleanup
   `c4ad6fe2`). U2.1–U2.4 are delivered on this WU2 branch. U2.2 is recorded by
   `b6213632`, `744bbe55`, and `e641283e`; U2.3 by `af509050` and `930328be`; U2.4 by
   `279a2471`, `fb5a03d8`, and `48615439`.
-- The reviewed boundary for this branch's own work was `7f02312e` (lineage
-  `review-016eba14e5434eaa`, approved, authority burned). Because `origin/main` advanced and
-  the branch merged it at `1aa0a060`, `7f02312e..HEAD` now also carries main's already-reviewed
-  content; the next assessment must isolate this unit's own work. Verify with
-  `git diff --stat <base-ref> HEAD` before firing the review, and prefer a base that excludes
-  main's content (`4a67d6be`, the current `origin/main`; or `1aa0a060` to scope strictly to the
-  U2.4 commits).
+- The branch's own work against current `origin/main` (`4a67d6be`) is reviewed and burned in
+  full by lineage `review-b2bdde6e4c280287` (approved, zero findings). The earlier U2.1–U2.3
+  review `review-016eba14e5434eaa` (boundary `7f02312e`) remains valid, but because `origin/main`
+  advanced and the branch merged it at `1aa0a060`, `7f02312e..HEAD` also carries main's
+  already-reviewed content; any future assessment must isolate this unit's own work with
+  `git diff --stat <base-ref> HEAD` and prefer a base that excludes main's content (`4a67d6be`).
 - U2.4 is delivered: focused owner-authorization, no-implicit-`default`, and business-memory
   coverage plus the R3-001 fail-closed guard hardening recorded above. WU3 then consumes the
   owner-filtered panel API and the UI project selector.
