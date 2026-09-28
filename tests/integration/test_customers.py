@@ -16,20 +16,31 @@ Runs against the migrated pgvector test DB (conftest DATABASE_URL).
 
 import psycopg
 import pytest
+from uuid import uuid4
+from datetime import datetime, timezone
 from sqlalchemy import func, select
 
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
+    Appointment,
+    AuditLog,
     Case,
     Conversation,
     ConversationState,
     Customer,
     CustomerNote,
+    CustomerEquipment,
+    Memory,
+    MemoryObservation,
+    MemoryRelation,
+    MemoryType,
     CustomerState,
     Message,
     MessageDirection,
     MessageStatus,
     MessageType,
+    User,
+    UserRole,
 )
 from app.services import customers  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
@@ -42,8 +53,10 @@ def clean_db(migrated_db):
     """Reset all customer-related tables before every test (shared test DB)."""
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
-            "TRUNCATE audit_log, conversation_events, cases, messages, "
-            "conversations, customer_notes, customers RESTART IDENTITY CASCADE"
+            "TRUNCATE audit_log, conversation_events, memory_relations, "
+            "memory_observations, memories, appointments, customer_equipment, "
+            "cases, messages, conversations, customer_notes, customers, users "
+            "RESTART IDENTITY CASCADE"
         )
     yield
 
@@ -441,3 +454,153 @@ def test_create_customer_rejects_unrecognized_phone():
     with SessionLocal() as session:
         with pytest.raises(ValueError, match="^phone cannot be normalized to E.164$"):
             customers.create_customer(session, "   ", actor="operador1")
+
+
+def test_merge_customers_reassigns_linked_rows_and_audits():
+    with SessionLocal() as session:
+        survivor = customers.get_or_create_customer(session, "56911111111")
+        loser = customers.get_or_create_customer(session, "56922222222")
+        conv = Conversation(customer_id=loser.id, wa_phone=loser.phone_e164)
+        session.add(conv)
+        session.flush()
+        case = Case(conversation_id=conv.id, customer_id=loser.id, service="repair",
+                    priority="media", status="abierto", summary="case")
+        session.add(case)
+        session.flush()
+        note = CustomerNote(customer_id=loser.id, note="note", author="operator")
+        equipment = CustomerEquipment(customer_id=loser.id, equipment_type="boiler")
+        technician = User(username=f"merge-tech-{uuid4().hex}", password_hash="unused", role=UserRole.TECNICO)
+        session.add(technician)
+        session.flush()
+        appointment = Appointment(customer_id=loser.id, case_id=case.id, service="repair",
+                                  technician_id=technician.id,
+                                  local_start=datetime(2026, 10, 1, 10), timezone="UTC",
+                                  starts_at=datetime(2026, 10, 1, 10, tzinfo=timezone.utc),
+                                  ends_at=datetime(2026, 10, 1, 11, tzinfo=timezone.utc),
+                                  duration_minutes=60)
+        session.add_all([note, equipment, appointment])
+        session.flush()
+
+        result = customers.merge_customers(session, survivor, loser, actor="operator")
+        session.commit()
+
+        assert result.id == loser.id
+        assert survivor.merged_into_customer_id == loser.id
+        assert survivor.archived_at is not None
+        assert conv.customer_id == case.customer_id == note.customer_id == equipment.customer_id == appointment.customer_id == loser.id
+        audits = session.scalars(select(AuditLog).where(AuditLog.action == "customer.merged")).all()
+        assert len(audits) == 1
+        assert audits[0].entity == "customer"
+        assert audits[0].entity_id == str(loser.id)
+
+
+def test_merge_customers_chooses_more_active_customer_and_fills_scalars():
+    with SessionLocal() as session:
+        first = customers.get_or_create_customer(session, "56911111111")
+        second = customers.get_or_create_customer(session, "56922222222")
+        first.name, first.email = "Kept", "same@example.com"
+        second.name, second.email = "Other", "different@example.com"
+        second.comuna = "Providencia"
+        session.add_all([
+            Conversation(customer_id=second.id, wa_phone=second.phone_e164),
+            Conversation(customer_id=second.id, wa_phone=second.phone_e164),
+        ])
+        session.flush()
+        survivor = customers.merge_customers(session, first, second, actor="operator")
+        session.commit()
+        assert survivor.id == second.id
+        assert survivor.name == "Other"
+        assert survivor.comuna == "Providencia"
+        audit = session.scalar(select(AuditLog).where(AuditLog.action == "customer.merged"))
+        assert audit.after["scalar_conflicts"]
+
+
+@pytest.mark.parametrize("guard", ["same", "tombstone"])
+def test_merge_customers_rejects_invalid_pair(guard):
+    with SessionLocal() as session:
+        first = customers.get_or_create_customer(session, "56911111111")
+        second = customers.get_or_create_customer(session, "56922222222")
+        if guard == "same":
+            second = first
+        else:
+            second.merged_into_customer_id = first.id
+            session.flush()
+        with pytest.raises(ValueError):
+            customers.merge_customers(session, first, second, actor="operator")
+
+
+def test_merge_customers_rekeys_customer_observations():
+    with SessionLocal() as session:
+        first = customers.get_or_create_customer(session, "56911111111")
+        second = customers.get_or_create_customer(session, "56922222222")
+        observation = MemoryObservation(scope="customer", entity_id=str(second.id),
+                                       tipo="riesgo", detalle={})
+        session.add(observation)
+        session.flush()
+        survivor = customers.merge_customers(session, first, second, actor="operator")
+        session.commit()
+        assert observation.entity_id == str(survivor.id)
+
+
+def test_merge_customers_tie_uses_older_customer_and_archived_side_loses():
+    from datetime import timedelta
+
+    with SessionLocal() as session:
+        older = customers.get_or_create_customer(session, "56911111111")
+        newer = customers.get_or_create_customer(session, "56922222222")
+        newer.created_at = older.created_at + timedelta(seconds=1)
+        session.flush()
+        assert customers.merge_customers(session, newer, older, actor="operator").id == older.id
+        session.rollback()
+
+    with SessionLocal() as session:
+        active = customers.get_or_create_customer(session, "56933333333")
+        archived = customers.get_or_create_customer(session, "56944444444")
+        customers.archive_customer(session, archived, actor="operator")
+        session.flush()
+        session.add(Conversation(customer_id=archived.id, wa_phone=archived.phone_e164))
+        session.flush()
+        assert customers.merge_customers(session, archived, active, actor="operator").id == active.id
+
+
+def test_merge_customers_deduplicates_equivalent_memories_and_records_content_conflict():
+    with SessionLocal() as session:
+        first = customers.get_or_create_customer(session, "56911111111")
+        second = customers.get_or_create_customer(session, "56922222222")
+        common = dict(scope="customer", tipo=MemoryType.CUSTOMER_MEMO,
+                      embedding=[0.0] * 384, duplicate_count=2)
+        kept = Memory(entity_id=str(first.id), topic_key="same", titulo="Same",
+                      contenido="equal", **common)
+        kept_conflict = Memory(entity_id=str(first.id), topic_key="different",
+                               titulo="Survivor title", contenido="Survivor body",
+                               scope="customer", tipo=MemoryType.CUSTOMER_MEMO,
+                               embedding=[2.0] * 384)
+        duplicate = Memory(entity_id=str(second.id), topic_key="same", titulo="Same",
+                           contenido="equal", duplicate_count=3,
+                           scope="customer", tipo=MemoryType.CUSTOMER_MEMO,
+                           embedding=[0.0] * 384)
+        loser_conflict = Memory(entity_id=str(second.id), topic_key="different",
+                                titulo="Loser title", contenido="Loser body",
+                                scope="customer", tipo=MemoryType.CUSTOMER_MEMO,
+                                embedding=[1.0] * 384)
+        session.add_all([kept, kept_conflict, duplicate, loser_conflict])
+        session.flush()
+        observation = MemoryObservation(memory_id=duplicate.id, scope="customer",
+                                       entity_id=str(second.id), tipo="riesgo", detalle={})
+        relation = MemoryRelation(id_a=duplicate.id, id_b=loser_conflict.id, relation="related")
+        session.add_all([observation, relation])
+        session.flush()
+
+        survivor = customers.merge_customers(session, first, second, actor="operator")
+        session.commit()
+
+        assert session.get(Memory, kept.id).duplicate_count == 5
+        assert session.get(Memory, duplicate.id) is None
+        assert session.get(Memory, loser_conflict.id) is None
+        assert observation.memory_id == kept.id
+        assert relation.id_a == kept.id
+        audit = session.scalar(select(AuditLog).where(AuditLog.action == "customer.merged"))
+        assert audit.after["memory_conflicts"] == [{
+            "topic_key": "different", "titulo": "Loser title", "contenido": "Loser body"
+        }]
+        assert audit.after["moved"]["customer_equipment"] == 0
