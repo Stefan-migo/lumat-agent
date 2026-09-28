@@ -137,6 +137,34 @@ def test_planner_catalog_advertises_the_memory_read_scope_contract():
         assert set(variants) == {"own", "customer"}
 
 
+def test_planner_catalog_drops_titles_without_weakening_memory_read_schema():
+    catalog = json.loads(_planner_tool_catalog(list(registry.TOOL_REGISTRY)))
+
+    def assert_no_titles(value):
+        if isinstance(value, dict):
+            assert "title" not in value
+            for nested in value.values():
+                assert_no_titles(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                assert_no_titles(nested)
+
+    assert_no_titles(catalog)
+
+    memory_read = next(entry for entry in catalog if entry["name"] == "memory.read")
+    variants = _advertised_scope_variants(memory_read["arguments"])
+
+    assert set(variants) == {"own", "customer"}
+    assert variants["customer"]["properties"]["entity_id"]["pattern"] == r"^(?:customer:\d+|\d+)$"
+    assert variants["own"]["properties"]["entity_id"]["type"] == "null"
+    assert {
+        scope: variant["required"] for scope, variant in variants.items()
+    } == {
+        scope: variant["required"]
+        for scope, variant in _advertised_scope_variants(registry.MemoryArgs.model_json_schema()).items()
+    }
+
+
 def test_planner_prompt_does_not_order_a_rejected_memory_read_shape():
     template = load_assistant_config().prompts["plan"]
 

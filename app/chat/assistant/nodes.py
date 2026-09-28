@@ -482,9 +482,24 @@ def panel_cost_gate(state: AssistantState) -> AssistantState:
 
 
 def _planner_tool_catalog(whitelist: list[str]) -> str:
+    def without_titles(value):
+        if isinstance(value, dict):
+            return {
+                key: without_titles(nested)
+                for key, nested in value.items()
+                if key != "title"
+            }
+        if isinstance(value, list):
+            return [without_titles(nested) for nested in value]
+        return value
+
     return json.dumps(
         [
-            {"name": name, "description": definition.description, "arguments": definition.schema()}
+            {
+                "name": name,
+                "description": definition.description,
+                "arguments": without_titles(definition.schema()),
+            }
             for name in whitelist
             if (definition := TOOL_REGISTRY.get(name)) is not None
         ],
