@@ -202,8 +202,8 @@ cd web && npm run build                      # the only frontend type check (tsc
 - [x] Enqueue an appointment-keyed reminder on booking (`appointment:{id}:reminder:24h`, due
       `starts_at - 24 h` in UTC), with an explicit policy for bookings made inside the 24 h window
       (closed: skip the operation entirely, decision 15).
-- [ ] Invalidate or reschedule the pending reminder on cancel and reschedule.
-- [ ] Deliver via an approved WhatsApp template (template-aware dispatcher), with an email fallback
+- [x] Invalidate or reschedule the pending reminder on cancel and reschedule.
+- [x] Deliver via an approved WhatsApp template (template-aware dispatcher), with an email fallback
       recipient (closed: the customer's email, decision 17), replacing free-form text for this
       business-initiated message.
 - [x] Add a periodic runner: a CLI entrypoint on `app/ops/sweep.py` plus the cron wiring already
@@ -238,7 +238,12 @@ cd web && npm run build                      # the only frontend type check (tsc
 - GREEN focused: `uv run pytest tests/unit/test_ops_sweep.py -o addopts='' -q` → **1 passed**; then `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py tests/integration/test_h4_notifications.py tests/unit/test_ops_sweep.py -o addopts='' -q` → **15 passed**.
 - Full suite: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/ -o addopts='' -q` → **1579 passed, 2 warnings** (181.72 s).
 - WU3 commit `0121d054` `feat(ops): run the notification sweep as a scheduled entry point` — CLI, cron documentation, CLI test, and this record. Rollback boundary: scheduled invocation and its documentation/test only.
-- Not yet proven: reschedule invalidation/rescheduling has implementation but no dedicated integration assertion; template delivery success/name/date-time parameter ordering has not been asserted end-to-end (fallback path and approved policy setup were exercised); cron has only been documented, not installed or observed firing (remote operation is expressly out of scope). Therefore overall S4 acceptance remains open.
+- Before the corrective round, unproven: reschedule invalidation/rescheduling had no dedicated integration assertion; template delivery success/name/date-time parameter ordering had not been asserted end-to-end (only fallback and approved policy setup were exercised). The cron had only been documented, not installed or observed firing (remote operation is expressly out of scope).
+- 2026-09-28: bounded corrective proof round added the three requested integration tests. No implementation change was needed: the first required focused execution was already green, so **there is no RED result to claim** for these test-only assertions. `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py -o addopts='' -q` → **10 passed** (both before and after adding the explicit one-row counts). Full suite: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/ -o addopts='' -q` → **1582 passed, 2 warnings** (208.71 s).
+- Newly proven: decision 15 creates no operation for a booking <24 h away; reschedule preserves the same single keyed row and moves its due instant, and moving inside 24 h permanently fails that pending row; successful dispatch uses the configured `recordatorio_prueba` name, exactly two local date/time parameters in order, and marks the operation sent.
+- Still honestly open: VPS cron installation/firing. Repository evidence is limited to the working CLI and the documented five-minute cron contract; installation is an authorized-ops action, not a repository test.
+- Graph Check for the corrective round: stale report still says `16ba9cbf`; queried booking/24 h scheduling, reschedule/reminder operation, and approved template dispatch areas. Nodes consulted include `book()`, `reschedule()`, `NotificationOperation`, `Appointment`, `send_template()`, `scheduling.py`, `notifications.py`, `templates.py`, and the notification integration tests. No requested directed path resolved (`book()`→`_maintain_reminder()` node absent; `reschedule()`→`NotificationOperation` and `send_template()`→`process_operation()` not found). No graph rebuild/update attempted.
+- Corrective round commit SHA pending.
 
 ### S5 — Post-service follow-up
 
