@@ -1,6 +1,6 @@
 # ODD Task: clientes-operativa
 
-Status: in progress — planning; WU1 ready to implement, WU2-WU4 blocked on owner decisions
+Status: in progress — WU1 delivered on the branch; WU2-WU4 blocked on owner decisions
 Worktree: `../lumat-agent-odd-clientes-operativa`
 Branch: `odd/clientes-operativa`
 Base: `c4ad6fe2` (main, 2026-09-28)
@@ -128,10 +128,28 @@ strategy, one PR per work unit.
 
 ## Progress / Evidence
 
-- [ ] WU1
-- [ ] WU2
-- [ ] WU3
-- [ ] WU4
+- [x] **WU1 delivered** — `web/src/components/pages/ClientesList.tsx` and
+      `ClientesList.test.tsx`, 61 insertions / 7 deletions. The row now offers
+      "Cambiar estado <cliente>"; the dialog loads the option list from the same source the
+      ficha uses (`GET /clients/{id}` → `states`, which is every `CustomerState` value, not a
+      per-row transition subset) and saves through the existing `changeClientState`, then
+      refreshes the list. The archive/restore actions and the 409 "open the existing ficha"
+      affordance are untouched. No backend file changed.
+- [x] **WU1 RED** — `npx vitest run src/components/pages/ClientesList.test.tsx` failed because
+      the row had no button named "Cambiar estado Marcela Fuentes".
+- [x] **WU1 GREEN** — same focused command: 1 file, 24 tests passed. Full suite
+      `npm test`: 90 files, 823 tests passed. `npm run build` (includes `tsc -b`): passed.
+- [x] **WU1 parent spot check** — the focused test was re-run by the parent: 24/24 passed.
+- [x] **WU1 assessment** — `gentle-ai review assess --base-ref c4ad6fe2 --committed-only`:
+      `risk: medium` (`executable_change`), `changed_lines: 216`, `review_due: false`,
+      `review_due_reason: under_budget`. No review transaction and no consent were opened; the
+      slice stays pending until a later commit reaches the review budget. The assessed base
+      remains `c4ad6fe2`.
+- [x] **Commits** — `18c41083 docs(odd): open the clientes-operativa unit`,
+      `e26215ae feat(clients): change a client's stage from the list`. Not pushed.
+- [ ] WU2 — blocked on D1
+- [ ] WU3 — blocked on D2
+- [ ] WU4 — blocked on D3/D4
 
 ## Closure
 
