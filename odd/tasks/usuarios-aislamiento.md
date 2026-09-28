@@ -1,9 +1,9 @@
 # ODD Task: usuarios-aislamiento
 
-Status: open — WU2 delivered through U2.3; U2.4 remains
+Status: open — WU2 delivered through U2.4; WU3 and WU4 remain
 Worktree: `../lumat-agent-odd-usuarios-aislamiento`
 Branch: WU1 delivered on `odd/usuarios-aislamiento` (merged); current slice `odd/usuarios-aislamiento-wu2`
-Base: `d3b5285e` (merge of `origin/main`)
+Base: `4a67d6be` (current `origin/main`, merged into the branch at `1aa0a060`)
 Depends on: nothing
 Source: `.rapsodia-code/sessions/archived/2026-09-25-usuarios-aislamiento/report.md` (archived when this unit was opened)
 Delivery strategy: `ask-on-risk`
@@ -138,7 +138,7 @@ silent default fallback remains.
   `app/services/agent_chat.py`; require an explicit project selection.
 - [x] **U2.3** — Update the tool registry and project tools so no tool reads or writes
   another user's project or memory; keep `projects.create` available.
-- [ ] **U2.4** — Add focused tests for authorization, no implicit `default`, and
+- [x] **U2.4** — Add focused tests for authorization, no implicit `default`, and
   business-memory behavior.
 
 **Acceptance slice:** cross-user memory recall is impossible through agent chat or
@@ -403,7 +403,40 @@ semantics; service and route tests must establish those.
 - R3-001 (reliability, WARNING, `app/services/projects.py`): resolved in
   `72da3d6a`; `_resolve_owner_id` is shared by merge and project locking, with
   tests for inferred, explicit, and contradictory owner paths.
-- [ ] WU2 — owner-aware memory, thread/project binding, and tools (U2.1–U2.3 delivered; U2.4 remains).
+- U2.4 — focused owner authorization coverage and the R3-001 fail-closed hardening.
+  - `279a2471 fix(chat): require the authenticated owner for project tools` — `execute_tool`
+    now fails closed whenever a `project.*` tool is called without an authenticated `owner_id`,
+    independent of `trusted_thread_id` (R3-001). Memory behavior is unchanged: own-scope
+    read/search already fail closed on a missing thread in their handler, all three memory
+    writes are covered by the autonomous-write guard, and customer-scope memory stays
+    business-shared. The existing project-tool unit tests now pass `owner_id=1`, so they keep
+    testing approval/argument mechanics instead of the new guard.
+  - `fb5a03d8 test(chat): cover cross-owner recall and shared business memory` — the
+    integration suite now asserts cross-owner recall is zero through the real tool path, that
+    customer business memory stays shared (read and search), and that an ownerless
+    `project.list` fails closed. `tests/unit/test_memory_tool_axes.py` gains a focused test
+    proving the derived owner reaches both own-memory axes for a non-default project (R2-001).
+  - `48615439 test(chat): relocate same-slug thread binding coverage to integration` —
+    discovered during U2.4 verification: `test_same_slug_projects_bind_and_resolve_by_authenticated_owner`
+    used a real database but lived in `tests/unit/`, whose conftest makes `migrated_db`/`clean_db`
+    no-ops for the DB-free unit suite; it only passed when another suite migrated first. Moved
+    to `tests/integration/test_agent_chat_thread_project.py` so it gets a migrated, truncated
+    database regardless of test order.
+  - Strict TDD RED: before the guard change,
+    `tests/unit/test_assistant_tools.py::test_project_tools_fail_closed_without_authenticated_owner`
+    failed with `Failed: DID NOT RAISE ToolValidationError` on the first `project.list`
+    assertion; GREEN after.
+  - Focused suite (order-independent): `114 passed`. Full backend suite: `1568 passed, 2
+    warnings` (the known `_publish_all` unawaited and fastembed pooling warnings).
+    `git diff --check` passed.
+  - R3-001 closed. R2-001 addressed with the focused owner-threading test. R2-002 (explicit
+    tool metadata instead of name prefixes) remains a non-blocking suggestion.
+- Branch state after the crash: the branch had already merged `origin/main` at `1aa0a060`
+  (parents `82922ce5`, `4a67d6be`) before U2.4 started; this merge was not recorded in memory or
+  in the prior handoff and is documented here. Delivery decision (owner, 2026-09-28): WU2 ships
+  as a **single PR with maintainer-approved `size:exception`** (the slice is ~668 changed lines
+  over the ~400 review budget); it is not split.
+- [x] WU2 — owner-aware memory, thread/project binding, and tools (U2.1–U2.4 delivered).
 - [ ] WU3 — owner-filtered panel API and project selection/creation.
 - [ ] WU4 — cross-user isolation suite and final gate.
 - [ ] Migration apply, verification, and rollback documentation completed.
@@ -417,19 +450,22 @@ complete. Record merged PRs, exact test results, migration evidence, and cleanup
 ## Recovery
 
 - Resume in `/home/stefan/repos/lumat-agent-odd-usuarios-aislamiento` on
-  `odd/usuarios-aislamiento-wu2`, based on merge commit `d3b5285e` of `origin/main`.
+  `odd/usuarios-aislamiento-wu2`, based on merge commit `1aa0a060` of `origin/main`
+  (`4a67d6be`).
 - WU1 was delivered on `odd/usuarios-aislamiento` and merged (PR #400, merge
-  `c4ad6fe2`). U2.1–U2.3 are delivered on this WU2 branch; U2.4 remains. U2.2
-  is recorded by `b6213632`, `744bbe55`, and `e641283e`; U2.3 is recorded by
-  `af509050` (`fix(chat): scope assistant tools to authenticated owners`) and
-  `930328be` (`test(chat): assert owner propagation through tool callers`), followed
-  by this documentation commit.
-- The reviewed boundary for this branch's own work is `7f02312e` (lineage
-  `review-016eba14e543eaa`, approved, authority burned). The next slice's assessment
-  starts from that commit.
-- U2.4 remains: focused authorization and no-implicit-`default` tests, business-memory
-  behavior, and the R3-001 fail-closed guard hardening recorded above. WU3 then consumes
-  the owner-filtered panel API and the UI project selector.
+  `c4ad6fe2`). U2.1–U2.4 are delivered on this WU2 branch. U2.2 is recorded by
+  `b6213632`, `744bbe55`, and `e641283e`; U2.3 by `af509050` and `930328be`; U2.4 by
+  `279a2471`, `fb5a03d8`, and `48615439`.
+- The reviewed boundary for this branch's own work was `7f02312e` (lineage
+  `review-016eba14e5434eaa`, approved, authority burned). Because `origin/main` advanced and
+  the branch merged it at `1aa0a060`, `7f02312e..HEAD` now also carries main's already-reviewed
+  content; the next assessment must isolate this unit's own work. Verify with
+  `git diff --stat <base-ref> HEAD` before firing the review, and prefer a base that excludes
+  main's content (`4a67d6be`, the current `origin/main`; or `1aa0a060` to scope strictly to the
+  U2.4 commits).
+- U2.4 is delivered: focused owner-authorization, no-implicit-`default`, and business-memory
+  coverage plus the R3-001 fail-closed guard hardening recorded above. WU3 then consumes the
+  owner-filtered panel API and the UI project selector.
 - Provision dependencies for the worktree as needed. Copy the ignored database
   environment file only as documented in `odd/tasks/test-db-isolation.md`; use
   `infra/test-db.sh up`, `eval "$(infra/test-db.sh env)"`, and `infra/test-db.sh down`
