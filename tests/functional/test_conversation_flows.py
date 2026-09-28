@@ -176,8 +176,9 @@ def test_cm2_complete_capture_persists_consent_and_ficha(
     assert captured["evidence"] == "unknown"
     assert "_pending" not in captured  # flow completed
 
-    # CM-5: completion + summary attached
-    assert any("quedó registrada" in r for r in replies)
+    # No technician availability is configured: do not promise a confirmed visit.
+    assert any("asesor" in r.lower() for r in replies)
+    # CM-5: handoff summary remains attached.
     assert conversation.summary is not None
 
 

@@ -141,7 +141,7 @@ def capture(state: ConversationState) -> dict:
 
     next_field = _next_field_after(pending)
     if next_field is None:
-        return {"captured": captured, "next_step": "summary", "replies": [COMPLETION_REPLY]}
+        return {"captured": captured, "next_step": "booking"}
 
     captured["_pending"] = next_field[0]
     with session_scope() as session:
