@@ -253,3 +253,26 @@ cd web && npm run build                      # the only frontend type check (tsc
 - 2026-09-28: delivery pending the owner's decision: PR3 = S3, three commits, ~642 authored lines
   against the 400-line budget (`ask-on-risk`), so either a size exception or a split into two chained
   PRs (cancel / reschedule).
+- 2026-09-28: **delivery decided by the owner: split into two stacked PRs to `main`**, chain strategy
+  `stacked-to-main`.
+  - PR 1 (cancel slice, branch `odd/agenda-agente-whatsapp-s3-cancel`, head `dd8cddd8`) =
+    `631b58e8` + `8d51503b`, 425 changed lines across 10 files; base `main`.
+  - PR 2 (reschedule slice, branch `odd/agenda-agente-whatsapp`) = `25f4a2aa` + `58052dd0` + this
+    record, 275 changed lines across 6 files; base = PR 1's branch until PR 1 merges, then
+    rebased/retargeted to `main` (the reschedule path reuses the `manage` node created by cancel, so
+    the slice genuinely depends on PR 1).
+  - Split rationale: cancel is independently shippable and each slice then fits the 400-line review
+    budget under `ask-on-risk`; a single 642-line PR would have needed `size:exception`.
+- 2026-09-28: **post-crash recovery and post-merge verification.** The machine went down with all four
+  worktree `db-test` containers exiting 255; the worktree itself was clean (`aa52c085`), no work was
+  lost. The merged tree (which had not been verified after `aa52c085` merged `origin/main`) was
+  re-verified:
+  - full backend on the full S3 tree (branch `odd/agenda-agente-whatsapp`, `aa52c085`):
+    `uv run pytest tests/ -o addopts='' -q` = **1571 passed**, 2 warnings (177 s).
+  - full backend on PR 1's tree (`odd/agenda-agente-whatsapp-s3-cancel`, `dd8cddd8`) = **1566 passed**
+    (217 s); the delta is the 5 reschedule tests absent from that slice.
+  - frontend: `npm run build` (`tsc -b && vite build`) passed; `npm test` = 90 files, **826 passed**.
+  - test DB re-provisioned through the repo helper (`infra/test-db.sh up`, worktree-derived project
+    `lumat-test-lumat-agent-odd-agenda-agente-whatsapp` on port 5945).
+  - the repository is honest about the frontend check: `tsc -b` only runs inside `npm run build`, and
+    a green Vitest run does not prove the tree type-checks; both were run.
