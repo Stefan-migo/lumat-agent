@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApiError, fetchClients, createCustomer, getClientFicha, archiveCustomer, unarchiveCustomer } from "../../api";
+import { ApiError, fetchClients, createCustomer, getClientFicha, archiveCustomer, unarchiveCustomer, changeClientState } from "../../api";
 import { ClientesList } from "./ClientesList";
 import type { Customer } from "../../types";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, fetchClients: vi.fn(), createCustomer: vi.fn(), getClientFicha: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn() };
+  return { ...actual, fetchClients: vi.fn(), createCustomer: vi.fn(), getClientFicha: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), changeClientState: vi.fn() };
 });
 
 const customers: Customer[] = [
@@ -230,6 +230,24 @@ describe("ClientesList", () => {
 
     expect(await screen.findByText("Marcela Fuentes")).toBeInTheDocument();
     expect(fetchClients).toHaveBeenCalledWith({ includeArchived: false, query: "" });
+  });
+
+  it("changes a client's state from the row and refreshes the list", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: customers });
+    vi.mocked(getClientFicha).mockResolvedValue({ customer: customers[0], states: ["nuevo", "contactado", "en_evaluacion"], history: {} } as never);
+    vi.mocked(changeClientState).mockResolvedValue({ customer: { ...customers[0], state: "en_evaluacion" } } as never);
+
+    render(<ClientesList />);
+    const row = (await screen.findByText("Marcela Fuentes")).closest("tr");
+    expect(row).not.toBeNull();
+    await user.click(within(row!).getByRole("button", { name: "Cambiar estado Marcela Fuentes" }));
+    const stateSelect = await screen.findByLabelText("Estado del cliente");
+    await user.selectOptions(stateSelect, "en_evaluacion");
+    await user.click(screen.getByRole("button", { name: "Guardar estado" }));
+
+    expect(changeClientState).toHaveBeenCalledWith(1, "en_evaluacion");
+    await waitFor(() => expect(fetchClients).toHaveBeenCalledTimes(2));
   });
 
   it("opens the create dialog and offers ficha navigation for a duplicate phone", async () => {
