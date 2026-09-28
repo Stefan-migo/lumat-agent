@@ -1,6 +1,6 @@
 # ODD Task: agenda-leftovers
 
-Status: in progress
+Status: verified — pending delivery (owner decision)
 Worktree: `../lumat-agent-odd-agenda-leftovers`
 Branch: `odd/agenda-leftovers`
 Base: `dff26b76` (main, 2026-09-28)
@@ -56,10 +56,10 @@ Out of scope, deferred to owner product decisions (NOT this unit):
 
 ## Acceptance criteria
 
-- [ ] Each in-scope leftover closed with cited evidence.
-- [ ] Backend suite green against baseline (>= 1534 passed, no new failures).
-- [ ] Web suite green against baseline (>= 822 passed, no new failures).
-- [ ] `npm run build` green.
+- [x] Each in-scope leftover closed with cited evidence.
+- [x] Backend suite green against baseline (1536 passed; baseline 1534).
+- [x] Web suite green against baseline (822 passed / 90 files; baseline 822).
+- [x] `npm run build` green.
 
 ## Tasks
 
@@ -121,7 +121,8 @@ One writer thread at a time; web tests and backend fixes are delegated sequentia
 - L4b — `75ef52be`: rollback restored before the branch; the missing-technician test now also asserts
   the raised error is `IntegrityError` and a follow-up `SELECT 1` succeeds (RED was
   `PendingRollbackError`).
-- Focused web: 49 passed. Focused backend: 18 passed. Full backend: 1536 passed.
+- Focused web: 49 passed. Focused backend: 18 passed.
+- Final verification on `349f9286` (frozen tree): backend **1536 passed**, web **822 passed / 90 files**, `npm run build` green.
 
 ## Next step
 
