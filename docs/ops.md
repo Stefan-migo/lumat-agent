@@ -400,6 +400,16 @@ crontab /tmp/cron && rm /tmp/cron)
 > digest via the same SMTP path as `monitor.sh`. Add it in T7.2 alongside the
 > seed if not present; the cron entry above is the ops contract.
 
+### 2.8.1 Appointment reminder sweep cron
+
+Run the durable notification sweep every five minutes so reminders due between
+API process starts are delivered. This repository change documents the cron
+entry; it does not install or execute anything remotely:
+
+```cron
+*/5 * * * * cd /opt/lumat && .venv/bin/python -m app.ops.sweep >> /var/log/lumat-sweep.log 2>&1
+```
+
 ### 2.9 Release record
 
 One row per deploy; it is the evidence that the tagged release is in production.

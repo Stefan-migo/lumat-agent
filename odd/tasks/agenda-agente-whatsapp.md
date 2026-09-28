@@ -199,14 +199,14 @@ cd web && npm run build                      # the only frontend type check (tsc
 
 ### S4 — 24 h reminder
 
-- [ ] Enqueue an appointment-keyed reminder on booking (`appointment:{id}:reminder:24h`, due
+- [x] Enqueue an appointment-keyed reminder on booking (`appointment:{id}:reminder:24h`, due
       `starts_at - 24 h` in UTC), with an explicit policy for bookings made inside the 24 h window
       (closed: skip the operation entirely, decision 15).
 - [ ] Invalidate or reschedule the pending reminder on cancel and reschedule.
 - [x] Deliver via an approved WhatsApp template (template-aware dispatcher), with an email fallback
       recipient (closed: the customer's email, decision 17), replacing free-form text for this
       business-initiated message.
-- [ ] Add a periodic runner: a CLI entrypoint on `app/ops/sweep.py` plus the cron wiring already
+- [x] Add a periodic runner: a CLI entrypoint on `app/ops/sweep.py` plus the cron wiring already
       used for ops jobs on the VPS.
 - [ ] Acceptance: booking creates exactly one reminder due at the right UTC instant; a cancelled
       visit produces no reminder; the sweep delivers a due reminder through the template and falls
@@ -227,12 +227,18 @@ cd web && npm run build                      # the only frontend type check (tsc
 - GREEN focused: same command after implementation → **5 passed**.
 - Full suite: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/ -o addopts='' -q` → **1576 passed, 2 warnings** (163.52 s).
 - Graph Check: `graphify-out/GRAPH_REPORT.md` snapshot is stale at `16ba9cbf` (not refreshed per instruction). Queried `scheduling.py`, `notifications.py`, `notify.py`, `templates.py`, `sweep.py`, and `main.py`. Relevant nodes: `book()`, `cancel()`, `reschedule()`, `Appointment`, `Customer`, `NotificationOperation`, `create_operation()`, `sweep_due_operations()`, `process_operation()`, `send_template()`, `send_email()`, `validate_channel_policy()`, `NotificationTemplateVersion`, `run()`, `main.py`, `sweep.py`. Resolved graph paths: `validate_channel_policy() → TemplatePolicyError → NotificationTemplateVersion`; `main.py → sweep.py → sweep_due_operations()`. Requested paths from scheduling `book()` to `NotificationOperation`, notification operation to sweep, notify template to email, and sweep module to sweep function did not resolve in stale graph.
-- Commit SHA and WU1 commit status pending verification/commit.
+- Commit `ca34eb69` `feat(scheduling): enqueue and maintain the 24 h reminder` — tests, scheduling hooks, and this progress record. Rollback boundary: scheduling reminder maintenance and its tests only.
 - WU2: added `notify.reminder_template_name` default, approved-template policy enforcement, local date/time body parameters, WhatsApp template dispatch, and fallback only to `Customer.email`; missing email is permanently failed and audited. Emergency template behavior remains defaulted to `emergency_alert`.
 - RED observed: focused command before implementation → **3 failed, 4 passed** (two new reminder assertions failed; the existing generic operation was also incorrectly routed and was corrected before GREEN).
 - GREEN focused: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py tests/integration/test_h4_notifications.py -o addopts='' -q` → **14 passed**.
 - Full suite: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/ -o addopts='' -q` → **1578 passed, 2 warnings** (212.49 s).
-- WU2 commit SHA pending.
+- WU2 commit `8f538902` `feat(notify): deliver the reminder through the WhatsApp template with an email fallback` — dispatcher, settings default, template sender, tests, and this record. Rollback boundary: reminder dispatch/settings/template behavior and its tests only.
+- WU3: added an argparse CLI (`--limit`, default 50) to `app.ops.sweep` and documented the five-minute cron command; no server was contacted and the cron was not installed.
+- RED observed: `uv run pytest tests/unit/test_ops_sweep.py -o addopts='' -q` → **1 failed** because `sweep.main` did not exist.
+- GREEN focused: `uv run pytest tests/unit/test_ops_sweep.py -o addopts='' -q` → **1 passed**; then `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py tests/integration/test_h4_notifications.py tests/unit/test_ops_sweep.py -o addopts='' -q` → **15 passed**.
+- Full suite: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/ -o addopts='' -q` → **1579 passed, 2 warnings** (181.72 s).
+- WU3 commit SHA pending.
+- Not yet proven: reschedule invalidation/rescheduling has implementation but no dedicated integration assertion; template delivery success/name/date-time parameter ordering has not been asserted end-to-end (fallback path and approved policy setup were exercised); cron has only been documented, not installed or observed firing (remote operation is expressly out of scope). Therefore overall S4 acceptance remains open.
 
 ### S5 — Post-service follow-up
 
