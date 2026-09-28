@@ -428,7 +428,7 @@ def test_client_ficha_returns_full_payload(client, make_user):
     assert case["service"] == "calefont"
     assert set(case) == {
         "id", "conversation_id", "customer_id", "created_at", "service",
-        "priority", "status", "summary", "emergency", "responsible_id",
+        "amount", "priority", "status", "summary", "emergency", "responsible_id",
         "escalated_at", "closed_at", "acknowledged_at", "ack_by", "is_open",
     }
     assert case["is_open"] is True
