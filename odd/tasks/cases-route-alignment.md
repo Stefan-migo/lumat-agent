@@ -1,9 +1,9 @@
 # ODD Task: cases-route-alignment
 
-Status: in progress — WU1 delivered on the branch (T1, T2, T3); WU2 pending
+Status: WU1 delivered and merged (PR #392 → 059a275a); WU2 delivered
 Worktree: `../lumat-agent-odd-cases-route-alignment`
-Branch: `odd/cases-route-alignment`
-Base: `e8717201` (= `main` = `origin/main` at branch time, merge of PR #388)
+Branch: `odd/cases-route-alignment-wu2`
+Base: `059a275a` (= `main` after the WU1 merge)
 Depends on: nothing
 Source: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md` (U4 `cases-page`)
 Delivery strategy: `ask-on-risk`
@@ -182,6 +182,7 @@ dependency; `tokens.css` values; Q4 (lifecycle vs operational status, tasks/remi
   defect lives in the shell's handling of the `cases` view, not in the dashboard's mapping. If
   `Dashboard.tsx` stays untouched, the change is smaller and the bug is fixed at its real
   source.
+- **D8 — the `.cases-list__actions` rule is renamed to `.case-actions`, not deleted (owner decision 2026-09-27).** The plan said to drop the `CasesList` CSS section, but the rule is live: `CaseActions.tsx:43` is its only consumer and `ClientFicha.tsx:323` mounts that component. Deleting it would silently break the case action layout in the ficha, and no test covers the class (`CaseActions.test.tsx` does not assert it). The rename removes the stale `CasesList` name while preserving the rule for its real owner. `CaseActions.tsx` is added to the authorized files for this rename only. Recorded gap: after the rename, `.case-actions` has no test pinning it — if the owner wants it covered, that is a follow-up.
 
 ## Tasks
 
@@ -216,16 +217,25 @@ hard to review split by file. Proposed slices below; the chain strategy is the o
 
 ### WU2 — remove the retired surface (T4, T5)
 
-- [ ] **T4** — RED first: assert the app tree mounts no `CasesList` (the surface is retired) and
+- [x] **T4** — RED first: assert the app tree mounts no `CasesList` (the surface is retired) and
   that the destructive test edits fail on the current tree; then delete
   `components/pages/CasesList.tsx`, `stories/pages/CasesList.stories.tsx`,
   `stories/pages/CasesList.stories.test.tsx`, the `PanelLinks.test.tsx` import/render and the
-  `style-boundary.test.ts` entry, and drop the `CasesList` CSS section in `primitives.css`.
-- [ ] **T5** — Reconcile the three living specs that name it (`panel-app/spec.md:61`,
+  `style-boundary.test.ts` entry. The live action CSS was renamed to `.case-actions` under D8.
+  Commit `c93f786f` (removal); class rename commit `d5cffdc1`.
+- [x] **T5** — Reconcile the three living specs that name it (`panel-app/spec.md:61`,
   `panel-design-system/spec.md:742`, `corp-components/spec.md:21`) so they describe the tree
-  that exists after the removal.
-- [ ] **WU2 verification of record** — `cd web && npm run test` (count must drop by the removed
-  story tests, and every remaining test must pass), `npx tsc -b --noEmit`, `npm run build`.
+  that exists after the removal. Commit `a9c1dcb9`.
+- [x] **WU2 verification of record** — `cd web && npm run test` → **90 files passed / 822 tests
+  passed**, exit 0; the flaky `ConversationsList` test did **not** appear. `npx tsc -b --noEmit` →
+  exit 0 (no output); `npm run build` → exit 0 (Vite built successfully; existing >500 kB
+  chunk warning); `git diff --check` → clean. Count fell by **15** (837 − 822), matching the
+  prediction exactly (14 story tests + 1 PanelLinks test).
+- [x] **WU2 readback** — `.case-actions` has no test asserting its class name (D8); the focused
+  `CaseActions.test.tsx` passed but does not pin the class, so coverage remains an explicit
+  follow-up if the owner wants it. `rg -n "CasesList" openspec/specs/` returned only
+  `panel-app/spec.md:164` and `:169`, preserving PNL-APP-21. Out-of-scope stale references in
+  the unarchived `panel-grammar-global` change remain a flagged follow-up.
 - [ ] **WU2 review measurement** — same command with `--base-ref` at the WU1 boundary.
 
 ## Acceptance criteria
@@ -250,6 +260,27 @@ hard to review split by file. Proposed slices below; the chain strategy is the o
 - `git diff --check`
 
 ## Progress
+
+- [x] Graph Check for WU2 from `/home/stefan/repos/lumat-agent`: queried
+      `CasesList CaseActions primitives.css table__link panel specs`; consulted `CasesList()`;
+      `CasesList.stories.tsx`; `CasesList.stories.test.tsx`; `PanelLinks.test.tsx`;
+      `.table__link`; `CaseActions()`; `CaseActions.test.tsx`; `AppShell.tsx`;
+      `pathForRoute()`; `ConversationsList()`; and `Corporate Components Capability`.
+      `CaseActions.tsx` is in the `ClientFicha.tsx` community; `.table__link` is in the
+      DS-UI-LINK link contract community. Directed paths from `CasesList()` to `CaseActions()`
+      and from `CaseActions()` to `.cases-list__actions` were not found; the CSS-class consumer
+      relationship is not a code edge, as the orchestrator verified by grep. Read
+      `graphify-out/GRAPH_REPORT.md` (graph built from `7b205ea6`, before this WU2 base).
+- [x] **WU2 recon (2026-09-27)** — The plan's CSS claim was disproved: `.cases-list__actions`
+      has a live consumer (`CaseActions.tsx:43`), so the rule is renamed, not deleted (D8).
+      Baseline on the clean tree at `059a275a`: `cd web && npm run test` → **91 files / 837
+      tests**, with **1 pre-existing flaky failure** in `ConversationsList.test.tsx`
+      (`it('requests search and page changes and renders empty state as a DOM row')`) that passes
+      3/3 in isolation. Expected WU2 count: **822** (837 − 14 story tests − 1 PanelLinks test).
+      Out-of-scope observation: the unarchived change
+      `openspec/changes/panel-grammar-global/specs/panel-design-system/spec.md:16,37` still names
+      `CasesList`. T5's authorized scope covers only the three `openspec/specs/*` files; if that
+      change is archived later it could re-introduce the name. Flagged as a follow-up.
 
 - [x] Worktree created (`rapso worktree create cases-route-alignment --yes`), provisioned
       (`uv sync`, `npm ci`), test DB up on `:5657`

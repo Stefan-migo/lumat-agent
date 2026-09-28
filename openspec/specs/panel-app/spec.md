@@ -58,7 +58,7 @@ The shell MUST expose logout from the PanelShell user block: it MUST `POST /pane
 
 ### Requirement: PNL-APP-4 — Page Extraction Preserves Story Exports (R7)
 
-The designed page components MUST be extracted from `web/src/stories/pages/*.stories.tsx` into `web/src/components/pages/` (DashboardOverview, LoginAuth, ClientesListView, ClientFichaView, ConversationsListView, ConversationThreadView, CasesListView, KbListView, SettingsView), and each story file MUST become a thin wrapper re-importing the extracted component, keeping the existing named exports and their props so story tests stay green.
+The designed page components MUST be extracted from `web/src/stories/pages/*.stories.tsx` into `web/src/components/pages/` (DashboardOverview, LoginAuth, ClientesListView, ClientFichaView, ConversationsListView, ConversationThreadView, KbListView, SettingsView), and each story file MUST become a thin wrapper re-importing the extracted component, keeping the existing named exports and their props so story tests stay green.
 
 #### Scenario: Story tests still resolve exports
 

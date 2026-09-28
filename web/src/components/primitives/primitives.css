@@ -310,8 +310,8 @@
 /* Row-level drill-down links. The accessible link colour is a contract, not a
    call-site decision, and it is density-neutral on purpose: colour only, no control
    padding, so a dense row does not grow to the 40px control target that
-   `.btn--tertiary` carries. Second consumers: CasesList (two cells) and
-   AutomationRulesPage (currently on the UA link colour). */
+   `.btn--tertiary` carries. Consumers: the Clientes list, the ficha history, the Agenda list and
+   the KB list (AutomationRulesPage is still on the UA link colour). */
 .table__link {
   color: var(--primary-700);
 }
@@ -342,8 +342,8 @@
   box-shadow: var(--elevation-raised);
   overflow-x: auto;
 }
-/* ---- CasesList ---- */
-.cases-list__actions {
+/* ---- CaseActions ---- */
+.case-actions {
   display: grid;
   gap: var(--space-2);
   align-items: end;

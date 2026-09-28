@@ -739,7 +739,7 @@ The dashboard story MUST render KPI cards from the `kpis` mock export, and the s
 
 ### Requirement: DS-GRAMMAR-1 — Agent-App Appearance, Control-Room Physiology
 
-The production panel MUST make `PanelShell`, `ConversationThread`, `ConversationsList`, and `AgentChat` expose the agent-app grammar through named DOM regions for rail, active threads, bubbles, status/handoff, composer, and optional inspector. `Dashboard`, `ClientesList`, `ClientFicha`, `CasesList`, `AgendaPage`, `AutomationRulesPage`, `Settings`, and `KbList` MUST retain control-room `DataTable`, KPI, `Badge`, filter, and state primitives.
+The production panel MUST make `PanelShell`, `ConversationThread`, `ConversationsList`, and `AgentChat` expose the agent-app grammar through named DOM regions for rail, active threads, bubbles, status/handoff, composer, and optional inspector. `Dashboard`, `ClientesList`, `ClientFicha`, `AgendaPage`, `AutomationRulesPage`, `Settings`, and `KbList` MUST retain control-room `DataTable`, KPI, `Badge`, filter, and state primitives.
 
 #### Scenario: Grammar is structurally testable
 - GIVEN the approved `AiAgentGrammar.stories.tsx` states are rendered
