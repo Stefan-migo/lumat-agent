@@ -117,7 +117,9 @@ def close_cortex_session(session, thread: InternalChatThread, *, report: str) ->
 
 def _thread_project_authorization(session: Session, thread: InternalChatThread):
     proyecto = thread.proyecto
-    return None if not proyecto or proyecto == "default" else projects.agent_context(session, proyecto)
+    return None if not proyecto or proyecto == "default" else projects.agent_context(
+        session, proyecto, owner_id=thread.user_id
+    )
 
 
 def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, authorization=None) -> dict:
@@ -203,7 +205,7 @@ def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, au
                 created = result.get("result") or {}
                 created_slug = created.get("slug") if isinstance(created, dict) else None
                 if created_slug:
-                    authorization = projects.agent_context(session, created_slug)
+                    authorization = projects.agent_context(session, created_slug, owner_id=thread.user_id)
             if result["status"] == "completed" and not definition.read_only:
                 requested_project = authorization.slug if authorization else requested_project
         except (ToolValidationError, ToolExecutionError, TimeoutError, ValueError) as exc:
@@ -305,7 +307,9 @@ def persist_sdb_state(
     """Persist bounded SDB state in JSONB and the canonical Tukulpan seam."""
     if authorization is not None and not isinstance(authorization, projects._ProjectAuthorization):
         raise ValueError("SDB persistence requires an authorized project capability")
-    if authorization is not None and projects.agent_context(session, authorization.slug) != authorization:
+    if authorization is not None and projects.agent_context(
+        session, authorization.slug, owner_id=thread.user_id
+    ) != authorization:
         raise ValueError("SDB persistence requires an active authorized project capability")
     proyecto = authorization.slug if authorization is not None else "default"
     state = dict(thread.assistant_state or {})
@@ -502,7 +506,7 @@ def create_thread(session: Session, user: User, *, proyecto: str = "default") ->
     if proyecto == "default":
         bound_project = "default"
     else:
-        bound_project = projects.agent_context(session, proyecto).slug
+        bound_project = projects.agent_context(session, proyecto, owner_id=user.id).slug
     thread = InternalChatThread(user_id=user.id, proyecto=bound_project)
     session.add(thread)
     session.flush()

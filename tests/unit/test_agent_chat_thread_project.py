@@ -1,16 +1,19 @@
 from types import SimpleNamespace
 
 import pytest
+from uuid import uuid4
 
-from app.models import InternalChatThread, User
+from app.db import SessionLocal
+from app.models import InternalChatThread, Project, User
 from app.services import agent_chat
 
 
 def test_create_thread_persists_validated_project_and_audits_namespace(monkeypatch):
     audit = {}
 
-    def agent_context(session, proyecto):
+    def agent_context(session, proyecto, *, owner_id=None):
         assert proyecto == "My Project"
+        assert owner_id == 3
         return SimpleNamespace(slug="my-project")
 
     monkeypatch.setattr(agent_chat.projects, "agent_context", agent_context)
@@ -37,8 +40,8 @@ def test_thread_project_authorization_uses_thread_column(monkeypatch):
     authorization = object()
     calls = []
 
-    def agent_context(session, proyecto):
-        calls.append(proyecto)
+    def agent_context(session, proyecto, *, owner_id=None):
+        calls.append((proyecto, owner_id))
         return authorization
 
     monkeypatch.setattr(agent_chat.projects, "agent_context", agent_context)
@@ -49,7 +52,7 @@ def test_thread_project_authorization_uses_thread_column(monkeypatch):
     )
 
     assert agent_chat._thread_project_authorization(object(), thread) is authorization
-    assert calls == ["bound-project"]
+    assert calls == [("bound-project", 1)]
 
 
 def test_create_thread_defaults_to_default_without_project_validation(monkeypatch):
@@ -82,7 +85,7 @@ def test_create_thread_defaults_to_default_without_project_validation(monkeypatc
 def test_create_thread_rejects_unknown_project_before_persistence(monkeypatch):
     audit_calls = []
 
-    def reject_project(session, proyecto):
+    def reject_project(session, proyecto, *, owner_id=None):
         raise ValueError(f"project {proyecto!r} is not active")
 
     monkeypatch.setattr(agent_chat.projects, "agent_context", reject_project)
@@ -111,7 +114,7 @@ def test_create_thread_rejects_unknown_project_before_persistence(monkeypatch):
 
 
 def test_thread_project_authorization_rejects_project_that_no_longer_resolves(monkeypatch):
-    def reject_project(session, proyecto):
+    def reject_project(session, proyecto, *, owner_id=None):
         raise ValueError(f"project {proyecto!r} is not active")
 
     monkeypatch.setattr(agent_chat.projects, "agent_context", reject_project)
@@ -119,6 +122,35 @@ def test_thread_project_authorization_rejects_project_that_no_longer_resolves(mo
 
     with pytest.raises(ValueError, match="not active"):
         agent_chat._thread_project_authorization(object(), thread)
+
+
+def test_same_slug_projects_bind_and_resolve_by_authenticated_owner(fake_embedder, migrated_db):
+    with SessionLocal() as session:
+        users = [User(username=f"chat-owner-{uuid4().hex}", password_hash="test") for _ in range(2)]
+        session.add_all(users)
+        session.flush()
+        slug = f"shared-{uuid4().hex[:8]}"
+        projects = [Project(
+            slug=slug, name=f"Project {index}", purpose=f"Purpose {index}",
+            purpose_embedding=[0.0] * 384, owner_id=user.id,
+        ) for index, user in enumerate(users)]
+        foreign_only = Project(
+            slug=f"foreign-{uuid4().hex[:8]}", name="Foreign project", purpose="Foreign purpose",
+            purpose_embedding=[0.0] * 384, owner_id=users[1].id,
+        )
+        session.add_all([*projects, foreign_only])
+        session.flush()
+
+        with pytest.raises(ValueError):
+            agent_chat.create_thread(session, users[0], proyecto=foreign_only.slug)
+        threads = [agent_chat.create_thread(session, user, proyecto=slug) for user in users]
+        assert [agent_chat._thread_project_authorization(session, thread).owner_id for thread in threads] == [
+            user.id for user in users
+        ]
+        with pytest.raises(ValueError):
+            agent_chat._thread_project_authorization(
+                session, InternalChatThread(user_id=users[0].id, proyecto=slug + "-missing")
+            )
 
 
 def test_agent_turn_authorization_failure_uses_turn_failure_path_and_publishes(monkeypatch):
