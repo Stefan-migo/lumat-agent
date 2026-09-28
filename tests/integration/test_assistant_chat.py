@@ -935,7 +935,7 @@ def test_rejected_approval_only_leaves_planner_cost_and_preserves_whatsapp_total
 def test_expired_approval_cannot_add_execution_cost(client):
     _user("assistant-expired-cost", "admin")
     _login(client, "assistant-expired-cost")
-    thread_id = client.post(f"/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post(f"/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     pending = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"})
     metadata = pending.json()["message"]["assistant_metadata"]
     settled = _wait_for_run(client, thread_id, metadata["run_id"])
