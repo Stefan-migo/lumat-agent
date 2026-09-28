@@ -101,17 +101,17 @@ cd web && npm run build                      # the only frontend type check (tsc
 
 ### S1 — Slot enumeration service
 
-- [ ] Add a bounded open-slot search to `app/services/scheduling.py` that returns concrete bookable
+- [x] Add a bounded open-slot search to `app/services/scheduling.py` that returns concrete bookable
       slots for a technician (or the availability rules) over a bounded window, respecting:
       `available=True` blocks, existing booked appointments, service duration, and the existing
       policy that a technician with no availability blocks is unrestricted.
-- [ ] Reuse `local_interval()` and the DST validation; return local date/time plus timezone, not raw
+- [x] Reuse `local_interval()` and the DST validation; return local date/time, not raw
       UTC guesses.
-- [ ] Acceptance: given a technician with a known availability window and one booked visit, the
+- [x] Acceptance: given a technician with a known availability window and one booked visit, the
       search returns only free slots that can actually be booked, and a slot returned by the search
       is accepted by `book()` at commit time.
-- [ ] Route: delegated writer (new service surface + tests, 2+ files).
-- [ ] Checks: `uv run pytest tests/unit/test_scheduling_unit.py tests/integration/test_scheduling.py -o addopts='' -q`
+- [x] Route: delegated writer (new service surface + tests, 2+ files).
+- [x] Checks: unit, integration, and full backend scheduling verification passed.
 
 ### S2 — Booking step in the WhatsApp graph
 
@@ -162,3 +162,10 @@ cd web && npm run build                      # the only frontend type check (tsc
 - 2026-09-28: worktree created on `e98b6683`; `uv sync`, `npm ci`, test DB up on port 5945; unit
   smoke `tests/unit/test_scheduling_unit.py` = 4 passed. Graph present but stale (`16ba9cbf`);
   refresh at session close.
+- 2026-09-28: S1 implemented in `e6632c7f` (`feat(scheduling): add bounded open-slot search`).
+  Strict TDD RED observed: test collection failed because `_candidate_starts` was not yet defined.
+  GREEN: scheduling unit tests = 10 passed; scheduling integration tests = 15 passed; full backend
+  suite = 1548 passed, 2 warnings. Graph checked nodes `local_interval()`, `_validate_slot()`,
+  `availability()`, `book()`, `Appointment`, `TechnicianAvailability`, and `_linked_rows()`; the
+  relevant extracted relationships connect `_validate_slot()` to `local_interval()` and
+  `availability()`, and connect `book()` to `_validate_slot()`. Graph is stale from `16ba9cbf`.
