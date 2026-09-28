@@ -169,6 +169,16 @@ def _owner_filter(owner_id: int | None):
     return Memory.owner_id.is_(None) if owner_id is None else Memory.owner_id == owner_id
 
 
+def _effective_owner_id(
+    authorization: projects._ProjectAuthorization | None, owner_id: int | None
+) -> int | None:
+    if authorization is None:
+        return owner_id
+    if owner_id is not None and owner_id != authorization.owner_id:
+        raise ValueError("owner_id contradicts project authorization")
+    return authorization.owner_id
+
+
 def _review_after(tipo: MemoryType, *, now: datetime | None = None) -> datetime | None:
     """Return the review instant for a decaying type, or None otherwise."""
     if tipo not in DECAYING_TYPES:
@@ -340,6 +350,7 @@ def upsert(
     that remains inside the caller's transaction and preserves rollback semantics.
     """
     _guard_writable_project(proyecto, authorization)
+    effective_owner_id = _effective_owner_id(authorization, owner_id)
 
     normalized_hash = _normalized_hash(contenido)
     embeddings = _embed([contenido])
@@ -367,7 +378,7 @@ def upsert(
                     visibility=visibility,
                     embedding=embedding,
                     normalized_hash=normalized_hash,
-                    owner_id=owner_id,
+                    owner_id=effective_owner_id,
                 )
         except IntegrityError:
             if attempt == 1:

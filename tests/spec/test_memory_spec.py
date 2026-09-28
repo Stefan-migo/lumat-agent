@@ -422,7 +422,7 @@ def test_memory_owner_namespace_isolated_for_writes_and_reads(fake_embedder, mig
         session.add_all(owners)
         session.flush()
         rows = [tukulpan.upsert(
-            session, owner_id=owner.id, authorization=_ProjectAuthorization(slug="casa"), proyecto="casa", scope="agent",
+            session, authorization=_ProjectAuthorization(slug="casa", owner_id=owner.id), proyecto="casa", scope="agent",
             entity_id="agent:casa", topic_key="fact", tipo=MemoryType.DECISION,
             titulo="Fact", contenido="Private fact", visibility=MemoryVisibility.GLOBAL,
         ) for owner in owners]
@@ -459,6 +459,35 @@ def test_memory_owner_namespace_isolated_for_writes_and_reads(fake_embedder, mig
         )
         assert rows[0].id in {result["id"] for result in results}
         assert rows[1].id not in {result["id"] for result in results}
+
+
+def test_memory_upsert_derives_and_enforces_authorized_owner(fake_embedder, migrated_db):
+    from app.services.projects import _ProjectAuthorization
+
+    with SessionLocal() as session:
+        owners = [User(username=f"derived-owner-{uuid4().hex}", password_hash="test") for _ in range(2)]
+        session.add_all(owners)
+        session.flush()
+        authorization = _ProjectAuthorization(slug="derived-project", owner_id=owners[0].id)
+
+        owned = tukulpan.upsert(
+            session, authorization=authorization, owner_id=None, proyecto="derived-project",
+            scope="agent", entity_id="agent:derived-project", topic_key="owned",
+            tipo=MemoryType.DECISION, titulo="Owned", contenido="Owner-derived memory",
+            visibility=MemoryVisibility.GLOBAL,
+        )
+        shared = tukulpan.upsert(
+            session, authorization=None, owner_id=None, scope="customer", entity_id="shared",
+            topic_key="business", tipo=MemoryType.DECISION, titulo="Shared", contenido="Business memory",
+        )
+        assert owned.owner_id == owners[0].id
+        assert shared.owner_id is None
+        with pytest.raises(ValueError, match="owner"):
+            tukulpan.upsert(
+                session, authorization=authorization, owner_id=owners[1].id, proyecto="derived-project",
+                scope="agent", entity_id="agent:derived-project", topic_key="contradiction",
+                tipo=MemoryType.DECISION, titulo="Rejected", contenido="Must fail closed",
+            )
 
 
 def test_mem2_rewrite_collision_keeps_written_key_and_folds_duplicate(fake_embedder, migrated_db):
