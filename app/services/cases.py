@@ -202,19 +202,27 @@ def update_case(
     *,
     status: str | None = None,
     responsible_id: int | None | object = _UNSET,
+    amount: float | None | object = _UNSET,
     actor: str = "system",
 ) -> Case:
-    """AP-5: change case state and/or the responsible user; audited.
+    """AP-5: change case state, responsible user, and/or service amount; audited.
 
     `status=None` keeps the current value; `responsible_id=None` (explicit)
     CLEARS the assignment (the sentinel default means "keep"). Every change
-    writes an audit snapshot (SH-5). The caller commits.
+    writes an audit snapshot (SH-5). For `amount`, omission keeps the current
+    value and explicit `null` clears it. The caller commits.
     """
-    before = {"status": case.status, "responsible_id": case.responsible_id}
+    before = {
+        "status": case.status,
+        "responsible_id": case.responsible_id,
+        "amount": float(case.amount) if case.amount is not None else None,
+    }
     if status is not None:
         set_case_status(case, status)
     if responsible_id is not _UNSET:
         case.responsible_id = responsible_id
+    if amount is not _UNSET:
+        case.amount = amount
     record_audit(
         session,
         actor=actor,
@@ -222,12 +230,20 @@ def update_case(
         entity="case",
         entity_id=str(case.id),
         before=before,
-        after={"status": case.status, "responsible_id": case.responsible_id},
+        after={
+            "status": case.status,
+            "responsible_id": case.responsible_id,
+            "amount": float(case.amount) if case.amount is not None else None,
+        },
     )
     session.flush()
     publish_event(
         session, event_type="case.updated", entity_type="case", entity_id=case.id,
-        payload={"status": case.status, "responsible_id": case.responsible_id},
+        payload={
+            "status": case.status,
+            "responsible_id": case.responsible_id,
+            "amount": float(case.amount) if case.amount is not None else None,
+        },
         dedupe_key=f"case:{case.id}:updated:{case.status}:{case.responsible_id}",
     )
     return case

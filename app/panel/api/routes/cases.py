@@ -6,7 +6,7 @@ Thin JSON wrappers over `app/services/cases.py` + `app/services/notify.py`:
                            open cases (HH-4, escalated first) with the
                            customer embedded per case (D8)
 - POST /cases/{id}/update -> {"ok", "case"} (AP-5 status + nullable
-                           responsible, audited with the actor)
+                           responsible + amount, audited with the actor)
 - POST /cases/{id}/ack   -> {"ok", "case"} (EM-4 emergency ack, audited)
 
 No new business logic; the mutation audits are the existing service calls
@@ -34,7 +34,7 @@ from app.services.notify import acknowledge_case
 router = APIRouter(tags=["panel-api-cases"])
 
 # Reuse the service's keep-vs-clear sentinel (app/services/cases.py): the body
-# field defaults to it so "omitted" keeps the current assignment, while an
+# field defaults to it so "omitted" keeps the current value, while an
 # explicit `null` clears it. Must be the SAME object instance the service
 # checks with `is`, not a local copy.
 _UNSET = cases_service._UNSET
@@ -43,6 +43,7 @@ _UNSET = cases_service._UNSET
 class CaseUpdateBody(BaseModel):
     status: str | None = None
     responsible_id: int | None | object = _UNSET
+    amount: float | None | object = _UNSET
 
 
 class ManualCaseBody(BaseModel):
@@ -98,13 +99,14 @@ def case_update(
     session: Session = Depends(get_db),
     current: User = Depends(require_operator_json),
 ) -> dict:
-    """AP-5: change case status and/or responsible; null clears assignment."""
+    """AP-5: update case status, responsible, or amount; omitted amount keeps and null clears."""
     case = _case_or_404(session, case_id)
     cases_service.update_case(
         session,
         case,
         status=body.status,
         responsible_id=body.responsible_id,
+        amount=body.amount,
         actor=current.username,
     )
     session.commit()

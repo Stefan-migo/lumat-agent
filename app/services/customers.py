@@ -551,6 +551,7 @@ def customer_history(
                 "customer_id": ca.customer_id,
                 "created_at": ca.created_at,
                 "service": ca.service,
+                "amount": float(ca.amount) if ca.amount is not None else None,
                 "priority": ca.priority,
                 "status": ca.status,
                 "summary": ca.summary,
