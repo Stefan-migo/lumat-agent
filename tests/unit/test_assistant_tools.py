@@ -828,16 +828,18 @@ def test_own_memory_read_uses_trusted_thread_and_agent_axes_and_fails_closed(mon
     )
 
     result = execute_tool(
-        SimpleNamespace(), "memory.read", {"scope": "own"}, trusted_thread_id=7
+        SimpleNamespace(), "memory.read", {"scope": "own"}, trusted_thread_id=7, owner_id=7
     )
     assert result["status"] == "completed"
     assert calls == [
-        {"scope": "panel", "entity_id": "thread:7", "proyecto": "default"},
-        {"scope": "agent", "entity_id": "agent:default", "proyecto": "default"},
+        {"scope": "panel", "entity_id": "thread:7", "proyecto": "default", "owner_id": None},
+        {"scope": "agent", "entity_id": "agent:default", "proyecto": "default", "owner_id": None},
     ]
 
     with pytest.raises(ToolValidationError, match="positive trusted thread id"):
         execute_tool(SimpleNamespace(), "memory.read", {"scope": "own"})
+    with pytest.raises(ToolValidationError, match="authenticated owner"):
+        execute_tool(SimpleNamespace(), "memory.read", {"scope": "own"}, trusted_thread_id=7)
     with pytest.raises(ToolValidationError, match="positive trusted thread id"):
         execute_tool(
             SimpleNamespace(), "memory.search", {"scope": "own", "query": "launch"}
@@ -859,14 +861,14 @@ def test_memory_search_uses_own_axes_and_bounds_content(monkeypatch):
     result = execute_tool(
         SimpleNamespace(),
         "memory.search", {"query": "launch", "scope": "own", "limit": 1},
-        trusted_thread_id=7,
+        trusted_thread_id=7, owner_id=7,
     )
 
     assert result["status"] == "completed"
     assert len(result["result"][0]["contenido"]) == 2_000
     assert [kwargs for _args, kwargs in calls] == [
-        {"scope": "panel", "entity_id": "thread:7", "proyecto": "default", "top_k": 1},
-        {"scope": "agent", "entity_id": "agent:default", "proyecto": "default", "top_k": 1},
+        {"scope": "panel", "entity_id": "thread:7", "proyecto": "default", "owner_id": None, "top_k": 1},
+        {"scope": "agent", "entity_id": "agent:default", "proyecto": "default", "owner_id": None, "top_k": 1},
     ]
     with pytest.raises(ToolValidationError):
         execute_tool(SimpleNamespace(), "memory.search", {"query": "x", "scope": "own", "entity_id": "customer:7"})
@@ -901,8 +903,8 @@ def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkey
         "tipo": "decision",
     }
 
-    first = execute_tool(session, "memory.write", args, trusted_thread_id=7)
-    second = execute_tool(session, "memory.write", args, trusted_thread_id=7)
+    first = execute_tool(session, "memory.write", args, trusted_thread_id=7, owner_id=7)
+    second = execute_tool(session, "memory.write", args, trusted_thread_id=7, owner_id=7)
 
     assert first["result"] == {"written": True, "id": 4, "topic_key": "agent:decision"}
     assert second["result"] == first["result"]
@@ -913,6 +915,7 @@ def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkey
         "memory.write",
         {**args, "visibility": "thread"},
         trusted_thread_id=7,
+        owner_id=7,
     )
     assert calls[-1]["scope"] == "panel"
     assert calls[-1]["entity_id"] == "thread:7"
@@ -943,9 +946,9 @@ def test_memory_correction_args_are_bounded_and_require_a_patch():
 def test_memory_correction_owned_axes_are_accepted(monkeypatch, row_kwargs):
     from app.chat.assistant.tools.registry import _owned_agent_memory_or_raise
 
-    row = SimpleNamespace(id=4, **row_kwargs)
+    row = SimpleNamespace(id=4, owner_id=None, **row_kwargs)
     session = SimpleNamespace(get=lambda _model, _id: row)
-    assert _owned_agent_memory_or_raise(session, 4, trusted_thread_id=8, proyecto="default") is row
+    assert _owned_agent_memory_or_raise(session, 4, trusted_thread_id=8, proyecto="default", memory_owner=None) is row
 
 
 @pytest.mark.parametrize(
@@ -960,15 +963,15 @@ def test_memory_correction_owned_axes_are_accepted(monkeypatch, row_kwargs):
 def test_memory_correction_rejects_rows_outside_agent_ownership(row_kwargs):
     from app.chat.assistant.tools.registry import _owned_agent_memory_or_raise
 
-    row = SimpleNamespace(id=4, **row_kwargs)
+    row = SimpleNamespace(id=4, owner_id=None, **row_kwargs)
     session = SimpleNamespace(get=lambda _model, _id: row)
     with pytest.raises(ToolValidationError):
-        _owned_agent_memory_or_raise(session, 4, trusted_thread_id=8, proyecto="default")
+        _owned_agent_memory_or_raise(session, 4, trusted_thread_id=8, proyecto="default", memory_owner=None)
 
 
 def test_memory_correction_update_and_delete_are_autonomous(monkeypatch):
     assert AUTONOMOUS_WRITE_ALLOWLIST == frozenset({"memory.write", "memory.update", "memory.delete"})
-    row = SimpleNamespace(id=4, proyecto="default", producer=memory.MemoryProducer.AGENT, topic_key="agent:x", scope="agent", entity_id="agent:default")
+    row = SimpleNamespace(id=4, owner_id=None, proyecto="default", producer=memory.MemoryProducer.AGENT, topic_key="agent:x", scope="agent", entity_id="agent:default")
 
     class Savepoint:
         def __enter__(self):
@@ -980,8 +983,8 @@ def test_memory_correction_update_and_delete_are_autonomous(monkeypatch):
     session = SimpleNamespace(begin_nested=lambda: Savepoint(), get=lambda _model, _id: row)
     monkeypatch.setattr("app.chat.assistant.tools.registry.memory.update", lambda *_args, **_kwargs: row)
     monkeypatch.setattr("app.chat.assistant.tools.registry.memory.delete", lambda *_args, **_kwargs: row)
-    assert execute_tool(session, "memory.update", {"id": 4, "titulo": "Fixed"}, trusted_thread_id=8)["result"] == {"updated": True, "id": 4}
-    assert execute_tool(session, "memory.delete", {"id": 4}, trusted_thread_id=8)["result"] == {"deleted": True, "id": 4}
+    assert execute_tool(session, "memory.update", {"id": 4, "titulo": "Fixed"}, trusted_thread_id=8, owner_id=8)["result"] == {"updated": True, "id": 4}
+    assert execute_tool(session, "memory.delete", {"id": 4}, trusted_thread_id=8, owner_id=8)["result"] == {"deleted": True, "id": 4}
 
 
 def test_memory_service_update_reembeds_only_changed_content(monkeypatch):
@@ -1088,6 +1091,7 @@ def test_memory_write_global_visibility_uses_canonical_agent_axis(monkeypatch):
             "visibility": "global",
         },
         trusted_thread_id=8,
+        owner_id=8,
     )
 
     assert result["result"] == {"written": True, "id": 5, "topic_key": "agent:fact"}
@@ -1120,7 +1124,7 @@ def test_memory_write_degrades_and_fails_closed_without_trusted_thread(monkeypat
     with pytest.raises(ToolValidationError):
         execute_tool(session, "memory.write", args)
 
-    result = execute_tool(session, "memory.write", args, trusted_thread_id=7)
+    result = execute_tool(session, "memory.write", args, trusted_thread_id=7, owner_id=7)
     assert result["result"]["written"] is False
     assert result["result"]["degraded_reason"] == "Memory write unavailable"
     assert "embedding unavailable" not in result["result"]["degraded_reason"]
@@ -1138,7 +1142,7 @@ def test_memory_update_degradation_does_not_leak_raw_exception(monkeypatch):
 
     raw_error = "private update backend details"
     row = SimpleNamespace(
-        id=4, proyecto="default", producer=memory.MemoryProducer.AGENT,
+        id=4, owner_id=None, proyecto="default", producer=memory.MemoryProducer.AGENT,
         topic_key="agent:fact", scope="agent", entity_id="agent:default",
     )
     session = SimpleNamespace(begin_nested=lambda: Savepoint(), get=lambda _model, _id: row)
@@ -1151,6 +1155,7 @@ def test_memory_update_degradation_does_not_leak_raw_exception(monkeypatch):
         session,
         MemoryUpdateArgs(id=4, titulo="Updated"),
         trusted_thread_id=7,
+        owner_id=7,
     )
 
     assert result == {"updated": False, "degraded_reason": "Memory update unavailable"}
@@ -1169,7 +1174,7 @@ def test_memory_delete_degradation_does_not_leak_raw_exception(monkeypatch):
 
     raw_error = "private delete backend details"
     row = SimpleNamespace(
-        id=4, proyecto="default", producer=memory.MemoryProducer.AGENT,
+        id=4, owner_id=None, proyecto="default", producer=memory.MemoryProducer.AGENT,
         topic_key="agent:fact", scope="agent", entity_id="agent:default",
     )
     session = SimpleNamespace(begin_nested=lambda: Savepoint(), get=lambda _model, _id: row)
@@ -1182,6 +1187,7 @@ def test_memory_delete_degradation_does_not_leak_raw_exception(monkeypatch):
         session,
         MemoryDeleteArgs(id=4),
         trusted_thread_id=7,
+        owner_id=7,
     )
 
     assert result == {"deleted": False, "degraded_reason": "Memory delete unavailable"}

@@ -144,6 +144,7 @@ def test_sdb_task_runner_never_fabricates_completed_results(monkeypatch):
     monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: {"status": "completed", "result": {"rows": []}})
     thread = SimpleNamespace(
         id=1,
+        user_id=1,
         current_plan={"sdb": {"tasks": [{"id": "task-1", "scope": {}, "summary": "read", "verifiable_output": "summary", "tool": "conversations.search", "arguments": {"query": "x", "limit": 10}}]}},
         assistant_state={"sdb": {"checkpoints": []}},
     )
@@ -162,7 +163,7 @@ def test_sdb_task_runner_stops_after_first_failure(monkeypatch):
     monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: captured.append(kwargs))
     monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: {"status": "error", "error": "read failed"})
     tasks = [{"id": f"task-{n}", "scope": {}, "summary": "read", "verifiable_output": "rows", "tool": "conversations.search", "arguments": {"query": "x", "limit": 10}} for n in (1, 2)]
-    thread = SimpleNamespace(id=1, current_plan={"sdb": {"tasks": tasks}}, assistant_state={"sdb": {"checkpoints": []}})
+    thread = SimpleNamespace(id=1, user_id=1, current_plan={"sdb": {"tasks": tasks}}, assistant_state={"sdb": {"checkpoints": []}})
 
     result = agent_chat._run_sdb_tasks(object(), thread, "run-1")
 
@@ -186,6 +187,7 @@ def test_sdb_failed_task_records_audit_and_never_streams_completed(monkeypatch):
     monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: {"status": "error", "error": "read failed"})
     thread = SimpleNamespace(
         id=1,
+        user_id=1,
         current_plan={"sdb": {"tasks": _sdb_plan()["tasks"]}},
         assistant_state={"sdb": {"checkpoints": []}},
     )
@@ -214,6 +216,7 @@ def test_sdb_timeout_and_exception_are_bounded_failed_attempts(monkeypatch):
         )
         thread = SimpleNamespace(
             id=1,
+            user_id=1,
             current_plan={"sdb": {"tasks": _sdb_plan()["tasks"]}},
             assistant_state={"sdb": {"checkpoints": []}},
         )
@@ -235,6 +238,7 @@ def test_sdb_gate_order_rejects_cost_before_project_capability(monkeypatch):
     task = _sdb_plan()["tasks"][0] | {"scope": {"proyecto": "field-ops"}}
     thread = SimpleNamespace(
         id=1,
+        user_id=1,
         current_plan={"sdb": {"tasks": [task]}},
         assistant_state={"sdb": {"checkpoints": []}, "guardrails": {"cost_allowed": False}},
     )
@@ -255,6 +259,7 @@ def test_sdb_missing_project_capability_fails_closed_without_tool(monkeypatch):
     task = _sdb_plan()["tasks"][0] | {"scope": {"proyecto": "field-ops"}}
     thread = SimpleNamespace(
         id=1,
+        user_id=1,
         current_plan={"sdb": {"tasks": [task]}},
         assistant_state={"sdb": {"checkpoints": []}},
     )
@@ -282,6 +287,7 @@ def test_sdb_write_task_is_rejected_with_no_side_effect(monkeypatch):
     }
     thread = SimpleNamespace(
         id=1,
+        user_id=1,
         current_plan={"sdb": {"tasks": [task]}},
         assistant_state={"sdb": {"checkpoints": []}},
     )
@@ -301,6 +307,7 @@ def test_sdb_task_runner_forwards_authorized_project_to_checkpoint(monkeypatch):
     authorization = SimpleNamespace(slug="field-ops")
     thread = SimpleNamespace(
         id=1,
+        user_id=1,
         current_plan={"sdb": {"tasks": [{"id": "task-1", "scope": {}, "summary": "read", "verifiable_output": "summary", "tool": "conversations.search", "arguments": {"query": "x", "limit": 10}}]}},
         assistant_state={"sdb": {"checkpoints": []}},
     )
@@ -326,7 +333,7 @@ def test_sdb_task_runner_forwards_consumed_binding_and_emits_ordered_contracts(m
     })
     monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: captured.append(kwargs))
     thread = SimpleNamespace(
-        id=1, current_plan={"sdb": plan},
+        id=1, user_id=1, current_plan={"sdb": plan},
         assistant_state={"sdb": {"checkpoints": []}, "approval": approval},
     )
 
@@ -417,6 +424,8 @@ def test_create_capability_is_used_for_following_mutation_and_persistence(monkey
     assert result["status"] == "completed"
     assert persisted[-1]["authorization"] is capability
     assert calls[-1]["task_binding"]["task_id"] == "rename"
+    assert calls[-1]["owner_id"] == owner_id
+    assert calls[-1]["trusted_thread_id"] == thread.id
     assert resolved_owners == [owner_id]
 
 
