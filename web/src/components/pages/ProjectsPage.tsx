@@ -1,9 +1,12 @@
-import { useCallback, type ReactNode } from "react";
-import { getProject, listProjects } from "../../api";
-import type { ProjectDetailResponse, ProjectsResponse } from "../../types";
+import { useCallback, useState, type FormEvent, type ReactNode } from "react";
+import { ApiError, createProject, getProject, listProjects } from "../../api";
+import type { ProjectCandidate, ProjectDetailResponse, ProjectsResponse } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
+import { Card } from "../primitives/Card";
+import { Input } from "../primitives/Input";
+import { Textarea } from "../primitives/Textarea";
 import { EmptyState } from "../shared/EmptyState";
 import { DataTable } from "../shared/DataTable";
 import { PageFrame } from "../shared/PageFrame";
@@ -11,6 +14,10 @@ import { StateMessage } from "../shared/StateMessage";
 import { memoryStatusLabel, memoryStatusTone, memoryTypeLabel, memoryTypeTone, projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 
 export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, state, sectionTabs }: { projectSlug?: string; onOpenProject?: (slug: string) => void; onOpenChat?: (slug: string) => void; data?: ProjectsResponse; state?: AsyncDataState; sectionTabs?: ReactNode }) {
+  const [form, setForm] = useState({ slug: "", name: "", purpose: "" });
+  const [createdProjects, setCreatedProjects] = useState<ProjectsResponse | null>(null);
+  const [creationError, setCreationError] = useState<{ detail: string; candidates: ProjectCandidate[] } | null>(null);
+  const [creating, setCreating] = useState(false);
   const load = useCallback(() => listProjects(), []);
   const fetched = useAsyncData(load, data === undefined);
   const detailLoad = useCallback(() => getProject(projectSlug!), [projectSlug]);
@@ -24,8 +31,36 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, sta
   }
   const projects = data ?? fetched.data;
   const currentState = state ?? (data ? "ready" : fetched.state);
+  const create = async (event: FormEvent) => {
+    event.preventDefault();
+    setCreating(true);
+    setCreationError(null);
+    try {
+      await createProject(form);
+      setCreatedProjects(await listProjects());
+      setForm({ slug: "", name: "", purpose: "" });
+    } catch (reason: unknown) {
+      const detail = reason instanceof ApiError ? reason.detail : "No pudimos crear el proyecto";
+      const candidates = reason instanceof ApiError && Array.isArray(reason.structuredDetail?.candidates)
+        ? reason.structuredDetail.candidates as ProjectCandidate[]
+        : [];
+      setCreationError({ detail, candidates });
+    } finally {
+      setCreating(false);
+    }
+  };
+  const visibleProjects = createdProjects ?? projects;
   return <PageFrame title="Proyectos" meta={<span>Explora los artefactos SDB</span>} state={currentState === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando proyectos" /> : currentState === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar los proyectos" /> : undefined}>
     {sectionTabs}
-    {!projects || projects.projects.length === 0 ? <EmptyState title="No hay proyectos" description="No hay espacios de proyecto registrados para mostrar." /> : <DataTable rows={projects.projects} rowKey={(project) => project.slug} columns={[{ key: "name", header: "Proyecto", render: (project) => <Button variant="tertiary" onClick={() => onOpenProject?.(project.slug)}>{project.name}</Button> }, { key: "purpose", header: "Propósito", render: (project) => project.purpose }, { key: "status", header: "Estado", render: (project) => <Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge> }]} />}
+    <Card title="Crear proyecto">
+      <form onSubmit={(event) => void create(event)}>
+        <Input label="Slug" maxLength={100} required value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} />
+        <Input label="Nombre" maxLength={200} required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+        <Textarea label="Propósito" maxLength={500} required value={form.purpose} onChange={(event) => setForm({ ...form, purpose: event.target.value })} />
+        <Button type="submit" disabled={creating}>{creating ? "Creando…" : "Crear proyecto"}</Button>
+        {creationError ? <section role="alert"><p>{creationError.detail}</p>{creationError.candidates.map((candidate) => <p key={candidate.slug}>{candidate.name} ({candidate.slug}) · {candidate.similarity}</p>)}</section> : null}
+      </form>
+    </Card>
+    {!visibleProjects || visibleProjects.projects.length === 0 ? <EmptyState title="No hay proyectos" description="No hay espacios de proyecto registrados para mostrar." /> : <DataTable rows={visibleProjects.projects} rowKey={(project) => project.slug} columns={[{ key: "name", header: "Proyecto", render: (project) => <Button variant="tertiary" onClick={() => onOpenProject?.(project.slug)}>{project.name}</Button> }, { key: "purpose", header: "Propósito", render: (project) => project.purpose }, { key: "status", header: "Estado", render: (project) => <Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge> }]} />}
   </PageFrame>;
 }

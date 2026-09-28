@@ -38,7 +38,8 @@ export async function apiFetch<T>(
     let detail = raw.trim();
     let structuredDetail: ApiError['structuredDetail'];
     try {
-      const payload = JSON.parse(raw) as { detail?: unknown };
+      const payload = JSON.parse(raw) as { detail?: unknown; candidates?: unknown };
+      if (Array.isArray(payload.candidates)) structuredDetail = { candidates: payload.candidates };
       if (typeof payload.detail === 'string') {
         detail = payload.detail;
       } else if (payload.detail && typeof payload.detail === 'object' && !Array.isArray(payload.detail)) {
@@ -82,7 +83,7 @@ export function searchKb({ q, topK, minSim }: { q: string; topK: number; minSim:
   return apiFetch<KbSearchResponse>(`/panel/api/kb/search?${params.toString()}`);
 }
 
-import type { ActiveConversationsResponse, AdminUser, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentDetail, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse, ProjectsResponse, ProjectDetailResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest } from './types';
+import type { ActiveConversationsResponse, AdminUser, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentDetail, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse, ProjectsResponse, ProjectDetailResponse, ProjectCreateRequest, ProjectCreateResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; q?: string; limit?: number; offset?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -107,7 +108,7 @@ export interface NotificationFilters { unread?: boolean; status?: string; source
 export function listNotifications(filters: NotificationFilters = {}) { const params = new URLSearchParams(); if (filters.unread !== undefined) params.set('unread', String(filters.unread)); if (filters.status) params.set('status', filters.status); if (filters.source) params.set('source', filters.source); const query = params.toString(); return apiFetch<NotificationsResponse>(`/panel/api/notifications${query ? `?${query}` : ''}`); }
 export const markNotificationRead = (id: number) => postJson<{ notification: PanelNotification }>(`/panel/api/notifications/${id}/read`);
 export const markAllNotificationsRead = () => postJson<{ ok: true; read: number }>('/panel/api/notifications/read-all');
-export const createChatThread = (proyecto?: string) => postJson<InternalChatResponse>('/panel/api/chat/threads', proyecto ? { proyecto } : {});
+export const createChatThread = (proyecto: string) => postJson<InternalChatResponse>('/panel/api/chat/threads', { proyecto });
 export const listChatThreads = (limit: number) => apiFetch<InternalChatThreadsResponse>(`/panel/api/chat/threads?limit=${encodeURIComponent(limit)}`);
 export const renameChatThread = (id: number, title: string) => apiFetch<{ thread: InternalChatThread }>(`/panel/api/chat/threads/${id}`, { method: 'PATCH', body: JSON.stringify({ title }) });
 export const deleteChatThread = (id: number) => apiFetch<{ ok: true }>(`/panel/api/chat/threads/${id}`, { method: 'DELETE' });
@@ -209,6 +210,7 @@ export const createUser = (body: { username: string; password: string; role: Adm
 export const toggleUserActive = (id: number) => postJson<{ user: AdminUser }>(`/panel/api/users/${id}/toggle-active`);
 export const resetUserPassword = (id: number, password: string) => postJson<{ user: AdminUser }>(`/panel/api/users/${id}/reset-password`, { password });
 export const listProjects = () => apiFetch<ProjectsResponse>('/panel/api/projects');
+export const createProject = (body: ProjectCreateRequest) => postJson<ProjectCreateResponse>('/panel/api/projects', body);
 export const getProject = (slug: string) => apiFetch<ProjectDetailResponse>(`/panel/api/projects/${encodeURIComponent(slug)}`);
 export const listPlanningSessions = () => apiFetch<PlanningSessionsResponse>('/panel/api/planning/sessions');
 export const getPlanningSession = (slug: string) => apiFetch<PlanningSessionDetailResponse>(`/panel/api/planning/sessions/${encodeURIComponent(slug)}`);

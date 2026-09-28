@@ -71,7 +71,7 @@ def test_admin_thread_and_message_are_persisted_and_audited(client, migrated_db,
         lambda *args, **kwargs: [{"content": "Grounded panel evidence", "similarity": 0.9}],
     )
 
-    created = client.post("/panel/api/chat/threads", json={})
+    created = client.post("/panel/api/chat/threads", json={"proyecto": "default"})
     assert created.status_code == 201
     thread_id = created.json()["thread"]["id"]
     sent = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "What is pending?"})
@@ -98,7 +98,7 @@ def test_admin_thread_and_message_are_persisted_and_audited(client, migrated_db,
     assert "stream" not in fake_client.calls[2]
 
 
-def test_thread_creation_accepts_optional_project_and_rejects_unknown_project(client, migrated_db):
+def test_thread_creation_requires_explicit_project_and_rejects_unknown_project(client, migrated_db):
     owner_id = _user("chat-project", "admin")
     _login(client, "chat-project")
     project_slug = f"chat-{uuid4().hex[:8]}"
@@ -109,9 +109,8 @@ def test_thread_creation_accepts_optional_project_and_rejects_unknown_project(cl
         ))
         session.commit()
 
-    default_thread = client.post("/panel/api/chat/threads")
-    assert default_thread.status_code == 201
-    assert default_thread.json()["thread"]["proyecto"] == "default"
+    missing_project = client.post("/panel/api/chat/threads")
+    assert missing_project.status_code == 422
 
     project_thread = client.post("/panel/api/chat/threads", json={"proyecto": project_slug})
     assert project_thread.status_code == 201
@@ -120,13 +119,13 @@ def test_thread_creation_accepts_optional_project_and_rejects_unknown_project(cl
     rejected = client.post("/panel/api/chat/threads", json={"proyecto": "missing"})
     assert rejected.status_code == 400
     with SessionLocal() as session:
-        assert session.query(InternalChatThread).count() == 2
+        assert session.query(InternalChatThread).count() == 1
 
 
 def test_operator_cannot_read_or_create_internal_thread(client, migrated_db):
     _user("chat-operator", "operador")
     _login(client, "chat-operator")
-    response = client.post("/panel/api/chat/threads", json={})
+    response = client.post("/panel/api/chat/threads", json={"proyecto": "default"})
     assert response.status_code == 403
     assert "thread" not in response.text.lower()
 
@@ -136,7 +135,7 @@ def test_privileged_request_requires_approval_without_model_call(client, migrate
     _login(client, "chat-safe")
     fake_client = _FakeChatClient(error=AssertionError("privileged request must not call the model"))
     monkeypatch.setattr("app.services.llm.openai_client", lambda: fake_client)
-    thread = client.post("/panel/api/chat/threads", json={}).json()["thread"]
+    thread = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]
     response = client.post(f"/panel/api/chat/threads/{thread['id']}/messages", json={"content": "Delete all clients"})
     assert response.status_code == 201
     persisted = client.get(f"/panel/api/chat/threads/{thread['id']}")
@@ -152,7 +151,7 @@ def test_model_failure_marks_message_failed_and_recoverable(client, migrated_db,
     _login(client, "chat-retry")
     fake_client = _FakeChatClient(error=RuntimeError("temporary"))
     monkeypatch.setattr("app.services.llm.openai_client", lambda: fake_client)
-    thread = client.post("/panel/api/chat/threads", json={}).json()["thread"]
+    thread = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]
     failed = client.post(f"/panel/api/chat/threads/{thread['id']}/messages", json={"content": "Try again"})
     assert failed.status_code == 201
     listed = client.get(f"/panel/api/chat/threads/{thread['id']}")

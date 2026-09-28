@@ -177,7 +177,7 @@ def test_cross_thread_read_is_not_exposed(client):
     _user("assistant-owner", "admin")
     _user("assistant-other", "admin")
     _login(client, "assistant-owner")
-    own_thread = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    own_thread = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
 
     client.post("/panel/api/logout")
     _login(client, "assistant-other")
@@ -190,7 +190,7 @@ def test_cross_thread_read_is_not_exposed(client):
 def test_pending_plan_survives_thread_reload(client):
     _user("assistant-recovery", "admin")
     _login(client, "assistant-recovery")
-    created = client.post("/panel/api/chat/threads", json={})
+    created = client.post("/panel/api/chat/threads", json={"proyecto": "default"})
     assert created.status_code == 201, created.text
     thread_id = created.json()["thread"]["id"]
 
@@ -216,7 +216,7 @@ def test_pending_plan_survives_thread_reload(client):
 def test_stream_reconnect_returns_ordered_persisted_events(client):
     _user("assistant-stream", "admin")
     _login(client, "assistant-stream")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
 
     response = client.post(
         f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Summarize operations"}
@@ -243,7 +243,7 @@ def test_stream_reconnect_returns_ordered_persisted_events(client):
 def test_blocked_cost_gate_persists_canned_reply_without_llm(client, monkeypatch):
     _user("assistant-cost-block", "admin")
     _login(client, "assistant-cost-block")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     with SessionLocal() as session:
         thread = session.get(InternalChatThread, thread_id)
         session.add(InternalChatMessage(
@@ -286,8 +286,8 @@ def test_thread_list_is_admin_only_bounded_and_ordered(client):
     _user("thread-list-admin", "admin")
     _user("thread-list-operator", "operador")
     _login(client, "thread-list-admin")
-    first_response = client.post("/panel/api/chat/threads", json={})
-    second_response = client.post("/panel/api/chat/threads", json={})
+    first_response = client.post("/panel/api/chat/threads", json={"proyecto": "default"})
+    second_response = client.post("/panel/api/chat/threads", json={"proyecto": "default"})
     assert first_response.status_code == 201
     assert second_response.status_code == 201
     first = first_response.json()["thread"]["id"]
@@ -328,7 +328,7 @@ def test_thread_list_rejects_unbounded_or_oversized_requests(client):
 def test_thread_list_does_not_fabricate_planning_sessions(client):
     _user("thread-list-planning", "admin")
     _login(client, "thread-list-planning")
-    regular = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    regular = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     planning = client.post("/panel/api/planning/sessions", json={"topic": "Planning only"}).json()["thread_id"]
     with SessionLocal() as session:
         session.add(InternalChatMessage(thread_id=regular, author="admin", content="regular", status="processed"))
@@ -344,9 +344,9 @@ def test_thread_list_does_not_fabricate_planning_sessions(client):
 def test_thread_list_excludes_empty_threads_and_orders_message_ties_by_id(client):
     _user("thread-list-empty", "admin")
     _login(client, "thread-list-empty")
-    empty = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
-    older = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
-    newer = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    empty = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    older = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+    newer = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     with SessionLocal() as session:
         timestamp = datetime(2026, 2, 1, tzinfo=timezone.utc)
         session.add_all([
@@ -366,7 +366,7 @@ def test_thread_rename_and_delete_are_owned_and_not_exposed(client):
     _user("thread-owner", "admin")
     _user("thread-other-owner", "admin")
     _login(client, "thread-owner")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
 
     renamed = client.patch(f"/panel/api/chat/threads/{thread_id}", json={"title": "Operations"})
     assert renamed.status_code == 200
@@ -388,7 +388,7 @@ def test_thread_rename_and_delete_are_owned_and_not_exposed(client):
 def test_failed_run_does_not_persist_partial_response(client, monkeypatch):
     _user("assistant-failure", "admin")
     _login(client, "assistant-failure")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     monkeypatch.setattr(
         "app.services.agent_chat.run_assistant",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("planner failed")),
@@ -415,7 +415,7 @@ def test_failed_run_does_not_persist_partial_response(client, monkeypatch):
 def test_empty_agent_response_is_localized(client, monkeypatch):
     _user("assistant-empty-response", "admin")
     _login(client, "assistant-empty-response")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     monkeypatch.setattr(
         "app.services.agent_chat.run_assistant",
         lambda *args, **kwargs: {"status": "completed", "response": None},
@@ -431,7 +431,7 @@ def test_empty_agent_response_is_localized(client, monkeypatch):
 def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatch):
     _user("assistant-usage", "admin")
     _login(client, "assistant-usage")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     monkeypatch.setattr(
         "app.services.llm.get_settings",
         lambda: SimpleNamespace(assistant_chat_model="gpt-4o-mini"),
@@ -474,7 +474,7 @@ def test_planner_and_terminal_stream_usage_are_persisted_once(client, monkeypatc
 def test_non_delegating_turn_keeps_pre_wiring_state_and_cost_contract(client, monkeypatch):
     _user("assistant-normal-turn-baseline", "admin")
     _login(client, "assistant-normal-turn-baseline")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     monkeypatch.setattr(
         "app.services.llm.get_settings",
         lambda: SimpleNamespace(assistant_chat_model="gpt-4o-mini"),
@@ -579,7 +579,7 @@ def _persisted_planner(thread_id: int) -> dict:
 def test_a_successful_turn_records_no_failure_diagnostic_from_an_earlier_turn(client, monkeypatch):
     _user("assistant-stale-planner", "admin")
     _login(client, "assistant-stale-planner")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     provider = _scripted_client([
         "this is not json",
         json.dumps({"kind": "respond", "arguments": {}, "summary": "done", "requires_approval": False}),
@@ -599,7 +599,7 @@ def test_a_successful_turn_records_no_failure_diagnostic_from_an_earlier_turn(cl
 def test_planner_arguments_belong_to_the_current_turn_only(client, monkeypatch):
     _user("assistant-stale-arguments", "admin")
     _login(client, "assistant-stale-arguments")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     provider = _scripted_client([
         json.dumps({
             "kind": "tool", "tool": "customers.search", "arguments": {"query": "ana"},
@@ -628,7 +628,7 @@ def _agent_answer(settled: dict) -> str:
 def _turn_with_plan(client, monkeypatch, content: str, planner_output: str | list[str]):
     _user(f"assistant-failure-{content}", "admin")
     _login(client, f"assistant-failure-{content}")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     stream_calls: list = []
     outputs = [planner_output] if isinstance(planner_output, str) else planner_output
     provider = _scripted_client(outputs, stream_calls=stream_calls)
@@ -769,7 +769,7 @@ def test_a_capped_read_only_turn_responder_receives_combined_tool_evidence(clien
 def test_stream_disconnect_keeps_known_usage_and_failed_request(client, monkeypatch):
     _user("assistant-disconnect", "admin")
     _login(client, "assistant-disconnect")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     planner = SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
             "kind": "respond", "arguments": {}, "summary": "planned", "requires_approval": False,
@@ -832,7 +832,7 @@ def test_approval_is_consumed_once_and_execution_requires_consumed_state():
 def test_approved_plan_route_records_execution_audit(client):
     _user("assistant-approval", "admin")
     _login(client, "assistant-approval")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
 
     pending = client.post(
         f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"}
@@ -858,7 +858,7 @@ def test_approved_plan_route_records_execution_audit(client):
 def test_approved_plan_stream_replays_complete_execution_sequence(client, monkeypatch):
     _user("assistant-approval-stream", "admin")
     _login(client, "assistant-approval-stream")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     monkeypatch.setattr(
         "app.services.agent_chat.execute",
         lambda state: {"status": "completed", "response": "Rule created.", "evidence": [{"tool": "automation.create_rule", "status": "completed", "detail": "created"}]},
@@ -912,7 +912,7 @@ def test_recovery_resumes_pending_execution_once():
 def test_rejected_approval_only_leaves_planner_cost_and_preserves_whatsapp_totals(client):
     _user("assistant-denied-cost", "admin")
     _login(client, "assistant-denied-cost")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     pending = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"})
     assert pending.status_code == 201
     metadata = pending.json()["message"]["assistant_metadata"]
@@ -935,7 +935,7 @@ def test_rejected_approval_only_leaves_planner_cost_and_preserves_whatsapp_total
 def test_expired_approval_cannot_add_execution_cost(client):
     _user("assistant-expired-cost", "admin")
     _login(client, "assistant-expired-cost")
-    thread_id = client.post(f"/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post(f"/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     pending = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"})
     metadata = pending.json()["message"]["assistant_metadata"]
     settled = _wait_for_run(client, thread_id, metadata["run_id"])
@@ -973,7 +973,7 @@ def _title_completion(title="Opening title", prompt_tokens=4, completion_tokens=
 def test_title_is_generated_once_after_first_response_and_uses_opening_admin_message(client, monkeypatch):
     _user("assistant-title-once", "admin")
     _login(client, "assistant-title-once")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     monkeypatch.setattr("app.services.agent_chat.run_assistant", lambda *args, **kwargs: _completed_result())
     calls = []
     monkeypatch.setattr(
@@ -1004,7 +1004,7 @@ def test_title_is_generated_once_after_first_response_and_uses_opening_admin_mes
 def test_title_cost_is_gated_and_recorded_on_first_assistant_message(client, monkeypatch):
     _user("assistant-title-cost", "admin")
     _login(client, "assistant-title-cost")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     monkeypatch.setattr("app.services.agent_chat.run_assistant", lambda *args, **kwargs: _completed_result())
     monkeypatch.setattr(
         "app.services.llm.get_settings",
@@ -1036,7 +1036,7 @@ def test_title_cost_is_gated_and_recorded_on_first_assistant_message(client, mon
 def test_non_normal_title_mode_uses_free_bounded_utf8_fallback(client, monkeypatch):
     _user("assistant-title-gate", "admin")
     _login(client, "assistant-title-gate")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     monkeypatch.setattr("app.services.agent_chat.run_assistant", lambda *args, **kwargs: _completed_result())
     monkeypatch.setattr("app.services.costs.internal_thread_cost_state", lambda *args: (80.0, "conservative"))
     calls = []
@@ -1064,7 +1064,7 @@ def test_non_normal_title_mode_uses_free_bounded_utf8_fallback(client, monkeypat
 def test_title_generation_failures_store_the_same_bounded_fallback(client, monkeypatch, failure):
     _user("assistant-title-failure", "admin")
     _login(client, "assistant-title-failure")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     monkeypatch.setattr("app.services.agent_chat.run_assistant", lambda *args, **kwargs: _completed_result())
     monkeypatch.setattr(
         "app.services.llm.openai_client",
@@ -1200,7 +1200,7 @@ def test_open_assistant_stream_releases_its_pooled_connection(client):
 
     _user("stream-pool", "admin")
     _login(client, "stream-pool")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     sent = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Summarize operations"})
     run_id = sent.json()["message"]["assistant_metadata"]["run_id"]
 
@@ -1243,7 +1243,7 @@ def test_open_assistant_stream_never_reads_the_thread_messages(client):
 
     _user("stream-read", "admin")
     _login(client, "stream-read")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     sent = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Summarize operations"})
     run_id = sent.json()["message"]["assistant_metadata"]["run_id"]
 
@@ -1274,7 +1274,7 @@ def test_stream_without_run_id_follows_the_thread_active_run(client):
     """
     _user("stream-fallback", "admin")
     _login(client, "stream-fallback")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     sent = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Summarize operations"})
     run_id = sent.json()["message"]["assistant_metadata"]["run_id"]
 

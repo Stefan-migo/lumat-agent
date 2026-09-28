@@ -177,7 +177,7 @@ def test_compaction_fires_once_the_thread_window_fills(client, monkeypatch):
 
     get_settings.cache_clear()
     _admin(client, "compaction-window")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
 
     # 20 x 1001 chars ~= 5,020 window tokens: above the compaction threshold,
     # while the injected context stays capped below it.
@@ -210,7 +210,7 @@ def test_compaction_stays_idle_for_a_short_thread(client, monkeypatch):
 
     get_settings.cache_clear()
     _admin(client, "compaction-short")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
 
     planner = {"kind": "respond", "classification": "normal", "summary": "ok", "requires_approval": False}
     with respx.mock(base_url="https://openrouter.ai/api/v1") as router:

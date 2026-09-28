@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -221,5 +221,18 @@ describe('internal chat thread API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
 
     await expect(listChatThreads(1)).resolves.toEqual(payload);
+  });
+
+  it('always creates a chat thread with an explicit project', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ thread: {}, messages: [] }), { status: 201 }));
+    await createChatThread('ops');
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/chat/threads', expect.objectContaining({ method: 'POST', body: JSON.stringify({ proyecto: 'ops' }) }));
+  });
+
+  it('creates projects with the bounded API payload', async () => {
+    const project = { id: 1, slug: 'ops', name: 'Operations', purpose: 'Run operations', status: 'active', created_at: null, updated_at: null };
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ project }), { status: 201 }));
+    await expect(createProject({ slug: 'ops', name: 'Operations', purpose: 'Run operations' })).resolves.toEqual({ project });
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/projects', expect.objectContaining({ method: 'POST', body: JSON.stringify({ slug: 'ops', name: 'Operations', purpose: 'Run operations' }) }));
   });
 });
