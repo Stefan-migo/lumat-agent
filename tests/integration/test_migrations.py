@@ -40,7 +40,6 @@ EXPECTED_TABLES = {
     "users",
     "conversations",
     "messages",
-    "cases",
     "conversation_events",
     "kb_documents",
     "kb_chunks",
@@ -48,6 +47,7 @@ EXPECTED_TABLES = {
     "audit_log",
     "customer_notes",  # 002_customer_notes.sql (CR-4 internal staff notes)
     "customer_equipment",  # 035_customer_equipment.sql (D5)
+    "cases",
     "memories",  # 009_memory.sql (MEM-1 persistent memory layer)
     "memory_relations",
     "memory_observations",
@@ -461,7 +461,8 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("033_customer_archived_at",),
         ("034_project_owners",),
         ("035_customer_equipment",),
-        ("036_memory_owner_dedup",),
+        ("036_case_amount",),
+        ("037_memory_owner_dedup",),
     ]
 
 
@@ -521,6 +522,14 @@ def test_cases_conversation_id_is_nullable(migrated_db, admin_conn):
         "WHERE table_name = 'cases' AND column_name = 'conversation_id'"
     ).fetchone()
     assert column == ("YES",)
+
+
+def test_case_amount_is_nullable_numeric_without_default(migrated_db, admin_conn):
+    column = admin_conn.execute(
+        "SELECT data_type, is_nullable, column_default FROM information_schema.columns "
+        "WHERE table_name = 'cases' AND column_name = 'amount'"
+    ).fetchone()
+    assert column == ("numeric", "YES", None)
 
 
 # --- tables ----------------------------------------------------------------

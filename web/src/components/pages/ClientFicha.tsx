@@ -1,5 +1,5 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, listClientEquipment, postJson, resolveMemoryRelation, unarchiveCustomer, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
+import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, listClientEquipment, postJson, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
@@ -30,6 +30,7 @@ import {
 
 const DATE_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short" });
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" });
+const CLP_FORMAT = new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 });
 const MESSAGE_PREVIEW = 10;
 const EQUIPMENT_TYPE_LABELS: Record<string, string> = { calefont: "Calefont", caldera: "Caldera", calefaccion: "Sistema de calefacción" };
 const EQUIPMENT_TYPE_OPTIONS = [{ value: "", label: "Sin especificar" }, ...Object.entries(EQUIPMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }))];
@@ -95,6 +96,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [equipmentForm, setEquipmentForm] = useState<CustomerEquipmentUpdate>({ equipment_type: "", brand: "", model: "", age: "", details: "" });
   const [equipmentMutation, setEquipmentMutation] = useState(false);
   const [equipmentFeedback, setEquipmentFeedback] = useState<Feedback | null>(null);
+  const [amountOpen, setAmountOpen] = useState(false);
+  const [amountInput, setAmountInput] = useState("");
+  const [amountMutation, setAmountMutation] = useState(false);
   const fetchFicha = useCallback(async () => {
     if (customerId === undefined) throw new Error("customer id is required");
     const [ficha, memoryResponse, pendingResponse] = await Promise.all([
@@ -167,6 +171,18 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
       setEquipmentFeedback({ tone: "success", title: editingEquipment ? "Equipo actualizado" : "Equipo agregado" });
     } catch (error) { setEquipmentFeedback({ tone: "danger", ...safeError(error, "equipo") }); }
     finally { setEquipmentMutation(false); }
+  };
+  const saveCaseAmount = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (customerId === undefined || !activeCase || amountMutation) return;
+    setAmountMutation(true);
+    setCaseFeedback(null);
+    try {
+      await updateCaseAmount(activeCase.id, amountInput.trim() === "" ? null : Number(amountInput));
+      await refresh();
+      setAmountOpen(false);
+    } catch (error) { setCaseFeedback({ tone: "danger", ...safeError(error, "caso") }); }
+    finally { setAmountMutation(false); }
   };
   const updateCase = async (caseId: number, status: string, responsibleId: number | null) => {
     setCaseFeedback(null);
@@ -262,6 +278,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     { key: "service", header: "Servicio", render: (row) => row.service },
     { key: "priority", header: "Prioridad", render: (row) => row.priority },
     { key: "status", header: "Estado", render: (row) => <Badge tone={caseStatusTone(row.status)}>{caseStatusLabel(row.status)}</Badge> },
+    { key: "amount", header: "Monto CLP", render: (row) => row.amount === null ? "Sin monto registrado" : CLP_FORMAT.format(row.amount) },
     { key: "summary", header: "Resumen", render: (row) => row.summary ?? "—" },
   ];
   const messageColumns: Column<(typeof history.messages)[number]>[] = [
@@ -354,12 +371,22 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
                 <div><dt>Estado</dt><dd><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge></dd></div>
                 <div><dt>Responsable</dt><dd>{data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"}</dd></div>
                 <div><dt>Resumen</dt><dd>{activeCase.summary ?? "—"}</dd></div>
+                <div><dt>Monto del servicio</dt><dd>{activeCase.amount === null ? "Sin monto registrado" : CLP_FORMAT.format(activeCase.amount)}</dd></div>
               </dl>
+              <Button variant="secondary" disabled={customerId === undefined || amountMutation} onClick={() => { setAmountInput(activeCase.amount === null ? "" : String(activeCase.amount)); setAmountOpen(true); }}>Editar monto del caso</Button>
               {activeCase.emergency ? <Badge tone={activeCase.ack_by === null ? "danger" : "warning"}>{activeCase.ack_by === null ? "Emergencia sin reconocer" : `Emergencia reconocida por ${activeCase.ack_by}`}</Badge> : null}
               <CaseActions target={activeCase} users={data.users} onUpdate={updateCase} onAcknowledge={acknowledgeCase} />
               <LocalFeedback feedback={caseFeedback} />
             </> : <EmptyState title="Sin caso activo" />}
           </Card>
+          <Dialog open={amountOpen} onClose={() => setAmountOpen(false)} title="Monto del servicio">
+            <form onSubmit={(event) => void saveCaseAmount(event)}>
+              <Input label="Monto CLP" type="number" min="0" step="1" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} />
+              <p>Deja el campo vacío para quitar el monto.</p>
+              <LocalFeedback feedback={caseFeedback} />
+              <Button type="submit" disabled={amountMutation}>{amountMutation ? "Guardando…" : "Guardar monto"}</Button>
+            </form>
+          </Dialog>
           <Card title="Memo del cliente">
             <p>{data.memo || "Todavía no hay memo para este cliente."}</p>
           </Card>

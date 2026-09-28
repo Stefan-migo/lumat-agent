@@ -167,6 +167,7 @@ export const unarchiveCustomer = (id: number) => postJson<CustomerMutationRespon
 export const getClientFicha = (id: number) => apiFetch<ClientFichaResponse>(`/panel/api/clients/${id}`);
 export const fetchCases = () => apiFetch<CasesResponse>('/panel/api/cases');
 export const createCase = (body: ManualCaseRequest) => postJson<{ ok: true; case: Case }>('/panel/api/cases', body);
+export const updateCaseAmount = (id: number, amount: number | null) => postJson<{ ok: true; case: Case }>(`/panel/api/cases/${id}/update`, { amount });
 export const changeClientState = (id: number, state: CustomerState) => postJson<ClientStateMutationResponse>(`/panel/api/clients/${id}/state`, { state });
 export const addClientNote = (id: number, note: string) => postJson<ClientNoteMutationResponse>(`/panel/api/clients/${id}/notes`, { note });
 export type CustomerEquipmentUpdate = Partial<Pick<CustomerEquipment, 'equipment_type' | 'brand' | 'model' | 'age' | 'details'>>;
