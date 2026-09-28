@@ -394,21 +394,30 @@ def test_create_capability_is_used_for_following_mutation_and_persistence(monkey
     approval = issue_approval({"sdb": plan})
     approval["status"] = "consumed"
     calls, persisted = [], []
-    capability = SimpleNamespace(slug="field-ops")
+    owner_id = 73
+    capability = SimpleNamespace(slug="field-ops", owner_id=owner_id)
+    resolved_owners = []
+
+    def agent_context(session, slug, *, owner_id=None):
+        resolved_owners.append(owner_id)
+        assert owner_id == thread.user_id
+        return capability
+
     monkeypatch.setattr(agent_chat, "projects", SimpleNamespace(
-        agent_context=lambda session, slug: capability,
+        agent_context=agent_context,
     ))
     monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: calls.append(kwargs) or {
         "status": "completed", "result": {"slug": "field-ops"}, "evidence": {},
     })
     monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: persisted.append(kwargs))
-    thread = SimpleNamespace(id=1, current_plan={"sdb": plan}, assistant_state={"sdb": {"checkpoints": []}, "approval": approval})
+    thread = SimpleNamespace(id=1, user_id=owner_id, current_plan={"sdb": plan}, assistant_state={"sdb": {"checkpoints": []}, "approval": approval})
 
     result = agent_chat._run_sdb_tasks(object(), thread, "run-capability")
 
     assert result["status"] == "completed"
     assert persisted[-1]["authorization"] is capability
     assert calls[-1]["task_binding"]["task_id"] == "rename"
+    assert resolved_owners == [owner_id]
 
 
 def test_project_scope_mismatch_is_failed_evidence_without_dispatch(monkeypatch):
