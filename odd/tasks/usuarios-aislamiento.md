@@ -325,6 +325,26 @@ semantics; service and route tests must establish those.
   - Focused verification: `eval "$(infra/test-db.sh env)" && uv run pytest tests/integration/test_assistant_tool_owner_isolation.py tests/unit/test_assistant_tools.py tests/spec/test_sdb_recovery.py tests/spec/test_projects_spec.py tests/spec/test_memory_spec.py tests/unit/test_agent_chat_thread_project.py tests/integration/test_assistant_harness_compatibility.py tests/unit/test_memory_tool_axes.py -q` passed `194 passed` with one known fastembed pooling warning.
   - Required focused command over the integration, assistant tools, SDB recovery, project spec, memory spec, and agent-chat project tests passed `166 passed` with one known fastembed pooling warning.
   - Full backend suite: `eval "$(infra/test-db.sh env)" && uv run pytest tests/` passed `1562 passed, 2 warnings`; warnings were the known `_publish_all` unawaited coroutine and fastembed pooling warnings.
+- WU2 native review (slice 2 + U2.3), lineage `review-016eba14e5434eaa`: **approved**, authority
+  **burned** (`gentle-ai.review-acknowledged/v1`, consumed revision
+  `sha256:3a3c896d7f0464cae275a04fc643859f4e48e7c14b2257e29f2d83a8da01fa70`). The candidate is
+  this branch's own unreviewed work with base `f27077ec` (the merged `origin/main`): 21 paths,
+  664 changed lines, tier `high`, correction budget 200, four lenses (risk, resilience,
+  readability, reliability), no correction opened. That base is deliberate: the previous
+  boundary `18f78aca` is a branch commit, so `18f78aca..HEAD` also carried the
+  `agenda-agente-whatsapp` content merged from main (1438 lines) that was already reviewed and
+  burned in its own lineage (PR #403); `f27077ec..HEAD` isolates this unit's work. All three
+  findings are non-blocking advisory follow-ups, not reopened review:
+  - R2-001 (readability, WARNING, `tests/unit/test_memory_tool_axes.py:187`): only some of the
+    non-default-project own-memory tests install the `projects.agent_context` mock, so those
+    axis assertions are weaker than they read.
+  - R2-002 (readability, SUGGESTION, `app/chat/assistant/tools/registry.py:623-624`): the
+    owner-scoped guard infers tool families from name prefixes; explicit tool metadata would
+    survive a future rename.
+  - R3-001 (reliability, WARNING, `app/chat/assistant/tools/registry.py:618`): the
+    owner-presence guard only rejects a missing owner when a positive `trusted_thread_id` is
+    supplied, so an owner-scoped tool called without that id can still run with
+    `owner_id=None` against the null-owner namespace. Harden this fail-closed contract in U2.4.
 - WU1 merge registration: WU1 merged as PR #400 → merge commit `c4ad6fe2`. PR #399 (`docs(odd): close the case-closure-fix unit`) merged afterward as `e98b6683`, the current `main`.
 - R3-001 closed by `fix(projects): resolve one consistent owner for project merge` (`72da3d6a`): one `_resolve_owner_id` resolution point is shared by `merge` and `_lock_projects`; an explicit `owner_id` wins, disagreeing objects raise, and an explicit owner contradicted by an owned `Project` raises.
 - Schema finding and fix: migration 035 (`db/migrations/035_memory_owner_dedup.sql`) replaces `uq_memories_normalized_content`, created in migration 028 on `(proyecto, scope, entity_id, normalized_hash)` without `owner_id`, with an owner-scoped index on `(owner_id, proyecto, scope, entity_id, normalized_hash) NULLS NOT DISTINCT WHERE normalized_hash IS NOT NULL`; `app/models.py` is aligned. WU1 allows two owners to share a project slug, so without this, upsert could resolve and rewrite another owner's row and legitimate inserts could collide. Rollback SQL is documented in the migration file.
@@ -404,6 +424,12 @@ complete. Record merged PRs, exact test results, migration evidence, and cleanup
   `af509050` (`fix(chat): scope assistant tools to authenticated owners`) and
   `930328be` (`test(chat): assert owner propagation through tool callers`), followed
   by this documentation commit.
+- The reviewed boundary for this branch's own work is `7f02312e` (lineage
+  `review-016eba14e543eaa`, approved, authority burned). The next slice's assessment
+  starts from that commit.
+- U2.4 remains: focused authorization and no-implicit-`default` tests, business-memory
+  behavior, and the R3-001 fail-closed guard hardening recorded above. WU3 then consumes
+  the owner-filtered panel API and the UI project selector.
 - Provision dependencies for the worktree as needed. Copy the ignored database
   environment file only as documented in `odd/tasks/test-db-isolation.md`; use
   `infra/test-db.sh up`, `eval "$(infra/test-db.sh env)"`, and `infra/test-db.sh down`
