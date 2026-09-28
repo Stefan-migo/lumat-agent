@@ -220,6 +220,15 @@ cd web && npm run build                      # the only frontend type check (tsc
       `cd /opt/lumat && .venv/bin/python -m app.ops.<script>` shape (`docs/ops.md` §2.8, the
       daily-summary entry).
 
+#### S4 apply progress
+
+- WU1: pending reminder enqueue on booking, UTC due instant, cancellation invalidation, and reschedule due-time update implemented in `app/services/scheduling.py` with integration coverage in `tests/integration/test_notifications.py`.
+- RED observed: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py -o addopts='' -q` → **2 failed, 3 passed**; both new assertions failed because booking/cancel had no appointment-keyed reminder operation.
+- GREEN focused: same command after implementation → **5 passed**.
+- Full suite: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/ -o addopts='' -q` → **1576 passed, 2 warnings** (163.52 s).
+- Graph Check: `graphify-out/GRAPH_REPORT.md` snapshot is stale at `16ba9cbf` (not refreshed per instruction). Queried `scheduling.py`, `notifications.py`, `notify.py`, `templates.py`, `sweep.py`, and `main.py`. Relevant nodes: `book()`, `cancel()`, `reschedule()`, `Appointment`, `Customer`, `NotificationOperation`, `create_operation()`, `sweep_due_operations()`, `process_operation()`, `send_template()`, `send_email()`, `validate_channel_policy()`, `NotificationTemplateVersion`, `run()`, `main.py`, `sweep.py`. Resolved graph paths: `validate_channel_policy() → TemplatePolicyError → NotificationTemplateVersion`; `main.py → sweep.py → sweep_due_operations()`. Requested paths from scheduling `book()` to `NotificationOperation`, notification operation to sweep, notify template to email, and sweep module to sweep function did not resolve in stale graph.
+- Commit SHA and WU1 commit status pending verification/commit.
+
 ### S5 — Post-service follow-up
 
 - [ ] Publish an `appointment.completed` (and `no_show`) domain event on `scheduling.close`,
