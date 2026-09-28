@@ -176,6 +176,35 @@ def test_agent_context_and_merge_require_project_owner(migrated_db, monkeypatch)
         assert target.status.value == "active"
 
 
+def test_merge_infers_owner_from_project_objects(migrated_db):
+    with SessionLocal() as session:
+        owners = [
+            User(username="inferred-owner", password_hash="test"),
+            User(username="different-owner", password_hash="test"),
+        ]
+        session.add_all(owners)
+        session.flush()
+        owner, other_owner = owners
+        source = projects.create(session, "inferred-source", "Source", "source", owner_id=owner.id)
+        target = projects.create(session, "inferred-target", "Target", "target", owner_id=owner.id)
+        other_source = projects.create(session, "other-source", "Other source", "other source", owner_id=owner.id)
+        other_target = projects.create(session, "other-target", "Other target", "other target", owner_id=other_owner.id)
+        session.flush()
+
+        projects.merge(session, source, target)
+        assert source.status.value == "archived"
+
+        with pytest.raises(ValueError, match="cannot merge projects across owners"):
+            projects.merge(session, other_source, other_target)
+        with pytest.raises(ValueError, match="cannot merge projects across owners"):
+            projects.merge(session, other_source, target, owner_id=other_owner.id)
+
+        null_source = _project(session, "null-source")
+        null_target = _project(session, "null-target")
+        projects.merge(session, "null-source", "null-target")
+        assert null_source.status.value == "archived"
+
+
 def test_find_returns_at_most_three_close_candidates_and_requires_approval(
     migrated_db, monkeypatch
 ):

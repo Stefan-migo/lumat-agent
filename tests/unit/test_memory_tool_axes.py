@@ -184,8 +184,9 @@ def test_own_memory_read_and_search_union_thread_and_agent_axes(monkeypatch):
     monkeypatch.setattr(
         registry.memory,
         "list_for_entity",
-        lambda _session, *, scope, entity_id, proyecto: list_calls.append((scope, entity_id, proyecto)) or ([thread_row] if entity_id == "thread:42" else [agent_row]),
+        lambda _session, *, scope, entity_id, proyecto, owner_id: list_calls.append((scope, entity_id, proyecto)) or ([thread_row] if entity_id == "thread:42" else [agent_row]),
     )
+    monkeypatch.setattr(registry.projects, "agent_context", lambda _session, slug, *, owner_id: SimpleNamespace(owner_id=owner_id))
     result = registry._read_memory(
         MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42, proyecto="acme"
     )
@@ -195,7 +196,7 @@ def test_own_memory_read_and_search_union_thread_and_agent_axes(monkeypatch):
     monkeypatch.setattr(
         registry.memory,
         "hybrid_search",
-        lambda _session, _query, *, scope, entity_id, proyecto, top_k: [
+        lambda _session, _query, *, scope, entity_id, proyecto, owner_id, top_k: [
             {"entity_id": entity_id, "score": 0.8 if scope == "panel" else 0.9}
         ],
     )
@@ -205,12 +206,31 @@ def test_own_memory_read_and_search_union_thread_and_agent_axes(monkeypatch):
     assert [row["entity_id"] for row in results] == ["agent:acme", "thread:42"]
 
 
+def test_own_memory_read_threads_derived_owner_into_both_axes(monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        registry.memory,
+        "list_for_entity",
+        lambda _session, *, scope, entity_id, proyecto, owner_id: seen.append((scope, owner_id)) or [],
+    )
+    monkeypatch.setattr(
+        registry.projects,
+        "agent_context",
+        lambda _session, slug, *, owner_id: SimpleNamespace(owner_id=7),
+    )
+
+    assert registry._read_memory(
+        MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42, proyecto="acme"
+    ) == []
+    assert seen == [("panel", 7), ("agent", 7)]
+
+
 def test_own_memory_never_returns_another_threads_panel_row(monkeypatch):
     other_thread = Mock(scope="panel", entity_id="thread:7", topic_key="other")
     monkeypatch.setattr(
         registry.memory,
         "list_for_entity",
-        lambda _session, *, scope, entity_id, proyecto: [other_thread] if entity_id == "thread:7" else [],
+        lambda _session, *, scope, entity_id, proyecto, owner_id: [other_thread] if entity_id == "thread:7" else [],
     )
     assert registry._read_memory(
         MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42
@@ -229,7 +249,7 @@ def test_own_memory_read_interleaves_both_axes_before_truncating(monkeypatch):
     monkeypatch.setattr(
         registry.memory,
         "list_for_entity",
-        lambda _session, *, scope, entity_id, proyecto: thread_rows if scope == "panel" else agent_rows,
+        lambda _session, *, scope, entity_id, proyecto, owner_id: thread_rows if scope == "panel" else agent_rows,
     )
 
     result = registry._read_memory(
@@ -260,6 +280,7 @@ def test_own_memory_read_returns_bounded_digest_with_stable_shape(monkeypatch):
         "list_for_entity",
         lambda _session, *, entity_id, **kwargs: [row] if entity_id == "thread:42" else [],
     )
+    monkeypatch.setattr(registry.projects, "agent_context", lambda _session, slug, *, owner_id: SimpleNamespace(owner_id=owner_id))
 
     result = registry._read_memory(
         MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42, proyecto="acme"
@@ -291,7 +312,7 @@ def test_own_memory_read_never_starves_the_project_axis(monkeypatch):
     monkeypatch.setattr(
         registry.memory,
         "list_for_entity",
-        lambda _session, *, scope, entity_id, proyecto: thread_rows if scope == "panel" else [agent_row],
+        lambda _session, *, scope, entity_id, proyecto, owner_id: thread_rows if scope == "panel" else [agent_row],
     )
 
     result = registry._read_memory(
@@ -314,7 +335,7 @@ def test_own_memory_read_topic_filter_still_matches_both_axes(monkeypatch):
     monkeypatch.setattr(
         registry.memory,
         "list_for_entity",
-        lambda _session, *, scope, entity_id, proyecto: thread_rows if scope == "panel" else agent_rows,
+        lambda _session, *, scope, entity_id, proyecto, owner_id: thread_rows if scope == "panel" else agent_rows,
     )
 
     result = registry._read_memory(
@@ -341,7 +362,7 @@ def test_global_write_maps_axis_and_stamps_agent_provenance(monkeypatch):
         visibility="global",
     )
 
-    monkeypatch.setattr(registry.projects, "agent_context", lambda _session, slug: Mock(slug=slug))
+    monkeypatch.setattr(registry.projects, "agent_context", lambda _session, slug, *, owner_id: Mock(slug=slug, owner_id=owner_id))
     result = registry._write_memory(session, args, trusted_thread_id=42, proyecto="acme")
 
     assert result == {"written": True, "id": 7, "topic_key": "agent:fact"}

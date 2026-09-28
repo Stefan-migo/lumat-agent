@@ -165,6 +165,20 @@ def _normalized_hash(contenido: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
+def _owner_filter(owner_id: int | None):
+    return Memory.owner_id.is_(None) if owner_id is None else Memory.owner_id == owner_id
+
+
+def _effective_owner_id(
+    authorization: projects._ProjectAuthorization | None, owner_id: int | None
+) -> int | None:
+    if authorization is None:
+        return owner_id
+    if owner_id is not None and owner_id != authorization.owner_id:
+        raise ValueError("owner_id contradicts project authorization")
+    return authorization.owner_id
+
+
 def _review_after(tipo: MemoryType, *, now: datetime | None = None) -> datetime | None:
     """Return the review instant for a decaying type, or None otherwise."""
     if tipo not in DECAYING_TYPES:
@@ -225,6 +239,7 @@ def _upsert_resolved(
     visibility: MemoryVisibility,
     embedding: list[float],
     normalized_hash: str,
+    owner_id: int | None,
 ) -> Memory:
     """Resolve and write one already-validated memory payload."""
     now = datetime.now(timezone.utc)
@@ -235,6 +250,7 @@ def _upsert_resolved(
             Memory.scope == scope,
             Memory.entity_id == entity_id,
             Memory.topic_key == topic_key,
+            _owner_filter(owner_id),
         )
     ).scalar_one_or_none()
 
@@ -245,11 +261,13 @@ def _upsert_resolved(
                 Memory.scope == scope,
                 Memory.entity_id == entity_id,
                 Memory.normalized_hash == normalized_hash,
+                _owner_filter(owner_id),
             )
         ).scalar_one_or_none()
 
     if row is None:
         row = Memory(
+            owner_id=owner_id,
             proyecto=proyecto,
             scope=scope,
             entity_id=entity_id,
@@ -284,6 +302,7 @@ def _upsert_resolved(
                 Memory.entity_id == entity_id,
                 Memory.normalized_hash == normalized_hash,
                 Memory.id != row.id,
+                _owner_filter(owner_id),
             )
         ).scalar_one_or_none()
         if duplicate is not None:
@@ -319,6 +338,7 @@ def upsert(
     origin_thread_id: str | None = None,
     visibility: MemoryVisibility = MemoryVisibility.THREAD,
     authorization: projects._ProjectAuthorization | None = None,
+    owner_id: int | None = None,
 ) -> Memory:
     """Create-or-update one memory by (proyecto, scope, entity_id, topic_key).
 
@@ -330,6 +350,7 @@ def upsert(
     that remains inside the caller's transaction and preserves rollback semantics.
     """
     _guard_writable_project(proyecto, authorization)
+    effective_owner_id = _effective_owner_id(authorization, owner_id)
 
     normalized_hash = _normalized_hash(contenido)
     embeddings = _embed([contenido])
@@ -357,6 +378,7 @@ def upsert(
                     visibility=visibility,
                     embedding=embedding,
                     normalized_hash=normalized_hash,
+                    owner_id=effective_owner_id,
                 )
         except IntegrityError:
             if attempt == 1:
@@ -544,6 +566,7 @@ def get_by_key(
     entity_id: str,
     topic_key: str,
     proyecto: str = WRITABLE_PROYECTO,
+    owner_id: int | None = None,
 ) -> Memory | None:
     """Return one memory by its composite key, or None when absent (MEM-2)."""
     return session.execute(
@@ -552,6 +575,7 @@ def get_by_key(
             Memory.scope == scope,
             Memory.entity_id == entity_id,
             Memory.topic_key == topic_key,
+            _owner_filter(owner_id),
         )
     ).scalar_one_or_none()
 
@@ -562,6 +586,7 @@ def list_for_entity(
     scope: str,
     entity_id: str,
     proyecto: str = WRITABLE_PROYECTO,
+    owner_id: int | None = None,
 ) -> list[Memory]:
     """All memories for one (scope, entity_id), newest first (MEM-2)."""
     rows = session.execute(
@@ -570,6 +595,7 @@ def list_for_entity(
             Memory.proyecto == proyecto,
             Memory.scope == scope,
             Memory.entity_id == entity_id,
+            _owner_filter(owner_id),
         )
         .order_by(Memory.updated_at.desc())
     ).scalars().all()
@@ -641,6 +667,7 @@ def hybrid_search(
     proyecto: str = WRITABLE_PROYECTO,
     min_sim: float = MEM_MIN_SIM,
     top_k: int = DEFAULT_TOP_K,
+    owner_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """Hybrid retrieval over one entity's memories (MEM-3).
 
@@ -689,6 +716,7 @@ def hybrid_search(
             Memory.proyecto == proyecto,
             Memory.scope == scope,
             Memory.entity_id == entity_id,
+            _owner_filter(owner_id),
             Memory.status != MemoryStatus.ARCHIVED,
         )
         .order_by(distance)

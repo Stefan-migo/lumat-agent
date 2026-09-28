@@ -1,9 +1,9 @@
 # ODD Task: clientes-operativa
 
-Status: in progress — WU1 merged (`c2163ff6`, PR #401) and WU2 merged (`4a67d6be`, PR #402; native review `review-d64cbb138ad3cca7` approved, authority burned). D1, D2, D5 decided. **WU3 (case amount) in progress on `odd/clientes-operativa-wu3`.** WU4 still blocked on D3/D4.
-Worktree: `../lumat-agent-odd-clientes-operativa-wu3` (one worktree, one branch per work unit)
-Branch: `odd/clientes-operativa-wu3`
-Base: `4a67d6be` (main, 2026-09-28; merge of WU2 — also the reviewed boundary carried into this slice)
+Status: WU1, WU2 and WU3 are merged to `main` (PRs #401/#402/#404) and the WU2/WU3 review advisories are closed (PR #408, `6c567d41`) — each with an approved, authority-burned native review. D1, D2, D5 decided (D2 by WU3). **WU4 (duplicate merge) is the only remaining work: blocked on D3/D4, and recommended as its own unit (D4).**
+Worktree: none live for this unit (one worktree, one branch per work unit); WU3's was `../lumat-agent-odd-clientes-operativa-wu3`, removed after PR #404
+Branch: none live; WU3's was `odd/clientes-operativa-wu3`
+Base: `f6912b8b` (main, 2026-09-28)
 Depends on: nothing
 Source: scope comparison `.rapsodia-code/sessions/archived/2026-08-07-reunion-cierre/propuesta-final-lumatagent.md` vs the owner's own-investment decision of 2026-09-28
 Delivery strategy: `ask-on-risk`
@@ -213,25 +213,37 @@ strategy, one PR per work unit.
 - [x] **WU3 commits** — `73daa8c7 feat(cases): add nullable amount to cases`; `07e125ec feat(cases): record and expose the case amount`; `c0159e03 test(cases): assert amount in customer history`; `40a7d3e7 feat(clients): show and edit the case amount on the ficha`; `64b7a7fd test(clients): update case amount story fixtures`.
 - [x] **WU3 correction round** — `8b4042a76d8b4ffc4f4dd9c137cc01fe2d72ec70 fix(cases): emit a distinct event when only the amount changes`; `456682c18f6e2130ef844755e93068d1ea5654f2 chore(cases): tighten migration 036`; `e55731ab docs(odd): record the WU3 correction`. C1 RED: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py::test_amount_only_updates_publish_events_with_each_new_amount -q` failed with `assert 1 == 2` because both amount-only updates reused one event; GREEN: the same command passed after the dedupe key included amount. Migration hygiene: `036` now uses `ADD COLUMN IF NOT EXISTS` and relies on existing cases grants. Recreated the isolated test DB with `bash infra/test-db.sh down && bash infra/test-db.sh up`. Focused backend (`eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py tests/integration/test_migrations.py -q`) passed; full backend (`eval "$(infra/test-db.sh env)" && uv run pytest tests/ -q`) passed with the existing coroutine/model warnings; `cd web && npm run build` passed with the existing large-chunk warning. No `web/` file changed in this correction round.
 - [x] **WU3 graph check** — query `case amount update path and case serialization` consulted `Case` (`app/models.py`), `update_case()` (`app/services/cases.py`), `cases.py` route, serializer/customer history modules and functional test nodes. `graphify path "update_case" "to_case_dict" --undirected` gave the route path `update_case() <--calls-- case_update() --calls--> to_case_dict()`. The directed query found no path; `ClientFicha` ↔ API and `Case` ↔ `ClientFicha` paths also cannot cross the HTTP boundary. Query `client ficha cases section display amount` consulted `ClientFicha.tsx`, `ClientFicha.test.tsx`, `api.ts`, `types.ts`, `Case`, and `record_audit()`. God nodes from `GRAPH_REPORT.md`: `Case` (97 edges), `record_audit()` (93 edges). Graph built at `16ba9cbf`, predating this branch, so structural results were treated as navigation and verified against source.
-- [ ] **WU3 T3.6 assessment** — orchestrator-owned review-slice assessment remains pending.
+- [x] **WU3 T3.6 assessment** — done. Native review `review-755c72be3927448f`: 4 lenses, tier `high`, 229 lines, **approved**, authority burned. PR #404 merged to `main` as `c1fff81c`. The WU3 receipt lives in the PR #404 body, not here: this doc was frozen between `review start` and merge.
+- [x] **WU2/WU3 advisories closed** — the four non-blocking advisories were delivered as separate
+      later work in PR #408 (merged `6c567d41`, branch `odd/clientes-operativa-advisories`, task doc
+      `odd/tasks/clientes-operativa-advisories.md`): WU3 `R1-001` (CLP float precision bound
+      documented in `to_case_dict` + exact round-trip test), WU3 `R3-001` (negative/non-finite guard
+      in the case-amount editor), WU2 `R2-001` (equipment `PATCH` keep-vs-clear contract documented),
+      WU2 `R3-001` (`useRef` request-sequence guard in `openState`). Native review
+      `review-e5fdb2a1b90ce4b7`: 1 lens (`review-reliability`), risk `medium`, **0 findings**,
+      approved, authority burned. Verification: backend exit 0, frontend 90 files / 829 tests,
+      `npm run build` exit 0 — also re-run over the merged tree with `origin/main` (`b5ddfee1`). The
+      receipt lives in the PR #408 body.
 - [ ] WU4 — blocked on D3/D4
 
 ## Closure
 
-Pending.
+WU1–WU3 are delivered and merged to `main`: PR #401 (`c2163ff6`), PR #402 (`4a67d6be`), PR #404
+(`c1fff81c`). The WU2/WU3 review advisories were closed as separate later work in PR #408
+(`6c567d41`). The unit is **not fully closed**: WU4 (duplicate merge) remains, blocked on D3/D4.
 
 ## Recovery
 
-- Nothing to resume beyond the task list above; the WU3 worktree and branch are live at base `4a67d6be`.
-- The branch is `odd/clientes-operativa-wu3`; the branches `odd/clientes-operativa` (WU1) and
-  `odd/clientes-operativa-wu2` no longer exist (local or remote) after PRs #401/#402 — one
-  worktree, one branch per work unit.
+- Nothing to resume beyond the task list above. No branch of this unit is live: `odd/clientes-operativa`
+  (WU1), `-wu2`, `-wu3`, and `-advisories` no longer exist (local or remote) after PRs
+  #401/#402/#404/#408 — one worktree, one branch per work unit.
 - WU3's review slice base is `4a67d6be` (the last reviewed boundary, advanced by WU2's approved
   review), **not** the WU3 branch point `c2163ff6`: WU1 assessed as `under_budget`, so the boundary
   advanced past both.
 - Note for the next session: another session is actively merging to `main`
   (`usuarios-aislamiento` WU1 landed as PR #400 during planning). `git fetch origin`
   immediately before any merge.
-- Latest migration on main is `035` (`customer_equipment`); WU3's is therefore `036`.
+- Latest migration on `main` is `036` (`db/migrations/036_case_amount.sql`, from WU3); WU3's review
+  slice base was `4a67d6be` and its work was sliced against it.
 - Test DB: `bash infra/test-db.sh up|down|env` (project name derives from the worktree slug).
 - `graphify-out/` is gitignored; query the graph from the principal worktree.

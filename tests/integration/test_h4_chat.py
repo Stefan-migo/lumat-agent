@@ -99,12 +99,13 @@ def test_admin_thread_and_message_are_persisted_and_audited(client, migrated_db,
 
 
 def test_thread_creation_accepts_optional_project_and_rejects_unknown_project(client, migrated_db):
-    _user("chat-project", "admin")
+    owner_id = _user("chat-project", "admin")
     _login(client, "chat-project")
     project_slug = f"chat-{uuid4().hex[:8]}"
     with SessionLocal() as session:
         session.add(Project(
-            slug=project_slug, name="Project A", purpose="A", purpose_embedding=[0.0] * 384
+            slug=project_slug, name="Project A", purpose="A", purpose_embedding=[0.0] * 384,
+            owner_id=owner_id,
         ))
         session.commit()
 
