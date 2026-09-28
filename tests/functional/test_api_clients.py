@@ -23,6 +23,7 @@ from app.models import (  # noqa: E402
     ConversationState,
     Customer,
     CustomerNote,
+    CustomerEquipment,
     CustomerState,
     MemoryType,
     Message,
@@ -109,6 +110,10 @@ def test_clients_endpoints_require_login_401_json(client):
         ("post", "/panel/api/clients"),
         ("patch", "/panel/api/clients/1"),
         ("post", "/panel/api/clients/1/consent"),
+        ("get", "/panel/api/clients/1/equipment"),
+        ("post", "/panel/api/clients/1/equipment"),
+        ("patch", "/panel/api/clients/1/equipment/1"),
+        ("delete", "/panel/api/clients/1/equipment/1"),
     ]:
         resp = getattr(client, method)(path, follow_redirects=False)
         assert resp.status_code == 401, f"{method.upper()} {path} must be 401"
@@ -118,6 +123,49 @@ def test_clients_endpoints_require_login_401_json(client):
         )
         assert resp.json() == {"detail": "unauthorized"}
         assert "access-control-allow-origin" not in resp.headers, "no CORS (D1)"
+
+
+def test_client_equipment_crud_and_missing_resources(client, make_user):
+    customer_id = _seed_customer()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    empty = client.get(f"/panel/api/clients/{customer_id}/equipment")
+    created = client.post(
+        f"/panel/api/clients/{customer_id}/equipment",
+        json={"equipment_type": "calefont", "brand": "Bosch", "details": "Bosch 10L"},
+    )
+    equipment = created.json()["equipment"]
+    updated = client.patch(
+        f"/panel/api/clients/{customer_id}/equipment/{equipment['id']}",
+        json={"model": "Therm 5600", "age": "5 años"},
+    )
+    removed = client.delete(
+        f"/panel/api/clients/{customer_id}/equipment/{equipment['id']}"
+    )
+    missing_client = client.get("/panel/api/clients/999999/equipment")
+    missing_equipment = client.patch(
+        f"/panel/api/clients/{customer_id}/equipment/999999", json={"brand": "X"}
+    )
+    missing_delete = client.delete(
+        f"/panel/api/clients/{customer_id}/equipment/999999"
+    )
+
+    assert empty.status_code == 200 and empty.json() == {"equipment": []}
+    assert created.status_code == 201
+    assert set(equipment) == {
+        "id", "customer_id", "equipment_type", "brand", "model", "age",
+        "details", "source_conversation_id", "created_at", "updated_at",
+    }
+    assert equipment["details"] == "Bosch 10L"
+    assert updated.status_code == 200
+    assert updated.json()["equipment"]["model"] == "Therm 5600"
+    assert updated.json()["equipment"]["age"] == "5 años"
+    assert removed.status_code == 200 and removed.json() == {"ok": True}
+    assert missing_client.status_code == 404
+    assert missing_equipment.status_code == missing_delete.status_code == 404
+    with SessionLocal() as session:
+        assert session.get(CustomerEquipment, equipment["id"]) is None
 
 
 def test_create_client_conflict_returns_existing_id_including_archived(client, make_user):

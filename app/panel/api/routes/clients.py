@@ -25,10 +25,19 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
-from app.models import CustomerState, Memory, MemoryRelation, MemoryStatus, MemoryType, User
+from app.models import (
+    CustomerEquipment,
+    CustomerState,
+    Memory,
+    MemoryRelation,
+    MemoryStatus,
+    MemoryType,
+    User,
+)
 from app.panel.api.deps import require_operator_json
 from app.panel.api.serializers import (
     to_customer_dict,
+    to_equipment_dict,
     to_memory_dict,
     to_memory_relation_dict,
     to_note_dict,
@@ -49,6 +58,14 @@ class StateBody(BaseModel):
 
 class NoteBody(BaseModel):
     note: str
+
+
+class EquipmentBody(BaseModel):
+    equipment_type: str | None = None
+    brand: str | None = None
+    model: str | None = None
+    age: str | None = None
+    details: str | None = None
 
 
 class CreateCustomerBody(BaseModel):
@@ -91,6 +108,20 @@ def _customer_or_404(session: Session, customer_id: int) -> customers.Customer:
     if customer is None:
         raise HTTPException(status_code=404, detail="customer not found")
     return customer
+
+
+def _equipment_or_404(
+    session: Session, customer_id: int, equipment_id: int
+) -> CustomerEquipment:
+    equipment = session.scalar(
+        select(CustomerEquipment).where(
+            CustomerEquipment.id == equipment_id,
+            CustomerEquipment.customer_id == customer_id,
+        )
+    )
+    if equipment is None:
+        raise HTTPException(status_code=404, detail="equipment not found")
+    return equipment
 
 
 def _ficha_memory_or_404(
@@ -318,6 +349,70 @@ def client_add_note(
     )
     session.commit()
     return {"ok": True, "note": to_note_dict(entry)}
+
+
+@router.get("/clients/{customer_id}/equipment")
+def client_equipment_list(
+    customer_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    _customer_or_404(session, customer_id)
+    return {
+        "equipment": [
+            to_equipment_dict(row)
+            for row in customers.list_customer_equipment(session, customer_id)
+        ]
+    }
+
+
+@router.post("/clients/{customer_id}/equipment", status_code=status.HTTP_201_CREATED)
+def client_equipment_create(
+    customer_id: int,
+    body: EquipmentBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    _customer_or_404(session, customer_id)
+    equipment = customers.create_customer_equipment(
+        session, customer_id, actor=current.username, **body.model_dump()
+    )
+    session.commit()
+    return {"equipment": to_equipment_dict(equipment)}
+
+
+@router.patch("/clients/{customer_id}/equipment/{equipment_id}")
+def client_equipment_update(
+    customer_id: int,
+    equipment_id: int,
+    body: EquipmentBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    _customer_or_404(session, customer_id)
+    equipment = _equipment_or_404(session, customer_id, equipment_id)
+    customers.update_customer_equipment(
+        session,
+        equipment,
+        actor=current.username,
+        **{field: getattr(body, field) for field in body.model_fields_set},
+    )
+    session.commit()
+    return {"equipment": to_equipment_dict(equipment)}
+
+
+@router.delete("/clients/{customer_id}/equipment/{equipment_id}")
+def client_equipment_delete(
+    customer_id: int,
+    equipment_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    _customer_or_404(session, customer_id)
+    equipment = _equipment_or_404(session, customer_id, equipment_id)
+    customers.delete_customer_equipment(session, equipment, actor=current.username)
+    session.commit()
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
