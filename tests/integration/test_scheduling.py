@@ -54,6 +54,18 @@ def test_booking_rejects_unlinked_case_and_overlapping_active_appointment():
             )
 
 
+def test_booking_does_not_report_a_missing_technician_as_a_conflict():
+    with SessionLocal() as session:
+        customer, case, _technician = _linked_rows(session)
+        with pytest.raises(Exception) as raised:
+            scheduling.book(
+                session, service="calefont", customer_id=customer.id, case_id=case.id,
+                technician_id=0, local_date=date(2026, 7, 15), local_time=time(10),
+                timezone_name="America/Santiago", duration_minutes=60, actor="oper",
+            )
+        assert not isinstance(raised.value, scheduling.AppointmentConflict)
+
+
 @pytest.mark.parametrize("outcome", [AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW])
 def test_close_records_outcome_history_and_audit(outcome):
     with SessionLocal() as session:

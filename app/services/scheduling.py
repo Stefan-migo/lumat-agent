@@ -14,6 +14,16 @@ from app.services.audit import record_audit
 from app.services.events import publish_event
 
 
+_OVERLAP_CONSTRAINTS = {
+    "appointments_technician_no_overlap",
+    "appointments_customer_no_overlap",
+}
+
+
+def _is_overlap_violation(exc: IntegrityError) -> bool:
+    return getattr(getattr(exc.orig, "diag", None), "constraint_name", None) in _OVERLAP_CONSTRAINTS
+
+
 class NonexistentLocalTime(ValueError):
     pass
 
@@ -100,8 +110,10 @@ def book(session: Session, *, service: str, customer_id: int, case_id: int, tech
     try:
         session.flush()
     except IntegrityError as exc:
-        session.rollback()
-        raise AppointmentConflict("technician or customer has an overlapping booking") from exc
+        if _is_overlap_violation(exc):
+            session.rollback()
+            raise AppointmentConflict("technician or customer has an overlapping booking") from exc
+        raise
     _history(session, appointment, actor=actor, action="booked", previous=None)
     record_audit(session, actor=actor, action="appointment.booked", entity="appointment", entity_id=str(appointment.id), after={"customer_id": customer_id, "case_id": case_id, "technician_id": technician_id})
     publish_event(session, event_type="appointment.booked", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": customer_id, "case_id": case_id, "recipient": customer.phone_e164, "service": service}, dedupe_key=f"appointment:{appointment.id}:booked")
@@ -150,8 +162,10 @@ def reschedule(session: Session, appointment: Appointment, *, local_date: date, 
     try:
         session.flush()
     except IntegrityError as exc:
-        session.rollback()
-        raise AppointmentConflict("technician or customer has an overlapping booking") from exc
+        if _is_overlap_violation(exc):
+            session.rollback()
+            raise AppointmentConflict("technician or customer has an overlapping booking") from exc
+        raise
     details = {"from_start": from_start, "to_start": appointment.local_start.isoformat(), "from_technician_id": from_technician_id, "to_technician_id": technician_id}
     _history(session, appointment, actor=actor, action="rescheduled", previous=previous, details=details)
     record_audit(session, actor=actor, action="appointment.rescheduled", entity="appointment", entity_id=str(appointment.id), after=details)
