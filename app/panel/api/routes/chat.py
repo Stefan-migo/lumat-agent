@@ -53,7 +53,7 @@ class ChatThreadTitleBody(BaseModel):
 
 
 class ChatThreadBody(BaseModel):
-    proyecto: str | None = Field(default=None, min_length=1, max_length=100)
+    proyecto: str = Field(min_length=1, max_length=100)
 
 
 def _planning_thread(session: Session, slug: str, user_id: int) -> InternalChatThread | None:
@@ -68,14 +68,12 @@ def _planning_report(session: Session, thread: InternalChatThread) -> Memory | N
 
 @router.post("/chat/threads", status_code=201)
 def new_thread(
-    body: ChatThreadBody | None = None,
+    body: ChatThreadBody,
     session: Session = Depends(get_db),
     current: User = Depends(require_admin_json),
 ) -> dict:
     try:
-        thread = create_thread(
-            session, current, proyecto=(body.proyecto if body and body.proyecto else "default")
-        )
+        thread = create_thread(session, current, proyecto=body.proyecto)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"thread": thread_dict(thread), "messages": []}

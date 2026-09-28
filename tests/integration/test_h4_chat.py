@@ -98,7 +98,7 @@ def test_admin_thread_and_message_are_persisted_and_audited(client, migrated_db,
     assert "stream" not in fake_client.calls[2]
 
 
-def test_thread_creation_accepts_optional_project_and_rejects_unknown_project(client, migrated_db):
+def test_thread_creation_requires_explicit_project_and_rejects_unknown_project(client, migrated_db):
     owner_id = _user("chat-project", "admin")
     _login(client, "chat-project")
     project_slug = f"chat-{uuid4().hex[:8]}"
@@ -109,9 +109,8 @@ def test_thread_creation_accepts_optional_project_and_rejects_unknown_project(cl
         ))
         session.commit()
 
-    default_thread = client.post("/panel/api/chat/threads")
-    assert default_thread.status_code == 201
-    assert default_thread.json()["thread"]["proyecto"] == "default"
+    missing_project = client.post("/panel/api/chat/threads")
+    assert missing_project.status_code == 422
 
     project_thread = client.post("/panel/api/chat/threads", json={"proyecto": project_slug})
     assert project_thread.status_code == 201
@@ -120,7 +119,7 @@ def test_thread_creation_accepts_optional_project_and_rejects_unknown_project(cl
     rejected = client.post("/panel/api/chat/threads", json={"proyecto": "missing"})
     assert rejected.status_code == 400
     with SessionLocal() as session:
-        assert session.query(InternalChatThread).count() == 2
+        assert session.query(InternalChatThread).count() == 1
 
 
 def test_operator_cannot_read_or_create_internal_thread(client, migrated_db):
