@@ -9,10 +9,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Appointment, AppointmentCalendarSync, AppointmentHistory, AppointmentStatus, Case, Customer, TechnicianAvailability, User
+from app.models import Appointment, AppointmentCalendarSync, AppointmentHistory, AppointmentStatus, Case, Customer, TechnicianAvailability, User, UserRole
 from app.services.audit import record_audit
 from app.services.calendar import ICSProvider, synchronize as synchronize_calendar
 from app.services.events import publish_event
+from app.services.settings import get_hours_timezone
 
 
 _OVERLAP_CONSTRAINTS = {
@@ -92,19 +93,125 @@ def _history(session: Session, appointment: Appointment, *, actor: str, action: 
 
 def _validate_slot(session: Session, *, customer_id: int, technician_id: int, local_date: date, local_time: time, timezone_name: str, duration_minutes: int, exclude_appointment_id: int | None = None) -> tuple[datetime, datetime]:
     starts, ends = local_interval(local_date, local_time, timezone_name, duration_minutes)
+    _validate_interval(session, customer_id=customer_id, technician_id=technician_id, starts=starts, ends=ends, exclude_appointment_id=exclude_appointment_id)
+    return starts, ends
+
+
+def _validate_interval(session: Session, *, customer_id: int | None, technician_id: int, starts: datetime, ends: datetime, exclude_appointment_id: int | None = None) -> None:
     configured = session.scalar(select(TechnicianAvailability.id).where(TechnicianAvailability.technician_id == technician_id)) is not None
     if configured and not availability(session, technician_id, starts, ends):
         raise Unavailable("technician is not available for the requested interval")
+    overlap = Appointment.technician_id == technician_id
+    if customer_id is not None:
+        overlap = overlap | (Appointment.customer_id == customer_id)
     statement = select(Appointment).where(
         Appointment.status == AppointmentStatus.BOOKED,
-        ((Appointment.technician_id == technician_id) | (Appointment.customer_id == customer_id)),
+        overlap,
         Appointment.starts_at < ends, Appointment.ends_at > starts,
     )
     if exclude_appointment_id is not None:
         statement = statement.where(Appointment.id != exclude_appointment_id)
     if session.scalar(statement) is not None:
         raise AppointmentConflict("technician or customer has an overlapping booking")
-    return starts, ends
+
+
+def _candidate_starts(window_start: datetime, window_end: datetime, duration_minutes: int, step_minutes: int, now: datetime):
+    step = timedelta(minutes=step_minutes)
+    duration = timedelta(minutes=duration_minutes)
+    candidate = window_start
+    while candidate + duration <= window_end:
+        if candidate >= now:
+            yield candidate
+        candidate += step
+
+
+def open_slots(
+    session: Session,
+    *,
+    technician_id: int,
+    window_start: datetime,
+    window_end: datetime,
+    duration_minutes: int,
+    timezone_name: str,
+    limit: int = 5,
+    step_minutes: int | None = None,
+) -> list[tuple[date, time]]:
+    """Return up to ``limit`` currently bookable local start times in a UTC window."""
+    if (window_start.tzinfo is None or window_start.utcoffset() is None
+            or window_end.tzinfo is None or window_end.utcoffset() is None
+            or window_start >= window_end):
+        raise InvalidRange("window must be timezone-aware and ordered")
+    if duration_minutes <= 0:
+        raise ValueError("duration must be positive")
+    step_minutes = duration_minutes if step_minutes is None else step_minutes
+    if step_minutes <= 0 or limit <= 0:
+        raise ValueError("step and limit must be positive")
+    zone = _zone(timezone_name)
+    start_utc = window_start.astimezone(timezone.utc)
+    end_utc = window_end.astimezone(timezone.utc)
+    now = datetime.now(timezone.utc)
+    slots: list[tuple[date, time]] = []
+    for starts in _candidate_starts(start_utc, end_utc, duration_minutes, step_minutes, now):
+        local = starts.astimezone(zone)
+        local_date, local_time = local.date(), local.timetz().replace(tzinfo=None)
+        try:
+            validated_start, validated_end = local_interval(local_date, local_time, timezone_name, duration_minutes)
+            if validated_start != starts:
+                continue
+            _validate_interval(session, customer_id=None, technician_id=technician_id, starts=validated_start, ends=validated_end)
+        except (NonexistentLocalTime, AmbiguousLocalTime, Unavailable, AppointmentConflict):
+            continue
+        slots.append((local_date, local_time))
+        if len(slots) == limit:
+            break
+    return slots
+
+
+def open_slots_for_assignment(
+    session: Session,
+    *,
+    now: datetime,
+    days: int = 7,
+    duration_minutes: int = 60,
+    limit: int = 3,
+) -> list[tuple[int, date, time]]:
+    """Return deterministic slots assigned to the lowest-id available technician."""
+    if now.tzinfo is None or now.utcoffset() is None or days <= 0 or limit <= 0:
+        raise InvalidRange("now must be aware and days/limit must be positive")
+
+    window_end = now.astimezone(timezone.utc) + timedelta(days=days)
+    timezone_name = get_hours_timezone(session)
+    assigned: dict[tuple[date, time], int] = {}
+    technicians = session.scalars(
+        select(User).where(User.role == UserRole.TECNICO).order_by(User.id)
+    ).all()
+    for technician in technicians:
+        blocks = session.scalars(
+            select(TechnicianAvailability)
+            .where(
+                TechnicianAvailability.technician_id == technician.id,
+                TechnicianAvailability.available.is_(True),
+                TechnicianAvailability.starts_at < window_end,
+                TechnicianAvailability.ends_at > now,
+            )
+            .order_by(TechnicianAvailability.starts_at, TechnicianAvailability.id)
+        ).all()
+        for block in blocks:
+            slots = open_slots(
+                session,
+                technician_id=technician.id,
+                window_start=max(now, block.starts_at),
+                window_end=min(window_end, block.ends_at),
+                duration_minutes=duration_minutes,
+                timezone_name=timezone_name,
+                limit=limit,
+            )
+            for local_date, local_time in slots:
+                key = (local_date, local_time)
+                assigned[key] = min(technician.id, assigned.get(key, technician.id))
+
+    ordered = sorted(assigned.items(), key=lambda item: item[0])
+    return [(technician_id, day, clock) for (day, clock), technician_id in ordered[:limit]]
 
 
 def book(session: Session, *, service: str, customer_id: int, case_id: int, technician_id: int, local_date: date, local_time: time, timezone_name: str, duration_minutes: int, actor: str) -> Appointment:

@@ -154,8 +154,8 @@ def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
     assert captured["evidence"] == "unknown"  # skip non-blocking (CM-2)
     assert captured["consent"] == "si"
     assert "_pending" not in captured  # capture finished
-    # completion confirmation reply
-    assert any("registrada" in r.lower() for r in last_replies)
+    # No technician schedule is configured: the completed request is handed off.
+    assert last_replies[-1] == "Un asesor revisará tu caso y te contactará a la brevedad."
 
     # CR-6: consent + captured data stored on the customer ficha
     customer = _customer()
