@@ -175,10 +175,16 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const saveCaseAmount = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (customerId === undefined || !activeCase || amountMutation) return;
+    const amountText = amountInput.trim();
+    const parsedAmount = amountText === "" ? null : Number(amountInput);
+    if (parsedAmount !== null && (!Number.isFinite(parsedAmount) || parsedAmount < 0)) {
+      setCaseFeedback({ tone: "danger", title: "Ingresa un monto CLP válido y no negativo" });
+      return;
+    }
     setAmountMutation(true);
     setCaseFeedback(null);
     try {
-      await updateCaseAmount(activeCase.id, amountInput.trim() === "" ? null : Number(amountInput));
+      await updateCaseAmount(activeCase.id, parsedAmount);
       await refresh();
       setAmountOpen(false);
     } catch (error) { setCaseFeedback({ tone: "danger", ...safeError(error, "caso") }); }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiError, apiFetch, addClientNote, changeClientState, postJson, resolveMemoryRelation, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, listClientEquipment } from "../../api";
 import { ClientFicha } from "./ClientFicha";
@@ -163,6 +163,24 @@ describe("ClientFicha page grammar", () => {
 
     expect(updateCaseAmount).toHaveBeenCalledWith(2, 200000);
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10"));
+  });
+
+  it("rejects a negative case amount before calling the API", async () => {
+    const user = userEvent.setup();
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("button", { name: "Editar monto del caso" }));
+    const dialog = screen.getByRole("dialog");
+    const input = within(dialog).getByLabelText("Monto CLP");
+    // fireEvent bypasses native constraint validation, mirroring the advisory's
+    // "submitted outside the HTML form UI" case for a `type="number"` field.
+    // A malformed/non-finite value is not representable here: the number input
+    // sanitizes it to "" (the documented "clear" input), so there is no NaN path.
+    fireEvent.change(input, { target: { value: "-1" } });
+    fireEvent.submit(input.closest("form")!);
+
+    expect(updateCaseAmount).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("Ingresa un monto CLP válido y no negativo");
   });
 
   it("updates and acknowledges an active case, then refetches the ficha", async () => {

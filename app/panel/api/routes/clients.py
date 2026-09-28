@@ -61,6 +61,8 @@ class NoteBody(BaseModel):
 
 
 class EquipmentBody(BaseModel):
+    """Equipment fields are optional: omitted keeps the value; explicit null clears it."""
+
     equipment_type: str | None = None
     brand: str | None = None
     model: str | None = None
@@ -389,6 +391,10 @@ def client_equipment_update(
     session: Session = Depends(get_db),
     current: User = Depends(require_operator_json),
 ) -> dict:
+    """Patch equipment: omitted fields keep their values; explicit null clears them.
+
+    Only fields in ``body.model_fields_set`` are forwarded to the update service.
+    """
     _customer_or_404(session, customer_id)
     equipment = _equipment_or_404(session, customer_id, equipment_id)
     customers.update_customer_equipment(
