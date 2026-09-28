@@ -1,5 +1,13 @@
 # ODD — case-closure-fix
 
+Status: complete — PR #365 (`33f1feba`), PR #366 (`478dfe1f`) and PR #368 (`cf5f8171`) merged to `main`
+Worktree: removed at close (was `../lumat-agent-odd-case-closure-fix`)
+Branch: deleted at close (shipped as `odd/case-closure-fix`, `docs/case-closure-archive` and `refactor/case-status-public-name`)
+Base: `main` before PR #365
+Depends on: nothing — U1 was the campaign's first unit
+Source: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md` (U1)
+Delivery strategy: single PR estimated; shipped as three (see `## Closure`)
+
 ## Objective
 
 Closing a case from the panel must actually close it: the case leaves the open-cases
@@ -266,3 +274,39 @@ Follow-up: the shared helper was renamed `_apply_status` → `set_case_status`, 
 imported across `cases`, `classify_intent` and `emergency`, so a module-private name no longer
 matched its role. The `_apply_status` references earlier in this document record the name as it
 stood at the time; the archived OpenSpec artifacts keep theirs unchanged for the same reason.
+
+## Closure
+
+- [x] **Unit closed 2026-09-26.** All three PRs are on `main`: the fix and its RED/GREEN tests →
+      PR #365 (`odd/case-closure-fix`, merge `33f1feba`); the OpenSpec archive and the unit
+      record → PR #366 (`docs/case-closure-archive`, merge `478dfe1f`); the helper rename →
+      PR #368 (`refactor/case-status-public-name`, merge `cf5f8171`).
+- [x] **Acceptance**: met. Closure is centralized in `set_case_status()` and **every**
+      `Case.status` writer goes through it — classification and emergency included, which the
+      original plan did not anticipate. The canonical predicate is `case_is_open_expr()` and it
+      serves `list_open_cases()` and the dashboard's urgent query;
+      `routes/conversations.py` ranks with the same predicate. `AD-HOY-1` was amended to read
+      "still open by status" instead of naming the `closed_at` column (D2).
+- [x] **Verification of record**: full suite `1466 passed, 2 warnings` after the corrective
+      unit; native review lineage `review-b2c7c2f6145c0c7b`, approved, zero findings, authority
+      burned.
+- [x] **Cleanup after the merge**: worktree `../lumat-agent-odd-case-closure-fix` removed;
+      all three branches deleted (remote + local). Verified absent on 2026-09-28.
+
+### Residual gaps and follow-ups (recorded, not silently dropped)
+
+- **The `## Delivery` single-PR estimate did not hold.** The plan forecast one PR inside the
+  ~400-line budget; delivery took three, because the native review found an incomplete
+  centralization (the corrective unit) and the archive and the rename each shipped on their
+  own. PR #366 was docs/OpenSpec-only; PR #368 was a rename with no behavior change.
+- **Naming history is intentionally inconsistent with the code.** The `_apply_status`
+  references above predate the PR #368 rename and are preserved as the name stood at the time.
+  The archived OpenSpec artifacts keep theirs for the same reason. Nothing is pending here.
+
+## Recovery
+
+- **Nothing to resume.** The unit is closed: all three PRs are merged to `main` and the
+  worktree and its branches no longer exist.
+- This file is the record of the unit; nothing in it is a pending task.
+- Source of record: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md`
+  (U1 row), now archived under `.rapsodia-code/sessions/archived/2026-09-25-clientes-crm/`.
