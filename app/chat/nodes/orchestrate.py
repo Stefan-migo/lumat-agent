@@ -83,6 +83,8 @@ def _dispatch(
             "escalate": True,
             "escalate_reason": "injection_detected",
         }
+    if intent in {"cancelar_visita", "reagendar_visita"}:
+        return {"next_step": "manage"}
     if intent in CAPTURE_INTENTS:
         return {"next_step": "capture"}
     if intent in RETRIEVAL_INTENTS:

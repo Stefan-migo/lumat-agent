@@ -455,6 +455,20 @@ def test_case_amount_round_trips_keeps_when_omitted_and_clears_with_null(client,
     assert audit.after["amount"] is None
 
 
+def test_case_amount_serializes_large_clp_integer_exactly(client, make_user):
+    case_id = _seed_case(status="escalado")
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.post(
+        f"/panel/api/cases/{case_id}/update", json={"amount": 9_999_999_999}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["case"]["amount"] == 9_999_999_999
+    assert _case_row(case_id).amount == 9_999_999_999
+
+
 def test_amount_only_updates_publish_events_with_each_new_amount(client, make_user):
     status = f"amount-event-test-{uuid4().hex}"
     case_id = _seed_case(status=status)

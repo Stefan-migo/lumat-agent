@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ApiError, archiveCustomer, changeClientState, createCustomer, fetchClients as listClients, getClientFicha, unarchiveCustomer } from "../../api";
 import type { Customer, CustomerState } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -85,6 +85,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const [stateOptions, setStateOptions] = useState<CustomerState[]>([]);
   const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
   const [archiveCounts, setArchiveCounts] = useState<{ cases: number; appointments: number } | null>(null);
+  const stateRequestSequence = useRef(0);
   const fetchClients = useCallback(
     () => listClients({ includeArchived, query }).then((response) => response.clients),
     [includeArchived, query],
@@ -161,6 +162,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
     }
   };
   const openState = async (customer: Customer) => {
+    const requestSequence = ++stateRequestSequence.current;
     setStateTarget(customer);
     setSelectedState(customer.state);
     setStateOptions([]);
@@ -168,8 +170,10 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
     setDialog("state");
     try {
       const ficha = await getClientFicha(customer.id);
+      if (requestSequence !== stateRequestSequence.current) return;
       setStateOptions(ficha.states ?? []);
     } catch {
+      if (requestSequence !== stateRequestSequence.current) return;
       setDialogError("No pudimos cargar los estados disponibles. Inténtalo nuevamente.");
     }
   };

@@ -163,6 +163,11 @@ def test_real_publishers_persist_message_case_and_appointment_transitions(migrat
             technician_id=technician.id, local_date=date(2026, 8, 20), local_time=time(10),
             timezone_name="America/Santiago", duration_minutes=60, actor="admin",
         )
+        scheduling.reschedule(
+            session, appointment, local_date=date(2026, 8, 20), local_time=time(11),
+            timezone_name="America/Santiago", duration_minutes=60,
+            technician_id=technician.id, actor="admin",
+        )
         scheduling.cancel(session, appointment, actor="admin", reason="test")
         session.commit()
 
@@ -170,5 +175,5 @@ def test_real_publishers_persist_message_case_and_appointment_transitions(migrat
         event_types = session.scalars(select(DomainEvent.event_type).order_by(DomainEvent.id)).all()
         assert event_types == [
             "message.received", "case.created", "case.updated",
-            "appointment.booked", "appointment.cancelled",
+            "appointment.booked", "appointment.rescheduled", "appointment.cancelled",
         ]

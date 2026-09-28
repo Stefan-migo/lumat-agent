@@ -174,6 +174,7 @@ def to_case_dict(case: Case) -> dict:
         "customer_id": case.customer_id,
         "created_at": _iso(case.created_at),
         "service": case.service,
+        # CLP amounts are integral and float preserves them exactly below 2**53.
         "amount": float(case.amount) if case.amount is not None else None,
         "priority": case.priority,
         "status": case.status,
