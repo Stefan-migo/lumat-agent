@@ -29,6 +29,13 @@ def clean_projects(migrated_db):
         session.query(ProjectAlias).delete()
         session.query(ProjectAudit).delete()
         session.query(Project).filter(Project.slug != "default").delete()
+        if session.scalar(select(Project).where(Project.slug == "default")) is None:
+            session.add(Project(
+                slug="default",
+                name="Default",
+                purpose="Default project namespace",
+                purpose_embedding=[0.0] * 384,
+            ))
         session.commit()
     yield
 
@@ -41,6 +48,25 @@ def test_project_registry_migration_and_models(migrated_db, admin_conn):
         ).fetchall()
     }
     assert {"projects", "project_aliases", "project_audit"} <= tables
+
+    for table in ("projects", "project_aliases", "memories"):
+        columns = {
+            row[0]
+            for row in admin_conn.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = 'public' AND table_name = %s",
+                (table,),
+            ).fetchall()
+        }
+        assert "owner_id" in columns
+
+    constraints = {
+        row[0]
+        for row in admin_conn.execute(
+            "SELECT conname FROM pg_constraint WHERE conrelid = 'memories'::regclass"
+        ).fetchall()
+    }
+    assert "uq_memories_owner_project_scope_entity_topic" in constraints
 
     column = admin_conn.execute(
         """
@@ -66,10 +92,10 @@ def test_project_registry_migration_and_models(migrated_db, admin_conn):
             c
             for c in Memory.__table__.constraints
             if {column.name for column in c.columns}
-            == {"proyecto", "scope", "entity_id", "topic_key"}
+            == {"owner_id", "proyecto", "scope", "entity_id", "topic_key"}
         )
         assert {column.name for column in unique.columns} == {
-            "proyecto", "scope", "entity_id", "topic_key"
+            "owner_id", "proyecto", "scope", "entity_id", "topic_key"
         }
 
 
@@ -92,6 +118,62 @@ def test_find_prefers_exact_slug_without_embedding(migrated_db, monkeypatch):
         assert result.project.id == project.id
         assert result.candidates == []
         assert result.requires_approval is False
+
+
+def test_projects_with_same_slug_are_scoped_by_owner(migrated_db, monkeypatch):
+    with SessionLocal() as session:
+        first = User(username="first-owner", password_hash="test")
+        second = User(username="second-owner", password_hash="test")
+        session.add_all([first, second])
+        session.flush()
+        monkeypatch.setattr(projects.kb, "embed_texts", lambda _: ([[1.0] + [0.0] * 383], 0))
+        a = projects.create(session, "shared-name", "First", "first distinct purpose", owner_id=first.id)
+        b = projects.create(session, "shared-name", "Second", "second distinct purpose", owner_id=second.id)
+        session.flush()
+
+        assert a.owner_id == first.id
+        assert b.owner_id == second.id
+        assert projects.find(session, "shared-name", owner_id=first.id).project.id == a.id
+        assert projects.find(session, "shared-name", owner_id=second.id).project.id == b.id
+        assert projects.find(session, "shared-name").project is None
+
+
+def test_aliases_allow_same_name_for_different_owners(migrated_db, monkeypatch):
+    with SessionLocal() as session:
+        owners = [
+            User(username="alias-owner-a", password_hash="test"),
+            User(username="alias-owner-b", password_hash="test"),
+        ]
+        session.add_all(owners)
+        session.flush()
+        monkeypatch.setattr(projects.kb, "embed_texts", lambda _: ([[1.0] + [0.0] * 383], 0))
+        for owner, slug in zip(owners, ("alias-a", "alias-b")):
+            project = projects.create(session, slug, slug, f"purpose {slug}", owner_id=owner.id)
+            session.flush()
+            session.add(ProjectAlias(project_id=project.id, owner_id=owner.id, alias="shared alias"))
+        session.flush()
+        assert session.query(ProjectAlias).filter_by(alias="shared alias").count() == 2
+
+
+def test_agent_context_and_merge_require_project_owner(migrated_db, monkeypatch):
+    with SessionLocal() as session:
+        owner = User(username="merge-owner", password_hash="test")
+        other_owner = User(username="other-merge-owner", password_hash="test")
+        session.add_all([owner, other_owner])
+        session.flush()
+        monkeypatch.setattr(projects.kb, "embed_texts", lambda _: ([[1.0] + [0.0] * 383], 0))
+        source = projects.create(session, "owned-source", "Source", "source purpose", owner_id=owner.id)
+        target = projects.create(session, "owned-target", "Target", "target purpose", owner_id=owner.id)
+        stranger_project = projects.create(session, "stranger", "Stranger", "stranger purpose", owner_id=other_owner.id)
+        session.flush()
+
+        assert projects.agent_context(session, "owned-source", owner.id).owner_id == owner.id
+        with pytest.raises(ValueError, match="not an active project"):
+            projects.agent_context(session, "owned-source", other_owner.id)
+        with pytest.raises(ValueError):
+            projects.merge(session, source, stranger_project, owner_id=owner.id)
+        projects.merge(session, source, target, owner_id=owner.id)
+        assert target.status.value == "active"
 
 
 def test_find_returns_at_most_three_close_candidates_and_requires_approval(
