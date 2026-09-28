@@ -463,6 +463,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("035_customer_equipment",),
         ("036_case_amount",),
         ("037_memory_owner_dedup",),
+        ("038_customer_merge",),
     ]
 
 
@@ -558,6 +559,18 @@ def test_customers_phone_e164_unique(migrated_db, admin_conn):
         )
 
 
+def test_customers_merge_tombstone_column(migrated_db, admin_conn):
+    column = admin_conn.execute(
+        "SELECT data_type, is_nullable FROM information_schema.columns "
+        "WHERE table_name = 'customers' AND column_name = 'merged_into_customer_id'"
+    ).fetchone()
+    assert column == ("bigint", "YES")
+    fk = admin_conn.execute(
+        "SELECT ccu.table_name, ccu.column_name FROM information_schema.constraint_column_usage ccu "
+        "JOIN information_schema.key_column_usage kcu ON ccu.constraint_name = kcu.constraint_name "
+        "WHERE kcu.table_name = 'customers' AND kcu.column_name = 'merged_into_customer_id'"
+    ).fetchone()
+    assert fk == ("customers", "id")
 def test_messages_wamid_partial_unique_inbound_only(migrated_db, admin_conn):
     """Partial unique index: inbound wamid dedup, outbound/other rows free (WH-5)."""
     admin_conn.execute(
