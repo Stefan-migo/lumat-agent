@@ -211,7 +211,7 @@ cd web && npm run build                      # the only frontend type check (tsc
 - [ ] Acceptance: booking creates exactly one reminder due at the right UTC instant; a cancelled
       visit produces no reminder; the sweep delivers a due reminder through the template and falls
       back to email when WhatsApp fails; the sweep runs on a schedule, not only at process start.
-- [ ] Route: delegated writer. **Reuse the existing queue, do not invent one**: `NotificationOperation`
+- [x] Route: delegated writer. **Reuse the existing queue, do not invent one**: `NotificationOperation`
       (`app/models.py:794`) already has `next_attempt_at`, bounded retries with backoff and a
       `FOR UPDATE SKIP LOCKED` + advisory-lock sweep (`app/services/notifications.py:204-214`), and it
       already runs at startup (`app/main.py:74-83`) and on the webhook sweep path
