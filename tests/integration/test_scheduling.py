@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 from sqlalchemy import text
@@ -147,6 +147,45 @@ def test_configured_availability_rejects_outside_block():
                 technician_id=technician.id, local_date=date(2026, 7, 15), local_time=time(10, 30),
                 timezone_name="America/Santiago", duration_minutes=30, actor="oper",
             )
+
+
+def test_open_slots_returns_only_bookable_slots_inside_availability():
+    with SessionLocal() as session:
+        customer, case, technician = _linked_rows(session)
+        other_customer = Customer(phone_e164="+56900000002")
+        session.add(other_customer)
+        session.flush()
+        other_case = Case(conversation_id=case.conversation_id, customer_id=other_customer.id, service="calefont")
+        session.add(other_case)
+        session.flush()
+        start = (datetime.now(timezone.utc) + timedelta(days=2)).replace(minute=0, second=0, microsecond=0)
+        available_end = start + timedelta(hours=2)
+        scheduling.add_availability(
+            session, technician_id=technician.id, starts_at=start, ends_at=available_end
+        )
+        booked_start = start + timedelta(minutes=30)
+        booked = scheduling.book(
+            session, service="calefont", customer_id=other_customer.id, case_id=other_case.id,
+            technician_id=technician.id, local_date=booked_start.date(),
+            local_time=booked_start.time(), timezone_name="UTC", duration_minutes=30, actor="oper",
+        )
+
+        slots = scheduling.open_slots(
+            session, technician_id=technician.id, window_start=start,
+            window_end=start + timedelta(hours=3), duration_minutes=30,
+            timezone_name="UTC", step_minutes=30,
+        )
+
+        assert (booked_start.date(), booked_start.time()) not in slots
+        assert all(datetime.combine(day, clock, timezone.utc) + timedelta(minutes=30) <= available_end for day, clock in slots)
+        assert slots
+        day, clock = slots[0]
+        accepted = scheduling.book(
+            session, service="calefont", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=day, local_time=clock,
+            timezone_name="UTC", duration_minutes=30, actor="oper",
+        )
+        assert accepted.status is AppointmentStatus.BOOKED
 
 
 def test_reschedule_rejects_a_slot_taken_by_another_booked_appointment():
