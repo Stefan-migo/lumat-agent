@@ -102,9 +102,12 @@ edges · 673 communities. Built at `16ba9cbf`, which **predates WU2/WU3 and this
 - [ ] **AD2 — R3-001 (WU3)** — guard the amount editor before submit: a non-empty input that is not
   finite or is negative must not call the API and must show a specific message. Files:
   `web/src/components/pages/ClientFicha.tsx`, `web/src/components/pages/ClientFicha.test.tsx`.
-  - RED: a test submitting `-1` (and a malformed value) asserts the API is NOT called and feedback
-    is shown.
-  - GREEN: the guard.
+  - RED: a test submitting `-1` (bypassing native constraint validation, mirroring "outside the HTML
+    form UI") asserts the API is NOT called and feedback is shown. A malformed/non-finite value is
+    not representable in a `type="number"` field — the input sanitizes it to `""` (the documented
+    clear) — so there is no NaN path to test; the finiteness check stays as defense.
+  - GREEN: the guard. The input keeps `type="number" min="0" step="1"`, the repo's house pattern for
+    numeric fields.
 - [ ] **AD3 — R2-001 (WU2)** — document "omitted = keep / explicit `null` = clear" on
   `EquipmentBody` and the equipment `PATCH` endpoint, reusing the `_UNSET` keep-vs-clear wording
   style from `app/panel/api/routes/cases.py:12-15`. Docs-only, no behavior change, no new test.
@@ -142,26 +145,32 @@ edges · 673 communities. Built at `16ba9cbf`, which **predates WU2/WU3 and this
   tests/functional/test_api_cases.py::test_case_amount_serializes_large_clp_integer_exactly -q`
   passed immediately (`.`); no precision failure observed for 9,999,999,999. GREEN: same command
   passed (`.`). Commit `3af05396`.
-- **AD2** — RED: `cd web && npm test -- --run src/components/pages/ClientFicha.test.tsx`
-  failed as expected: 2 tests failed / 32 passed; `-1` had no validation alert and malformed input
-  reached the API as `null`. GREEN focused combined run: `cd web && npm test -- --run
-  src/components/pages/ClientFicha.test.tsx src/components/pages/ClientesList.test.tsx` passed,
-  59 tests. Commit `fa532507`.
+- **AD2** — RED (observed, mutation check): with the guard disabled,
+  `cd web && npm test -- --run src/components/pages/ClientFicha.test.tsx -t "rejects a negative
+  case amount"` → 1 failed (`updateCaseAmount` called with `-1`). GREEN: the same command passes;
+  `ClientFicha.test.tsx` alone → 33 passed. Commit `fa532507`, corrected in `2a31b813`.
+  **Correction (orchestrator review):** the first implementation additionally changed the input from
+  `type="number" min="0" step="1"` to `type="text" inputMode="numeric"` — unrequested scope creep and
+  a UX downgrade (every other numeric input in the repo uses `type="number"`). Reverted, keeping only
+  the JS guard. The malformed-input case was dropped from the test because a `type="number"` field
+  sanitizes it: `1e999` was observed reaching the handler as `""` (→ `null`), so no NaN path exists.
 - **AD3** — docs-only; no RED. `git show --stat --oneline a11cf487` shows only
   `app/panel/api/routes/clients.py` (6 insertions). Commit `a11cf487`.
 - **AD4** — RED: with the sequence guard temporarily absent,
   `cd web && npm test -- --run src/components/pages/ClientesList.test.tsx -t "stale ficha response"`
   failed because the stale response replaced the options (`Pendiente` missing; `Cancelado` present).
   GREEN: same command passed (1 passed, 24 skipped). Commit `986dc41a`.
-- **AD-VERIFY** — `eval "$(infra/test-db.sh env)" && uv run pytest tests/ -q`: exited 0,
-  reached 100%; warnings: unawaited `_publish_all` coroutine and fastembed pooling notice.
-  `cd web && npm test`: 90 files / 830 tests passed (90.42s); existing React `act(...)` and jsdom
-  navigation warnings appeared. `cd web && npm run build`: exited 0; `tsc -b` and Vite build
-  succeeded (14.09s), with existing chunk-size warning.
+- **AD-VERIFY** (re-run over the corrected tree at `2a31b813`):
+  - `eval "$(infra/test-db.sh env)" && uv run pytest tests/ -q` → exit 0, zero FAILED/ERROR; existing
+    warnings (unawaited `_publish_all` coroutine, fastembed pooling notice).
+  - `cd web && npm test` → exit 0, 90 files / 829 tests passed; existing React `act(...)` and jsdom
+    navigation warnings.
+  - `cd web && npm run build` → exit 0, `tsc -b` + Vite built; existing >500 kB chunk warning.
 
 ## Next step
 
-Complete; no remaining implementation tasks.
+Implementation complete and green. Next: the native review of this slice (RDD is on; base is the
+last reviewed boundary `c1fff81c`), then PR and merge.
 
 ## Recovery
 
