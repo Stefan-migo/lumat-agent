@@ -138,6 +138,15 @@ def get_or_create_customer(session: Session, phone: str) -> Customer:
             entity_id=str(customer.id),
             after={"phone_e164": phone_e164, "channel": "whatsapp"},
         )
+    elif customer.merged_into_customer_id is not None:
+        seen = set()
+        while customer.merged_into_customer_id is not None:
+            if customer.id in seen:
+                raise ValueError("merged customer chain contains a cycle")
+            seen.add(customer.id)
+            customer = session.get(Customer, customer.merged_into_customer_id)
+            if customer is None:
+                raise ValueError("merged customer target not found")
     elif customer.archived_at is not None:
         archived_at = customer.archived_at
         customer.archived_at = None
@@ -230,6 +239,66 @@ def set_customer_state(
     return customer
 
 
+def _resolve_customer_merge(session: Session, first: Customer, second: Customer):
+    activity_models = (Conversation, Case, Appointment, CustomerNote)
+    counts = {
+        customer.id: {
+            model.__tablename__: session.scalar(
+                select(func.count()).select_from(model).where(model.customer_id == customer.id)
+            ) or 0
+            for model in activity_models
+        }
+        for customer in (first, second)
+    }
+    if (first.archived_at is None) != (second.archived_at is None):
+        survivor, loser = (first, second) if first.archived_at is None else (second, first)
+    else:
+        survivor, loser = sorted(
+            (first, second),
+            key=lambda row: (-sum(counts[row.id].values()), row.created_at, row.id),
+        )
+    return survivor, loser, counts
+
+
+def preview_customer_merge(session: Session, first: Customer, second: Customer) -> dict:
+    if first.id == second.id:
+        raise ValueError("cannot merge a customer into itself")
+    if first.merged_into_customer_id is not None or second.merged_into_customer_id is not None:
+        raise ValueError("cannot merge a customer tombstone")
+    survivor, loser, _ = _resolve_customer_merge(session, first, second)
+    moved = {
+        model.__tablename__: session.scalar(
+            select(func.count()).select_from(model).where(model.customer_id == loser.id)
+        ) or 0
+        for model in (Conversation, Case, CustomerNote, CustomerEquipment, Appointment)
+    }
+    other_memories = list(session.scalars(select(Memory).where(
+        Memory.scope == "customer", Memory.entity_id == str(loser.id)
+    )))
+    kept_memories = list(session.scalars(select(Memory).where(
+        Memory.scope == "customer", Memory.entity_id == str(survivor.id)
+    )))
+    by_key = {(m.scope, m.topic_key): m for m in kept_memories}
+    by_hash = {(m.scope, m.normalized_hash): m for m in kept_memories if m.normalized_hash}
+    conflicts = 0
+    for memory in other_memories:
+        duplicate = by_key.get((memory.scope, memory.topic_key)) or (
+            by_hash.get((memory.scope, memory.normalized_hash)) if memory.normalized_hash else None
+        )
+        if duplicate is not None and not all(
+            (getattr(memory, field) == getattr(duplicate, field))
+            for field in ("topic_key", "tipo", "titulo", "contenido", "embedding", "pin", "review_after", "status")
+        ):
+            conflicts += 1
+    scalar_conflicts = [
+        field for field in ("name", "email", "comuna", "address")
+        if getattr(survivor, field) and getattr(loser, field)
+        and getattr(survivor, field) != getattr(loser, field)
+    ]
+    return {"survivor_id": survivor.id, "loser_id": loser.id, "moved": moved,
+            "memory_conflicts": conflicts, "scalar_conflicts": scalar_conflicts}
+
+
 def merge_customers(
     session: Session, first: Customer, second: Customer, *, actor: str
 ) -> Customer:
@@ -247,22 +316,7 @@ def merge_customers(
     if first.merged_into_customer_id is not None or second.merged_into_customer_id is not None:
         raise ValueError("cannot merge a customer tombstone")
 
-    activity_models = (Conversation, Case, Appointment, CustomerNote)
-    counts: dict[int, dict[str, int]] = {}
-    for customer in (first, second):
-        counts[customer.id] = {
-            model.__tablename__: session.scalar(
-                select(func.count()).select_from(model).where(model.customer_id == customer.id)
-            ) or 0
-            for model in activity_models
-        }
-    if (first.archived_at is None) != (second.archived_at is None):
-        survivor, loser = (first, second) if first.archived_at is None else (second, first)
-    else:
-        survivor, loser = sorted(
-            (first, second),
-            key=lambda row: (-sum(counts[row.id].values()), row.created_at, row.id),
-        )
+    survivor, loser, counts = _resolve_customer_merge(session, first, second)
     if survivor.merged_into_customer_id is not None:
         raise ValueError("cannot merge into a customer tombstone")
 

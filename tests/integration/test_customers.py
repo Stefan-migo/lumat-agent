@@ -412,6 +412,30 @@ def test_get_or_create_auto_unarchives_archived_customer_once():
         assert audit.after == {"archived_at": None}
 
 
+def test_get_or_create_customer_resolves_merged_phone_without_unarchiving_tombstone():
+    from app.models import AuditLog
+
+    with SessionLocal() as session:
+        survivor = customers.get_or_create_customer(session, "56911111111")
+        loser = customers.get_or_create_customer(session, "56922222222")
+        customers.merge_customers(session, survivor, loser, actor="operator")
+        loser_id = loser.id
+        session.commit()
+
+    with SessionLocal() as session:
+        resolved = customers.get_or_create_customer(session, "56922222222")
+        session.commit()
+        tombstone = session.get(Customer, loser_id)
+        assert resolved.id == survivor.id
+        assert tombstone.archived_at is not None
+        assert tombstone.merged_into_customer_id == survivor.id
+        assert session.scalar(select(func.count(Customer.id))) == 2
+        assert session.scalar(select(AuditLog).where(
+            AuditLog.action == "customer.auto_unarchived",
+            AuditLog.entity_id == str(loser_id),
+        )) is None
+
+
 def test_create_customer_sets_defaults_and_audits_operator():
     from app.models import AuditLog
 

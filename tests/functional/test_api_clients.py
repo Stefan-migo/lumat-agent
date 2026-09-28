@@ -114,6 +114,8 @@ def test_clients_endpoints_require_login_401_json(client):
         ("post", "/panel/api/clients/1/equipment"),
         ("patch", "/panel/api/clients/1/equipment/1"),
         ("delete", "/panel/api/clients/1/equipment/1"),
+        ("get", "/panel/api/clients/1/merge-preview?with=2"),
+        ("post", "/panel/api/clients/1/merge"),
     ]:
         resp = getattr(client, method)(path, follow_redirects=False)
         assert resp.status_code == 401, f"{method.upper()} {path} must be 401"
@@ -123,6 +125,45 @@ def test_clients_endpoints_require_login_401_json(client):
         )
         assert resp.json() == {"detail": "unauthorized"}
         assert "access-control-allow-origin" not in resp.headers, "no CORS (D1)"
+
+
+def test_customer_merge_preview_is_read_only_and_merge_tombstones_loser(client, make_user):
+    first_id = _seed_customer(phone="+56911112222", name="First", messages=0)
+    second_id = _seed_customer(phone="+56922223333", name="Second", messages=2)
+    with SessionLocal() as session:
+        session.add(Conversation(customer_id=second_id, wa_phone="+56922223333"))
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    preview = client.get(f"/panel/api/clients/{first_id}/merge-preview", params={"with": second_id})
+    assert preview.status_code == 200
+    assert preview.json()["survivor_id"] == second_id
+    assert preview.json()["loser_id"] == first_id
+    assert preview.json()["moved"]["conversations"] == 1
+    assert _customer_row(first_id).merged_into_customer_id is None
+
+    merged = client.post(f"/panel/api/clients/{first_id}/merge", json={"other_id": second_id})
+    assert merged.status_code == 200
+    assert merged.json()["survivor"]["id"] == second_id
+    assert merged.json()["moved"]["conversations"] == 1
+    assert _customer_row(first_id).merged_into_customer_id == second_id
+    assert _customer_row(first_id).archived_at is not None
+
+
+def test_customer_merge_routes_map_guards_and_missing_to_400_and_404(client, make_user):
+    first_id = _seed_customer(phone="+56911112222", messages=0)
+    second_id = _seed_customer(phone="+56922223333", messages=0)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    self_merge = client.post(f"/panel/api/clients/{first_id}/merge", json={"other_id": first_id})
+    tombstone_id = client.post(f"/panel/api/clients/{first_id}/merge", json={"other_id": second_id}).json()["survivor"]["id"]
+    tombstone = client.post(f"/panel/api/clients/{second_id}/merge", json={"other_id": tombstone_id})
+    missing = client.get("/panel/api/clients/999999/merge-preview", params={"with": second_id})
+
+    assert self_merge.status_code == tombstone.status_code == 400
+    assert missing.status_code == 404
 
 
 def test_client_equipment_crud_and_missing_resources(client, make_user):
