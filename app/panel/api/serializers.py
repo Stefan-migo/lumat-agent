@@ -19,6 +19,7 @@ from app.models import (
     Conversation,
     Customer,
     CustomerNote,
+    CustomerEquipment,
     KbDocument,
     Memory,
     Message,
@@ -67,6 +68,22 @@ def to_note_dict(note: CustomerNote) -> dict:
         "note": note.note,
         "author": note.author,
         "created_at": _iso(note.created_at),
+    }
+
+
+def to_equipment_dict(equipment: CustomerEquipment) -> dict:
+    """Customer equipment row -> snake_case panel dict."""
+    return {
+        "id": equipment.id,
+        "customer_id": equipment.customer_id,
+        "equipment_type": equipment.equipment_type,
+        "brand": equipment.brand,
+        "model": equipment.model,
+        "age": equipment.age,
+        "details": equipment.details,
+        "source_conversation_id": equipment.source_conversation_id,
+        "created_at": _iso(equipment.created_at),
+        "updated_at": _iso(equipment.updated_at),
     }
 
 
