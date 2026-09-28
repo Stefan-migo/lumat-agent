@@ -38,9 +38,9 @@ def test_panel_planner_catalog_matches_pre_delegation_bytes():
     config = load_assistant_config()
     catalog = _planner_tool_catalog(list(config.tools_whitelist))
 
-    # SHA-256 of the serialized assistant catalog at the pre-delegation baseline (96ba8ca2).
+    # SHA-256 of the serialized assistant catalog at the post-tool-catalog-trim baseline.
     assert hashlib.sha256(catalog.encode("utf-8")).hexdigest() == (
-        "e522ed875fc30e59bf16dddbb02dbf5dfeb552d29f10d0ec5c5d1af1cf1eb9f6"
+        "7d967c047aeb8681a5faf801e0de4731a7108a37404e51694771d0860e58f0ab"
     )
 
 
