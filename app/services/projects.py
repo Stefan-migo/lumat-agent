@@ -239,8 +239,8 @@ def _audit(session: Session, project_id: int, action: str, actor: str, before: A
     ))
 
 
-def rename(session: Session, project: models.Project | str, name: str, *, actor: str = "agent") -> models.Project:
-    locked = _lock_projects(session, project)
+def rename(session: Session, project: models.Project | str, name: str, *, owner_id: int | None = None, actor: str = "agent") -> models.Project:
+    locked = _lock_projects(session, project, owner_id=owner_id)
     row = locked[_project_id(project)]
     if _has_active_run(session, row.slug):
         raise ValueError("cannot rename project with an active SDB run")
@@ -261,8 +261,8 @@ def rename(session: Session, project: models.Project | str, name: str, *, actor:
     return row
 
 
-def archive(session: Session, project: models.Project | str, *, actor: str = "agent") -> models.Project:
-    locked = _lock_projects(session, project)
+def archive(session: Session, project: models.Project | str, *, owner_id: int | None = None, actor: str = "agent") -> models.Project:
+    locked = _lock_projects(session, project, owner_id=owner_id)
     row = locked[_project_id(project)]
     if row.slug == "default":
         raise ValueError("default project cannot be archived")

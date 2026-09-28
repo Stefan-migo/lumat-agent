@@ -191,6 +191,8 @@ def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, au
                 approval=approval if not definition.read_only else None,
                 task_binding=binding,
                 whitelist=whitelist, cost_allowed=cost_allowed,
+                trusted_thread_id=thread.id,
+                owner_id=thread.user_id,
                 proyecto=authorization.slug if authorization is not None else "default",
             )
             result = {

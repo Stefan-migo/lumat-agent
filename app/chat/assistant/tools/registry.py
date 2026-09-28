@@ -323,16 +323,18 @@ def _kpis(session, args: KpiArgs):
     return dashboard.compute_kpis(session, args.window_days)
 
 
-def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, proyecto: str = "default"):
+def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, proyecto: str = "default", owner_id: int | None = None):
     parsed = args.root
     if parsed.scope == "own":
         if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
             raise ToolValidationError("own memory read requires a positive trusted thread id")
+        authorization = None if proyecto == memory.WRITABLE_PROYECTO else projects.agent_context(session, proyecto, owner_id=owner_id)
+        memory_owner = authorization.owner_id if authorization is not None else None
         thread_rows = memory.list_for_entity(
-            session, scope="panel", entity_id=memory.thread_memory_entity(trusted_thread_id), proyecto=proyecto
+            session, scope="panel", entity_id=memory.thread_memory_entity(trusted_thread_id), proyecto=proyecto, owner_id=memory_owner
         )
         agent_rows = memory.list_for_entity(
-            session, scope="agent", entity_id=memory.agent_memory_entity(proyecto), proyecto=proyecto
+            session, scope="agent", entity_id=memory.agent_memory_entity(proyecto), proyecto=proyecto, owner_id=memory_owner
         )
         if parsed.topic:
             thread_rows = [row for row in thread_rows if row.topic_key == parsed.topic]
@@ -365,17 +367,20 @@ def _read_memory(session, args: MemoryArgs, *, trusted_thread_id: int | None, pr
     return rows[: parsed.limit]
 
 
-def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | None, proyecto: str = "default"):
+def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | None, proyecto: str = "default", owner_id: int | None = None):
     parsed = args.root
     if parsed.scope == "own":
         if type(trusted_thread_id) is not int or trusted_thread_id <= 0:
             raise ToolValidationError("own memory search requires a positive trusted thread id")
+        authorization = None if proyecto == memory.WRITABLE_PROYECTO else projects.agent_context(session, proyecto, owner_id=owner_id)
+        memory_owner = authorization.owner_id if authorization is not None else None
         rows = memory.hybrid_search(
             session,
             parsed.query,
             scope="panel",
             entity_id=memory.thread_memory_entity(trusted_thread_id),
             proyecto=proyecto,
+            owner_id=memory_owner,
             top_k=parsed.limit,
         ) + memory.hybrid_search(
             session,
@@ -383,6 +388,7 @@ def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | 
             scope="agent",
             entity_id=memory.agent_memory_entity(proyecto),
             proyecto=proyecto,
+            owner_id=memory_owner,
             top_k=parsed.limit,
         )
         rows.sort(key=lambda row: row.get("score", 0), reverse=True)
@@ -404,10 +410,10 @@ def _search_memory(session, args: MemorySearchArgs, *, trusted_thread_id: int | 
     ]
 
 
-def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int, proyecto: str = "default"):
+def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int, proyecto: str = "default", owner_id: int | None = None):
     key = args.topic_key
     try:
-        authorization = None if proyecto == memory.WRITABLE_PROYECTO else projects.agent_context(session, proyecto)
+        authorization = None if proyecto == memory.WRITABLE_PROYECTO else projects.agent_context(session, proyecto, owner_id=owner_id)
         scope, entity_id = memory.visibility_target(
             args.visibility, thread_id=trusted_thread_id, proyecto=proyecto
         )
@@ -433,7 +439,7 @@ def _write_memory(session, args: MemoryWriteArgs, *, trusted_thread_id: int, pro
         return {"written": False, "degraded_reason": "Memory write unavailable", "topic_key": key}
 
 
-def _owned_agent_memory_or_raise(session, memory_id: int, *, trusted_thread_id: int, proyecto: str):
+def _owned_agent_memory_or_raise(session, memory_id: int, *, trusted_thread_id: int, proyecto: str, memory_owner: int | None):
     row = session.get(memory.Memory, memory_id)
     if row is None:
         raise ToolValidationError(f"memory {memory_id} is not owned by the assistant")
@@ -443,6 +449,7 @@ def _owned_agent_memory_or_raise(session, memory_id: int, *, trusted_thread_id: 
     }
     if (
         row.proyecto != proyecto
+        or row.owner_id != memory_owner
         or row.producer is not memory.MemoryProducer.AGENT
         or not row.topic_key.startswith("agent:")
         or (row.scope, row.entity_id) not in owned_axes
@@ -451,8 +458,10 @@ def _owned_agent_memory_or_raise(session, memory_id: int, *, trusted_thread_id: 
     return row
 
 
-def _update_memory(session, args: MemoryUpdateArgs, *, trusted_thread_id: int, proyecto: str = "default"):
-    _owned_agent_memory_or_raise(session, args.id, trusted_thread_id=trusted_thread_id, proyecto=proyecto)
+def _update_memory(session, args: MemoryUpdateArgs, *, trusted_thread_id: int, proyecto: str = "default", owner_id: int | None = None):
+    authorization = None if proyecto == memory.WRITABLE_PROYECTO else projects.agent_context(session, proyecto, owner_id=owner_id)
+    memory_owner = authorization.owner_id if authorization is not None else None
+    _owned_agent_memory_or_raise(session, args.id, trusted_thread_id=trusted_thread_id, proyecto=proyecto, memory_owner=memory_owner)
     try:
         with session.begin_nested():
             row = memory.update(
@@ -468,8 +477,10 @@ def _update_memory(session, args: MemoryUpdateArgs, *, trusted_thread_id: int, p
         return {"updated": False, "degraded_reason": "Memory update unavailable"}
 
 
-def _delete_memory(session, args: MemoryDeleteArgs, *, trusted_thread_id: int, proyecto: str = "default"):
-    _owned_agent_memory_or_raise(session, args.id, trusted_thread_id=trusted_thread_id, proyecto=proyecto)
+def _delete_memory(session, args: MemoryDeleteArgs, *, trusted_thread_id: int, proyecto: str = "default", owner_id: int | None = None):
+    authorization = None if proyecto == memory.WRITABLE_PROYECTO else projects.agent_context(session, proyecto, owner_id=owner_id)
+    memory_owner = authorization.owner_id if authorization is not None else None
+    _owned_agent_memory_or_raise(session, args.id, trusted_thread_id=trusted_thread_id, proyecto=proyecto, memory_owner=memory_owner)
     try:
         with session.begin_nested():
             row = memory.delete(session, args.id)
@@ -491,28 +502,31 @@ def _web_fetch(_session, args: WebFetchArgs):
     return webfetch.read_page(args.url)
 
 
-def _project_list(session, args: ProjectListArgs):
-    return projects.list(session)[: args.limit]
+def _project_list(session, args: ProjectListArgs, *, owner_id: int | None = None):
+    return projects.list(session, owner_id=owner_id)[: args.limit]
 
 
-def _project_find(session, args: ProjectFindArgs, *, _approval=None):
-    return projects.find(session, args.query, _approval=_approval)
+def _project_find(session, args: ProjectFindArgs, *, owner_id: int | None = None, _approval=None):
+    return projects.find(session, args.query, owner_id=owner_id, _approval=_approval)
 
 
-def _project_create(session, args: ProjectCreateArgs, *, _approval=None):
-    return projects.create(session, args.slug, args.name, args.purpose, _approval=_approval)
+def _project_create(session, args: ProjectCreateArgs, *, owner_id: int | None = None, _approval=None):
+    result = projects.create(session, args.slug, args.name, args.purpose, owner_id=owner_id, _approval=_approval)
+    if hasattr(session, "flush"):
+        session.flush()
+    return result
 
 
-def _project_rename(session, args: ProjectRenameArgs):
-    return projects.rename(session, args.project, args.name)
+def _project_rename(session, args: ProjectRenameArgs, *, owner_id: int | None = None):
+    return projects.rename(session, args.project, args.name, owner_id=owner_id)
 
 
-def _project_archive(session, args: ProjectArchiveArgs):
-    return projects.archive(session, args.project)
+def _project_archive(session, args: ProjectArchiveArgs, *, owner_id: int | None = None):
+    return projects.archive(session, args.project, owner_id=owner_id)
 
 
-def _project_merge(session, args: ProjectMergeArgs):
-    return projects.merge(session, args.source, args.target)
+def _project_merge(session, args: ProjectMergeArgs, *, owner_id: int | None = None):
+    return projects.merge(session, args.source, args.target, owner_id=owner_id)
 
 
 def _assistant_capabilities(_session, _args: CapabilitiesArgs):
@@ -596,13 +610,17 @@ def execute_tool(
     cost_allowed: bool = True,
     trusted_thread_id: int | None = None,
     proyecto: str = "default",
+    owner_id: int | None = None,
 ) -> dict:
+    """Execute one allow-listed tool using the authenticated chat-thread owner."""
     definition = get_tool(name)
     if whitelist is not None and name not in whitelist:
         raise ToolValidationError(f"tool is not whitelisted: {name}")
     autonomous_write = name in AUTONOMOUS_WRITE_ALLOWLIST
     if autonomous_write and (type(trusted_thread_id) is not int or trusted_thread_id <= 0):
         raise ToolValidationError("autonomous memory write requires a positive trusted thread id")
+    if name.startswith(("project.", "memory.")) and type(trusted_thread_id) is int and trusted_thread_id > 0 and owner_id is None:
+        raise ToolValidationError("owner-scoped tool requires the authenticated owner")
     if definition.write and not autonomous_write and name not in SDB_WRITE_ALLOWLIST:
         raise ToolValidationError("write-not-registered")
     if not cost_allowed:
@@ -650,20 +668,21 @@ def execute_tool(
     if not definition.read_only and not autonomous_write and not project_approval and not validate_execution(payload, approval or {}):
         raise ToolValidationError("approval does not match exact tool arguments")
     try:
-        if name == "project.find":
-            result = _plain(definition.handler(session, parsed, _approval=project_approval))
-        elif name == "project.create":
-            result = _plain(definition.handler(session, parsed, _approval=project_approval))
+        if name.startswith("project."):
+            kwargs = {"owner_id": owner_id}
+            if name in {"project.find", "project.create"}:
+                kwargs["_approval"] = project_approval
+            result = _plain(definition.handler(session, parsed, **kwargs))
         elif name in {"memory.write", "memory.update", "memory.delete"}:
             result = _plain(
                 definition.handler(
-                    session, parsed, trusted_thread_id=trusted_thread_id, proyecto=proyecto
+                    session, parsed, trusted_thread_id=trusted_thread_id, proyecto=proyecto, owner_id=owner_id
                 )
             )
         elif name in {"memory.read", "memory.search"}:
             result = _plain(
                 definition.handler(
-                    session, parsed, trusted_thread_id=trusted_thread_id, proyecto=proyecto
+                    session, parsed, trusted_thread_id=trusted_thread_id, proyecto=proyecto, owner_id=owner_id
                 )
             )
         else:
