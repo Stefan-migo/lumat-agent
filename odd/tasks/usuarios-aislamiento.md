@@ -104,12 +104,12 @@ of WU1–WU4; track them in the dependent `agent-role-access` unit after this un
 project registry methods enforce owner scope; `default` remains shared and is not
 silently chosen for an unselected chat.
 
-- [ ] **U1.1** — Add migration 034 for `projects.owner_id`, owner-scoped slug
+- [x] **U1.1** — Add migration 034 for `projects.owner_id`, owner-scoped slug
   uniqueness, nullable `memories.owner_id` and owner-aware memory key, and
   `project_aliases.owner_id` with backfill and `UNIQUE(owner_id, alias)`.
-- [ ] **U1.2** — Make list/find/create/merge and agent-context registry operations
+- [x] **U1.2** — Make list/find/create/merge and agent-context registry operations
   owner-aware; enforce per-owner slug and alias uniqueness.
-- [ ] **U1.3** — Preserve shared `default` handling without introducing implicit
+- [x] **U1.3** — Preserve shared `default` handling without introducing implicit
   chat fallback; add focused migration and service tests.
 
 **Acceptance slice:** two owners may use the same slug and alias; lookups are owner
@@ -288,7 +288,22 @@ semantics; service and route tests must establish those.
 ## Progress
 
 - [ ] Graph Check recorded for planning (see nodes and relationships above).
-- [ ] WU1 — migration 034 and owner-aware project registry.
+- [x] WU1 — migration 034 and owner-aware project registry.
+- Verification: `uv run pytest tests/spec/test_projects_spec.py tests/integration/test_migrations.py -q`
+  — `38 passed`; `uv run pytest tests/` — `1537 passed, 2 warnings`;
+  `git diff --check` — passed.
+- D9 backfill is deterministic when exactly one admin exists; no admin or multiple
+  admins produce no ownership assignment. The multi-admin case remains a manual
+  resolution gap; migration test coverage verifies schema, not legacy-row backfill.
+- Graph check: queried `projects project_aliases memories owner user registry` in
+  the main worktree and `projects service list find create merge agent_context
+  project_aliases owner` in this worktree. Consulted `Project`, `ProjectAlias`,
+  `Memory`, `User`, `services/projects.py` (`list`, `find`, `create`, `merge`,
+  `agent_context`), `models.py`, `test_projects_spec.py`, and
+  `test_migrations.py`. The undirected path connected `services/projects.py` to
+  `ProjectsPage.tsx` through `api.ts`/`postJson()`; no direct directed path from
+  service to model was found. The code and focused tests, not graph relationships,
+  establish runtime behavior.
 - [ ] WU2 — owner-aware memory, explicit project-bound chat, and tools.
 - [ ] WU3 — owner-filtered panel API and project selection/creation.
 - [ ] WU4 — cross-user isolation suite and final gate.
