@@ -387,7 +387,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           </Card>
           <Dialog open={amountOpen} onClose={() => setAmountOpen(false)} title="Monto del servicio">
             <form onSubmit={(event) => void saveCaseAmount(event)}>
-              <Input label="Monto CLP" type="text" inputMode="numeric" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} />
+              <Input label="Monto CLP" type="number" min="0" step="1" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} />
               <p>Deja el campo vacío para quitar el monto.</p>
               <LocalFeedback feedback={caseFeedback} />
               <Button type="submit" disabled={amountMutation}>{amountMutation ? "Guardando…" : "Guardar monto"}</Button>
