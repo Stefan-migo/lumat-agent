@@ -414,6 +414,53 @@ def test_mem2_same_key_rewrite_is_not_a_duplicate(fake_embedder, migrated_db):
         assert rewritten.duplicate_count == 1
 
 
+def test_memory_owner_namespace_isolated_for_writes_and_reads(fake_embedder, migrated_db):
+    from app.services.projects import _ProjectAuthorization
+
+    with SessionLocal() as session:
+        owners = [User(username=f"memory-owner-{uuid4().hex}", password_hash="test") for _ in range(2)]
+        session.add_all(owners)
+        session.flush()
+        rows = [tukulpan.upsert(
+            session, owner_id=owner.id, authorization=_ProjectAuthorization(slug="casa"), proyecto="casa", scope="agent",
+            entity_id="agent:casa", topic_key="fact", tipo=MemoryType.DECISION,
+            titulo="Fact", contenido="Private fact", visibility=MemoryVisibility.GLOBAL,
+        ) for owner in owners]
+        shared = tukulpan.upsert(
+            session, authorization=_ProjectAuthorization(slug="casa"), proyecto="casa", scope="agent", entity_id="agent:casa",
+            topic_key="business", tipo=MemoryType.DECISION, titulo="Business",
+            contenido="Business shared fact", visibility=MemoryVisibility.GLOBAL,
+        )
+        session.commit()
+
+        assert rows[0].id != rows[1].id
+        assert tukulpan.get_by_key(
+            session, owner_id=owners[0].id, proyecto="casa", scope="agent",
+            entity_id="agent:casa", topic_key="fact",
+        ).id == rows[0].id
+        assert tukulpan.get_by_key(
+            session, owner_id=owners[1].id, proyecto="casa", scope="agent",
+            entity_id="agent:casa", topic_key="fact",
+        ).id == rows[1].id
+        assert tukulpan.get_by_key(
+            session, proyecto="casa", scope="agent", entity_id="agent:casa",
+            topic_key="business",
+        ).id == shared.id
+        assert tukulpan.get_by_key(
+            session, proyecto="casa", scope="agent", entity_id="agent:casa",
+            topic_key="fact",
+        ) is None
+        assert {row.id for row in tukulpan.list_for_entity(
+            session, owner_id=owners[0].id, proyecto="casa", scope="agent", entity_id="agent:casa"
+        )} == {rows[0].id}
+        results = tukulpan.hybrid_search(
+            session, "Private fact", owner_id=owners[0].id, proyecto="casa",
+            scope="agent", entity_id="agent:casa", min_sim=0,
+        )
+        assert rows[0].id in {result["id"] for result in results}
+        assert rows[1].id not in {result["id"] for result in results}
+
+
 def test_mem2_rewrite_collision_keeps_written_key_and_folds_duplicate(fake_embedder, migrated_db):
     """A keyed rewrite whose new content is already held elsewhere must not crash.
 
