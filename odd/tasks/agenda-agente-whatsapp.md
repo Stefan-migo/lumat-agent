@@ -49,6 +49,19 @@ consequences; configurable reminder lead time; two-way external calendar sync.
    92) and therefore in scope.
 5. **No-show**: no automated flow; the reminder is informative and an operator marks `no_show` in
    the panel.
+6. **Technician assignment** (2026-09-28): among the `tecnico` users whose availability block covers
+   the slot, the lowest id. Deterministic, no new configuration. Prerequisite: the owner loads the
+   work schedule in `technician_availability` (the proposal already requires this, line 107).
+7. **Offer window and defaults** (orchestrator decision, vetoable): search the next 7 days, bounded
+   by the technicians' availability rows; no new window configuration. `service` is the fixed label
+   `Visita técnica` and `duration_minutes` is 60 (both adjustable later). If no slot exists, the
+   agent hands off to a human instead of inventing one.
+8. **Confirmation UX** (orchestrator decision, vetoable): the agent offers up to 3 numbered concrete
+   slots; the customer confirms by number or by wording that normalizes unambiguously to exactly one
+   offered slot (deterministic digit match first, then a constrained normalization that may abstain).
+   Ambiguity re-asks once, then hands off. The exact slot is re-validated at commit; a conflict
+   re-offers instead of failing the conversation. The LLM never states availability it did not
+   receive from the scheduling service.
 
 ## Accepted constraints (verified evidence)
 
@@ -115,17 +128,29 @@ cd web && npm run build                      # the only frontend type check (tsc
 
 ### S2 — Booking step in the WhatsApp graph
 
-- [ ] Add the booking step to the WhatsApp conversation: consume the captured availability, offer
-      concrete slots from S1, take the customer's explicit confirmation, then call
-      `scheduling.book` with the customer/case from trusted conversation state.
-- [ ] Replace the human-handoff copy (`capture.py:37-40`) on the booking path with a confirmation
-      that names the booked slot; keep a safe fallback when no slot fits.
-- [ ] Acceptance: a scripted conversation where the customer asks for a time and confirms gets a
-      real `Appointment` row in `booked` status with history and audit; a customer who does not
-      confirm books nothing; no booking is possible for a customer/case the conversation does not
-      own.
-- [ ] Route: delegated writer (new node + graph wiring + state + tests).
-- [ ] Checks: focused assistant/chat tests plus the full backend suite.
+- [x] Add an assignment-aware slot search that reuses S1's `open_slots`, iterating `tecnico` users and
+      returning `(technician_id, local_date, local_time)` for the lowest-id technician free at each
+      slot. If no technician has availability rows at all, return no slots (do not treat everyone as
+      unrestricted across multiple technicians).
+- [x] Add a `booking` node to the WhatsApp graph, reachable after capture completes and re-entered
+      while a pending offer exists:
+  - no pending offer: compute up to 3 slots over the next 7 days; if none, hand off to a human;
+    otherwise persist a frozen pending offer (technician id + the exact slots + created_at) on the
+    conversation and reply with the numbered offer;
+  - pending offer: resolve the customer's reply to exactly one offered slot (deterministic digit
+    match first, then a constrained normalization allowed to abstain); ambiguous → re-ask once, then
+    hand off; expired offer → re-offer or hand off.
+- [x] Book with `scheduling.book` using the customer and case from trusted conversation state and
+      `actor="assistant"`. On `Unavailable` or `AppointmentConflict`, re-offer instead of failing.
+- [x] Replace the human-handoff copy (`capture.py:37-40`) on the booking path with a confirmation
+      that names the booked slot; keep `summary` after a successful booking.
+- [x] Acceptance: (a) a scripted conversation where the customer asks for a time and confirms
+      produces a real `Appointment` in `booked` status with history and audit; (b) no confirmation
+      books nothing; (c) no booking is possible for a customer/case the conversation does not own;
+      (d) a slot taken between the offer and the confirmation re-offers rather than crashing;
+      (e) with no technician availability configured, the agent hands off and books nothing.
+- [x] Route: delegated writer (new node + graph wiring + state + tests).
+- [x] Checks: focused chat/integration tests plus the full backend suite.
 
 ### S3 — Reschedule and cancel from WhatsApp
 
@@ -169,3 +194,13 @@ cd web && npm run build                      # the only frontend type check (tsc
   `availability()`, `book()`, `Appointment`, `TechnicianAvailability`, and `_linked_rows()`; the
   relevant extracted relationships connect `_validate_slot()` to `local_interval()` and
   `availability()`, and connect `book()` to `_validate_slot()`. Graph is stale from `16ba9cbf`.
+- 2026-09-28: S2 implemented in `5a32d61a` (assignment search) and `b279b242` (WhatsApp booking).
+  RED: assignment tests failed because `get_hours_timezone` was not yet imported; booking
+  acceptance tests failed to receive offers/handoffs before the graph node existed. GREEN:
+  scheduling/chat focused tests = 43 passed; full backend suite = 1555 passed, 2 warnings.
+  Graph queries consulted `availability()`, `TechnicianAvailability`, `User`, `ConversationState`,
+  `capture()`, `orchestrate()`, `summary()`, and `chat/graph.py`. Queried edges: `book()` and
+  `availability()` are both contained in `scheduling.py`; `orchestrate()` and `capture()` are
+  imported by `chat/graph.py`. The report's conversation pipeline hyperedge connects emergency,
+  cost, handoff, receive, classification, and orchestration nodes. Communities include
+  `scheduling.py` and `chat/graph.py`. Report remains stale at `16ba9cbf` by instruction.
