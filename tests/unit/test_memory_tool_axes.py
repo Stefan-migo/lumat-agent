@@ -206,6 +206,25 @@ def test_own_memory_read_and_search_union_thread_and_agent_axes(monkeypatch):
     assert [row["entity_id"] for row in results] == ["agent:acme", "thread:42"]
 
 
+def test_own_memory_read_threads_derived_owner_into_both_axes(monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        registry.memory,
+        "list_for_entity",
+        lambda _session, *, scope, entity_id, proyecto, owner_id: seen.append((scope, owner_id)) or [],
+    )
+    monkeypatch.setattr(
+        registry.projects,
+        "agent_context",
+        lambda _session, slug, *, owner_id: SimpleNamespace(owner_id=7),
+    )
+
+    assert registry._read_memory(
+        MagicMock(), registry.MemoryArgs.model_validate({}), trusted_thread_id=42, proyecto="acme"
+    ) == []
+    assert seen == [("panel", 7), ("agent", 7)]
+
+
 def test_own_memory_never_returns_another_threads_panel_row(monkeypatch):
     other_thread = Mock(scope="panel", entity_id="thread:7", topic_key="other")
     monkeypatch.setattr(

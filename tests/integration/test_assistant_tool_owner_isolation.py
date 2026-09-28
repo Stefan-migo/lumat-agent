@@ -112,3 +112,20 @@ def test_registry_scopes_projects_and_memory_to_authenticated_owner(fake_embedde
             trusted_thread_id=thread_b.id, owner_id=user_b.id,
         )
         assert business.id in {row["id"] for row in shared["result"]}
+
+        cross = execute_tool(
+            session, "memory.search", {"scope": "own", "query": "Owner A secret"},
+            trusted_thread_id=thread_b.id, owner_id=user_b.id, proyecto="field-ops",
+        )
+        assert cross["result"] == []
+
+        business_search = execute_tool(
+            session, "memory.search", {"scope": "customer", "entity_id": "customer:9", "query": "Business memory"},
+            trusted_thread_id=thread_b.id, owner_id=user_b.id,
+        )
+        assert business.id in {row["id"] for row in business_search["result"]}
+
+        with pytest.raises(
+            ToolValidationError, match="owner-scoped tool requires the authenticated owner"
+        ):
+            execute_tool(session, "project.list", {})
