@@ -19,6 +19,7 @@ class _ProjectAuthorization:
     """Opaque capability issued by this service for one active namespace."""
 
     slug: str
+    owner_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -51,39 +52,42 @@ def normalize_slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
 
 
-def list(session: Session) -> list[models.Project]:
+def list(session: Session, owner_id: int | None = None) -> list[models.Project]:
     """Return every project, including archived entries."""
-    return session.scalars(select(models.Project).order_by(models.Project.slug)).all()
+    return session.scalars(select(models.Project).where(models.Project.owner_id == owner_id).order_by(models.Project.slug)).all()
 
 
 def find(
     session: Session,
     query: str,
     *,
+    owner_id: int | None = None,
     _approval: _ApprovedProjectDecision | None = None,
 ) -> ProjectResult:
     """Resolve an exact slug or return at most three approval-bound candidates."""
     slug = normalize_slug(query)
-    exact = session.scalar(select(models.Project).where(func.lower(models.Project.slug) == slug))
+    owner_filter = models.Project.owner_id.is_(None) if owner_id is None else models.Project.owner_id == owner_id
+    exact = session.scalar(select(models.Project).where(owner_filter, func.lower(models.Project.slug) == slug))
     if exact is not None:
         return ProjectResult(project=exact, candidates=[])
 
     embeddings, _ = kb.embed_texts([query])
-    result = _semantic_candidates(session, embeddings[0])
+    result = _semantic_candidates(session, embeddings[0], owner_id)
     if _approval is not None and _approval.operation == "find":
         selected_slug = _approval.decision.get("selected_slug")
         if selected_slug and any(candidate.slug == selected_slug for candidate in result.candidates):
-            project = session.scalar(select(models.Project).where(models.Project.slug == selected_slug))
+            project = session.scalar(select(models.Project).where(models.Project.slug == selected_slug, owner_filter))
             if project is not None:
                 return ProjectResult(project=project, candidates=result.candidates)
     return result
 
 
-def _semantic_candidates(session: Session, vector: list[float]) -> ProjectResult:
+def _semantic_candidates(session: Session, vector: list[float], owner_id: int | None = None) -> ProjectResult:
     similarity = (1 - models.Project.purpose_embedding.cosine_distance(vector)).label("similarity")
+    owner_filter = models.Project.owner_id.is_(None) if owner_id is None else models.Project.owner_id == owner_id
     rows = session.execute(
         select(models.Project, similarity)
-        .where(models.Project.purpose_embedding.cosine_distance(vector) <= 1 - SIMILARITY_THRESHOLD)
+        .where(owner_filter, models.Project.purpose_embedding.cosine_distance(vector) <= 1 - SIMILARITY_THRESHOLD)
         .order_by(similarity.desc())
         .limit(MAX_CANDIDATES)
     ).all()
@@ -97,12 +101,14 @@ def create(
     name: str,
     purpose: str,
     *,
+    owner_id: int | None = None,
     _approval: _ApprovedProjectDecision | None = None,
 ) -> models.Project | ProjectResult:
     """Create a project only when no exact or semantic purpose candidate exists."""
     normalized_purpose = normalize(purpose)
     duplicate = session.scalar(
         select(models.Project).where(
+            models.Project.owner_id.is_(None) if owner_id is None else models.Project.owner_id == owner_id,
             func.lower(func.regexp_replace(models.Project.purpose, r"\s+", " ", "g"))
             == normalized_purpose
         )
@@ -125,7 +131,7 @@ def create(
             return result
 
     embedding, _ = kb.embed_texts([purpose])
-    semantic_result = _semantic_candidates(session, embedding[0])
+    semantic_result = _semantic_candidates(session, embedding[0], owner_id)
     if semantic_result.requires_approval:
         if _approval is None or _approval.operation != "create":
             return semantic_result
@@ -133,7 +139,7 @@ def create(
         if selected_slug:
             if not any(candidate.slug == selected_slug for candidate in semantic_result.candidates):
                 return semantic_result
-            project = session.scalar(select(models.Project).where(models.Project.slug == selected_slug))
+            project = session.scalar(select(models.Project).where(models.Project.slug == selected_slug, models.Project.owner_id == owner_id))
             return project or semantic_result
         if _approval.decision.get("create_distinct") is not True:
             return semantic_result
@@ -143,18 +149,20 @@ def create(
         name=name.strip(),
         purpose=purpose.strip(),
         purpose_embedding=embedding[0],
+        owner_id=owner_id,
     )
     session.add(project)
     return project
 
 
-def agent_context(session: Session, proyecto: str) -> _ProjectAuthorization:
+def agent_context(session: Session, proyecto: str, owner_id: int | None = None) -> _ProjectAuthorization:
     """Issue the canonical service capability for an active project namespace."""
     slug = normalize_slug(proyecto)
-    project = session.scalar(select(models.Project).where(models.Project.slug == slug))
+    owner_filter = models.Project.owner_id.is_(None) if owner_id is None else models.Project.owner_id == owner_id
+    project = session.scalar(select(models.Project).where(models.Project.slug == slug, owner_filter))
     if project is None or _status_value(project.status) != "active":
         raise ValueError(f"project {proyecto!r} is not an active project")
-    return _ProjectAuthorization(slug=project.slug)
+    return _ProjectAuthorization(slug=project.slug, owner_id=project.owner_id)
 
 
 def _project_id(project: models.Project | str) -> str:
@@ -165,11 +173,15 @@ def _status_value(status: models.ProjectStatus | str) -> str:
     return status.value if isinstance(status, models.ProjectStatus) else str(status)
 
 
-def _lock_projects(session: Session, *projects: models.Project | str) -> dict[str, models.Project]:
+def _lock_projects(session: Session, *projects: models.Project | str, owner_id: int | None = None) -> dict[str, models.Project]:
     slugs = {_project_id(project) for project in projects}
+    selected_owner = owner_id if owner_id is not None else next(
+        (project.owner_id for project in projects if isinstance(project, models.Project)), None
+    )
+    owner_filter = models.Project.owner_id.is_(None) if selected_owner is None else models.Project.owner_id == selected_owner
     rows = session.scalars(
         select(models.Project)
-        .where(models.Project.slug.in_(slugs))
+        .where(models.Project.slug.in_(slugs), owner_filter)
         .order_by(models.Project.id)
         .with_for_update()
     ).all()
@@ -200,6 +212,7 @@ def _validate_namespace(session: Session, project: models.Project) -> None:
             func.count(models.Memory.id),
         )
         .where(models.Memory.proyecto == project.slug)
+        .where(models.Memory.owner_id == project.owner_id)
         .group_by(models.Memory.scope, models.Memory.entity_id, models.Memory.topic_key)
         .having(func.count(models.Memory.id) > 1)
     ).all()
@@ -224,10 +237,12 @@ def rename(session: Session, project: models.Project | str, name: str, *, actor:
     if not new_name:
         raise ValueError("project name cannot be empty")
     alias = normalize(new_name)
-    if session.scalar(select(models.Project).where(func.lower(models.Project.slug) == alias)) or session.scalar(select(models.ProjectAlias).where(models.ProjectAlias.alias == alias)):
+    owner_filter = models.Project.owner_id.is_(None) if row.owner_id is None else models.Project.owner_id == row.owner_id
+    alias_filter = models.ProjectAlias.owner_id.is_(None) if row.owner_id is None else models.ProjectAlias.owner_id == row.owner_id
+    if session.scalar(select(models.Project).where(owner_filter, func.lower(models.Project.slug) == alias)) or session.scalar(select(models.ProjectAlias).where(alias_filter, models.ProjectAlias.alias == alias)):
         raise ValueError(f"project alias {alias!r} already exists")
     row.name = new_name
-    session.add(models.ProjectAlias(project_id=row.id, alias=alias))
+    session.add(models.ProjectAlias(project_id=row.id, owner_id=row.owner_id, alias=alias))
     _audit(session, row.id, "rename", actor, old, {"slug": row.slug, "name": new_name, "status": _status_value(row.status)})
     session.flush()
     return row
@@ -254,18 +269,30 @@ def _memory_equivalent(left: models.Memory, right: models.Memory) -> bool:
     ))
 
 
-def merge(session: Session, source: models.Project | str, target: models.Project | str, *, actor: str = "agent") -> models.Project:
-    locked = _lock_projects(session, source, target)
+def merge(session: Session, source: models.Project | str, target: models.Project | str, *, owner_id: int | None = None, actor: str = "agent") -> models.Project:
+    locked = _lock_projects(session, source, target, owner_id=owner_id)
     source_row, target_row = locked[_project_id(source)], locked[_project_id(target)]
     if source_row.id == target_row.id:
         raise ValueError("cannot merge a project into itself")
+    if source_row.owner_id != target_row.owner_id or source_row.owner_id != owner_id:
+        raise ValueError("cannot merge projects across owners")
     if source_row.slug == "default":
         raise ValueError("default project cannot be merged away")
     if _has_active_run(session, source_row.slug) or _has_active_run(session, target_row.slug):
         raise ValueError("cannot merge projects with an active SDB run")
 
-    source_memories = session.scalars(select(models.Memory).where(models.Memory.proyecto == source_row.slug)).all()
-    target_memories = session.scalars(select(models.Memory).where(models.Memory.proyecto == target_row.slug)).all()
+    source_memories = session.scalars(
+        select(models.Memory).where(
+            models.Memory.proyecto == source_row.slug,
+            models.Memory.owner_id == source_row.owner_id,
+        )
+    ).all()
+    target_memories = session.scalars(
+        select(models.Memory).where(
+            models.Memory.proyecto == target_row.slug,
+            models.Memory.owner_id == target_row.owner_id,
+        )
+    ).all()
     target_by_key = {(m.scope, m.entity_id, m.topic_key): m for m in target_memories}
     target_by_hash = {
         (m.scope, m.entity_id, m.normalized_hash): m
@@ -302,7 +329,7 @@ def merge(session: Session, source: models.Project | str, target: models.Project
             session.execute(update(models.MemoryRelation).where(models.MemoryRelation.id_a == memory.id).values(id_a=existing.id))
             session.execute(update(models.MemoryRelation).where(models.MemoryRelation.id_b == memory.id).values(id_b=existing.id))
             session.delete(memory)
-    target_row_alias = models.ProjectAlias(project_id=target_row.id, alias=source_row.slug)
+    target_row_alias = models.ProjectAlias(project_id=target_row.id, owner_id=target_row.owner_id, alias=source_row.slug)
     session.add(target_row_alias)
     before = {"source": source_row.slug, "target": target_row.slug, "source_status": _status_value(source_row.status)}
     source_row.status = models.ProjectStatus.ARCHIVED

@@ -177,8 +177,18 @@ class ProjectStatus(str, enum.Enum):
 
 class Project(Base):
     __tablename__ = "projects"
+    __table_args__ = (
+        Index(
+            "uq_projects_owner_normalized_slug",
+            "owner_id",
+            text("lower(btrim(slug))"),
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    owner_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     slug: Mapped[str] = mapped_column(String(100), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     purpose: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -197,10 +207,14 @@ class Project(Base):
 
 class ProjectAlias(Base):
     __tablename__ = "project_aliases"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "alias", postgresql_nulls_not_distinct=True),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("projects.id"), nullable=False)
-    alias: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    owner_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    alias: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = _ts()
 
 
@@ -465,7 +479,11 @@ class Memory(Base):
 
     __tablename__ = "memories"
     __table_args__ = (
-        UniqueConstraint("proyecto", "scope", "entity_id", "topic_key"),
+        UniqueConstraint(
+            "owner_id", "proyecto", "scope", "entity_id", "topic_key",
+            name="uq_memories_owner_project_scope_entity_topic",
+            postgresql_nulls_not_distinct=True,
+        ),
         Index("idx_memories_entity", "scope", "entity_id"),
         Index(
             "uq_memories_normalized_content",
@@ -479,6 +497,7 @@ class Memory(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    owner_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
     proyecto: Mapped[str] = mapped_column(String(100), default="default", server_default="default")
     scope: Mapped[str] = mapped_column(String(100), nullable=False)
     entity_id: Mapped[str] = mapped_column(String(100), nullable=False)
