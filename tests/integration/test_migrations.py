@@ -341,6 +341,86 @@ def test_migration_031_binds_existing_threads_to_default(tmp_path):
             conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} ").format(sql.Identifier(scratch_name)))
 
 
+@pytest.mark.parametrize("admin_count", [1, 2])
+def test_migration_034_backfills_only_owned_project_axis_memory(tmp_path, admin_count):
+    """D9 assigns legacy project and panel/agent memory only when one admin exists."""
+    admin_parts = conninfo_to_dict(ADMIN_DB_URL)
+    scratch_name = f"{admin_parts['dbname']}_mig034_{uuid4().hex}"
+    scratch_url = make_conninfo(**{**admin_parts, "dbname": scratch_name})
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+        conn.execute(sql.SQL("CREATE DATABASE {} ").format(sql.Identifier(scratch_name)))
+
+    try:
+        migrations = sorted((REPO_ROOT / "db" / "migrations").glob("*.sql"))
+        migration_env = os.environ.copy()
+        migration_env.update({
+            "DATABASE_URL": scratch_url,
+            "APP_DB_PASSWORD": "app",
+            "PYTHON": str(REPO_ROOT / ".venv" / "bin" / "python"),
+        })
+
+        def migrate(runner: Path, label: str) -> None:
+            result = subprocess.run(
+                ["bash", str(runner)], env=migration_env, capture_output=True,
+                text=True, timeout=60,
+            )
+            assert result.returncode == 0, (
+                f"{label} failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+            )
+
+        migrate(
+            _runner_dir(tmp_path / "pre034", [m for m in migrations if _migration_number(m) <= 33]),
+            "033 scaffold",
+        )
+        with psycopg.connect(scratch_url, autocommit=True) as conn:
+            user_ids = [conn.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (%s, 'test', 'admin') RETURNING id",
+                (f"migration-034-admin-{i}",),
+            ).fetchone()[0] for i in range(admin_count)]
+            embedding = "[" + ",".join("0.1" for _ in range(384)) + "]"
+            conn.execute(
+                "INSERT INTO projects (slug, name, purpose, purpose_embedding) "
+                "VALUES ('legacy-project', 'Legacy', 'Legacy project', %s::vector)", (embedding,),
+            )
+            memory_ids = {}
+            for label, project, scope, entity in (
+                ("panel", "legacy-project", "panel", "thread:legacy"),
+                ("agent", "legacy-project", "agent", "agent:legacy-project"),
+                ("customer", "legacy-project", "customer", "customer:1"),
+                ("default", "default", "agent", "agent:default"),
+            ):
+                memory_ids[label] = conn.execute(
+                    "INSERT INTO memories (proyecto, scope, entity_id, titulo, contenido, embedding, visibility) "
+                    "VALUES (%s, %s, %s, %s, 'legacy', %s::vector, %s) RETURNING id",
+                    (project, scope, entity, label, embedding, "global" if scope == "agent" else "thread"),
+                ).fetchone()[0]
+
+        migration = next(m for m in migrations if _migration_number(m) == 34)
+        migrate(_runner_dir(tmp_path / "034", [migration]), "034 migration")
+        with psycopg.connect(scratch_url, autocommit=True) as conn:
+            expected_owner = user_ids[0] if admin_count == 1 else None
+            assert conn.execute("SELECT owner_id FROM projects WHERE slug='legacy-project'").fetchone() == (expected_owner,)
+            owners = dict(conn.execute(
+                "SELECT titulo, owner_id FROM memories WHERE id = ANY(%s)",
+                (list(memory_ids.values()),),
+            ).fetchall())
+            assert owners == {
+                "panel": expected_owner,
+                "agent": expected_owner,
+                "customer": None,
+                "default": None,
+            }
+            # Re-applying the SQL itself is a no-op, including the multi-admin case.
+            conn.execute(migration.read_text())
+            assert dict(conn.execute(
+                "SELECT titulo, owner_id FROM memories WHERE id = ANY(%s)",
+                (list(memory_ids.values()),),
+            ).fetchall()) == owners
+    finally:
+        with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+            conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} ").format(sql.Identifier(scratch_name)))
+
+
 def test_schema_migrations_records_version(migrated_db, admin_conn):
     rows = admin_conn.execute(
         "SELECT version FROM schema_migrations ORDER BY version"

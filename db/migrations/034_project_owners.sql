@@ -4,7 +4,7 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS owner_id BIGINT REFERENCES users(i
 ALTER TABLE project_aliases ADD COLUMN IF NOT EXISTS owner_id BIGINT REFERENCES users(id);
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS owner_id BIGINT REFERENCES users(id);
 
--- Legacy projects and agent memory belong to the sole admin. If the admin
+-- Legacy projects and project-axis memory belong to the sole admin. If the admin
 -- identity is absent or ambiguous, these updates are intentionally no-ops.
 WITH admin AS (
     SELECT min(id) AS id FROM users WHERE role = 'admin' HAVING count(*) = 1
@@ -24,7 +24,7 @@ WITH admin AS (
 )
 UPDATE memories
 SET owner_id = (SELECT id FROM admin)
-WHERE proyecto <> 'default' AND scope = 'panel' AND owner_id IS NULL
+WHERE proyecto <> 'default' AND scope IN ('panel', 'agent') AND owner_id IS NULL
   AND EXISTS (SELECT 1 FROM admin);
 
 DROP INDEX IF EXISTS uq_projects_normalized_slug;
