@@ -619,7 +619,14 @@ def execute_tool(
     autonomous_write = name in AUTONOMOUS_WRITE_ALLOWLIST
     if autonomous_write and (type(trusted_thread_id) is not int or trusted_thread_id <= 0):
         raise ToolValidationError("autonomous memory write requires a positive trusted thread id")
-    if name.startswith(("project.", "memory.")) and type(trusted_thread_id) is int and trusted_thread_id > 0 and owner_id is None:
+    # Owner-scoped tools must never fall back to the null-owner business namespace.
+    # Project tools carry no thread signal, so they always require the authenticated
+    # owner (R3-001). Memory tools are owner-scoped inside an authenticated thread;
+    # own-scope read/search already fail closed on a missing thread in their handler.
+    owner_scoped = name.startswith("project.") or (
+        name.startswith("memory.") and type(trusted_thread_id) is int and trusted_thread_id > 0
+    )
+    if owner_scoped and owner_id is None:
         raise ToolValidationError("owner-scoped tool requires the authenticated owner")
     if definition.write and not autonomous_write and name not in SDB_WRITE_ALLOWLIST:
         raise ToolValidationError("write-not-registered")

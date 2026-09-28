@@ -230,9 +230,29 @@ def test_project_tools_are_typed_bounded_and_classified():
         assert get_tool(name).schema()["type"] == "object"
 
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "project.find", {"query": "x" * 201})
+        execute_tool(SimpleNamespace(), "project.find", {"query": "x" * 201}, owner_id=1)
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "project.merge", {"source": "a", "target": "b", "extra": "no"})
+        execute_tool(SimpleNamespace(), "project.merge", {"source": "a", "target": "b", "extra": "no"}, owner_id=1)
+
+
+def test_project_tools_fail_closed_without_authenticated_owner(monkeypatch):
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.projects.list",
+        lambda *args, **kwargs: [],
+    )
+    with pytest.raises(
+        ToolValidationError, match="owner-scoped tool requires the authenticated owner"
+    ):
+        execute_tool(SimpleNamespace(), "project.list", {})
+
+    # A trusted thread does not substitute for the authenticated owner.
+    with pytest.raises(
+        ToolValidationError, match="owner-scoped tool requires the authenticated owner"
+    ):
+        execute_tool(SimpleNamespace(), "project.list", {}, trusted_thread_id=9)
+
+    result = execute_tool(SimpleNamespace(), "project.list", {}, owner_id=1)
+    assert result["status"] == "completed"
 
 
 def test_project_whitelist_is_checked_at_execution_boundary(monkeypatch):
@@ -254,7 +274,7 @@ def test_ambiguous_project_find_requires_approval_without_selecting_namespace(mo
         lambda *args, **kwargs: ProjectResult(None, [candidate], requires_approval=True),
     )
 
-    result = execute_tool(SimpleNamespace(), "project.find", {"query": "gas service"})
+    result = execute_tool(SimpleNamespace(), "project.find", {"query": "gas service"}, owner_id=1)
 
     assert result["status"] == "approval_pending"
     assert result["result"]["project"] is None
@@ -288,7 +308,7 @@ def test_approved_project_find_selects_candidate(monkeypatch):
     approval = issue_approval(plan)
     assert consume_approval(approval, approval["token"]) is True
 
-    result = execute_tool(SimpleNamespace(), "project.find", plan["arguments"], approval=approval)
+    result = execute_tool(SimpleNamespace(), "project.find", plan["arguments"], approval=approval, owner_id=1)
 
     assert result["status"] == "completed"
     assert result["result"]["project"] == "gas"
@@ -310,7 +330,7 @@ def test_approved_project_create_reuses_candidate(monkeypatch):
     approval = issue_approval(plan)
     assert consume_approval(approval, approval["token"]) is True
 
-    result = execute_tool(SimpleNamespace(), "project.create", plan["arguments"], approval=approval)
+    result = execute_tool(SimpleNamespace(), "project.create", plan["arguments"], approval=approval, owner_id=1)
 
     assert result["status"] == "completed"
     assert result["result"]["slug"] == "gas"
@@ -332,7 +352,7 @@ def test_approved_project_create_creates_distinct_project(monkeypatch):
     approval = issue_approval(plan)
     assert consume_approval(approval, approval["token"]) is True
 
-    result = execute_tool(SimpleNamespace(), "project.create", plan["arguments"], approval=approval)
+    result = execute_tool(SimpleNamespace(), "project.create", plan["arguments"], approval=approval, owner_id=1)
 
     assert result["status"] == "completed"
     assert result["result"]["slug"] == "gas-new"
@@ -351,22 +371,22 @@ def test_project_approval_decision_is_required_and_replay_or_changes_select_noth
     plan = _approved_project_plan("project.find", arguments, {"selected_slug": "gas"})
     approval = issue_approval(plan)
 
-    pending = execute_tool(SimpleNamespace(), "project.find", arguments)
+    pending = execute_tool(SimpleNamespace(), "project.find", arguments, owner_id=1)
     assert pending["status"] == "approval_pending"
     assert pending["result"]["project"] is None
     assert calls == [None]
 
     assert consume_approval(approval, approval["token"]) is True
-    execute_tool(SimpleNamespace(), "project.find", arguments, approval=approval)
+    execute_tool(SimpleNamespace(), "project.find", arguments, approval=approval, owner_id=1)
     assert calls[-1] is not None
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "project.find", {"query": "changed"}, approval=approval)
+        execute_tool(SimpleNamespace(), "project.find", {"query": "changed"}, approval=approval, owner_id=1)
     assert len(calls) == 2
     assert consume_approval(approval, approval["token"]) is False
 
     expired = issue_approval(plan, expires_at=datetime.now(timezone.utc) - timedelta(seconds=1))
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "project.find", arguments, approval=expired)
+        execute_tool(SimpleNamespace(), "project.find", arguments, approval=expired, owner_id=1)
 
 
 def test_project_mutation_requires_consumed_exact_non_expired_approval(monkeypatch):
@@ -380,17 +400,17 @@ def test_project_mutation_requires_consumed_exact_non_expired_approval(monkeypat
     approval = issue_approval(plan)
 
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "project.rename", arguments, approval=approval)
+        execute_tool(SimpleNamespace(), "project.rename", arguments, approval=approval, owner_id=1)
     assert called == []
 
     assert consume_approval(approval, approval["token"]) is True
     assert validate_execution(plan, approval) is True
-    execute_tool(SimpleNamespace(), "project.rename", arguments, approval=approval)
+    execute_tool(SimpleNamespace(), "project.rename", arguments, approval=approval, owner_id=1)
     assert called == [True]
 
     changed = {"project": "gas", "name": "Changed"}
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "project.rename", changed, approval=approval)
+        execute_tool(SimpleNamespace(), "project.rename", changed, approval=approval, owner_id=1)
     assert called == [True]
 
 
@@ -454,7 +474,7 @@ def test_sdb_project_create_uses_frozen_decision_and_real_execute_path(monkeypat
     approval, binding, task = _sdb_approved_project("project.create", arguments, {"create_distinct": True})
 
     result = execute_tool(
-        SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=binding
+        SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=binding, owner_id=1
     )
 
     assert result["status"] == "completed"
@@ -474,7 +494,7 @@ def test_sdb_project_create_rejects_missing_or_invalid_decision_without_mutation
     approval, binding, task = _sdb_approved_project("project.create", arguments, decision)
 
     with pytest.raises(ToolValidationError, match="decision"):
-        execute_tool(SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=binding)
+        execute_tool(SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=binding, owner_id=1)
     assert called == []
 
 
@@ -494,7 +514,7 @@ def test_sdb_project_mutations_use_real_execute_path(monkeypatch, tool, argument
     )
     approval, binding, task = _sdb_approved_project(tool, arguments)
 
-    result = execute_tool(SimpleNamespace(), tool, arguments, approval=approval, task_binding=binding)
+    result = execute_tool(SimpleNamespace(), tool, arguments, approval=approval, task_binding=binding, owner_id=1)
 
     assert result["status"] == "completed"
     assert called == [True]
@@ -512,7 +532,7 @@ def test_sdb_project_binding_tampering_is_rejected_before_mutation(monkeypatch, 
     tampered = {**binding, field: value}
 
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=tampered)
+        execute_tool(SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=tampered, owner_id=1)
     assert called == []
 
 
@@ -558,13 +578,13 @@ def test_project_create_requires_exact_decision_payload(monkeypatch):
         "project_payload": {"operation": "create", "arguments": args, "decision": {"create_distinct": True}},
     })
     assert consume_approval(approval, approval["token"])
-    execute_tool(SimpleNamespace(), "project.create", args, approval=approval)
+    execute_tool(SimpleNamespace(), "project.create", args, approval=approval, owner_id=1)
     assert called == [True]
 
     bad = issue_approval({"tool": "project.create", "arguments": args, "project_payload": {"operation": "create", "arguments": args, "decision": {"unexpected": True}}})
     assert consume_approval(bad, bad["token"])
     with pytest.raises(ToolValidationError, match="decision"):
-        execute_tool(SimpleNamespace(), "project.create", args, approval=bad)
+        execute_tool(SimpleNamespace(), "project.create", args, approval=bad, owner_id=1)
     assert called == [True]
 
 
