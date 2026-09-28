@@ -1,8 +1,8 @@
 # ODD Task: cases-route-alignment
 
-Status: WU1 delivered and merged (PR #392 → 059a275a); WU2 delivered
-Worktree: `../lumat-agent-odd-cases-route-alignment`
-Branch: `odd/cases-route-alignment-wu2`
+Status: complete — WU1 merged (PR #392 → 059a275a), WU2 merged (PR #393 → 5a70124e)
+Worktree: removed at close (was `../lumat-agent-odd-cases-route-alignment`)
+Branch: deleted at close (was `odd/cases-route-alignment-wu2`)
 Base: `059a275a` (= `main` after the WU1 merge)
 Depends on: nothing
 Source: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md` (U4 `cases-page`)
@@ -236,7 +236,12 @@ hard to review split by file. Proposed slices below; the chain strategy is the o
   follow-up if the owner wants it. `rg -n "CasesList" openspec/specs/` returned only
   `panel-app/spec.md:164` and `:169`, preserving PNL-APP-21. Out-of-scope stale references in
   the unarchived `panel-grammar-global` change remain a flagged follow-up.
-- [ ] **WU2 review measurement** — same command with `--base-ref` at the WU1 boundary.
+- [x] **WU2 review measurement** — `gentle-ai review assess --cwd . --agent opencode
+      --base-ref 059a275a --committed-only --json` → `risk: medium`, 11 paths, 439 changed
+      lines, `review_due: true` (`slice_budget_reached`). The native plan selected one lens
+      (`review-reliability`); lineage `review-60c46846215bc32a`, zero findings, `approved`,
+      authority burned. The receipt lives in PR #393's body, not here: the freeze forbids
+      tracked-file bytes after the review starts.
 
 ## Acceptance criteria
 
@@ -332,14 +337,84 @@ hard to review split by file. Proposed slices below; the chain strategy is the o
       ordering reason. It was rewritten to drive explicit URLs and `popstate` events and to assert
       the selected tab at each step.
 
+## Closure
+
+- [x] **Unit closed 2026-09-28.** Both slices are on `main` via the `stacked-to-main` chain
+      the owner chose on 2026-09-27: WU1 → PR #392 (`odd/cases-route-alignment`, merge
+      `059a275a`), WU2 → PR #393 (`odd/cases-route-alignment-wu2`, merge `5a70124e`).
+- [x] **Acceptance criteria**: met. 1, 2 and 4 are pinned by WU1's merged tests
+      (`AppShell.test.tsx` for the dashboard entry, `panelRoutes.test.ts` plus the remount
+      assertion for durability, the `pushState` counter for one history entry per change, and
+      the acknowledgement test); 3 and 5 by WU2 — no surface mounts `CasesList`, its
+      component, story, story test and `PanelLinks` test are gone, and `openspec/specs/` names
+      it only inside PNL-APP-21's own retirement clauses (`panel-app/spec.md:164,169`); 6 and
+      7 hold (no new dependency; frontend suite, typecheck and build green; no Python file
+      touched).
+- [x] **Cleanup after the merge** (2026-09-28): worktree
+      `/home/stefan/repos/lumat-agent-odd-cases-route-alignment` removed, branch
+      `odd/cases-route-alignment-wu2` deleted (remote + local), test database
+      `lumat-test-lumat-agent-odd-cases-route-alignment` torn down — container and network
+      removed, no residue. `rapso worktree cleanup` aborted on its branch step (see the
+      Rapsodia defect below); both branch deletions were finished by hand.
+
+### Residual gaps and follow-ups (recorded, not silently dropped)
+
+- **`.case-actions` is pinned by no test.** The only assertion on that class
+  (`CasesList.stories.test.tsx:39`) was deleted by WU2 itself, so the stylesheet hook and its
+  consumer (`CaseActions.tsx:43`) can now drift apart with nothing to catch it — the exact
+  failure mode WU2 found by hand. D8's recorded gap; a one-line assertion in
+  `CaseActions.test.tsx` would close it.
+- **`openspec/changes/panel-grammar-global/` is unarchived and still names `CasesList`**
+  (`specs/panel-design-system/spec.md:16,37`). It sat outside T5's authorized scope. If it is
+  ever archived by syncing that delta it could re-introduce the name into the living
+  `panel-design-system` spec WU2 just cleaned.
+- **WU1's review receipt did not cover the bringing-level merge.** Its frozen candidate was
+  `e8717201..6ccc686b`; the tree that landed also carried the docs-only merge of `origin/main`
+  (`35319f61`) and the merge commit itself. PR #392's body states this and claims no coverage
+  for them.
+- **The graph cannot see CSS-class consumption.** `graphify query` found no path from
+  `CaseActions()` to `.cases-list__actions`, because a CSS class name is not a code edge. The
+  live consumer was found by grep. The mandatory Graph Check is necessary but not sufficient
+  for this class of defect.
+- **The `.table__link` comment now names four consumers, verified by grep, not by a test.**
+  If one of them stops using the class, the comment goes stale silently.
+- **Pre-existing frontend flake, unrelated to this unit.** `ConversationsList.test.tsx` →
+  `requests search and page changes and renders empty state as a DOM row` fails intermittently
+  under full-suite parallel load and passes 3/3 in isolation. Observed once on the clean tree
+  at `059a275a`.
+- **Incidental byte.** WU2 added a trailing newline at EOF to
+  `openspec/specs/corp-components/spec.md`; it was not requested and is unrelated to the
+  requirement edit. Declared because it is what made `review assess` classify a markdown file
+  as an `executable_change`.
+- **Rapsodia defect — `rapso worktree cleanup` deletes the stale branch (identified, not
+  filed).** `rapso worktree cleanup cases-route-alignment --remote` removed the worktree and
+  then aborted with `error: branch 'odd/cases-route-alignment' not found`, because it deletes
+  the branch recorded in `.rapsodia-code/worktree.json` at creation time rather than the
+  worktree's current branch — which had been reparked to `odd/cases-route-alignment-wu2`. The
+  remote branch was left behind as a result. Smallest reproduction: `rapso worktree create X`,
+  rename the branch to `odd/X-wu2`, then `rapso worktree cleanup X --remote`. Suggested
+  upstream at https://github.com/Stefan-migo/rapsodia-code/issues; the CLI's own failure
+  envelope classifies it as a Rapsodia defect.
+- **Graph artifact caveat.** The close-time refresh ran `graphify update --force` and then
+  `graphify cluster-only --no-viz`. That flag is the tool's own recommendation above 5000
+  nodes (this graph is 8109), but it also removes the aggregated `graph.html` that `update`
+  had written. `graph.json` and `GRAPH_REPORT.md` are current; `graph.html` is absent by the
+  tool's node limit, not by a modelling decision.
+- **Out of scope by design**: Q4 (lifecycle vs operational status, tasks/reminders) and
+  mounting any standalone cases surface. Neither is a gap in this unit.
+
 ## Recovery
 
-- Worktree: `/home/stefan/repos/lumat-agent-odd-cases-route-alignment`,
-  branch `odd/cases-route-alignment`, base `e8717201`.
-- Test DB: `bash infra/test-db.sh up|down|env`, project
-  `lumat-test-lumat-agent-odd-cases-route-alignment`, port `5657`.
-- On resume: read this file and reconcile the checkbox state against `git log` before
-  continuing.
+- **Nothing to resume.** The unit is closed: both slices are merged to `main` and the
+  worktree, its branches and its test database were removed on 2026-09-28.
+- Test DB (historical): `bash infra/test-db.sh up|down|env`, project
+  `lumat-test-lumat-agent-odd-cases-route-alignment`, port `5657` — torn down at close.
+- `graphify-out/` is gitignored: query the graph from `/home/stefan/repos/lumat-agent`.
+  The graph was refreshed once at session close, per the Rapsodia policy.
+- This file is the record of the unit; nothing in it is a pending task.
 - Source of record: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md`
   (U4 row) — read together with PNL-APP-21 in `openspec/specs/panel-app/spec.md:162-169`, which
   governs this unit.
+- Handoff of record: `.rapsodia-code/handoffs/2026-09-27-cases-route-alignment-wu2.md` — its T4
+  instruction to drop the `CasesList` CSS section is **superseded by D8**. Delivery record:
+  Engram **#5180** (`odd/cases-route-alignment/wu2-delivery`).
