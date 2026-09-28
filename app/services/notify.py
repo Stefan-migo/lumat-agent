@@ -62,8 +62,8 @@ ACK_WORDS = frozenset({"ok", "listo", "recibido", "gracias"})
 _ACK_PUNCTUATION = " .,!?¿¡;:"
 
 
-def send_template(phone_e164: str, body_params: list[str]) -> str:
-    """Send the `emergency_alert` utility template; returns the Meta wamid.
+def send_template(phone_e164: str, body_params: list[str], *, template_name: str = EMERGENCY_TEMPLATE_NAME) -> str:
+    """Send a WhatsApp utility template; returns the Meta wamid.
 
     Same pattern as `send.send_text` (Bearer token, raise_for_status) but with
     type=template — the only business-initiated channel Meta allows (D9).
@@ -79,7 +79,7 @@ def send_template(phone_e164: str, body_params: list[str]) -> str:
             "to": phone_e164,
             "type": "template",
             "template": {
-                "name": EMERGENCY_TEMPLATE_NAME,
+                "name": template_name,
                 "language": {"code": TEMPLATE_LANGUAGE},
                 "components": [
                     {
