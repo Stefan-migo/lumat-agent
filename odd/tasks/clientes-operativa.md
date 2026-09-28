@@ -1,6 +1,6 @@
 # ODD Task: clientes-operativa
 
-Status: in progress — WU1 merged to `main` (PR #401 → `c2163ff6`). D1 decided: option A. D5 resolved: promotion shape. **WU2 (equipment) in progress.** WU3/WU4 still blocked on D2-D4.
+Status: in progress — WU1 merged to `main` (PR #401 → `c2163ff6`). D1 decided: option A. D5 resolved: promotion shape. **WU2 (equipment) implemented on `odd/clientes-operativa-wu2`, verified, pending native review and PR.** WU3/WU4 still blocked on D2-D4.
 Worktree: `../lumat-agent-odd-clientes-operativa` (one worktree, one branch per work unit)
 Branch: `odd/clientes-operativa-wu2`
 Base: `c2163ff6` (main, 2026-09-28; merge of WU1)
@@ -158,12 +158,44 @@ strategy, one PR per work unit.
       **90 files / 823 tests**, `npm run build` (includes `tsc -b`) passed, and both CI jobs
       (`test`, `panel`) green. The merged branch was deleted (local and remote) and the
       worktree was reparked to `odd/clientes-operativa-wu2` off the updated `main`.
-- [ ] **WU2 planned** — the row is `customer_equipment`, migration `035`, dto/in shape frozen
-      by D5. Promotion lands on the consent turn (`_apply_consent_and_customer`) and is keyed by
-      `source_conversation_id` under a partial unique index, so a retried or recaptured flow
-      upserts instead of duplicating. The worktree now carries its own `infra/.env` and `.venv`
-      (`uv sync`, Python 3.14), and `bash infra/test-db.sh env` resolves the isolated DB on port
-      **6304**.
+- [x] **WU2 delivered** — `customer_equipment` (migration `035`) in the D5 shape: the verbatim
+      capture in `details`, `equipment_type` pre-filled from the capture intent when it names an
+      appliance, brand/model/age operator-editable, and a partial unique index on
+      `source_conversation_id` so promotion is idempotent per conversation. Promotion runs on the
+      consent turn; a re-promotion only writes non-null captured values, so an operator edit is
+      never wiped. API: list/create/update/delete under `GET|POST /clients/{id}/equipment` and
+      `PATCH|DELETE /clients/{id}/equipment/{equipment_id}` (`require_operator_json`), serializer
+      `to_equipment_dict`. Ficha: an "Equipos" section with add/edit through `Dialog` +
+      `Input`/`Select`; **no delete control** — the stated ficha scope is view/add/edit and the
+      DELETE endpoint is covered by backend tests only.
+- [x] **WU2 RED** — backend: `tests/functional/test_api_clients.py` failed collection with
+      `ImportError: cannot import name 'CustomerEquipment' from 'app.models'`. Frontend:
+      `npx vitest run src/components/pages/ClientFicha.test.tsx` → 3 failed / 28 passed, the
+      equipment section and its add/edit controls absent.
+- [x] **WU2 GREEN** — backend focused: `test_migrations.py` 23 passed, `test_chat_capture.py`
+      13 passed, `test_api_clients.py` 30 passed; full `pytest tests/` passed. Frontend focused:
+      `ClientFicha.test.tsx` 31 passed; full `npm test` 90 files / 826 tests passed; `npm run
+      build` (`tsc -b`) passed.
+- [x] **WU2 corrections** — `0480a9b3`: re-promotion no longer nulls an operator-set
+      `equipment_type`/`details`, with a regression test asserting one row and exactly one
+      promotion audit; and the generic `"quiero una visita"` scenario was restored in
+      `test_cm2_complete_capture_persists_and_confirms`, which now asserts `equipment_type is None`
+      while still promoting `details`.
+- [x] **WU2 parent spot checks** — `uv run pytest tests/integration/test_chat_capture.py` 13
+      passed; `npx vitest run src/components/pages/ClientFicha.test.tsx` 31 passed; full
+      `npm test` 90 files / 826 tests passed. An earlier `AgendaPage` cancellation-test timeout
+      did not reproduce and is not WU2 territory.
+- [x] **WU2 commits** — `41e1941c docs(odd): plan WU2 equipment storage and record the D5
+      decision`, `d4126465 feat(clients): add customer equipment table and model`, `51f8a68d
+      feat(clients): promote captured equipment into customer fichas`, `e66bbc10 feat(clients):
+      expose equipment CRUD in clients API`, `0480a9b3 fix(clients): preserve operator equipment
+      values on promotion`, `50bd48b3 feat(clients): show and edit customer equipment on the ficha`.
+- [x] **WU2 assessment** — `gentle-ai review assess --base-ref c4ad6fe2 --committed-only`:
+      `risk: high` (`process_boundary` — `tests/integration/test_migrations.py`), `changed_paths:
+      17`, `changed_lines: 938`, `review_due: true` (`high_risk`). The base is `c4ad6fe2`, not the
+      WU2 branch point `c2163ff6`, because the WU1 slice assessed as `under_budget` and never
+      advanced the reviewed boundary; `c2163ff6` would leave WU1's `ClientesList` change
+      unreviewed. The review receipt belongs in the PR body, not in this doc.
 - [ ] WU3 — blocked on D2
 - [ ] WU4 — blocked on D3/D4
 
