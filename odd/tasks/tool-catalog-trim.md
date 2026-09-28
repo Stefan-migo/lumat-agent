@@ -3,7 +3,8 @@
 **Branch**: `odd/tool-catalog-trim`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-tool-catalog-trim`
 **Base**: `059a275a` (= `main` = `origin/main` at branch time, merge of PR #392)
-**Status**: in progress — implementation handed to one bounded writer
+**Status**: implementation complete and review-approved (`review-3a87733c0eba3a00`); awaiting the
+owner's push and PR decision. Not merged.
 
 ## Objective
 
@@ -68,11 +69,16 @@ per-scope `const`, the customer `entity_id` `pattern`, the `null` own `entity_id
 
 ## Tasks
 
-- [ ] **T1 (RED)** Unit test: the serialized catalog carries no `title` key at any depth, and
+- [x] **T1 (RED)** Unit test: the serialized catalog carries no `title` key at any depth, and
       `memory.read` still announces both scope variants with their exact rules.
-- [ ] **T2 (GREEN)** Implement the recursive `title` strip in `_planner_tool_catalog`.
-- [ ] **T3** Re-baseline the pinned catalog hash in `tests/unit/test_assistant_delegation.py`.
-- [ ] **T4** Verify: full suite green, and re-measure the catalog end to end.
+      RED observed: `AssertionError` at `assert "title" not in value`, first offender
+      `title: 'CapabilitiesArgs'`.
+- [x] **T2 (GREEN)** Implement the recursive `title` strip in `_planner_tool_catalog`.
+      Implemented as a nested `without_titles` helper; `registry.py` untouched.
+- [x] **T3** Re-baseline the pinned catalog hash in `tests/unit/test_assistant_delegation.py`.
+      `e522ed87…1eb9f6` → `7d967c04…e58f0ab`, recomputed independently by the orchestrator and
+      matching the implemented value.
+- [x] **T4** Verify: full suite green, and re-measure the catalog end to end.
 
 ## Acceptance criteria
 
@@ -103,4 +109,30 @@ per-scope `const`, the customer `entity_id` `pattern`, the `null` own `entity_id
 
 ## Progress
 
-- (pending)
+**Implementation** — `dc5049b1` `perf(assistant): drop presentation-only schema titles from the
+planner catalog` (3 files, +46 / −3).
+
+**Acceptance criteria — verified by the orchestrator, not only by the writer**
+
+- **AC1** pass. `"title"` appears nowhere in the serialized catalog; the new unit test walks the
+  parsed structure asserting no `title` key at any depth.
+- **AC2** pass. `$defs`, `oneOf` and `discriminator` are still present, both scope variants are
+  announced, the customer `entity_id` keeps `pattern` `^(?:customer:\d+|\d+)$`, the own
+  `entity_id` keeps `type: null`, and the new test asserts the advertised per-scope `required`
+  lists equal the registry model's own. Every pre-existing assertion about the announced
+  contract still passes unchanged.
+- **AC3** pass. Re-measured independently: `24 8851 2213` (`tools chars tok`), i.e. 8.851 ≤ 8.900
+  and −434 tok/turn (−16.4%) versus the `24 10587 2647` baseline.
+- **AC4** pass. Full suite: 1.534 tests, 0 failures, exit code 0. Orchestrator spot check over
+  the five directly affected files: 191 passed.
+
+**Native review (RDD on, global)** — lineage `review-3a87733c0eba3a00`, tier `medium`, single
+selected lens `review-reliability`, correction budget 78 and unused (no findings).
+Result: **approved** with zero findings; authority burned by acknowledgement.
+
+**Not done, by design** — nothing was pushed and no PR exists. Both are owner decisions under
+ordinary repository policy.
+
+**Next step** — the owner decides push and PR. The unit's doc records its PR number before the
+merge, and the repo convention needs a second docs-only PR to correct the `Status` line once
+the unit PR lands.
