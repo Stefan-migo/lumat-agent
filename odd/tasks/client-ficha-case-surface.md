@@ -1,14 +1,13 @@
 # ODD Task: client-ficha-case-surface
 
-Status: in progress
-Worktree: `../lumat-agent-odd-client-ficha-case-surface`
-Branch: `odd/client-ficha-case-surface`
+Status: complete — S1 merged (PR #373 → 44d0625c), S2 merged (PR #374 → 5a2ccec2)
+Worktree: removed at close (was `../lumat-agent-odd-client-ficha-case-surface`)
+Branch: deleted at close (was `odd/client-ficha-case-surface`)
 Base: `cf5f8171` (main, after U1 `case-closure-fix` and the `set_case_status` rename)
 Depends on: `case-closure-fix` (U1, delivered)
 Source: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md`
-deleted from canonical sessions dir; local copy of record below.
 Delivery strategy: `ask-on-risk`
-Chain strategy: unresolved (asked only when the ~400-line budget is reached)
+Chain strategy: `stacked-to-main` (owner decision) — PR 1 = S1, PR 2 = S2
 
 ## Objective
 
@@ -281,17 +280,75 @@ fetch closure captured in the current render.
 - [x] S1 code size `cf5f8171..HEAD`: **482 changed lines** (341 added, 141 deleted)
       across `app/ tests/ web/`. Over the ~400 review-focus heuristic; the
       `ask-on-risk` strategy applies before S2. Owner decision requested.
-- [ ] T6 …
+- [x] S2 — T6 (be): `customer_history(session, customer_id, messages_limit=None)` returns
+      `messages_total` and, for a positive limit, the latest N reversed to ascending; both
+      `/clients/{id}` and `/conversations/{id}` accept `messages_limit`. RED observed (both
+      endpoints returned the full list), then GREEN. Commit `161651a8`.
+- [x] S2 — T7a (fe): shared `CollapsibleMessages.tsx` disclosure control (`total`/`previewCount`/
+      `expanded`/`onToggle`), no fetch, no rendering. RED observed (module not resolvable), then
+      GREEN. Commit `061f062c`.
+- [x] S2 — T7b (fe): the ficha requests `messages_limit=10` while collapsed, expands through the
+      hook's `retry()` (clearing the `refreshed` override first), and its Mensajes table gains the
+      `Conversación` link column. RED observed (link absent, `messages_limit=10` missing), then
+      GREEN. Commit `1047e0e1`.
+- [x] S2 — T7c + T8 (fe): `getConversation(id, messagesLimit?)`; the thread requests the last 10
+      and expands through `retry()`; `ConversationThread` and its fixtures gain `messages_total`;
+      a `ManyMessages` story shows the disclosure. RED observed (initial call missing
+      `messages_limit=10`), then GREEN. Commit `cdddc9db`.
+- [x] S2 verification of record: `uv run pytest tests/` → **1479 passed**;
+      `cd web && npm run test` → **89 files / 769 tests**; `npx tsc -b --noEmit` → exit 0;
+      `npm run build` → exit 0 (pre-existing >500 kB chunk warning).
+- [x] S2 code size `4a395f3e..HEAD`: **290 changed lines** (255 added, 35 deleted) across
+      `app/ tests/ web/` — under the ~400 review-focus budget.
+- [x] Unit code size `cf5f8171..HEAD`: **768 changed lines** (594 added, 174 deleted). Delivery:
+      `stacked-to-main`, PR 1 = S1 (~482, over budget by owner choice), PR 2 = S2 (~290).
+
+## Closure
+
+- [x] **Unit closed 2026-09-28.** Both slices are on `main` via the `stacked-to-main` chain the
+      owner chose: S1 → PR #373 (`odd/client-ficha-case-surface`, merge `44d0625c`), S2 → PR #374
+      (merge `5a2ccec2`).
+- [x] **Native review**: lineage `review-c4f6804f85ce580a` — **one** receipt covering both
+      slices, approved, zero findings, authority burned.
+- [x] **Verification of record** (on the U2 branch): `uv run pytest tests/` → **1479 passed**;
+      `cd web && npm run test` → **89 files / 769 tests**; `npx tsc -b --noEmit` → exit 0;
+      `npm run build` → exit 0 (pre-existing >500 kB chunk warning).
+- [x] **Acceptance criteria**: met at delivery. Criteria 1, 2, 3, 5, 6 and 7 are covered by the
+      merged tests and the per-slice verification of record. **Criterion 4 is superseded today**
+      (recorded below) — it held when U2 was delivered, but a later unit changed the surface it
+      names, so it is not reopened for it.
+- [x] **Cleanup at close** (2026-09-28): worktree
+      `/home/stefan/repos/lumat-agent-odd-client-ficha-case-surface` removed, branch
+      `odd/client-ficha-case-surface` deleted (remote + local), test database
+      `lumat-test-lumat-agent-odd-client-ficha-case-surface` (`:5650`) torn down.
+
+### AC4 supersession (recorded, not silently left drifting)
+
+- Criterion 4 reads *"`CaseActions` has a single implementation used by both `CasesList` and the
+  ficha"*. That **held when U2 was delivered**. U4 (`cases-route-alignment`, 2026-09-27) then
+  retired `CasesList` per PNL-APP-21 (`openspec/specs/panel-app/spec.md:162-169`) and renamed
+  the `.cases-list__actions` rule to `.case-actions` (U4 decision D8). Today `CaseActions` is
+  consumed only by `ClientFicha.tsx:323`. Criterion 4 is superseded by U4, not failed; the unit
+  is not reopened for it.
+
+### Residual gaps and follow-ups (recorded, not silently dropped)
+
+- **S1 shipped over the ~400-line review-focus budget by owner choice** (482 changed lines);
+  S2 stayed within it (290). Recorded here, not hidden.
+- **The ficha case serialization stays inline in `customer_history`** (D6) and diverges from
+  `to_case_dict`; a recorded ceiling, not a hidden bug.
+- **Out of scope by design**: U3 `clients-crud`, U4 `cases-page`, and U5 `agenda-redesign` are
+  separate units. The removed `<ol>` visit trail belongs to U5's per-appointment page.
 
 ## Recovery
 
-- Worktree: `/home/stefan/repos/lumat-agent-odd-client-ficha-case-surface`,
-  branch `odd/client-ficha-case-surface`, base `cf5f8171`.
-- Test DB: `./infra/test-db.sh up|down|env`, project
-  `lumat-test-lumat-agent-odd-client-ficha-case-surface`, port `5650`.
-- Dev server (if needed): `cd web && npm run dev -- --host 127.0.0.1 --port 5177`
-  with `VITE_API_TARGET` pointed at the running API.
-- On resume: read this file and reconcile the checkbox state against `git log`
-  before continuing.
-- Session of record:
-  `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/`.
+- **Nothing to resume.** The unit is closed: both slices are merged to `main` and the worktree,
+  its branch and its test database were removed on 2026-09-28.
+- Test DB (historical): `./infra/test-db.sh up|down|env`, project
+  `lumat-test-lumat-agent-odd-client-ficha-case-surface`, port `5650` — torn down at close.
+- `graphify-out/` is gitignored: query the graph from `/home/stefan/repos/lumat-agent`.
+- This file is the record of the unit; nothing in it is a pending task.
+- Source of record: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md`
+  (U2 row), read together with PNL-APP-21 in `openspec/specs/panel-app/spec.md:162-169`.
+- Handoff of record: `.rapsodia-code/handoffs/2026-09-28-clientes-status-reconciliation.md`
+  (Engram **#5192**).
