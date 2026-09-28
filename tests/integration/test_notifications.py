@@ -180,3 +180,71 @@ def test_cancelled_appointment_invalidates_its_pending_reminder(migrated_db):
             NotificationOperation.idempotency_key == f"appointment:{appointment.id}:reminder:24h"
         ))
         assert reminder.status == "permanently_failed"
+
+
+def test_appointment_reminder_dispatches_approved_template_then_customer_email_fallback(migrated_db, monkeypatch):
+    from app.models import Case, NotificationTemplateVersion, User, UserRole
+    from app.services import scheduling, notify
+
+    sent = []
+    monkeypatch.setattr(notify, "send_template", lambda phone, params, *, template_name=None: (_ for _ in ()).throw(OSError("Meta down")))
+    monkeypatch.setattr(notify, "send_email", lambda session, to, subject, body: sent.append((to, subject, body)))
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, "+56933333335")
+        customer.email = "customer@example.com"
+        technician = User(username="delivery-tech", password_hash="x", role=UserRole.TECNICO)
+        session.add(technician)
+        session.flush()
+        case = Case(customer_id=customer.id, status="open")
+        session.add(case)
+        session.flush()
+        appointment = scheduling.book(
+            session, service="Visit", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=datetime.now(timezone.utc).date() + timedelta(days=3),
+            local_time=datetime.strptime("12:00", "%H:%M").time(), timezone_name="UTC",
+            duration_minutes=60, actor="test",
+        )
+        template = NotificationTemplateVersion(
+            event="appointment.reminder.24h", channel="whatsapp", locale="es", version=1,
+            content="Visita {date} {time}", required_variables=["date", "time"], approved=True,
+            smtp_allowed=True, created_by="test",
+        )
+        session.add(template)
+        session.flush()
+        operation = session.scalar(select(NotificationOperation).where(
+            NotificationOperation.source_id == str(appointment.id)
+        ))
+        assert notifications.process_operation(session, operation.id, now=operation.next_attempt_at) is True
+        assert sent and sent[0][0] == "customer@example.com"
+        assert "01/10/" in sent[0][2]
+
+
+def test_appointment_reminder_without_customer_email_permanently_fails(migrated_db, monkeypatch):
+    from app.models import Case, NotificationTemplateVersion, User, UserRole, AuditLog
+    from app.services import scheduling, notify
+
+    monkeypatch.setattr(notify, "send_template", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("Meta down")))
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, "+56933333336")
+        technician = User(username="no-email-tech", password_hash="x", role=UserRole.TECNICO)
+        session.add(technician)
+        session.flush()
+        case = Case(customer_id=customer.id, status="open")
+        session.add(case)
+        session.flush()
+        appointment = scheduling.book(
+            session, service="Visit", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=datetime.now(timezone.utc).date() + timedelta(days=3),
+            local_time=datetime.strptime("12:00", "%H:%M").time(), timezone_name="UTC",
+            duration_minutes=60, actor="test",
+        )
+        session.add(NotificationTemplateVersion(
+            event="appointment.reminder.24h", channel="whatsapp", locale="es", version=1,
+            content="Visita {date} {time}", required_variables=["date", "time"], approved=True,
+            smtp_allowed=True, created_by="test",
+        ))
+        session.flush()
+        operation = session.scalar(select(NotificationOperation).where(NotificationOperation.source_id == str(appointment.id)))
+        notifications.process_operation(session, operation.id, now=operation.next_attempt_at)
+        assert operation.status == "permanently_failed"
+        assert session.scalar(select(AuditLog).where(AuditLog.action == "notification.reminder_no_email")) is not None
