@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal
-from app.models import Appointment, AppointmentHistory, AppointmentStatus, AuditLog, Case, Conversation, Customer, TechnicianAvailability, User
+from app.models import Appointment, AppointmentHistory, AppointmentStatus, AuditLog, AutomationRule, Case, Conversation, Customer, DomainEvent, TechnicianAvailability, User
 from app.services import scheduling
 
 
@@ -309,6 +309,44 @@ def test_reschedule_allows_new_slot_that_overlaps_its_previous_slot():
             "to_technician_id": technician.id,
         }
         assert session.query(AuditLog).filter_by(action="appointment.rescheduled", entity_id=str(moved.id)).count() == 1
+
+
+def test_reschedule_publishes_event_accepted_by_automation():
+    from app.services.automation import evaluate_event
+
+    with SessionLocal() as session:
+        customer, case, technician = _linked_rows(session)
+        appointment = scheduling.book(
+            session, service="calefont", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=date(2026, 7, 15), local_time=time(10),
+            timezone_name="America/Santiago", duration_minutes=60, actor="oper",
+        )
+        moved = scheduling.reschedule(
+            session, appointment, local_date=date(2026, 7, 15), local_time=time(11),
+            timezone_name="America/Santiago", duration_minutes=60,
+            technician_id=technician.id, actor="oper",
+        )
+        events = session.query(DomainEvent).filter_by(
+            event_type="appointment.rescheduled", entity_type="appointment",
+            entity_id=str(moved.id),
+        ).all()
+        assert len(events) == 1
+        event = events[0]
+        assert event.dedupe_key == f"appointment:{moved.id}:rescheduled"
+        assert event.payload == {
+            "customer_id": customer.id, "case_id": case.id,
+            "recipient": customer.phone_e164,
+            "from_start": "2026-07-15T10:00:00", "to_start": "2026-07-15T11:00:00",
+            "from_technician_id": technician.id, "to_technician_id": technician.id,
+        }
+        rule = AutomationRule(
+            name="Rescheduled", event_type="appointment.rescheduled", conditions={},
+            channel="whatsapp", template_event="appointment.rescheduled",
+            cooldown_seconds=0, enabled=True, created_by="admin",
+        )
+        session.add(rule)
+        session.flush()
+        assert evaluate_event(session, event) == [rule.id]
 
 
 def test_open_slots_for_assignment_uses_lowest_free_technician_and_never_mutates(monkeypatch):

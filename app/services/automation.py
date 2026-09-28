@@ -12,7 +12,7 @@ from app.services.audit import record_audit
 from app.services.notifications import create_operation
 
 ALLOWED_CHANNELS = {"whatsapp", "email"}
-ALLOWED_EVENTS = {"message.received", "case.created", "case.updated", "appointment.booked", "appointment.cancelled"}
+ALLOWED_EVENTS = {"message.received", "case.created", "case.updated", "appointment.booked", "appointment.rescheduled", "appointment.cancelled"}
 MAX_AUTHORING_COOLDOWN_SECONDS = 2_592_000
 
 
