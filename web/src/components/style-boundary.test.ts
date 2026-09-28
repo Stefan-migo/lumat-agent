@@ -25,7 +25,6 @@ describe("stylesheet boundary", () => {
   it("keeps fully migrated components free of static inline styles", () => {
     const componentFiles = [
       "src/components/domain/ClientMemories.tsx",
-      "src/components/pages/CasesList.tsx",
     ];
     const offenders = componentFiles.filter((file) =>
       /style=\{\{/.test(readFileSync(join(process.cwd(), file), "utf8")),

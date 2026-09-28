@@ -40,7 +40,7 @@ export function CaseActions({
   };
 
   return (
-    <div className="cases-list__actions">
+    <div className="case-actions">
       <Select
         label="Estado"
         aria-label={`Estado caso ${target.id}`}

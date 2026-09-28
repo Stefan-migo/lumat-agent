@@ -18,7 +18,7 @@ The `.table` primitive MUST consume the catalog `table` slots (`--corp-border`, 
 
 #### Scenario: Existing table consumers stay green
 
-- GIVEN the current DataTable consumers (CasesList, ClientesList, KbList, ConversationsList, ClientFicha)
+- GIVEN the current DataTable consumers (ClientesList, KbList, ConversationsList, ClientFicha)
 - WHEN the full test suite runs
 - THEN all existing table assertions pass unchanged
 
