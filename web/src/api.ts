@@ -63,7 +63,7 @@ export function patchJson<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
 }
 
-import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse } from './types';
+import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse, CustomerEquipment } from './types';
 export const uploadKbDocument = (title: string, file: File, visibility: KbVisibility) => {
   const body = new FormData();
   body.append('title', title);
@@ -169,6 +169,10 @@ export const fetchCases = () => apiFetch<CasesResponse>('/panel/api/cases');
 export const createCase = (body: ManualCaseRequest) => postJson<{ ok: true; case: Case }>('/panel/api/cases', body);
 export const changeClientState = (id: number, state: CustomerState) => postJson<ClientStateMutationResponse>(`/panel/api/clients/${id}/state`, { state });
 export const addClientNote = (id: number, note: string) => postJson<ClientNoteMutationResponse>(`/panel/api/clients/${id}/notes`, { note });
+export type CustomerEquipmentUpdate = Partial<Pick<CustomerEquipment, 'equipment_type' | 'brand' | 'model' | 'age' | 'details'>>;
+export const listClientEquipment = (clientId: number) => apiFetch<{ equipment: CustomerEquipment[] }>(`/panel/api/clients/${clientId}/equipment`);
+export const createClientEquipment = (clientId: number, body: CustomerEquipmentUpdate) => postJson<{ equipment: CustomerEquipment }>(`/panel/api/clients/${clientId}/equipment`, body);
+export const updateClientEquipment = (clientId: number, equipmentId: number, body: CustomerEquipmentUpdate) => patchJson<{ equipment: CustomerEquipment }>(`/panel/api/clients/${clientId}/equipment/${equipmentId}`, body);
 export const resolveMemoryRelation = (customerId: number, relationId: number, relation: MemoryRelationKind) => postJson<{ ok: true; relation: MemoryRelation }>(`/panel/api/clients/${customerId}/memory-relations/${relationId}`, { relation });
 export const listAutomationRules = () => apiFetch<AutomationRulesResponse>('/panel/api/automation-rules');
 export const getAutomationRule = (id: number) => apiFetch<AutomationRuleResponse>(`/panel/api/automation-rules/${id}`);

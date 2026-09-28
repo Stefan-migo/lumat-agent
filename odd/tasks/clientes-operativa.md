@@ -1,9 +1,9 @@
 # ODD Task: clientes-operativa
 
-Status: in progress — WU1 delivered on the branch; WU2-WU4 blocked on owner decisions
-Worktree: `../lumat-agent-odd-clientes-operativa`
-Branch: `odd/clientes-operativa`
-Base: `c4ad6fe2` (main, 2026-09-28)
+Status: in progress — WU1 merged to `main` (PR #401 → `c2163ff6`). D1 decided: option A. D5 resolved: promotion shape. **WU2 (equipment) implemented on `odd/clientes-operativa-wu2`, verified, pending native review and PR.** WU3/WU4 still blocked on D2-D4.
+Worktree: `../lumat-agent-odd-clientes-operativa` (one worktree, one branch per work unit)
+Branch: `odd/clientes-operativa-wu2`
+Base: `c2163ff6` (main, 2026-09-28; merge of WU1)
 Depends on: nothing
 Source: scope comparison `.rapsodia-code/sessions/archived/2026-08-07-reunion-cierre/propuesta-final-lumatagent.md` vs the owner's own-investment decision of 2026-09-28
 Delivery strategy: `ask-on-risk`
@@ -83,10 +83,11 @@ PR #400) scoped assistant memory and project namespaces (`db/migrations/034_proj
 
 | # | Decision | Blocks | Recommendation |
 |---|----------|--------|----------------|
-| D1 | **Equipment shape**: a `CustomerEquipment` table (multiple rows per client, references address/service history) vs a minimal structured set of columns on `Customer` | WU2 | Table. Lumat's request 3.4 puts "Equipos, direcciones y antecedentes técnicos" under **base de clientes**, and one client can own a calefont *and* a caldera. A single column set cannot represent that. |
+| D1 | **Equipment shape** — **DECIDED 2026-09-28: option A, a `CustomerEquipment` table** (multiple rows per client) | Resolved | Chosen by the owner. Lumat's request 3.4 puts "Equipos, direcciones y antecedentes técnicos" under **base de clientes**, and one client can own a calefont *and* a caldera. Rejected: a column set on `Customer`, because a client with two appliances would force a second migration. |
 | D2 | **Amount semantics**: what the field means (quoted value? invoiced value?) and its currency | WU3 | Nullable numeric, currency CLP (Lumat is Chilean), meaning "value of the service for this case". Flag if it should be USD or carry both. |
 | D3 | **Merge rules**: which record survives (oldest? richest? most activity?) and what happens to conflicting scalar fields | WU4 | Survivor = the record with more activity; empty survivor fields filled from the loser; conflicting non-empty fields prefer the survivor and are recorded in the audit row. |
 | D4 | **Merge in or out of this unit** | WU4 sequencing | **Out — its own unit.** Four FK reassignments plus memory re-keying is not the same size as the other three, and a failure corrupts customer history. |
+| D5 | **Equipment promotion shape** — **DECIDED 2026-09-28: promote the captured text verbatim** | WU2 | The capture asks one open question and stores a single `equipment` string (`capture.py:30`). Parsing it into marca/modelo/antigüedad would invent data. Chosen: the row keeps the verbatim answer in `details`, `equipment_type` is pre-filled from the capture intent when it names an appliance (calefont/caldera/calefaccion), and marca/modelo/antigüedad are operator-editable in the ficha. Rejected: restructuring the capture into per-field questions — it changes customer-facing behaviour and its tests, out of proportion to WU2. |
 
 WU1 is unblocked and needs none of these.
 
@@ -114,9 +115,13 @@ Queried from the principal worktree (`graphify-out/2026-09-28/`).
 | T1.1 | WU1 | RED: the client list renders a stage control and changing it calls `changeClientState` and refreshes the row | delegated (writer) |
 | T1.2 | WU1 | GREEN: implement the row control reusing `Dialog` + `Select` and the existing endpoint | delegated (writer, same unit as T1.1) |
 | T1.3 | WU1 | Verification: `npm test` (web) and `npm run build` (`tsc -b`) green | delegated per-action |
-| T2.1 | WU2 | Schema + migration `035` for the chosen equipment shape (D1) | blocked on D1 |
-| T2.2 | WU2 | Capture path promotes the free-text equipment answer into structured rows | blocked on D1 |
-| T2.3 | WU2 | Ficha renders and edits equipment; API serializer + endpoint | blocked on D1 |
+| T2.1 | WU2 | Migration `035`: `customer_equipment` table — FK `customer_id` NOT NULL and indexed, nullable `equipment_type`/`brand`/`model`/`age`/`details`, partial unique `source_conversation_id` (promotion idempotency), timestamps, grants | delegated (writer, backend) |
+| T2.2 | WU2 | `CustomerEquipment` model beside `Customer`/`CustomerNote` | delegated (same writer) |
+| T2.3 | WU2 | Service: list/create/update/delete a customer's equipment, audited with `record_audit` (the `set_customer_state` pattern) | delegated (same writer) |
+| T2.4 | WU2 | Promotion: on the consent turn, upsert the captured equipment into a row keyed by `source_conversation_id`; `equipment_type` pre-filled from the capture intent when it names an appliance | delegated (same writer) |
+| T2.5 | WU2 | API under the customer: list/create/update/delete with `require_operator_json`, response shape mirroring `clients.py` | delegated (same writer) |
+| T2.6 | WU2 | Ficha equipment section — view, add, edit — reusing `Dialog` + `Input`/`Select` | delegated (writer, frontend) |
+| T2.7 | WU2 | Tests: backend functional (`test_api_clients.py` pattern) plus promotion idempotency (retry/recapture yields one row); frontend (`ClientFicha.test.tsx` pattern) | delegated per side |
 | T4.1 | WU4 | Merge service: reassign the four FKs and re-key memories, single transaction, audited | blocked on D3/D4 |
 
 ## Delivery
@@ -146,8 +151,51 @@ strategy, one PR per work unit.
       slice stays pending until a later commit reaches the review budget. The assessed base
       remains `c4ad6fe2`.
 - [x] **Commits** — `18c41083 docs(odd): open the clientes-operativa unit`,
-      `e26215ae feat(clients): change a client's stage from the list`. Not pushed.
-- [ ] WU2 — blocked on D1
+      `e26215ae feat(clients): change a client's stage from the list`,
+      `8095381c docs(odd): record the WU1 delivery and assessment`.
+- [x] **WU1 merged** — PR #401, merge commit `c2163ff6`. Pre-merge integration ran over the
+      tree that landed (after merging `origin/main` into the branch): frontend suite
+      **90 files / 823 tests**, `npm run build` (includes `tsc -b`) passed, and both CI jobs
+      (`test`, `panel`) green. The merged branch was deleted (local and remote) and the
+      worktree was reparked to `odd/clientes-operativa-wu2` off the updated `main`.
+- [x] **WU2 delivered** — `customer_equipment` (migration `035`) in the D5 shape: the verbatim
+      capture in `details`, `equipment_type` pre-filled from the capture intent when it names an
+      appliance, brand/model/age operator-editable, and a partial unique index on
+      `source_conversation_id` so promotion is idempotent per conversation. Promotion runs on the
+      consent turn; a re-promotion only writes non-null captured values, so an operator edit is
+      never wiped. API: list/create/update/delete under `GET|POST /clients/{id}/equipment` and
+      `PATCH|DELETE /clients/{id}/equipment/{equipment_id}` (`require_operator_json`), serializer
+      `to_equipment_dict`. Ficha: an "Equipos" section with add/edit through `Dialog` +
+      `Input`/`Select`; **no delete control** — the stated ficha scope is view/add/edit and the
+      DELETE endpoint is covered by backend tests only.
+- [x] **WU2 RED** — backend: `tests/functional/test_api_clients.py` failed collection with
+      `ImportError: cannot import name 'CustomerEquipment' from 'app.models'`. Frontend:
+      `npx vitest run src/components/pages/ClientFicha.test.tsx` → 3 failed / 28 passed, the
+      equipment section and its add/edit controls absent.
+- [x] **WU2 GREEN** — backend focused: `test_migrations.py` 23 passed, `test_chat_capture.py`
+      13 passed, `test_api_clients.py` 30 passed; full `pytest tests/` passed. Frontend focused:
+      `ClientFicha.test.tsx` 31 passed; full `npm test` 90 files / 826 tests passed; `npm run
+      build` (`tsc -b`) passed.
+- [x] **WU2 corrections** — `0480a9b3`: re-promotion no longer nulls an operator-set
+      `equipment_type`/`details`, with a regression test asserting one row and exactly one
+      promotion audit; and the generic `"quiero una visita"` scenario was restored in
+      `test_cm2_complete_capture_persists_and_confirms`, which now asserts `equipment_type is None`
+      while still promoting `details`.
+- [x] **WU2 parent spot checks** — `uv run pytest tests/integration/test_chat_capture.py` 13
+      passed; `npx vitest run src/components/pages/ClientFicha.test.tsx` 31 passed; full
+      `npm test` 90 files / 826 tests passed. An earlier `AgendaPage` cancellation-test timeout
+      did not reproduce and is not WU2 territory.
+- [x] **WU2 commits** — `41e1941c docs(odd): plan WU2 equipment storage and record the D5
+      decision`, `d4126465 feat(clients): add customer equipment table and model`, `51f8a68d
+      feat(clients): promote captured equipment into customer fichas`, `e66bbc10 feat(clients):
+      expose equipment CRUD in clients API`, `0480a9b3 fix(clients): preserve operator equipment
+      values on promotion`, `50bd48b3 feat(clients): show and edit customer equipment on the ficha`.
+- [x] **WU2 assessment** — `gentle-ai review assess --base-ref c4ad6fe2 --committed-only`:
+      `risk: high` (`process_boundary` — `tests/integration/test_migrations.py`), `changed_paths:
+      17`, `changed_lines: 938`, `review_due: true` (`high_risk`). The base is `c4ad6fe2`, not the
+      WU2 branch point `c2163ff6`, because the WU1 slice assessed as `under_budget` and never
+      advanced the reviewed boundary; `c2163ff6` would leave WU1's `ClientesList` change
+      unreviewed. The review receipt belongs in the PR body, not in this doc.
 - [ ] WU3 — blocked on D2
 - [ ] WU4 — blocked on D3/D4
 
@@ -157,7 +205,9 @@ Pending.
 
 ## Recovery
 
-- Nothing to resume beyond the task list above; the worktree and branch are live at base `c4ad6fe2`.
+- Nothing to resume beyond the task list above; the worktree and branch are live at base `c2163ff6`.
+- The branch is `odd/clientes-operativa-wu2`; the work-unit-1 branch `odd/clientes-operativa` no
+  longer exists (local or remote) after PR #401 — one worktree, one branch per work unit.
 - Note for the next session: another session is actively merging to `main`
   (`usuarios-aislamiento` WU1 landed as PR #400 during planning). `git fetch origin`
   immediately before any merge.
