@@ -459,7 +459,29 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("032_case_conversation_nullable",),
         ("033_customer_archived_at",),
         ("034_project_owners",),
+        ("035_memory_owner_dedup",),
     ]
+
+
+def test_memory_dedup_index_includes_owner_and_allows_cross_owner_duplicates(migrated_db, admin_conn):
+    index = admin_conn.execute(
+        "SELECT indexdef FROM pg_indexes WHERE tablename='memories' "
+        "AND indexname='uq_memories_normalized_content'"
+    ).fetchone()
+    assert index is not None
+    assert "(owner_id, proyecto, scope, entity_id, normalized_hash)" in index[0]
+    embedding = "[" + ",".join("0.1" for _ in range(384)) + "]"
+    owners = [admin_conn.execute(
+        "INSERT INTO users (username, password_hash) VALUES (%s, 'test') RETURNING id",
+        (f"memory-dedup-{uuid4().hex}",),
+    ).fetchone()[0] for _ in range(2)]
+    for owner_id in owners:
+        admin_conn.execute(
+            "INSERT INTO memories (owner_id, proyecto, scope, entity_id, topic_key, titulo, contenido, "
+            "embedding, normalized_hash, visibility) VALUES (%s, 'casa', 'agent', 'agent:casa', %s, 'fact', "
+            "'same content', %s::vector, 'same-hash', 'global')",
+            (owner_id, f"fact-{owner_id}", embedding),
+        )
 
 
 def test_internal_chat_cost_column_and_app_grants(migrated_db, admin_conn):
