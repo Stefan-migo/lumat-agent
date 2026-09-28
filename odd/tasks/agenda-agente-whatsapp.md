@@ -203,7 +203,7 @@ cd web && npm run build                      # the only frontend type check (tsc
       `starts_at - 24 h` in UTC), with an explicit policy for bookings made inside the 24 h window
       (closed: skip the operation entirely, decision 15).
 - [ ] Invalidate or reschedule the pending reminder on cancel and reschedule.
-- [x] Deliver via an approved WhatsApp template (template-aware dispatcher), with an email fallback
+- [ ] Deliver via an approved WhatsApp template (template-aware dispatcher), with an email fallback
       recipient (closed: the customer's email, decision 17), replacing free-form text for this
       business-initiated message.
 - [x] Add a periodic runner: a CLI entrypoint on `app/ops/sweep.py` plus the cron wiring already
@@ -237,7 +237,7 @@ cd web && npm run build                      # the only frontend type check (tsc
 - RED observed: `uv run pytest tests/unit/test_ops_sweep.py -o addopts='' -q` → **1 failed** because `sweep.main` did not exist.
 - GREEN focused: `uv run pytest tests/unit/test_ops_sweep.py -o addopts='' -q` → **1 passed**; then `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py tests/integration/test_h4_notifications.py tests/unit/test_ops_sweep.py -o addopts='' -q` → **15 passed**.
 - Full suite: `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/ -o addopts='' -q` → **1579 passed, 2 warnings** (181.72 s).
-- WU3 commit SHA pending.
+- WU3 commit `0121d054` `feat(ops): run the notification sweep as a scheduled entry point` — CLI, cron documentation, CLI test, and this record. Rollback boundary: scheduled invocation and its documentation/test only.
 - Not yet proven: reschedule invalidation/rescheduling has implementation but no dedicated integration assertion; template delivery success/name/date-time parameter ordering has not been asserted end-to-end (fallback path and approved policy setup were exercised); cron has only been documented, not installed or observed firing (remote operation is expressly out of scope). Therefore overall S4 acceptance remains open.
 
 ### S5 — Post-service follow-up
