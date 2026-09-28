@@ -40,6 +40,8 @@ already recorded in the readiness `report.md`: user administration exists in
 | D5 (owner, 2026-09-28) | Isolation is absolute: neither an admin nor anyone else can see another user's projects or agent memory. There is no admin override. | Project and agent memory privacy applies equally to all roles. | Admin supervision access. An orphaned project therefore requires database access to recover; this unit adds no in-app recovery. |
 | D6 (owner, 2026-09-28) | `project_aliases` become per-user: migrate global `UNIQUE(alias)` to `UNIQUE(owner_id, alias)` and backfill the owner. | Aliases must allow the same name for different owners without global lookup leakage. | Keep aliases global, which prevents same-alias projects and preserves cross-user namespace behavior. |
 | D7 (owner, 2026-09-28) | The panel gains project creation, and the agent tool `projects.create` remains. | Users need a direct panel path while existing agent workflows remain available. | Tool-only creation; or replacing the agent tool with panel-only creation. |
+| D8 (owner, 2026-09-28) | Opening internal agent chat to `operador` and `tecnico`, with per-role tool authorization, is a separate dependent unit, `agent-role-access`; it starts only after this unit lands. Chat remains admin-only here. | Isolation work must not broaden chat access before tool permissions are defined per role. | Include role access in this unit without role-specific tool authorization. |
+| D9 (owner, 2026-09-28) | Backfill legacy non-`default` projects and their agent memory to the admin; keep `default` business-shared and business-scope memory at `owner_id=NULL`. Migration 034 must enumerate legacy rows, and the owner must confirm the list before applying; stop for reassignment if multiple admins make a project's owner ambiguous. | Only admins can chat in the legacy system and therefore only admins could have created projects; ambiguity must not be silently resolved. | Assign legacy rows automatically or assign business memory to an individual owner. |
 
 ## Verified facts
 
@@ -52,6 +54,12 @@ already recorded in the readiness `report.md`: user administration exists in
 - The panel projects API is currently read-only; project creation exists as the `projects.create` agent tool. This unit adds panel creation without removing the tool.
 - User administration already exists in the API, service, and frontend. The contrary statement in readiness `session.md` is stale and superseded, not an unresolved gap.
 - The latest migration on main is `033_customer_archived_at.sql`; this unit opens with migration **034**. Readiness `report.md`'s former 031 → 032 note is stale.
+- Every route in `app/panel/api/routes/chat.py`—thread create/list/read/update/delete, messages, stream, approval, attachments, `/assistant/capabilities`, and planning sessions—uses `require_admin_json` (for example, lines 69-89, 127-162, 189-208, 226-256, 278-361).
+- `app/chat/assistant/tools/registry.py:26-33` defines `SDB_WRITE_ALLOWLIST` as `automation.create_rule`, `project.create`, `project.rename`, `project.archive`, and `project.merge`, and `AUTONOMOUS_WRITE_ALLOWLIST` as `memory.write`, `memory.update`, and `memory.delete`. Tool execution gates writes by these allowlists and approval/read-only mechanics (lines 588-608); it has no role filter.
+- The only role-aware assistant behavior found is the manual SDB trigger downgrade in `app/chat/assistant/state.py:219-220` (`requested is True` with a non-admin role routes to normal).
+- Concrete overreach if chat opens without per-role tool authorization: `automation.create_rule` is in the admin-only `automation-rules` navigation (`web/src/components/domain/PanelShell.tsx:45`); `project.rename`, `project.archive`, and `project.merge` are agent tools while `app/panel/api/routes/projects.py:1,17-39` exposes read-only project endpoints guarded by `require_operator_json`.
+- The chat navigation item is `adminOnly: true` at `web/src/components/domain/PanelShell.tsx:40`; footer navigation adds chat only when `user.role === "admin"` at line 440.
+- The projects panel routes use `require_operator_json` (`app/panel/api/routes/projects.py:17-27`), so operators can list and inspect projects but have no chat route access in this unit.
 - One `meta_phone_number_id` is configured (`app/config.py:74`); WhatsApp remains business-shared.
 - Strict TDD is on (`openspec/config.yaml:38`). Backend runner is `uv run pytest tests/` (`openspec/config.yaml:29,31`); web runner is `cd web && npm test`.
 - The per-worktree test database convention is documented in `odd/tasks/test-db-isolation.md`; use `infra/test-db.sh` rather than a shared test database.
@@ -66,6 +74,7 @@ already recorded in the readiness `report.md`: user administration exists in
 - Bind internal chat threads to their user and require explicit project selection.
 - Owner-filter all project and memory panel/tool access, including admin requests; add panel project selection and creation while retaining `projects.create`.
 - Explicit cross-user isolation, business-memory preservation, and migration/backfill tests.
+- Legacy non-`default` project and associated agent-memory backfill follows D9, with the enumerated legacy list confirmed before applying migration 034.
 
 **Out of scope**
 
@@ -76,6 +85,7 @@ already recorded in the readiness `report.md`: user administration exists in
 - In-app recovery for orphaned projects; database access is required.
 - Retroactive privatization of existing `default` threads or memory.
 - Redesign of unrelated panel surfaces.
+- Opening the agent chat to operador or tecnico, and per-role tool authorization — deferred to the dependent unit `agent-role-access`.
 
 ## Work units
 
@@ -85,6 +95,9 @@ deletions, not targets to code-golf; the total forecast remains approximately
 500–800 changed lines. Reassess honestly during implementation and ask on risk.
 
 ### WU1 — ownership schema and project registry
+
+The chat role opening and its per-role tool authorization are deliberately not part
+of WU1–WU4; track them in the dependent `agent-role-access` unit after this unit lands.
 
 **Start:** base `16ba9cbf`, current global project registry and memory schema.
 **End:** migration 034 supplies owner-aware project/alias schema and backfill;
@@ -200,6 +213,8 @@ authorization.
 - User administration remains unchanged and out of scope.
 - Migration 034 has an explicit backfill and documented rollback; existing data is
   not silently assigned an incorrect owner.
+- The agent chat remains admin-only in this unit.
+- Legacy non-default projects and their agent memory are backfilled to the admin under D9, with the legacy list confirmed before applying.
 - Backend suite, web suite, and web build/type check pass.
 
 ## Checks and constraints
@@ -235,6 +250,8 @@ authorization.
 | Absolute isolation strands an orphaned project | No administrator can recover it in-app. | Explicitly accepted by D5; document that recovery requires database access. |
 | Admin override is accidentally retained | Admin routes or tools leak other users' projects/memory. | Apply owner filters regardless of role and test admin as a non-override user. |
 | Existing `default` threads/memory have ambiguous ownership | Retroactive privatization could alter behavior or lose business context. | Do not retroactively privatize in this unit; preserve existing business-shared behavior and document the migration boundary. |
+| Opening the agent to non-admin roles without per-role tool filtering would escalate privileges beyond panel permissions | Operators or technicians could access mutations not available through their panel routes, including automation authoring and project rename/archive/merge. | Keep chat admin-only in this unit; define and test per-role tool authorization in the dependent `agent-role-access` unit, which must start only after this unit lands. |
+| Legacy non-default projects or associated agent memory have ambiguous ownership | Incorrect backfill could assign private project context to the wrong user. | Migration 034 must enumerate legacy rows and require owner confirmation before applying; if multiple admins make a project's owner ambiguous, stop and reassign before applying. Preserve `default` as shared and business-scope memory as `owner_id=NULL`. |
 | Worktree test databases collide | Parallel tests interfere or destroy fixtures. | Follow the per-worktree DB helper and verify the resolved test DB before running suites. |
 
 ## Deliberately not built (YAGNI)
@@ -297,4 +314,7 @@ complete. Record merged PRs, exact test results, migration evidence, and cleanup
   `cd web && npm test`, and `cd web && npm run build`.
 - Apply migration 034 only through `migrate.sh`; verify it and keep rollback steps
   documented before any deployment.
+- Do not start `agent-role-access` until `usuarios-aislamiento` is delivered. The
+  dependent-unit handoff is `/home/stefan/repos/lumat-agent/.rapsodia-code/handoffs/2026-09-28-agent-role-access.md`;
+  its base must be this unit's closure commit.
 - Do not push, open PRs, merge, or deploy without explicit owner authorization.
