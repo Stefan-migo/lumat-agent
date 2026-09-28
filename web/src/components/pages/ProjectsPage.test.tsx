@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { ProjectsPage } from "./ProjectsPage";
 import { parsePanelPath, pathForView } from "../domain/panelRoutes";
 
 describe("projects panel", () => {
+  afterEach(() => vi.restoreAllMocks());
   it("parses and emits the project route", () => {
     expect(parsePanelPath("/panel/app/projects")).toEqual({ view: "projects" });
     expect(pathForView("projects")).toBe("/panel/app/projects");
@@ -15,7 +16,43 @@ describe("projects panel", () => {
     expect(screen.getByRole("columnheader", { name: "Proyecto" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Operations" }));
     expect(onOpenProject).toHaveBeenCalledWith("ops");
-    expect(screen.queryByRole("button", { name: /crear|renombrar|archivar|fusionar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /renombrar|archivar|fusionar/i })).not.toBeInTheDocument();
+  });
+
+  const fillProjectForm = async () => {
+    fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "ops" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Operations" } });
+    fireEvent.change(screen.getByLabelText("Purpose"), { target: { value: "Run operations" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+  };
+
+  it("creates a project and refreshes the project list", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ projects: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 2, slug: "ops", name: "Operations", purpose: "Run operations", status: "active" } }), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ projects: [{ id: 2, slug: "ops", name: "Operations", purpose: "Run operations", status: "active" }] }), { status: 200 }));
+    render(<ProjectsPage />);
+    await fillProjectForm();
+    expect(await screen.findByRole("button", { name: "Operations" })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/panel/api/projects", expect.objectContaining({ method: "POST", body: JSON.stringify({ slug: "ops", name: "Operations", purpose: "Run operations" }) }));
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("shows duplicate slug conflicts", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ projects: [] }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Slug already exists" }), { status: 409 }));
+    render(<ProjectsPage />);
+    await fillProjectForm();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Slug already exists");
+  });
+
+  it("shows candidates for ambiguous project purposes", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ projects: [] }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Purpose is ambiguous", candidates: [{ slug: "ops", name: "Operations", similarity: 0.82 }] }), { status: 409 }));
+    render(<ProjectsPage />);
+    await fillProjectForm();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Purpose is ambiguous");
+    expect(alert).toHaveTextContent("Operations (ops)");
+    expect(alert).toHaveTextContent("0.82");
   });
 
   it("groups SDB artifacts by entity in read-only tables", async () => {
