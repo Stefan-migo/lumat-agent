@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
-import { ApiError, archiveCustomer, createCustomer, fetchClients as listClients, getClientFicha, unarchiveCustomer } from "../../api";
-import type { Customer } from "../../types";
+import { ApiError, archiveCustomer, changeClientState, createCustomer, fetchClients as listClients, getClientFicha, unarchiveCustomer } from "../../api";
+import type { Customer, CustomerState } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -13,6 +13,7 @@ import { customerStateLabel, customerStateTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import { Dialog } from "../primitives/Dialog";
 import { Input } from "../primitives/Input";
+import { Select } from "../primitives/Select";
 
 export type ClientesListState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
 
@@ -74,12 +75,15 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   // text, so resetting our query state alone would leave the stale term on screen.
   const [searchResetKey, setSearchResetKey] = useState(0);
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [dialog, setDialog] = useState<"create" | "archive" | null>(null);
+  const [dialog, setDialog] = useState<"create" | "archive" | "state" | null>(null);
   const [phone, setPhone] = useState("");
   const [dialogError, setDialogError] = useState("");
   const [existingCustomerId, setExistingCustomerId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<Customer | null>(null);
+  const [stateTarget, setStateTarget] = useState<Customer | null>(null);
+  const [stateOptions, setStateOptions] = useState<CustomerState[]>([]);
+  const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
   const [archiveCounts, setArchiveCounts] = useState<{ cases: number; appointments: number } | null>(null);
   const fetchClients = useCallback(
     () => listClients({ includeArchived, query }).then((response) => response.clients),
@@ -156,6 +160,33 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       setDialogError("No pudimos restaurar el cliente. Inténtalo nuevamente.");
     }
   };
+  const openState = async (customer: Customer) => {
+    setStateTarget(customer);
+    setSelectedState(customer.state);
+    setStateOptions([]);
+    setDialogError("");
+    setDialog("state");
+    try {
+      const ficha = await getClientFicha(customer.id);
+      setStateOptions(ficha.states ?? []);
+    } catch {
+      setDialogError("No pudimos cargar los estados disponibles. Inténtalo nuevamente.");
+    }
+  };
+  const saveState = async () => {
+    if (!stateTarget || !selectedState || busy) return;
+    setBusy(true);
+    setDialogError("");
+    try {
+      await changeClientState(stateTarget.id, selectedState);
+      setDialog(null);
+      refresh();
+    } catch {
+      setDialogError("No pudimos cambiar el estado del cliente. Inténtalo nuevamente.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <PageFrame
@@ -174,7 +205,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
         {dialog === null && dialogError ? <p role="alert">{dialogError}</p> : null}
         {state === "loading" ? null : data && data.length > 0 ? (
           <div className="data-region">
-            <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} actions={(customer) => customer.archived_at ? <Button variant="secondary" onClick={() => void restore(customer)}>Restaurar {customer.name ?? "cliente"}</Button> : <Button variant="secondary" onClick={() => void openArchive(customer)}>Archivar {customer.name ?? "cliente"}</Button>} />
+            <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} actions={(customer) => <><Button variant="secondary" onClick={() => void openState(customer)}>Cambiar estado {customer.name ?? "cliente"}</Button>{customer.archived_at ? <Button variant="secondary" onClick={() => void restore(customer)}>Restaurar {customer.name ?? "cliente"}</Button> : <Button variant="secondary" onClick={() => void openArchive(customer)}>Archivar {customer.name ?? "cliente"}</Button>}</>} />
           </div>
         ) : filtered ? (
           <div>
@@ -197,6 +228,11 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
         <p>{archiveTarget?.name ?? "Este cliente"}: {archiveCounts ? `${archiveCounts.cases} ${archiveCounts.cases === 1 ? "caso abierto" : "casos abiertos"} y ${archiveCounts.appointments} ${archiveCounts.appointments === 1 ? "visita futura" : "visitas futuras"}.` : "Cargando antecedentes…"}</p>
         {dialogError ? <p role="alert">{dialogError}</p> : null}
         <Button onClick={() => void confirmArchive()} disabled={busy || !archiveCounts}>Confirmar archivo</Button>
+      </Dialog>
+      <Dialog open={dialog === "state"} onClose={() => setDialog(null)} title="Cambiar estado del cliente">
+        <Select id="client-state" label="Estado del cliente" value={selectedState ?? stateTarget?.state ?? ""} options={stateOptions.map((option) => ({ value: option, label: customerStateLabel(option) }))} disabled={busy || stateOptions.length === 0} onChange={(event) => setSelectedState(event.target.value as CustomerState)} />
+        {dialogError ? <p role="alert">{dialogError}</p> : null}
+        <Button onClick={() => void saveState()} disabled={busy || !selectedState || selectedState === stateTarget?.state || stateOptions.length === 0}>{busy ? "Guardando…" : "Guardar estado"}</Button>
       </Dialog>
     </PageFrame>
   );
