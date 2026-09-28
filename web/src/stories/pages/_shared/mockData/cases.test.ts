@@ -7,6 +7,7 @@ import { clients } from "./clients";
 const CASE_KEYS = [
   "ack_by",
   "acknowledged_at",
+  "amount",
   "closed_at",
   "conversation_id",
   "created_at",
