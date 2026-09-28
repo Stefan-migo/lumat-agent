@@ -1,6 +1,8 @@
 from datetime import date, datetime, time
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal
 from app.models import Appointment, AppointmentHistory, AppointmentStatus, AuditLog, Case, Conversation, Customer, TechnicianAvailability, User
@@ -64,6 +66,8 @@ def test_booking_does_not_report_a_missing_technician_as_a_conflict():
                 timezone_name="America/Santiago", duration_minutes=60, actor="oper",
             )
         assert not isinstance(raised.value, scheduling.AppointmentConflict)
+        assert isinstance(raised.value, IntegrityError)
+        assert session.execute(text("SELECT 1")).scalar_one() == 1
 
 
 @pytest.mark.parametrize("outcome", [AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW])

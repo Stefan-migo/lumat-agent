@@ -118,8 +118,8 @@ def book(session: Session, *, service: str, customer_id: int, case_id: int, tech
     try:
         session.flush()
     except IntegrityError as exc:
+        session.rollback()
         if _is_overlap_violation(exc):
-            session.rollback()
             raise AppointmentConflict("technician or customer has an overlapping booking") from exc
         raise
     _history(session, appointment, actor=actor, action="booked", previous=None)
@@ -171,8 +171,8 @@ def reschedule(session: Session, appointment: Appointment, *, local_date: date, 
     try:
         session.flush()
     except IntegrityError as exc:
+        session.rollback()
         if _is_overlap_violation(exc):
-            session.rollback()
             raise AppointmentConflict("technician or customer has an overlapping booking") from exc
         raise
     details = {"from_start": from_start, "to_start": appointment.local_start.isoformat(), "from_technician_id": from_technician_id, "to_technician_id": technician_id}
