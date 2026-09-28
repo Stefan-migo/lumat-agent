@@ -204,3 +204,6 @@ cd web && npm run build                      # the only frontend type check (tsc
   imported by `chat/graph.py`. The report's conversation pipeline hyperedge connects emergency,
   cost, handoff, receive, classification, and orchestration nodes. Communities include
   `scheduling.py` and `chat/graph.py`. Report remains stale at `16ba9cbf` by instruction.
+  RDD assessment was attempted after the work-unit commits but returned `unassessable` for this
+  runtime (changed paths/lines reported as 0); its suggested clone-local disable still failed, so
+  the clone override was restored to unset and global RDD remains on. No RDD receipt was produced.
