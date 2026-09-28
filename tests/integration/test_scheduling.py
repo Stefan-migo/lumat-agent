@@ -309,3 +309,53 @@ def test_reschedule_allows_new_slot_that_overlaps_its_previous_slot():
             "to_technician_id": technician.id,
         }
         assert session.query(AuditLog).filter_by(action="appointment.rescheduled", entity_id=str(moved.id)).count() == 1
+
+
+def test_open_slots_for_assignment_uses_lowest_free_technician_and_never_mutates(monkeypatch):
+    with SessionLocal() as session:
+        lower = User(username="assignment-lower", password_hash="test", role="tecnico")
+        higher = User(username="assignment-higher", password_hash="test", role="tecnico")
+        session.add_all([lower, higher])
+        session.flush()
+        monkeypatch.setattr(scheduling, "get_hours_timezone", lambda _session: "UTC")
+        starts = (datetime.now(timezone.utc) + timedelta(days=2)).replace(
+            minute=0, second=0, microsecond=0
+        )
+        ends = starts + timedelta(hours=2)
+        for technician in (lower, higher):
+            scheduling.add_availability(
+                session, technician_id=technician.id, starts_at=starts, ends_at=ends
+            )
+        other, case, _ = _linked_rows(session)
+        scheduling.book(
+            session, service="test", customer_id=other.id, case_id=case.id,
+            technician_id=lower.id, local_date=starts.date(), local_time=starts.time(),
+            timezone_name="UTC", duration_minutes=60, actor="test",
+        )
+        session.flush()
+        before = {
+            model: session.query(model).count()
+            for model in (Appointment, AppointmentHistory, AuditLog, TechnicianAvailability)
+        }
+
+        slots = scheduling.open_slots_for_assignment(
+            session, now=starts - timedelta(minutes=1), days=1, limit=3
+        )
+
+        assert slots == [
+            (higher.id, starts.date(), starts.time()),
+            (lower.id, (starts + timedelta(hours=1)).date(), (starts + timedelta(hours=1)).time()),
+        ]
+        assert {model: session.query(model).count() for model in before} == before
+
+
+def test_open_slots_for_assignment_returns_empty_when_no_availability_rows(monkeypatch):
+    with SessionLocal() as session:
+        technician = User(username="assignment-unconfigured", password_hash="test", role="tecnico")
+        session.add(technician)
+        session.flush()
+        monkeypatch.setattr(scheduling, "get_hours_timezone", lambda _session: "UTC")
+
+        assert scheduling.open_slots_for_assignment(
+            session, now=datetime.now(timezone.utc), days=7
+        ) == []
