@@ -9,8 +9,9 @@ from app.services import agent_chat
 def test_create_thread_persists_validated_project_and_audits_namespace(monkeypatch):
     audit = {}
 
-    def agent_context(session, proyecto):
+    def agent_context(session, proyecto, *, owner_id=None):
         assert proyecto == "My Project"
+        assert owner_id == 3
         return SimpleNamespace(slug="my-project")
 
     monkeypatch.setattr(agent_chat.projects, "agent_context", agent_context)
@@ -37,8 +38,8 @@ def test_thread_project_authorization_uses_thread_column(monkeypatch):
     authorization = object()
     calls = []
 
-    def agent_context(session, proyecto):
-        calls.append(proyecto)
+    def agent_context(session, proyecto, *, owner_id=None):
+        calls.append((proyecto, owner_id))
         return authorization
 
     monkeypatch.setattr(agent_chat.projects, "agent_context", agent_context)
@@ -49,7 +50,7 @@ def test_thread_project_authorization_uses_thread_column(monkeypatch):
     )
 
     assert agent_chat._thread_project_authorization(object(), thread) is authorization
-    assert calls == ["bound-project"]
+    assert calls == [("bound-project", 1)]
 
 
 def test_create_thread_defaults_to_default_without_project_validation(monkeypatch):
@@ -82,7 +83,7 @@ def test_create_thread_defaults_to_default_without_project_validation(monkeypatc
 def test_create_thread_rejects_unknown_project_before_persistence(monkeypatch):
     audit_calls = []
 
-    def reject_project(session, proyecto):
+    def reject_project(session, proyecto, *, owner_id=None):
         raise ValueError(f"project {proyecto!r} is not active")
 
     monkeypatch.setattr(agent_chat.projects, "agent_context", reject_project)
@@ -111,7 +112,7 @@ def test_create_thread_rejects_unknown_project_before_persistence(monkeypatch):
 
 
 def test_thread_project_authorization_rejects_project_that_no_longer_resolves(monkeypatch):
-    def reject_project(session, proyecto):
+    def reject_project(session, proyecto, *, owner_id=None):
         raise ValueError(f"project {proyecto!r} is not active")
 
     monkeypatch.setattr(agent_chat.projects, "agent_context", reject_project)

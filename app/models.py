@@ -520,12 +520,14 @@ class Memory(Base):
         Index("idx_memories_entity", "scope", "entity_id"),
         Index(
             "uq_memories_normalized_content",
+            "owner_id",
             "proyecto",
             "scope",
             "entity_id",
             "normalized_hash",
             unique=True,
             postgresql_where=text("normalized_hash IS NOT NULL"),
+            postgresql_nulls_not_distinct=True,
         ),
     )
 

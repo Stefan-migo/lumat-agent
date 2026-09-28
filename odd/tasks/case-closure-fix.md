@@ -5,7 +5,7 @@ Worktree: removed at close (was `../lumat-agent-odd-case-closure-fix`)
 Branch: deleted at close (shipped as `odd/case-closure-fix`, `docs/case-closure-archive` and `refactor/case-status-public-name`)
 Base: `main` before PR #365
 Depends on: nothing — U1 was the campaign's first unit
-Source: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md` (U1)
+Source: `.rapsodia-code/sessions/archived/2026-09-25-clientes-crm/report.md` (U1)
 Delivery strategy: single PR estimated; shipped as three (see `## Closure`)
 
 ## Objective
@@ -308,5 +308,5 @@ stood at the time; the archived OpenSpec artifacts keep theirs unchanged for the
 - **Nothing to resume.** The unit is closed: all three PRs are merged to `main` and the
   worktree and its branches no longer exist.
 - This file is the record of the unit; nothing in it is a pending task.
-- Source of record: `.rapsodia-code/sessions/ready-for-odd/2026-09-25-clientes-crm/report.md`
+- Source of record: `.rapsodia-code/sessions/archived/2026-09-25-clientes-crm/report.md`
   (U1 row), now archived under `.rapsodia-code/sessions/archived/2026-09-25-clientes-crm/`.

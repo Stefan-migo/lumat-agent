@@ -567,6 +567,7 @@ def delegation_span(state: AssistantState, scope) -> AssistantState:
                 whitelist=set(scope.tools_whitelist),
                 cost_allowed=True,
                 trusted_thread_id=state.get("thread_id"),
+                owner_id=state.get("user_id"),
                 proyecto=_project_slug(state),
             )
         except (ToolExecutionError, ToolValidationError) as exc:
@@ -957,6 +958,7 @@ def execute(state: AssistantState) -> AssistantState:
                 whitelist=set(config.tools_whitelist),
                 cost_allowed=state.get("guardrails", {}).get("cost_allowed", True),
                 trusted_thread_id=state.get("thread_id"),
+                owner_id=state.get("user_id"),
                 proyecto=_project_slug(state),
             )
         except (ToolExecutionError, ToolValidationError) as exc:

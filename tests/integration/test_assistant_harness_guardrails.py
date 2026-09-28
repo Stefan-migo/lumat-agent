@@ -127,6 +127,7 @@ def test_execution_audits_before_evidence(monkeypatch):
 def _tool_loop_state(**overrides):
     state = {
         "thread_id": 7,
+        "user_id": 7,
         "run_id": "run-tool-loop",
         "content": "Find Ana",
         "plan": {
@@ -985,6 +986,7 @@ def test_execute_forwards_trusted_thread_to_memory_write(migrated_db):
     with SessionLocal() as session:
         result = execute({
             "thread_id": 7,
+            "user_id": 7,
             "run_id": "run-memory-write",
             "plan": _memory_plan(),
             "session": session,
@@ -1021,6 +1023,7 @@ def test_execute_forwards_trusted_thread_to_memory_correction(migrated_db, tool)
         memory_id = row.id
         result = execute({
             "thread_id": 7,
+            "user_id": 7,
             "run_id": "run-memory-correction",
             "plan": {
                 "kind": "tool",
@@ -1039,12 +1042,12 @@ def test_execute_forwards_trusted_thread_to_memory_correction(migrated_db, tool)
 def test_memory_write_is_idempotent_in_db(migrated_db):
     first = _memory_plan()
     with SessionLocal() as session:
-        execute({"thread_id": 7, "run_id": "run-memory-first", "plan": first, "session": session, "evidence": []})
+        execute({"thread_id": 7, "user_id": 7, "run_id": "run-memory-first", "plan": first, "session": session, "evidence": []})
         second = {
             **first,
             "arguments": {**first["arguments"], "contenido": "Refreshed fact"},
         }
-        execute({"thread_id": 7, "run_id": "run-memory-second", "plan": second, "session": session, "evidence": []})
+        execute({"thread_id": 7, "user_id": 7, "run_id": "run-memory-second", "plan": second, "session": session, "evidence": []})
 
         rows = session.execute(
             select(Memory).where(Memory.topic_key == "agent:fact", Memory.entity_id == "agent:default")

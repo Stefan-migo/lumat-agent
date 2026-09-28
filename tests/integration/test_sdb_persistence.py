@@ -250,20 +250,28 @@ def test_sdb_state_writes_one_checkpoint_row_per_task_sequence():
 
 
 def test_authorized_project_reaches_every_sdb_artifact_key():
-    thread_id = _thread_id()
     with SessionLocal() as session:
-        project = session.scalar(select(Project).where(Project.slug == "sdb-namespace"))
+        user = User(username="sdb-project-owner", password_hash="test", role="admin")
+        session.add(user)
+        session.flush()
+        thread = InternalChatThread(user_id=user.id)
+        session.add(thread)
+        session.flush()
+        thread_id = thread.id
+        project = session.scalar(select(Project).where(
+            Project.slug == "sdb-namespace", Project.owner_id == user.id
+        ))
         if project is None:
             project = Project(
                 slug="sdb-namespace",
                 name="SDB Namespace",
                 purpose="A deterministic SDB namespace",
                 purpose_embedding=[0.0] * 384,
+                owner_id=user.id,
             )
             session.add(project)
-            session.commit()
-        authorization = projects.agent_context(session, project.slug)
-        thread = session.get(InternalChatThread, thread_id)
+            session.flush()
+        authorization = projects.agent_context(session, project.slug, owner_id=user.id)
         agent_chat.persist_sdb_state(
             session,
             thread,
