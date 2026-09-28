@@ -243,7 +243,7 @@ cd web && npm run build                      # the only frontend type check (tsc
 - Newly proven: decision 15 creates no operation for a booking <24 h away; reschedule preserves the same single keyed row and moves its due instant, and moving inside 24 h permanently fails that pending row; successful dispatch uses the configured `recordatorio_prueba` name, exactly two local date/time parameters in order, and marks the operation sent.
 - Still honestly open: VPS cron installation/firing. Repository evidence is limited to the working CLI and the documented five-minute cron contract; installation is an authorized-ops action, not a repository test.
 - Graph Check for the corrective round: stale report still says `16ba9cbf`; queried booking/24 h scheduling, reschedule/reminder operation, and approved template dispatch areas. Nodes consulted include `book()`, `reschedule()`, `NotificationOperation`, `Appointment`, `send_template()`, `scheduling.py`, `notifications.py`, `templates.py`, and the notification integration tests. No requested directed path resolved (`book()`→`_maintain_reminder()` node absent; `reschedule()`→`NotificationOperation` and `send_template()`→`process_operation()` not found). No graph rebuild/update attempted.
-- Corrective round commit SHA pending.
+- Corrective round commit `150a1bc7` `test(notify): prove appointment reminder edge cases` — integration proof and apply-progress update. No production-code changes; rollback boundary is the three added test cases and this corrective progress entry.
 
 ### S5 — Post-service follow-up
 
