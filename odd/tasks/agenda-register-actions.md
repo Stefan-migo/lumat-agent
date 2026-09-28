@@ -1,6 +1,6 @@
 # ODD Task: agenda-register-actions
 
-Status: in progress
+Status: merged — PR #380 (`8e5a978a`) + PR #383 (`f5a6d68d`); unit record closed in PR #385 (`9eb48d8b`).
 Worktree: `../lumat-agent-odd-agenda-register-actions`
 Branch: `odd/agenda-register-actions`
 Base: `28fd4ad3` (main, after U5 `agenda-appointment-detail` and the CI frontend gate)

@@ -1,6 +1,6 @@
 # ODD Task: agenda-appointment-detail
 
-Status: in progress
+Status: merged — PR #376 (`7fb8cd10`).
 Worktree: `../lumat-agent-odd-agenda-appointment-detail`
 Branch: `odd/agenda-appointment-detail`
 Depends on: `agenda-visit-dialog` (PR #370, merged `2a85b675`)
