@@ -1,9 +1,9 @@
 # ODD Task: clientes-operativa
 
-Status: in progress — WU1 merged (`c2163ff6`, PR #401) and WU2 merged (`4a67d6be`, PR #402; native review `review-d64cbb138ad3cca7` approved, authority burned). D1, D2, D5 decided. **WU3 (case amount) in progress on `odd/clientes-operativa-wu3`.** WU4 still blocked on D3/D4.
-Worktree: `../lumat-agent-odd-clientes-operativa-wu3` (one worktree, one branch per work unit)
-Branch: `odd/clientes-operativa-wu3`
-Base: `4a67d6be` (main, 2026-09-28; merge of WU2 — also the reviewed boundary carried into this slice)
+Status: WU1, WU2 and WU3 are merged to `main` (PRs #401/#402/#404) and the WU2/WU3 review advisories are closed (PR #408, `6c567d41`) — each with an approved, authority-burned native review. D1, D2, D5 decided (D2 by WU3). **WU4 (duplicate merge) is the only remaining work: blocked on D3/D4, and recommended as its own unit (D4).**
+Worktree: none live for this unit (one worktree, one branch per work unit); WU3's was `../lumat-agent-odd-clientes-operativa-wu3`, removed after PR #404
+Branch: none live; WU3's was `odd/clientes-operativa-wu3`
+Base: `f6912b8b` (main, 2026-09-28)
 Depends on: nothing
 Source: scope comparison `.rapsodia-code/sessions/archived/2026-08-07-reunion-cierre/propuesta-final-lumatagent.md` vs the owner's own-investment decision of 2026-09-28
 Delivery strategy: `ask-on-risk`
