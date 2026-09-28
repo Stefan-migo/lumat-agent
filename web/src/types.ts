@@ -19,6 +19,9 @@ export interface Project { id: number; slug: string; name: string; purpose: stri
 export interface ProjectArtifact { id: number; entity_id: string; topic_key: string; tipo: MemoryType; titulo: string; contenido: string; status: MemoryStatus; created_at: string | null; updated_at: string | null; }
 export interface ProjectsResponse { projects: Project[]; }
 export interface ProjectDetailResponse { project: Project; artifacts: Record<string, ProjectArtifact[]>; }
+export interface ProjectCandidate { slug: string; name: string; similarity: number; }
+export interface ProjectCreateRequest { slug: string; name: string; purpose: string; }
+export interface ProjectCreateResponse { project: Project; }
 
 export type CortexStatus = 'active' | 'closed';
 export interface CortexHandoff { status: 'none' | 'pending' | 'approved'; sdb_phase: 'SPEC' | 'APPROVE' | null; run_id?: string; approval?: AssistantApproval | null; }

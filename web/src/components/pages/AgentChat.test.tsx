@@ -72,24 +72,35 @@ describe("AgentChat", () => {
     );
   });
 
-  it("creates only when Nuevo chat is explicitly pressed", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
-      async (input) =>
-        String(input).includes("?limit=20")
-          ? jsonResponse({ threads: [] })
-          : jsonResponse({ thread: makeThread(), messages: [] }, 201),
-    );
+  it("requires a project selection before creating a new chat", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input) === "/panel/api/projects") return jsonResponse({ projects: [{ id: 1, slug: "ops", name: "Operations", purpose: "Run operations", status: "active" }] });
+      if (String(input) === "/panel/api/chat/threads" && init?.method === "POST") return jsonResponse({ thread: { ...makeThread(), proyecto: "ops" }, messages: [] }, 201);
+      return jsonResponse({ threads: [] });
+    });
 
     render(<AgentChat />);
     fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
 
+    expect(await screen.findByRole("dialog", { name: /elegir proyecto/i })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({ method: "POST" }));
+    fireEvent.click(screen.getByRole("button", { name: "Operations" }));
+
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
         "/panel/api/chat/threads",
-        expect.objectContaining({ method: "POST" }),
+        expect.objectContaining({ method: "POST", body: JSON.stringify({ proyecto: "ops" }) }),
       ),
     );
     expect(await screen.findByRole("textbox", { name: /mensaje/i })).toBeEnabled();
+  });
+
+  it("does not create a chat when the user has no projects", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ projects: [], threads: [] }));
+    render(<AgentChat />);
+    fireEvent.click(await screen.findByRole("button", { name: "Nuevo chat" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/proyecto primero/i);
+    expect(fetchMock).not.toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({ method: "POST" }));
   });
 
   it("loads an owned deep link without creating a thread", async () => {

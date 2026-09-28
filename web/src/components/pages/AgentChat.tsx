@@ -16,6 +16,7 @@ import {
   getAssistantCapabilities,
   getChatThread,
   listChatThreads,
+  listProjects,
   openPlanningSession,
   renameChatThread,
   sendChatMessage,
@@ -307,6 +308,8 @@ export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatPr
   const [topicError, setTopicError] = useState("");
   const [renameTarget, setRenameTarget] = useState<InternalChatThreadSummary | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InternalChatThreadSummary | null>(null);
+  const [projectChoices, setProjectChoices] = useState<{ slug: string; name: string }[]>([]);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [renameTitle, setRenameTitle] = useState("");
   const watchCancelledRef = useRef(false);
   const watchedRunRef = useRef<string | null>(null);
@@ -479,9 +482,38 @@ export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatPr
 
   const newChat = async () => {
     setError(null);
+    const project = thread?.proyecto || requestedProject;
+    if (!project) {
+      try {
+        const result = await listProjects();
+        if (result.projects.length === 0) {
+          setError("Crea un proyecto primero para iniciar un chat.");
+          return;
+        }
+        setProjectChoices(result.projects.map(({ slug, name }) => ({ slug, name })));
+        setProjectPickerOpen(true);
+      } catch (reason: unknown) {
+        setError(reason instanceof ApiError ? reason.detail : "No pudimos cargar los proyectos");
+      }
+      return;
+    }
     setLoading(true);
     try {
-      const result = await createChatThread(thread?.proyecto ?? requestedProject);
+      const result = await createChatThread(project);
+      loadThread(result);
+      onThreadOpened?.(result.thread.id);
+    } catch (reason: unknown) {
+      setError(reason instanceof ApiError ? reason.detail : "No pudimos crear el chat");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createProjectChat = async (project: string) => {
+    setProjectPickerOpen(false);
+    setLoading(true);
+    try {
+      const result = await createChatThread(project);
       loadThread(result);
       onThreadOpened?.(result.thread.id);
     } catch (reason: unknown) {
@@ -767,6 +799,12 @@ export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatPr
       }
     >
       {sectionTabs}
+      <Dialog open={projectPickerOpen} onClose={() => setProjectPickerOpen(false)} title="Elegir proyecto">
+        <div className="assistant-chat__planning-form">
+          <p>Elige el proyecto para este chat.</p>
+          {projectChoices.map((project) => <Button key={project.slug} variant="secondary" onClick={() => void createProjectChat(project.slug)}>{project.name}</Button>)}
+        </div>
+      </Dialog>
       <Dialog
         open={planningOpen}
         onClose={() => {
