@@ -317,6 +317,7 @@ export interface Case {
   customer_id: number | null;
   created_at: string | null;
   service: string | null;
+  amount: number | null;
   priority: string;
   status: string;
   emergency: boolean;
@@ -420,6 +421,7 @@ export interface ClientFichaResponse {
       customer_id: number | null;
       created_at: string | null;
       service: string;
+      amount: number | null;
       priority: string;
       status: string;
       emergency: boolean;

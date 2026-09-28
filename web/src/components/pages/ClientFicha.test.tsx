@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApiError, apiFetch, addClientNote, changeClientState, postJson, resolveMemoryRelation, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, listClientEquipment } from "../../api";
+import { ApiError, apiFetch, addClientNote, changeClientState, postJson, resolveMemoryRelation, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, listClientEquipment } from "../../api";
 import { ClientFicha } from "./ClientFicha";
 import type { ClientFichaResponse, Memory } from "../../types";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), listClientEquipment: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCaseAmount: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), listClientEquipment: vi.fn() };
 });
 
 describe("ClientFicha equipment", () => {
@@ -75,8 +75,8 @@ const ficha: ClientFichaResponse = {
   history: {
     conversations: [{ id: 1, state: "human", summary: "Coordinar visita", created_at: "2026-07-15T12:00:00Z", closed_at: null }],
     cases: [
-      { id: 2, conversation_id: 1, customer_id: 7, created_at: "2026-07-15T12:00:00Z", service: "Reparación", priority: "alta", status: "open", summary: "Calefón", emergency: true, responsible_id: 9, escalated_at: null, closed_at: null, acknowledged_at: null, ack_by: null, is_open: true },
-      { id: 1, conversation_id: 1, customer_id: 7, created_at: "2026-07-14T12:00:00Z", service: "Gasfitería", priority: "normal", status: "cerrado", summary: "Llave", emergency: false, responsible_id: null, escalated_at: null, closed_at: "2026-07-14T14:00:00Z", acknowledged_at: null, ack_by: null, is_open: false },
+      { id: 2, conversation_id: 1, customer_id: 7, created_at: "2026-07-15T12:00:00Z", service: "Reparación", amount: null, priority: "alta", status: "open", summary: "Calefón", emergency: true, responsible_id: 9, escalated_at: null, closed_at: null, acknowledged_at: null, ack_by: null, is_open: true },
+      { id: 1, conversation_id: 1, customer_id: 7, created_at: "2026-07-14T12:00:00Z", service: "Gasfitería", amount: null, priority: "normal", status: "cerrado", summary: "Llave", emergency: false, responsible_id: null, escalated_at: null, closed_at: "2026-07-14T14:00:00Z", acknowledged_at: null, ack_by: null, is_open: false },
     ],
     messages: [{ id: 3, conversation_id: 1, direction: "inbound", msg_type: "text", text: "Necesito ayuda", media_url: null, created_at: "2026-07-15T12:00:00Z" }],
     messages_total: 12,
@@ -144,6 +144,25 @@ describe("ClientFicha page grammar", () => {
     const archive = screen.getByRole("region", { name: "Casos anteriores" });
     expect(within(archive).queryByText("#2")).not.toBeInTheDocument();
     expect(within(archive).getByText("#1")).toBeInTheDocument();
+  });
+
+  it("renders a nullable CLP case amount and saves it through the existing update API", async () => {
+    const user = userEvent.setup();
+    vi.mocked(updateCaseAmount).mockResolvedValue({ ok: true, case: { ...ficha.history.cases[0], amount: 200000, customer: ficha.customer } });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    const withAmount = { ...ficha, history: { ...ficha.history, cases: ficha.history.cases.map((row) => row.id === 2 ? { ...row, amount: 125000 } : row) } };
+    render(<ClientFicha customerId={7} data={withAmount} memories={memories} />);
+
+    expect(screen.getByText(/125\.000/)).toBeInTheDocument();
+    expect(screen.getByText("Sin monto registrado")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Editar monto del caso" }));
+    const dialog = screen.getByRole("dialog");
+    await user.clear(within(dialog).getByLabelText("Monto CLP"));
+    await user.type(within(dialog).getByLabelText("Monto CLP"), "200000");
+    await user.click(within(dialog).getByRole("button", { name: "Guardar monto" }));
+
+    expect(updateCaseAmount).toHaveBeenCalledWith(2, 200000);
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10"));
   });
 
   it("updates and acknowledges an active case, then refetches the ficha", async () => {
