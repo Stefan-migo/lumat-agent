@@ -96,7 +96,7 @@ describe("AgendaPage Storybook state matrix", () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     vi.mocked(closeAppointment).mockResolvedValue({ ok: true, appointment: Data.args!.data![0] });
     vi.mocked(listAppointments).mockResolvedValue({ appointments: Data.args!.data! });
-    const { container } = render(<AgendaPageStory data={Data.args?.data} state="ready" />);
+    render(<AgendaPageStory data={Data.args?.data} state="ready" />);
     expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
     expect(screen.getByText("Camila Soto")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Cerrar visita" }));
@@ -107,8 +107,7 @@ describe("AgendaPage Storybook state matrix", () => {
     await act(async () => {
       await CloseConfirmation.play?.({ canvasElement: storyContainer } as Parameters<NonNullable<typeof CloseConfirmation.play>>[0]);
     });
-    expect(container.querySelector(".data-region")).toBeInTheDocument();
-    expect(screen.getAllByText("Mantención de calefón").length).toBeGreaterThan(0);
+    expect(within(storyContainer).getByRole("dialog", { name: "Cerrar visita de Camila Soto — Mantención de calefón" })).toBeInTheDocument();
   });
 
   it("covers rescheduling while preserving appointment facts", async () => {

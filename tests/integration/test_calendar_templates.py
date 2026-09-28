@@ -1,9 +1,10 @@
 from datetime import date, time
 
 import pytest
+from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import Appointment, AppointmentStatus, Case, Conversation, Customer, User
+from app.models import Appointment, AppointmentCalendarSync, AppointmentStatus, Case, Conversation, Customer, User
 from app.services import calendar, scheduling, templates
 
 
@@ -48,9 +49,33 @@ def test_calendar_sync_is_idempotent_and_exports_cancellation():
         assert len(provider.calls) == 2
 
         scheduling.cancel(session, appointment, actor="oper")
-        cancelled = calendar.synchronize(session, appointment, provider=provider, actor="oper")
+        cancelled = session.scalar(select(AppointmentCalendarSync).where(
+            AppointmentCalendarSync.appointment_id == appointment.id
+        ))
         assert cancelled.status == "synced"
-        assert provider.calls[-1][3] is AppointmentStatus.CANCELLED
+        assert cancelled.cancelled is True
+        assert "STATUS:CANCELLED" in cancelled.payload
+        assert cancelled.attempts == 3
+
+
+def test_reschedule_updates_an_existing_calendar_export():
+    with SessionLocal() as session:
+        appointment = _appointment(session)
+        sync = calendar.synchronize(session, appointment, provider=calendar.ICSProvider(), actor="oper")
+
+        scheduling.reschedule(
+            session, appointment, local_date=date(2026, 7, 16), local_time=time(12),
+            timezone_name="America/Santiago", duration_minutes=90,
+            technician_id=appointment.technician_id, actor="oper",
+        )
+
+        session.flush()
+        session.refresh(sync)
+        assert sync.status == "synced"
+        assert sync.cancelled is False
+        assert "DTSTART;TZID=America/Santiago:20260716T120000" in sync.payload
+        assert "DTEND;TZID=America/Santiago:20260716T133000" in sync.payload
+        assert sync.attempts == 2
 
 
 def test_calendar_failure_keeps_booking_and_is_retryable():
