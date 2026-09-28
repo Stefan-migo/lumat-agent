@@ -1,6 +1,6 @@
 # ODD Task: clientes-operativa
 
-Status: WU1, WU2 and WU3 are merged to `main` (PRs #401/#402/#404) and the WU2/WU3 review advisories are closed (PR #408, `6c567d41`) — each with an approved, authority-burned native review. D1, D2, D5 decided (D2 by WU3). **WU4 (duplicate merge) is the only remaining work: blocked on D3/D4, and recommended as its own unit (D4).**
+Status: WU1, WU2 and WU3 are merged to `main` (PRs #401/#402/#404) and the WU2/WU3 review advisories are closed (PR #408, `6c567d41`) — each with an approved, authority-burned native review. D1, D2, D5 decided (D2 by WU3). **WU4 (duplicate merge) was moved out of this unit on 2026-09-28: D4 decided it is its own unit, now `odd/tasks/clientes-merge-duplicados.md` (branch `odd/clientes-merge-duplicados`). This unit's delivery scope is closed.**
 Worktree: none live for this unit (one worktree, one branch per work unit); WU3's was `../lumat-agent-odd-clientes-operativa-wu3`, removed after PR #404
 Branch: none live; WU3's was `odd/clientes-operativa-wu3`
 Base: `f6912b8b` (main, 2026-09-28)
@@ -85,8 +85,8 @@ PR #400) scoped assistant memory and project namespaces (`db/migrations/034_proj
 |---|----------|--------|----------------|
 | D1 | **Equipment shape** — **DECIDED 2026-09-28: option A, a `CustomerEquipment` table** (multiple rows per client) | Resolved | Chosen by the owner. Lumat's request 3.4 puts "Equipos, direcciones y antecedentes técnicos" under **base de clientes**, and one client can own a calefont *and* a caldera. Rejected: a column set on `Customer`, because a client with two appliances would force a second migration. |
 | D2 | **Amount semantics**: what the field means (quoted value? invoiced value?) and its currency — **DECIDED 2026-09-28: nullable numeric, currency CLP, meaning "value of the service for this case"** | Resolved — WU3 unblocked | Chosen by the owner from the recorded recommendation, unchanged. Rejected: non-null (would invent an amount for historical and non-billable cases) and a dual-currency field (the business is Chilean; a second currency is speculation). Currency is implicit in the stored scalar, documented rather than modelled. |
-| D3 | **Merge rules**: which record survives (oldest? richest? most activity?) and what happens to conflicting scalar fields | WU4 | Survivor = the record with more activity; empty survivor fields filled from the loser; conflicting non-empty fields prefer the survivor and are recorded in the audit row. |
-| D4 | **Merge in or out of this unit** | WU4 sequencing | **Out — its own unit.** Four FK reassignments plus memory re-keying is not the same size as the other three, and a failure corrupts customer history. |
+| D3 | **Merge rules**: which record survives (oldest? richest? most activity?) and what happens to conflicting scalar fields — **DECIDED 2026-09-28 in the merge unit: survivor = the record with more activity, measured as the sum of Conversation + Case + Appointment + CustomerNote rows; tie → the oldest `created_at`** | Resolved in `clientes-merge-duplicados` | Empty survivor fields filled from the loser; conflicting non-empty fields prefer the survivor and are recorded in the audit row. Memory collisions were not covered here and were decided separately (M1). |
+| D4 | **Merge in or out of this unit** — **DECIDED 2026-09-28: out — its own unit** | Resolved | Five FK reassignments plus memory re-keying is not the same size as the other three, and a failure corrupts customer history. |
 | D5 | **Equipment promotion shape** — **DECIDED 2026-09-28: promote the captured text verbatim** | WU2 | The capture asks one open question and stores a single `equipment` string (`capture.py:30`). Parsing it into marca/modelo/antigüedad would invent data. Chosen: the row keeps the verbatim answer in `details`, `equipment_type` is pre-filled from the capture intent when it names an appliance (calefont/caldera/calefaccion), and marca/modelo/antigüedad are operator-editable in the ficha. Rejected: restructuring the capture into per-field questions — it changes customer-facing behaviour and its tests, out of proportion to WU2. |
 
 WU1 is unblocked and needs none of these.
@@ -128,7 +128,7 @@ Queried from the principal worktree (`graphify-out/2026-09-28/`).
 | T3.4 | WU3 | GREEN frontend: the ficha shows the case amount and lets the operator set it (WU2 equipment pattern: `Dialog` + `Input`, refresh after save) | delegated (same writer) |
 | T3.5 | WU3 | Verification: focused backend (`test_api_cases.py`, `test_migrations.py`, `test_api_clients.py`), full `pytest tests/`, `npm test`, `npm run build` (`tsc -b`) | delegated per-action |
 | T3.6 | WU3 | Assessment + review slice bookkeeping on base `4a67d6be` | orchestrator |
-| T4.1 | WU4 | Merge service: reassign the four FKs and re-key memories, single transaction, audited | blocked on D3/D4 |
+| T4.1 | WU4 | **Moved** to `odd/tasks/clientes-merge-duplicados.md` (D4, 2026-09-28). The merge service there reassigns **five** FKs, not four: `customer_equipment` (`models.py:424`, migration `035`) postdates this problem statement. | moved |
 
 ## Delivery
 
@@ -224,13 +224,14 @@ strategy, one PR per work unit.
       approved, authority burned. Verification: backend exit 0, frontend 90 files / 829 tests,
       `npm run build` exit 0 — also re-run over the merged tree with `origin/main` (`b5ddfee1`). The
       receipt lives in the PR #408 body.
-- [ ] WU4 — blocked on D3/D4
+- [x] **WU4 moved out** — D3 and D4 decided by the owner on 2026-09-28; the duplicate merge is now its own unit (`odd/tasks/clientes-merge-duplicados.md`, branch `odd/clientes-merge-duplicados`, base `16d94ced`). This unit delivers nothing further.
 
 ## Closure
 
 WU1–WU3 are delivered and merged to `main`: PR #401 (`c2163ff6`), PR #402 (`4a67d6be`), PR #404
 (`c1fff81c`). The WU2/WU3 review advisories were closed as separate later work in PR #408
-(`6c567d41`). The unit is **not fully closed**: WU4 (duplicate merge) remains, blocked on D3/D4.
+(`6c567d41`). The unit's delivery scope is **closed**: WU4 (duplicate merge) was moved to its own
+unit on 2026-09-28 (D4) — see `odd/tasks/clientes-merge-duplicados.md`.
 
 ## Recovery
 
@@ -243,7 +244,7 @@ WU1–WU3 are delivered and merged to `main`: PR #401 (`c2163ff6`), PR #402 (`4a
 - Note for the next session: another session is actively merging to `main`
   (`usuarios-aislamiento` WU1 landed as PR #400 during planning). `git fetch origin`
   immediately before any merge.
-- Latest migration on `main` is `036` (`db/migrations/036_case_amount.sql`, from WU3); WU3's review
-  slice base was `4a67d6be` and its work was sliced against it.
+- Latest migration on `main` is `037` (`db/migrations/037_memory_owner_dedup.sql`, from
+  `usuarios-aislamiento`); WU3's review slice base was `4a67d6be` and its work was sliced against it.
 - Test DB: `bash infra/test-db.sh up|down|env` (project name derives from the worktree slug).
 - `graphify-out/` is gitignored; query the graph from the principal worktree.
