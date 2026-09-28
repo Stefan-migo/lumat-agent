@@ -1,13 +1,62 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApiError, apiFetch, addClientNote, changeClientState, postJson, resolveMemoryRelation, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer } from "../../api";
+import { ApiError, apiFetch, addClientNote, changeClientState, postJson, resolveMemoryRelation, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, listClientEquipment } from "../../api";
 import { ClientFicha } from "./ClientFicha";
 import type { ClientFichaResponse, Memory } from "../../types";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), listClientEquipment: vi.fn() };
+});
+
+describe("ClientFicha equipment", () => {
+  beforeEach(() => { vi.clearAllMocks(); vi.mocked(listClientEquipment).mockResolvedValue({ equipment: [] }); });
+
+  const equipment = [
+    { id: 11, customer_id: 7, equipment_type: "calefont", brand: "Bosch", model: "Therm 5600", age: "5 años", details: "Calefont Bosch, instalado hace cinco años", source_conversation_id: 4, created_at: null, updated_at: null },
+    { id: 12, customer_id: 7, equipment_type: null, brand: null, model: null, age: null, details: "Tiene una caldera antigua", source_conversation_id: 5, created_at: null, updated_at: null },
+  ];
+
+  it("renders equipment fields and a details-only row gracefully", async () => {
+    vi.mocked(listClientEquipment).mockResolvedValue({ equipment });
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    const section = await screen.findByRole("region", { name: "Equipos" });
+    expect(within(section).getByText("Calefont")).toBeInTheDocument();
+    expect(within(section).getByText("Bosch · Therm 5600 · 5 años")).toBeInTheDocument();
+    expect(within(section).getByText("Calefont Bosch, instalado hace cinco años")).toBeInTheDocument();
+    expect(within(section).getByText("Tiene una caldera antigua")).toBeInTheDocument();
+  });
+
+  it("adds equipment from the dialog", async () => {
+    const user = userEvent.setup();
+    vi.mocked(createClientEquipment).mockResolvedValue({ equipment: equipment[0] });
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(await screen.findByRole("button", { name: "Agregar equipo" }));
+    const dialog = screen.getByRole("dialog");
+    await user.selectOptions(within(dialog).getByLabelText("Tipo"), "calefont");
+    await user.type(within(dialog).getByLabelText("Marca"), "Bosch");
+    await user.click(within(dialog).getByRole("button", { name: "Guardar equipo" }));
+
+    expect(createClientEquipment).toHaveBeenCalledWith(7, { equipment_type: "calefont", brand: "Bosch", model: null, age: null, details: null });
+  });
+
+  it("edits equipment through the dialog", async () => {
+    const user = userEvent.setup();
+    vi.mocked(updateClientEquipment).mockResolvedValue({ equipment: equipment[0] });
+    vi.mocked(listClientEquipment).mockResolvedValue({ equipment: [equipment[0]] });
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(await screen.findByRole("button", { name: "Editar equipo" }));
+    const dialog = screen.getByRole("dialog");
+    await user.clear(within(dialog).getByLabelText("Marca"));
+    await user.type(within(dialog).getByLabelText("Marca"), "Bosch renovado");
+    await user.click(within(dialog).getByRole("button", { name: "Guardar equipo" }));
+
+    expect(updateClientEquipment).toHaveBeenCalledWith(7, 11, { equipment_type: "calefont", brand: "Bosch renovado", model: "Therm 5600", age: "5 años", details: "Calefont Bosch, instalado hace cinco años" });
+  });
 });
 
 const ficha: ClientFichaResponse = {
@@ -185,7 +234,7 @@ describe("ClientFicha page grammar", () => {
     reject(new ApiError(500, "database password leaked"));
 
     expect(await screen.findByRole("heading", { name: "No pudimos guardar el estado" })).toBeInTheDocument();
-    expect(screen.getByRole("alert")).not.toHaveTextContent("database password leaked");
+    expect(screen.getAllByRole("alert").every((alert) => !alert.textContent?.includes("database password leaked"))).toBe(true);
   });
 
   it("rejects an empty note before making the request", async () => {

@@ -1,7 +1,7 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, postJson, resolveMemoryRelation, unarchiveCustomer, updateCustomerConsent, updateCustomerProfile } from "../../api";
+import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, listClientEquipment, postJson, resolveMemoryRelation, unarchiveCustomer, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { Appointment, ClientFichaResponse, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
+import type { Appointment, ClientFichaResponse, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
 import { pathForRoute } from "../domain/panelRoutes";
 import { Badge } from "../primitives/Badge";
@@ -31,6 +31,8 @@ import {
 const DATE_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short" });
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" });
 const MESSAGE_PREVIEW = 10;
+const EQUIPMENT_TYPE_LABELS: Record<string, string> = { calefont: "Calefont", caldera: "Caldera", calefaccion: "Sistema de calefacción" };
+const EQUIPMENT_TYPE_OPTIONS = [{ value: "", label: "Sin especificar" }, ...Object.entries(EQUIPMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }))];
 
 const formatDate = (value: string | null | undefined) => (value ? DATE_FORMAT.format(new Date(value)) : "—");
 const formatDateTime = (value: string | null | undefined) => (value ? DATE_TIME_FORMAT.format(new Date(value)) : "—");
@@ -87,6 +89,12 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [consentFeedback, setConsentFeedback] = useState<Feedback | null>(null);
   const [archiveFeedback, setArchiveFeedback] = useState<Feedback | null>(null);
   const [customerMutation, setCustomerMutation] = useState<"profile" | "consent" | "archive" | null>(null);
+  const [equipmentRefresh, setEquipmentRefresh] = useState(0);
+  const [equipmentOpen, setEquipmentOpen] = useState(false);
+  const [editingEquipment, setEditingEquipment] = useState<CustomerEquipment | null>(null);
+  const [equipmentForm, setEquipmentForm] = useState<CustomerEquipmentUpdate>({ equipment_type: "", brand: "", model: "", age: "", details: "" });
+  const [equipmentMutation, setEquipmentMutation] = useState(false);
+  const [equipmentFeedback, setEquipmentFeedback] = useState<Feedback | null>(null);
   const fetchFicha = useCallback(async () => {
     if (customerId === undefined) throw new Error("customer id is required");
     const [ficha, memoryResponse, pendingResponse] = await Promise.all([
@@ -97,6 +105,12 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     return { ficha, memories: memoryResponse.memories, pendingRelations: pendingResponse.relations };
   }, [customerId, messagesExpanded]);
   const fetched = useAsyncData(fetchFicha, controlledData === undefined && controlledState === undefined);
+  const fetchEquipment = useCallback(async () => {
+    if (customerId === undefined) return [];
+    return (await listClientEquipment(customerId)).equipment;
+  }, [customerId]);
+  const equipmentData = useAsyncData(fetchEquipment, customerId !== undefined, equipmentRefresh);
+  const equipmentRows = equipmentData.data ?? [];
   const data = refreshed?.ficha ?? controlledData ?? fetched.data?.ficha;
   const memories = refreshed?.memories ?? controlledMemories ?? fetched.data?.memories ?? [];
   const pendingRelations = refreshed?.pendingRelations ?? fetched.data?.pendingRelations ?? [];
@@ -126,11 +140,33 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     const next = await fetchFicha();
     setRefreshed(next);
   };
-  const safeError = (error: unknown, action: "estado" | "nota" | "caso" | "identidad" | "consentimiento" | "archivo") => {
-    const labels = { estado: "el estado", nota: "la nota", caso: "el caso", identidad: "la identidad", consentimiento: "el consentimiento", archivo: "el archivo" };
+  const safeError = (error: unknown, action: "estado" | "nota" | "caso" | "identidad" | "consentimiento" | "archivo" | "equipo") => {
+    const labels = { estado: "el estado", nota: "la nota", caso: "el caso", identidad: "la identidad", consentimiento: "el consentimiento", archivo: "el archivo", equipo: "el equipo" };
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return { title: `No tienes permiso para guardar ${labels[action]}` };
     if (error instanceof ApiError && (error.status === 400 || error.status === 422)) return { title: `Revisa ${labels[action]} e inténtalo de nuevo` };
     return { title: `No pudimos guardar ${labels[action]}`, detail: "Inténtalo nuevamente." };
+  };
+  const openEquipment = (entry?: CustomerEquipment) => {
+    const current = entry ?? null;
+    setEditingEquipment(current);
+    setEquipmentForm({ equipment_type: current?.equipment_type ?? "", brand: current?.brand ?? "", model: current?.model ?? "", age: current?.age ?? "", details: current?.details ?? "" });
+    setEquipmentFeedback(null);
+    setEquipmentOpen(true);
+  };
+  const saveEquipment = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (customerId === undefined || equipmentMutation) return;
+    setEquipmentFeedback(null);
+    setEquipmentMutation(true);
+    const body = Object.fromEntries(Object.entries(equipmentForm).map(([key, value]) => [key, value === "" ? null : value])) as CustomerEquipmentUpdate;
+    try {
+      if (editingEquipment) await updateClientEquipment(customerId, editingEquipment.id, body);
+      else await createClientEquipment(customerId, body);
+      setEquipmentRefresh((value) => value + 1);
+      setEquipmentOpen(false);
+      setEquipmentFeedback({ tone: "success", title: editingEquipment ? "Equipo actualizado" : "Equipo agregado" });
+    } catch (error) { setEquipmentFeedback({ tone: "danger", ...safeError(error, "equipo") }); }
+    finally { setEquipmentMutation(false); }
   };
   const updateCase = async (caseId: number, status: string, responsibleId: number | null) => {
     setCaseFeedback(null);
@@ -329,6 +365,34 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           </Card>
 
           <ClientMemories memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} />
+
+          <section aria-label="Equipos">
+            <Card title="Equipos">
+              <Button variant="secondary" disabled={customerId === undefined || equipmentMutation} onClick={() => openEquipment()}>Agregar equipo</Button>
+              {equipmentData.state === "loading" ? <p role="status">Cargando equipos…</p> : null}
+              {equipmentData.state === "error" || equipmentData.state === "denied" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar los equipos" /> : null}
+              {equipmentRows.length ? <ul className="data-region">
+                {equipmentRows.map((entry) => <li key={entry.id}>
+                  <div>{entry.equipment_type ? <Badge>{EQUIPMENT_TYPE_LABELS[entry.equipment_type] ?? entry.equipment_type}</Badge> : <span>Sin especificar</span>}</div>
+                  <p>{[entry.brand, entry.model, entry.age].filter(Boolean).join(" · ") || "Sin datos estructurados"}</p>
+                  {entry.details ? <p>{entry.details}</p> : null}
+                  <Button variant="secondary" disabled={equipmentMutation} onClick={() => openEquipment(entry)}>Editar equipo</Button>
+                </li>)}
+              </ul> : equipmentData.state === "empty" || equipmentData.state === "ready" ? <EmptyState title="No hay equipos registrados" /> : null}
+              {equipmentOpen ? null : <LocalFeedback feedback={equipmentFeedback} />}
+            </Card>
+          </section>
+          <Dialog open={equipmentOpen} onClose={() => setEquipmentOpen(false)} title={editingEquipment ? "Editar equipo" : "Agregar equipo"}>
+            <form onSubmit={(event) => void saveEquipment(event)}>
+              <Select id="equipment-type" label="Tipo" value={equipmentForm.equipment_type ?? ""} options={EQUIPMENT_TYPE_OPTIONS} onChange={(event) => setEquipmentForm({ ...equipmentForm, equipment_type: event.target.value })} />
+              <Input label="Marca" value={equipmentForm.brand ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, brand: event.target.value })} />
+              <Input label="Modelo" value={equipmentForm.model ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, model: event.target.value })} />
+              <Input label="Antigüedad" value={equipmentForm.age ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, age: event.target.value })} />
+              <Textarea label="Detalle capturado" value={equipmentForm.details ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, details: event.target.value })} />
+              <LocalFeedback feedback={equipmentFeedback} />
+              <Button type="submit" disabled={equipmentMutation}>{equipmentMutation ? "Guardando…" : "Guardar equipo"}</Button>
+            </form>
+          </Dialog>
 
           <Card title="Notas">
             {data.notes.length ? data.notes.map((entry) => <p key={entry.id}>{entry.author ?? "—"} · {entry.note}</p>) : <EmptyState title="No hay notas" />}
