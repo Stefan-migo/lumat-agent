@@ -1,9 +1,9 @@
 # ODD Task: usuarios-aislamiento
 
-Status: open — WU2 delivered through U2.4; WU3 and WU4 remain
-Worktree: `../lumat-agent-odd-usuarios-aislamiento`
-Branch: WU1 delivered on `odd/usuarios-aislamiento` (merged); current slice `odd/usuarios-aislamiento-wu2`
-Base: `4a67d6be` (current `origin/main`, merged into the branch at `1aa0a060`)
+Status: open — WU1 and WU2 merged; WU3 in progress; WU4 remains
+Worktree: `../lumat-agent-odd-usuarios-aislamiento-wu3`
+Branch: WU1 on `odd/usuarios-aislamiento` (merged, PR #400); WU2 on `odd/usuarios-aislamiento-wu2` (merged, PR #407); current slice `odd/usuarios-aislamiento-wu3`
+Base: `16d94ced` (current `origin/main`, the WU2 merge)
 Depends on: nothing
 Source: `.rapsodia-code/sessions/archived/2026-09-25-usuarios-aislamiento/report.md` (archived when this unit was opened)
 Delivery strategy: `ask-on-risk`
@@ -154,7 +154,7 @@ the panel UI.
 **End:** the panel lists and selects only the current user's projects and can create
 them; admins receive no cross-user override.
 
-- [ ] **U3.1** — Filter project API reads and mutations by the authenticated owner;
+- [x] **U3.1** — Filter project API reads and mutations by the authenticated owner;
   add create endpoint and validation as required by the panel.
 - [ ] **U3.2** — Add project selection and project creation to the panel, using the
   existing projects page/API contracts.
@@ -448,6 +448,24 @@ semantics; service and route tests must establish those.
   `shell_process`). Review is now closed; push/PR/merge remain separate owner decisions.
 - [x] WU2 — owner-aware memory, thread/project binding, and tools (U2.1–U2.4 delivered).
 - [ ] WU3 — owner-filtered panel API and project selection/creation.
+  - [x] U3.1 — owner-scoped project reads and the authenticated create endpoint (`82a09a44`).
+    - Strict TDD RED verified by the orchestrator against unmodified production code:
+      `assert ['shared', 'shared'] == ['shared']` (the old list exposed another owner's
+      same-slug project) and `assert 405 == 201` (no create route existed). GREEN after:
+      `32 passed, 1 warning` (the known fastembed pooling warning); `git diff --check` clean.
+    - Reads: `GET /panel/api/projects` and `GET /panel/api/projects/{slug}` filter
+      `Project.owner_id == current.id`; the SDB artifact browse also filters
+      `Memory.owner_id == current.id`, so a same-slug project owned by another user cannot
+      leak artifacts. A non-owned project is a 404, never a 403, and an admin gets no
+      override.
+    - Creation: `POST /panel/api/projects` (201, `require_operator_json`) mirrors the
+      `ProjectCreateArgs` bounds so panel and agent tool cannot drift, resolves the owner
+      from the session, and returns 409 with `candidates` on a purpose ambiguity. A
+      duplicate slug for the same owner is also 409: RED showed an uncaught `IntegrityError`
+      (`uq_projects_owner_normalized_slug`) would have answered 500.
+    - Owner decision (2026-09-28): U3.3 enforcement is **strict** — the chat thread endpoint
+      will require an explicit `proyecto`, and the ~53 existing `json={}` call sites in 8
+      integration test files are updated to `{"proyecto": "default"}`.
 - [ ] WU4 — cross-user isolation suite and final gate.
 - [ ] Migration apply, verification, and rollback documentation completed.
 - [ ] Acceptance criteria verified; unit closed.
@@ -459,30 +477,26 @@ complete. Record merged PRs, exact test results, migration evidence, and cleanup
 
 ## Recovery
 
-- Resume in `/home/stefan/repos/lumat-agent-odd-usuarios-aislamiento` on
-  `odd/usuarios-aislamiento-wu2`, based on merge commit `1aa0a060` of `origin/main`
-  (`4a67d6be`).
-- WU1 was delivered on `odd/usuarios-aislamiento` and merged (PR #400, merge
-  `c4ad6fe2`). U2.1–U2.4 are delivered on this WU2 branch. U2.2 is recorded by
-  `b6213632`, `744bbe55`, and `e641283e`; U2.3 by `af509050` and `930328be`; U2.4 by
-  `279a2471`, `fb5a03d8`, and `48615439`.
-- The branch's own work against current `origin/main` (`4a67d6be`) is reviewed and burned in
-  full by lineage `review-b2bdde6e4c280287` (approved, zero findings). The earlier U2.1–U2.3
-  review `review-016eba14e5434eaa` (boundary `7f02312e`) remains valid, but because `origin/main`
-  advanced and the branch merged it at `1aa0a060`, `7f02312e..HEAD` also carries main's
-  already-reviewed content; any future assessment must isolate this unit's own work with
-  `git diff --stat <base-ref> HEAD` and prefer a base that excludes main's content (`4a67d6be`).
-- U2.4 is delivered: focused owner-authorization, no-implicit-`default`, and business-memory
-  coverage plus the R3-001 fail-closed guard hardening recorded above. WU3 then consumes the
-  owner-filtered panel API and the UI project selector.
-- Provision dependencies for the worktree as needed. Copy the ignored database
-  environment file only as documented in `odd/tasks/test-db-isolation.md`; use
-  `infra/test-db.sh up`, `eval "$(infra/test-db.sh env)"`, and `infra/test-db.sh down`
-  for this worktree's test database.
-- For each unit, run focused tests first. Final gates: `uv run pytest tests/`,
-  `cd web && npm test`, and `cd web && npm run build`.
-- Migration 034 still has a production-apply gate: apply only through `migrate.sh`; verify it and keep rollback steps
-  documented before any deployment.
+- Resume in `/home/stefan/repos/lumat-agent-odd-usuarios-aislamiento-wu3` on
+  `odd/usuarios-aislamiento-wu3`, based on `16d94ced` (the current `origin/main`, the WU2
+  merge). The WU2 worktree was removed and its branch deleted.
+- WU1 was delivered on `odd/usuarios-aislamiento` and merged (PR #400, merge `c4ad6fe2`).
+  WU2 was delivered on `odd/usuarios-aislamiento-wu2` and merged (PR #407, merge `16d94ced`);
+  its own work is reviewed and burned in full by lineage `review-b2bdde6e4c280287`.
+- WU3 is in progress: U3.1 is delivered by `82a09a44`. U3.2–U3.4 remain. Delivery is
+  `stacked-to-main` (`ask-on-risk`), so WU3 is the third PR of the chain and its candidate is
+  this branch's own work against the current `origin/main`; isolate it with
+  `git diff --stat <base-ref> HEAD` before any review, because a branch commit as `--base-ref`
+  drags already-reviewed main content into the candidate.
+- Test database for this worktree: `infra/test-db.sh up` / `eval "$(infra/test-db.sh env)"` /
+  `infra/test-db.sh down` — derived port `5592`, Compose project
+  `lumat-test-lumat-agent-odd-usuarios-aislamiento-wu3`. `infra/.env` was copied from the
+  primary worktree and must never be sourced before `test-db.sh env`.
+- Graphify is PARTIAL: `graphify . --update` fails the semantic chunking step with
+  `402 Insufficient Balance` and `tree_sitter_sql` is missing, so the graph is navigation
+  only, never authority.
+- Migration 034 still has a production-apply gate: apply only through `migrate.sh`; verify it
+  and keep rollback steps documented before any deployment.
 - Do not start `agent-role-access` until `usuarios-aislamiento` is delivered. The
   dependent-unit handoff is `/home/stefan/repos/lumat-agent/.rapsodia-code/handoffs/2026-09-28-agent-role-access.md`;
   its base must be this unit's closure commit.
