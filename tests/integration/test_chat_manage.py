@@ -99,6 +99,131 @@ def _classify_cancel(monkeypatch):
     )
 
 
+def _classify_reschedule(monkeypatch):
+    from app.chat.nodes import classify_intent
+
+    monkeypatch.setattr(
+        classify_intent, "_llm_classify",
+        lambda text, message_id: {"intent": "reagendar_visita", "service": None, "priority": None, "status": None, "injection": False},
+    )
+
+
+def _add_reschedule_availability():
+    with SessionLocal() as session:
+        technician = session.scalar(select(User).where(User.username == "manage-technician"))
+        start = datetime.now(timezone.utc) + timedelta(days=1)
+        start = start.replace(hour=9, minute=0, second=0, microsecond=0)
+        scheduling.add_availability(
+            session, technician_id=technician.id, starts_at=start,
+            ends_at=start + timedelta(days=2),
+        )
+        session.commit()
+        return technician.id
+
+
+def test_customer_reschedules_through_graph(mock_openai_chat, monkeypatch):
+    _classify_reschedule(monkeypatch)
+    conv_id, customer_id, appointment_id = _seed_conversation()
+    technician_id = _add_reschedule_availability()
+    offered = _invoke(conv_id, _add_message(conv_id, "quiero reagendar mi visita", "wamid.manage.reschedule.ask"))
+    assert any("1." in reply and "horario" in reply.lower() for reply in offered)
+    with SessionLocal() as session:
+        original_start = session.get(Appointment, appointment_id).starts_at
+        offer = session.get(Conversation, conv_id).captured_data["_manage_offer"]
+        assert offer["mode"] == "reschedule"
+        assert offer["slots"][0]["technician_id"] == technician_id
+    replies = _invoke(conv_id, _add_message(conv_id, "1", "wamid.manage.reschedule.select"))
+    assert any("reagendada" in reply.lower() for reply in replies)
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        assert appointment.starts_at != original_start
+        assert appointment.technician_id == technician_id
+        assert appointment.history[-1].actor == "assistant"
+        assert session.query(AuditLog).filter_by(action="appointment.rescheduled").count() == 1
+        assert "_manage_offer" not in session.get(Conversation, conv_id).captured_data
+        from app.models import DomainEvent
+        assert session.query(DomainEvent).filter_by(
+            event_type="appointment.rescheduled", entity_id=str(appointment_id)
+        ).count() == 1
+
+
+def test_reschedule_ambiguous_slot_reasks_once_then_hands_off(mock_openai_chat, monkeypatch):
+    _classify_reschedule(monkeypatch)
+    conv_id, _, appointment_id = _seed_conversation()
+    _add_reschedule_availability()
+    _invoke(conv_id, _add_message(conv_id, "reagendar", "wamid.manage.reschedule.ambask"))
+    clarification = _invoke(conv_id, _add_message(conv_id, "el martes", "wamid.manage.reschedule.amb"))
+    assert any("no pude identificar" in reply.lower() for reply in clarification)
+    final = _invoke(conv_id, _add_message(conv_id, "no sé", "wamid.manage.reschedule.amb2"))
+    assert any("asesor" in reply.lower() for reply in final)
+    with SessionLocal() as session:
+        assert session.get(Appointment, appointment_id).history[-1].action == "booked"
+        assert "_manage_offer" not in session.get(Conversation, conv_id).captured_data
+        assert session.query(AuditLog).filter_by(action="appointment.rescheduled").count() == 0
+
+
+def test_reschedule_never_offers_another_customers_appointment(mock_openai_chat, monkeypatch):
+    _classify_reschedule(monkeypatch)
+    conv_id, customer_id, appointment_id = _seed_conversation()
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        appointment.customer_id = get_or_create_customer(session, "+56922222222").id
+        session.commit()
+    replies = _invoke(conv_id, _add_message(conv_id, "reagendar", "wamid.manage.reschedule.owner"))
+    assert any("no tienes visitas próximas" in reply.lower() for reply in replies)
+    with SessionLocal() as session:
+        assert session.get(Appointment, appointment_id).status is AppointmentStatus.BOOKED
+        assert session.get(Conversation, conv_id).captured_data.get("_manage_offer") is None
+        assert session.query(AuditLog).filter_by(action="appointment.rescheduled").count() == 0
+
+
+def test_reschedule_blocks_started_appointment_at_offer_time(mock_openai_chat, monkeypatch):
+    _classify_reschedule(monkeypatch)
+    conv_id, _, appointment_id = _seed_conversation()
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        past = datetime.now(timezone.utc) - timedelta(hours=1)
+        appointment.starts_at, appointment.ends_at = past, past + timedelta(hours=1)
+        appointment.local_start = past.replace(tzinfo=None)
+        session.commit()
+    replies = _invoke(conv_id, _add_message(conv_id, "reagendar", "wamid.manage.reschedule.past"))
+    assert any("no tienes visitas próximas" in reply.lower() for reply in replies)
+    with SessionLocal() as session:
+        appointment = session.get(Appointment, appointment_id)
+        assert appointment.status is AppointmentStatus.BOOKED
+        assert appointment.history[-1].action == "booked"
+        assert session.query(AuditLog).filter_by(action="appointment.rescheduled").count() == 0
+
+
+def test_reschedule_selects_appointment_before_offering_slots(mock_openai_chat, monkeypatch):
+    _classify_reschedule(monkeypatch)
+    conv_id, customer_id, first_id = _seed_conversation()
+    technician_id = _add_reschedule_availability()
+    with SessionLocal() as session:
+        first = session.get(Appointment, first_id)
+        second = Appointment(
+            service="Mantención", customer_id=customer_id, case_id=first.case_id,
+            technician_id=first.technician_id, local_start=first.local_start + timedelta(days=1),
+            timezone=first.timezone, starts_at=first.starts_at + timedelta(days=1),
+            ends_at=first.ends_at + timedelta(days=1), duration_minutes=first.duration_minutes,
+        )
+        session.add(second)
+        session.commit()
+        second_id = second.id
+    listing = _invoke(conv_id, _add_message(conv_id, "reagendar una visita", "wamid.manage.reschedule.list"))
+    assert any("1." in reply and "2." in reply for reply in listing)
+    slots = _invoke(conv_id, _add_message(conv_id, "2", "wamid.manage.reschedule.pick"))
+    assert any("horario" in reply.lower() for reply in slots)
+    with SessionLocal() as session:
+        offer = session.get(Conversation, conv_id).captured_data["_manage_offer"]
+        assert offer["appointment_id"] == second_id
+        assert offer["slots"][0]["technician_id"] == technician_id
+    _invoke(conv_id, _add_message(conv_id, "1", "wamid.manage.reschedule.slot"))
+    with SessionLocal() as session:
+        assert session.get(Appointment, first_id).history[-1].action == "booked"
+        assert session.get(Appointment, second_id).history[-1].action == "rescheduled"
+
+
 def test_negative_confirmation_keeps_appointment_booked(mock_openai_chat, monkeypatch):
     _classify_cancel(monkeypatch)
     conv_id, _, appointment_id = _seed_conversation()
