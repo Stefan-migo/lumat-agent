@@ -1,9 +1,9 @@
 # ODD Task: usuarios-aislamiento
 
-Status: open — WU2 in progress (U2.1 delivered; R3-001 closed)
+Status: open — WU2 delivered through U2.3; U2.4 remains
 Worktree: `../lumat-agent-odd-usuarios-aislamiento`
 Branch: WU1 delivered on `odd/usuarios-aislamiento` (merged); current slice `odd/usuarios-aislamiento-wu2`
-Base: `e98b6683` (main)
+Base: `d3b5285e` (merge of `origin/main`)
 Depends on: nothing
 Source: `.rapsodia-code/sessions/archived/2026-09-25-usuarios-aislamiento/report.md` (archived when this unit was opened)
 Delivery strategy: `ask-on-risk`
@@ -48,7 +48,7 @@ already recorded in the readiness `report.md`: user administration exists in
 - Roles are `admin`, `operador`, and `tecnico` (`app/models.py:71-75`).
 - `User` is defined at `app/models.py:238`; signed-session authentication reloads the user per request (`app/main.py:95-106`, `app/panel/api/deps.py:28-38`).
 - Role dependencies are in `app/panel/api/deps.py:46-68`.
-- `Memory` is defined at `app/models.py:458`; its current unique key is `(proyecto, scope, entity_id, topic_key)` (`app/models.py:466-469`). The implementation is `app/services/tukulpan.py`; `app/services/memory.py` re-exports it.
+- `Memory` is defined at `app/models.py:472`; its unique key is `(owner_id, proyecto, scope, entity_id, topic_key)` (`app/models.py:482-486`). Migration 035 scopes normalized-content deduplication to `(owner_id, proyecto, scope, entity_id, normalized_hash)`, with `NULLS NOT DISTINCT` and a partial predicate for non-NULL hashes (`db/migrations/035_memory_owner_dedup.sql:4-6`). Migration 034 adds/backfills the owner axis (`db/migrations/034_project_owners.sql`). The implementation is `app/services/tukulpan.py`; `app/services/memory.py` re-exports it.
 - `InternalChatThread` is defined at `app/models.py:798` and has `user_id` and `proyecto` fields (`app/models.py:803-805`). Chat thread creation and ownership-filtered routes live in `app/services/agent_chat.py` and `app/panel/api/routes/chat.py`.
 - Project registry and alias behavior are in `app/services/projects.py`. Existing global slug and alias uniqueness originate in `db/migrations/024_projects.sql`; the seeded `default` project is global (`024_projects.sql:36-38`).
 - The panel projects API is currently read-only; project creation exists as the `projects.create` agent tool. This unit adds panel creation without removing the tool.
@@ -134,9 +134,9 @@ silent default fallback remains.
 
 - [x] **U2.1** — Add owner-aware write guard, upsert, and recall in
   `app/services/tukulpan.py`; preserve `owner_id=NULL` for business memory.
-- [ ] **U2.2** — Bind thread creation and project use to the authenticated owner in
+- [x] **U2.2** — Bind thread creation and project use to the authenticated owner in
   `app/services/agent_chat.py`; require an explicit project selection.
-- [ ] **U2.3** — Update the tool registry and project tools so no tool reads or writes
+- [x] **U2.3** — Update the tool registry and project tools so no tool reads or writes
   another user's project or memory; keep `projects.create` available.
 - [ ] **U2.4** — Add focused tests for authorization, no implicit `default`, and
   business-memory behavior.
@@ -294,7 +294,7 @@ semantics; service and route tests must establish those.
 
 ## Progress
 
-- [ ] Graph Check recorded for planning (see nodes and relationships above).
+- [x] Graph Check recorded for planning and U2.3 (see nodes and relationships above).
 - [x] WU1 — migration 034 and owner-aware project registry.
 - [x] U2.1 — owner-scoped memory writes/recall, dedup index, and consistent project merge owner resolution.
   - `feat(db): scope memory content dedup index by owner` → `2953102a`
@@ -303,6 +303,28 @@ semantics; service and route tests must establish those.
   - Strict TDD observed: service RED was `TypeError: upsert() got an unexpected keyword argument 'owner_id'` before implementation. Migration RED was an `AssertionError` showing the pre-035 index `(proyecto, scope, entity_id, normalized_hash)` without `owner_id`; recovered by reverting only the migration and ORM index, then rerunning `test_memory_dedup_index_includes_owner_and_allows_cross_owner_duplicates`. Both were GREEN after restore.
   - Full backend suite on the branch: `uv run pytest tests/` → `1544 passed, 2 warnings`; the warnings are the known pre-existing `_publish_all` and fastembed pooling warnings.
   - `git diff --check` passed.
+- U2.2 registration (landed before this U2.3 work):
+  - `b6213632` makes `_effective_owner_id` derive ownership from project authorization and reject contradictory explicit owners, closing finding R1-001 at the write seam.
+  - `744bbe55` binds `agent_chat` thread creation and project use to the authenticated owner; `e641283e` aligns fixtures.
+  - Strict TDD RED exposed that the inserted memory had `owner_id=None` despite owner-bearing authorization. The focused test passed after implementation.
+  - Full suite on `e641283e`: `1546 passed` with the two known pre-existing warnings.
+- U2.3 scope decision (owner decision): explicit project-selection enforcement remains in WU3 (option B); U2.2 delivered owner binding only.
+- [x] U2.3 — owner-scoped assistant registry and project/memory tools, retaining `project.create`.
+  - Added the authenticated `owner_id` parameter and a fail-closed guard for project/memory tools whenever a positive trusted thread id is present without an owner.
+  - Project list/find/create/rename/archive/merge now forward the owner; `projects.rename` and `projects.archive` accept owner scope. `memory.read`/`search` resolve project authorization and filter both own-memory axes by that project's owner, while customer memory remains business-scoped. Writes derive ownership from project authorization; update/delete verify the row owner.
+  - Propagated `state.user_id` from both assistant node tool-execution sites and `thread.user_id` plus `thread.id` from `_run_sdb_tasks`. Project creation flushes at the registry boundary so the same SDB run can resolve the newly created project for its next task.
+  - Replaced the mocked blind spot with `tests/integration/test_assistant_tool_owner_isolation.py`, using the real test database and real `execute_tool`/`agent_context` paths. It covers SDB project creation and following project use, two users sharing a slug, cross-owner memory read/update/delete denial, business-memory visibility, and project-list isolation.
+  - Strict TDD RED observed before implementation: `eval "$(infra/test-db.sh env)" && uv run pytest tests/integration/test_assistant_tool_owner_isolation.py -q` failed on unmodified production code with:
+    ```text
+    >           assert project.owner_id == thread.user_id
+    E           assert None == 1
+    E            +  where None = <app.models.Project object at 0x7f0aae0ff750>.owner_id
+    E            +  and   1 = <app.models.InternalChatThread object at 0x7f0aae236f90>.user_id
+    ```
+    GREEN after implementation: the same command passed `2 passed`.
+  - Focused verification: `eval "$(infra/test-db.sh env)" && uv run pytest tests/integration/test_assistant_tool_owner_isolation.py tests/unit/test_assistant_tools.py tests/spec/test_sdb_recovery.py tests/spec/test_projects_spec.py tests/spec/test_memory_spec.py tests/unit/test_agent_chat_thread_project.py tests/integration/test_assistant_harness_compatibility.py tests/unit/test_memory_tool_axes.py -q` passed `194 passed` with one known fastembed pooling warning.
+  - Required focused command over the integration, assistant tools, SDB recovery, project spec, memory spec, and agent-chat project tests passed `166 passed` with one known fastembed pooling warning.
+  - Full backend suite: `eval "$(infra/test-db.sh env)" && uv run pytest tests/` passed `1562 passed, 2 warnings`; warnings were the known `_publish_all` unawaited coroutine and fastembed pooling warnings.
 - WU1 merge registration: WU1 merged as PR #400 → merge commit `c4ad6fe2`. PR #399 (`docs(odd): close the case-closure-fix unit`) merged afterward as `e98b6683`, the current `main`.
 - R3-001 closed by `fix(projects): resolve one consistent owner for project merge` (`72da3d6a`): one `_resolve_owner_id` resolution point is shared by `merge` and `_lock_projects`; an explicit `owner_id` wins, disagreeing objects raise, and an explicit owner contradicted by an owned `Project` raises.
 - Schema finding and fix: migration 035 (`db/migrations/035_memory_owner_dedup.sql`) replaces `uq_memories_normalized_content`, created in migration 028 on `(proyecto, scope, entity_id, normalized_hash)` without `owner_id`, with an owner-scoped index on `(owner_id, proyecto, scope, entity_id, normalized_hash) NULLS NOT DISTINCT WHERE normalized_hash IS NOT NULL`; `app/models.py` is aligned. WU1 allows two owners to share a project slug, so without this, upsert could resolve and rewrite another owner's row and legitimate inserts could collide. Rollback SQL is documented in the migration file.
@@ -344,20 +366,24 @@ semantics; service and route tests must establish those.
   `ProjectsPage.tsx` through `api.ts`/`postJson()`; no direct directed path from
   service to model was found. The code and focused tests, not graph relationships,
   establish runtime behavior.
+- U2.3 graph check ran from `/home/stefan/repos/lumat-agent` without rebuilding.
+  Queries covered assistant tool registry and project/memory owner scoping. Consulted
+  nodes: `Registry`, `execute_tool()`, `ToolValidationError`, `_read_memory()`,
+  `_owned_agent_memory_or_raise()`, `projects.py`, `nodes.py`, `agent_chat.py`,
+  `Project`, `Memory`, and `InternalChatThread`; neighborhoods connect registry
+  dispatch to project/memory services and SDB execution to tool execution.
+  `graphify path "execute_tool()" "_run_sdb_tasks()"` returned “No directed path
+  found”; recorded as the permitted degenerate path, not a blocker.
 - WU1 native review: lineage `review-64f9d66f93cac584`, four lenses (risk, resilience,
   readability, reliability), **approved**, authority burned. Both findings are
   non-blocking and recorded here as follow-ups:
   - R2-001 (readability, WARNING, `odd/tasks/usuarios-aislamiento.md:359`): the
     `## Recovery` section still said the implementation had not started, contradicting
     this Progress. Corrected in the same follow-up commit that records this review.
-  - R3-001 (reliability, WARNING, `app/services/projects.py:180-184`): `_lock_projects`
-    infers the owner from the first `Project` argument, but `merge` validates
-    `source_row.owner_id != owner_id` against the possibly-`None` argument, so a caller
-    that passes owned `Project` objects without `owner_id` raises even for same-owner
-    projects, while string-slug callers without an owner only see the shared namespace.
-    The optional-owner contract must be settled explicitly (infer consistently or require
-    the owner) in WU2, with a test for the omitted-argument path.
-- [ ] WU2 — owner-aware memory, explicit project-bound chat, and tools (U2.1 delivered; U2.2–U2.4 remain).
+- R3-001 (reliability, WARNING, `app/services/projects.py`): resolved in
+  `72da3d6a`; `_resolve_owner_id` is shared by merge and project locking, with
+  tests for inferred, explicit, and contradictory owner paths.
+- [ ] WU2 — owner-aware memory, thread/project binding, and tools (U2.1–U2.3 delivered; U2.4 remains).
 - [ ] WU3 — owner-filtered panel API and project selection/creation.
 - [ ] WU4 — cross-user isolation suite and final gate.
 - [ ] Migration apply, verification, and rollback documentation completed.
@@ -371,11 +397,13 @@ complete. Record merged PRs, exact test results, migration evidence, and cleanup
 ## Recovery
 
 - Resume in `/home/stefan/repos/lumat-agent-odd-usuarios-aislamiento` on
-  `odd/usuarios-aislamiento-wu2`; current planning base is `e98b6683`.
+  `odd/usuarios-aislamiento-wu2`, based on merge commit `d3b5285e` of `origin/main`.
 - WU1 was delivered on `odd/usuarios-aislamiento` and merged (PR #400, merge
-  `c4ad6fe2`). WU2 is in progress on `odd/usuarios-aislamiento-wu2` (no upstream on
-  purpose) at `2953102a`, `4c5a0add`, and `72da3d6a`; U2.1 is delivered and U2.2,
-  U2.3, and U2.4 remain. The current main is `e98b6683` after PR #399 merged.
+  `c4ad6fe2`). U2.1–U2.3 are delivered on this WU2 branch; U2.4 remains. U2.2
+  is recorded by `b6213632`, `744bbe55`, and `e641283e`; U2.3 is recorded by
+  `af509050` (`fix(chat): scope assistant tools to authenticated owners`) and
+  `930328be` (`test(chat): assert owner propagation through tool callers`), followed
+  by this documentation commit.
 - Provision dependencies for the worktree as needed. Copy the ignored database
   environment file only as documented in `odd/tasks/test-db-isolation.md`; use
   `infra/test-db.sh up`, `eval "$(infra/test-db.sh env)"`, and `infra/test-db.sh down`
