@@ -334,6 +334,19 @@ semantics; service and route tests must establish those.
   `ProjectsPage.tsx` through `api.ts`/`postJson()`; no direct directed path from
   service to model was found. The code and focused tests, not graph relationships,
   establish runtime behavior.
+- WU1 native review: lineage `review-64f9d66f93cac584`, four lenses (risk, resilience,
+  readability, reliability), **approved**, authority burned. Both findings are
+  non-blocking and recorded here as follow-ups:
+  - R2-001 (readability, WARNING, `odd/tasks/usuarios-aislamiento.md:359`): the
+    `## Recovery` section still said the implementation had not started, contradicting
+    this Progress. Corrected in the same follow-up commit that records this review.
+  - R3-001 (reliability, WARNING, `app/services/projects.py:180-184`): `_lock_projects`
+    infers the owner from the first `Project` argument, but `merge` validates
+    `source_row.owner_id != owner_id` against the possibly-`None` argument, so a caller
+    that passes owned `Project` objects without `owner_id` raises even for same-owner
+    projects, while string-slug callers without an owner only see the shared namespace.
+    The optional-owner contract must be settled explicitly (infer consistently or require
+    the owner) in WU2, with a test for the omitted-argument path.
 - [ ] WU2 — owner-aware memory, explicit project-bound chat, and tools.
 - [ ] WU3 — owner-filtered panel API and project selection/creation.
 - [ ] WU4 — cross-user isolation suite and final gate.
@@ -349,8 +362,9 @@ complete. Record merged PRs, exact test results, migration evidence, and cleanup
 
 - Resume in `/home/stefan/repos/lumat-agent-odd-usuarios-aislamiento` on
   `odd/usuarios-aislamiento`; current planning base is `16ba9cbf`.
-- Implementation has not started. Confirm the branch includes the current main
-  base before beginning a work unit; continue the chain WU1 → WU2 → WU3 → WU4.
+- WU1 is implemented and its native review is approved (authority burned). Continue the
+  chain with WU2. Confirm the branch includes the current main base before beginning a
+  work unit; the chain is WU1 → WU2 → WU3 → WU4.
 - Provision dependencies for the worktree as needed. Copy the ignored database
   environment file only as documented in `odd/tasks/test-db-isolation.md`; use
   `infra/test-db.sh up`, `eval "$(infra/test-db.sh env)"`, and `infra/test-db.sh down`
