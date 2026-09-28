@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Appointment, AppointmentCalendarSync, AppointmentHistory, AppointmentStatus, Case, Customer, TechnicianAvailability, User, UserRole
+from app.models import Appointment, AppointmentCalendarSync, AppointmentHistory, AppointmentStatus, Case, Customer, NotificationOperation, TechnicianAvailability, User, UserRole
 from app.services.audit import record_audit
 from app.services.calendar import ICSProvider, synchronize as synchronize_calendar
 from app.services.events import publish_event
@@ -31,6 +31,45 @@ def _sync_existing_calendar(session: Session, appointment: Appointment, *, actor
         AppointmentCalendarSync.appointment_id == appointment.id
     )) is not None:
         synchronize_calendar(session, appointment, provider=ICSProvider(), actor=actor)
+
+
+def _maintain_reminder(session: Session, appointment: Appointment, *, schedule: bool) -> None:
+    from app.services.notifications import create_operation
+
+    key = f"appointment:{appointment.id}:reminder:24h"
+    operation = session.scalar(select(NotificationOperation).where(
+        NotificationOperation.idempotency_key == key
+    ))
+    if not schedule:
+        if operation is not None and operation.status in {"pending", "retryable"}:
+            operation.status = "permanently_failed"
+            operation.error = "appointment cancelled or reminder no longer eligible"
+            record_audit(session, actor="system", action="notification.reminder_invalidated",
+                         entity="notification_operation", entity_id=str(operation.id),
+                         after={"appointment_id": appointment.id})
+        session.flush()
+        return
+
+    due_at = appointment.starts_at - timedelta(hours=24)
+    if due_at <= datetime.now(timezone.utc):
+        if operation is not None and operation.status in {"pending", "retryable"}:
+            operation.status = "permanently_failed"
+            operation.error = "appointment is inside the 24-hour reminder window"
+        session.flush()
+        return
+    customer = session.get(Customer, appointment.customer_id)
+    values = dict(
+        recipient=customer.phone_e164 if customer else "",
+        channel="whatsapp", content="Appointment reminder", source_entity="appointment",
+        source_id=str(appointment.id), idempotency_key=key, next_attempt_at=due_at,
+    )
+    if operation is None:
+        create_operation(session, **values)
+    elif operation.status in {"pending", "retryable"}:
+        operation.next_attempt_at = due_at
+        operation.recipient = values["recipient"]
+        operation.content = values["content"]
+    session.flush()
 
 
 class NonexistentLocalTime(ValueError):
@@ -232,6 +271,7 @@ def book(session: Session, *, service: str, customer_id: int, case_id: int, tech
     _history(session, appointment, actor=actor, action="booked", previous=None)
     record_audit(session, actor=actor, action="appointment.booked", entity="appointment", entity_id=str(appointment.id), after={"customer_id": customer_id, "case_id": case_id, "technician_id": technician_id})
     publish_event(session, event_type="appointment.booked", entity_type="appointment", entity_id=appointment.id, payload={"customer_id": customer_id, "case_id": case_id, "recipient": customer.phone_e164, "service": service}, dedupe_key=f"appointment:{appointment.id}:booked")
+    _maintain_reminder(session, appointment, schedule=True)
     return appointment
 
 
@@ -241,6 +281,7 @@ def cancel(session: Session, appointment: Appointment, *, actor: str, reason: st
     previous = appointment.status
     appointment.status = AppointmentStatus.CANCELLED
     session.flush()
+    _maintain_reminder(session, appointment, schedule=False)
     _history(session, appointment, actor=actor, action="cancelled", previous=previous, details={"reason": reason} if reason else None)
     record_audit(session, actor=actor, action="appointment.cancelled", entity="appointment", entity_id=str(appointment.id), after={"reason": reason})
     _sync_existing_calendar(session, appointment, actor=actor)
@@ -282,6 +323,7 @@ def reschedule(session: Session, appointment: Appointment, *, local_date: date, 
         if _is_overlap_violation(exc):
             raise AppointmentConflict("technician or customer has an overlapping booking") from exc
         raise
+    _maintain_reminder(session, appointment, schedule=True)
     details = {"from_start": from_start, "to_start": appointment.local_start.isoformat(), "from_technician_id": from_technician_id, "to_technician_id": technician_id}
     _history(session, appointment, actor=actor, action="rescheduled", previous=previous, details=details)
     record_audit(session, actor=actor, action="appointment.rescheduled", entity="appointment", entity_id=str(appointment.id), after=details)

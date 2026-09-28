@@ -10,13 +10,52 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.db import session_scope
-from app.models import AutomationExecution, AutomationRule, Customer, NotificationAttempt, NotificationOperation, PanelNotification
+from app.models import Appointment, AutomationExecution, AutomationRule, Customer, NotificationAttempt, NotificationOperation, NotificationTemplateVersion, PanelNotification
 from app.services.audit import record_audit
 from app.services.send import send_text
 from app.services.push import send_push
 
 SWEEP_LOCK_KEY = 832731
 DEFAULT_BATCH_SIZE = 50
+
+
+class MissingReminderEmail(Exception):
+    pass
+
+
+def _send_appointment_reminder(session: Session, operation: NotificationOperation) -> str:
+    from app.services import notify
+    from app.services.settings import get_setting
+    from app.services.templates import TemplatePolicyError, validate_channel_policy
+
+    appointment = session.get(Appointment, int(operation.source_id))
+    customer = session.get(Customer, appointment.customer_id) if appointment else None
+    if appointment is None or customer is None or appointment.status.value != "booked":
+        raise RuntimeError("appointment reminder no longer references a booked visit")
+    template_name = get_setting(session, "notify.reminder_template_name", default="appointment_reminder_24h")
+    template = session.scalar(select(NotificationTemplateVersion).where(
+        NotificationTemplateVersion.event == "appointment.reminder.24h",
+        NotificationTemplateVersion.channel == "whatsapp",
+        NotificationTemplateVersion.locale == "es",
+    ).order_by(NotificationTemplateVersion.version.desc()).limit(1))
+    if template is None:
+        raise TemplatePolicyError("appointment reminder WhatsApp template is not published")
+    validate_channel_policy(channel="whatsapp", approved=template.approved, business_initiated=True)
+    params = [appointment.local_start.strftime("%d/%m/%Y"), appointment.local_start.strftime("%H:%M")]
+    try:
+        return notify.send_template(operation.recipient, params, template_name=template_name)
+    except Exception as whatsapp_error:
+        if not customer.email:
+            raise MissingReminderEmail("customer has no email for appointment reminder fallback") from whatsapp_error
+        try:
+            notify.send_email(session, customer.email, "Recordatorio de visita Lumat",
+                              f"Te recordamos tu visita el {params[0]} a las {params[1]}.")
+        except Exception:
+            raise
+        record_audit(session, actor="system", action="notification.reminder_email_fallback",
+                     entity="notification_operation", entity_id=str(operation.id),
+                     after={"recipient": customer.email})
+        return f"email:{customer.email}"
 
 
 def send_whatsapp(recipient: str, content: str) -> str:
@@ -168,12 +207,28 @@ def process_operation(
     session.add(attempt)
     session.flush()
     try:
-        if operation.channel == "push":
+        if (operation.idempotency_key.endswith(":reminder:24h") and operation.source_entity == "appointment"
+                and session.get(Appointment, int(operation.source_id)) is not None):
+            external_id = _send_appointment_reminder(session, operation)
+        elif operation.channel == "push":
             external_id = (deliver or send_push)(operation.recipient, operation.content)
         else:
             external_id = (deliver or (send_whatsapp if operation.channel == "whatsapp" else send_email))(operation.recipient, operation.content)
     except Exception as exc:
         error = str(exc)[:2000]
+        if isinstance(exc, MissingReminderEmail):
+            attempt.status = "failed"
+            attempt.error = error
+            operation.error = error
+            operation.status = "permanently_failed"
+            record_audit(session, actor="system", action="notification.reminder_no_email",
+                         entity="notification_operation", entity_id=str(operation.id),
+                         after={"appointment_id": operation.source_id, "error": error})
+            record_audit(session, actor="system", action="notification.attempt_failed",
+                         entity="notification_operation", entity_id=str(operation.id),
+                         after={"attempt": operation.attempts, "error": error, "status": operation.status})
+            session.flush()
+            return False
         if operation.channel == "push":
             record_audit(session, actor="system", action="notification.push_failed", entity="notification_operation", entity_id=str(operation.id), after={"error": error, "fallback": "whatsapp_or_email"})
             _process_push_fallback(session, operation)

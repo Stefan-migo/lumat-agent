@@ -152,6 +152,7 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     # recipient + email fallback SMTP config. Panel-editable via the KV surface.
     "notify.owner_email": DEFAULT_OWNER_EMAIL,
     "notify.owner_whatsapp": DEFAULT_OWNER_WHATSAPP,
+    "notify.reminder_template_name": "appointment_reminder_24h",
     "notify.smtp_host": DEFAULT_SMTP_HOST,
     "notify.smtp_from": DEFAULT_SMTP_FROM,
     # SS-5: tone style used by the chat nodes.
