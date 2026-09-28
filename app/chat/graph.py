@@ -53,6 +53,7 @@ from langgraph.graph import END, START, StateGraph
 from sqlalchemy.orm import Session
 
 from app.chat.nodes.capture import capture
+from app.chat.nodes.booking import booking
 from app.chat.nodes.classify_intent import classify_intent
 from app.chat.nodes.cost_gate import cost_gate
 from app.chat.nodes.closure_gate import closure_gate
@@ -154,7 +155,11 @@ def _after_cost_gate(state: ConversationState) -> str:
 
 def _after_handoff_gate(state: ConversationState) -> str:
     """Deterministic trigger -> handoff node; clear -> normal flow."""
-    return "handoff" if state.handoff_reason else "closure_gate"
+    if state.handoff_reason:
+        return "handoff"
+    if "_booking_offer" in (state.captured or {}):
+        return "booking"
+    return "closure_gate"
 
 
 def _after_closure_gate(state: ConversationState) -> str:
@@ -167,8 +172,13 @@ def _route_path(state: ConversationState) -> str:
 
 
 def _after_capture(state: ConversationState) -> str:
-    # capture returns next_step="summary" only when all fields are collected
-    return "summary" if getattr(state, "next_step", None) == "summary" else END
+    step = getattr(state, "next_step", None)
+    return step if step in {"booking", "summary"} else END
+
+
+def _after_booking(state: ConversationState) -> str:
+    step = getattr(state, "next_step", None)
+    return step if step in {"summary", "handoff"} else END
 
 
 def _after_respond(state: ConversationState) -> str:
@@ -219,6 +229,7 @@ def build_graph():
     builder.add_node("classify_intent", classify_intent)
     builder.add_node("orchestrate", orchestrate)
     builder.add_node("capture", capture)
+    builder.add_node("booking", booking)
     builder.add_node("respond", respond)
     builder.add_node("summary", summary)
     builder.add_node("emergency", emergency)
@@ -239,7 +250,7 @@ def build_graph():
     builder.add_conditional_edges(
         "handoff_gate",
         _after_handoff_gate,
-        {"handoff": "handoff", "closure_gate": "closure_gate"},
+        {"handoff": "handoff", "booking": "booking", "closure_gate": "closure_gate"},
     )
     builder.add_conditional_edges(
         "closure_gate",
@@ -262,7 +273,8 @@ def build_graph():
             "handoff": "handoff",
         },
     )
-    builder.add_conditional_edges("capture", _after_capture, {"summary": "summary", END: END})
+    builder.add_conditional_edges("capture", _after_capture, {"booking": "booking", "summary": "summary", END: END})
+    builder.add_conditional_edges("booking", _after_booking, {"summary": "summary", "handoff": "handoff", END: END})
     builder.add_conditional_edges("respond", _after_respond, {"handoff": "handoff", END: END})
     builder.add_edge("research_triage", END)
     builder.add_edge("handoff", END)
