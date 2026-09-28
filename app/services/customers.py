@@ -392,9 +392,11 @@ def promote_captured_equipment(
 
     before = {"equipment_type": equipment.equipment_type, "details": equipment.details}
     equipment.customer_id = customer.id
-    equipment.equipment_type = equipment_type
-    equipment.details = details
-    after = {"equipment_type": equipment_type, "details": details}
+    if equipment_type is not None:
+        equipment.equipment_type = equipment_type
+    if details is not None:
+        equipment.details = details
+    after = {"equipment_type": equipment.equipment_type, "details": equipment.details}
     changed = {key: value for key, value in before.items() if value != after[key]}
     if changed:
         record_audit(

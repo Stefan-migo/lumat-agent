@@ -136,7 +136,7 @@ def test_cm2_progressive_capture_asks_fields_in_order(mock_openai_chat):
 def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
     conv_id = _start_conversation()
     turns = [
-        ("calefont", "wamid.comp1"),
+        ("quiero una visita", "wamid.comp1"),
         ("Juan", "wamid.comp2"),
         ("Providencia", "wamid.comp3"),
         ("Av Siempre Viva 123", "wamid.comp4"),
@@ -172,7 +172,7 @@ def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
         ).all()
         assert len(equipment) == 1
         assert equipment[0].details == "Calefont Bosch 10 anios"
-        assert equipment[0].equipment_type == "calefont"
+        assert equipment[0].equipment_type is None
 
 
 def test_capture_equipment_promotion_is_idempotent(mock_openai_chat):
@@ -203,6 +203,54 @@ def test_capture_equipment_promotion_is_idempotent(mock_openai_chat):
     assert len(rows) == 1
     assert rows[0].details == "Calefont Bosch 10L"
     assert rows[0].equipment_type == "calefont"
+
+
+def test_equipment_repromotion_preserves_operator_type_when_capture_omits_it():
+    from app.services.customers import (
+        promote_captured_equipment,
+        update_customer_equipment,
+    )
+
+    conv_id = _start_conversation()
+    captured = {"equipment": "Calefont Bosch 10L"}
+    with SessionLocal() as session:
+        customer = session.scalar(
+            select(Customer).where(Customer.phone_e164 == "+56912345678")
+        )
+        equipment = promote_captured_equipment(session, customer, conv_id, captured)
+        session.commit()
+        assert equipment is not None
+        assert equipment.equipment_type is None
+
+        update_customer_equipment(
+            session, equipment, actor="oper", equipment_type="caldera"
+        )
+        session.commit()
+        original_details = equipment.details
+
+        promoted_again = promote_captured_equipment(
+            session, customer, conv_id, captured
+        )
+        session.commit()
+        rows = session.scalars(
+            select(CustomerEquipment).where(
+                CustomerEquipment.source_conversation_id == conv_id
+            )
+        ).all()
+        from app.models import AuditLog
+
+        promotion_audits = session.scalars(
+            select(AuditLog).where(
+                AuditLog.action == "customer.equipment_promoted",
+                AuditLog.entity_id == str(equipment.id),
+            )
+        ).all()
+
+    assert promoted_again is not None
+    assert promoted_again.equipment_type == "caldera"
+    assert promoted_again.details == original_details == "Calefont Bosch 10L"
+    assert len(rows) == 1
+    assert len(promotion_audits) == 1
 
 
 def test_cm2_skip_is_unknown_and_non_blocking(mock_openai_chat):
