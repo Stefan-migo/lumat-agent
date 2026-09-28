@@ -1,6 +1,6 @@
 # ODD Task: usuarios-aislamiento
 
-Status: open — planning complete, implementation not started
+Status: open — WU1 implementation and remediation complete; stacked chain continues
 Worktree: `../lumat-agent-odd-usuarios-aislamiento`
 Branch: `odd/usuarios-aislamiento`
 Base: `16ba9cbf` (main)
@@ -103,6 +103,13 @@ of WU1–WU4; track them in the dependent `agent-role-access` unit after this un
 **End:** migration 034 supplies owner-aware project/alias schema and backfill;
 project registry methods enforce owner scope; `default` remains shared and is not
 silently chosen for an unselected chat.
+
+**Intentional intermediate behavior (stacked-to-main):** In WU1, `owner_id=None`
+means business scope only (fail-closed). Until WU2/WU3 pass the authenticated
+owner, the panel project list, `project.find`/`project.list`, and `agent_context`
+see only `NULL`-owner projects. Forgetting to pass the owner must fail closed,
+never expose another user's project. This is a known intermediate state of the
+`stacked-to-main` chain, not final user-visible functionality.
 
 - [x] **U1.1** — Add migration 034 for `projects.owner_id`, owner-scoped slug
   uniqueness, nullable `memories.owner_id` and owner-aware memory key, and
@@ -289,12 +296,35 @@ semantics; service and route tests must establish those.
 
 - [ ] Graph Check recorded for planning (see nodes and relationships above).
 - [x] WU1 — migration 034 and owner-aware project registry.
-- Verification: `uv run pytest tests/spec/test_projects_spec.py tests/integration/test_migrations.py -q`
-  — `38 passed`; `uv run pytest tests/` — `1537 passed, 2 warnings`;
-  `git diff --check` — passed.
-- D9 backfill is deterministic when exactly one admin exists; no admin or multiple
-  admins produce no ownership assignment. The multi-admin case remains a manual
-  resolution gap; migration test coverage verifies schema, not legacy-row backfill.
+- Scope evidence: `scope='customer'` is written/read as customer business memory
+  (`app/services/tukulpan.py:743,780,789,833,896`); `scope='panel'` is written for
+  thread memory (`app/services/tukulpan.py:379,405,431,485,525` and
+  `app/chat/assistant/tools/registry.py:332,376`); `scope='agent'` is the explicit
+  project-axis `AGENT_SCOPE` (`app/services/tukulpan.py:59`) and is written with
+  `agent:<proyecto>` (`app/chat/assistant/tools/registry.py:335,383`). The
+  `daily`/`conversation` values in `app/chat/nodes/cost_gate.py:42,49` are passed
+  to `costs.maybe_alert_owner`; `app/services/costs.py:265-285` writes/deduplicates
+  them in `AuditLog`, not `memories`. Accordingly, migration 034 backfills
+  non-`default` `panel` and `agent` memories only when exactly one admin exists;
+  `customer` and `default` stay NULL. No ambiguous memory scope was found.
+- `eval "$(infra/test-db.sh env)" && uv run pytest 'tests/integration/test_migrations.py::test_migration_034_backfills_only_owned_project_axis_memory' -q`
+  — `2 passed`; this is the exact D9 backfill result. The broader focused command,
+  `eval "$(infra/test-db.sh env)" && uv run pytest tests/integration/test_migrations.py tests/spec/test_projects_spec.py -q`,
+  passed `40 passed` (one known fastembed warning).
+- D9 backfill test: real scratch database migrated through 033, populated with
+  legacy project/memory rows and admin user(s), then only 034 applied. It asserts
+  panel+agent ownership with one admin; both remain NULL along with customer and
+  default memory when exactly two admins exist; reapplying migration SQL preserves
+  owner values. Focused result: `40 passed` (one known fastembed warning).
+- Strict TDD evidence: temporarily checked out pre-WU1 `app/models.py` and
+  `app/services/projects.py` from `fd14b106`; the service tests failed `4` tests
+  (`StopIteration` for the owner-aware unique key, and three `TypeError` failures
+  for missing `owner_id` parameters). Restored implementation; same suite passed
+  `18 passed` (one known fastembed warning).
+- `eval "$(infra/test-db.sh env)" && uv run pytest tests/` — `1539 passed, 2 warnings`;
+  the warnings are the existing async `_publish_all` unawaited warning and fastembed
+  pooling warning.
+- `git diff --check` — passed.
 - Graph check: queried `projects project_aliases memories owner user registry` in
   the main worktree and `projects service list find create merge agent_context
   project_aliases owner` in this worktree. Consulted `Project`, `ProjectAlias`,
