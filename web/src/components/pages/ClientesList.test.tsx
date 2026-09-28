@@ -250,6 +250,28 @@ describe("ClientesList", () => {
     await waitFor(() => expect(fetchClients).toHaveBeenCalledTimes(2));
   });
 
+  it("does not let a stale ficha response replace the latest state options", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: customers });
+    let resolveFirst!: (value: unknown) => void;
+    vi.mocked(getClientFicha)
+      .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }) as never)
+      .mockResolvedValueOnce({ customer: customers[1], states: ["nuevo", "pendiente"] } as never);
+    render(<ClientesList />);
+    const row1 = (await screen.findByText("Marcela Fuentes")).closest("tr")!;
+    const row2 = screen.getByText("Pedro Soto").closest("tr")!;
+
+    await user.click(within(row1).getByRole("button", { name: "Cambiar estado Marcela Fuentes" }));
+    await user.click(within(row2).getByRole("button", { name: "Cambiar estado Pedro Soto" }));
+    const select = await screen.findByLabelText("Estado del cliente");
+    await waitFor(() => expect(select.querySelectorAll("option")).toHaveLength(2));
+    resolveFirst({ customer: customers[0], states: ["contactado", "cancelado"] });
+
+    await waitFor(() => expect(select.querySelectorAll("option")).toHaveLength(2));
+    expect(within(select).getByRole("option", { name: "Pendiente" })).toBeInTheDocument();
+    expect(within(select).queryByRole("option", { name: "Cancelado" })).not.toBeInTheDocument();
+  });
+
   it("opens the create dialog and offers ficha navigation for a duplicate phone", async () => {
     const user = userEvent.setup();
     const onOpenClient = vi.fn();
