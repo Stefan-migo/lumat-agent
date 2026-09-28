@@ -21,9 +21,9 @@ describe("projects panel", () => {
 
   const fillProjectForm = async () => {
     fireEvent.change(await screen.findByLabelText("Slug"), { target: { value: "ops" } });
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Operations" } });
-    fireEvent.change(screen.getByLabelText("Purpose"), { target: { value: "Run operations" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Operations" } });
+    fireEvent.change(screen.getByLabelText("Propósito"), { target: { value: "Run operations" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crear proyecto" }));
   };
 
   it("creates a project and refreshes the project list", async () => {

@@ -55,9 +55,9 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, sta
     <Card title="Crear proyecto">
       <form onSubmit={(event) => void create(event)}>
         <Input label="Slug" maxLength={100} required value={form.slug} onChange={(event) => setForm({ ...form, slug: event.target.value })} />
-        <Input label="Name" maxLength={200} required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-        <Textarea label="Purpose" maxLength={500} required value={form.purpose} onChange={(event) => setForm({ ...form, purpose: event.target.value })} />
-        <Button type="submit" disabled={creating}>{creating ? "Creating…" : "Create project"}</Button>
+        <Input label="Nombre" maxLength={200} required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+        <Textarea label="Propósito" maxLength={500} required value={form.purpose} onChange={(event) => setForm({ ...form, purpose: event.target.value })} />
+        <Button type="submit" disabled={creating}>{creating ? "Creando…" : "Crear proyecto"}</Button>
         {creationError ? <section role="alert"><p>{creationError.detail}</p>{creationError.candidates.map((candidate) => <p key={candidate.slug}>{candidate.name} ({candidate.slug}) · {candidate.similarity}</p>)}</section> : null}
       </form>
     </Card>
