@@ -244,6 +244,6 @@ def update_case(
             "responsible_id": case.responsible_id,
             "amount": float(case.amount) if case.amount is not None else None,
         },
-        dedupe_key=f"case:{case.id}:updated:{case.status}:{case.responsible_id}",
+        dedupe_key=f"case:{case.id}:updated:{case.status}:{case.responsible_id}:{case.amount}",
     )
     return case

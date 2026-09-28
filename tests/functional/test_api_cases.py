@@ -17,6 +17,7 @@ for a missing case. No redirects, no CORS (D1).
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from sqlalchemy import select
 
@@ -29,6 +30,7 @@ from app.models import (  # noqa: E402
     ConversationState,
     Customer,
     CustomerState,
+    DomainEvent,
     Message,
     MessageDirection,
     MessageType,
@@ -451,6 +453,31 @@ def test_case_amount_round_trips_keeps_when_omitted_and_clears_with_null(client,
     assert audit.actor == "oper"
     assert audit.before["amount"] == 125000
     assert audit.after["amount"] is None
+
+
+def test_amount_only_updates_publish_events_with_each_new_amount(client, make_user):
+    status = f"amount-event-test-{uuid4().hex}"
+    case_id = _seed_case(status=status)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    first = client.post(f"/panel/api/cases/{case_id}/update", json={"amount": 125000})
+    second = client.post(f"/panel/api/cases/{case_id}/update", json={"amount": 200000})
+    assert first.status_code == second.status_code == 200
+
+    with SessionLocal() as session:
+        events = session.scalars(
+            select(DomainEvent)
+            .where(
+                DomainEvent.event_type == "case.updated",
+                DomainEvent.entity_id == str(case_id),
+                DomainEvent.dedupe_key.contains(status),
+            )
+            .order_by(DomainEvent.id)
+        ).all()
+    assert len(events) == 2
+    assert events[0].payload["amount"] == 125000
+    assert events[1].payload["amount"] == 200000
 
 
 def test_case_update_missing_404_json(client, make_user):
