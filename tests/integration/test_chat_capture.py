@@ -34,6 +34,7 @@ from app.models import (  # noqa: E402
     Case,
     Conversation,
     Customer,
+    CustomerEquipment,
     DocumentFormat,
     KbVisibility,
     Message,
@@ -135,7 +136,7 @@ def test_cm2_progressive_capture_asks_fields_in_order(mock_openai_chat):
 def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
     conv_id = _start_conversation()
     turns = [
-        ("quiero una visita", "wamid.comp1"),
+        ("calefont", "wamid.comp1"),
         ("Juan", "wamid.comp2"),
         ("Providencia", "wamid.comp3"),
         ("Av Siempre Viva 123", "wamid.comp4"),
@@ -164,6 +165,44 @@ def test_cm2_complete_capture_persists_and_confirms(mock_openai_chat):
     assert customer.address == "Av Siempre Viva 123"
     assert customer.consent_status is True
     assert customer.consent_at is not None
+
+    with SessionLocal() as session:
+        equipment = session.scalars(
+            select(CustomerEquipment).where(CustomerEquipment.customer_id == customer.id)
+        ).all()
+        assert len(equipment) == 1
+        assert equipment[0].details == "Calefont Bosch 10 anios"
+        assert equipment[0].equipment_type == "calefont"
+
+
+def test_capture_equipment_promotion_is_idempotent(mock_openai_chat):
+    from app.services.customers import promote_captured_equipment
+
+    conv_id = _start_conversation()
+    _turn(conv_id, "calefont", "wamid.equipment0")
+    for index, text in enumerate(
+        ["Juan", "Providencia", "Av Siempre Viva 123", "Calefont Bosch 10L",
+         "No enciende", "no tengo", "mañana", "si"],
+        start=1,
+    ):
+        _turn(conv_id, text, f"wamid.equipment{index}")
+
+    with SessionLocal() as session:
+        customer = session.scalar(select(Customer).where(Customer.phone_e164 == "+56912345678"))
+        captured = _conversation_captured(conv_id)
+        first = promote_captured_equipment(session, customer, conv_id, captured)
+        session.commit()
+        second = promote_captured_equipment(session, customer, conv_id, captured)
+        session.commit()
+        rows = session.scalars(
+            select(CustomerEquipment).where(CustomerEquipment.source_conversation_id == conv_id)
+        ).all()
+
+    assert first is not None and second is not None
+    assert first.id == second.id
+    assert len(rows) == 1
+    assert rows[0].details == "Calefont Bosch 10L"
+    assert rows[0].equipment_type == "calefont"
 
 
 def test_cm2_skip_is_unknown_and_non_blocking(mock_openai_chat):

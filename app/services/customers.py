@@ -27,6 +27,7 @@ from app.models import (
     Conversation,
     Customer,
     CustomerNote,
+    CustomerEquipment,
     CustomerState,
     Message,
     Appointment,
@@ -248,6 +249,164 @@ def list_notes(session: Session, customer_id: int) -> list[CustomerNote]:
             .order_by(CustomerNote.created_at, CustomerNote.id)
         )
     )
+
+
+def _normalize_equipment_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return None if not normalized or normalized.lower() == "unknown" else normalized
+
+
+def _equipment_snapshot(equipment: CustomerEquipment) -> dict:
+    return {
+        field: getattr(equipment, field)
+        for field in ("equipment_type", "brand", "model", "age", "details")
+    }
+
+
+def list_customer_equipment(
+    session: Session, customer_id: int
+) -> list[CustomerEquipment]:
+    """List equipment on a customer ficha in creation order."""
+    return list(
+        session.scalars(
+            select(CustomerEquipment)
+            .where(CustomerEquipment.customer_id == customer_id)
+            .order_by(CustomerEquipment.created_at, CustomerEquipment.id)
+        )
+    )
+
+
+def create_customer_equipment(
+    session: Session,
+    customer_id: int,
+    *,
+    actor: str,
+    equipment_type: str | None = None,
+    brand: str | None = None,
+    model: str | None = None,
+    age: str | None = None,
+    details: str | None = None,
+) -> CustomerEquipment:
+    """Create and audit a manually entered customer equipment record."""
+    equipment = CustomerEquipment(
+        customer_id=customer_id,
+        equipment_type=_normalize_equipment_value(equipment_type),
+        brand=_normalize_equipment_value(brand),
+        model=_normalize_equipment_value(model),
+        age=_normalize_equipment_value(age),
+        details=_normalize_equipment_value(details),
+    )
+    session.add(equipment)
+    session.flush()
+    record_audit(
+        session,
+        actor=actor,
+        action="customer.equipment_created",
+        entity="customer_equipment",
+        entity_id=str(equipment.id),
+        after={"customer_id": customer_id, **_equipment_snapshot(equipment)},
+    )
+    return equipment
+
+
+def update_customer_equipment(
+    session: Session,
+    equipment: CustomerEquipment,
+    *,
+    actor: str,
+    **changes: str | None,
+) -> CustomerEquipment:
+    """Update supplied equipment fields and audit only actual changes."""
+    before = _equipment_snapshot(equipment)
+    for field, value in changes.items():
+        if field in before:
+            setattr(equipment, field, _normalize_equipment_value(value))
+    after = _equipment_snapshot(equipment)
+    changed_before = {field: value for field, value in before.items() if value != after[field]}
+    if changed_before:
+        record_audit(
+            session,
+            actor=actor,
+            action="customer.equipment_updated",
+            entity="customer_equipment",
+            entity_id=str(equipment.id),
+            before=changed_before,
+            after={field: after[field] for field in changed_before},
+        )
+    return equipment
+
+
+def delete_customer_equipment(
+    session: Session, equipment: CustomerEquipment, *, actor: str
+) -> None:
+    """Delete an equipment record and audit its last values."""
+    record_audit(
+        session,
+        actor=actor,
+        action="customer.equipment_deleted",
+        entity="customer_equipment",
+        entity_id=str(equipment.id),
+        before={"customer_id": equipment.customer_id, **_equipment_snapshot(equipment)},
+    )
+    session.delete(equipment)
+
+
+def promote_captured_equipment(
+    session: Session,
+    customer: Customer,
+    conversation_id: int,
+    captured: dict,
+) -> CustomerEquipment | None:
+    """Promote D5 equipment capture verbatim, idempotently per conversation."""
+    equipment_type = _normalize_equipment_value(captured.get("equipment_type"))
+    details = _normalize_equipment_value(captured.get("equipment"))
+    if equipment_type is None and details is None:
+        return None
+
+    equipment = session.scalar(
+        select(CustomerEquipment).where(
+            CustomerEquipment.source_conversation_id == conversation_id
+        )
+    )
+    if equipment is None:
+        equipment = CustomerEquipment(
+            customer_id=customer.id,
+            source_conversation_id=conversation_id,
+            equipment_type=equipment_type,
+            details=details,
+        )
+        session.add(equipment)
+        session.flush()
+        record_audit(
+            session,
+            actor="system",
+            action="customer.equipment_promoted",
+            entity="customer_equipment",
+            entity_id=str(equipment.id),
+            after={"customer_id": customer.id, "source_conversation_id": conversation_id,
+                   "equipment_type": equipment_type, "details": details},
+        )
+        return equipment
+
+    before = {"equipment_type": equipment.equipment_type, "details": equipment.details}
+    equipment.customer_id = customer.id
+    equipment.equipment_type = equipment_type
+    equipment.details = details
+    after = {"equipment_type": equipment_type, "details": details}
+    changed = {key: value for key, value in before.items() if value != after[key]}
+    if changed:
+        record_audit(
+            session,
+            actor="system",
+            action="customer.equipment_promoted",
+            entity="customer_equipment",
+            entity_id=str(equipment.id),
+            before=changed,
+            after={key: after[key] for key in changed},
+        )
+    return equipment
 
 
 # ---------------------------------------------------------------------------

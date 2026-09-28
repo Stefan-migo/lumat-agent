@@ -18,7 +18,11 @@ import logging
 from app.chat.state import ConversationState
 from app.db import session_scope
 from app.models import Conversation, Customer
-from app.services.customers import record_consent, update_captured_data
+from app.services.customers import (
+    promote_captured_equipment,
+    record_consent,
+    update_captured_data,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +101,7 @@ def _apply_consent_and_customer(session, state: ConversationState, captured: dic
         comuna=clean.get("comuna"),
         address=clean.get("address"),
     )
+    promote_captured_equipment(session, customer, state.conversation_id, clean)
     consent = _answer_consent(captured.get("consent", "unknown"))
     if consent is not None:
         record_consent(session, customer, consent=consent)
@@ -118,6 +123,8 @@ def capture(state: ConversationState) -> dict:
         # First capture turn: the current message is the menu choice/intent,
         # not an answer. Ask the first field without storing anything.
         captured["_pending"] = CAPTURE_FIELDS[0][0]
+        if state.intent in {"calefont", "caldera", "calefaccion"}:
+            captured["equipment_type"] = state.intent
         with session_scope() as session:
             _persist_captured(session, state, captured)
         return {"captured": captured, "replies": [CAPTURE_FIELDS[0][1]]}
