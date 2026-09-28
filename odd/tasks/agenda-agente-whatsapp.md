@@ -79,6 +79,22 @@ consequences; configurable reminder lead time; two-way external calendar sync.
     `booked` visits numbered and the customer chooses; deterministic resolution, same discipline as the
     slot offer. Ownership is the conversation's `customer_id`, so a visit booked in another
     conversation of the same phone is still manageable.
+15. **S4 — bookings inside the 24 h window** (owner, 2026-09-28): if less than 24 h remain at booking
+    time, **no reminder operation is created at all**. The customer is booking in that same
+    conversation, so an immediate reminder adds nothing and pollutes the thread. No shortened-lead
+    variant and no second lead-time configuration are introduced.
+16. **S4 — reminder template identity** (owner, 2026-09-28): the Meta template does not exist yet, so
+    the name is **configurable** through the settings KV (`notify.reminder_template_name`, default
+    `appointment_reminder_24h`) and the content/policy gate is a published
+    `NotificationTemplateVersion` row (`approved` required for a business-initiated WhatsApp send, see
+    `app/services/templates.py:38-42`). Body parameters: the visit's **local date and time**, in that
+    order, and nothing else — no customer name. When the template is approved in Meta, the operator
+    changes the key from the panel; no code change.
+17. **S4 — email fallback recipient** (owner, 2026-09-28): the fallback goes to the **customer's own
+    email** (`Customer.email`, `app/models.py:232`), because the reminder is for the customer. If the
+    ficha has no email, the operation ends `permanently_failed` with audit — no recipient is invented
+    and the team's `notify.owner_email` is NOT used (that is the emergency pattern, a different
+    purpose).
 
 ## Accepted constraints (verified evidence)
 
@@ -184,16 +200,25 @@ cd web && npm run build                      # the only frontend type check (tsc
 ### S4 — 24 h reminder
 
 - [ ] Enqueue an appointment-keyed reminder on booking (`appointment:{id}:reminder:24h`, due
-      `starts_at - 24 h` in UTC), with an explicit policy for bookings made inside the 24 h window.
+      `starts_at - 24 h` in UTC), with an explicit policy for bookings made inside the 24 h window
+      (closed: skip the operation entirely, decision 15).
 - [ ] Invalidate or reschedule the pending reminder on cancel and reschedule.
 - [ ] Deliver via an approved WhatsApp template (template-aware dispatcher), with an email fallback
-      recipient, replacing free-form text for this business-initiated message.
+      recipient (closed: the customer's email, decision 17), replacing free-form text for this
+      business-initiated message.
 - [ ] Add a periodic runner: a CLI entrypoint on `app/ops/sweep.py` plus the cron wiring already
       used for ops jobs on the VPS.
 - [ ] Acceptance: booking creates exactly one reminder due at the right UTC instant; a cancelled
       visit produces no reminder; the sweep delivers a due reminder through the template and falls
       back to email when WhatsApp fails; the sweep runs on a schedule, not only at process start.
-- [ ] Route: delegated writer.
+- [ ] Route: delegated writer. **Reuse the existing queue, do not invent one**: `NotificationOperation`
+      (`app/models.py:794`) already has `next_attempt_at`, bounded retries with backoff and a
+      `FOR UPDATE SKIP LOCKED` + advisory-lock sweep (`app/services/notifications.py:204-214`), and it
+      already runs at startup (`app/main.py:74-83`) and on the webhook sweep path
+      (`app/services/send.py:193`). The missing piece is a real periodic runner: `app/ops/sweep.py`
+      today only exposes `run(limit=50)` with no `__main__`, and the ops contract for cron is the
+      `cd /opt/lumat && .venv/bin/python -m app.ops.<script>` shape (`docs/ops.md` §2.8, the
+      daily-summary entry).
 
 ### S5 — Post-service follow-up
 
@@ -276,3 +301,25 @@ cd web && npm run build                      # the only frontend type check (tsc
     `lumat-test-lumat-agent-odd-agenda-agente-whatsapp` on port 5945).
   - the repository is honest about the frontend check: `tsc -b` only runs inside `npm run build`, and
     a green Vitest run does not prove the tree type-checks; both were run.
+- 2026-09-28: **S4 started.** Worktree re-created from `b5ddfee1` (PR #406 merge) on
+  `odd/agenda-agente-whatsapp`. Note: `rapso worktree provision` reported `provisioned: true` but
+  created nothing (no `.venv`, no `web/node_modules`, no `infra/.env`); provisioning was done by hand
+  (`cp ../lumat-agent/infra/.env infra/.env`, `uv sync`, `cd web && npm ci`, `infra/test-db.sh up`).
+  Unit smoke `tests/unit/test_scheduling_unit.py` = 10 passed.
+- 2026-09-28: S4 product decisions 15-17 closed with the owner (see Closed product decisions).
+- 2026-09-28: S4 reconnaissance (read-only, delegated). Verified: the durable queue already exists
+  (`NotificationOperation` with `next_attempt_at`, exponential retries, `permanently_failed` at
+  `max_attempts`, `FOR UPDATE SKIP LOCKED` + advisory lock, injectable `now` — the test seam);
+  the outbound WhatsApp path is free-form text (`send.send_text`, `app/services/send.py:39-60`) while
+  the only template send is hard-coded to `emergency_alert` (`app/services/notify.py:52`, `:65-95`);
+  the template registry with the `approved` policy gate exists (`app/services/templates.py:38-57`);
+  email exists (`notify.send_email`, `:98-113`); hook points are `scheduling.book` (`:217-235`),
+  `cancel` (`:238-249`) and `reschedule` (`:265-303`), none of which commit — they flush inside the
+  caller's transaction. `app/ops/sweep.py` has no CLI entrypoint yet. Graph Check ran against the
+  stale snapshot (`16ba9cbf`); the delegated explorer's interface had no graph query tool, so the
+  orchestrator ran `graphify query "notification operation sweep reminder appointment"` (nodes:
+  `NotificationOperation`, `notifications.py`, `sweep.py`, `notify.py`, `send.py`, `templates`-adjacent
+  `NotificationTemplateVersion`, `Customer`, `session_scope()`, `record_audit()`, `automation.py`,
+  `models.py`, `main.py`) and a stale-snapshot hit `Reminder sweep runs inside the existing webhook
+  sweep (no scheduler)` (`tests/integration/test_emergency_notify.py:557`). `graphify path` did not
+  resolve for module-level labels. No rebuild attempted (HTTP 402).
