@@ -286,6 +286,20 @@ def reschedule(session: Session, appointment: Appointment, *, local_date: date, 
     _history(session, appointment, actor=actor, action="rescheduled", previous=previous, details=details)
     record_audit(session, actor=actor, action="appointment.rescheduled", entity="appointment", entity_id=str(appointment.id), after=details)
     _sync_existing_calendar(session, appointment, actor=actor)
+    customer = session.get(Customer, appointment.customer_id)
+    publish_event(
+        session,
+        event_type="appointment.rescheduled",
+        entity_type="appointment",
+        entity_id=appointment.id,
+        payload={
+            "customer_id": appointment.customer_id,
+            "case_id": appointment.case_id,
+            "recipient": customer.phone_e164 if customer else None,
+            **details,
+        },
+        dedupe_key=f"appointment:{appointment.id}:rescheduled",
+    )
     return appointment
 
 
