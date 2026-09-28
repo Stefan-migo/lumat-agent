@@ -173,11 +173,24 @@ def _status_value(status: models.ProjectStatus | str) -> str:
     return status.value if isinstance(status, models.ProjectStatus) else str(status)
 
 
+def _resolve_owner_id(projects: tuple[models.Project | str, ...], owner_id: int | None) -> int | None:
+    project_owners = {
+        project.owner_id
+        for project in projects
+        if isinstance(project, models.Project) and project.owner_id is not None
+    }
+    if owner_id is None:
+        if len(project_owners) > 1:
+            raise ValueError("cannot merge projects across owners")
+        owner_id = next(iter(project_owners), None)
+    if any(project_owner != owner_id for project_owner in project_owners):
+        raise ValueError("cannot merge projects across owners")
+    return owner_id
+
+
 def _lock_projects(session: Session, *projects: models.Project | str, owner_id: int | None = None) -> dict[str, models.Project]:
     slugs = {_project_id(project) for project in projects}
-    selected_owner = owner_id if owner_id is not None else next(
-        (project.owner_id for project in projects if isinstance(project, models.Project)), None
-    )
+    selected_owner = _resolve_owner_id(projects, owner_id)
     owner_filter = models.Project.owner_id.is_(None) if selected_owner is None else models.Project.owner_id == selected_owner
     rows = session.scalars(
         select(models.Project)
@@ -270,11 +283,12 @@ def _memory_equivalent(left: models.Memory, right: models.Memory) -> bool:
 
 
 def merge(session: Session, source: models.Project | str, target: models.Project | str, *, owner_id: int | None = None, actor: str = "agent") -> models.Project:
-    locked = _lock_projects(session, source, target, owner_id=owner_id)
+    selected_owner = _resolve_owner_id((source, target), owner_id)
+    locked = _lock_projects(session, source, target, owner_id=selected_owner)
     source_row, target_row = locked[_project_id(source)], locked[_project_id(target)]
     if source_row.id == target_row.id:
         raise ValueError("cannot merge a project into itself")
-    if source_row.owner_id != target_row.owner_id or source_row.owner_id != owner_id:
+    if source_row.owner_id != target_row.owner_id or source_row.owner_id != selected_owner:
         raise ValueError("cannot merge projects across owners")
     if source_row.slug == "default":
         raise ValueError("default project cannot be merged away")
