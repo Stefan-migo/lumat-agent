@@ -134,15 +134,34 @@ edges · 673 communities. Built at `16ba9cbf`, which **predates WU2/WU3 and this
   test DB up. Baseline focused backend green (`test_api_cases.py` + `test_api_clients.py`).
 - [x] **Graph Check** — run; recorded above. Graph stale (`16ba9cbf`), declared and used as
   navigation only.
-- [ ] AD1, AD2, AD3, AD4, AD-VERIFY.
+- [x] AD1, AD2, AD3, AD4, AD-VERIFY.
 
 ## Verification evidence
 
-(to be filled per task: RED command + observed failure, GREEN command + observed pass)
+- **AD1** — RED characterization: `eval "$(infra/test-db.sh env)" && uv run pytest
+  tests/functional/test_api_cases.py::test_case_amount_serializes_large_clp_integer_exactly -q`
+  passed immediately (`.`); no precision failure observed for 9,999,999,999. GREEN: same command
+  passed (`.`). Commit `3af05396`.
+- **AD2** — RED: `cd web && npm test -- --run src/components/pages/ClientFicha.test.tsx`
+  failed as expected: 2 tests failed / 32 passed; `-1` had no validation alert and malformed input
+  reached the API as `null`. GREEN focused combined run: `cd web && npm test -- --run
+  src/components/pages/ClientFicha.test.tsx src/components/pages/ClientesList.test.tsx` passed,
+  59 tests. Commit `fa532507`.
+- **AD3** — docs-only; no RED. `git show --stat --oneline a11cf487` shows only
+  `app/panel/api/routes/clients.py` (6 insertions). Commit `a11cf487`.
+- **AD4** — RED: with the sequence guard temporarily absent,
+  `cd web && npm test -- --run src/components/pages/ClientesList.test.tsx -t "stale ficha response"`
+  failed because the stale response replaced the options (`Pendiente` missing; `Cancelado` present).
+  GREEN: same command passed (1 passed, 24 skipped). Commit `986dc41a`.
+- **AD-VERIFY** — `eval "$(infra/test-db.sh env)" && uv run pytest tests/ -q`: exited 0,
+  reached 100%; warnings: unawaited `_publish_all` coroutine and fastembed pooling notice.
+  `cd web && npm test`: 90 files / 830 tests passed (90.42s); existing React `act(...)` and jsdom
+  navigation warnings appeared. `cd web && npm run build`: exited 0; `tsc -b` and Vite build
+  succeeded (14.09s), with existing chunk-size warning.
 
 ## Next step
 
-AD1 (R1-001): write the RED test, then document the bound.
+Complete; no remaining implementation tasks.
 
 ## Recovery
 
