@@ -3,8 +3,7 @@
 **Branch**: `odd/tool-catalog-trim`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-tool-catalog-trim`
 **Base**: `059a275a` (= `main` = `origin/main` at branch time, merge of PR #392)
-**Status**: implementation complete and review-approved (`review-3a87733c0eba3a00`); awaiting the
-owner's push and PR decision. Not merged.
+**Status**: merged — PR #394 (`ed88ae43`, 2026-09-28). Worktree and branches cleaned.
 
 ## Objective
 
@@ -126,13 +125,23 @@ planner catalog` (3 files, +46 / −3).
 - **AC4** pass. Full suite: 1.534 tests, 0 failures, exit code 0. Orchestrator spot check over
   the five directly affected files: 191 passed.
 
-**Native review (RDD on, global)** — lineage `review-3a87733c0eba3a00`, tier `medium`, single
-selected lens `review-reliability`, correction budget 78 and unused (no findings).
-Result: **approved** with zero findings; authority burned by acknowledgement.
+**Native review (RDD on, global)** — two lineages, both `approved` with zero findings, both
+authority burned by acknowledgement:
 
-**Not done, by design** — nothing was pushed and no PR exists. Both are owner decisions under
-ordinary repository policy.
+- `review-3a87733c0eba3a00` — the implementation candidate, base `059a275a`, tier `medium`, lens
+  `review-reliability`, correction budget 78 and unused (no findings).
+- `review-ad7d576beb3d6c0b` — the merged tree, base `97deffc1`, tier `medium`, lens
+  `review-reliability`, correction budget 94 and unused (no findings).
 
-**Next step** — the owner decides push and PR. The unit's doc records its PR number before the
-merge, and the repo convention needs a second docs-only PR to correct the `Status` line once
-the unit PR lands.
+The second review was required, not redundant. Bringing `origin/main` into the branch for this
+repo's pre-merge discipline moved the base, and the native authority returned `unrelated` /
+`fresh_target_ready` for the new tree even though its `paths_digest` was identical to the first.
+Consent is per candidate and does not carry over. Doing the base merge-in **before** the first
+review would have saved a whole cycle.
+
+**Delivery** — PR #394 (`odd/tool-catalog-trim` → `main`, label `type:refactor`), merged as
+`ed88ae43` on 2026-09-28T00:38:51Z. CI on the merged tree (run 36362788581): `test` pass 1m57s,
+`panel` pass 2m43s, GitGuardian pass. Test DB brought down; worktree, local branch and remote
+branch cleaned; local `main` synced to `ed88ae43`.
+
+**Closed** — nothing pending. This docs-only PR exists solely to correct this record.
