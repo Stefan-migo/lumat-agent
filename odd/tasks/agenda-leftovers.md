@@ -63,25 +63,25 @@ Out of scope, deferred to owner product decisions (NOT this unit):
 
 ## Tasks
 
-- [ ] **L1** — unit-doc status lines (doc-only, inline).
+- [x] **L1** — unit-doc status lines (doc-only, inline). Closed in `94646aa9`.
       Replace `Status: in progress` in:
       - `odd/tasks/agenda-appointment-detail.md` → `Status: merged — PR #376 (`7fb8cd10`).`
       - `odd/tasks/agenda-register-actions.md` → two slices + closure:
         `Status: merged — PR #380 (`8e5a978a`) + PR #383 (`f5a6d68d`); unit record closed in PR #385 (`9eb48d8b`).`
 
-- [ ] **L3** — R3-001A unambiguous story assertion (test-only).
+- [x] **L3** — R3-001A unambiguous story assertion (test-only). Closed in `f7af0243`.
       `web/src/stories/pages/AgendaPage.stories.test.tsx:95-110` renders the story a second time into
       `storyContainer`, runs `CloseConfirmation.play` against it, then asserts against the FIRST
       `container`. The assertion must target the second render's expected state, not the first
       container or a global query.
 
-- [ ] **L5** — AG-UI-3 explicit register assertion (test-only).
+- [x] **L5** — AG-UI-3 explicit register assertion (test-only). Closed in `522d7394`.
       `web/src/components/pages/AgendaPage.test.tsx` (terminal-row tests near lines 216-221 and
       282-287 assert no close/cancel action, but not that `Reprogramar` is absent). Add an explicit
       assertion for a non-`booked` row: the `Reprogramar` action is absent and `rescheduleAppointment`
       is not called.
 
-- [ ] **L4** — narrow the `IntegrityError` translation (code + tests, TDD).
+- [x] **L4** — narrow the `IntegrityError` translation (code + tests, TDD). Closed in `fed73870`.
       `app/services/scheduling.py:150-154` (`reschedule`) and `:100-104` (`book`) translate EVERY
       `IntegrityError` into `AppointmentConflict`, so an unrelated integrity failure (e.g. a
       nonexistent `technician_id` violating the FK) is misreported as a booking conflict. Translate
@@ -89,24 +89,41 @@ Out of scope, deferred to owner product decisions (NOT this unit):
       as their actual error. RED first: a test that triggers a non-overlap integrity failure and
       expects it NOT to be reported as `appointment_conflict`.
 
-- [ ] **L7** — calendar-sync consistency on cancel/reschedule (code + tests, TDD).
+- [x] **L7** — calendar-sync consistency on cancel/reschedule (code + tests, TDD). Closed in `d8ade9ea`.
       `book()`, `cancel()` and `reschedule()` in `app/services/scheduling.py` never update
       `AppointmentCalendarSync` (`app/models.py`), so a moved/cancelled appointment can leave exported
       ICS at the previous state. Keep the persisted appointment and its calendar representation
       consistent for both transitions, using the existing calendar sync/export path. RED first.
 
+- [x] **L4b** — restore `session.rollback()` before re-raising a non-overlap `IntegrityError`. Closed in `75ef52be`.
+      (code + tests, TDD). Introduced by `fed73870`: the non-overlap branch dropped the rollback the
+      original handler always performed, leaving the session in a pending-rollback state.
+
 ## Route declaration
 
 - L1: **inline** — two mechanical doc lines, no research.
 - L3, L5: **delegated writer** — 2 non-trivial test files (writer trigger).
-- L4, L7: **delegated writer** — backend code plus tests (writer trigger).
+- L4, L4b, L7: **delegated writer** — backend code plus tests (writer trigger).
 
 One writer thread at a time; web tests and backend fixes are delegated sequentially.
 
 ## Progress / evidence
 
-(append per task as each closes)
+- L1 — `94646aa9`: U5 → `merged — PR #376 (7fb8cd10)`; U6 → `merged — PR #380 (8e5a978a) + PR #383 (f5a6d68d); unit record closed in PR #385 (9eb48d8b)`.
+- L3 — `f7af0243`: asserts the named close dialog within `storyContainer`. Non-vacuity: mutating the
+  story play to open the cancel dialog made the assertion fail.
+- L5 — `522d7394`: the terminal-row test (`completed`/`no_show`/`cancelled`) asserts `Reprogramar` is
+  absent and `rescheduleAppointment` was not called. Non-vacuity: forcing the row condition failed it.
+- L4 — `fed73870`: constraint-name match (`exc.orig.diag.constraint_name`) against the two overlap
+  constraints declared in migration `011_h3_scheduling.sql`; RED reproduced with `technician_id=0`.
+- L7 — `d8ade9ea`: `_sync_existing_calendar()` refreshes an existing sync record on cancel and
+  reschedule; appointments without one stay opt-out.
+- L4b — `75ef52be`: rollback restored before the branch; the missing-technician test now also asserts
+  the raised error is `IntegrityError` and a follow-up `SELECT 1` succeeds (RED was
+  `PendingRollbackError`).
+- Focused web: 49 passed. Focused backend: 18 passed. Full backend: 1536 passed.
 
 ## Next step
 
-Delegated writer for L3 + L5 (web test gaps), then L4 + L7 (backend bugs), then full verification.
+Finish L4b, then run the full verification (backend + web + `npm run build`) and freeze the review
+candidate. Delivery (push, PR, merge) is the owner's decision.
