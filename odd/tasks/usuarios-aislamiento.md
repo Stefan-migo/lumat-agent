@@ -1,9 +1,9 @@
 # ODD Task: usuarios-aislamiento
 
-Status: open — WU1 implementation and remediation complete; stacked chain continues
+Status: open — WU2 in progress (U2.1 delivered; R3-001 closed)
 Worktree: `../lumat-agent-odd-usuarios-aislamiento`
-Branch: `odd/usuarios-aislamiento`
-Base: `16ba9cbf` (main)
+Branch: WU1 delivered on `odd/usuarios-aislamiento` (merged); current slice `odd/usuarios-aislamiento-wu2`
+Base: `e98b6683` (main)
 Depends on: nothing
 Source: `.rapsodia-code/sessions/archived/2026-09-25-usuarios-aislamiento/report.md` (archived when this unit was opened)
 Delivery strategy: `ask-on-risk`
@@ -132,7 +132,7 @@ business-owned/shared and is never an implicit chat selection.
 **End:** memory and agent chat flows consistently enforce user ownership; no
 silent default fallback remains.
 
-- [ ] **U2.1** — Add owner-aware write guard, upsert, and recall in
+- [x] **U2.1** — Add owner-aware write guard, upsert, and recall in
   `app/services/tukulpan.py`; preserve `owner_id=NULL` for business memory.
 - [ ] **U2.2** — Bind thread creation and project use to the authenticated owner in
   `app/services/agent_chat.py`; require an explicit project selection.
@@ -197,7 +197,7 @@ production rollback remains migration 034's documented rollback plan.
 ### Chain order
 
 ```text
-main (16ba9cbf) → WU1 → WU2 → WU3 → WU4
+main (e98b6683) → WU1 (merged) → WU2 → WU3 → WU4
 ```
 
 Every child branch starts from its immediate predecessor and is rebased/updated to
@@ -296,6 +296,16 @@ semantics; service and route tests must establish those.
 
 - [ ] Graph Check recorded for planning (see nodes and relationships above).
 - [x] WU1 — migration 034 and owner-aware project registry.
+- [x] U2.1 — owner-scoped memory writes/recall, dedup index, and consistent project merge owner resolution.
+  - `feat(db): scope memory content dedup index by owner` → `2953102a`
+  - `feat(memory): scope memory writes and recall by owner` → `4c5a0add`
+  - `fix(projects): resolve one consistent owner for project merge` → `72da3d6a`
+  - Strict TDD observed: service RED was `TypeError: upsert() got an unexpected keyword argument 'owner_id'` before implementation. Migration RED was an `AssertionError` showing the pre-035 index `(proyecto, scope, entity_id, normalized_hash)` without `owner_id`; recovered by reverting only the migration and ORM index, then rerunning `test_memory_dedup_index_includes_owner_and_allows_cross_owner_duplicates`. Both were GREEN after restore.
+  - Full backend suite on the branch: `uv run pytest tests/` → `1544 passed, 2 warnings`; the warnings are the known pre-existing `_publish_all` and fastembed pooling warnings.
+  - `git diff --check` passed.
+- WU1 merge registration: WU1 merged as PR #400 → merge commit `c4ad6fe2`. PR #399 (`docs(odd): close the case-closure-fix unit`) merged afterward as `e98b6683`, the current `main`.
+- R3-001 closed by `fix(projects): resolve one consistent owner for project merge` (`72da3d6a`): one `_resolve_owner_id` resolution point is shared by `merge` and `_lock_projects`; an explicit `owner_id` wins, disagreeing objects raise, and an explicit owner contradicted by an owned `Project` raises.
+- Schema finding and fix: migration 035 (`db/migrations/035_memory_owner_dedup.sql`) replaces `uq_memories_normalized_content`, created in migration 028 on `(proyecto, scope, entity_id, normalized_hash)` without `owner_id`, with an owner-scoped index on `(owner_id, proyecto, scope, entity_id, normalized_hash) NULLS NOT DISTINCT WHERE normalized_hash IS NOT NULL`; `app/models.py` is aligned. WU1 allows two owners to share a project slug, so without this, upsert could resolve and rewrite another owner's row and legitimate inserts could collide. Rollback SQL is documented in the migration file.
 - Scope evidence: `scope='customer'` is written/read as customer business memory
   (`app/services/tukulpan.py:743,780,789,833,896`); `scope='panel'` is written for
   thread memory (`app/services/tukulpan.py:379,405,431,485,525` and
@@ -347,7 +357,7 @@ semantics; service and route tests must establish those.
     projects, while string-slug callers without an owner only see the shared namespace.
     The optional-owner contract must be settled explicitly (infer consistently or require
     the owner) in WU2, with a test for the omitted-argument path.
-- [ ] WU2 — owner-aware memory, explicit project-bound chat, and tools.
+- [ ] WU2 — owner-aware memory, explicit project-bound chat, and tools (U2.1 delivered; U2.2–U2.4 remain).
 - [ ] WU3 — owner-filtered panel API and project selection/creation.
 - [ ] WU4 — cross-user isolation suite and final gate.
 - [ ] Migration apply, verification, and rollback documentation completed.
@@ -361,17 +371,18 @@ complete. Record merged PRs, exact test results, migration evidence, and cleanup
 ## Recovery
 
 - Resume in `/home/stefan/repos/lumat-agent-odd-usuarios-aislamiento` on
-  `odd/usuarios-aislamiento`; current planning base is `16ba9cbf`.
-- WU1 is implemented and its native review is approved (authority burned). Continue the
-  chain with WU2. Confirm the branch includes the current main base before beginning a
-  work unit; the chain is WU1 → WU2 → WU3 → WU4.
+  `odd/usuarios-aislamiento-wu2`; current planning base is `e98b6683`.
+- WU1 was delivered on `odd/usuarios-aislamiento` and merged (PR #400, merge
+  `c4ad6fe2`). WU2 is in progress on `odd/usuarios-aislamiento-wu2` (no upstream on
+  purpose) at `2953102a`, `4c5a0add`, and `72da3d6a`; U2.1 is delivered and U2.2,
+  U2.3, and U2.4 remain. The current main is `e98b6683` after PR #399 merged.
 - Provision dependencies for the worktree as needed. Copy the ignored database
   environment file only as documented in `odd/tasks/test-db-isolation.md`; use
   `infra/test-db.sh up`, `eval "$(infra/test-db.sh env)"`, and `infra/test-db.sh down`
   for this worktree's test database.
 - For each unit, run focused tests first. Final gates: `uv run pytest tests/`,
   `cd web && npm test`, and `cd web && npm run build`.
-- Apply migration 034 only through `migrate.sh`; verify it and keep rollback steps
+- Migration 034 still has a production-apply gate: apply only through `migrate.sh`; verify it and keep rollback steps
   documented before any deployment.
 - Do not start `agent-role-access` until `usuarios-aislamiento` is delivered. The
   dependent-unit handoff is `/home/stefan/repos/lumat-agent/.rapsodia-code/handoffs/2026-09-28-agent-role-access.md`;
