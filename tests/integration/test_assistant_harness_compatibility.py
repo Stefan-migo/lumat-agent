@@ -56,7 +56,7 @@ def test_admin_sse_replays_only_the_requested_run(client, monkeypatch):
         "app.services.agent_chat.run_assistant",
         lambda **kwargs: {"status": "completed", "plan": {"kind": "respond"}, "response": "ok"},
     )
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     sent = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "hello"})
     run_id = sent.json()["message"]["assistant_metadata"]["run_id"]
 
@@ -79,7 +79,7 @@ def test_operator_cannot_open_compatibility_sse(client):
 def test_exact_approval_replay_is_rejected_after_first_consumption(client, monkeypatch):
     _user("compat-replay-admin")
     _login(client, "compat-replay-admin")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     pending = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "create a rule"})
     metadata = client.get(f"/panel/api/chat/threads/{thread_id}").json()["messages"][0]["assistant_metadata"]
     monkeypatch.setattr(
@@ -99,7 +99,7 @@ def test_streaming_failure_is_persisted_as_recoverable_error(client, monkeypatch
         "app.services.agent_chat.run_assistant",
         lambda **kwargs: (_ for _ in ()).throw(RuntimeError("stream disconnected")),
     )
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
 
     sent = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "continue"})
     loaded = client.get(f"/panel/api/chat/threads/{thread_id}")
@@ -119,7 +119,7 @@ def test_panel_turn_does_not_receive_whatsapp_state(client, monkeypatch):
         return {"status": "completed", "plan": {"kind": "respond"}, "response": "ok"}
 
     monkeypatch.setattr("app.services.agent_chat.run_assistant", fake_run)
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     response = client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "hello"})
 
     assert response.status_code == 201

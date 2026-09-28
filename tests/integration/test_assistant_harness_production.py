@@ -40,7 +40,7 @@ def test_valid_read_runs_through_production_graph_with_history_and_registry_prom
     from app.config import get_settings
     get_settings.cache_clear()
     _admin(client, "production-read")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     with SessionLocal() as session:
         session.add(InternalChatMessage(thread_id=thread_id, author="admin", content="older context", status="processed"))
         session.add(InternalChatMessage(thread_id=thread_id, author="agent", content="newer context", status="processed"))
@@ -70,7 +70,7 @@ def test_malformed_or_unwhitelisted_production_plan_falls_back_without_execution
     from app.config import get_settings
     get_settings.cache_clear()
     _admin(client, "production-invalid")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     planner = {"kind": "tool", "tool": "not.allowed", "arguments": {}, "summary": "Unsafe", "requires_approval": False}
     captured: list[dict] = []
     with respx.mock(base_url="https://openrouter.ai/api/v1") as router:

@@ -100,7 +100,7 @@ def test_admin_upload_persists_private_thread_scoped_reference(client, monkeypat
         session.add(User(username=username, password_hash=hash_password("pass"), role="admin"))
         session.commit()
     assert client.post("/panel/api/login", json={"username": username, "password": "pass"}).status_code == 200
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     monkeypatch.setenv("MEDIA_DIR", str(tmp_path))
     get_settings.cache_clear()
     response = client.post(f"/panel/api/chat/threads/{thread_id}/attachments", files={"file": ("notes.txt", b"private notes", "text/plain")})
@@ -117,7 +117,7 @@ def test_upload_rejection_paths_return_errors_without_success_audit(client, monk
         session.add(User(username=username, password_hash=hash_password("pass"), role="admin"))
         session.commit()
     assert client.post("/panel/api/login", json={"username": username, "password": "pass"}).status_code == 200
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     with SessionLocal() as session:
         before = session.query(AuditLog).filter(AuditLog.action == "internal_chat.attachment_uploaded").count()
     bad = client.post(f"/panel/api/chat/threads/{thread_id}/attachments", files={"file": ("x.exe", b"x", "application/octet-stream")})
@@ -137,7 +137,7 @@ def test_cross_thread_attachment_upload_is_denied(client):
         session.add_all([User(username=first, password_hash=hash_password("pass"), role="admin"), User(username=second, password_hash=hash_password("pass"), role="admin")])
         session.commit()
     assert client.post("/panel/api/login", json={"username": first, "password": "pass"}).status_code == 200
-    own = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    own = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     client.post("/panel/api/logout")
     assert client.post("/panel/api/login", json={"username": second, "password": "pass"}).status_code == 200
     denied = client.post(f"/panel/api/chat/threads/{own}/attachments", files={"file": ("x.txt", b"x", "text/plain")})

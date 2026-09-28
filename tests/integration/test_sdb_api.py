@@ -45,7 +45,7 @@ def _events(response):
 def test_authenticated_admin_can_explicitly_enter_sdb(client, migrated_db, mock_openai_chat):
     _user("sdb-api-admin", "admin")
     _login(client, "sdb-api-admin")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
 
     response = client.post(
         f"/panel/api/chat/threads/{thread_id}/messages",
@@ -65,7 +65,7 @@ def test_operator_cannot_request_or_stream_sdb(client, migrated_db):
     _user("sdb-api-operator", "operador")
     _login(client, "sdb-api-operator")
 
-    created = client.post("/panel/api/chat/threads", json={})
+    created = client.post("/panel/api/chat/threads", json={"proyecto": "default"})
     assert created.status_code == 403
     stream = client.get("/panel/api/chat/threads/1/stream?run_id=operator-run")
     assert stream.status_code == 403
@@ -75,7 +75,7 @@ def test_operator_cannot_request_or_stream_sdb(client, migrated_db):
 def test_sdb_stream_contains_ordered_phases_and_evidence(client, migrated_db, mock_openai_chat):
     _user("sdb-api-events", "admin")
     _login(client, "sdb-api-events")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     pending = client.post(
         f"/panel/api/chat/threads/{thread_id}/messages",
         json={"content": "Review service history", "sdb_requested": True},
@@ -99,7 +99,7 @@ def test_sdb_stream_contains_ordered_phases_and_evidence(client, migrated_db, mo
 def test_sdb_stream_reconnect_replays_same_persisted_events(client, migrated_db, mock_openai_chat):
     _user("sdb-api-reconnect", "admin")
     _login(client, "sdb-api-reconnect")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     pending = client.post(
         f"/panel/api/chat/threads/{thread_id}/messages",
         json={"content": "Review service history", "sdb_requested": True},
@@ -120,7 +120,7 @@ def test_failed_sdb_task_stream_is_error_and_never_completed(client, migrated_db
 
     _user("sdb-api-failed", "admin")
     _login(client, "sdb-api-failed")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     pending = client.post(
         f"/panel/api/chat/threads/{thread_id}/messages",
         json={"content": "Review service history", "sdb_requested": True},

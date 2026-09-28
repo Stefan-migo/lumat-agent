@@ -68,7 +68,7 @@ def test_internal_chat_uses_sse_preview_instead_of_realtime_tokens(client, monke
         published.append(envelope)
 
     monkeypatch.setattr("app.services.realtime.publisher.publish", capture)
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
 
     response = client.post(
         f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "What is pending?"}
@@ -98,7 +98,7 @@ def test_token_delivery_failure_does_not_change_persisted_post_contract(client, 
         raise RuntimeError("subscriber disappeared")
 
     monkeypatch.setattr("app.services.realtime.publisher.publish", fail)
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
 
     response = client.post(
         f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "Continue"}
@@ -116,7 +116,7 @@ def test_operator_remains_denied_from_internal_chat(client):
     _user("stream-operator", "operador")
     _login(client, "stream-operator")
 
-    response = client.post("/panel/api/chat/threads", json={})
+    response = client.post("/panel/api/chat/threads", json={"proyecto": "default"})
 
     assert response.status_code == 403
     assert "thread" not in response.text.lower()
@@ -125,7 +125,7 @@ def test_operator_remains_denied_from_internal_chat(client):
 def test_realtime_response_preserves_cost_tier_metadata(client, monkeypatch):
     _user("stream-tier", "admin")
     _login(client, "stream-tier")
-    thread_id = client.post("/panel/api/chat/threads", json={}).json()["thread"]["id"]
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
     monkeypatch.setattr(
         "app.services.agent_chat.run_assistant",
         lambda *args, **kwargs: {
