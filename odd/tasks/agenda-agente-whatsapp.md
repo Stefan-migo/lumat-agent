@@ -2,7 +2,7 @@
 
 - Status: in progress
 - Branch: `odd/agenda-agente-whatsapp`
-- Base: `e98b6683` (origin/main)
+- Base: `f27077ec` (origin/main, after PR #403 merged S1+S2); S3 re-created the worktree from here
 - Worktree: `../lumat-agent-odd-agenda-agente-whatsapp`
 - Engram mirror: `odd/agenda-agente-whatsapp/tasks`
 - Created: 2026-09-28
@@ -62,6 +62,23 @@ consequences; configurable reminder lead time; two-way external calendar sync.
    Ambiguity re-asks once, then hands off. The exact slot is re-validated at commit; a conflict
    re-offers instead of failing the conversation. The LLM never states availability it did not
    receive from the scheduling service.
+9. **S3 — already-started or past visits** (owner, 2026-09-28): the WhatsApp flow never cancels or
+   reschedules a visit whose window already started (`starts_at <= now`, aware UTC); it explains and
+   mutates nothing. The guard lives in the chat node, deliberately NOT in `scheduling.cancel()`, so the
+   panel/operator keeps the authority to act on an in-progress visit.
+10. **S3 — no cancellation cutoff** (owner, 2026-09-28): any moment before the start is valid; no new
+    configuration is introduced.
+11. **S3 — no cancellation reason** (owner, 2026-09-28): the agent cancels right after the customer's
+    explicit confirmation, with `reason=None`.
+12. **S3 — reschedule notifies the team through the domain event** (owner, 2026-09-28): `reschedule()`
+    publishes `appointment.rescheduled` like `book`/`cancel`, and the event is allowed in
+    `ALLOWED_EVENTS`. No default rule or template is seeded; the team configures a rule if it wants one.
+13. **S3 — technician on reschedule** (owner, 2026-09-28): re-resolved with the same rule as booking
+    (`open_slots_for_assignment`, lowest free id); the technician may change.
+14. **S3 — several upcoming visits** (owner, 2026-09-28): the agent lists the customer's upcoming
+    `booked` visits numbered and the customer chooses; deterministic resolution, same discipline as the
+    slot offer. Ownership is the conversation's `customer_id`, so a visit booked in another
+    conversation of the same phone is still manageable.
 
 ## Accepted constraints (verified evidence)
 
@@ -154,12 +171,15 @@ cd web && npm run build                      # the only frontend type check (tsc
 
 ### S3 — Reschedule and cancel from WhatsApp
 
-- [ ] Expose reschedule and cancel through the same confirmation discipline, enforcing ownership
+- [x] Expose reschedule and cancel through the same confirmation discipline, enforcing ownership
       and an explicit policy for already-started or past visits.
-- [ ] Publish the missing `appointment.rescheduled` event (and keep the reminder queue consistent).
-- [ ] Acceptance: a customer can move their own visit to a free slot and cancel it; a cancelled or
-      rescheduled visit updates the pending reminder; reprogramming notifies the team.
-- [ ] Route: delegated writer.
+- [x] Publish the missing `appointment.rescheduled` event (and keep the reminder queue consistent).
+- [x] Acceptance: a customer can move their own visit to a free slot and cancel it; reprogramming
+      notifies the team (`appointment.rescheduled` is published and allowed in `ALLOWED_EVENTS`).
+- [ ] Acceptance (deferred to S4): a cancelled or rescheduled visit updates the pending reminder.
+      NOT testable in S3 — the reminder queue is only populated in S4. S3 publishes the event and keeps
+      `appointment.id` stable so S4 can invalidate/re-key. No test was fabricated for this clause.
+- [x] Route: delegated writer.
 
 ### S4 — 24 h reminder
 
@@ -207,3 +227,29 @@ cd web && npm run build                      # the only frontend type check (tsc
   RDD assessment was attempted after the work-unit commits but returned `unassessable` for this
   runtime (changed paths/lines reported as 0); its suggested clone-local disable still failed, so
   the clone override was restored to unset and global RDD remains on. No RDD receipt was produced.
+- 2026-09-28: S3 worktree re-created from `f27077ec` (PR #403 merge) and provisioned by hand (env,
+  `uv sync`, `npm ci`, test DB `lumat-test-lumat-agent-odd-agenda-agente-whatsapp` on port 5945);
+  unit smoke `tests/unit/test_scheduling_unit.py` = 10 passed.
+- 2026-09-28: S3 product decisions 9-14 closed with the owner (see Closed product decisions).
+- 2026-09-28: S3 implemented in three work-unit commits:
+  - `631b58e8` `feat(scheduling): publish appointment.rescheduled event` — RED observed (event missing);
+    focused 23 passed; full backend 1556 passed.
+  - `8d51503b` `feat(chat): cancel appointment from WhatsApp` — RED observed (no confirmation offer);
+    focused 11 passed; full backend 1562 passed. RDD review: medium, lens `review-reliability`,
+    approved with no findings, authority burned (lineage `review-db26ae5a55d6075d`, candidate
+    `sha256:b5dafad4…`, 425 lines).
+  - `25f4a2aa` `feat(chat): reschedule appointment from WhatsApp` — RED observed (no slot offer);
+    focused 16 passed; full backend 1567 passed. RDD assess over `8d51503b..HEAD`: medium,
+    `review_due=false` (`under_budget`, 217 lines), boundary stays `8d51503b`.
+- 2026-09-28: Graph Check ran on the stale snapshot (`16ba9cbf`); `graphify --update` still fails with
+  HTTP 402. Nodes consulted: `cancel()`, `reschedule()`, `open_slots_for_assignment()`, `scheduling.py`,
+  `DomainEvent`, `publish_event()`, `automation.py`, `evaluate_event()`, `graph.py`, `state.py`,
+  `Conversation`, `Customer`, `Message`, `Appointment`, `record_audit()`; `graph.py`→`nodes/booking.py`
+  did not resolve in the stale snapshot. No rebuild attempted.
+- 2026-09-28: honest gaps from S3: the manage node returns `next_step: "end"` on reply turns (the
+  `_after_manage` router maps anything outside `{summary, handoff}` to `END`; it works, but booking uses
+  `summary` for the same situation — a candidate follow-up, not invented as a fix); the confirmation
+  parser stays deterministic (same limitation as S2).
+- 2026-09-28: delivery pending the owner's decision: PR3 = S3, three commits, ~642 authored lines
+  against the 400-line budget (`ask-on-risk`), so either a size exception or a split into two chained
+  PRs (cancel / reschedule).
