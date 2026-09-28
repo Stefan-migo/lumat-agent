@@ -1,9 +1,9 @@
 # ODD Task: clientes-operativa
 
-Status: in progress — WU1 merged to `main` (PR #401 → `c2163ff6`). D1 decided: option A. D5 resolved: promotion shape. **WU2 (equipment) implemented on `odd/clientes-operativa-wu2`, verified, pending native review and PR.** WU3/WU4 still blocked on D2-D4.
-Worktree: `../lumat-agent-odd-clientes-operativa` (one worktree, one branch per work unit)
-Branch: `odd/clientes-operativa-wu2`
-Base: `c2163ff6` (main, 2026-09-28; merge of WU1)
+Status: in progress — WU1 merged (`c2163ff6`, PR #401) and WU2 merged (`4a67d6be`, PR #402; native review `review-d64cbb138ad3cca7` approved, authority burned). D1, D2, D5 decided. **WU3 (case amount) in progress on `odd/clientes-operativa-wu3`.** WU4 still blocked on D3/D4.
+Worktree: `../lumat-agent-odd-clientes-operativa-wu3` (one worktree, one branch per work unit)
+Branch: `odd/clientes-operativa-wu3`
+Base: `4a67d6be` (main, 2026-09-28; merge of WU2 — also the reviewed boundary carried into this slice)
 Depends on: nothing
 Source: scope comparison `.rapsodia-code/sessions/archived/2026-08-07-reunion-cierre/propuesta-final-lumatagent.md` vs the owner's own-investment decision of 2026-09-28
 Delivery strategy: `ask-on-risk`
@@ -65,7 +65,7 @@ the four; blast radius is every customer-linked table.**
 
 - **WU1** Editable stage in the client list (frontend only, reusing the existing endpoint).
 - **WU2** Structured equipment storage, captured from the conversation and editable in the ficha.
-- **WU3** A nullable amount field on `Case`, exposed in the API and the ficha.
+- **WU3** A nullable amount field on `Case`, recorded by the operator through the existing case update path and exposed in the API and the ficha.
 - **WU4** Assisted merge of two duplicate clients (reassign FKs, pick the survivor).
 
 ### Out (deliberately, reserved for separate quotes)
@@ -84,7 +84,7 @@ PR #400) scoped assistant memory and project namespaces (`db/migrations/034_proj
 | # | Decision | Blocks | Recommendation |
 |---|----------|--------|----------------|
 | D1 | **Equipment shape** — **DECIDED 2026-09-28: option A, a `CustomerEquipment` table** (multiple rows per client) | Resolved | Chosen by the owner. Lumat's request 3.4 puts "Equipos, direcciones y antecedentes técnicos" under **base de clientes**, and one client can own a calefont *and* a caldera. Rejected: a column set on `Customer`, because a client with two appliances would force a second migration. |
-| D2 | **Amount semantics**: what the field means (quoted value? invoiced value?) and its currency | WU3 | Nullable numeric, currency CLP (Lumat is Chilean), meaning "value of the service for this case". Flag if it should be USD or carry both. |
+| D2 | **Amount semantics**: what the field means (quoted value? invoiced value?) and its currency — **DECIDED 2026-09-28: nullable numeric, currency CLP, meaning "value of the service for this case"** | Resolved — WU3 unblocked | Chosen by the owner from the recorded recommendation, unchanged. Rejected: non-null (would invent an amount for historical and non-billable cases) and a dual-currency field (the business is Chilean; a second currency is speculation). Currency is implicit in the stored scalar, documented rather than modelled. |
 | D3 | **Merge rules**: which record survives (oldest? richest? most activity?) and what happens to conflicting scalar fields | WU4 | Survivor = the record with more activity; empty survivor fields filled from the loser; conflicting non-empty fields prefer the survivor and are recorded in the audit row. |
 | D4 | **Merge in or out of this unit** | WU4 sequencing | **Out — its own unit.** Four FK reassignments plus memory re-keying is not the same size as the other three, and a failure corrupts customer history. |
 | D5 | **Equipment promotion shape** — **DECIDED 2026-09-28: promote the captured text verbatim** | WU2 | The capture asks one open question and stores a single `equipment` string (`capture.py:30`). Parsing it into marca/modelo/antigüedad would invent data. Chosen: the row keeps the verbatim answer in `details`, `equipment_type` is pre-filled from the capture intent when it names an appliance (calefont/caldera/calefaccion), and marca/modelo/antigüedad are operator-editable in the ficha. Rejected: restructuring the capture into per-field questions — it changes customer-facing behaviour and its tests, out of proportion to WU2. |
@@ -122,6 +122,12 @@ Queried from the principal worktree (`graphify-out/2026-09-28/`).
 | T2.5 | WU2 | API under the customer: list/create/update/delete with `require_operator_json`, response shape mirroring `clients.py` | delegated (same writer) |
 | T2.6 | WU2 | Ficha equipment section — view, add, edit — reusing `Dialog` + `Input`/`Select` | delegated (writer, frontend) |
 | T2.7 | WU2 | Tests: backend functional (`test_api_clients.py` pattern) plus promotion idempotency (retry/recapture yields one row); frontend (`ClientFicha.test.tsx` pattern) | delegated per side |
+| T3.1 | WU3 | Record path: the problem states a Case "cannot **record** an amount", and `POST /cases/{id}/update` already exists (`routes/cases.py:94`, audited via `cases_service.update_case`). WU3 therefore records through that path instead of shipping a nullable column nothing can write — the doc's "exposed in the API and the ficha" alone would be a dead field | decided (interpretation, recorded) |
+| T3.2 | WU3 | RED: `amount` round-trips through `POST /cases/{id}/update` and appears in `to_case_dict` and the `customer_history` case payload; omitted keeps the current value, explicit `null` clears it; the change is audited | delegated |
+| T3.3 | WU3 | GREEN backend: migration `036` (`cases.amount` numeric NULL, grant pattern copied from `035`), `Case.amount` (`models.py`), `to_case_dict` (`serializers.py`), `customer_history` (`customers.py`), `update_case` service + `CaseUpdateBody.amount` reusing the existing `_UNSET` keep-vs-clear sentinel. The null-vs-omit contract is documented in the service/route docstrings — this is the R2-001 pattern, not repeated | delegated (same writer) |
+| T3.4 | WU3 | GREEN frontend: the ficha shows the case amount and lets the operator set it (WU2 equipment pattern: `Dialog` + `Input`, refresh after save) | delegated (same writer) |
+| T3.5 | WU3 | Verification: focused backend (`test_api_cases.py`, `test_migrations.py`, `test_api_clients.py`), full `pytest tests/`, `npm test`, `npm run build` (`tsc -b`) | delegated per-action |
+| T3.6 | WU3 | Assessment + review slice bookkeeping on base `4a67d6be` | orchestrator |
 | T4.1 | WU4 | Merge service: reassign the four FKs and re-key memories, single transaction, audited | blocked on D3/D4 |
 
 ## Delivery
@@ -196,7 +202,18 @@ strategy, one PR per work unit.
       WU2 branch point `c2163ff6`, because the WU1 slice assessed as `under_budget` and never
       advanced the reviewed boundary; `c2163ff6` would leave WU1's `ClientesList` change
       unreviewed. The review receipt belongs in the PR body, not in this doc.
-- [ ] WU3 — blocked on D2
+- [x] **WU2 merged** — PR #402, merge commit `4a67d6be`. Native review `review-d64cbb138ad3cca7`: 4 lenses, tier `high`, 970 lines, **approved**, authority burned. Pre-merge integration ran over the tree that landed (after merging `origin/main` into the branch): backend suite green, `npm run build` (`tsc -b`) green, CI (`test`, `panel`) green. **The WU2 receipt lives in the PR #402 body, not here** — this doc was frozen between `review start` and merge, which is why the status line above still read "pending native review and PR" on `main`.
+- [x] **WU2 advisories (non-blocking, not corrections)** — R2-001: the equipment `PATCH` null-vs-omit contract is undocumented (`clients.py:392-398`); R3-001: a stale async `getClientFicha` response can overwrite the options of the client-state dialog opened later (`ClientesList.tsx:163-171`, a WU1 file). Both are separate work, recorded in the PR #402 body.
+- [x] **WU3 provisioned** — new worktree `../lumat-agent-odd-clientes-operativa-wu3` (branch `odd/clientes-operativa-wu3`, base `4a67d6be`), `.venv` via `uv sync`, `web/node_modules` installed, isolated test DB up on port 5475. `.rapsodia-code/worktree.json` was regenerated fresh; the stale-branch trap that crashed `rapso worktree cleanup` after WU2 does not apply to a newly created worktree.
+- [x] **WU3 D2 decided** — nullable numeric, CLP, "value of the service for this case" (owner, 2026-09-28): the recorded recommendation unchanged.
+- [x] **WU3 Graph Check** — queried from the principal worktree (`graphify-out/` stamped at `4a67d6be`). `graphify query "Case model fields and case serialization to_case_dict customer_history"` → `to_case_dict()` (`serializers.py:169`), `customer_history()` (`customers.py:486`), `Case` (`models.py:349`), `test_stream_events_preserves_compatible_event_serialization()`. `graphify query "client ficha cases section display amount"` → `cases.py` services + `routes/cases.py`, `test_api_cases.py`, `dashboard.py`, `ClientFicha.test.tsx`, `record_audit()`, `publish_event()`. `graphify path "Case" "to_case_dict"` → "no directed path" with an ambiguous source match; the edge is direct in code (`serializers.to_case_dict(case)`), so this is the known node-resolution limitation, not a missing link.
+- [x] **WU3 — implemented** — `cases.amount NUMERIC NULL` (migration 036; no default or backfill) records the service value in CLP through the existing `/cases/{id}/update` route. The service reuses `_UNSET`: omitted keeps the value, explicit `null` clears it, with the contract documented in the service and route docstrings. Updates remain actor-audited; amount is present in case responses and customer history. Client ficha renders CLP values, explicitly renders `Sin monto registrado` for null, and edits through a dialog that refreshes after save. No manual-case amount, conversion, invoicing, payment, report, or pipeline work was added.
+- [x] **WU3 RED** — backend: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py -q` → `1 failed`; amount update returned HTTP 200 but response serialization raised `KeyError: 'amount'`. Frontend: `npx vitest run src/components/pages/ClientFicha.test.tsx` → 1 failed / 31 passed; expected CLP amount was absent from the ficha.
+- [x] **WU3 GREEN / verification** — focused backend `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py tests/integration/test_migrations.py -q` → 42 passed. Full backend `eval "$(infra/test-db.sh env)" && uv run pytest tests/ -q` → passed; existing coroutine/model warnings remain. Frontend focused `npx vitest run src/components/pages/ClientFicha.test.tsx` → 32 passed; amount fixture and story shape check `npx vitest run src/components/pages/ClientFicha.test.tsx src/stories/pages/_shared/mockData/cases.test.ts` → 42 passed. `npm run build` (`tsc -b` + Vite) passed (existing >500 kB chunk warning). Final full `npm test` → 90 files / 827 tests passed. Earlier full-suite attempts hit the known ~5s load timeouts (and once caught the case serializer fixture's outdated expected keys); `npx vitest run src/components/pages/AgendaPage.test.tsx` → 37 passed isolated and `npx vitest run src/components/domain/AppShell.test.tsx` → 29 passed isolated, then the updated full suite passed.
+- [x] **WU3 commits** — `73daa8c7 feat(cases): add nullable amount to cases`; `07e125ec feat(cases): record and expose the case amount`; `c0159e03 test(cases): assert amount in customer history`; `40a7d3e7 feat(clients): show and edit the case amount on the ficha`; `64b7a7fd test(clients): update case amount story fixtures`.
+- [x] **WU3 correction round** — `8b4042a76d8b4ffc4f4dd9c137cc01fe2d72ec70 fix(cases): emit a distinct event when only the amount changes`; `456682c18f6e2130ef844755e93068d1ea5654f2 chore(cases): tighten migration 036`; `e55731ab docs(odd): record the WU3 correction`. C1 RED: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py::test_amount_only_updates_publish_events_with_each_new_amount -q` failed with `assert 1 == 2` because both amount-only updates reused one event; GREEN: the same command passed after the dedupe key included amount. Migration hygiene: `036` now uses `ADD COLUMN IF NOT EXISTS` and relies on existing cases grants. Recreated the isolated test DB with `bash infra/test-db.sh down && bash infra/test-db.sh up`. Focused backend (`eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_cases.py tests/integration/test_migrations.py -q`) passed; full backend (`eval "$(infra/test-db.sh env)" && uv run pytest tests/ -q`) passed with the existing coroutine/model warnings; `cd web && npm run build` passed with the existing large-chunk warning. No `web/` file changed in this correction round.
+- [x] **WU3 graph check** — query `case amount update path and case serialization` consulted `Case` (`app/models.py`), `update_case()` (`app/services/cases.py`), `cases.py` route, serializer/customer history modules and functional test nodes. `graphify path "update_case" "to_case_dict" --undirected` gave the route path `update_case() <--calls-- case_update() --calls--> to_case_dict()`. The directed query found no path; `ClientFicha` ↔ API and `Case` ↔ `ClientFicha` paths also cannot cross the HTTP boundary. Query `client ficha cases section display amount` consulted `ClientFicha.tsx`, `ClientFicha.test.tsx`, `api.ts`, `types.ts`, `Case`, and `record_audit()`. God nodes from `GRAPH_REPORT.md`: `Case` (97 edges), `record_audit()` (93 edges). Graph built at `16ba9cbf`, predating this branch, so structural results were treated as navigation and verified against source.
+- [ ] **WU3 T3.6 assessment** — orchestrator-owned review-slice assessment remains pending.
 - [ ] WU4 — blocked on D3/D4
 
 ## Closure
@@ -205,12 +222,16 @@ Pending.
 
 ## Recovery
 
-- Nothing to resume beyond the task list above; the worktree and branch are live at base `c2163ff6`.
-- The branch is `odd/clientes-operativa-wu2`; the work-unit-1 branch `odd/clientes-operativa` no
-  longer exists (local or remote) after PR #401 — one worktree, one branch per work unit.
+- Nothing to resume beyond the task list above; the WU3 worktree and branch are live at base `4a67d6be`.
+- The branch is `odd/clientes-operativa-wu3`; the branches `odd/clientes-operativa` (WU1) and
+  `odd/clientes-operativa-wu2` no longer exist (local or remote) after PRs #401/#402 — one
+  worktree, one branch per work unit.
+- WU3's review slice base is `4a67d6be` (the last reviewed boundary, advanced by WU2's approved
+  review), **not** the WU3 branch point `c2163ff6`: WU1 assessed as `under_budget`, so the boundary
+  advanced past both.
 - Note for the next session: another session is actively merging to `main`
   (`usuarios-aislamiento` WU1 landed as PR #400 during planning). `git fetch origin`
   immediately before any merge.
-- Latest migration on main is `034`; WU2's is therefore `035`.
+- Latest migration on main is `035` (`customer_equipment`); WU3's is therefore `036`.
 - Test DB: `bash infra/test-db.sh up|down|env` (project name derives from the worktree slug).
 - `graphify-out/` is gitignored; query the graph from the principal worktree.

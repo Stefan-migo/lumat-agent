@@ -17,6 +17,7 @@ for a missing case. No redirects, no CORS (D1).
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from sqlalchemy import select
 
@@ -29,6 +30,7 @@ from app.models import (  # noqa: E402
     ConversationState,
     Customer,
     CustomerState,
+    DomainEvent,
     Message,
     MessageDirection,
     MessageType,
@@ -365,8 +367,8 @@ def test_case_update_changes_status_and_responsible_audited(client, make_user):
         )
     assert audit is not None
     assert audit.actor == "oper"
-    assert audit.before == {"status": "escalado", "responsible_id": None}
-    assert audit.after == {"status": "en_atencion", "responsible_id": responsible_id}
+    assert audit.before == {"status": "escalado", "responsible_id": None, "amount": None}
+    assert audit.after == {"status": "en_atencion", "responsible_id": responsible_id, "amount": None}
 
 
 def test_case_update_clears_responsible_with_null(client, make_user):
@@ -421,6 +423,61 @@ def test_case_update_keeps_fields_when_omitted(client, make_user):
             select(AuditLog).where(AuditLog.action == "case.updated")
         )
     assert audit is not None, "update without edits still audited (AP-5)"
+
+
+def test_case_amount_round_trips_keeps_when_omitted_and_clears_with_null(client, make_user):
+    case_id = _seed_case(status="escalado")
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    updated = client.post(f"/panel/api/cases/{case_id}/update", json={"amount": 125000})
+    assert updated.status_code == 200
+    assert updated.json()["case"]["amount"] == 125000
+    assert any(row["id"] == case_id and row["amount"] == 125000
+               for row in client.get("/panel/api/cases").json()["cases"])
+    case_row = _case_row(case_id)
+    assert case_row.amount == 125000
+    history = client.get(f"/panel/api/clients/{case_row.customer_id}").json()["history"]["cases"]
+    assert next(row for row in history if row["id"] == case_id)["amount"] == 125000
+
+    kept = client.post(f"/panel/api/cases/{case_id}/update", json={})
+    assert kept.status_code == 200
+    assert kept.json()["case"]["amount"] == 125000
+
+    cleared = client.post(f"/panel/api/cases/{case_id}/update", json={"amount": None})
+    assert cleared.status_code == 200
+    assert cleared.json()["case"]["amount"] is None
+    with SessionLocal() as session:
+        audit = session.scalar(select(AuditLog).where(AuditLog.action == "case.updated").order_by(AuditLog.id.desc()))
+    assert audit is not None
+    assert audit.actor == "oper"
+    assert audit.before["amount"] == 125000
+    assert audit.after["amount"] is None
+
+
+def test_amount_only_updates_publish_events_with_each_new_amount(client, make_user):
+    status = f"amount-event-test-{uuid4().hex}"
+    case_id = _seed_case(status=status)
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    first = client.post(f"/panel/api/cases/{case_id}/update", json={"amount": 125000})
+    second = client.post(f"/panel/api/cases/{case_id}/update", json={"amount": 200000})
+    assert first.status_code == second.status_code == 200
+
+    with SessionLocal() as session:
+        events = session.scalars(
+            select(DomainEvent)
+            .where(
+                DomainEvent.event_type == "case.updated",
+                DomainEvent.entity_id == str(case_id),
+                DomainEvent.dedupe_key.contains(status),
+            )
+            .order_by(DomainEvent.id)
+        ).all()
+    assert len(events) == 2
+    assert events[0].payload["amount"] == 125000
+    assert events[1].payload["amount"] == 200000
 
 
 def test_case_update_missing_404_json(client, make_user):

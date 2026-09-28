@@ -26,7 +26,7 @@ const ficha: ClientFichaResponse = {
   customer,
   history: {
     conversations: [{ id: 41, state: "human", summary: "Coordinar visita por calefón", created_at: "2026-07-15T12:00:00Z", closed_at: null }],
-    cases: [{ id: 8, conversation_id: 41, customer_id: customer.id, created_at: "2026-07-15T12:00:00Z", service: "Reparación calefón", priority: "alta", status: "abierto", emergency: false, responsible_id: 3, summary: "El equipo no enciende", escalated_at: null, closed_at: null, acknowledged_at: null, ack_by: null, is_open: true }],
+    cases: [{ id: 8, conversation_id: 41, customer_id: customer.id, created_at: "2026-07-15T12:00:00Z", service: "Reparación calefón", amount: null, priority: "alta", status: "abierto", emergency: false, responsible_id: 3, summary: "El equipo no enciende", escalated_at: null, closed_at: null, acknowledged_at: null, ack_by: null, is_open: true }],
     messages: [{ id: 91, conversation_id: 41, direction: "inbound", msg_type: "text", text: "Hola, mi calefón no enciende hace dos días", media_url: null, created_at: "2026-07-15T12:00:00Z" }],
     messages_total: 1,
     appointments: [appointment],
