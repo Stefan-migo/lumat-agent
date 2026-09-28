@@ -1,6 +1,6 @@
 # ODD Task: usuarios-aislamiento
 
-Status: open — WU1 and WU2 merged; WU3 in progress; WU4 remains
+Status: open — WU1 and WU2 merged; WU3 implemented, review and delivery pending; WU4 remains
 Worktree: `../lumat-agent-odd-usuarios-aislamiento-wu3`
 Branch: WU1 on `odd/usuarios-aislamiento` (merged, PR #400); WU2 on `odd/usuarios-aislamiento-wu2` (merged, PR #407); current slice `odd/usuarios-aislamiento-wu3`
 Base: `16d94ced` (current `origin/main`, the WU2 merge)
@@ -156,11 +156,11 @@ them; admins receive no cross-user override.
 
 - [x] **U3.1** — Filter project API reads and mutations by the authenticated owner;
   add create endpoint and validation as required by the panel.
-- [ ] **U3.2** — Add project selection and project creation to the panel, using the
+- [x] **U3.2** — Add project selection and project creation to the panel, using the
   existing projects page/API contracts.
-- [ ] **U3.3** — Ensure chat selection is explicit and empty/unselected state cannot
+- [x] **U3.3** — Ensure chat selection is explicit and empty/unselected state cannot
   silently submit against `default`.
-- [ ] **U3.4** — Add API and frontend tests for owner filtering, creation, selection,
+- [x] **U3.4** — Add API and frontend tests for owner filtering, creation, selection,
   and admin non-override behavior.
 
 **Acceptance slice:** each role sees only its own projects; project creation is
@@ -466,6 +466,36 @@ semantics; service and route tests must establish those.
     - Owner decision (2026-09-28): U3.3 enforcement is **strict** — the chat thread endpoint
       will require an explicit `proyecto`, and the ~53 existing `json={}` call sites in 8
       integration test files are updated to `{"proyecto": "default"}`.
+  - [x] U3.2 — project creation and selection in the panel (`3d592cc0`, `d511e693`).
+    - `ProjectsPage` gains a bounded creation form (slug/name/purpose, mirroring the API bounds) that calls
+      the new `createProject` helper and refreshes the list on 201. A 409 surfaces the conflicting
+      candidates when present and the duplicate-slug `detail` otherwise. Opening a project still navigates
+      to chat bound to that project (`AppShell`), which is the panel's selection surface.
+  - [x] U3.3 — explicit chat project selection, no silent `default`
+    (`c2fde67d`, `ec3cdbb4`, `32942a88`, `525f35b5`, `b7a8ff95`).
+    - Backend: `POST /panel/api/chat/threads` requires `proyecto`; the `else "default"` fallback is gone and
+      an explicitly sent `"default"` still binds the business-shared project (owner decision: strict).
+    - Client: `createChatThread(proyecto: string)` always sends `{proyecto}` — the `{}` branch is gone. The
+      `AgentChat` "Nuevo chat" flow reuses the URL/thread project when present and otherwise lists the
+      user's own projects in a picker, refusing to create a thread when nothing is selected.
+    - Fixtures: 54 call sites across 8 integration test files now state `{"proyecto": "default"}`. The first
+      sweep missed one `f"..."` call site (`test_assistant_chat.py:938`) and only the full backend suite
+      caught it; `525f35b5` fixes it. Focused files alone are not a sufficient gate here.
+    - RED for the route contract: `3 failed, 7 passed` before the change (body-less and `{}` creation
+      returned 201), GREEN `10 passed` after.
+  - [x] U3.4 — route and frontend contract tests.
+    - `tests/integration/test_chat_thread_project_selection.py`: no body → 422, `{}` → 422, another user's
+      project → 400 with no thread row created, own project → 201 bound to it, explicit `"default"` → 201.
+    - `tests/functional/test_api_projects.py`: owner-scoped list/detail, same-slug isolation, artifact owner
+      scoping, admin non-override, creation ownership, purpose ambiguity → 409 with candidates, duplicate
+      slug → 409, invalid body → 422.
+    - `web`: `ProjectsPage.test.tsx` (creation success and both 409 shapes), `AgentChat.test.tsx` (picker
+      instead of a silent default, no thread without a project), `api.test.ts` (the POST always carries
+      `proyecto`).
+  - Gate results with WU3 applied: `uv run pytest tests/` → `1592 passed, 2 warnings` (the known
+    `_publish_all` unawaited and fastembed pooling warnings); `cd web && npm test` → `90 test files, 835
+    tests passed`; `cd web && npm run build` (`tsc -b` + vite) passed; `git diff --check` clean. No Python
+    linter/formatter is configured in this repo, so tests and the build are the complete check set.
 - [ ] WU4 — cross-user isolation suite and final gate.
 - [ ] Migration apply, verification, and rollback documentation completed.
 - [ ] Acceptance criteria verified; unit closed.
@@ -483,7 +513,9 @@ complete. Record merged PRs, exact test results, migration evidence, and cleanup
 - WU1 was delivered on `odd/usuarios-aislamiento` and merged (PR #400, merge `c4ad6fe2`).
   WU2 was delivered on `odd/usuarios-aislamiento-wu2` and merged (PR #407, merge `16d94ced`);
   its own work is reviewed and burned in full by lineage `review-b2bdde6e4c280287`.
-- WU3 is in progress: U3.1 is delivered by `82a09a44`. U3.2–U3.4 remain. Delivery is
+- WU3 is implemented on this branch: U3.1 by `82a09a44`, U3.2–U3.4 through `d511e693` (backend
+  `c2fde67d`/`ec3cdbb4`, frontend `32942a88`/`3d592cc0`, corrections `525f35b5`/`b7a8ff95`). Review and
+  delivery are pending. Delivery is
   `stacked-to-main` (`ask-on-risk`), so WU3 is the third PR of the chain and its candidate is
   this branch's own work against the current `origin/main`; isolate it with
   `git diff --stat <base-ref> HEAD` before any review, because a branch commit as `--base-ref`
