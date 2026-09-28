@@ -1,6 +1,6 @@
 # ODD Task: clientes-operativa
 
-Status: in progress — WU1 delivered on the branch; WU2-WU4 blocked on owner decisions
+Status: in progress — WU1 merged to `main` (PR #401 → `c2163ff6`). D1 decided: option A. Next: WU2 (equipment). WU3/WU4 still blocked on D2-D4.
 Worktree: `../lumat-agent-odd-clientes-operativa`
 Branch: `odd/clientes-operativa`
 Base: `c4ad6fe2` (main, 2026-09-28)
@@ -83,7 +83,7 @@ PR #400) scoped assistant memory and project namespaces (`db/migrations/034_proj
 
 | # | Decision | Blocks | Recommendation |
 |---|----------|--------|----------------|
-| D1 | **Equipment shape**: a `CustomerEquipment` table (multiple rows per client, references address/service history) vs a minimal structured set of columns on `Customer` | WU2 | Table. Lumat's request 3.4 puts "Equipos, direcciones y antecedentes técnicos" under **base de clientes**, and one client can own a calefont *and* a caldera. A single column set cannot represent that. |
+| D1 | **Equipment shape** — **DECIDED 2026-09-28: option A, a `CustomerEquipment` table** (multiple rows per client) | Resolved | Chosen by the owner. Lumat's request 3.4 puts "Equipos, direcciones y antecedentes técnicos" under **base de clientes**, and one client can own a calefont *and* a caldera. Rejected: a column set on `Customer`, because a client with two appliances would force a second migration. |
 | D2 | **Amount semantics**: what the field means (quoted value? invoiced value?) and its currency | WU3 | Nullable numeric, currency CLP (Lumat is Chilean), meaning "value of the service for this case". Flag if it should be USD or carry both. |
 | D3 | **Merge rules**: which record survives (oldest? richest? most activity?) and what happens to conflicting scalar fields | WU4 | Survivor = the record with more activity; empty survivor fields filled from the loser; conflicting non-empty fields prefer the survivor and are recorded in the audit row. |
 | D4 | **Merge in or out of this unit** | WU4 sequencing | **Out — its own unit.** Four FK reassignments plus memory re-keying is not the same size as the other three, and a failure corrupts customer history. |
@@ -146,8 +146,16 @@ strategy, one PR per work unit.
       slice stays pending until a later commit reaches the review budget. The assessed base
       remains `c4ad6fe2`.
 - [x] **Commits** — `18c41083 docs(odd): open the clientes-operativa unit`,
-      `e26215ae feat(clients): change a client's stage from the list`. Not pushed.
-- [ ] WU2 — blocked on D1
+      `e26215ae feat(clients): change a client's stage from the list`,
+      `8095381c docs(odd): record the WU1 delivery and assessment`.
+- [x] **WU1 merged** — PR #401, merge commit `c2163ff6`. Pre-merge integration ran over the
+      tree that landed (after merging `origin/main` into the branch): frontend suite
+      **90 files / 823 tests**, `npm run build` (includes `tsc -b`) passed, and both CI jobs
+      (`test`, `panel`) green. The merged branch was deleted (local and remote) and the
+      worktree was reparked to `odd/clientes-operativa-wu2` off the updated `main`.
+- [ ] WU2 — **option A**, `CustomerEquipment` table; migration `035`. Needs a worktree-local
+      `infra/.env` before the backend suite can run here (absent today; present only in the
+      principal worktree)
 - [ ] WU3 — blocked on D2
 - [ ] WU4 — blocked on D3/D4
 
