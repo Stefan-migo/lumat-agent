@@ -165,6 +165,20 @@ describe("ClientFicha page grammar", () => {
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10"));
   });
 
+  it.each(["-1", "not-a-number"])("rejects invalid case amount %s before calling the API", async (amount) => {
+    const user = userEvent.setup();
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("button", { name: "Editar monto del caso" }));
+    const dialog = screen.getByRole("dialog");
+    await user.clear(within(dialog).getByLabelText("Monto CLP"));
+    await user.type(within(dialog).getByLabelText("Monto CLP"), amount);
+    await user.click(within(dialog).getByRole("button", { name: "Guardar monto" }));
+
+    expect(updateCaseAmount).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("Ingresa un monto CLP válido y no negativo");
+  });
+
   it("updates and acknowledges an active case, then refetches the ficha", async () => {
     const user = userEvent.setup();
     vi.mocked(postJson).mockResolvedValue({ ok: true });
