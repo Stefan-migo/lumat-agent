@@ -49,6 +49,14 @@ const customers: Customer[] = [
   },
 ];
 
+type User = ReturnType<typeof userEvent.setup>;
+
+/** Opens a row's action menu and returns it scoped to that row's accessible name. */
+async function openRowActions(user: User, row: HTMLElement, name: string) {
+  await user.click(within(row).getByRole("button", { name: `Acciones para ${name}` }));
+  return within(await screen.findByRole("menu", { name: `Acciones para ${name}` }));
+}
+
 describe("ClientesList", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.restoreAllMocks());
@@ -241,7 +249,8 @@ describe("ClientesList", () => {
     render(<ClientesList />);
     const row = (await screen.findByText("Marcela Fuentes")).closest("tr");
     expect(row).not.toBeNull();
-    await user.click(within(row!).getByRole("button", { name: "Cambiar estado Marcela Fuentes" }));
+    const menu = await openRowActions(user, row!, "Marcela Fuentes");
+    await user.click(menu.getByRole("menuitem", { name: "Cambiar estado" }));
     const stateSelect = await screen.findByLabelText("Estado del cliente");
     await user.selectOptions(stateSelect, "en_evaluacion");
     await user.click(screen.getByRole("button", { name: "Guardar estado" }));
@@ -261,8 +270,8 @@ describe("ClientesList", () => {
     const row1 = (await screen.findByText("Marcela Fuentes")).closest("tr")!;
     const row2 = screen.getByText("Pedro Soto").closest("tr")!;
 
-    await user.click(within(row1).getByRole("button", { name: "Cambiar estado Marcela Fuentes" }));
-    await user.click(within(row2).getByRole("button", { name: "Cambiar estado Pedro Soto" }));
+    await user.click((await openRowActions(user, row1, "Marcela Fuentes")).getByRole("menuitem", { name: "Cambiar estado" }));
+    await user.click((await openRowActions(user, row2, "Pedro Soto")).getByRole("menuitem", { name: "Cambiar estado" }));
     const select = await screen.findByLabelText("Estado del cliente");
     await waitFor(() => expect(select.querySelectorAll("option")).toHaveLength(2));
     resolveFirst({ customer: customers[0], states: ["contactado", "cancelado"] });
@@ -291,15 +300,18 @@ describe("ClientesList", () => {
     const user = userEvent.setup();
     vi.mocked(getClientFicha).mockResolvedValue({ customer: customers[0], history: { cases: [{ is_open: true }, { is_open: false }], appointments: [{ starts_at: "2099-01-01", status: "booked" }] } } as never);
     vi.mocked(archiveCustomer).mockResolvedValue({ customer: customers[0] });
-    render(<ClientesList data={[{ ...customers[0], archived_at: null }]} state="ready" />);
-    await user.click(screen.getByRole("button", { name: "Archivar Marcela Fuentes" }));
+    const { unmount } = render(<ClientesList data={[{ ...customers[0], archived_at: null }]} state="ready" />);
+    const activeRow = screen.getByText("Marcela Fuentes").closest("tr")!;
+    await user.click((await openRowActions(user, activeRow, "Marcela Fuentes")).getByRole("menuitem", { name: "Archivar" }));
     expect(getClientFicha).toHaveBeenCalledTimes(1);
     expect(await screen.findByText(/1 caso abierto y 1 visita futura/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Confirmar archivo" }));
     expect(archiveCustomer).toHaveBeenCalledWith(1);
+    unmount();
 
     render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
-    await user.click(screen.getByRole("button", { name: "Restaurar Marcela Fuentes" }));
+    const archivedRow = screen.getByText("Marcela Fuentes").closest("tr")!;
+    await user.click((await openRowActions(user, archivedRow, "Marcela Fuentes")).getByRole("menuitem", { name: "Restaurar" }));
     expect(unarchiveCustomer).toHaveBeenCalledWith(1);
   });
 
@@ -307,7 +319,8 @@ describe("ClientesList", () => {
     const user = userEvent.setup();
     vi.mocked(unarchiveCustomer).mockRejectedValue(new Error("offline"));
     render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
-    await user.click(screen.getByRole("button", { name: "Restaurar Marcela Fuentes" }));
+    const row = screen.getByText("Marcela Fuentes").closest("tr")!;
+    await user.click((await openRowActions(user, row, "Marcela Fuentes")).getByRole("menuitem", { name: "Restaurar" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos restaurar");
   });
 
@@ -344,5 +357,84 @@ describe("ClientesList", () => {
     await user.clear(search);
     await waitFor(() => expect(screen.getByText("Pedro Soto")).toBeInTheDocument());
     expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: false, query: "" });
+  });
+});
+
+// panel-action-affordances — the row action is one icon trigger named for the row,
+// not two pills whose visible labels repeat the customer name and dominate the cell
+// (DESIGN_SYSTEM.md:475).
+describe("ClientesList — row actions", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("gives each row exactly one action trigger, named for its customer", () => {
+    render(<ClientesList data={customers} state="ready" />);
+
+    const row = screen.getByText("Marcela Fuentes").closest("tr");
+    expect(row).not.toBeNull();
+    expect(within(row!).getAllByRole("button")).toHaveLength(1);
+    expect(
+      within(row!).getByRole("button", { name: "Acciones para Marcela Fuentes" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the customer name out of the visible action text", () => {
+    render(<ClientesList data={customers} state="ready" />);
+
+    const row = screen.getByText("Marcela Fuentes").closest("tr")!;
+    for (const control of within(row).getAllByRole("button")) {
+      expect(control.textContent).not.toContain("Marcela Fuentes");
+    }
+  });
+
+  it("falls back to the phone when the customer has no name", () => {
+    render(<ClientesList data={customers} state="ready" />);
+
+    const row = screen.getByText("+56955555555").closest("tr")!;
+    expect(
+      within(row).getByRole("button", { name: "Acciones para +56955555555" }),
+    ).toBeInTheDocument();
+  });
+
+  it("wraps the row actions in the shared action-cell contract", () => {
+    const { container } = render(<ClientesList data={customers} state="ready" />);
+
+    const cell = container.querySelector(".table__actions");
+    expect(cell).not.toBeNull();
+    expect(cell!.querySelector(".menu__trigger")).not.toBeNull();
+  });
+
+  it("routes Cambiar estado from the row menu to the state dialog", async () => {
+    const user = userEvent.setup();
+    render(<ClientesList data={customers} state="ready" />);
+
+    const row = screen.getByText("Marcela Fuentes").closest("tr")!;
+    const menu = await openRowActions(user, row, "Marcela Fuentes");
+    await user.click(menu.getByRole("menuitem", { name: "Cambiar estado" }));
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Cambiar estado del cliente");
+  });
+
+  it("marks Archivar as a destructive item with an icon and its label", async () => {
+    const user = userEvent.setup();
+    render(<ClientesList data={[{ ...customers[0], archived_at: null }]} state="ready" />);
+
+    const row = screen.getByText("Marcela Fuentes").closest("tr")!;
+    const menu = await openRowActions(user, row, "Marcela Fuentes");
+    const archive = menu.getByRole("menuitem", { name: "Archivar" });
+
+    expect(archive).toHaveClass("menu__item--danger");
+    expect(archive.querySelector("svg")).not.toBeNull();
+    expect(archive).toHaveTextContent("Archivar");
+  });
+
+  it("offers Restaurar instead of Archivar for an archived customer", async () => {
+    const user = userEvent.setup();
+    render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
+
+    const row = screen.getByText("Marcela Fuentes").closest("tr")!;
+    const menu = await openRowActions(user, row, "Marcela Fuentes");
+
+    expect(menu.getByRole("menuitem", { name: "Restaurar" })).toBeInTheDocument();
+    expect(menu.queryByRole("menuitem", { name: "Archivar" })).not.toBeInTheDocument();
   });
 });

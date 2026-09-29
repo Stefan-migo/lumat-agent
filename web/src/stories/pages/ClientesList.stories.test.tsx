@@ -165,6 +165,18 @@ describe("ClientesList appearance axis (amended DS-GRAMMAR-1)", () => {
     expect(link).not.toHaveAttribute("style");
   });
 
+  it("shows the row actions as one icon menu per row in the shared action cell", () => {
+    const { container } = render(<ClientesListView />);
+
+    const cell = container.querySelector(".table__actions");
+    expect(cell).not.toBeNull();
+    expect(
+      within(cell as HTMLElement).getByRole("button", {
+        name: `Acciones para ${customers[0].name}`,
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("keeps the dense data layer tabular with no conversation component", () => {
     const { container } = render(<ClientesListView />);
 

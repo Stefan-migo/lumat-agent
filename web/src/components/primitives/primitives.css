@@ -657,6 +657,17 @@
   color: var(--corp-fg);
   cursor: pointer;
 }
+/* Icon-only trigger: the single row-action control, square and named for assistive
+   technology through `aria-label`, so the row's own name is not repeated as visible
+   action text (DESIGN_SYSTEM.md:475). 40px is the control floor this block already
+   applies to the trigger and its items. */
+.menu__trigger--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  padding: var(--space-2);
+}
 .menu__content {
   min-width: 12rem;
   padding: var(--space-1);
@@ -669,9 +680,15 @@
 .menu__item {
   display: flex;
   align-items: center;
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--corp-radius);
   cursor: pointer;
+}
+/* Destructive item: the glyph and the label carry the meaning and colour only
+   reinforces it (DESIGN_SYSTEM.md:509-510). `--danger` on `--corp-bg` is 5.78:1. */
+.menu__item--danger {
+  color: var(--danger);
 }
 .menu__item:focus,
 .menu__item:hover { background: var(--corp-surface-hover); outline: none; }
