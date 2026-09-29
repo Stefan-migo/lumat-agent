@@ -47,7 +47,7 @@ describe('AppShell (T6.4)', () => {
       within(operadorDrawer).queryByRole('button', { name: /base de conocimientos/i }),
     ).not.toBeInTheDocument();
     expect(within(operadorDrawer).queryByRole('button', { name: /configuraci[oó]n/i })).not.toBeInTheDocument();
-    expect(within(operadorDrawer).queryByRole('button', { name: 'Asistente Lumat' })).not.toBeInTheDocument();
+    expect(within(operadorDrawer).getByRole('button', { name: 'Asistente Lumat' })).toBeInTheDocument();
     expect(within(operadorDrawer).queryByRole('button', { name: 'Automatizaciones' })).not.toBeInTheDocument();
   });
 
@@ -485,13 +485,15 @@ describe('AppShell — agent shell grammar', () => {
     expect(requests.filter((path) => path.includes('/notifications'))).toHaveLength(1);
   });
 
-  it('renders the responsive footer navigation with an admin-only raised chat action', () => {
-    const { container } = render(<AppShell user={admin} />);
+  it('renders the responsive footer navigation with chat for every panel role', () => {
+    const { container, rerender } = render(<AppShell user={admin} />);
     const footer = within(container.querySelector('.panel-shell__footer-nav') as HTMLElement);
     expect(footer.getByRole('button', { name: 'Notificaciones' })).toBeInTheDocument();
     expect(footer.getByRole('button', { name: 'Panel' })).toHaveAttribute('aria-current', 'page');
     expect(footer.getByRole('button', { name: 'Agente Lumat' })).toHaveClass('panel-shell__footer-nav--primary');
     expect(footer.getAllByRole('button')).toHaveLength(5);
+    rerender(<AppShell user={operador} />);
+    expect(within(container.querySelector('.panel-shell__footer-nav') as HTMLElement).getByRole('button', { name: 'Agente Lumat' })).toBeInTheDocument();
   });
 
   it('renders the optional inspector without active-thread chrome', () => {

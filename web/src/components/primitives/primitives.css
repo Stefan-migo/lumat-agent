@@ -1643,6 +1643,7 @@
   margin: 0 auto;
   padding: var(--space-5) 0;
 }
+.technician-shell .panel-shell__footer-nav { display: grid; }
 @media (max-width: 40rem) {
   .technician-shell__header-inner {
     align-items: flex-start;

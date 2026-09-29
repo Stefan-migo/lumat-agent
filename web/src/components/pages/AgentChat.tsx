@@ -24,6 +24,7 @@ import {
   uploadAssistantAttachment,
 } from "../../api";
 import { Check, Copy, Paperclip, RotateCcw, Send } from "lucide-react";
+import { roleLabels } from "../../roleLabels";
 import type {
   AssistantApproval,
   AssistantAttachment,
@@ -275,7 +276,7 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   const requestedId =
     threadId ??
     (Number(new URLSearchParams(globalThis.location.search).get("thread_id")) || undefined);
-  const humanAuthorLabel = role === "admin" ? "Administrador" : role === "tecnico" ? "Técnico" : "Operador";
+  const humanAuthorLabel = roleLabels[role];
   const [thread, setThread] = useState<InternalChatThread | null>(null);
   const [messages, setMessages] = useState<InternalChatMessage[]>([]);
   const [content, setContent] = useState("");
