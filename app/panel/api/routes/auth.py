@@ -126,7 +126,15 @@ def login(
 @router.get("/me")
 def me(current: User = Depends(require_user_json)) -> dict:
     """Current user claims for the SPA route guard (PDW-AUTH-2)."""
-    return {"id": current.id, "username": current.username, "role": current.role.value}
+    return {
+        "id": current.id,
+        "username": current.username,
+        "role": current.role.value,
+        "email": current.email,
+        "name": current.name,
+        "phone": current.phone,
+        "position": current.position,
+    }
 
 
 @router.post("/logout")

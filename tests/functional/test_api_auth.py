@@ -79,6 +79,10 @@ def test_me_with_session_returns_username_role(client, make_user):
     assert body["id"] == user_id
     assert body["username"] == "oper"
     assert body["role"] == "operador"
+    assert {field: body[field] for field in ("email", "name", "phone", "position")} == {
+        "email": None, "name": None, "phone": None, "position": None,
+    }
+    assert "locked_until" not in body and "failed_logins" not in body
 
 
 def test_me_with_admin_session_returns_admin_role(client, make_user):
