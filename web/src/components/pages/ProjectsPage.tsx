@@ -1,6 +1,6 @@
 import { useCallback, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, createProject, getProject, listProjects } from "../../api";
-import type { ProjectCandidate, ProjectDetailResponse, ProjectsResponse } from "../../types";
+import type { Project, ProjectCandidate, ProjectDetailResponse, ProjectsResponse } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
@@ -36,15 +36,25 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, sta
     setCreating(true);
     setCreationError(null);
     try {
-      await createProject(form);
-      setCreatedProjects(await listProjects());
+      let created: Project;
+      try {
+        created = (await createProject(form)).project;
+      } catch (reason: unknown) {
+        const detail = reason instanceof ApiError ? reason.detail : "No pudimos crear el proyecto";
+        const candidates = reason instanceof ApiError && Array.isArray(reason.structuredDetail?.candidates)
+          ? reason.structuredDetail.candidates as ProjectCandidate[]
+          : [];
+        setCreationError({ detail, candidates });
+        return;
+      }
       setForm({ slug: "", name: "", purpose: "" });
-    } catch (reason: unknown) {
-      const detail = reason instanceof ApiError ? reason.detail : "No pudimos crear el proyecto";
-      const candidates = reason instanceof ApiError && Array.isArray(reason.structuredDetail?.candidates)
-        ? reason.structuredDetail.candidates as ProjectCandidate[]
-        : [];
-      setCreationError({ detail, candidates });
+      try {
+        setCreatedProjects(await listProjects());
+      } catch {
+        // The refresh is best-effort: the project was created, so a list failure
+        // must neither read as a creation error nor hide the new project.
+        setCreatedProjects({ projects: [...(createdProjects ?? projects)?.projects ?? [], created] });
+      }
     } finally {
       setCreating(false);
     }
