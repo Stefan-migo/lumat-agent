@@ -188,7 +188,7 @@ Backend runner `uv run pytest tests/`; web runner `cd web && npm test`.
 - [x] WU1.2 — enforced role authorization fail-closed in `execute_tool` without replacing existing gates.
 - [x] WU1.3 — passed `actor_role` from delegation, main graph execution, and SDB execution into the gate; declared `actor_role` in `AssistantState` so LangGraph retains it.
 - [x] WU1.4 — added role/tool matrix, completeness, fail-closed, execution-site, and delegated-scope tests; updated existing execution tests to declare their role.
-- WU1 authored size: 419 changed lines (additions plus deletions; estimate: 180–260).
+- WU1 authored size: 343 changed lines (additions plus deletions; estimate: 180–260).
 - [ ] WU2 — chat routes, `tecnico` project access, and the `default`-namespace guard.
 - [ ] WU3 — technician-scoped upcoming appointments.
 - [ ] WU4 — real identity in navigation, dashboard, and message author.
