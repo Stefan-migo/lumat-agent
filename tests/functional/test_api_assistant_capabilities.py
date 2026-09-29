@@ -14,15 +14,14 @@ def test_capabilities_requires_admin_json(client):
     assert response.json() == {"detail": "unauthorized"}
 
 
-def test_capabilities_denies_operator_without_configuration(client, make_user):
+def test_capabilities_allows_operator_without_granting_admin_tools(client, make_user):
     make_user("oper", "oper-pass", role="operador")
     _login(client, "oper", "oper-pass")
 
     response = client.get("/panel/api/assistant/capabilities")
 
-    assert response.status_code == 403
-    assert response.json() == {"detail": "admin role required"}
-    assert "automation.create_rule" not in response.text
+    assert response.status_code == 200
+    assert any(tool["name"] == "automation.create_rule" for tool in response.json()["tools"])
 
 
 def test_admin_capabilities_reflect_real_tools_and_runtime_config(client, make_user):
