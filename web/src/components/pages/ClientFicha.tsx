@@ -1,7 +1,7 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, listClientEquipment, postJson, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
+import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { Appointment, ClientFichaResponse, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
+import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
 import { pathForRoute } from "../domain/panelRoutes";
 import { Badge } from "../primitives/Badge";
@@ -34,6 +34,7 @@ const CLP_FORMAT = new Intl.NumberFormat("es-CL", { style: "currency", currency:
 const MESSAGE_PREVIEW = 10;
 const EQUIPMENT_TYPE_LABELS: Record<string, string> = { calefont: "Calefont", caldera: "Caldera", calefaccion: "Sistema de calefacción" };
 const EQUIPMENT_TYPE_OPTIONS = [{ value: "", label: "Sin especificar" }, ...Object.entries(EQUIPMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }))];
+const MERGE_COUNT_LABELS: Record<keyof ClientMergePreview["moved"], string> = { conversations: "conversaciones", cases: "casos", customer_notes: "notas", customer_equipment: "equipos", appointments: "visitas" };
 
 const formatDate = (value: string | null | undefined) => (value ? DATE_FORMAT.format(new Date(value)) : "—");
 const formatDateTime = (value: string | null | undefined) => (value ? DATE_TIME_FORMAT.format(new Date(value)) : "—");
@@ -96,27 +97,35 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [equipmentForm, setEquipmentForm] = useState<CustomerEquipmentUpdate>({ equipment_type: "", brand: "", model: "", age: "", details: "" });
   const [equipmentMutation, setEquipmentMutation] = useState(false);
   const [equipmentFeedback, setEquipmentFeedback] = useState<Feedback | null>(null);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeClients, setMergeClients] = useState<Customer[]>([]);
+  const [mergeOtherId, setMergeOtherId] = useState("");
+  const [mergePreview, setMergePreview] = useState<ClientMergePreview | null>(null);
+  const [mergeFeedback, setMergeFeedback] = useState<Feedback | null>(null);
+  const [mergeLoading, setMergeLoading] = useState(false);
+  const [mergedCustomerId, setMergedCustomerId] = useState<number | null>(null);
+  const fichaCustomerId = mergedCustomerId ?? customerId;
   const [amountOpen, setAmountOpen] = useState(false);
   const [amountInput, setAmountInput] = useState("");
   const [amountMutation, setAmountMutation] = useState(false);
   const fetchFicha = useCallback(async () => {
-    if (customerId === undefined) throw new Error("customer id is required");
+    if (fichaCustomerId === undefined) throw new Error("customer id is required");
     const [ficha, memoryResponse, pendingResponse] = await Promise.all([
-      apiFetch<ClientFichaResponse>(`/panel/api/clients/${customerId}${messagesExpanded ? "" : `?messages_limit=${MESSAGE_PREVIEW}`}`),
-      apiFetch<MemoriesResponse>(`/panel/api/clients/${customerId}/memories`),
-      apiFetch<PendingMemoryRelationsResponse>(`/panel/api/clients/${customerId}/memory-relations/pending`),
+      apiFetch<ClientFichaResponse>(`/panel/api/clients/${fichaCustomerId}${messagesExpanded ? "" : `?messages_limit=${MESSAGE_PREVIEW}`}`),
+      apiFetch<MemoriesResponse>(`/panel/api/clients/${fichaCustomerId}/memories`),
+      apiFetch<PendingMemoryRelationsResponse>(`/panel/api/clients/${fichaCustomerId}/memory-relations/pending`),
     ]);
     return { ficha, memories: memoryResponse.memories, pendingRelations: pendingResponse.relations };
-  }, [customerId, messagesExpanded]);
-  const fetched = useAsyncData(fetchFicha, controlledData === undefined && controlledState === undefined);
+  }, [fichaCustomerId, messagesExpanded]);
+  const fetched = useAsyncData(fetchFicha, (controlledData === undefined || mergedCustomerId !== null) && controlledState === undefined, mergedCustomerId ?? 0);
   const fetchEquipment = useCallback(async () => {
-    if (customerId === undefined) return [];
-    return (await listClientEquipment(customerId)).equipment;
-  }, [customerId]);
-  const equipmentData = useAsyncData(fetchEquipment, customerId !== undefined, equipmentRefresh);
+    if (fichaCustomerId === undefined) return [];
+    return (await listClientEquipment(fichaCustomerId)).equipment;
+  }, [fichaCustomerId]);
+  const equipmentData = useAsyncData(fetchEquipment, fichaCustomerId !== undefined, equipmentRefresh + (mergedCustomerId ?? 0));
   const equipmentRows = equipmentData.data ?? [];
-  const data = refreshed?.ficha ?? controlledData ?? fetched.data?.ficha;
-  const memories = refreshed?.memories ?? controlledMemories ?? fetched.data?.memories ?? [];
+  const data = mergedCustomerId !== null ? fetched.data?.ficha : refreshed?.ficha ?? controlledData ?? fetched.data?.ficha;
+  const memories = mergedCustomerId !== null ? fetched.data?.memories ?? [] : refreshed?.memories ?? controlledMemories ?? fetched.data?.memories ?? [];
   const pendingRelations = refreshed?.pendingRelations ?? fetched.data?.pendingRelations ?? [];
   const state: FichaState = controlledState ?? (controlledData ? "ready" : fetched.state);
 
@@ -140,9 +149,37 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     }
   };
   const refresh = async () => {
-    if (customerId === undefined) return;
+    if (fichaCustomerId === undefined) return;
     const next = await fetchFicha();
     setRefreshed(next);
+  };
+  const openMerge = async () => {
+    if (fichaCustomerId === undefined) return;
+    setMergeOpen(true);
+    setMergeFeedback(null);
+    setMergePreview(null);
+    setMergeOtherId("");
+    try { setMergeClients((await fetchClients({ includeArchived: true })).clients.filter((client) => client.id !== fichaCustomerId)); }
+    catch (error) { setMergeFeedback({ tone: "danger", title: error instanceof ApiError ? error.detail : "No pudimos cargar los clientes" }); }
+  };
+  const selectMergeClient = async (otherId: string) => {
+    setMergeOtherId(otherId);
+    setMergePreview(null);
+    setMergeFeedback(null);
+    if (!otherId || fichaCustomerId === undefined) return;
+    try { setMergePreview(await previewClientMerge(fichaCustomerId, Number(otherId))); }
+    catch (error) { setMergeFeedback({ tone: "danger", title: error instanceof ApiError ? error.detail : "No pudimos cargar la vista previa" }); }
+  };
+  const confirmMerge = async () => {
+    if (!mergePreview || fichaCustomerId === undefined || mergeLoading) return;
+    setMergeLoading(true);
+    setMergeFeedback(null);
+    try {
+      const { survivor } = await mergeClient(fichaCustomerId, Number(mergeOtherId));
+      if (mergePreview.survivor_id === fichaCustomerId) { await refresh(); setEquipmentRefresh((value) => value + 1); setMergeOpen(false); }
+      else { setMergedCustomerId(survivor.id); setRefreshed(null); setMergeOpen(false); }
+    } catch (error) { setMergeFeedback({ tone: "danger", title: error instanceof ApiError ? error.detail : "No pudimos fusionar los clientes" }); }
+    finally { setMergeLoading(false); }
   };
   const safeError = (error: unknown, action: "estado" | "nota" | "caso" | "identidad" | "consentimiento" | "archivo" | "equipo") => {
     const labels = { estado: "el estado", nota: "la nota", caso: "el caso", identidad: "la identidad", consentimiento: "el consentimiento", archivo: "el archivo", equipo: "el equipo" };
@@ -311,6 +348,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={openProfile}>Editar identidad</Button>
               <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={() => { setConsentFeedback(null); void saveConsent(); }}>Cambiar consentimiento</Button>
               <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={() => customer.archived_at ? void saveArchive() : setArchiveOpen(true)}>{customer.archived_at ? "Restaurar" : "Archivar"}</Button>
+              <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={() => void openMerge()}>Fusionar con otro cliente</Button>
               <LocalFeedback feedback={consentFeedback} />
               {/* The dialog owns the surface while it is open, so the same failure never renders twice. */}
               {profileOpen ? null : <LocalFeedback feedback={profileFeedback} />}
@@ -343,6 +381,17 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             <p>Tiene {openCaseCount} {openCaseCount === 1 ? "caso abierto" : "casos abiertos"} y {futureAppointmentCount} {futureAppointmentCount === 1 ? "visita futura" : "visitas futuras"}. Puedes continuar; estos trabajos seguirán registrados.</p>
             <LocalFeedback feedback={archiveFeedback} />
             <Button disabled={customerMutation !== null} onClick={() => void saveArchive()}>{customerMutation === "archive" ? "Guardando…" : "Confirmar archivo"}</Button>
+          </Dialog>
+          <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)} title="Fusionar clientes">
+            <Select id="merge-other-client" label="Otro cliente" value={mergeOtherId} options={[{ value: "", label: "Selecciona un cliente" }, ...mergeClients.map((client) => ({ value: String(client.id), label: `${client.name ?? "Sin nombre"} · ${client.phone_e164 ?? "Sin teléfono"}` }))]} onChange={(event) => void selectMergeClient(event.target.value)} />
+            {mergePreview ? <>
+              <p>Cliente superviviente: {mergePreview.survivor_id === customer.id ? customer.name : mergeClients.find((client) => client.id === mergePreview.survivor_id)?.name ?? `#${mergePreview.survivor_id}`}</p>
+              <p>Se moverán: {Object.entries(mergePreview.moved).map(([table, count]) => `${MERGE_COUNT_LABELS[table as keyof ClientMergePreview["moved"]]}: ${count}`).join(" · ")}.</p>
+              <p>{mergePreview.memory_conflicts} conflictos de memoria.</p>
+              {mergePreview.scalar_conflicts.length ? <p>En conflictos de identidad, se conserva el valor del cliente superviviente: {mergePreview.scalar_conflicts.join(", ")}.</p> : null}
+            </> : null}
+            <LocalFeedback feedback={mergeFeedback} />
+            <Button disabled={!mergePreview || mergeLoading} onClick={() => void confirmMerge()}>{mergeLoading ? "Fusionando…" : "Confirmar fusión"}</Button>
           </Dialog>
 
           <Card title="Estado">
