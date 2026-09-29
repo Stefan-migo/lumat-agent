@@ -14,6 +14,7 @@ from _testdb import admin_database_url
 
 
 ADMIN_DB_URL = admin_database_url()
+FOLLOWUP_NOW = datetime(2030, 1, 1, 12, tzinfo=timezone.utc)
 
 
 @pytest.fixture(autouse=True)
@@ -365,3 +366,154 @@ def test_appointment_reminder_sends_configured_template_and_local_datetime_param
         assert len(calls[0][1]) == 2
         assert operation.status == "sent"
         assert operation.delivered_at is not None
+
+
+@pytest.mark.parametrize("outcome", ["completed", "no_show"])
+def test_close_schedules_followup_and_publishes_outcome_event(migrated_db, outcome):
+    from app.models import AppointmentStatus, Case, DomainEvent, User, UserRole
+    from app.services import scheduling
+    from app.services.settings import get_setting
+
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, "+56933333340")
+        technician = User(username=f"followup-{outcome}", password_hash="x", role=UserRole.TECNICO)
+        session.add(technician)
+        session.flush()
+        case = Case(customer_id=customer.id, status="open")
+        session.add(case)
+        session.flush()
+        appointment = scheduling.book(
+            session, service="Visit", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=FOLLOWUP_NOW.date() + timedelta(days=2),
+            local_time=datetime.strptime("14:35", "%H:%M").time(), timezone_name="UTC",
+            duration_minutes=60, actor="test",
+        )
+        scheduling.close(session, appointment, outcome=AppointmentStatus(outcome), actor="test", now=FOLLOWUP_NOW)
+        key = f"appointment:{appointment.id}:followup:{outcome}"
+        operation = session.scalar(select(NotificationOperation).where(NotificationOperation.idempotency_key == key))
+        assert operation is not None
+        assert operation.next_attempt_at == FOLLOWUP_NOW + timedelta(hours=24)
+        assert operation.recipient == get_setting(session, "notify.owner_whatsapp")
+        assert operation.status == "pending"
+        assert session.scalar(select(func.count()).select_from(NotificationOperation).where(NotificationOperation.idempotency_key == key)) == 1
+        event_type = f"appointment.{outcome}"
+        event = session.scalar(select(DomainEvent).where(DomainEvent.event_type == event_type, DomainEvent.entity_id == str(appointment.id)))
+        assert event is not None
+        assert event.dedupe_key == f"appointment:{appointment.id}:{outcome}"
+        assert event.payload == {
+            "customer_id": customer.id, "case_id": case.id,
+            "recipient": customer.phone_e164, "outcome": outcome,
+        }
+
+
+def test_close_cannot_schedule_followup_twice(migrated_db):
+    from app.models import AppointmentStatus, Case, User, UserRole
+    from app.services import scheduling
+
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, "+56933333341")
+        technician = User(username="followup-once", password_hash="x", role=UserRole.TECNICO)
+        session.add(technician)
+        session.flush()
+        case = Case(customer_id=customer.id, status="open")
+        session.add(case)
+        session.flush()
+        appointment = scheduling.book(
+            session, service="Visit", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=FOLLOWUP_NOW.date() + timedelta(days=2),
+            local_time=datetime.strptime("14:35", "%H:%M").time(), timezone_name="UTC",
+            duration_minutes=60, actor="test",
+        )
+        scheduling.close(session, appointment, outcome=AppointmentStatus.COMPLETED, actor="test", now=FOLLOWUP_NOW)
+        with pytest.raises(ValueError):
+            scheduling.close(session, appointment, outcome=AppointmentStatus.COMPLETED, actor="test", now=FOLLOWUP_NOW)
+        key = f"appointment:{appointment.id}:followup:completed"
+        assert session.scalar(select(func.count()).select_from(NotificationOperation).where(NotificationOperation.idempotency_key == key)) == 1
+
+
+@pytest.mark.parametrize(
+    "outcome,template_event,setting_key,template_name",
+    [
+        ("completed", "appointment.followup.completed", "notify.followup_template_name", "appointment_followup"),
+        ("no_show", "appointment.followup.no_show", "notify.followup_no_show_template_name", "appointment_followup_no_show"),
+    ],
+)
+def test_followup_dispatch_uses_outcome_specific_template_and_parameters(
+    migrated_db, monkeypatch, outcome, template_event, setting_key, template_name,
+):
+    from app.models import AppointmentStatus, Case, NotificationTemplateVersion, User, UserRole
+    from app.services import scheduling, notify
+    from app.services.settings import set_setting
+
+    calls = []
+    monkeypatch.setattr(notify, "send_template", lambda phone, params, *, template_name=None:
+                        calls.append((phone, params, template_name)) or "wamid-followup")
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, f"+5693333334{0 if outcome == 'completed' else 2}")
+        customer.name = "Ana"
+        technician = User(username=f"dispatch-followup-{outcome}", password_hash="x", role=UserRole.TECNICO)
+        session.add(technician)
+        session.flush()
+        case = Case(customer_id=customer.id, status="open")
+        session.add(case)
+        session.flush()
+        set_setting(session, setting_key, template_name)
+        appointment = scheduling.book(
+            session, service="Visit", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=FOLLOWUP_NOW.date() + timedelta(days=2),
+            local_time=datetime.strptime("14:35", "%H:%M").time(), timezone_name="UTC",
+            duration_minutes=60, actor="test",
+        )
+        scheduling.close(session, appointment, outcome=AppointmentStatus(outcome), actor="test", now=FOLLOWUP_NOW)
+        session.add(NotificationTemplateVersion(
+            event=template_event, channel="whatsapp", locale="es", version=1,
+            content="Follow-up {customer_name} {date} {time}",
+            required_variables=["customer_name", "date", "time"], approved=True,
+            smtp_allowed=True, created_by="test",
+        ))
+        session.flush()
+        operation = session.scalar(select(NotificationOperation).where(
+            NotificationOperation.idempotency_key == f"appointment:{appointment.id}:followup:{outcome}"
+        ))
+        assert notifications.process_operation(session, operation.id, now=operation.next_attempt_at) is True
+        assert calls == [(operation.recipient, ["Ana", "03/01/2030", "14:35"], template_name)]
+
+
+def test_followup_whatsapp_failure_falls_back_to_team_email_and_audits(migrated_db, monkeypatch):
+    from app.models import AppointmentStatus, Case, NotificationTemplateVersion, User, UserRole
+    from app.services import scheduling, notify
+    from app.services.settings import get_setting
+
+    emails = []
+    monkeypatch.setattr(notify, "send_template", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("Meta down")))
+    monkeypatch.setattr(notify, "send_email", lambda session, to, subject, body: emails.append((to, subject, body)))
+    with SessionLocal() as session:
+        customer = get_or_create_customer(session, "+56933333343")
+        technician = User(username="fallback-followup", password_hash="x", role=UserRole.TECNICO)
+        session.add(technician)
+        session.flush()
+        case = Case(customer_id=customer.id, status="open")
+        session.add(case)
+        session.flush()
+        appointment = scheduling.book(
+            session, service="Visit", customer_id=customer.id, case_id=case.id,
+            technician_id=technician.id, local_date=FOLLOWUP_NOW.date() + timedelta(days=2),
+            local_time=datetime.strptime("14:35", "%H:%M").time(), timezone_name="UTC",
+            duration_minutes=60, actor="test",
+        )
+        scheduling.close(session, appointment, outcome=AppointmentStatus.COMPLETED, actor="test", now=FOLLOWUP_NOW)
+        session.add(NotificationTemplateVersion(
+            event="appointment.followup.completed", channel="whatsapp", locale="es", version=1,
+            content="Follow-up", required_variables=[], approved=True, smtp_allowed=True, created_by="test",
+        ))
+        session.flush()
+        operation = session.scalar(select(NotificationOperation).where(
+            NotificationOperation.idempotency_key == f"appointment:{appointment.id}:followup:completed"
+        ))
+        assert notifications.process_operation(session, operation.id, now=operation.next_attempt_at) is True
+        address = get_setting(session, "notify.owner_email")
+        assert emails and emails[0][0] == address
+        session.flush()
+        assert session.scalar(select(AuditLog).where(
+            AuditLog.action == "notification.followup_email_fallback"
+        )) is not None

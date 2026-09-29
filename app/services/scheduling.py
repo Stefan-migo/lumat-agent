@@ -13,7 +13,7 @@ from app.models import Appointment, AppointmentCalendarSync, AppointmentHistory,
 from app.services.audit import record_audit
 from app.services.calendar import ICSProvider, synchronize as synchronize_calendar
 from app.services.events import publish_event
-from app.services.settings import get_hours_timezone
+from app.services.settings import get_hours_timezone, get_setting
 
 
 _OVERLAP_CONSTRAINTS = {
@@ -70,6 +70,23 @@ def _maintain_reminder(session: Session, appointment: Appointment, *, schedule: 
         operation.recipient = values["recipient"]
         operation.content = values["content"]
     session.flush()
+
+
+def _schedule_followup(session: Session, appointment: Appointment, *, outcome: AppointmentStatus, now: datetime) -> None:
+    from app.services.notifications import create_operation
+
+    key = f"appointment:{appointment.id}:followup:{outcome.value}"
+    content = "Appointment follow-up: completed visit" if outcome is AppointmentStatus.COMPLETED else "Appointment follow-up: no-show visit"
+    create_operation(
+        session,
+        recipient=get_setting(session, "notify.owner_whatsapp"),
+        channel="whatsapp",
+        content=content,
+        source_entity="appointment",
+        source_id=str(appointment.id),
+        idempotency_key=key,
+        next_attempt_at=now + timedelta(hours=24),
+    )
 
 
 class NonexistentLocalTime(ValueError):
@@ -290,7 +307,7 @@ def cancel(session: Session, appointment: Appointment, *, actor: str, reason: st
     return appointment
 
 
-def close(session: Session, appointment: Appointment, *, outcome: AppointmentStatus, actor: str, reason: str | None = None) -> Appointment:
+def close(session: Session, appointment: Appointment, *, outcome: AppointmentStatus, actor: str, reason: str | None = None, now: datetime | None = None) -> Appointment:
     if appointment.status is not AppointmentStatus.BOOKED:
         raise ValueError("only booked appointments can be closed")
     if outcome not in (AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW):
@@ -300,6 +317,17 @@ def close(session: Session, appointment: Appointment, *, outcome: AppointmentSta
     session.flush()
     _history(session, appointment, actor=actor, action=outcome.value, previous=previous, details={"reason": reason} if reason else None)
     record_audit(session, actor=actor, action=f"appointment.{outcome.value}", entity="appointment", entity_id=str(appointment.id), after={"outcome": outcome.value, "reason": reason})
+    customer = session.get(Customer, appointment.customer_id)
+    publish_event(
+        session,
+        event_type=f"appointment.{outcome.value}",
+        entity_type="appointment",
+        entity_id=appointment.id,
+        payload={"customer_id": appointment.customer_id, "case_id": appointment.case_id,
+                 "recipient": customer.phone_e164 if customer else None, "outcome": outcome.value},
+        dedupe_key=f"appointment:{appointment.id}:{outcome.value}",
+    )
+    _schedule_followup(session, appointment, outcome=outcome, now=now or datetime.now(timezone.utc))
     return appointment
 
 
