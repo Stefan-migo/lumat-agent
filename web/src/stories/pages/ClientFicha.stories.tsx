@@ -32,7 +32,7 @@ const ficha: ClientFichaResponse = {
     appointments: [appointment],
   },
   notes: [{ id: 3, customer_id: customer.id, note: "Confirmar por WhatsApp antes de la visita.", author: "operador", created_at: null }],
-  memo: memories.find((memory) => memory.topic_key === "customer_memo")?.contenido ?? "",
+  memo: "",
   states: ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"],
   users: [{ id: 3, username: "operador" }],
 };
@@ -41,12 +41,12 @@ export function UnansweredEmergency() {
   return <ClientFicha data={{ ...ficha, history: { ...ficha.history, cases: [{ ...ficha.history.cases[0], emergency: true }] } }} memories={memories} />;
 }
 
-export function ClientFichaView({ memo = ficha.memo }: { memo?: string }) {
-  return <ClientFicha data={{ ...ficha, memo }} memories={memories} />;
+export function ClientFichaView() {
+  return <ClientFicha data={ficha} memories={memories} />;
 }
 
 export function NoMemo() {
-  return <ClientFichaView memo="" />;
+  return <ClientFicha data={ficha} memories={memories.filter((memory) => memory.topic_key !== "customer_memo")} />;
 }
 
 /** Calendar-sync failure with a recoverable retry, on the populated ficha. Exported for tests. */

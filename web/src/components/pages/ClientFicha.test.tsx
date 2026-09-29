@@ -92,10 +92,10 @@ const memories: Memory[] = [{
   id: 5,
   scope: "customer",
   entity_id: "7",
-  tipo: "preference",
+  tipo: "customer_memo",
   titulo: "Horario",
   contenido: "Prefiere contacto por la tarde.",
-  topic_key: "horario",
+  topic_key: "customer_memo",
   pin: true,
   status: "active",
   created_at: null,
@@ -121,13 +121,13 @@ describe("ClientFicha page grammar", () => {
   it("retains operational cards, memory and note content, badges, and history tables", () => {
     const { container } = render(<ClientFicha data={ficha} memories={memories} />);
 
-    expect(screen.getByRole("heading", { name: "Memo del cliente" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Memo del cliente" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Memorias del cliente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Notas" })).toBeInTheDocument();
-    expect(screen.getAllByText("Prefiere contacto por la tarde.")).toHaveLength(2);
+    expect(screen.getAllByText("Prefiere contacto por la tarde.")).toHaveLength(1);
     expect(screen.getByText("operador · Confirmar por WhatsApp")).toBeInTheDocument();
     expect(screen.getAllByText("Contactado").length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("table")).toHaveLength(4);
+    expect(screen.getAllByRole("table")).toHaveLength(3);
     expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Conversaciones" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Casos anteriores" })).toBeInTheDocument();
