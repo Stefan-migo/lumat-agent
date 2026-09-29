@@ -122,13 +122,21 @@ four remaining `DataTable.actions` consumers; KPIs; any new dependency.
   exists, the featured block is simply absent. The memories card already owns the
   empty state (`Sin memorias todavía`), so `Todavía no hay memo para este cliente.`
   is not re-added anywhere.
-- **D5 — The Tipo column uses the shared labels that already exist.** The local
-  `tipoTone` helper in `ClientMemories` is replaced by the exported
-  `memoryTypeTone`, and the cell renders `memoryTypeLabel(m.tipo)`. This deletes a
-  duplicate helper, consumes substrate that already exists and was unused, and stops
-  the surface printing raw backend identifiers — which is what the ficha's own
-  invariant test already forbids in spirit.
-- **D6 — B3 and B4 stay in their own slices.** The `Historial` disclosure and the
+- **D5 — The memories card renders operator labels, not backend identifiers.** The
+  local `tipoTone` and `statusTone` helpers in `ClientMemories` are deleted in favour of
+  the exported `memoryTypeTone` / `memoryTypeLabel` and `memoryStatusTone` /
+  `memoryStatusLabel` from `toneMaps.ts`, and both cells render the label. This deletes
+  two duplicate helpers, consumes substrate that already existed and was unused (the
+  `memoryType*` / `memoryStatus*` pair had **no consumer**), and stops the surface
+  printing raw backend identifiers — which is what the ficha's own invariant test
+  already forbids in spirit. The status column was not in the original plan; it is the
+  same pattern in the same file with the same evidence, so leaving it raw would have
+  been half the job. The featured block uses the same pair.
+- **D6 — One action renderer, two call sites.** The pin/delete cell was inlined in the
+  table's `actions` prop. It is now a single local `renderActions(memory)` used by both
+  the featured block and the table, so the featured memo cannot drift from a row's
+  actions while the two stay textually identical.
+- **D7 — B3 and B4 stay in their own slices.** The `Historial` disclosure and the
   list's Cliente cell are untouched here so this review stays focused.
 
 ## Graph check (Step 1)
@@ -229,10 +237,22 @@ edges consulted:
   `DataTable` renders its empty surface rather than a table); Storybook tests retain
   the empty memories assertion and reject the removed placeholder. Focused ficha and
   story tests passed (`48/48`).
-- [x] **T6** — full verification passed: `npm run test` (90 files, 854 tests),
-  `npx tsc -b --noEmit`, `npm run build`, `npm run build-storybook`, and
-  `git diff --check`. The Vite and Storybook builds retain the existing >500 kB chunk
-  warning.
+- [x] **T6** — implementation-side verification passed: `npx tsc -b --noEmit`,
+  `npm run build`, `npm run build-storybook`, `git diff --check`, and a canonical
+  `npm run test` run of 90 files / 854 tests. The Vite and Storybook builds retain the
+  existing >500 kB chunk warning.
+- [x] **Parent verification, after the writer's report.** Two canonical `npm run test`
+  runs on this same candidate flaked under host load — `load average` **20.75 on 8
+  CPUs** — and the failures **moved between runs**: run 1 timed out four tests across
+  `AgendaPage.test.tsx`, `AgendaPage.stories.test.tsx` and `AppShell.test.tsx`
+  (`Test timed out in 5000ms`); run 2 failed a single unrelated async assertion in
+  `AgentChat.test.tsx`. Every file that failed passed on the other run, none of them is
+  touched by this slice, and all three timed-out files pass in isolation on this
+  candidate (**78/78**, 32s). A controlled run with bounded parallelism —
+  `npm run test -- --maxWorkers=2` — is green: **90 files, 854 tests passed, exit 0**.
+  With two sibling sessions live, the contention is pre-existing and not attributable
+  to this candidate; it is recorded as a follow-up, not fixed here.
+- [x] Phantom-token check re-run by the parent on the final candidate: prints `[]`.
 
 ## Size
 
@@ -255,6 +275,14 @@ final documentation commit.
   `PlanningSessions.tsx`. Note `ClientMemories` still renders `Fijar`/`Eliminar` as
   `variant="secondary"` buttons in `.table__actions`; B1 only introduced the menu
   idiom, it did not convert this consumer.
+- **The web suite flakes under host contention.** Two canonical `npm run test` runs
+  under `load average` ~20 on 8 CPUs failed timing-sensitive tests in files this slice
+  does not touch, and the failing files differed between runs. `vitest` runs with its
+  default 5000 ms per-test timeout and no bounded worker pool (`web/vite.config.ts`
+  sets no `testTimeout` or `maxWorkers`), so a loaded host can starve the heavier React
+  tests. Not fixed here: it is pre-existing test-infrastructure behaviour, outside this
+  slice's scope and files. The durable fixes would be a bounded pool or a raised
+  timeout in the shared vitest config, and both deserve their own slice.
 - **B1 is not merged.** `ClientFicha.tsx` is touched by both slices in different
   regions, so before the second of the two merges the repository's own pre-merge
   integration check over the merged tree applies.
