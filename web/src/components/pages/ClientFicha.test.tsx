@@ -102,6 +102,11 @@ const memories: Memory[] = [{
   updated_at: null,
 }];
 
+async function clickCustomerMenuItem(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(screen.getByRole("button", { name: `Acciones para ${ficha.customer.name}` }));
+  await user.click(await screen.findByRole("menuitem", { name: label }));
+}
+
 describe("ClientFicha page grammar", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.restoreAllMocks());
@@ -288,6 +293,35 @@ describe("ClientFicha page grammar", () => {
 describe("ClientFicha customer controls", () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it("groups the customer summary into one card with one primary action and a named actions menu", async () => {
+    const user = userEvent.setup();
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    const rail = screen.getByRole("region", { name: "Resumen del cliente" });
+    expect(rail.querySelectorAll(":scope > .card")).toHaveLength(1);
+    expect(within(rail).getByRole("heading", { name: "Cliente" })).toBeInTheDocument();
+    expect(within(rail).queryByRole("heading", { name: "Identidad" })).not.toBeInTheDocument();
+    expect(within(rail).queryByRole("heading", { name: "Estado" })).not.toBeInTheDocument();
+    expect(within(rail).getByText("MF")).toBeInTheDocument();
+    expect(within(rail).getByText("Marcela Fuentes")).toBeInTheDocument();
+    expect(within(rail).getByText("Teléfono", { selector: "dt" })).toBeInTheDocument();
+    expect(within(rail).getByText("+56912345678")).toBeInTheDocument();
+    expect(within(rail).getByText("Contactado", { selector: ".badge" })).toBeInTheDocument();
+
+    const actions = rail.querySelector(".client-ficha__customer-controls") as HTMLElement;
+    expect(within(actions).getByRole("button", { name: "Editar identidad" })).toHaveClass("btn--primary");
+    expect(actions.querySelectorAll(".btn--primary")).toHaveLength(1);
+    expect(actions.querySelectorAll(".menu__trigger--icon")).toHaveLength(1);
+    expect(within(actions).getByRole("button", { name: "Acciones para Marcela Fuentes" })).toBeInTheDocument();
+    expect(within(actions).getAllByRole("button").every((button) => !button.textContent?.includes("Marcela Fuentes"))).toBe(true);
+
+    await user.click(within(actions).getByRole("button", { name: "Acciones para Marcela Fuentes" }));
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Cambiar consentimiento" })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Fusionar con otro cliente" })).toHaveClass("menu__item--danger");
+    expect(within(menu).getByRole("menuitem", { name: "Archivar" })).toHaveClass("menu__item--danger");
+  });
+
   it("edits profile fields in a dialog without allowing phone changes", async () => {
     const user = userEvent.setup();
     vi.mocked(updateCustomerProfile).mockResolvedValue({ customer: ficha.customer });
@@ -320,7 +354,7 @@ describe("ClientFicha customer controls", () => {
     const user = userEvent.setup();
     vi.mocked(updateCustomerConsent).mockRejectedValue(new ApiError(500, "private"));
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
-    await user.click(screen.getByRole("button", { name: "Cambiar consentimiento" }));
+    await clickCustomerMenuItem(user, "Cambiar consentimiento");
     expect(updateCustomerConsent).toHaveBeenCalledWith(7, false);
     expect(await screen.findByRole("heading", { name: "No pudimos guardar el consentimiento" })).toBeInTheDocument();
   });
@@ -332,10 +366,11 @@ describe("ClientFicha customer controls", () => {
     vi.mocked(archiveCustomer).mockResolvedValue({ customer: ficha.customer });
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
     render(<ClientFicha customerId={7} data={{ ...ficha, history: { ...ficha.history, appointments: [futureAppointment] } }} memories={memories} />);
-    await user.click(screen.getByRole("button", { name: "Archivar" }));
+    await clickCustomerMenuItem(user, "Archivar");
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent("1 caso abierto");
     expect(dialog).toHaveTextContent("1 visita futura");
+    expect(within(dialog).getByRole("button", { name: "Confirmar archivo" })).toHaveClass("btn--danger");
     await user.click(within(dialog).getByRole("button", { name: "Confirmar archivo" }));
     expect(archiveCustomer).toHaveBeenCalledWith(7);
     expect(await screen.findByRole("heading", { name: "Cliente archivado" })).toBeInTheDocument();
@@ -346,7 +381,7 @@ describe("ClientFicha customer controls", () => {
     vi.mocked(archiveCustomer).mockRejectedValue(new ApiError(500, "private"));
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
-    await user.click(screen.getByRole("button", { name: "Archivar" }));
+    await clickCustomerMenuItem(user, "Archivar");
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirmar archivo" }));
     expect(await screen.findAllByRole("heading", { name: "No pudimos guardar el archivo" })).toHaveLength(1);
   });
@@ -356,7 +391,7 @@ describe("ClientFicha customer controls", () => {
     vi.mocked(unarchiveCustomer).mockRejectedValue(new ApiError(500, "private"));
     render(<ClientFicha customerId={7} data={{ ...ficha, customer: { ...ficha.customer, archived_at: "2026-09-01T00:00:00Z" } }} memories={memories} />);
     expect(screen.getByText("Cliente archivado")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Restaurar" }));
+    await clickCustomerMenuItem(user, "Restaurar");
     expect(unarchiveCustomer).toHaveBeenCalledWith(7);
     expect(await screen.findByRole("heading", { name: "No pudimos guardar el archivo" })).toBeInTheDocument();
   });
@@ -373,13 +408,14 @@ describe("ClientFicha merge dialog", () => {
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
-    await user.click(screen.getByRole("button", { name: "Fusionar con otro cliente" }));
+    await clickCustomerMenuItem(user, "Fusionar con otro cliente");
     const dialog = screen.getByRole("dialog");
     await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
     expect(await within(dialog).findByText("Cliente superviviente: Marcela Fuentes")).toBeInTheDocument();
     expect(within(dialog).getByText(/Se moverán:/)).toHaveTextContent("conversaciones: 2 · casos: 1 · notas: 3 · equipos: 1 · visitas: 0");
     expect(within(dialog).getByText(/2 conflictos de memoria/)).toBeInTheDocument();
     expect(within(dialog).getByText(/name/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Confirmar fusión" })).toHaveClass("btn--danger");
     await user.click(within(dialog).getByRole("button", { name: "Confirmar fusión" }));
 
     expect(previewClientMerge).toHaveBeenCalledWith(7, 8);
@@ -396,7 +432,7 @@ describe("ClientFicha merge dialog", () => {
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
     await waitFor(() => expect(listClientEquipment).toHaveBeenCalledTimes(1));
-    await user.click(screen.getByRole("button", { name: "Fusionar con otro cliente" }));
+    await clickCustomerMenuItem(user, "Fusionar con otro cliente");
     const dialog = screen.getByRole("dialog");
     await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
     await user.click(await within(dialog).findByRole("button", { name: "Confirmar fusión" }));
@@ -417,7 +453,7 @@ describe("ClientFicha merge dialog", () => {
     });
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
-    await user.click(screen.getByRole("button", { name: "Fusionar con otro cliente" }));
+    await clickCustomerMenuItem(user, "Fusionar con otro cliente");
     const dialog = screen.getByRole("dialog");
     await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
     await user.click(await within(dialog).findByRole("button", { name: "Confirmar fusión" }));
@@ -432,7 +468,7 @@ describe("ClientFicha merge dialog", () => {
     vi.mocked(previewClientMerge).mockRejectedValue(new ApiError(400, "cannot merge a customer tombstone"));
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
-    await user.click(screen.getByRole("button", { name: "Fusionar con otro cliente" }));
+    await clickCustomerMenuItem(user, "Fusionar con otro cliente");
     const dialog = screen.getByRole("dialog");
     await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
 
@@ -451,7 +487,7 @@ describe("ClientFicha slice 2 — product register", () => {
 
     expect(container.querySelector("select")).toHaveClass("field__control");
     expect(container.querySelector("textarea")).toHaveClass("field__control");
-    expect(container.querySelectorAll("button:not(.btn):not(.dialog__close)")).toHaveLength(0);
+    expect(container.querySelectorAll("button:not(.btn):not(.dialog__close):not(.menu__trigger)")).toHaveLength(0);
   });
 
   // T11 — no raw backend identifier on the surface.

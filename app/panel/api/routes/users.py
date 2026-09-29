@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import User
-from app.panel.api.deps import require_admin_json
-from app.panel.api.serializers import to_admin_user_dict
+from app.models import User, UserRole
+from app.panel.api.deps import require_admin_json, require_operator_json
+from app.panel.api.serializers import to_admin_user_dict, to_user_dict
 from app.panel.deps import get_db
 from app.services import users
 from app.services.audit import record_audit
@@ -49,6 +50,16 @@ def list_users(
     session: Session = Depends(get_db), current: User = Depends(require_admin_json)
 ) -> dict:
     return {"users": [to_admin_user_dict(user) for user in users.list_users(session)]}
+
+
+@router.get("/technicians")
+def list_technicians(
+    session: Session = Depends(get_db), current: User = Depends(require_operator_json)
+) -> dict:
+    technicians = session.scalars(
+        select(User).where(User.role == UserRole.TECNICO).order_by(User.username)
+    ).all()
+    return {"technicians": [to_user_dict(user) for user in technicians]}
 
 
 @router.post("/users", status_code=status.HTTP_201_CREATED)

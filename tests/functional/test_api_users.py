@@ -63,6 +63,32 @@ def test_admin_list_is_ordered_and_allow_listed(client, make_user):
     assert all("password_hash" not in row and "failed_logins" not in row and "locked_until" not in row for row in users)
 
 
+def test_technician_list_is_operator_readable_minimal_and_ordered(client, make_user):
+    unauthenticated = client.get("/panel/api/technicians", follow_redirects=False)
+    assert unauthenticated.status_code == 401
+    assert unauthenticated.headers["content-type"].startswith("application/json")
+    assert "location" not in unauthenticated.headers
+
+    make_user("zulu-tech", "password1", role="tecnico")
+    make_user("alpha-operator", "password1", role="operador")
+    make_user("bravo-tech", "password1", role="tecnico")
+    _login(client, make_user, "technician-picker-operator", "password1", "operador")
+
+    response = client.get("/panel/api/technicians")
+
+    assert response.status_code == 200
+    technicians = response.json()["technicians"]
+    assert [row["username"] for row in technicians] == ["bravo-tech", "zulu-tech"]
+    assert all(set(row) == {"id", "username"} for row in technicians)
+
+    client.post("/panel/api/logout")
+    _login(client, make_user, "technician-picker-technician", "password1", "tecnico")
+    forbidden = client.get("/panel/api/technicians", follow_redirects=False)
+    assert forbidden.status_code == 403
+    assert forbidden.headers["content-type"].startswith("application/json")
+    assert "location" not in forbidden.headers
+
+
 def test_create_accepts_each_role_and_hashes_password(client, make_user):
     _admin(client, make_user)
     for role in ("admin", "operador", "tecnico"):

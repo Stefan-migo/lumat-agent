@@ -825,6 +825,43 @@ def test_conversations_and_appointments_use_service_seams(monkeypatch):
     assert execute_tool(SimpleNamespace(), "appointments.upcoming", {}, role="admin")["result"][0]["id"] == 2
 
 
+def test_upcoming_appointments_use_the_technician_seam_only_for_tecnico(monkeypatch):
+    own = SimpleNamespace(id=2, starts_at=datetime.now(timezone.utc) + timedelta(days=1))
+    calls = []
+
+    def _for_technician(session, technician_id):
+        calls.append(("technician", technician_id))
+        return [(own, None, None)]
+
+    def _for_range(session, from_date, to_date, timezone_name):
+        calls.append(("range", None))
+        return [(own, None, None, None, None)]
+
+    monkeypatch.setattr("app.chat.assistant.tools.registry.scheduling.list_for_technician", _for_technician)
+    monkeypatch.setattr("app.chat.assistant.tools.registry.scheduling.list_for_range", _for_range)
+
+    technician = execute_tool(SimpleNamespace(), "appointments.upcoming", {}, role="tecnico", owner_id=42)
+    assert calls == [("technician", 42)]
+    assert [item["id"] for item in technician["result"]] == [2]
+
+    calls.clear()
+    for role in ("admin", "operador"):
+        assert execute_tool(
+            SimpleNamespace(), "appointments.upcoming", {}, role=role, owner_id=42
+        )["result"][0]["id"] == 2
+    assert calls == [("range", None), ("range", None)]
+
+
+def test_upcoming_appointments_fail_closed_for_tecnico_without_an_authenticated_owner(monkeypatch):
+    monkeypatch.setattr(
+        "app.chat.assistant.tools.registry.scheduling.list_for_technician",
+        lambda *args, **kwargs: pytest.fail("must not query the agenda without an owner"),
+    )
+
+    with pytest.raises(ToolValidationError, match="authenticated owner"):
+        execute_tool(SimpleNamespace(), "appointments.upcoming", {}, role="tecnico")
+
+
 def test_memory_read_is_bounded_and_uses_memory_service(monkeypatch):
     memories = [SimpleNamespace(id=index, topic_key="topic") for index in range(30)]
     monkeypatch.setattr(

@@ -64,6 +64,18 @@
 .btn--tertiary:hover {
   text-decoration: underline;
 }
+/* Destructive or irreversible action (DESIGN_SYSTEM.md:444). Colours come from the
+   existing danger pair (DESIGN_SYSTEM.md:202,510); the token set defines no darker
+   danger step, so the hover deepens the border rather than inventing a token. */
+.btn--danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+.btn--danger:hover {
+  background: var(--danger-tint);
+  border-color: var(--danger);
+}
 .btn > svg,
 .dialog__close > svg {
   width: var(--icon-md);
@@ -388,6 +400,16 @@
   color: var(--corp-text);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
+}
+/* Identity header and action group of the ficha rail: avatar, name, badges, the single
+   primary action and the `...` menu flow in one wrapping row above the facts list. The
+   card's own grid gap owns the vertical rhythm between the header, the facts and the
+   state control, so this rule sets no margin. */
+.client-ficha__customer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
 }
 .client-ficha__state-control {
   display: grid;
