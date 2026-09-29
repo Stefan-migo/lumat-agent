@@ -54,9 +54,54 @@ describe("Button (T7.1)", () => {
     render(<Button variant="primary">Guardar</Button>);
     render(<Button variant="secondary">Cancelar</Button>);
     render(<Button variant="tertiary">Operations</Button>);
+    render(<Button variant="danger">Eliminar</Button>);
     expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Operations" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Eliminar" })).toHaveClass("btn--danger");
+    expect(screen.getByRole("button", { name: "Eliminar" })).toBeEnabled();
+  });
+
+  it("defines the danger variant through the existing danger token", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    expect(css).toMatch(/\.btn--danger\s*\{[^}]*var\(--danger\)/s);
+  });
+
+  it("resolves every variant token reference against the token source — no phantom custom property", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    const tokens = readFileSync(join(process.cwd(), "src/tokens/tokens.css"), "utf8");
+    // A custom property counts as declared when it is defined in the token source
+    // or scoped locally inside this stylesheet (e.g. `.dashboard__card { --bent-accent: … }`).
+    const declared = new Set(
+      [...(css + tokens).matchAll(/(--[a-z0-9-]+)\s*:/gi)].map((match) => match[1]),
+    );
+
+    const variantRules = css.match(/\.btn--[a-z-]+(?:\s*:[a-z-]+)?\s*\{[^}]*\}/gs) ?? [];
+    expect(variantRules.length).toBeGreaterThanOrEqual(4);
+
+    const referenced = [
+      ...new Set(
+        variantRules.flatMap((rule) =>
+          [...rule.matchAll(/var\((--[a-z0-9-]+)/gi)].map((match) => match[1]),
+        ),
+      ),
+    ];
+    expect(referenced.length).toBeGreaterThan(0);
+    // A `var()` with no declared custom property is invalid at computed-value time,
+    // so the declaration silently drops — the variant loses the style and still looks green.
+    expect(referenced.filter((token) => !declared.has(token))).toEqual([]);
+  });
+
+  it("preserves native disabled behavior for the danger variant", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(<Button variant="danger" onClick={onClick} disabled>Eliminar</Button>);
+
+    const button = screen.getByRole("button", { name: "Eliminar" });
+    expect(button).toHaveClass("btn--danger");
+    expect(button).toBeDisabled();
+    await user.click(button);
+    expect(onClick).not.toHaveBeenCalled();
   });
 });
 

@@ -5,10 +5,12 @@ import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, Cu
 import { ClientMemories } from "../domain/ClientMemories";
 import { pathForRoute } from "../domain/panelRoutes";
 import { Badge } from "../primitives/Badge";
+import { Avatar } from "../primitives/Avatar";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
 import { Dialog } from "../primitives/Dialog";
 import { Input } from "../primitives/Input";
+import { Menu } from "../primitives/Menu";
 import { Select } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
 import { DataTable, type Column } from "../shared/DataTable";
@@ -342,13 +344,27 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     >
       <div className="detail-region">
         <section className="detail-region__rail" aria-label="Resumen del cliente">
-          <Card title="Identidad">
+          <Card title="Cliente">
             <div className="client-ficha__customer-controls">
+              <Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} />
+              <strong>{customer.name ?? customer.phone_e164 ?? "—"}</strong>
               {customer.archived_at ? <Badge tone="warning">Cliente archivado</Badge> : null}
-              <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={openProfile}>Editar identidad</Button>
-              <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={() => { setConsentFeedback(null); void saveConsent(); }}>Cambiar consentimiento</Button>
-              <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={() => customer.archived_at ? void saveArchive() : setArchiveOpen(true)}>{customer.archived_at ? "Restaurar" : "Archivar"}</Button>
-              <Button variant="secondary" disabled={customerId === undefined || customerMutation !== null} onClick={() => void openMerge()}>Fusionar con otro cliente</Button>
+              <Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge>
+              <Button disabled={customerId === undefined || customerMutation !== null} onClick={openProfile}>Editar identidad</Button>
+              <Menu
+                trigger="icon"
+                label={`Acciones para ${customer.name ?? customer.phone_e164 ?? "cliente"}`}
+                items={[
+                  { value: "consent", label: "Cambiar consentimiento", disabled: customerId === undefined || customerMutation !== null },
+                  { value: "merge", label: "Fusionar con otro cliente", tone: "danger", disabled: customerId === undefined || customerMutation !== null },
+                  { value: "archive", label: customer.archived_at ? "Restaurar" : "Archivar", tone: "danger", disabled: customerId === undefined || customerMutation !== null },
+                ]}
+                onSelect={(value) => {
+                  if (value === "consent") { setConsentFeedback(null); void saveConsent(); }
+                  if (value === "merge") void openMerge();
+                  if (value === "archive") customer.archived_at ? void saveArchive() : setArchiveOpen(true);
+                }}
+              />
               <LocalFeedback feedback={consentFeedback} />
               {/* The dialog owns the surface while it is open, so the same failure never renders twice. */}
               {profileOpen ? null : <LocalFeedback feedback={profileFeedback} />}
@@ -362,39 +378,6 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
               <div><dt>Cliente desde</dt><dd>{formatDate(customer.created_at)}</dd></div>
             </dl>
-            <div><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div>
-          </Card>
-
-          <Dialog open={profileOpen} onClose={() => setProfileOpen(false)} title="Editar identidad">
-            <form onSubmit={(event) => void saveProfile(event)}>
-              <Input label="Nombre" value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} />
-              <Input label="Correo" type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
-              <Input label="Comuna" value={profile.comuna} onChange={(event) => setProfile({ ...profile, comuna: event.target.value })} />
-              <Input label="Dirección" value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} />
-              <Input label="Teléfono" value={customer.phone_e164 ?? "—"} readOnly />
-              <LocalFeedback feedback={profileFeedback} />
-              <Button type="submit" disabled={customerMutation !== null}>{customerMutation === "profile" ? "Guardando…" : "Guardar cambios"}</Button>
-            </form>
-          </Dialog>
-          <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} title="Archivar cliente">
-            <p>Vas a archivar a {customer.name ?? customer.phone_e164 ?? "este cliente"}.</p>
-            <p>Tiene {openCaseCount} {openCaseCount === 1 ? "caso abierto" : "casos abiertos"} y {futureAppointmentCount} {futureAppointmentCount === 1 ? "visita futura" : "visitas futuras"}. Puedes continuar; estos trabajos seguirán registrados.</p>
-            <LocalFeedback feedback={archiveFeedback} />
-            <Button disabled={customerMutation !== null} onClick={() => void saveArchive()}>{customerMutation === "archive" ? "Guardando…" : "Confirmar archivo"}</Button>
-          </Dialog>
-          <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)} title="Fusionar clientes">
-            <Select id="merge-other-client" label="Otro cliente" value={mergeOtherId} options={[{ value: "", label: "Selecciona un cliente" }, ...mergeClients.map((client) => ({ value: String(client.id), label: `${client.name ?? "Sin nombre"} · ${client.phone_e164 ?? "Sin teléfono"}` }))]} onChange={(event) => void selectMergeClient(event.target.value)} />
-            {mergePreview ? <>
-              <p>Cliente superviviente: {mergePreview.survivor_id === customer.id ? customer.name : mergeClients.find((client) => client.id === mergePreview.survivor_id)?.name ?? `#${mergePreview.survivor_id}`}</p>
-              <p>Se moverán: {Object.entries(mergePreview.moved).map(([table, count]) => `${MERGE_COUNT_LABELS[table as keyof ClientMergePreview["moved"]]}: ${count}`).join(" · ")}.</p>
-              <p>{mergePreview.memory_conflicts} conflictos de memoria.</p>
-              {mergePreview.scalar_conflicts.length ? <p>En conflictos de identidad, se conserva el valor del cliente superviviente: {mergePreview.scalar_conflicts.join(", ")}.</p> : null}
-            </> : null}
-            <LocalFeedback feedback={mergeFeedback} />
-            <Button disabled={!mergePreview || mergeLoading} onClick={() => void confirmMerge()}>{mergeLoading ? "Fusionando…" : "Confirmar fusión"}</Button>
-          </Dialog>
-
-          <Card title="Estado">
             <div className="client-ficha__state-control">
               <Select
                 id="client-state"
@@ -414,6 +397,34 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               {isSaving ? <p role="status">Guardando estado…</p> : null}
             </div>
           </Card>
+          <Dialog open={profileOpen} onClose={() => setProfileOpen(false)} title="Editar identidad">
+            <form onSubmit={(event) => void saveProfile(event)}>
+              <Input label="Nombre" value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} />
+              <Input label="Correo" type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
+              <Input label="Comuna" value={profile.comuna} onChange={(event) => setProfile({ ...profile, comuna: event.target.value })} />
+              <Input label="Dirección" value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} />
+              <Input label="Teléfono" value={customer.phone_e164 ?? "—"} readOnly />
+              <LocalFeedback feedback={profileFeedback} />
+              <Button type="submit" disabled={customerMutation !== null}>{customerMutation === "profile" ? "Guardando…" : "Guardar cambios"}</Button>
+            </form>
+          </Dialog>
+          <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} title="Archivar cliente">
+            <p>Vas a archivar a {customer.name ?? customer.phone_e164 ?? "este cliente"}.</p>
+            <p>Tiene {openCaseCount} {openCaseCount === 1 ? "caso abierto" : "casos abiertos"} y {futureAppointmentCount} {futureAppointmentCount === 1 ? "visita futura" : "visitas futuras"}. Puedes continuar; estos trabajos seguirán registrados.</p>
+            <LocalFeedback feedback={archiveFeedback} />
+            <Button variant="danger" disabled={customerMutation !== null} onClick={() => void saveArchive()}>{customerMutation === "archive" ? "Guardando…" : "Confirmar archivo"}</Button>
+          </Dialog>
+          <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)} title="Fusionar clientes">
+            <Select id="merge-other-client" label="Otro cliente" value={mergeOtherId} options={[{ value: "", label: "Selecciona un cliente" }, ...mergeClients.map((client) => ({ value: String(client.id), label: `${client.name ?? "Sin nombre"} · ${client.phone_e164 ?? "Sin teléfono"}` }))]} onChange={(event) => void selectMergeClient(event.target.value)} />
+            {mergePreview ? <>
+              <p>Cliente superviviente: {mergePreview.survivor_id === customer.id ? customer.name : mergeClients.find((client) => client.id === mergePreview.survivor_id)?.name ?? `#${mergePreview.survivor_id}`}</p>
+              <p>Se moverán: {Object.entries(mergePreview.moved).map(([table, count]) => `${MERGE_COUNT_LABELS[table as keyof ClientMergePreview["moved"]]}: ${count}`).join(" · ")}.</p>
+              <p>{mergePreview.memory_conflicts} conflictos de memoria.</p>
+              {mergePreview.scalar_conflicts.length ? <p>En conflictos de identidad, se conserva el valor del cliente superviviente: {mergePreview.scalar_conflicts.join(", ")}.</p> : null}
+            </> : null}
+            <LocalFeedback feedback={mergeFeedback} />
+            <Button variant="danger" disabled={!mergePreview || mergeLoading} onClick={() => void confirmMerge()}>{mergeLoading ? "Fusionando…" : "Confirmar fusión"}</Button>
+          </Dialog>
         </section>
 
         <div className="detail-region__main">

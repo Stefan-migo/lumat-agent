@@ -4,7 +4,7 @@ import "./primitives.css";
 export interface ButtonProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "type"> {
   /** Visual variant; colors come from tokens only (PDW-TKN-2). */
-  variant?: "primary" | "secondary" | "tertiary";
+  variant?: "primary" | "secondary" | "tertiary" | "danger";
   /** When provided, renders an `<a>` instead of a `<button>` (e.g. CSV links). */
   href?: string;
   /** Render target interaction type. `button` by default; ignored when `href` is set. */
