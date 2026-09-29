@@ -64,12 +64,17 @@
 .btn--tertiary:hover {
   text-decoration: underline;
 }
+/* Destructive or irreversible action (DESIGN_SYSTEM.md:444). Colours come from the
+   existing danger pair (DESIGN_SYSTEM.md:202,510); the token set defines no darker
+   danger step, so the hover deepens the border rather than inventing a token. */
 .btn--danger {
-  background: var(--danger);
-  color: var(--surface);
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 .btn--danger:hover {
-  background: var(--danger-700);
+  background: var(--danger-tint);
+  border-color: var(--danger);
 }
 .btn > svg,
 .dialog__close > svg {
