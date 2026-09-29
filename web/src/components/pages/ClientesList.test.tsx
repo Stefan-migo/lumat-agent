@@ -66,17 +66,33 @@ describe("ClientesList", () => {
 
     expect(screen.getByRole("main")).toHaveTextContent("Clientes");
     expect(screen.getByRole("columnheader", { name: "Cliente" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Teléfono" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Teléfono" })).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Estado" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Consentimiento" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Creado" })).toBeInTheDocument();
 
+    // The name cell is a resource: avatar initials, the drill-down link, and the phone
+    // muted underneath. The phone is no longer its own column, so this is also the guard
+    // that it is not lost.
+    const cell = screen.getByRole("link", { name: "Marcela Fuentes" }).closest(".table__resource");
+    expect(cell).not.toBeNull();
+    expect(cell!.querySelector(".table__resource-avatar")).toHaveTextContent("MF");
+    expect(within(cell as HTMLElement).getByText("+56912345678")).toBeInTheDocument();
     expect(screen.getByText("Marcela Fuentes")).toBeInTheDocument();
     expect(screen.getByText("+56912345678")).toBeInTheDocument();
     expect(screen.getByText("Contactado")).toBeInTheDocument();
     expect(screen.getByText("En evaluación")).toBeInTheDocument();
     expect(screen.getByText("2026-07-15")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("omits the muted phone line when the customer has no phone", () => {
+    const { container } = render(<ClientesList data={[{ ...customers[0], phone_e164: null }]} state="ready" />);
+
+    const cell = container.querySelector(".table__resource");
+    expect(cell).not.toBeNull();
+    expect(cell!.querySelector(".table__resource-avatar")).toHaveTextContent("MF");
+    expect(cell!.querySelector(".table__resource-meta")).toBeNull();
   });
 
   // The plural form only. The singular ("1 clientes") is a known defect fixed in T3 and is
