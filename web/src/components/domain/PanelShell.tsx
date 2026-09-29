@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { PanelNotification, User } from "../../types";
+import { roleLabels } from "../../roleLabels";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 import { Icon } from "../primitives/Icon";
@@ -87,7 +88,7 @@ function Brand({ mobile = false, compact = false }: { mobile?: boolean; compact?
 }
 
 function UserContext({ user, compact = false, onLogout }: { user: User; compact?: boolean; onLogout?: () => void | Promise<void> }) {
-  const role = user.role === "admin" ? "Administrador" : user.role === "tecnico" ? "Técnico" : "Operador";
+  const role = roleLabels[user.role];
   return (
     <div
       className="panel-shell__user"

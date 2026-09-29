@@ -2,14 +2,13 @@ import { useCallback, useState } from "react";
 import { ApiError, createUser, fetchUsers, resetUserPassword, toggleUserActive } from "../../api";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import type { AdminUser, Role, User } from "../../types";
+import { roleLabels } from "../../roleLabels";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
 import { Input } from "../primitives/Input";
 import { DataTable, type Column } from "../shared/DataTable";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
-
-const roleLabels: Record<Role, string> = { admin: "Administrador", operador: "Operador", tecnico: "Técnico" };
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.detail : fallback;
