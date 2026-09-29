@@ -327,6 +327,24 @@
 .table__link {
   color: var(--primary-700);
 }
+/* Resource cell: identity first, supporting detail muted beneath. Mirrors the queue
+   row's avatar + name + meta shape for a table cell. Consumers: the Clientes list. */
+.table__resource {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.table__resource-avatar { flex: 0 0 auto; }
+.table__resource-body {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.table__resource-meta {
+  color: var(--corp-fg-muted);
+  font-size: var(--text-sm);
+}
 .table__stale {
   margin: 0 0 var(--space-3);
   color: var(--text-muted);

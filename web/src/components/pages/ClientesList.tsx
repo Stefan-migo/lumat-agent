@@ -4,6 +4,7 @@ import { ApiError, archiveCustomer, changeClientState, createCustomer, fetchClie
 import type { Customer, CustomerState } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import { Badge } from "../primitives/Badge";
+import { Avatar } from "../primitives/Avatar";
 import { Button } from "../primitives/Button";
 import { SearchInput } from "../primitives/SearchInput";
 import { DataTable, type Column } from "../shared/DataTable";
@@ -34,13 +35,18 @@ const columns = (onOpenClient?: (id: number) => void): Column<Customer>[] => [
     key: "name",
     header: "Cliente",
     render: (customer) => (
-      <a className="table__link" href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>
-        {customer.name ?? "—"}
-      </a>
+      <div className="table__resource">
+        <Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} className="table__resource-avatar" />
+        <div className="table__resource-body">
+          <a className="table__link" href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>
+            {customer.name ?? "—"}
+          </a>
+          {customer.phone_e164 ? <span className="table__resource-meta">{customer.phone_e164}</span> : null}
+        </div>
+      </div>
     ),
   },
   { key: "archived", header: "Registro", render: (customer) => customer.archived_at ? <Badge tone="warning">Archivado</Badge> : "—" },
-  { key: "phone", header: "Teléfono", render: (customer) => customer.phone_e164 ?? "—" },
   {
     key: "state",
     header: "Estado",
