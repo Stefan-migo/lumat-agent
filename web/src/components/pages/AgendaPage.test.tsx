@@ -246,6 +246,18 @@ describe('AgendaPage', () => {
     expect(within(screen.getByRole('dialog', { name: 'Reprogramar visita' })).getByRole('alert')).toHaveTextContent('Completa todos los campos');
   });
 
+  it('tells the operator when the technician lookup fails while opening the reschedule dialog', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchTechnicians).mockRejectedValue(new Error('Sin conexión'));
+    render(<AgendaPage data={[appointment()]} state="ready" />);
+    await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+    const dialog = screen.getByRole('dialog', { name: 'Reprogramar visita' });
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent('No pudimos cargar las opciones de la visita');
+    expect(alert).toHaveTextContent('Sin conexión');
+    expect(rescheduleAppointment).not.toHaveBeenCalled();
+  });
+
   it('separates active and non-active visits in a keyboard-operable client-side register view', async () => {
     const user = userEvent.setup();
     const rows = [appointment(), appointment({ id: 2, status: 'cancelled', service: 'Cancelled service' }), appointment({ id: 3, status: 'completed', service: 'Completed service' }), appointment({ id: 4, status: 'no_show', service: 'No-show service' })];
