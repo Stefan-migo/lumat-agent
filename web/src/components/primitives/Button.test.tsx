@@ -54,9 +54,29 @@ describe("Button (T7.1)", () => {
     render(<Button variant="primary">Guardar</Button>);
     render(<Button variant="secondary">Cancelar</Button>);
     render(<Button variant="tertiary">Operations</Button>);
+    render(<Button variant="danger">Eliminar</Button>);
     expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Operations" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Eliminar" })).toHaveClass("btn--danger");
+    expect(screen.getByRole("button", { name: "Eliminar" })).toBeEnabled();
+  });
+
+  it("defines the danger variant through the existing danger token", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    expect(css).toMatch(/\.btn--danger\s*\{[^}]*var\(--danger\)/s);
+  });
+
+  it("preserves native disabled behavior for the danger variant", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(<Button variant="danger" onClick={onClick} disabled>Eliminar</Button>);
+
+    const button = screen.getByRole("button", { name: "Eliminar" });
+    expect(button).toHaveClass("btn--danger");
+    expect(button).toBeDisabled();
+    await user.click(button);
+    expect(onClick).not.toHaveBeenCalled();
   });
 });
 
