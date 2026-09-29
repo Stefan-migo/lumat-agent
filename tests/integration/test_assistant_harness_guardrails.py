@@ -1115,3 +1115,75 @@ def test_alerts_are_emitted_for_each_scope(monkeypatch):
 
     assert result["cost_mode"] == "conservative"
     assert {alert["scope"] for alert in alerts} == {"conversation", "daily"}
+
+
+def test_technician_upcoming_appointments_are_scoped_to_the_caller(migrated_db):
+    """U3.2: a technician observes only their own appointments (D3)."""
+    from app.models import Appointment, AppointmentStatus, Case, Conversation, Customer, User, UserRole
+
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as session:
+        tech_a = User(username="scope-tech-a", password_hash="test", role=UserRole.TECNICO)
+        tech_b = User(username="scope-tech-b", password_hash="test", role=UserRole.TECNICO)
+        session.add_all([tech_a, tech_b])
+        session.flush()
+        customer = Customer(phone_e164="+56900009977", name="Scope Customer")
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add(conversation)
+        session.flush()
+        case = Case(
+            conversation_id=conversation.id,
+            customer_id=customer.id,
+            service="scope check",
+            status="open",
+            summary="Scope check",
+        )
+        session.add(case)
+        session.flush()
+
+        def _appointment(technician_id, offset_days):
+            start = now + timedelta(days=offset_days)
+            return Appointment(
+                service="scope check",
+                customer_id=customer.id,
+                case_id=case.id,
+                technician_id=technician_id,
+                local_start=start.replace(tzinfo=None),
+                timezone="UTC",
+                starts_at=start,
+                ends_at=start + timedelta(hours=1),
+                duration_minutes=60,
+                status=AppointmentStatus.BOOKED,
+            )
+
+        own = _appointment(tech_a.id, 2)
+        foreign = _appointment(tech_b.id, 3)
+        session.add_all([own, foreign])
+        session.flush()
+        own_id, foreign_id = own.id, foreign.id
+        tech_a_id, tech_b_id = tech_a.id, tech_b.id
+        session.commit()
+
+    with SessionLocal() as session:
+        mine = execute_tool(
+            session, "appointments.upcoming", {"limit": 10}, role="tecnico", owner_id=tech_a_id
+        )
+        mine_ids = [item["id"] for item in mine["result"]]
+        assert own_id in mine_ids
+        assert foreign_id not in mine_ids
+
+        # The other technician sees their own appointment, never mine.
+        theirs = execute_tool(
+            session, "appointments.upcoming", {"limit": 10}, role="tecnico", owner_id=tech_b_id
+        )
+        assert [item["id"] for item in theirs["result"]] == [foreign_id]
+
+        # admin and operador keep the mapped, unfiltered agenda view.
+        for role in ("admin", "operador"):
+            staff = execute_tool(
+                session, "appointments.upcoming", {"limit": 10}, role=role, owner_id=tech_a_id
+            )
+            staff_ids = [item["id"] for item in staff["result"]]
+            assert own_id in staff_ids and foreign_id in staff_ids
