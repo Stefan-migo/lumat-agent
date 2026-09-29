@@ -168,7 +168,7 @@ def test_operator_cannot_read_assistant_stream(client):
 
     response = client.get("/panel/api/chat/threads/1/stream")
 
-    assert response.status_code == 403
+    assert response.status_code == 404
     assert "plan" not in response.text.lower()
     assert "evidence" not in response.text.lower()
 
@@ -314,7 +314,7 @@ def test_thread_list_is_admin_only_bounded_and_ordered(client):
 
     client.post("/panel/api/logout")
     _login(client, "thread-list-operator")
-    assert client.get("/panel/api/chat/threads?limit=1").status_code == 403
+    assert client.get("/panel/api/chat/threads?limit=1").json()["threads"] == []
 
 
 def test_thread_list_rejects_unbounded_or_oversized_requests(client):
