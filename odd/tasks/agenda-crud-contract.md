@@ -60,8 +60,10 @@ One spec text change plus one task doc → single PR against `main`, well inside
 - [x] Read back the full spec and verify the targeted requirements and untouched AG-UI-2/AG-UI-4.
 - [x] Confirm scope is limited to these two files and the task doc is outside any `gentle-ai` managed block.
 - [x] Save the task doc to Engram using the requested CLI command (observation #5027).
-- [ ] Commit both files in one work-unit commit.
+- [x] Commit both files in one work-unit commit — `a6eb2793`, delivered as **PR #361** (merged). The spec
+      `openspec/specs/agenda-calendar-ui/spec.md` and this record travelled together, as required.
 
 ## Next step
 
-Owner may review and deliver the single PR against `main`; no PR is created by this unit.
+None. Delivered as **PR #361** (merged, `a6eb2793`). The previous wording ("no PR is created by this
+unit") was stale — the PR exists. Corrected during the 2026-09-29 stale-checkbox sweep.

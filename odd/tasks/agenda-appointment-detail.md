@@ -300,7 +300,9 @@ accepted as ordinary repository policy; no `size:exception` label was requested.
       full web 768 passed, build green
 - [x] WU4 — Story coverage and full verification (`071084ea`) — focused 5 passed, full web 773 passed,
       build green, closing backend 1483 passed
-- [ ] Owner decision: push and open the PR
+- [x] Owner decision: push and open the PR — delivered as **PR #376** (merged). `AppointmentDetail.tsx`,
+      its `.test.tsx`, the stories and the per-appointment route are all in `main`. Re-verified against
+      `origin/main` (not against this record) during the 2026-09-29 stale-checkbox sweep.
 
 ## Verification (observed)
 

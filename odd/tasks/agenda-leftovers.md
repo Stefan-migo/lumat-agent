@@ -126,5 +126,11 @@ One writer thread at a time; web tests and backend fixes are delegated sequentia
 
 ## Next step
 
-Finish L4b, then run the full verification (backend + web + `npm run build`) and freeze the review
-candidate. Delivery (push, PR, merge) is the owner's decision.
+None. L3 closed in `f7af0243` (a test-only change to `AgendaPage.stories.test.tsx`; the mapping comes
+from this record's own Progress entry at `:72`, not from the commit subject) and L4b in `75ef52be`. The
+full verification was run by **this unit** on the frozen tree `349f9286` — backend **1536 passed**, web
+**822 passed / 90 files**, `npm run build` green — reported here as that unit's own observed run, not
+re-executed by the sweep. Delivered as **PR #398** (merged).
+
+The previous wording ("Finish L4b…") was stale: it described work that had already closed. Corrected
+during the 2026-09-29 stale-checkbox sweep.
