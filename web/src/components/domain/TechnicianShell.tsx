@@ -25,7 +25,7 @@ function technicianRoute(path: string): PanelRoute {
 }
 
 /** Session chrome and URL-backed restricted view routing for the technician surface. */
-export function TechnicianShell({ user, onLogout }: TechnicianShellProps) {
+export function TechnicianShell({ user, onLogout, children }: TechnicianShellProps) {
   const [route, setRoute] = useState(() => technicianRoute(`${window.location.pathname}${window.location.search}`));
 
   useEffect(() => {
@@ -55,7 +55,7 @@ export function TechnicianShell({ user, onLogout }: TechnicianShellProps) {
       ? <ProjectsPage sectionTabs={sectionTabs} projectSlug={route.projectSlug} onOpenProject={(slug) => navigate({ view: 'projects', projectSlug: slug })} onOpenChat={(slug) => navigate({ view: 'chat', projectSlug: slug })} />
       : view === 'planning-sessions'
         ? <PlanningSessions sectionTabs={sectionTabs} sessionSlug={route.planningSessionSlug} onOpenSession={(slug) => navigate({ view: 'planning-sessions', planningSessionSlug: slug })} onOpenThread={(id) => navigate({ view: 'chat', threadId: id })} />
-        : <TechnicianAgenda />;
+        : children ?? <TechnicianAgenda />;
 
   return (
     <div className="technician-shell">
@@ -69,7 +69,7 @@ export function TechnicianShell({ user, onLogout }: TechnicianShellProps) {
         </div>
       </header>
       <div className="technician-shell__content panel-shell__content">{page}</div>
-      <nav className="panel-shell__footer-nav" style={{ display: 'grid' }} aria-label="Navegación del técnico">
+      <nav className="panel-shell__footer-nav" aria-label="Navegación del técnico">
         {(['agenda', 'chat', 'projects', 'planning-sessions'] as const).map((target) => {
           const label = target === 'agenda' ? 'Agenda' : target === 'chat' ? 'Asistente' : target === 'projects' ? 'Proyectos' : 'Sesiones de planificación';
           return <button key={target} type="button" aria-current={view === target ? 'page' : undefined} onClick={() => navigate({ view: target })}><span>{label}</span></button>;
