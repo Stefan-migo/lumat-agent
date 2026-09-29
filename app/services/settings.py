@@ -153,6 +153,8 @@ SETTINGS_DEFAULTS: dict[str, Any] = {
     "notify.owner_email": DEFAULT_OWNER_EMAIL,
     "notify.owner_whatsapp": DEFAULT_OWNER_WHATSAPP,
     "notify.reminder_template_name": "appointment_reminder_24h",
+    "notify.followup_template_name": "appointment_followup",
+    "notify.followup_no_show_template_name": "appointment_followup_no_show",
     "notify.smtp_host": DEFAULT_SMTP_HOST,
     "notify.smtp_from": DEFAULT_SMTP_FROM,
     # SS-5: tone style used by the chat nodes.

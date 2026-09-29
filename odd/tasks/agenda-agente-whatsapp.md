@@ -2,7 +2,7 @@
 
 - Status: in progress
 - Branch: `odd/agenda-agente-whatsapp`
-- Base: `f27077ec` (origin/main, after PR #403 merged S1+S2); S3 re-created the worktree from here
+- Base: `9d2f220d` (origin/main, after PRs #413/#414/#415 merged); S5 re-created the worktree from here
 - Worktree: `../lumat-agent-odd-agenda-agente-whatsapp`
 - Engram mirror: `odd/agenda-agente-whatsapp/tasks`
 - Created: 2026-09-28
@@ -95,6 +95,29 @@ consequences; configurable reminder lead time; two-way external calendar sync.
     ficha has no email, the operation ends `permanently_failed` with audit — no recipient is invented
     and the team's `notify.owner_email` is NOT used (that is the emergency pattern, a different
     purpose).
+18. **S5 — follow-up channel** (owner, 2026-09-29): both channels with fallback — an approved WhatsApp
+    template first, email as fallback. The template name is **configurable** through the settings KV,
+    same pattern as decision 16: `notify.followup_template_name` (default `appointment_followup`) for
+    `completed`, and `notify.followup_no_show_template_name` (default `appointment_followup_no_show`)
+    for `no_show`. The `approved` template policy gate of `app/services/templates.py` applies.
+19. **S5 — follow-up delay** (owner, 2026-09-29): the follow-up is due **24 h after the visit is
+    closed** (due instant = close time + 24 h). Unlike decision 15, no window-skew clause is needed:
+    the due instant is always in the future when the operation is created.
+20. **S5 — `no_show` differs from `completed`** (owner, 2026-09-29): distinct outcomes with distinct
+    templates. `close()` publishes **two** domain events — `appointment.completed` and
+    `appointment.no_show` — and both are allowed in `ALLOWED_EVENTS`.
+21. **S5 — follow-up recipient** (owner, 2026-09-29): the follow-up goes to the **team**, so an
+    operator contacts the customer again — not to the customer. Recipients are the existing settings
+    (`notify.owner_whatsapp` for the WhatsApp leg, `notify.owner_email` for the email fallback). This
+    does not contradict decision 17: that rule scoped `notify.owner_email` out of the *reminder*,
+    where the audience is the customer; here the audience is the team, a different purpose.
+22. **S5 — idempotency key** (owner, 2026-09-29): the operation is keyed
+    `appointment:{id}:followup:{outcome}` with `outcome` in `completed`/`no_show`, and the dispatcher
+    matches the **exact key**, never a loose suffix. Idempotency rides the existing
+    `NotificationOperation.idempotency_key` unique constraint. Deliberately NOT done: no `kind` column
+    on `NotificationOperation` (a migration for a single new consumer); the exact key closes the same
+    gap. Revisit `kind` when more operation types appear — that is also the root fix for the open S4
+    R3-001 advisory, which this decision refuses to widen.
 
 ## Accepted constraints (verified evidence)
 
@@ -247,10 +270,55 @@ cd web && npm run build                      # the only frontend type check (tsc
 
 ### S5 — Post-service follow-up
 
-- [ ] Publish an `appointment.completed` (and `no_show`) domain event on `scheduling.close`,
+- [x] Publish an `appointment.completed` (and `no_show`) domain event on `scheduling.close`,
       allow the event through `ALLOWED_EVENTS`, and schedule the post-service follow-up template.
-- [ ] Acceptance: closing a visit as completed produces a follow-up scheduled once, idempotently.
-- [ ] Route: delegated writer.
+- [x] Acceptance: closing a visit as completed produces a follow-up scheduled once, idempotently.
+- [x] Route: delegated writer.
+
+#### S5 apply progress
+
+- WU1 publishes completed/no-show events on close, registers both event types, and creates one
+  appointment-keyed operation due 24 hours after close for the team WhatsApp number. `close()` accepts
+  an optional aware UTC `now` while preserving existing callers.
+- Strict-TDD RED observed before WU1 implementation:
+  `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py tests/unit/test_scheduling_unit.py -o addopts='' -q`
+  → **4 failed, 20 passed** (close did not yet accept `now`; the follow-up defaults were absent).
+- WU1 GREEN:
+  `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py tests/unit/test_scheduling_unit.py -o addopts='' -q`
+  → **24 passed**.
+- WU1 commit `74e6a477` `feat(scheduling): publish close events and schedule the post-service follow-up`.
+  Rollback boundary: remove the `close()` event/follow-up behavior, two allowed events, two settings
+  defaults, and their unit assertions; the close/event integration assertions are included with WU2
+  in `tests/integration/test_notifications.py`. No schema change or migration is involved.
+- WU2 dispatch RED observed before dispatcher implementation:
+  `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py -k followup_dispatch -o addopts='' -q`
+  → **2 failed, 14 deselected** (both outcome-specific operations were handled by generic dispatch,
+  so the template send did not succeed).
+- WU2 delivers the matching outcome's latest approved Spanish WhatsApp template with customer name,
+  local date, and local time; WhatsApp send failures fall back to the configured team email and are
+  audited. The existing reminder predicate and retry semantics were left unchanged.
+- WU2 GREEN:
+  `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py -o addopts='' -q`
+  → **16 passed**.
+- Full backend GREEN:
+  `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/ -o addopts='' -q`
+  → **1618 passed, 2 warnings** (207.00 s).
+- WU2 commit `feat(notify): deliver the post-service follow-up to the team` (this commit). Rollback
+  boundary: remove the exact-key follow-up dispatch and sender plus its tests and this apply-progress
+  entry; WU1 close events/queue behavior remains independently revertible in its own commit.
+- Graph Check nodes consulted: `close()`, `publish_event()`, `DomainEvent`, `AppointmentStatus`,
+  `NotificationTemplateVersion`, `NotificationOperation`, `create_operation()`,
+  `_send_appointment_reminder()`, `scheduling.py`, `notifications.py`, `settings.py`,
+  `automation.py`, and `templates.py`. The report is stale at `16ba9cbf`; directed path
+  `close()` → `_send_appointment_reminder()` was not present. Graphify update was not run, per the
+  task constraint.
+- Native review of the S5 slice: lineage `review-6ff12c716a939f8a`, risk `medium`, 1 lens
+  (`review-reliability`), candidate `sha256:7762844e…` (7 paths, 330 changed lines, correction budget
+  165), **findings NONE**, state `approved`, authority burned
+  (`gentle-ai.review-acknowledged/v1`, consumed revision `sha256:cb5be3de…`). The ODD budget check had
+  reported `review_due=false` (`under_budget`); the native STATUS preflighted the target as unreviewed
+  and ready, the owner granted consent, and the review approved. This receipt covers the frozen
+  candidate above; the later `docs(odd)` commit that records it changes no source byte.
 
 ## Progress log
 
@@ -348,3 +416,10 @@ cd web && npm run build                      # the only frontend type check (tsc
   `models.py`, `main.py`) and a stale-snapshot hit `Reminder sweep runs inside the existing webhook
   sweep (no scheduler)` (`tests/integration/test_emergency_notify.py:557`). `graphify path` did not
   resolve for module-level labels. No rebuild attempted (HTTP 402).
+- 2026-09-29: **S5 started.** Worktree re-created from `9d2f220d` (origin/main, after PRs #413/#414/#415
+  merged) on `odd/agenda-agente-whatsapp`. `rapso worktree create` created the worktree but did not
+  provision it (same no-op provisioning behaviour recorded for S4); provisioned by hand
+  (`cp ../lumat-agent/infra/.env infra/.env`, `uv sync`, `cd web && npm ci`, `infra/test-db.sh up`).
+  Unit smoke `tests/unit/test_scheduling_unit.py` = 10 passed; the test DB resolved to
+  `localhost:5945` (`lumat`).
+- 2026-09-29: S5 product decisions 18-22 closed with the owner (see Closed product decisions).
