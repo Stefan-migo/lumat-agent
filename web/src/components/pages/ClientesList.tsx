@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { Archive, ArchiveRestore, ArrowRightLeft } from "lucide-react";
 import { ApiError, archiveCustomer, changeClientState, createCustomer, fetchClients as listClients, getClientFicha, unarchiveCustomer } from "../../api";
 import type { Customer, CustomerState } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -14,6 +15,7 @@ import { pathForRoute } from "../domain/panelRoutes";
 import { Dialog } from "../primitives/Dialog";
 import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
+import { Menu } from "../primitives/Menu";
 
 export type ClientesListState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
 
@@ -209,7 +211,36 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
         {dialog === null && dialogError ? <p role="alert">{dialogError}</p> : null}
         {state === "loading" ? null : data && data.length > 0 ? (
           <div className="data-region">
-            <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} actions={(customer) => <><Button variant="secondary" onClick={() => void openState(customer)}>Cambiar estado {customer.name ?? "cliente"}</Button>{customer.archived_at ? <Button variant="secondary" onClick={() => void restore(customer)}>Restaurar {customer.name ?? "cliente"}</Button> : <Button variant="secondary" onClick={() => void openArchive(customer)}>Archivar {customer.name ?? "cliente"}</Button>}</>} />
+            <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} actions={(customer) => {
+              // The row's identity lives in the trigger's accessible name, not in every
+              // action label: two pills repeating the customer name dominated the cell
+              // (DESIGN_SYSTEM.md:475). `Archivar` is the only destructive action and
+              // carries tone plus an icon, never colour alone (DESIGN_SYSTEM.md:509-510).
+              const rowLabel = `Acciones para ${customer.name ?? customer.phone_e164 ?? "cliente"}`;
+              const items = customer.archived_at
+                ? [
+                    { value: "state", label: "Cambiar estado", icon: ArrowRightLeft },
+                    { value: "restore", label: "Restaurar", icon: ArchiveRestore },
+                  ]
+                : [
+                    { value: "state", label: "Cambiar estado", icon: ArrowRightLeft },
+                    { value: "archive", label: "Archivar", icon: Archive, tone: "danger" as const },
+                  ];
+              return (
+                <div className="table__actions">
+                  <Menu
+                    trigger="icon"
+                    label={rowLabel}
+                    items={items}
+                    onSelect={(value) => {
+                      if (value === "state") void openState(customer);
+                      else if (value === "archive") void openArchive(customer);
+                      else void restore(customer);
+                    }}
+                  />
+                </div>
+              );
+            }} />
           </div>
         ) : filtered ? (
           <div>
