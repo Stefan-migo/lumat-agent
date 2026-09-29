@@ -204,7 +204,7 @@ evidence below so its work is mechanical. **T4 is inline** (the orchestrator own
 document). **T5 verification is delegated to the same writer** under the RDD-on gate,
 whose report is the verification of record, followed by a parent spot check.
 
-- [ ] **T1 — RED.** In `ClientFicha.test.tsx`, add the disclosure tests **before**
+- [x] **T1 — RED.** In `ClientFicha.test.tsx`, add the disclosure tests **before**
   touching the component, and observe them fail against the unmodified ficha:
   - the `Historial` surface is a `<details>` carrying the history class, and its
     `open` property is `false` on first render;
@@ -213,18 +213,18 @@ whose report is the verification of record, followed by a parent spot check.
   - activating the summary sets `open` to `true`.
   Add a short comment stating **why** the test asserts `open` and not visibility
   (D6), so the next reader does not "fix" it into a false negative.
-- [ ] **T2 — GREEN.** In `ClientFicha.tsx`, replace the
+- [x] **T2 — GREEN.** In `ClientFicha.tsx`, replace the
   `<section aria-label="Historial">` + `<h2>Historial</h2>` opening with
   `<details className="…history…">` + `<summary>` carrying the `<h2>`, keep the four
   `.client-ficha__history-block` sub-regions byte-identical, and close with
   `</details>` instead of `</section>`.
-- [ ] **T3 — GREEN.** In `primitives.css`, next to `.client-ficha__history-block`, add
+- [x] **T3 — GREEN.** In `primitives.css`, next to `.client-ficha__history-block`, add
   the two disclosure rules per D5 (summary cursor; the `<h2>` inside the summary has
   its user-agent margin dropped and flows inline with the marker). No colour, no
   token, no `var()`, no hex.
-- [ ] **T4 —** Keep this document current: Progress, Size, and any decision that
+- [x] **T4 —** Keep this document current: Progress, Size, and any decision that
   changed. Finalise it **before** `review start`.
-- [ ] **T5 — verification of record.** Run the Commands below in the foreground and
+- [x] **T5 — verification of record.** Run the Commands below in the foreground and
   report `<command>: <observed result>` for each.
 
 ## Acceptance criteria
@@ -275,15 +275,44 @@ The backend suite is **not** run: no Python path is in this candidate.
   none of them is modified. The decision itself is unaffected: it was taken on product
   merit, and collapsed is now strictly cheaper than stated, not more expensive.
 - [x] Created this ODD record in the unit worktree before the first source change.
-- [ ] B3 implementation.
-- [ ] Verification.
+- [x] **T1 RED observed.** Both new tests failed against the unmodified ficha:
+  `collapses the history behind a native disclosure that starts closed` —
+  `AssertionError: expected null not to be null` (the `.client-ficha__history` selector
+  returned `null`); `opens the history disclosure when the operator activates its
+  summary` — `TypeError: Cannot read properties of null (reading 'open')`. Run result:
+  `2 failed | 38 skipped`, 1 failed test file.
+- [x] **T2/T3 GREEN.** `59d3ded3` (tests) and `78faf204` (component + stylesheet). The
+  four `.client-ficha__history-block` occurrences are intact and **not re-indented**:
+  the `<details>` sits at the old `<section>`'s indentation and the `<summary>` at the
+  old `<h2>`'s, so the sub-regions keep 12 spaces and the diff stays at 8 changed lines
+  in `ClientFicha.tsx`.
+- [x] **T5 — writer's verification of record.** `npx tsc -b --noEmit`: exit 0, no
+  output. `npm run build`: exit 0 (existing chunk-size warning). `npm run
+  build-storybook`: exit 0 (existing `eval` and chunk-size warnings). `git diff
+  --check`: exit 0. The writer reported the bounded full-suite run as **`partial`**: it
+  exceeded its own 120 s command timeout before Vitest printed totals, so it declined to
+  claim a pass. That is the correct call.
+- [x] **Parent resolution of the `partial`, and the parent spot check.** Re-ran the
+  heaviest required command on the frozen candidate with a long timeout:
+  `cd web && npm run test -- --maxWorkers=2` → **90 files passed, 861 tests passed,
+  exit 0**, duration 171.76 s. The count reconciles exactly: the handoff's 858 was
+  measured at `76eefbb4`, PR #431 added 1 test on top of it (859 at this slice's base
+  `c0c78ebe`), and this slice adds 2 → 861. No flake was observed on this run.
+- [x] Scope confirmed on the frozen candidate: `git diff --name-only c0c78ebe` lists
+  exactly the four authorized files; `git status --short` is empty; `git diff --check`
+  exits 0; `grep -c 'client-ficha__history-block'` on the component returns 4.
+- [x] Pre-existing history assertions (`ClientFicha.test.tsx:135-139`, `:149`,
+  `:533-536`; `ClientFicha.stories.test.tsx:97`, `:100`) are **untouched** and pass, as
+  D6.1 predicts: they are insensitive to the disclosure state.
+- [ ] RDD gate, then push and PR (owner-gated).
 
 ## Size
 
-Forecast from the task list: **well under 100 authored changed lines** (`primitives.css`
-≈ 8 inserted, `ClientFicha.tsx` ≈ 6 changed, `ClientFicha.test.tsx` ≈ 25 inserted), far
-inside the ~400 review-focus budget. This document is a separate documentation commit
-that must land **before** `review start`.
+Measured, `git diff --stat c0c78ebe` over the source files only: **48 authored changed
+lines** — `ClientFicha.tsx` 8 (4 insertions, 4 deletions), `primitives.css` 12
+insertions, `ClientFicha.test.tsx` 28 insertions. Far inside the ~400 review-focus
+budget. This document is committed separately (`ad4bb73b`) and must be final before
+`review start`; the receipt belongs in the PR body, never here.
 
 ## Deferred and follow-ups
 
