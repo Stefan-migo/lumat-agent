@@ -429,6 +429,18 @@
   color: var(--corp-text);
   font-size: var(--text-lg);
 }
+/* Native disclosure for the ficha history: the platform owns open/closed, keyboard
+   activation and the AT semantics. The marker stays visible on purpose — it is the
+   affordance, so `.disclosure__summary` is not reused here. Only the heading inside
+   <summary> needs its user-agent margin dropped so the row matches the block rhythm
+   below it. */
+.client-ficha__history > summary {
+  cursor: pointer;
+}
+.client-ficha__history > summary h2 {
+  display: inline;
+  margin: 0;
+}
 .client-ficha__visits {
   display: grid;
   gap: var(--space-3);

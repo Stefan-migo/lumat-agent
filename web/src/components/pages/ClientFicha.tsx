@@ -498,8 +498,10 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             <LocalFeedback feedback={noteFeedback} />
           </Card>
 
-          <section aria-label="Historial">
-            <h2>Historial</h2>
+          <details className="client-ficha__history">
+            <summary>
+              <h2>Historial</h2>
+            </summary>
             <section aria-labelledby="ficha-visits-heading" className="client-ficha__history-block">
               <h3 id="ficha-visits-heading">Visitas</h3>
               <p>Historial de visitas ordenado cronológicamente</p>
@@ -548,7 +550,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
                 </CollapsibleMessages>
               </div>
             </section>
-          </section>
+          </details>
         </div>
       </div>
     </PageFrame>
