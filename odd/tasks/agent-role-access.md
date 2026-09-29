@@ -39,7 +39,7 @@ catalog — including `customers.search`, `conversations.list`, `kb.retrieve`, a
 | D3 (owner, 2026-09-29) | `tecnico` gets **zero** business-data reads. `appointments.upcoming` is scoped to the requesting technician. | A technician must not reach sensitive business information, and a global appointments tool would leak the whole agenda. | Give `tecnico` the global `appointments.upcoming`; this exposes every customer's visit. |
 | D4 (owner, 2026-09-29) | `admin` keeps the full catalog with one exception: no role, admin included, reads another user's agent memory. | Per-user privacy of the conversation with the agent is absolute. | Admin supervision access to another user's memory or threads. |
 | D5 (owner, 2026-09-29) | A chat thread may not be bound to the business-shared `default` namespace by a role that must not read business memory. | `default` is business-shared memory (`usuarios-aislamiento` D4); binding to it would bypass D3. | Leave the API open and rely on the UI not offering `default`. |
-| D6 (derived, pending confirmation) | `tecnico`'s private set is `memory.*`, `project.*`, `web.*`, and `assistant.capabilities`; that includes project reads and creation, which are required for `tecnico` to start a chat at all (see Verified facts). | Without project list/create, `tecnico` cannot select a project and the chat cannot open; project namespaces are private, not business data. | Grant only chat routes, which leaves `tecnico` unable to create a thread. |
+| D6 (derived, pending confirmation) | `tecnico`'s private set is `memory.*`, `project.*`, `web.*`, and `assistant.capabilities`; that includes project reads and creation, which are required for `tecnico` to start a chat at all (see Verified facts). `appointments.upcoming` is granted to `tecnico` only in WU3, together with its scoping. | Without project list/create, `tecnico` cannot select a project and the chat cannot open; project namespaces are private, not business data. Withholding the global appointments tool until WU3 scopes it means no slice ever exposes it unscoped. | Grant only chat routes, which leaves `tecnico` unable to create a thread; or grant the unscoped appointments tool in WU1, which leaks the whole agenda for the window between WU2 and WU3. |
 | D7 | `automation.create_rule` stays `admin`-only. | Its panel surface is already admin-gated, it is unreachable by a non-admin through any current request path, and D2 excludes privileged writing from `operador`. | Grant it to `operador` as a non-privileged write. |
 | D8 | The role-to-tool map is declared explicitly per tool, not inferred from name prefixes. | Replaces the advisory R2-002 name-prefix family inference as the authorization source, so a future tool rename cannot silently change coverage. | Extend the existing `project.`/`memory.` prefix inference with more prefixes. |
 
@@ -54,10 +54,11 @@ All line numbers were re-verified on this worktree at `8f9d7a8e` before writing 
 - `projects.list` filters `owner_id == owner_id` (`app/services/projects.py:55-57`), so the business-shared `default` row (owner `NULL`) never appears in the picker; the API body still accepts it.
 - **Tool execution receives no role.** `execute_tool` signature at `app/chat/assistant/tools/registry.py:602-614` takes `trusted_thread_id`, `proyecto`, and `owner_id`. Its gate runs at `:617-676`: optional whitelist (`:617-618`), autonomous-write thread requirement (`:619-621`), the WU2 owner guard (`:622-630`), non-read-only allowlists (`:631-632`), cost gate (`:633-634`), project approval validation (`:645-672`), and consumed approval for non-autonomous writes (`:673-676`).
 - The owner guard infers families by name prefix (`name.startswith("project.")`, and `memory.` with a positive thread id) at `registry.py:622-630`. This is the open advisory **R2-002**.
-- **The role exists but never reaches execution.** `app/services/agent_chat.py:679` passes `actor_role=user.role.value`; `app/chat/assistant/graph.py:172-187` threads it into assistant state (typed at `app/chat/assistant/state.py:77`). The execution calls pass only `owner_id=state.get("user_id")` (`app/chat/assistant/nodes.py:565-570`, `:953-961`).
+- **The role existed upstream but was absent from the `AssistantState` schema.** `app/services/agent_chat.py:679` passes `actor_role=user.role.value`, and `app/chat/assistant/graph.py:172-187` adds it to the initial state. The prior `app/chat/assistant/state.py:77` declaration was on `SDBTrigger`, not `AssistantState`; WU1 adds `actor_role` to the `AssistantState` `TypedDict` so LangGraph retains it. All three tool execution sites now pass it to `execute_tool`.
 - Tool execution happens at three sites, all with a whitelist: `nodes.py:567` (delegation scope path), `nodes.py:958` (main path), and `app/services/agent_chat.py:193` (SDB task path, whitelist from `load_assistant_config().tools_whitelist`).
 - A per-assistant `tools_whitelist` already flows from the agent registry (`app/agent_registry.py:52`, `:63`, `:73`) into `AssistantRuntimeConfig.tools_whitelist` (`app/services/prompts.py:105`, `:155`). The role map must intersect with it, not replace it.
-- **The catalog is 24 tools: 17 read-only, 7 writes** (`registry.py:563-588`). Write allowlists at `registry.py:26-33`.
+- **The catalog is 24 tools: 16 read-only, 8 writes** (`registry.py:563-588`). Write allowlists at `registry.py:26-33`.
+- Role map denominators for WU1: `admin` 24 allowed / 0 denied; `operador` 23 allowed / 1 denied (`automation.create_rule`); `tecnico` 14 allowed / 10 denied. The WU1 `tecnico` denials are `customers.search`, `customers.list`, `customers.operational_history`, `conversations.search`, `conversations.list`, `cases.list`, `kb.retrieve`, `dashboard.summary`, `automation.create_rule`, and `appointments.upcoming`. `appointments.upcoming` is withheld from `tecnico` in WU1 and granted only in WU3 together with its technician scoping, so no slice ever exposes the unscoped global tool; after WU3 the `tecnico` map is 15 allowed / 9 denied.
 - `kb.retrieve` reads the whole corpus including internal documents by deliberate choice (`registry.py:313-315`).
 - `appointments.upcoming` is global: `_upcoming_appointments` calls `scheduling.list_for_range(session, date, date+30d, "UTC")` with no owner or technician filter (`registry.py:279-282`).
 - **Memory privacy is already enforced.** `_owned_agent_memory_or_raise` (`registry.py:442-458`) requires matching `proyecto`, `owner_id`, `producer`, `agent:` topic prefix, and an owned axis, so D4's exception already holds in code.
@@ -125,8 +126,8 @@ Estimated authored size: 200–300 changed lines.
 
 ### WU3 — technician-scoped upcoming appointments
 
-- **U3.1** Scope `appointments.upcoming` to the requesting technician instead of the unfiltered global range query, leaving the `admin` and `operador` behavior as the map declares.
-- **U3.2** Tests: a technician sees only their own appointments; a technician cannot observe another technician's or an unassigned appointment; `admin` and `operador` keep their mapped view.
+- **U3.1** Grant `appointments.upcoming` to `tecnico` in the role map and scope it to the requesting technician in the same slice, replacing the unfiltered global range query. `admin` and `operador` keep their mapped view.
+- **U3.2** Tests: a technician sees only their own appointments; a technician cannot observe another technician's or an unassigned appointment; `admin` and `operador` keep their mapped view; the map now allows the tool for `tecnico`.
 
 Estimated authored size: 80–140 changed lines.
 
@@ -175,6 +176,7 @@ Backend runner `uv run pytest tests/`; web runner `cd web && npm test`.
 - **Semantic-merge risk** across a four-slice chain: `registry.py`, `nodes.py`, `chat.py`, `projects.py`, `PanelShell.tsx`, and `AgentChat.tsx` are touched by more than one slice type and by other in-flight work. Merge the current base into a branch before pushing, and run the frontend suite plus `npm run build` plus the backend suite on the merged tree.
 - **Review budget:** the forecast exceeds the ~400-line budget; the chain split is required, not optional.
 - **D6 is derived, not owner-confirmed.** It should be confirmed before WU2 grants `tecnico` project access.
+- **Planner/catalog role-coherence follow-up:** `assistant.capabilities` (`registry.py:532-544`) and the planner catalog (`nodes.py:518`, `:620`) are built from `tools_whitelist` only, not filtered by role. A non-admin planner may therefore be offered a tool its role cannot execute; execution rejects it at the authorization gate. This is a coherence/UX follow-up, not a security defect, because execution remains the boundary. Fold it into whichever later slice first makes the gap visible; do not implement it in WU1.
 - No push, PR, merge, or deploy happens without separate explicit owner authorization.
 
 ## Progress
@@ -182,7 +184,11 @@ Backend runner `uv run pytest tests/`; web runner `cd web && npm test`.
 - [x] Unit opened: worktree `../lumat-agent-odd-agent-role-access` on `odd/agent-role-access` from `8f9d7a8e` (owner authorized 2026-09-29).
 - [x] Graph refreshed in this worktree to `8f9d7a8e`; scope clarified so the WhatsApp bot pipeline is excluded.
 - [x] Role-to-tool map decided with the owner (D1–D5, D7).
-- [ ] WU1 — role-to-tool authorization map and enforcement.
+- [x] WU1.1 — declared an explicit per-tool `UserRole` authorization map for all 24 tools.
+- [x] WU1.2 — enforced role authorization fail-closed in `execute_tool` without replacing existing gates.
+- [x] WU1.3 — passed `actor_role` from delegation, main graph execution, and SDB execution into the gate; declared `actor_role` in `AssistantState` so LangGraph retains it.
+- [x] WU1.4 — added role/tool matrix, completeness, fail-closed, execution-site, and delegated-scope tests; updated existing execution tests to declare their role.
+- WU1 authored size: 419 changed lines (additions plus deletions; estimate: 180–260).
 - [ ] WU2 — chat routes, `tecnico` project access, and the `default`-namespace guard.
 - [ ] WU3 — technician-scoped upcoming appointments.
 - [ ] WU4 — real identity in navigation, dashboard, and message author.
