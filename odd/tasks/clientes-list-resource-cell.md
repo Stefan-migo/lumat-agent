@@ -174,21 +174,21 @@ work is mechanical. **T4 is inline** (the orchestrator owns this document). **T5
 is delegated to the same writer** under the RDD-on gate, whose report is the verification of
 record, followed by a parent spot check.
 
-- [ ] **T1 — RED.** In `ClientesList.test.tsx`, before touching the component, assert the
+- [x] **T1 — RED.** In `ClientesList.test.tsx`, before touching the component, assert the
   resource cell and drop the `Teléfono` column assertion (`:69`). The phone assertion
   (`getByText("+56912345678")`) **stays at table level** — it is the guard that the phone is
   not lost, and it must keep finding exactly one occurrence after the move. Add: the cell
   carries the avatar (initials of the name), the name link still points at the client route,
   and there is no `Teléfono` columnheader. Observe the test fail against the unmodified list.
-- [ ] **T2 — GREEN.** In `ClientesList.tsx`, make `name` render the resource cell and delete
+- [x] **T2 — GREEN.** In `ClientesList.tsx`, make `name` render the resource cell and delete
   the `phone` column entry, importing `Avatar`.
-- [ ] **T3 — GREEN.** In `primitives.css`, next to the `.table__*` family, add the
+- [x] **T3 — GREEN.** In `primitives.css`, next to the `.table__*` family, add the
   `.table__resource` rules per D2/D3/D4 using existing tokens only. No colour literal, no new
   token, no `var()` that is not declared.
-- [ ] **T4 —** Update `DESIGN_SYSTEM.md:364` so it no longer lists the phone as a supporting
+- [x] **T4 —** Update `DESIGN_SYSTEM.md:364` so it no longer lists the phone as a supporting
   column, and keep this document current (Progress, Size). Finalise both **before**
   `review start`.
-- [ ] **T5 — verification of record.** Run the Commands below in the foreground and report
+- [x] **T5 — verification of record.** Run the Commands below in the foreground and report
   `<command>: <observed result>` for each.
 
 ## Acceptance criteria
@@ -232,15 +232,40 @@ The backend suite is **not** run: no Python path is in this candidate.
 - [x] The house precedent located before any design work: `ConversationsList.tsx:79-86`
   already renders avatar + name + muted meta, so this is an application of a proven pattern.
 - [x] Created this ODD record in the unit worktree before the first source change.
-- [ ] B4 implementation.
-- [ ] Verification.
+- [x] **T1 RED observed.** Focused run failed against the unmodified list with
+  `2 failed | 31 passed`: `renders the operational table with the client columns and
+  values` — `expected document not to contain element, found <th …>Teléfono</th> instead`
+  (`ClientesList.test.tsx:69`); `omits the muted phone line when the customer has no phone`
+  — `expected null not to be null` (`.table__resource` absent).
+- [x] **T2/T3/T4 GREEN.** `c2dc487d` (tests) and `2d81ff76` (component, stylesheet and the
+  `DESIGN_SYSTEM.md:364` line). The `phone` column entry is gone; the `Cliente` cell renders
+  `Avatar` + `.table__resource-body` with the link and the muted phone; the four untouched
+  columns are unchanged.
+- [x] **T5 — writer's verification of record.** `npm run test -- --maxWorkers=2` → 90 files,
+  863 tests. `npx tsc -b --noEmit` → exit 0, no output. `npm run build` → exit 0.
+  `npm run build-storybook` → exit 0. `git diff --check` → exit 0. `git status --short` →
+  empty. The writer reported `completed` and confirmed all four referenced tokens are declared
+  in `tokens.css`.
+- [x] **Parent re-run and spot check.** Re-ran the heaviest required command on the frozen
+  candidate with a long timeout: `cd web && npm run test -- --maxWorkers=2` → **90 files
+  passed, 863 tests passed, exit 0**, duration 281.79 s. The count reconciles: 861 at the base
+  `4644ba99` plus the 2 tests added here.
+- [x] Scope confirmed on the frozen candidate: `git diff --name-only 4644ba99` lists exactly
+  the four authorized files plus this record; `Avatar.tsx`, `DataTable.tsx`,
+  `ConversationsList.tsx` and `tokens.css` are **byte-identical** to the base (empty
+  `git diff --stat` over those paths); `git diff --check` exits 0.
+- [x] The phone guard survives the move: `getByText("+56912345678")` at
+  `ClientesList.test.tsx:82` requires exactly one occurrence and passes, so the phone is
+  proved present exactly once rather than merely assumed.
+- [ ] RDD gate, then push and PR (owner-gated).
 
 ## Size
 
-Forecast: **well under 80 authored changed lines** — `ClientesList.tsx` around 15,
-`primitives.css` around 20, `ClientesList.test.tsx` around 25, `DESIGN_SYSTEM.md` one line.
-Far inside the ~400 review-focus budget. This document is a separate documentation commit
-that must land **before** `review start`.
+Measured, `git diff --numstat 4644ba99 -- web/`: **52 authored changed lines** — 46
+insertions, 6 deletions. `ClientesList.tsx` 10/4, `primitives.css` 18/0,
+`ClientesList.test.tsx` 17/1, `DESIGN_SYSTEM.md` 1/1. Far inside the ~400 review-focus
+budget. This document is committed separately and must be final before `review start`; the
+receipt belongs in the PR body, never here.
 
 ## Deferred and follow-ups
 
