@@ -20,6 +20,7 @@ import filecmp
 import os
 import shutil
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
@@ -133,6 +134,43 @@ def _runner_dir(root: Path, migrations: list[Path]) -> Path:
     for migration in migrations:
         (directory / migration.name).symlink_to(migration)
     return runner
+
+
+@contextmanager
+def _scratch_migration_db(tmp_path: Path, before: int, target: int):
+    """Yield an isolated database scaffolded before target, plus its migration runner."""
+    admin_parts = conninfo_to_dict(ADMIN_DB_URL)
+    scratch_name = f"{admin_parts['dbname']}_mig{target:03}_{uuid4().hex}"
+    scratch_url = make_conninfo(**{**admin_parts, "dbname": scratch_name})
+    with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+        conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(scratch_name)))
+    migrations = sorted((REPO_ROOT / "db" / "migrations").glob("*.sql"))
+    migration_env = os.environ.copy()
+    migration_env.update({
+        "DATABASE_URL": scratch_url, "APP_DB_PASSWORD": "app",
+        "PYTHON": str(REPO_ROOT / ".venv" / "bin" / "python"),
+    })
+
+    def migrate(runner: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["bash", str(runner)], env=migration_env, capture_output=True,
+            text=True, timeout=60,
+        )
+
+    try:
+        scaffold = migrate(_runner_dir(
+            tmp_path / "scaffold",
+            [m for m in migrations if _migration_number(m) <= before],
+        ))
+        assert scaffold.returncode == 0, f"scaffold failed:\n{scaffold.stdout}\n{scaffold.stderr}"
+        target_runner = _runner_dir(
+            tmp_path / "target", [m for m in migrations if _migration_number(m) == target]
+        )
+        with psycopg.connect(scratch_url, autocommit=True) as conn:
+            yield conn, lambda: migrate(target_runner), migrations
+    finally:
+        with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
+            conn.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(scratch_name)))
 
 
 def test_migration_030_preserves_existing_project_rows(tmp_path):
@@ -420,6 +458,124 @@ def test_migration_034_backfills_only_owned_project_axis_memory(tmp_path, admin_
     finally:
         with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
             conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} ").format(sql.Identifier(scratch_name)))
+
+
+def test_migration_034_backfills_alias_owner_from_project_and_leaves_default_unowned(tmp_path):
+    with _scratch_migration_db(tmp_path, 33, 34) as (conn, apply_034, _):
+        admin = conn.execute(
+            "INSERT INTO users (username, password_hash, role) VALUES ('alias-admin', 'test', 'admin') RETURNING id"
+        ).fetchone()[0]
+        vector = "[" + ",".join("0.0" for _ in range(384)) + "]"
+        legacy = conn.execute(
+            "INSERT INTO projects (slug, name, purpose, purpose_embedding) VALUES ('legacy-owned', 'Legacy', 'p', %s::vector) RETURNING id",
+            (vector,),
+        ).fetchone()[0]
+        # The 033 scaffold already seeds the business-shared `default` project.
+        default = conn.execute("SELECT id FROM projects WHERE slug = 'default'").fetchone()[0]
+        conn.execute(
+            "INSERT INTO project_aliases (project_id, alias) VALUES (%s, 'legacy-owned'), (%s, 'default-alias')",
+            (legacy, default),
+        )
+        result = apply_034()
+        assert result.returncode == 0, f"034 failed:\n{result.stdout}\n{result.stderr}"
+        assert dict(conn.execute(
+            "SELECT alias, owner_id FROM project_aliases ORDER BY alias"
+        ).fetchall()) == {
+            "default-alias": None, "legacy-owned": admin,
+        }
+
+
+def test_migration_034_alias_unique_constraint_is_owner_scoped(tmp_path):
+    with _scratch_migration_db(tmp_path, 33, 34) as (conn, apply_034, _):
+        owners = [conn.execute(
+            "INSERT INTO users (username, password_hash) VALUES (%s, 'test') RETURNING id",
+            (f"alias-unique-{i}",),
+        ).fetchone()[0] for i in range(2)]
+        vector = "[" + ",".join("0.0" for _ in range(384)) + "]"
+        projects = [conn.execute(
+            "INSERT INTO projects (slug, name, purpose, purpose_embedding) VALUES (%s, 'p', 'p', %s::vector) RETURNING id",
+            (f"alias-project-{i}", vector),
+        ).fetchone()[0] for i in range(2)]
+        result = apply_034()
+        assert result.returncode == 0, f"034 failed:\n{result.stdout}\n{result.stderr}"
+        for owner, project in zip(owners, projects):
+            conn.execute(
+                "INSERT INTO project_aliases (project_id, alias, owner_id) VALUES (%s, 'shared-alias', %s)",
+                (project, owner),
+            )
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(
+                "INSERT INTO project_aliases (project_id, alias, owner_id) VALUES (%s, 'shared-alias', %s)",
+                (projects[0], owners[0]),
+            )
+
+
+def test_migration_034_collision_premises_are_unreachable_in_legacy_schema(tmp_path):
+    """Legacy uniqueness makes the 034 alias/composite-key collision risks in odd/tasks/usuarios-aislamiento.md structurally unreachable."""
+    with _scratch_migration_db(tmp_path, 33, 34) as (conn, _, _):
+        vector = "[" + ",".join("0.0" for _ in range(384)) + "]"
+        projects = [conn.execute(
+            "INSERT INTO projects (slug, name, purpose, purpose_embedding) VALUES (%s, 'p', 'p', %s::vector) RETURNING id",
+            (f"legacy-collision-project-{i}", vector),
+        ).fetchone()[0] for i in range(2)]
+        conn.execute("INSERT INTO project_aliases (project_id, alias) VALUES (%s, 'legacy-collision')", (projects[0],))
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute("INSERT INTO project_aliases (project_id, alias) VALUES (%s, 'legacy-collision')", (projects[1],))
+
+        memory = (
+            "INSERT INTO memories (proyecto, scope, entity_id, topic_key, titulo, contenido, embedding, visibility) "
+            "VALUES ('legacy-collision', 'agent', 'agent:collision', 'same-topic', %s, 'legacy', %s::vector, 'global')"
+        )
+        conn.execute(memory, ("first", vector))
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(memory, ("second", vector))
+
+
+def test_migration_037_rejects_same_owner_duplicate_normalized_hash(tmp_path):
+    with _scratch_migration_db(tmp_path, 36, 37) as (conn, apply_037, _):
+        owners = [conn.execute(
+            "INSERT INTO users (username, password_hash) VALUES (%s, 'test') RETURNING id",
+            (f"dedup-owner-{uuid4().hex}",),
+        ).fetchone()[0] for _ in range(2)]
+        vector = "[" + ",".join("0.0" for _ in range(384)) + "]"
+        result = apply_037()
+        assert result.returncode == 0, f"037 failed:\n{result.stdout}\n{result.stderr}"
+        for owner in owners:
+            conn.execute(
+                "INSERT INTO memories (owner_id, proyecto, scope, entity_id, topic_key, titulo, contenido, embedding, normalized_hash, visibility) "
+                "VALUES (%s, 'dedup-project', 'agent', 'agent:dedup', %s, 'fact', 'same', %s::vector, 'same-hash', 'global')",
+                (owner, f"topic-{owner}", vector),
+            )
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(
+                "INSERT INTO memories (owner_id, proyecto, scope, entity_id, topic_key, titulo, contenido, embedding, normalized_hash, visibility) "
+                "VALUES (%s, 'dedup-project', 'agent', 'agent:dedup', 'another-topic', 'fact', 'same', %s::vector, 'same-hash', 'global')",
+                (owners[0], vector),
+            )
+
+
+def test_migration_037_documented_rollback_fails_with_cross_owner_hash_duplicates(tmp_path):
+    """Evidence: 037's documented rollback fails when cross-owner hash duplicates exist."""
+    with _scratch_migration_db(tmp_path, 36, 37) as (conn, apply_037, migrations):
+        owners = [conn.execute(
+            "INSERT INTO users (username, password_hash) VALUES (%s, 'test') RETURNING id",
+            (f"rollback-owner-{uuid4().hex}",),
+        ).fetchone()[0] for _ in range(2)]
+        vector = "[" + ",".join("0.0" for _ in range(384)) + "]"
+        result = apply_037()
+        assert result.returncode == 0, f"037 failed:\n{result.stdout}\n{result.stderr}"
+        for owner in owners:
+            conn.execute(
+                "INSERT INTO memories (owner_id, proyecto, scope, entity_id, topic_key, titulo, contenido, embedding, normalized_hash, visibility) "
+                "VALUES (%s, 'rollback-project', 'agent', 'agent:rollback', %s, 'fact', 'same', %s::vector, 'rollback-hash', 'global')",
+                (owner, f"topic-{owner}", vector),
+            )
+        rollback = "\n".join(line.split("-- Rollback: ", 1)[1] for line in next(
+            migration for migration in migrations if _migration_number(migration) == 37
+        ).read_text().splitlines() if line.startswith("-- Rollback: "))
+        with pytest.raises(psycopg.errors.UniqueViolation) as error:
+            conn.execute(rollback)
+        assert "uq_memories_normalized_content" in str(error.value)
 
 
 def test_schema_migrations_records_version(migrated_db, admin_conn):
