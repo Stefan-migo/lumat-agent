@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 
 def _login(client, username: str, password: str) -> None:
     response = client.post("/panel/api/login", json={"username": username, "password": password})
@@ -14,14 +16,63 @@ def test_capabilities_requires_admin_json(client):
     assert response.json() == {"detail": "unauthorized"}
 
 
-def test_capabilities_allows_operator_without_granting_admin_tools(client, make_user):
+def test_capabilities_hides_tools_the_role_cannot_execute(client, make_user):
     make_user("oper", "oper-pass", role="operador")
     _login(client, "oper", "oper-pass")
 
     response = client.get("/panel/api/assistant/capabilities")
 
     assert response.status_code == 200
-    assert any(tool["name"] == "automation.create_rule" for tool in response.json()["tools"])
+    names = {tool["name"] for tool in response.json()["tools"]}
+    # operador keeps every business read but no privileged write (D2/D7).
+    assert "automation.create_rule" not in names
+    assert {"customers.search", "kb.retrieve"} <= names
+
+
+def test_technician_capabilities_exclude_every_business_read(client, make_user):
+    make_user("tec", "tec-pass", role="tecnico")
+    _login(client, "tec", "tec-pass")
+
+    response = client.get("/panel/api/assistant/capabilities")
+
+    assert response.status_code == 200
+    payload = response.json()
+    names = {tool["name"] for tool in payload["tools"]}
+    assert names.isdisjoint(
+        {
+            "customers.search",
+            "customers.list",
+            "conversations.search",
+            "conversations.list",
+            "appointments.upcoming",
+            "customers.operational_history",
+            "cases.list",
+            "kb.retrieve",
+            "dashboard.summary",
+            "automation.create_rule",
+        }
+    )
+    assert {"memory.read", "memory.search", "memory.write", "project.list", "project.create"} <= names
+    # The derived flags must describe the same filtered catalog the count shows.
+    assert payload["kb_available"] is False
+    assert payload["memory_available"] is True
+
+
+@pytest.mark.parametrize("role", ["admin", "operador", "tecnico"])
+def test_capabilities_only_lists_tools_the_role_may_execute(client, make_user, role):
+    """The catalog must never advertise a tool the role's map denies."""
+    from app.chat.assistant.tools.registry import ROLE_TOOL_ALLOWLIST
+    from app.models import UserRole
+
+    make_user("who", "who-pass", role=role)
+    _login(client, "who", "who-pass")
+
+    response = client.get("/panel/api/assistant/capabilities")
+
+    assert response.status_code == 200
+    user_role = UserRole(role)
+    for tool in response.json()["tools"]:
+        assert user_role in ROLE_TOOL_ALLOWLIST.get(tool["name"], frozenset()), tool["name"]
 
 
 def test_admin_capabilities_reflect_real_tools_and_runtime_config(client, make_user):

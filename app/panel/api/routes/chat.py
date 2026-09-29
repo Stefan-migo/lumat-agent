@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.models import AssistantAttachment, InternalChatMessage, InternalChatThread, Memory, User
 from app.config import get_settings
 from app.agent_registry import get_registry
-from app.chat.assistant.tools.registry import get_tool
+from app.chat.assistant.tools.registry import get_tool, is_tool_allowed_for_role
 from app.panel.api.deps import require_agent_surface_json
 from app.panel.deps import get_db
 from app.services.agent_chat import approve_plan, close_cortex_session, create_run_message, create_thread, get_thread, message_dict, read_owned_thread_run, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
@@ -259,6 +259,12 @@ def assistant_capabilities(current: User = Depends(require_agent_surface_json)) 
     """Return the validated assistant configuration without mutation controls."""
     registry = get_registry()
     assistant = registry.assistant
+    # R3-001: the catalog must describe only what this role may execute, so the
+    # panel count and the KB/memory flags never advertise a tool the role's map
+    # denies. Intersect with the runtime whitelist; never replace it.
+    allowed = [
+        name for name in assistant.tools_whitelist if is_tool_allowed_for_role(name, current.role.value)
+    ]
     tools = [
         {
             "name": name,
@@ -266,14 +272,14 @@ def assistant_capabilities(current: User = Depends(require_agent_surface_json)) 
             "read_only": get_tool(name).read_only,
             "write": get_tool(name).write,
         }
-        for name in assistant.tools_whitelist
+        for name in allowed
     ]
     return {
         "tools": tools,
         "personas": [assistant.persona],
         "prompts": list(assistant.prompts.values()),
-        "kb_available": "kb.retrieve" in assistant.tools_whitelist,
-        "memory_available": any(name.startswith("memory.") for name in assistant.tools_whitelist),
+        "kb_available": "kb.retrieve" in allowed,
+        "memory_available": any(name.startswith("memory.") for name in allowed),
     }
 
 
