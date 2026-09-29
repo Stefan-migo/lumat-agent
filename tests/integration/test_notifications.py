@@ -479,7 +479,8 @@ def test_followup_dispatch_uses_outcome_specific_template_and_parameters(
         assert calls == [(operation.recipient, ["Ana", "03/01/2030", "14:35"], template_name)]
 
 
-def test_followup_whatsapp_failure_falls_back_to_team_email_and_audits(migrated_db, monkeypatch):
+@pytest.mark.parametrize("outcome", ["completed", "no_show"])
+def test_followup_whatsapp_failure_falls_back_to_team_email_and_audits(migrated_db, monkeypatch, outcome):
     from app.models import AppointmentStatus, Case, NotificationTemplateVersion, User, UserRole
     from app.services import scheduling, notify
     from app.services.settings import get_setting
@@ -488,7 +489,8 @@ def test_followup_whatsapp_failure_falls_back_to_team_email_and_audits(migrated_
     monkeypatch.setattr(notify, "send_template", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("Meta down")))
     monkeypatch.setattr(notify, "send_email", lambda session, to, subject, body: emails.append((to, subject, body)))
     with SessionLocal() as session:
-        customer = get_or_create_customer(session, "+56933333343")
+        customer = get_or_create_customer(session, f"+5693333334{3 if outcome == 'completed' else 4}")
+        customer.name = "Ana"
         technician = User(username="fallback-followup", password_hash="x", role=UserRole.TECNICO)
         session.add(technician)
         session.flush()
@@ -501,18 +503,29 @@ def test_followup_whatsapp_failure_falls_back_to_team_email_and_audits(migrated_
             local_time=datetime.strptime("14:35", "%H:%M").time(), timezone_name="UTC",
             duration_minutes=60, actor="test",
         )
-        scheduling.close(session, appointment, outcome=AppointmentStatus.COMPLETED, actor="test", now=FOLLOWUP_NOW)
+        scheduling.close(session, appointment, outcome=AppointmentStatus(outcome), actor="test", now=FOLLOWUP_NOW)
         session.add(NotificationTemplateVersion(
-            event="appointment.followup.completed", channel="whatsapp", locale="es", version=1,
+            event=f"appointment.followup.{outcome}", channel="whatsapp", locale="es", version=1,
             content="Follow-up", required_variables=[], approved=True, smtp_allowed=True, created_by="test",
         ))
         session.flush()
         operation = session.scalar(select(NotificationOperation).where(
-            NotificationOperation.idempotency_key == f"appointment:{appointment.id}:followup:completed"
+            NotificationOperation.idempotency_key == f"appointment:{appointment.id}:followup:{outcome}"
         ))
         assert notifications.process_operation(session, operation.id, now=operation.next_attempt_at) is True
         address = get_setting(session, "notify.owner_email")
         assert emails and emails[0][0] == address
+        assert emails[0][1] == "Seguimiento de visita Lumat"
+        if outcome == "completed":
+            assert emails[0][2] == (
+                "La visita de Ana del 03/01/2030 a las 14:35 quedó cerrada como completada. "
+                "Contacta al cliente para hacer el seguimiento."
+            )
+        else:
+            assert emails[0][2] == (
+                "La visita de Ana del 03/01/2030 a las 14:35 quedó marcada como no asistida. "
+                "Contacta al cliente para reagendar."
+            )
         session.flush()
         assert session.scalar(select(AuditLog).where(
             AuditLog.action == "notification.followup_email_fallback"
