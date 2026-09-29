@@ -246,6 +246,9 @@ class Customer(Base):
     consent_status: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    merged_into_customer_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("customers.id")
+    )
     created_at: Mapped[datetime] = _ts()
 
 

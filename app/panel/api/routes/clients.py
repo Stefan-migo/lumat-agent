@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
@@ -54,6 +54,10 @@ router = APIRouter(tags=["panel-api-clients"])
 
 class StateBody(BaseModel):
     state: str
+
+
+class MergeBody(BaseModel):
+    other_id: int
 
 
 class NoteBody(BaseModel):
@@ -302,6 +306,39 @@ def client_state_change(
         raise HTTPException(status_code=400, detail=str(exc))
     session.commit()
     return {"ok": True, "state": customer.state.value}
+
+
+@router.get("/clients/{customer_id}/merge-preview")
+def client_merge_preview(
+    customer_id: int,
+    with_id: int = Query(alias="with"),
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    first = _customer_or_404(session, customer_id)
+    second = _customer_or_404(session, with_id)
+    try:
+        return customers.preview_customer_merge(session, first, second)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/clients/{customer_id}/merge")
+def client_merge(
+    customer_id: int,
+    body: MergeBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    first = _customer_or_404(session, customer_id)
+    second = _customer_or_404(session, body.other_id)
+    try:
+        preview = customers.preview_customer_merge(session, first, second)
+        survivor = customers.merge_customers(session, first, second, actor=current.username)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    session.commit()
+    return {"survivor": to_customer_dict(survivor), "moved": preview["moved"]}
 
 
 @router.post("/clients/{customer_id}/archive")
