@@ -14,11 +14,17 @@ describe("ClientMemories domain component (MEM-6)", () => {
     expect(screen.queryAllByRole("heading", { level: 1 })).toHaveLength(0);
   });
 
-  it("renders every memory as a table row with stable identity", () => {
+  it("features the memo once and keeps the other memories as table rows", () => {
     render(<ClientMemoriesView />);
     const table = screen.getByRole("table");
-    for (const m of memories) {
-      expect(within(table).getByText(m.contenido)).toBeInTheDocument();
+    const memo = memories.find((memory) => memory.topic_key === "customer_memo")!;
+    const featured = document.querySelector(".client-memories__memo");
+    expect(within(table).queryByText(memo.contenido)).not.toBeInTheDocument();
+    expect(screen.getAllByText(memo.contenido)).toHaveLength(1);
+    expect(featured).not.toBeNull();
+    expect(within(featured as HTMLElement).getByText("Activo")).toBeInTheDocument();
+    for (const memory of memories.filter((entry) => entry.id !== memo.id)) {
+      expect(within(table).getByText(memory.contenido)).toBeInTheDocument();
     }
   });
 
@@ -54,19 +60,25 @@ describe("ClientMemories domain component (MEM-6)", () => {
         onPin={onPin}
       />,
     );
-    const firstRowButtons = within(screen.getByRole("table")).getAllByRole("button");
-    // pined row (memories[0].pin=false) -> "Fijar"; then "Eliminar"
-    expect(firstRowButtons[0].textContent).toBe("Fijar");
-    await userEvent.click(firstRowButtons[0]);
+    expect(screen.getByRole("button", { name: "Fijar" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Fijar" }));
     expect(onPin).toHaveBeenCalledWith(memories[0].id, true);
-    await userEvent.click(firstRowButtons[1]);
+    await userEvent.click(screen.getByRole("button", { name: "Eliminar" }));
     expect(onDelete).toHaveBeenCalledWith(memories[0].id);
   });
 
-  it("renders 'Quitar pin' when the row is pinned", () => {
+  it("renders 'Quitar pin' when the featured memo is pinned", () => {
     const pinned = { ...memories[0], pin: true };
     render(<ClientMemories memories={[pinned]} onPin={() => {}} onDelete={() => {}} />);
     expect(screen.getByRole("button", { name: "Quitar pin" })).toBeInTheDocument();
+  });
+
+  it("leaves duplicate customer memo topic rows in the table", () => {
+    const duplicate = { ...memories[0], id: memories[0].id + 100, contenido: "Second memo row" };
+    render(<ClientMemories memories={[memories[0], duplicate]} />);
+    const table = screen.getByRole("table");
+    expect(screen.getAllByText(memories[0].contenido)).toHaveLength(1);
+    expect(within(table).getByText(duplicate.contenido)).toBeInTheDocument();
   });
 
   it("uses stylesheet classes for memory layout sites", () => {

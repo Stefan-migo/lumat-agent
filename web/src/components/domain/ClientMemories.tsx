@@ -5,6 +5,7 @@ import { Card } from "../primitives/Card";
 import { Textarea } from "../primitives/Textarea";
 import type { Column } from "../shared/DataTable";
 import { DataTable } from "../shared/DataTable";
+import { memoryStatusLabel, memoryStatusTone } from "../shared/toneMaps";
 import type { Memory, MemoryRelation, MemoryRelationKind } from "../../types";
 
 export type MemoryHandler = (memoryId: number) => void;
@@ -19,17 +20,6 @@ export interface ClientMemoriesProps {
   onPin?: MemoryPinHandler;
   pendingRelations?: MemoryRelation[];
   onResolveRelation?: (relationId: number, relation: MemoryRelationKind) => Promise<void> | void;
-}
-
-function statusTone(status: Memory["status"]): "neutral" | "success" | "warning" | "danger" {
-  switch (status) {
-    case "active":
-      return "success";
-    case "needs_review":
-      return "warning";
-    case "archived":
-      return "neutral";
-  }
 }
 
 function tipoTone(tipo: Memory["tipo"]): "neutral" | "success" | "warning" | "danger" {
@@ -50,6 +40,24 @@ export function ClientMemories({
 }: ClientMemoriesProps) {
   const [draft, setDraft] = useState("");
   const [resolvingId, setResolvingId] = useState<number | null>(null);
+  const featuredMemo = memories.find((memory) => memory.topic_key === "customer_memo");
+  const tableMemories = featuredMemo
+    ? memories.filter((memory) => memory.id !== featuredMemo.id)
+    : memories;
+  const renderActions = (memory: Memory) => (
+    <div className="table__actions">
+      {onPin ? (
+        <Button variant="secondary" onClick={() => onPin(memory.id, !memory.pin)}>
+          {memory.pin ? "Quitar pin" : "Fijar"}
+        </Button>
+      ) : null}
+      {onDelete ? (
+        <Button variant="secondary" onClick={() => onDelete(memory.id)}>
+          Eliminar
+        </Button>
+      ) : null}
+    </div>
+  );
 
   const columns: Column<Memory>[] = [
     {
@@ -62,32 +70,29 @@ export function ClientMemories({
     {
       key: "status",
       header: "Estado",
-      render: (m) => <Badge tone={statusTone(m.status)}>{m.status}</Badge>,
+      render: (m) => <Badge tone={memoryStatusTone(m.status)}>{memoryStatusLabel(m.status)}</Badge>,
     },
     { key: "pin", header: "Pin", render: (m) => (m.pin ? "✓" : "—") },
   ];
 
   return (
     <Card title="Memorias del cliente">
+      {featuredMemo ? (
+        <div className="client-memories__memo">
+          <strong>{featuredMemo.contenido}</strong>
+          <div>
+            <Badge tone={tipoTone(featuredMemo.tipo)}>{featuredMemo.tipo}</Badge>
+            <Badge tone={memoryStatusTone(featuredMemo.status)}>{memoryStatusLabel(featuredMemo.status)}</Badge>
+          </div>
+          {renderActions(featuredMemo)}
+        </div>
+      ) : null}
       <DataTable
         columns={columns}
-        rows={memories}
+        rows={tableMemories}
         emptyMessage="Sin memorias todavía"
         rowKey={(m) => String(m.id)}
-        actions={(m) => (
-          <div className="table__actions">
-            {onPin ? (
-              <Button variant="secondary" onClick={() => onPin(m.id, !m.pin)}>
-                {m.pin ? "Quitar pin" : "Fijar"}
-              </Button>
-            ) : null}
-            {onDelete ? (
-              <Button variant="secondary" onClick={() => onDelete(m.id)}>
-                Eliminar
-              </Button>
-            ) : null}
-          </div>
-        )}
+        actions={renderActions}
       />
       {onUpsert ? (
         <div className="client-memories__section">
