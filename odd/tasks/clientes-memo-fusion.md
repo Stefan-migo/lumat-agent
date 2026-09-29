@@ -150,27 +150,27 @@ edges consulted:
 
 ## Tasks
 
-- [ ] **T1** — RED: `ClientMemories.stories.test.tsx` stops asserting that the memo is
+- [x] **T1** — RED: `ClientMemories.stories.test.tsx` stops asserting that the memo is
   a table row and asserts the featured block instead — the memo content appears once,
   outside the table; the table holds the other memories only; the featured block keeps
   `Fijar`/`Quitar pin` and `Eliminar` wired to `onPin`/`onDelete`. Also nail the
   lossless case: with two rows sharing the `customer_memo` topic key, only the
   featured one leaves the table. Observed failing against the unmodified component.
-- [ ] **T2** — GREEN: feature the memo inside `ClientMemories` per D1–D3, and add the
+- [x] **T2** — GREEN: feature the memo inside `ClientMemories` per D1–D3, and add the
   `.client-memories__memo` rule to `primitives.css` using existing tokens only.
-- [ ] **T3** — RED/GREEN: replace the local `tipoTone` with `memoryTypeTone` and
+- [x] **T3** — RED/GREEN: replace the local `tipoTone` with `memoryTypeTone` and
   render `memoryTypeLabel(m.tipo)` per D5. The raw identifiers stop appearing in the
   Tipo column, so the ficha's raw-identifier invariant becomes true for every memory
   type rather than by fixture accident.
-- [ ] **T4** — RED: `ClientFicha.test.tsx` asserts the `Memo del cliente` card is gone,
+- [x] **T4** — RED: `ClientFicha.test.tsx` asserts the `Memo del cliente` card is gone,
   that the memo text appears exactly **once**, and that the remaining card count and
   table count are updated. The `toHaveLength(2)` on the duplicated content becomes
   `toHaveLength(1)`. Observed failing against the unmodified ficha.
-- [ ] **T5** — GREEN: delete the memo card from `ClientFicha.tsx` and stop deriving
+- [x] **T5** — GREEN: delete the memo card from `ClientFicha.tsx` and stop deriving
   `memo` in `ClientFicha.stories.tsx` (`ficha.memo` and the `ClientFichaView` memo
   prop are the duplication as code). Update `ClientFicha.stories.test.tsx` so the
   no-memo case asserts the absence of the duplicate instead of the removed sentence.
-- [ ] **T6** — verification of record: `cd web && npm run test`,
+- [x] **T6** — verification of record: `cd web && npm run test`,
   `cd web && npx tsc -b --noEmit`, `cd web && npm run build`,
   `cd web && npm run build-storybook`, `git diff --check`.
 
@@ -208,13 +208,37 @@ edges consulted:
   explicit owner consent), branched from `main` at `e77da7d7` by the owner's choice.
 - [x] Graph refreshed to the slice base (`e77da7d7`): 8574 nodes, 18491 edges, 720
   communities; `GRAPH_REPORT.md` regenerated.
+- [x] B2 implementation Graphify check used the current `73063d63` graph; consulted
+  `ClientMemories()`, `ClientFicha()`, `MEMORY_TYPE_LABELS`, `MEMORY_TYPE_TONES`,
+  `DataTable`, `Card()`, `memoryTypeTone`, `memoryTypeLabel`, the related stories,
+  tests, and `.client-memories__section`. Existing component dependencies remain
+  `ClientMemories` → `DataTable` / `Card` / `Badge` / `Button`; `ClientFicha` →
+  `ClientMemories`. No Graphify refresh was run during implementation.
+- [x] **T1 RED** — focused Vitest run failed against the original component because
+  the `customer_memo` content was found inside the table (`Tests 1 failed | 8
+  passed`). **T2 GREEN** — featured memo, ID-only row exclusion, action preservation,
+  and the tokenized `.client-memories__memo` style; the section count stays exactly
+  two. Focused test passed (`9/9`).
+- [x] **T3 RED/GREEN** — shared type-label assertion first failed because the featured
+  badge rendered `customer_memo`; replacing `tipoTone` with `memoryTypeTone` and using
+  `memoryTypeLabel` made the focused test pass (`10/10`).
+- [x] **T4 RED/T5 GREEN** — ficha test first failed because the removed card heading
+  was still present. Deleted the card and story derivation/prop; the fixture now
+  supplies an actual `customer_memo` memory. Ficha test asserts exactly one memo text,
+  no card, and three tables (the memo-only memory fixture leaves no table rows, so
+  `DataTable` renders its empty surface rather than a table); Storybook tests retain
+  the empty memories assertion and reject the removed placeholder. Focused ficha and
+  story tests passed (`48/48`).
+- [x] **T6** — full verification passed: `npm run test` (90 files, 854 tests),
+  `npx tsc -b --noEmit`, `npm run build`, `npm run build-storybook`, and
+  `git diff --check`. The Vite and Storybook builds retain the existing >500 kB chunk
+  warning.
 
 ## Size
 
-Forecast for B2 under `web/`: `ClientMemories.tsx` +~30, `primitives.css` +~8,
-`ClientFicha.tsx` −~5, the two component/story test files +~60, the stories files
-−~10 — roughly **110–140 changed lines**, inside the ~400 review-focus budget. The
-running count from work-unit commits is recorded as the slice lands.
+Final B2 web diff from `e77da7d7`: **88 insertions, 58 deletions** across seven files
+(146 changed lines), inside the ~400 review-focus budget. The ODD record is a separate
+final documentation commit.
 
 ## Deferred and follow-ups
 
