@@ -112,14 +112,13 @@ def test_token_delivery_failure_does_not_change_persisted_post_contract(client, 
     assert [message["content"] for message in messages] == ["Continue", "complete"]
 
 
-def test_operator_remains_denied_from_internal_chat(client):
+def test_operator_can_create_business_shared_internal_thread(client):
     _user("stream-operator", "operador")
     _login(client, "stream-operator")
 
     response = client.post("/panel/api/chat/threads", json={"proyecto": "default"})
 
-    assert response.status_code == 403
-    assert "thread" not in response.text.lower()
+    assert response.status_code == 201
 
 
 def test_realtime_response_preserves_cost_tier_metadata(client, monkeypatch):

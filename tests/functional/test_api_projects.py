@@ -56,11 +56,22 @@ def test_projects_detail_missing_and_mutation_routes(client, make_user):
         assert response.status_code == 405
 
 
-def test_projects_browse_allows_operator_but_not_tecnico(client, make_user):
+def test_projects_browse_allows_tecnico(client, make_user):
     make_user("projects-tech", "projects-pass", role="tecnico")
     response = client.post("/panel/api/login", json={"username": "projects-tech", "password": "projects-pass"})
     assert response.status_code == 200
-    assert client.get("/panel/api/projects").status_code == 403
+    assert client.get("/panel/api/projects").status_code == 200
+
+
+def test_tecnico_can_create_own_project(client, make_user):
+    owner_id = make_user("projects-tech-create", "projects-pass", role="tecnico")
+    client.post("/panel/api/login", json={"username": "projects-tech-create", "password": "projects-pass"})
+    created = client.post("/panel/api/projects", json={
+        "slug": "tech-private", "name": "Technician Project", "purpose": "Technician-only working namespace",
+    })
+    assert created.status_code == 201
+    with SessionLocal() as session:
+        assert session.scalar(select(Project).where(Project.slug == "tech-private")).owner_id == owner_id
 
 
 def test_project_reads_are_scoped_and_admin_has_no_override(client, make_user):

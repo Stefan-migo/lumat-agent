@@ -66,3 +66,16 @@ def require_admin_json(current: User = Depends(get_current_user_json)) -> User:
     if current.role.value != "admin":
         raise HTTPException(status_code=403, detail="admin role required")
     return current
+
+
+# agent-role-access D1/D6: every panel role reaches the internal agent chat and
+# its own project namespaces. Declared explicitly (D8) so a future role is denied
+# by default instead of silently granted; tool execution stays the fail-closed
+# per-role boundary via ROLE_TOOL_ALLOWLIST.
+AGENT_SURFACE_ROLES = frozenset({"admin", "operador", "tecnico"})
+
+
+def require_agent_surface_json(current: User = Depends(get_current_user_json)) -> User:
+    if current.role.value not in AGENT_SURFACE_ROLES:
+        raise HTTPException(status_code=403, detail="agent surface role required")
+    return current

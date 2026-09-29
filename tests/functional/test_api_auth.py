@@ -186,7 +186,6 @@ def test_tecnico_is_denied_admin_and_operational_json_surfaces(client, make_user
         ("get", "/panel/api/conversations"),
         ("get", "/panel/api/clients"),
         ("get", "/panel/api/cases"),
-        ("post", "/panel/api/chat/threads"),
     ):
         if method == "post":
             response = client.post(path, json={}, follow_redirects=False)

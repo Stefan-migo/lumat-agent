@@ -36,10 +36,17 @@ def test_role_tool_matrix_is_enforced(role, tool_name, monkeypatch):
 
     if expected_allowed:
         result = call()
-        assert result.get("error") != f"tool is not authorized for role {role.value}: {tool_name}"
+        assert result["result"] == {"ok": True}
+        assert "error" not in result
     else:
         with pytest.raises(ToolValidationError, match="not authorized"):
             call()
+
+
+def test_business_memory_roles_match_business_tool_permissions():
+    assert registry.BUSINESS_MEMORY_ROLES == {"admin", "operador"}
+    assert UserRole.TECNICO not in registry.ROLE_TOOL_ALLOWLIST["customers.search"]
+    assert {UserRole.ADMIN, UserRole.OPERADOR} <= registry.ROLE_TOOL_ALLOWLIST["customers.search"]
 
 
 def test_role_tool_map_is_complete_and_covers_every_role():
