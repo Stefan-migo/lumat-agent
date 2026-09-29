@@ -34,6 +34,7 @@ const CLP_FORMAT = new Intl.NumberFormat("es-CL", { style: "currency", currency:
 const MESSAGE_PREVIEW = 10;
 const EQUIPMENT_TYPE_LABELS: Record<string, string> = { calefont: "Calefont", caldera: "Caldera", calefaccion: "Sistema de calefacción" };
 const EQUIPMENT_TYPE_OPTIONS = [{ value: "", label: "Sin especificar" }, ...Object.entries(EQUIPMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }))];
+const MERGE_COUNT_LABELS: Record<keyof ClientMergePreview["moved"], string> = { conversations: "conversaciones", cases: "casos", customer_notes: "notas", customer_equipment: "equipos", appointments: "visitas" };
 
 const formatDate = (value: string | null | undefined) => (value ? DATE_FORMAT.format(new Date(value)) : "—");
 const formatDateTime = (value: string | null | undefined) => (value ? DATE_TIME_FORMAT.format(new Date(value)) : "—");
@@ -175,7 +176,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     setMergeFeedback(null);
     try {
       const { survivor } = await mergeClient(fichaCustomerId, Number(mergeOtherId));
-      if (mergePreview.survivor_id === fichaCustomerId) { await refresh(); setMergeOpen(false); }
+      if (mergePreview.survivor_id === fichaCustomerId) { await refresh(); setEquipmentRefresh((value) => value + 1); setMergeOpen(false); }
       else { setMergedCustomerId(survivor.id); setRefreshed(null); setMergeOpen(false); }
     } catch (error) { setMergeFeedback({ tone: "danger", title: error instanceof ApiError ? error.detail : "No pudimos fusionar los clientes" }); }
     finally { setMergeLoading(false); }
@@ -385,7 +386,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             <Select id="merge-other-client" label="Otro cliente" value={mergeOtherId} options={[{ value: "", label: "Selecciona un cliente" }, ...mergeClients.map((client) => ({ value: String(client.id), label: `${client.name ?? "Sin nombre"} · ${client.phone_e164 ?? "Sin teléfono"}` }))]} onChange={(event) => void selectMergeClient(event.target.value)} />
             {mergePreview ? <>
               <p>Cliente superviviente: {mergePreview.survivor_id === customer.id ? customer.name : mergeClients.find((client) => client.id === mergePreview.survivor_id)?.name ?? `#${mergePreview.survivor_id}`}</p>
-              <p>Se moverán: {Object.entries(mergePreview.moved).map(([table, count]) => `${table}: ${count}`).join(" · ")}.</p>
+              <p>Se moverán: {Object.entries(mergePreview.moved).map(([table, count]) => `${MERGE_COUNT_LABELS[table as keyof ClientMergePreview["moved"]]}: ${count}`).join(" · ")}.</p>
               <p>{mergePreview.memory_conflicts} conflictos de memoria.</p>
               {mergePreview.scalar_conflicts.length ? <p>En conflictos de identidad, se conserva el valor del cliente superviviente: {mergePreview.scalar_conflicts.join(", ")}.</p> : null}
             </> : null}

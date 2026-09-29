@@ -377,12 +377,31 @@ describe("ClientFicha merge dialog", () => {
     const dialog = screen.getByRole("dialog");
     await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
     expect(await within(dialog).findByText("Cliente superviviente: Marcela Fuentes")).toBeInTheDocument();
+    expect(within(dialog).getByText(/Se moverán:/)).toHaveTextContent("conversaciones: 2 · casos: 1 · notas: 3 · equipos: 1 · visitas: 0");
     expect(within(dialog).getByText(/2 conflictos de memoria/)).toBeInTheDocument();
     expect(within(dialog).getByText(/name/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Confirmar fusión" }));
 
     expect(previewClientMerge).toHaveBeenCalledWith(7, 8);
     expect(mergeClient).toHaveBeenCalledWith(7, 8);
+  });
+
+  it("reloads equipment after a survivor-side merge", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listClientEquipment).mockResolvedValue({ equipment: [] });
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ ...ficha.customer, id: 8 }] });
+    vi.mocked(previewClientMerge).mockResolvedValue({ survivor_id: 7, loser_id: 8, moved: { conversations: 0, cases: 0, customer_notes: 0, customer_equipment: 1, appointments: 0 }, memory_conflicts: 0, scalar_conflicts: [] });
+    vi.mocked(mergeClient).mockResolvedValue({ survivor: ficha.customer, moved: { conversations: 0, cases: 0, customer_notes: 0, customer_equipment: 1, appointments: 0 } });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await waitFor(() => expect(listClientEquipment).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: "Fusionar con otro cliente" }));
+    const dialog = screen.getByRole("dialog");
+    await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
+    await user.click(await within(dialog).findByRole("button", { name: "Confirmar fusión" }));
+
+    await waitFor(() => expect(listClientEquipment).toHaveBeenCalledTimes(2));
   });
 
   it("loads the survivor ficha when the current client becomes the loser", async () => {
