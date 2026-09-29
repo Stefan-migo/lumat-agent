@@ -241,8 +241,17 @@ suite green. Backend runner `uv run pytest tests/`; web runner `cd web && npm te
 - [x] S1.5 — `POST /panel/api/me/password`. (`40da381e`)
 - [x] S1.6 — `POST /panel/api/users/{id}/unlock`. (`40da381e`)
 - [x] S1.7 — slice 1 tests. (`9da4562b`, `f3e746e2`, `40da381e`)
+- Slice 1 authored size: 263 additions / 6 deletions outside this document (estimate 250–380), under the ~400 review budget.
+- [x] Orchestrator verification — `uv run pytest tests/` re-run by the orchestrator on `b908921f`: **1731 passed, 2 deselected**, exit 0. Migration applied through `db/migrate.sh`, idempotent on a second run, and the documented `-- Rollback:` block rehearsed against a scratch database.
+- Orchestrator cleanup (`b908921f`): the ficha test carried a second copy of the per-role denial matrix and ended on an unreachable `continue`. The dedicated denial test already covers the same three routes for the same two roles, so the duplicate was removed. Coverage unchanged, dead code gone.
+- **TDD discipline gap, disclosed by the implementer and recorded honestly.** RED was observed for the first assertion of each area — a missing route returns 404 and drives the test red — but several later assertions inside the same test functions were written after their implementation, and early missing-route failures stopped the run before those assertions executed. The tests are meaningful and assert real behavior, but the strict per-assertion RED → GREEN sequence was **not** fully observed for every case. Do not read this slice as clean strict TDD.
+- Findings recorded, not fixed (owner decides):
+  - `POST /panel/api/me/password` answers **401** for a wrong current password. The caller *is* authenticated, so 400 or 403 would be the more honest status; the generic detail text is correct.
+  - The same route does **not** count failed attempts, so its current-password check has no brute-force ceiling — unlike login, which locks after 5 failures (AP-1, `app/services/users.py:26-27`). Reaching it requires an already-authenticated session, which bounds severity, but it is the difference between access and account takeover.
+  - `change_own_password` re-fetches the entity with `_get_user(session, current.id)` although the `current` dependency already is that entity.
+  - `PATCH` validates field length but not email shape.
+  - `PATCH /users/{id}` on an unknown id has no 404 test; the `GET` one does.
 
 ## Next step
 
-Implement slice 1 (backend) with strict TDD, RED first, then stop for owner review
-before slice 2.
+Slice 1 is implemented, verified and committed at `b908921f`; **it is not pushed**. Owner review of this slice gates slice 2 (the frontend ficha). Open question for the owner: whether the `me/password` brute-force ceiling and its 401 status get closed inside this unit or as a follow-up.
