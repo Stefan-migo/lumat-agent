@@ -154,26 +154,26 @@ tabular presentation.
 
 ## Tasks
 
-- [ ] **T1** — RED: `Menu.test.tsx` covers the row affordances — an icon-only
+- [x] **T1** — RED: `Menu.test.tsx` covers the row affordances — an icon-only
   trigger with the accessible name from `label`, the items still operable by
   keyboard and `onSelect`, an item rendering its icon, and a `tone="danger"` item.
   Observed failing against the unmodified `Menu`.
-- [ ] **T2** — GREEN: extend `Menu.tsx` (`MenuItem.icon`, `MenuItem.tone`,
+- [x] **T2** — GREEN: extend `Menu.tsx` (`MenuItem.icon`, `MenuItem.tone`,
   icon-only trigger with `aria-label`) and the menu rules in `primitives.css`.
   `primitives.css` stays hex-free and the existing `Menu.test.tsx` and
   `Menu.stories.tsx` keep passing.
-- [ ] **T3** — RED: `ClientesList.test.tsx` asserts the row-action cell renders one
+- [x] **T3** — RED: `ClientesList.test.tsx` asserts the row-action cell renders one
   menu trigger per row whose accessible name carries the customer name, that no
   visible action label embeds the customer name, that the items are
   `Cambiar estado` / `Archivar` (or `Restaurar` when archived), and that choosing
   an item calls the same handler as before.
-- [ ] **T4** — GREEN: rewrite the `ClientesList` actions callback as
+- [x] **T4** — GREEN: rewrite the `ClientesList` actions callback as
   `.table__actions` wrapping the icon-triggered `Menu`; `Archivar` becomes a
   `tone="danger"` item with an icon.
-- [ ] **T5** — stories: `Menu.stories.tsx` gains an icon-trigger story including a
+- [x] **T5** — stories: `Menu.stories.tsx` gains an icon-trigger story including a
   destructive item; `ClientesList.stories.test.tsx` assertions update for the new
   cell. Viewport presets stay global per `DS-STORY-7`.
-- [ ] **T6** — verification of record: `cd web && npm run test`,
+- [x] **T6** — verification of record: `cd web && npm run test`,
   `cd web && npx tsc -b --noEmit`, `cd web && npm run build`,
   `cd web && npm run build-storybook`, plus a rows-per-screen comparison against
   base `5e2ae2ba` at 1366×768.
@@ -206,13 +206,53 @@ tabular presentation.
 
 ## Progress
 
-- [x] Created this ODD record in the unit worktree before the first source change.
+- [x] Created this ODD record in the unit worktree before the first source change
+  (commit `8c800797`).
 - [x] Worktree created (`rapso worktree create panel-action-affordances`) and
   `npm ci` completed in `web/`.
+- [x] T1 — RED observed in `Menu.test.tsx`: 3 failed / 7 passed against the
+  unmodified `Menu`.
+- [x] T2 — GREEN. Commit `af273f37`. `Menu.test.tsx` 10/10; the pre-existing tests
+  are untouched and `primitives.css` stays hex-free.
+- [x] T3 — RED observed in `ClientesList.test.tsx`: 11 failed / 21 passed. The four
+  pre-existing row-action tests were moved to the new accessible-name contract in
+  the same step, because the old labels were the defect; their assertions are
+  otherwise preserved.
+- [x] T4 — GREEN. Commit `b9fcf612`. 42/42 across `ClientesList.test.tsx` and
+  `Menu.test.tsx`.
+- [x] T5 — stories. Commit `63e3bacb`. `ClientesList.stories.test.tsx` 23/23.
+- [x] T6 — verification of record: `cd web && npm run test` → **90 files, 852
+  tests, all passing**; `cd web && npx tsc -b --noEmit` → exit 0;
+  `cd web && npm run build` → exit 0 (pre-existing >500 kB chunk warning
+  unchanged); `cd web && npm run build-storybook` → exit 0, preview built in 21s.
+- [x] Density (acceptance 7) argued structurally: the cell replaces two 40px pill
+  buttons with one 40px icon trigger, so the row's intrinsic height is unchanged and
+  its width strictly decreases. The visual confirmation at 1366×768 is the owner's.
+- [x] Spec check: `DS-GRAMMAR-1` (live) keeps the dense surface tabular and retains
+  the control-room `DataTable`; the `Acciones` action-label contract of
+  `openspec/specs/panel-design-system/spec.md:557` is unchanged; `CST-PRIM-7` sizing,
+  token use and Radix keyboard ownership hold. No spec delta is required.
+- [x] `git diff --check` clean.
 
 ## Size
 
-To be recorded at close against base `5e2ae2ba`.
+`5e2ae2ba..HEAD` under `web/`: **304 changed lines** (291 added, 13 deleted) across 7
+files. Breakdown: `ClientesList.test.tsx` 106, `Menu.test.tsx` 64, `Menu.stories.tsx`
+38, `Menu.tsx` 34, `ClientesList.tsx` 33, `primitives.css` 17,
+`ClientesList.stories.test.tsx` 12. Production code is 84 lines (34 + 33 + 17); the
+rest is tests and stories. Non-`web/` artifacts add 224 lines
+(`odd/tasks/panel-action-affordances.md`). 304 is inside the ~400 review-focus budget.
+
+## Deferred and follow-ups
+
+- **The remaining `DataTable.actions` consumers are not converted here** (D7):
+  `ClientMemories.tsx:78`, `UserManagement.tsx:87`, `AgendaPage.tsx:239-250`,
+  `PlanningSessions.tsx:70`. Each becomes its own slice.
+- **`Button` `variant="danger"` is still unimplemented** (D6) and belongs to the ficha
+  unit, where `Archivar` and `Fusionar` are standalone destructive buttons.
+  `DESIGN_SYSTEM.md:444` documents it; `Button.tsx:4-8` does not implement it.
+- **`RowActions` is not extracted yet** (D2). It earns its place when the second
+  table consumer lands.
 
 ## Recovery
 
