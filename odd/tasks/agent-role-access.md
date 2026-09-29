@@ -42,6 +42,7 @@ catalog — including `customers.search`, `conversations.list`, `kb.retrieve`, a
 | D6 (owner-confirmed, 2026-09-29) | `tecnico`'s private set is `memory.*`, `project.*`, `web.*`, and `assistant.capabilities`; that includes owner-scoped project reads and creation. `appointments.upcoming` is granted to `tecnico` only in WU3, together with its scoping. | Without project list/create, `tecnico` cannot select a project and the chat cannot open; project namespaces are private, not business data. Withholding the global appointments tool until WU3 scopes it means no slice ever exposes it unscoped. | Grant only chat routes, which leaves `tecnico` unable to create a thread; or grant the unscoped appointments tool in WU1, which leaks the whole agenda for the window between WU2 and WU3. |
 | D7 | `automation.create_rule` stays `admin`-only. | Its panel surface is already admin-gated, it is unreachable by a non-admin through any current request path, and D2 excludes privileged writing from `operador`. | Grant it to `operador` as a non-privileged write. |
 | D8 | The role-to-tool map is declared explicitly per tool, not inferred from name prefixes. | Replaces the advisory R2-002 name-prefix family inference as the authorization source, so a future tool rename cannot silently change coverage. | Extend the existing `project.`/`memory.` prefix inference with more prefixes. |
+| D9 (owner, 2026-09-29) | The R3-001 follow-up is resolved by filtering the `GET /assistant/capabilities` catalog by role, not by relaxing IAC-1. | IAC-1 (`openspec/specs/internal-agent-chat/spec.md:24`) already requires the surface not to expose privileged tools; the code was the wrong side. Filtering also fixes the user-visible count a `tecnico` read ("24 herramientas disponibles" while 10 were denied). | Change IAC-1 from "expose" to "execute", which would have left the panel count incoherent. |
 
 ## Verified facts
 
@@ -197,9 +198,14 @@ Backend runner `uv run pytest tests/`; web runner `cd web && npm test`.
 - [x] U2.4 — route/tool/declaration matrix coverage. Evidence: route authorization test, guard role completeness test, and business-memory/tool declaration coherence test.
 - [x] WU2 — chat routes, `tecnico` project access, and the `default`-namespace guard. Evidence: role-aware guard + 15 route dependencies; three project dependencies; route and namespace tests; updated live specs.
 - WU2 authored size: 316 changed lines (additions plus deletions).
-- [ ] WU3 — technician-scoped upcoming appointments.
+- [x] U3.1 — `appointments.upcoming` granted to `tecnico` in the map and scoped to the requesting technician in the same slice. Evidence: `_upcoming_appointments` dispatches on role; `tecnico` reads `scheduling.list_for_technician(session, owner_id)` and fails closed without an authenticated owner; `admin`/`operador` keep `list_for_range`. The owner chain was verified end to end (`chat.py:305-311` `user_id=current.id` -> `run_assistant` -> `state["user_id"]` -> `execute_tool(owner_id=...)`).
+- [x] U3.2 — Tests: a technician sees only their own appointments and never another technician's; the other technician sees theirs; `admin`/`operador` keep the mapped view; the role matrix allows the tool for `tecnico`; the scoped technician catalog advertises it.
+- [x] WU3 — technician-scoped upcoming appointments. Evidence: role-dispatched handler + owner-scoped seam, unit seam and fail-closed tests, DB-backed scoping test, role matrix and capabilities catalog updated.
+- WU3 authored size: 153 changed lines (additions plus deletions; estimate: 80–140).
+- [x] Follow-up `uv.lock` — synced to `pyproject` `2026.09.7`. Evidence: PR #425, merge `ecc67e48`.
+- [x] Follow-up R3-001 — the capabilities catalog is filtered by role (D9). Evidence: PR #426, merge `e77da7d7`; catalog-vs-executable invariant test per role.
 - [ ] WU4 — real identity in navigation, dashboard, and message author.
 
 ## Next step
 
-WU2 is implemented and verified in its feature worktree; proceed to WU3 after review.
+WU1–WU3 are delivered; the two carried follow-ups (`uv.lock`, R3-001) are closed. Proceed to WU4.
