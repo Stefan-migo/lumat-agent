@@ -7,7 +7,7 @@ describe("AssistantTabs", () => {
   it("renders the three assistant sections", () => {
     render(<AssistantTabs active="chat" onSelect={vi.fn()} />);
 
-    expect(screen.getByRole("tab", { name: "Asistente" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Chat" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Proyectos" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Sesiones de planificación" })).toBeInTheDocument();
   });
@@ -16,7 +16,7 @@ describe("AssistantTabs", () => {
     render(<AssistantTabs active="projects" onSelect={vi.fn()} />);
 
     expect(screen.getByRole("tab", { name: "Proyectos" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Asistente" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "false");
   });
 
   it("selects the clicked section", async () => {

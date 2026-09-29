@@ -30,8 +30,8 @@ describe("TechnicianShell routing", () => {
     fireEvent.click(screen.getByRole("button", { name: "Asistente" }));
     expect(await screen.findByRole("heading", { name: "AgentChat role=tecnico" })).toBeInTheDocument();
     const tabs = screen.getByRole("tablist", { name: "Secciones del asistente" });
-    for (const label of ["Asistente", "Proyectos", "Sesiones de planificación"]) expect(within(tabs).getByRole("tab", { name: label })).toBeInTheDocument();
-    expect(within(tabs).getByRole("tab", { name: "Asistente" })).toHaveAttribute("aria-selected", "true");
+    for (const label of ["Chat", "Proyectos", "Sesiones de planificación"]) expect(within(tabs).getByRole("tab", { name: label })).toBeInTheDocument();
+    expect(within(tabs).getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
     await userEvent.setup().click(within(tabs).getByRole("tab", { name: "Proyectos" }));
     expect(window.location.pathname).toBe("/panel/app/projects");
     expect(await screen.findByRole("heading", { name: "ProjectsPage" })).toBeInTheDocument();
