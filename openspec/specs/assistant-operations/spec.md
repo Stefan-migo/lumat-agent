@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provide an admin-only, durable operations assistant with visible planning, exact approvals, typed execution, evidence, audit, and recoverable streaming.
+Provide a role-authorized, durable operations assistant with visible planning, exact approvals, typed execution, evidence, audit, and recoverable streaming.
 
 ## Requirements
 

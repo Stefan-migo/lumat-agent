@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.chat.assistant.graph import run_assistant
 from app.chat.assistant.approval import arguments_digest, canonical_sdb_digest, issue_approval, validate_approval
 from app.chat.assistant.nodes import execute, sdb_deliver, sdb_verify
-from app.chat.assistant.tools.registry import ToolExecutionError, ToolValidationError, execute_tool, get_tool
+from app.chat.assistant.tools.registry import BUSINESS_MEMORY_ROLES, ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.chat.assistant import nodes as assistant_nodes
 from app.chat.assistant.attachments import prepare_attachment_context
 from app.chat.assistant.state import estimate_tokens, merge_assistant_state
@@ -507,6 +507,8 @@ def assemble_context(session, thread_id: int, *, messages=None, attachments=None
 
 def create_thread(session: Session, user: User, *, proyecto: str = "default") -> InternalChatThread:
     if proyecto == "default":
+        if user.role.value not in BUSINESS_MEMORY_ROLES:
+            raise ValueError("role is not allowed to bind a thread to business-shared memory")
         bound_project = "default"
     else:
         bound_project = projects.agent_context(session, proyecto, owner_id=user.id).slug

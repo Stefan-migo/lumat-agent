@@ -70,14 +70,30 @@ def test_create_thread_defaults_to_default_without_project_validation(monkeypatc
             pass
 
     session = Session()
-    implicit = agent_chat.create_thread(session, SimpleNamespace(id=3, username="admin"))
+    admin = SimpleNamespace(id=3, username="admin", role=SimpleNamespace(value="admin"))
+    implicit = agent_chat.create_thread(session, admin)
     explicit = agent_chat.create_thread(
-        session, SimpleNamespace(id=3, username="admin"), proyecto="default"
+        session, admin, proyecto="default"
     )
 
     assert implicit.proyecto == "default"
     assert explicit.proyecto == "default"
     assert calls == []
+
+
+def test_create_thread_rejects_default_for_tecnico_before_persistence(monkeypatch):
+    class Session:
+        def __init__(self):
+            self.added = []
+
+        def add(self, thread):
+            self.added.append(thread)
+
+    session = Session()
+    user = SimpleNamespace(id=3, username="tecnico", role=SimpleNamespace(value="tecnico"))
+    with pytest.raises(ValueError, match="business-shared"):
+        agent_chat.create_thread(session, user, proyecto="default")
+    assert session.added == []
 
 
 def test_create_thread_rejects_unknown_project_before_persistence(monkeypatch):

@@ -72,7 +72,7 @@ def test_operator_cannot_open_compatibility_sse(client):
 
     response = client.get("/panel/api/chat/threads/1/stream")
 
-    assert response.status_code == 403
+    assert response.status_code == 404
     assert "evidence" not in response.text.lower()
 
 

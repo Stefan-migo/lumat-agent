@@ -615,6 +615,11 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "project.merge": frozenset(UserRole),
 }
 
+# Roles that may read business-shared memory (agent-role-access D2/D3/D5).
+# `tecnico` is excluded here for the same reason its tool map denies every
+# business read; both declarations are asserted together in tests.
+BUSINESS_MEMORY_ROLES: frozenset[str] = frozenset({"admin", "operador"})
+
 
 def get_tool(name: str) -> ToolDefinition:
     try:

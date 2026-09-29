@@ -2,25 +2,26 @@
 
 ## Purpose
 
-Provide persistent owner/admin conversations with the agent inside the authenticated panel.
+Provide persistent conversations with the agent for every authenticated panel role, with role-based tool authorization and owner-scoped threads and project namespaces.
 
 ## Requirements
 
 ### Requirement: IAC-1 — Role-Bound Threads
 
-The system MUST restrict internal agent chat to the owner/admin authorization boundary, MUST persist threads and messages, and MUST audit creation and message actions.
+The system MUST allow every authenticated panel role to reach internal agent chat, MUST persist threads and messages, and MUST audit creation and message actions. It MUST preserve per-role tool authorization and MUST NOT expose another user's threads, projects, or data.
 
 #### Scenario: Authorized thread
 
-- GIVEN an authenticated owner or admin
+- GIVEN an authenticated panel user
 - WHEN they open or send a message in an internal thread
 - THEN the thread and message are persisted and the action is audited
 
-#### Scenario: Operator denied
+#### Scenario: Non-admin role reaches chat without privilege escalation
 
-- GIVEN an authenticated operador
-- WHEN they request an internal agent thread
-- THEN the server returns an authorization error and exposes no thread data
+- GIVEN an authenticated operador or tecnico
+- WHEN they request an internal agent thread or project namespace
+- THEN the server permits the request only within their owner scope and their role's tool allowlist
+- AND it MUST NOT expose privileged tools or another user's data
 
 ### Requirement: IAC-2 — Context Boundary
 
@@ -169,12 +170,12 @@ The assistant MUST preserve realtime streaming, approval, `active_run_id` recove
 
 ### Requirement: IAC-5 — Authorization and Context Non-Regression
 
-The `AgentChat` presentation MUST remain inside the existing owner/admin authorization and conversation graph/model context boundaries defined by IAC-1 and IAC-2. Visual roles, avatars, bubbles, and retry controls MUST NOT expose thread data or privileged tools to an operador.
+The `AgentChat` presentation MUST remain inside the authenticated panel-role boundary and conversation graph/model context boundaries defined by IAC-1 and IAC-2. Visual roles, avatars, bubbles, and retry controls MUST NOT expose another user's thread data or privileged tools to an operador or tecnico.
 
-#### Scenario: Operator remains denied
-- GIVEN an authenticated operador opens `AgentChat`
-- WHEN the existing authorization response is forbidden
-- THEN no internal thread or message content renders and the visible state is an actionable permission error
+#### Scenario: Non-admin roles remain tool- and owner-bounded
+- GIVEN an authenticated operador or tecnico opens `AgentChat`
+- WHEN the server authorizes the request
+- THEN the caller may access only their own threads and projects and only tools in their role allowlist
 
 #### Scenario: Authorized failure does not escalate context
 - GIVEN an authorized user requests an unavailable privileged action through the internal chat
@@ -183,11 +184,11 @@ The `AgentChat` presentation MUST remain inside the existing owner/admin authori
 
 ### Requirement: IAC-6 — Compatible Token Streaming
 
-The assistant MUST stream ordered plan, approval, tool, evidence, response, and error events over its dedicated admin-only SSE endpoint while retaining compatible thread endpoints and serialized fields. Stream tokens are transient presentation; persisted history and durable approval state are authoritative after completion, reconnect, or reload.
+The assistant MUST stream ordered plan, approval, tool, evidence, response, and error events over its authenticated panel-role SSE endpoint while retaining compatible thread endpoints and serialized fields. Stream tokens are transient presentation; persisted history and durable approval state are authoritative after completion, reconnect, or reload.
 (Previously: compatibility required ordered SSE and persistence but did not define transient token authority after reconnect.)
 
 #### Scenario: SSE and thread persistence coexist
-- GIVEN an authorized administrator submits a message
+- GIVEN an authorized panel user submits a message
 - WHEN the assistant generates a response
 - THEN SSE events identify the thread and the existing endpoint returns the persisted compatible thread shape
 
@@ -211,10 +212,10 @@ The chat surface MUST send planning lifecycle changes only from its planning but
 - WHEN the administrator clicks Close session
 - THEN the same literal lifecycle operation runs as `/planning close`
 
-#### Scenario: Operator remains denied
-- GIVEN an authenticated operador requests assistant chat or its SSE stream
+#### Scenario: Non-admin access preserves tool restrictions
+- GIVEN an authenticated operador or tecnico requests assistant chat or its SSE stream
 - WHEN authorization is checked
-- THEN access is rejected and no token, plan, or thread data is exposed
+- THEN only the caller's own thread data is exposed and tool execution remains restricted by the role allowlist
 
 ### Requirement: IAC-8 — Honest SDB Conversation Delivery
 
@@ -237,16 +238,16 @@ Internal agent chat MUST present verified bounded outcomes for writes: success o
 
 ### Requirement: IAC-9 — Bounded Thread List and Read
 
-The internal chat API MUST expose owner/admin-authorized, bounded thread-list and thread-read data for the navigator, including stable identity, title or preview, updated time, selected state support, and run/approval or unread status where available. It MUST NOT fabricate planning sessions as conversation threads or expand write permissions.
+The internal chat API MUST expose authenticated-role-authorized, owner-scoped, bounded thread-list and thread-read data for the navigator, including stable identity, title or preview, updated time, selected state support, and run/approval or unread status where available. It MUST NOT fabricate planning sessions as conversation threads or expand write permissions.
 
 #### Scenario: Authorized bounded list
 
-- GIVEN an authenticated owner or admin requests internal threads
+- GIVEN an authenticated panel user requests internal threads
 - WHEN the list is read
 - THEN only a bounded, stable result is returned with fields sufficient for navigation
 
 #### Scenario: Unauthorized or unbounded request
 
-- GIVEN an operador requests the list or a client requests an unsupported unbounded page
+- GIVEN a caller requests another user's list or a client requests an unsupported unbounded page
 - WHEN authorization or bounds are checked
 - THEN the server rejects the request without exposing thread data

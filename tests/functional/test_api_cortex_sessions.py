@@ -17,7 +17,7 @@ def test_planning_session_lifecycle_and_auth_matrix(client, make_user):
     assert client.get("/panel/api/planning/sessions").status_code == 401
     make_user("cortex-operator", "cortex-pass", role="operador")
     client.post("/panel/api/login", json={"username": "cortex-operator", "password": "cortex-pass"})
-    assert client.get("/panel/api/planning/sessions").status_code == 403
+    assert client.get("/panel/api/planning/sessions").status_code == 200
 
     client.post("/panel/api/logout")
     _login(client, make_user)
@@ -53,6 +53,23 @@ def test_planning_unknown_thread_and_forbidden_detail(client, make_user):
     _login(client, make_user)
     assert client.post("/panel/api/planning/sessions", json={"topic": "Review", "thread_id": 9999}).status_code == 404
     assert client.get("/panel/api/planning/sessions/unknown").status_code == 404
+
+
+def test_tecnico_planning_requires_own_project_namespace(client, make_user):
+    _login(client, make_user, username="cortex-tecnico", role="tecnico")
+    rejected = client.post("/panel/api/planning/sessions", json={"topic": "Private planning"})
+    assert rejected.status_code == 400
+    created = client.post("/panel/api/projects", json={
+        "slug": "tech-planning", "name": "Technician Planning", "purpose": "Private technician planning namespace",
+    })
+    assert created.status_code == 201
+    opened = client.post("/panel/api/planning/sessions", json={
+        "topic": "Private planning", "proyecto": "tech-planning",
+    })
+    assert opened.status_code == 201, opened.text
+    with SessionLocal() as session:
+        thread = session.get(InternalChatThread, opened.json()["thread_id"])
+        assert thread.proyecto == "tech-planning"
 
 
 def test_report_approval_reuses_existing_endpoint(client, make_user):

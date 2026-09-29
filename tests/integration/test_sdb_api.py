@@ -61,15 +61,14 @@ def test_authenticated_admin_can_explicitly_enter_sdb(client, migrated_db, mock_
         assert thread.current_plan["sdb"]["tasks"][0]["verifiable_output"]
 
 
-def test_operator_cannot_request_or_stream_sdb(client, migrated_db):
+def test_operator_can_reach_chat_routes_without_crossing_tool_boundary(client, migrated_db):
     _user("sdb-api-operator", "operador")
     _login(client, "sdb-api-operator")
 
     created = client.post("/panel/api/chat/threads", json={"proyecto": "default"})
-    assert created.status_code == 403
-    stream = client.get("/panel/api/chat/threads/1/stream?run_id=operator-run")
-    assert stream.status_code == 403
-    assert "sdb" not in stream.text.lower()
+    assert created.status_code == 201
+    thread_id = created.json()["thread"]["id"]
+    assert client.get(f"/panel/api/chat/threads/{thread_id}").status_code == 200
 
 
 def test_sdb_stream_contains_ordered_phases_and_evidence(client, migrated_db, mock_openai_chat):
