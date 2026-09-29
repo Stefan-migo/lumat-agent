@@ -1,14 +1,16 @@
 # ODD Task: clientes-merge-duplicados
 
-Status: opened 2026-09-28. All decisions closed (D3, D4, surface scope, memory-collision policy, loser identity). No code written yet.
-Worktree: `../lumat-agent-odd-clientes-merge-duplicados`
-Branch: `odd/clientes-merge-duplicados`
-Base: `16d94ced` (main, 2026-09-28)
+Status: in progress. Decisions closed (D3, D4, surface scope, memory-collision policy, loser identity).
+**PR 1 (backend slice) merged to `main` as `41e14a01` (PR #413). PR 2 (frontend slice, F1-F3) in flight.**
+Worktree (PR 2): `../lumat-agent-odd-clientes-merge-ui`
+Branch (PR 2): `odd/clientes-merge-ui`
+Base (PR 2): `9d2f220d` (main, 2026-09-28)
 Depends on: nothing
 Source: split out of `odd/tasks/clientes-operativa.md` WU4 — D4 decided 2026-09-28: the duplicate merge is its own unit
 Delivery strategy: `ask-on-risk`
 Chain strategy: `stacked-to-main` (repo precedent: the Clientes campaign and `cases-route-alignment` both shipped stacked to main)
-Engram mirror: topic `odd/clientes-merge-duplicados/tasks` — **pending**: the write was blocked by ambiguous active-session attribution (2 candidates for `lumat-agent` in this directory). Resync when the ambiguity is resolved; the decisions themselves are already saved at `odd/clientes-merge/decisions`.
+Engram mirror: topic `odd/clientes-merge-duplicados/tasks` — **pending**: the write was blocked by ambiguous active-session attribution (2 candidates for `lumat-agent` in this directory). Resync when the ambiguity is resolved; the decisions themselves are already saved at `odd/clientes-merge/decisions`, and the PR 2 handoff at `handoff/clientes-merge-ui`.
+History: PR 1 was built in `../lumat-agent-odd-clientes-merge-duplicados` on `odd/clientes-merge-duplicados` off `16d94ced`; that worktree and both branches are gone (cleanup after the merge).
 
 ## Objective
 
@@ -208,12 +210,17 @@ regression.
 - [x] **B4-B5 parent spot check** — re-ran the full backend suite myself: `EXIT=0`. Note for the next session: the repo's `addopts = "-q"` plus an extra `-q` makes `-qq`, which **suppresses pytest's final summary line** — read the exit code, not the tail.
 - [x] **B4-B5 diff review** — read the whole diff: the preview is genuinely read-only (the test asserts `merged_into_customer_id is None` after a preview call), and the existing `test_clients_endpoints_require_login_401_json` was extended with **both** new endpoints, so auth coverage is complete rather than assumed.
 - [x] **Doc correction** — B5 in this doc said "error mapping to 400/404/409". There is **no 409 case**: under M1 the merge always proceeds, so no conflict status exists. The route maps guards to 400 and a missing customer to 404. Corrected here rather than left to instruct a future reader.
-- [ ] F1-F3 — frontend slice
+- [ ] F1-F3 — frontend slice implemented; verification evidence below (not marked complete here because O1 closure remains outstanding).
+- **F1 RED** — from `web/`, `npx vitest run src/components/pages/ClientFicha.test.tsx` → exit 1; `ClientFicha.test.tsx (34 tests | 1 failed)`, the merge dialog test failed because `Fusionar con otro cliente` was not present (33 passed). This was the intended missing-UI failure.
+- **F2 GREEN** — from `web/`, `npx vitest run src/components/pages/ClientFicha.test.tsx` → exit 0; 36 tests passed (36 total). Added the dialog, preview and merge calls, backend detail feedback, and loser-to-survivor ficha reload.
+- **F3 frontend suite** — from `web/`, `npm test` → exit 0; 90 test files and 838 tests passed. The pre-existing React `act(...)` and jsdom navigation warnings appeared; no timeout failures.
+- **F3 production build** — from `web/`, `npm run build` → exit 0; `tsc -b` and Vite production build completed. Vite emitted the existing >500 kB chunk-size advisory.
+- **Frontend graph check** — from the principal worktree, `graphify query "client ficha merge dialog and client api layer"` consulted nodes `ClientFicha.tsx`, `ClientFicha.test.tsx`, `Dialog()`, `Dialog.tsx`, `api.ts`, `apiFetch()`, `postJson()`, `fetchClients()`, `Customer`, and `ClientFichaResponse`; `graphify path "ClientFicha.tsx" "api.ts"` returned `ClientFicha.tsx --imports_from [EXTRACTED]--> api.ts`. `GRAPH_REPORT.md` hubs consulted: `types.ts`, `ClientFicha.stories.tsx`, `Dialog.tsx`, and `clients.py`.
 - [ ] O1 — assessment + review
 
 ## Closure
 
-Not closed. No code written. Backend slice is the next unit of work.
+Not closed. PR 1 (backend) is merged and PR 2 (frontend F1-F3) is implemented and verified. O1 assessment + review bookkeeping remains outstanding.
 
 ## Recovery
 
