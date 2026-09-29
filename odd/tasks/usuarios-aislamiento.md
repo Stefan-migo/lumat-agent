@@ -1,9 +1,9 @@
 # ODD Task: usuarios-aislamiento
 
-Status: open — WU1 and WU2 merged; WU3 implemented, review and delivery pending; WU4 remains
-Worktree: `../lumat-agent-odd-usuarios-aislamiento-wu3`
-Branch: WU1 on `odd/usuarios-aislamiento` (merged, PR #400); WU2 on `odd/usuarios-aislamiento-wu2` (merged, PR #407); current slice `odd/usuarios-aislamiento-wu3`
-Base: `16d94ced` (current `origin/main`, the WU2 merge)
+Status: open — WU1, WU2, and WU3 merged; WU4 remains
+Worktree: none live — the WU3 worktree `../lumat-agent-odd-usuarios-aislamiento-wu3` was removed at cleanup
+Branch: WU1 on `odd/usuarios-aislamiento` (merged, PR #400); WU2 on `odd/usuarios-aislamiento-wu2` (merged, PR #407); WU3 on `odd/usuarios-aislamiento-wu3` (merged, PR #412, branch deleted)
+Base: `2adc0eb9` (current `origin/main`, the WU3 merge)
 Depends on: nothing
 Source: `.rapsodia-code/sessions/archived/2026-09-25-usuarios-aislamiento/report.md` (archived when this unit was opened)
 Delivery strategy: `ask-on-risk`
@@ -447,7 +447,7 @@ semantics; service and route tests must establish those.
   the slice over the review budget and high-risk (`tests/integration/test_migrations.py`
   `shell_process`). Review is now closed; push/PR/merge remain separate owner decisions.
 - [x] WU2 — owner-aware memory, thread/project binding, and tools (U2.1–U2.4 delivered).
-- [ ] WU3 — owner-filtered panel API and project selection/creation.
+- [x] WU3 — owner-filtered panel API and project selection/creation.
   - [x] U3.1 — owner-scoped project reads and the authenticated create endpoint (`82a09a44`).
     - Strict TDD RED verified by the orchestrator against unmodified production code:
       `assert ['shared', 'shared'] == ['shared']` (the old list exposed another owner's
@@ -496,6 +496,24 @@ semantics; service and route tests must establish those.
     `_publish_all` unawaited and fastembed pooling warnings); `cd web && npm test` → `90 test files, 835
     tests passed`; `cd web && npm run build` (`tsc -b` + vite) passed; `git diff --check` clean. No Python
     linter/formatter is configured in this repo, so tests and the build are the complete check set.
+  - WU3 delivered as **PR #412** (`feat(panel): owner-scoped project API and explicit chat project
+    selection`), merged as `2adc0eb9` with a merge commit and a single `type:feature` label, under
+    maintainer-approved `size:exception` (634 changed lines: 498 insertions, 136 deletions over 20 files).
+  - Native review of the delivered candidate: lineage `review-89e87986c882ceaa`, tier `medium`, one lens
+    (reliability), **approved**, authority burned (`gentle-ai.review-acknowledged/v1`, consumed revision
+    `sha256:f1dda9cd…`). An earlier review of the same own-work candidate
+    (`review-a650106515207a19`, zero findings) was invalidated when `origin/main` advanced to
+    `ef76b729` after it; the branch then merged main (`30f6d127`), the integration was re-run over the
+    merged tree (`1600 passed` backend, `835` web, build OK — main touched none of the 20 files) and the
+    review was repeated against the real tree. CI was green (`panel` 2m49s, `test` 2m40s, GitGuardian
+    pass) and `origin/main` was verified contained in the branch before merging.
+  - Advisory follow-up from the WU3 delivery review, non-blocking and deliberately not corrected on this
+    candidate: **R3-001** (`web/src/components/pages/ProjectsPage.tsx:35-40`) — the creation POST and the
+    follow-up list refresh share one `try`, so a refresh failure after a successful create is reported as
+    a creation error and the persisted project does not appear until reload. Route it to WU4.
+  - Cleanup after merge: worktree `../lumat-agent-odd-usuarios-aislamiento-wu3` removed, branch
+    `odd/usuarios-aislamiento-wu3` deleted locally and remotely, this worktree's `db-test` container and
+    network removed, and local `main` fast-forwarded to `2adc0eb9`.
 - [ ] WU4 — cross-user isolation suite and final gate.
 - [ ] Migration apply, verification, and rollback documentation completed.
 - [ ] Acceptance criteria verified; unit closed.
@@ -507,23 +525,22 @@ complete. Record merged PRs, exact test results, migration evidence, and cleanup
 
 ## Recovery
 
-- Resume in `/home/stefan/repos/lumat-agent-odd-usuarios-aislamiento-wu3` on
-  `odd/usuarios-aislamiento-wu3`, based on `16d94ced` (the current `origin/main`, the WU2
-  merge). The WU2 worktree was removed and its branch deleted.
-- WU1 was delivered on `odd/usuarios-aislamiento` and merged (PR #400, merge `c4ad6fe2`).
-  WU2 was delivered on `odd/usuarios-aislamiento-wu2` and merged (PR #407, merge `16d94ced`);
-  its own work is reviewed and burned in full by lineage `review-b2bdde6e4c280287`.
-- WU3 is implemented on this branch: U3.1 by `82a09a44`, U3.2–U3.4 through `d511e693` (backend
-  `c2fde67d`/`ec3cdbb4`, frontend `32942a88`/`3d592cc0`, corrections `525f35b5`/`b7a8ff95`). Review and
-  delivery are pending. Delivery is
-  `stacked-to-main` (`ask-on-risk`), so WU3 is the third PR of the chain and its candidate is
-  this branch's own work against the current `origin/main`; isolate it with
-  `git diff --stat <base-ref> HEAD` before any review, because a branch commit as `--base-ref`
-  drags already-reviewed main content into the candidate.
-- Test database for this worktree: `infra/test-db.sh up` / `eval "$(infra/test-db.sh env)"` /
-  `infra/test-db.sh down` — derived port `5592`, Compose project
-  `lumat-test-lumat-agent-odd-usuarios-aislamiento-wu3`. `infra/.env` was copied from the
-  primary worktree and must never be sourced before `test-db.sh env`.
+- WU3 is merged: **PR #412**, merge commit `2adc0eb9` (see the Progress record). Its worktree was removed
+  and its branch deleted locally and remotely.
+- Next slice: **WU4** — cross-user isolation suite, migration 034 apply/rollback verification, and the
+  final gate, plus the advisory **R3-001** from the WU3 delivery review
+  (`web/src/components/pages/ProjectsPage.tsx:35-40`). Create its worktree following the ODD convention
+  (`../lumat-agent-odd-<slug>`) from the current `origin/main` (`2adc0eb9`).
+- Delivery is `stacked-to-main` (`ask-on-risk`); WU4 is the fourth PR of the chain and its candidate is
+  its own work against the current `origin/main`. Isolate it with `git diff --stat <base-ref> HEAD`
+  before any review, because a branch commit as `--base-ref` drags already-reviewed main content into
+  the candidate.
+- Never mutate a branch after the review authority is burned, docs included: the delivered candidate must
+  equal the reviewed one. A merge-time record goes in a later doc-hygiene PR, as WU1–WU3 did.
+- Per-worktree test database: `infra/test-db.sh up` / `eval "$(infra/test-db.sh env)"` /
+  `infra/test-db.sh down`, with `infra/.env` copied from the primary worktree and never sourced before
+  `test-db.sh env`. The WU3 worktree derived port `5592` and Compose project
+  `lumat-test-lumat-agent-odd-usuarios-aislamiento-wu3`; both were torn down at cleanup.
 - Graphify is PARTIAL: `graphify . --update` fails the semantic chunking step with
   `402 Insufficient Balance` and `tree_sitter_sql` is missing, so the graph is navigation
   only, never authority.
