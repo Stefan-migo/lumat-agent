@@ -5,7 +5,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgendaPage } from './AgendaPage';
 import type { AgendaAppointment } from '../../types';
-import { cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, rescheduleAppointment, retryCalendarSync } from '../../api';
+import { cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, rescheduleAppointment, retryCalendarSync } from '../../api';
 import { appointmentStatusLabel, appointmentSyncLabel } from '../shared/toneMaps';
 
 vi.mock('../../api', () => ({
@@ -18,7 +18,7 @@ vi.mock('../../api', () => ({
   createCase: vi.fn(),
   fetchClients: vi.fn(),
   fetchCases: vi.fn(),
-  fetchUsers: vi.fn(),
+  fetchTechnicians: vi.fn(),
 }));
 
 const appointment = (overrides: Partial<AgendaAppointment> = {}): AgendaAppointment => ({
@@ -223,10 +223,11 @@ describe('AgendaPage', () => {
 
   it('opens the reschedule dialog with the booked row slot and submits the complete replacement', async () => {
     const user = userEvent.setup();
-    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: 'Luis', role: 'tecnico', active: true }] as never });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: 'Luis' }] });
     vi.mocked(rescheduleAppointment).mockResolvedValue({ ok: true, appointment: {} });
     render(<AgendaPage data={[appointment()]} state="ready" />);
     await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+    await waitFor(() => expect(fetchTechnicians).toHaveBeenCalledOnce());
     const dialog = screen.getByRole('dialog', { name: 'Reprogramar visita' });
     expect(within(dialog).getByLabelText('Fecha local')).toHaveValue('2026-09-05');
     expect(within(dialog).getByLabelText('Hora local')).toHaveValue('10:00');
@@ -237,7 +238,7 @@ describe('AgendaPage', () => {
 
   it('refuses a replacement slot with no technician instead of sending an unlinked slot', async () => {
     const user = userEvent.setup();
-    vi.mocked(fetchUsers).mockResolvedValue({ users: [] as never });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [] });
     render(<AgendaPage data={[appointment({ technician_id: null })]} state="ready" />);
     await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
     await user.click(screen.getByRole('button', { name: 'Confirmar reprogramación' }));
@@ -394,12 +395,13 @@ describe('AgendaPage', () => {
     const user = userEvent.setup({ delay: null });
     vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
     vi.mocked(fetchCases).mockResolvedValue({ cases: [{ id: 20, service: 'Mantención', customer: { id: 10, name: 'Camila Soto' } }] as never, users: [] });
-    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: 'Luis', role: 'tecnico', active: true }] as never });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: 'Luis' }] });
     vi.mocked(createAppointment).mockResolvedValue({ ok: true, appointment: {} as never });
     vi.mocked(listAppointments).mockResolvedValue({ appointments: [] });
 
     render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    await waitFor(() => expect(fetchTechnicians).toHaveBeenCalledOnce());
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Cliente'), '10');
     await user.type(screen.getByLabelText('Caso'), 'Mantención');
@@ -422,7 +424,7 @@ describe('AgendaPage', () => {
     const user = userEvent.setup();
     vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
     vi.mocked(fetchCases).mockResolvedValue({ cases: [{ id: 20, service: null, customer: { id: 10, name: 'Camila Soto' } }] as never, users: [] });
-    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: 'Luis', role: 'tecnico', active: true }] as never });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: 'Luis' }] });
     vi.mocked(createAppointment).mockResolvedValue({ ok: true, appointment: {} as never });
 
     render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
@@ -455,7 +457,7 @@ describe('AgendaPage', () => {
     const createdCase = { id: 21, service: 'Instalación', customer_id: 10 };
     vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
     vi.mocked(fetchCases).mockResolvedValue({ cases: [] as never, users: [] });
-    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: 'Luis', role: 'tecnico', active: true }] as never });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: 'Luis' }] });
     vi.mocked(createCase).mockResolvedValue({ ok: true, case: createdCase as never });
     vi.mocked(createAppointment).mockResolvedValue({ ok: true, appointment: {} as never });
 
@@ -483,7 +485,7 @@ describe('AgendaPage', () => {
     let resolveCreateCase!: (value: { ok: true; case: never }) => void;
     vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
     vi.mocked(fetchCases).mockResolvedValue({ cases: [] as never, users: [] });
-    vi.mocked(fetchUsers).mockResolvedValue({ users: [] as never });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [] });
     vi.mocked(createCase).mockReturnValue(new Promise((resolve) => { resolveCreateCase = resolve; }) as never);
 
     render(<AgendaPage data={[]} state="empty" />);
@@ -508,7 +510,7 @@ describe('AgendaPage', () => {
     const user = userEvent.setup();
     vi.mocked(fetchClients).mockResolvedValue({ clients: [] as never });
     vi.mocked(fetchCases).mockResolvedValue({ cases: [] as never, users: [] });
-    vi.mocked(fetchUsers).mockResolvedValue({ users: [] as never });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [] });
     render(<AgendaPage data={[]} state="empty" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());

@@ -317,6 +317,8 @@ export interface UserRef {
   username: string;
 }
 
+export interface TechniciansResponse { technicians: UserRef[]; }
+
 export interface Case {
   id: number;
   conversation_id: number | null;

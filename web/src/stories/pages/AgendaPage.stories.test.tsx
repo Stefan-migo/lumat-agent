@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { cancelAppointment, closeAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
+import { cancelAppointment, closeAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
 import {
   AgendaPageStory,
   CancelConfirmation,
@@ -28,7 +28,7 @@ vi.mock("../../api", () => ({
   createCase: vi.fn(),
   fetchCases: vi.fn(),
   fetchClients: vi.fn(),
-  fetchUsers: vi.fn(),
+  fetchTechnicians: vi.fn(),
 }));
 
 describe("AgendaPage Storybook state matrix", () => {
@@ -112,7 +112,7 @@ describe("AgendaPage Storybook state matrix", () => {
 
   it("covers rescheduling while preserving appointment facts", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: "Luis", role: "tecnico", active: true }] as never });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: "Luis" }] });
     vi.mocked(rescheduleAppointment).mockResolvedValue({ ok: true, appointment: {} });
     render(<AgendaPageStory data={Data.args?.data} state="ready" />);
     expect(screen.getByText("Camila Soto")).toBeInTheDocument();
@@ -128,7 +128,7 @@ describe("AgendaPage Storybook state matrix", () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: "Camila Soto" }] as never });
     vi.mocked(fetchCases).mockResolvedValue({ cases: [], users: [] });
-    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 30, username: "Luis", role: "tecnico", active: true }] as never });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: "Luis" }] });
 
     render(<AgendaPageStory {...(CreateVisit.args ?? {})} />);
     await user.click(screen.getByRole("button", { name: "Nueva visita" }));

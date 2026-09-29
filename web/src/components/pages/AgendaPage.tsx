@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { ApiError, cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchUsers, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
+import { ApiError, cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { AgendaAppointment, Case, Customer, AdminUser } from "../../types";
+import type { AgendaAppointment, Case, Customer, UserRef } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Combobox } from "../primitives/Combobox";
@@ -65,7 +65,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const [createFeedback, setCreateFeedback] = useState<{ tone: "danger" | "success"; title: string; detail?: string } | null>(null);
   const [clients, setClients] = useState<Customer[]>([]);
   const [cases, setCases] = useState<Case[]>([]);
-  const [technicians, setTechnicians] = useState<AdminUser[]>([]);
+  const [technicians, setTechnicians] = useState<UserRef[]>([]);
   const [createForm, setCreateForm] = useState({ customer_id: "", case_id: "", technician_id: "", service: "", local_date: "", local_time: "09:00", duration_minutes: "60" });
   const [view, setView] = useState<AgendaCalendarView>("month");
   const [anchor, setAnchor] = useState(() => agendaTodayKey(timezone));
@@ -157,10 +157,10 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     setCreateFeedback(null);
     setCreateForm((form) => ({ ...form, local_date: form.local_date || from }));
     try {
-      const [clientResponse, caseResponse, userResponse] = await Promise.all([fetchClients(), fetchCases(), fetchUsers()]);
+      const [clientResponse, caseResponse, technicianResponse] = await Promise.all([fetchClients(), fetchCases(), fetchTechnicians()]);
       setClients(clientResponse.clients);
       setCases(caseResponse.cases);
-      setTechnicians(userResponse.users.filter((user) => user.role === "tecnico"));
+      setTechnicians(technicianResponse.technicians);
     } catch (error) {
       setCreateFeedback({ tone: "danger", title: "No pudimos cargar las opciones de la visita", detail: error instanceof Error ? error.message : undefined });
     }
@@ -237,7 +237,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const selectedRows = registerView === "active" && selectedDay ? activeRows.filter((row) => localDate(row.local_start) === selectedDay) : null;
   const containsToday = periodDays.includes(today);
   const actions = (row: AgendaAppointment) => <>
-    {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setRescheduleTarget(row); setRescheduleForm({ local_date: row.local_start.slice(0, 10), local_time: row.local_start.slice(11, 16), duration_minutes: String(row.duration_minutes ?? 60), technician_id: String(row.technician_id ?? "") }); setRescheduleFeedback(null); void fetchUsers().then((response) => setTechnicians(response.users.filter((user) => user.role === "tecnico"))); }}>Reprogramar</Button> : null}
+    {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setRescheduleTarget(row); setRescheduleForm({ local_date: row.local_start.slice(0, 10), local_time: row.local_start.slice(11, 16), duration_minutes: String(row.duration_minutes ?? 60), technician_id: String(row.technician_id ?? "") }); setRescheduleFeedback(null); void fetchTechnicians().then((response) => setTechnicians(response.technicians)); }}>Reprogramar</Button> : null}
     {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setCancelTarget(row); setCancelFeedback(null); }}>Cancelar visita</Button> : null}
     {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setCloseTarget(row); setCloseFeedback(null); }}>Cerrar visita</Button> : null}
     {row.sync.status === "pending" || row.sync.status === "failed" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void retrySync(row.id)} aria-label="Reintentar calendario">Reintentar calendario</Button> : null}
