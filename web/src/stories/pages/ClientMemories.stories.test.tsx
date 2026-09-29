@@ -81,6 +81,16 @@ describe("ClientMemories domain component (MEM-6)", () => {
     expect(within(table).getByText(duplicate.contenido)).toBeInTheDocument();
   });
 
+  it("renders shared memory type labels instead of backend identifiers", () => {
+    render(<ClientMemoriesView />);
+    expect(screen.getByText("Memo del cliente")).toBeInTheDocument();
+    expect(screen.getByText("Preferencia")).toBeInTheDocument();
+    expect(screen.getByText("Decisión")).toBeInTheDocument();
+    expect(screen.queryByText("customer_memo")).not.toBeInTheDocument();
+    expect(screen.queryByText("preference")).not.toBeInTheDocument();
+    expect(screen.queryByText("decision")).not.toBeInTheDocument();
+  });
+
   it("uses stylesheet classes for memory layout sites", () => {
     const relation: MemoryRelation = {
       id: 1,

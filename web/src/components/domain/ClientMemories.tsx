@@ -5,7 +5,7 @@ import { Card } from "../primitives/Card";
 import { Textarea } from "../primitives/Textarea";
 import type { Column } from "../shared/DataTable";
 import { DataTable } from "../shared/DataTable";
-import { memoryStatusLabel, memoryStatusTone } from "../shared/toneMaps";
+import { memoryStatusLabel, memoryStatusTone, memoryTypeLabel, memoryTypeTone } from "../shared/toneMaps";
 import type { Memory, MemoryRelation, MemoryRelationKind } from "../../types";
 
 export type MemoryHandler = (memoryId: number) => void;
@@ -20,10 +20,6 @@ export interface ClientMemoriesProps {
   onPin?: MemoryPinHandler;
   pendingRelations?: MemoryRelation[];
   onResolveRelation?: (relationId: number, relation: MemoryRelationKind) => Promise<void> | void;
-}
-
-function tipoTone(tipo: Memory["tipo"]): "neutral" | "success" | "warning" | "danger" {
-  return tipo === "customer_memo" ? "warning" : "neutral";
 }
 
 /** Ficha memories panel (MEM-6): list + edit + delete + mark(pin) over the
@@ -63,7 +59,7 @@ export function ClientMemories({
     {
       key: "tipo",
       header: "Tipo",
-      render: (m) => <Badge tone={tipoTone(m.tipo)}>{m.tipo}</Badge>,
+      render: (m) => <Badge tone={memoryTypeTone(m.tipo)}>{memoryTypeLabel(m.tipo)}</Badge>,
     },
     { key: "titulo", header: "Titulo", render: (m) => m.titulo ?? "—" },
     { key: "contenido", header: "Contenido", render: (m) => m.contenido ?? "—" },
@@ -81,7 +77,7 @@ export function ClientMemories({
         <div className="client-memories__memo">
           <strong>{featuredMemo.contenido}</strong>
           <div>
-            <Badge tone={tipoTone(featuredMemo.tipo)}>{featuredMemo.tipo}</Badge>
+            <Badge tone={memoryTypeTone(featuredMemo.tipo)}>{memoryTypeLabel(featuredMemo.tipo)}</Badge>
             <Badge tone={memoryStatusTone(featuredMemo.status)}>{memoryStatusLabel(featuredMemo.status)}</Badge>
           </div>
           {renderActions(featuredMemo)}
