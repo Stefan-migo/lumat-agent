@@ -37,7 +37,7 @@ function PanelToggleIcon({ collapsed }: { collapsed: boolean }) {
 
 const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" | "advanced-dashboard" | "projects" | "planning-sessions">, NavigationItem> = {
   dashboard: { label: "Panel unificado", icon: PanelLeft },
-  chat: { label: "Asistente Lumat", icon: Bot, adminOnly: true },
+  chat: { label: "Asistente Lumat", icon: Bot },
   conversations: { label: "Conversaciones", icon: MessageSquare },
   clients: { label: "Clientes", icon: Users },
   agenda: { label: "Agenda", icon: Calendar },
@@ -436,8 +436,8 @@ export function PanelShell({
            {children}
         </div>
        </div>
-       <nav className={`panel-shell__footer-nav${user.role === "admin" ? " panel-shell__footer-nav--admin" : ""}`} aria-label="Navegación inferior">
-         {(["notifications", "dashboard", ...(user.role === "admin" ? ["chat"] : []), "conversations", "agenda"] as PanelView[]).map((view) => {
+        <nav className="panel-shell__footer-nav panel-shell__footer-nav--admin" aria-label="Navegación inferior">
+          {(["notifications", "dashboard", "chat", "conversations", "agenda"] as PanelView[]).map((view) => {
             const item = view === "notifications" ? { label: "Notificaciones", icon: Bell } : view === "dashboard" ? { label: "Panel", icon: PanelLeft } : view === "chat" ? { label: "Agente Lumat", icon: Bot } : view === "conversations" ? { label: "Conversaciones", icon: MessageSquare } : { label: "Agenda", icon: Calendar };
             return <button key={view} type="button" className={view === "chat" ? "panel-shell__footer-nav--primary" : undefined} aria-current={currentView === view ? "page" : undefined} aria-label={item.label} onClick={() => handleNavigation(view)}><Icon icon={item.icon} /><span>{item.label}</span></button>;
          })}

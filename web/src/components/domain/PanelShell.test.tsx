@@ -5,12 +5,24 @@ import { PanelShell } from "./PanelShell";
 import type { User } from "../../types";
 
 const admin: User = { username: "ana", role: "admin" };
+const operador: User = { username: "vero", role: "operador" };
 
 function sidebar(container: HTMLElement) {
   return within(container.querySelector(".panel-shell__sidebar") as HTMLElement);
 }
 
 describe("PanelShell rail contract (2C-1)", () => {
+  it("shows chat to an operador while keeping privileged sections hidden", () => {
+    const { container } = render(<PanelShell user={operador}><p>Contenido</p></PanelShell>);
+    const rail = sidebar(container);
+    expect(rail.getByRole("button", { name: "Asistente Lumat" })).toBeInTheDocument();
+    for (const label of ["Base de Conocimientos", "Automatizaciones", "Configuración", "Usuarios"]) {
+      expect(rail.queryByRole("button", { name: label })).not.toBeInTheDocument();
+    }
+    const footer = within(container.querySelector(".panel-shell__footer-nav") as HTMLElement);
+    expect(footer.getByRole("button", { name: "Agente Lumat" })).toBeInTheDocument();
+  });
+
   it("enters focus mode from the keyboard, traps focus, and restores the trigger on Escape", async () => {
     const user = userEvent.setup();
     render(<PanelShell user={admin}><button type="button">Content action</button></PanelShell>);
