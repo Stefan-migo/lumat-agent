@@ -7,7 +7,7 @@ directly. They never call panel routes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from enum import Enum
 from itertools import zip_longest
 import logging
@@ -277,10 +277,28 @@ def _search_conversations(session, args: QueryArgs):
     return conversations.list_conversations(session, args.query, args.limit)
 
 
-def _upcoming_appointments(session, args: AppointmentArgs):
+def _upcoming_appointments(session, args: AppointmentArgs, *, role: str | None = None, owner_id: int | None = None):
     now = datetime.now(timezone.utc)
-    rows = scheduling.list_for_range(session, now.date(), now.date() + timedelta(days=30), "UTC")
-    return [row[0] for row in rows if row[0].starts_at is not None and row[0].starts_at >= now][: args.limit]
+    # Same inclusive window the range projection uses (from now until the end of
+    # the 31st day after today, UTC), so a technician and an operator never
+    # disagree about whether one appointment is upcoming.
+    window_end = datetime.combine(now.date() + timedelta(days=31), time.min, tzinfo=timezone.utc)
+    if role == UserRole.TECNICO.value:
+        # D3: a technician reads only their own agenda. `technician_id` is a FK to
+        # `users.id`, so the authenticated caller id is the technician id.
+        if owner_id is None:
+            raise ToolValidationError("technician appointments require the authenticated owner")
+        appointments = [row[0] for row in scheduling.list_for_technician(session, owner_id)]
+    else:
+        appointments = [
+            row[0]
+            for row in scheduling.list_for_range(session, now.date(), now.date() + timedelta(days=30), "UTC")
+        ]
+    return [
+        appointment
+        for appointment in appointments
+        if appointment.starts_at is not None and now <= appointment.starts_at < window_end
+    ][: args.limit]
 
 
 def _open_cases(session, args: CasesArgs):
@@ -594,7 +612,7 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
     "customers.list": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "conversations.search": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "conversations.list": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
-    "appointments.upcoming": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "appointments.upcoming": frozenset({UserRole.ADMIN, UserRole.OPERADOR, UserRole.TECNICO}),
     "customers.operational_history": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "cases.list": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
     "kb.retrieve": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
@@ -619,6 +637,17 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
 # `tecnico` is excluded here for the same reason its tool map denies every
 # business read; both declarations are asserted together in tests.
 BUSINESS_MEMORY_ROLES: frozenset[str] = frozenset({"admin", "operador"})
+
+
+def is_tool_allowed_for_role(name: str, role: str) -> bool:
+    """Whether `role` may execute `name`. Unknown or non-string roles fail closed."""
+    if not isinstance(role, str):
+        return False
+    try:
+        user_role = UserRole(role)
+    except ValueError:
+        return False
+    return user_role in ROLE_TOOL_ALLOWLIST.get(name, frozenset())
 
 
 def get_tool(name: str) -> ToolDefinition:
@@ -652,7 +681,7 @@ def execute_tool(
         raise ToolValidationError(f"tool is not whitelisted: {name}")
     if not isinstance(role, str) or role not in {item.value for item in UserRole}:
         raise ToolValidationError("unrecognized actor role")
-    if UserRole(role) not in ROLE_TOOL_ALLOWLIST.get(name, frozenset()):
+    if not is_tool_allowed_for_role(name, role):
         raise ToolValidationError(f"tool is not authorized for role {role}: {name}")
     autonomous_write = name in AUTONOMOUS_WRITE_ALLOWLIST
     if autonomous_write and (type(trusted_thread_id) is not int or trusted_thread_id <= 0):
@@ -730,6 +759,8 @@ def execute_tool(
                     session, parsed, trusted_thread_id=trusted_thread_id, proyecto=proyecto, owner_id=owner_id
                 )
             )
+        elif name == "appointments.upcoming":
+            result = _plain(definition.handler(session, parsed, role=role, owner_id=owner_id))
         else:
             result = _plain(definition.handler(session, parsed))
     except SearchFailure as exc:
