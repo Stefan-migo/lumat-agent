@@ -10,6 +10,14 @@ from app.services.scheduling import (
     local_interval,
     open_slots,
 )
+from app.services.automation import ALLOWED_EVENTS
+from app.services.settings import SETTINGS_DEFAULTS
+
+
+def test_followup_defaults_and_events_are_registered():
+    assert SETTINGS_DEFAULTS["notify.followup_template_name"] == "appointment_followup"
+    assert SETTINGS_DEFAULTS["notify.followup_no_show_template_name"] == "appointment_followup_no_show"
+    assert {"appointment.completed", "appointment.no_show"} <= ALLOWED_EVENTS
 
 
 def test_local_interval_preserves_chile_dst_and_returns_utc_range():
