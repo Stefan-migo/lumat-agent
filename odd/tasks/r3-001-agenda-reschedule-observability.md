@@ -127,7 +127,7 @@ minimal.
 - [x] **T2 — GREEN.** Append the rejection handler to the lookup writing into `rescheduleFeedback`.
   Re-run T1 and observe it pass.
 - [x] **T3 — Evidence.** Run every check below and record observed results.
-- [ ] **T4 — Record + commit.** Update this document with the evidence and commit the work unit.
+- [x] **T4 — Record + commit.** Update this document with the evidence and commit the work unit.
 
 ## Acceptance criteria
 
@@ -175,3 +175,5 @@ minimal.
 | 2026-09-29 | Full web suite: `npm test -- --run --testTimeout=20000` → `Test Files 90 passed (90)`, `Tests 860 passed (860)` in 131.81s. No load-dependent failure appeared, so L8 did not fire in this run. The `860` baseline is 8 above the `852` recorded at PR #430 — the base advanced to `c0c78ebe` (PR #431, `odd/agent-role-access-wu4`), which added tests; this unit contributes one of those eight. |
 | 2026-09-29 | `npm run build` → passed (`tsc -b` clean; Vite emitted only the pre-existing >500 kB chunk advisory). `git diff --check` → clean. Diff size: 13 insertions, 1 deletion across 2 files. |
 | 2026-09-29 | Scope observation: `web/src/stories/pages/AgendaPage.stories.test.tsx` was **not** touched. Its API mock uses `mockResolvedValue`, and adding a rejection handler requires no mock change — the file stayed out of the diff, as the scope anticipated ("only if its mock needs it"). |
+| 2026-09-29 | **Work unit committed: `f3560c4d`** — `fix(agenda): surface technician lookup failures when rescheduling`. 3 files, 190 insertions, 1 deletion. Working tree clean afterwards. No `Co-Authored-By`. |
+| 2026-09-29 | **Native review assessment** (`gentle-ai review assess --agent opencode --base-ref c0c78ebe --committed-only`): `risk: medium` (`executable_change` on `AgendaPage.test.tsx`), 3 changed paths, 191 changed lines. `review_due: false`, `review_due_reason: "under_budget"` — the slice is under the ~400 authored-line budget, so no native review is due for this commit; the boundary stays pending in the slice. RDD is `on` (decided by global). |
