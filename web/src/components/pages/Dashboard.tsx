@@ -190,12 +190,12 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
       <section className="dashboard__section" aria-label="Navegación operativa">
         <div className="dashboard__section-head"><h2>Atajos</h2></div>
         <div className="dashboard__grid">
-          {role === "admin" ? <button className="dashboard__card dashboard__card--agent" type="button" onClick={() => navigate("chat")} aria-label="Abrir Agente Lumat">
+          <button className="dashboard__card dashboard__card--agent" type="button" onClick={() => navigate("chat")} aria-label="Abrir Agente Lumat">
             <span className="dashboard__card__icon"><Icon icon={ICONS.agent} size="md" /></span>
             <span className="dashboard__card__label">Agente Lumat</span>
             <span className="dashboard__card__sub">Consulta, deriva o delega tareas</span>
             <span className="dashboard__card__hint">Abrir <Icon icon={ICONS.arrow} size="sm" /></span>
-          </button> : null}
+          </button>
           {cards.map((label) => (
             <button className="dashboard__card" type="button" key={label} onClick={() => navigate(viewFor[label])} aria-label={`Abrir ${label}`} style={{ "--bent-accent": accents[label] } as CSSProperties}>
               <span className="dashboard__card__icon"><Icon icon={ICONS[iconFor[label]]} size="md" /></span>

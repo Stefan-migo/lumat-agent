@@ -52,7 +52,11 @@ describe("Dashboard operational surface", () => {
     expect(screen.getByLabelText("Tendencia de contactos de 7 días")).toBeInTheDocument();
 
     rerender(<Dashboard data={data} state="ready" role="operador" />);
-    expect(screen.queryByText("Agente Lumat")).not.toBeInTheDocument();
+    expect(screen.getByText("Agente Lumat")).toBeInTheDocument();
+    expect(screen.queryByText("Automatizaciones")).not.toBeInTheDocument();
+
+    rerender(<Dashboard data={data} state="ready" role="tecnico" />);
+    expect(screen.getByText("Agente Lumat")).toBeInTheDocument();
     expect(screen.queryByText("Automatizaciones")).not.toBeInTheDocument();
   });
 
