@@ -234,13 +234,13 @@ suite green. Backend runner `uv run pytest tests/`; web runner `cd web && npm te
 
 - [x] Thread audited and the profile scope chosen with the owner (P1, P2, P3).
 - [x] Graph check run in this worktree; the plan recorded.
-- [ ] S1.1 — migration `039_user_profile.sql` and the `User` columns.
-- [ ] S1.2 — serializers expose the four fields and the lockout state.
-- [ ] S1.3 — `GET /panel/api/users/{id}`.
-- [ ] S1.4 — `PATCH /panel/api/users/{id}`.
-- [ ] S1.5 — `POST /panel/api/me/password`.
-- [ ] S1.6 — `POST /panel/api/users/{id}/unlock`.
-- [ ] S1.7 — slice 1 tests.
+- [x] S1.1 — migration `039_user_profile.sql` and the `User` columns. (`9da4562b`)
+- [x] S1.2 — serializers expose the four fields and the lockout state. (`f3e746e2`)
+- [x] S1.3 — `GET /panel/api/users/{id}`. (`40da381e`)
+- [x] S1.4 — `PATCH /panel/api/users/{id}`. (`40da381e`)
+- [x] S1.5 — `POST /panel/api/me/password`. (`40da381e`)
+- [x] S1.6 — `POST /panel/api/users/{id}/unlock`. (`40da381e`)
+- [x] S1.7 — slice 1 tests. (`9da4562b`, `f3e746e2`, `40da381e`)
 
 ## Next step
 
