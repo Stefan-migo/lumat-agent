@@ -529,7 +529,7 @@ def _bounded_title(value: str) -> str:
 def _opening_message(session: Session, thread_id: int) -> InternalChatMessage | None:
     return session.scalar(
         select(InternalChatMessage)
-        .where(InternalChatMessage.thread_id == thread_id, InternalChatMessage.author == "admin")
+        .where(InternalChatMessage.thread_id == thread_id, InternalChatMessage.author != "agent")
         .order_by(InternalChatMessage.created_at, InternalChatMessage.id)
     )
 
@@ -596,7 +596,7 @@ def create_run_message(
     run_id = uuid4().hex
     message = InternalChatMessage(
         thread_id=thread.id,
-        author="admin",
+        author=getattr(user.role, "value", user.role),
         content=content.strip(),
         status="processing",
         assistant_metadata={"run_id": run_id},
