@@ -109,10 +109,12 @@ describe("ClientFicha page", () => {
 });
 
 describe("ClientFicha state matrix stories", () => {
-  it("renders archived customers with an available restore action", () => {
+  it("renders archived customers with an available restore action", async () => {
+    const user = userEvent.setup();
     render(<ArchivedClientFicha />);
     expect(screen.getByText("Cliente archivado")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Restaurar" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: `Acciones para ${customer.name}` }));
+    expect(await screen.findByRole("menuitem", { name: "Restaurar" })).toBeInTheDocument();
   });
 
   it("renders the calendar-sync failure with its retry control", () => {
