@@ -44,7 +44,6 @@ def test_technician_capabilities_exclude_every_business_read(client, make_user):
             "customers.list",
             "conversations.search",
             "conversations.list",
-            "appointments.upcoming",
             "customers.operational_history",
             "cases.list",
             "kb.retrieve",
@@ -52,7 +51,16 @@ def test_technician_capabilities_exclude_every_business_read(client, make_user):
             "automation.create_rule",
         }
     )
-    assert {"memory.read", "memory.search", "memory.write", "project.list", "project.create"} <= names
+    # WU3 grants the scoped technician agenda; the catalog must show it now that
+    # the role can execute it.
+    assert {
+        "memory.read",
+        "memory.search",
+        "memory.write",
+        "project.list",
+        "project.create",
+        "appointments.upcoming",
+    } <= names
     # The derived flags must describe the same filtered catalog the count shows.
     assert payload["kb_available"] is False
     assert payload["memory_available"] is True
