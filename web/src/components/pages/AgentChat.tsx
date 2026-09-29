@@ -275,6 +275,7 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   const requestedId =
     threadId ??
     (Number(new URLSearchParams(globalThis.location.search).get("thread_id")) || undefined);
+  const humanAuthorLabel = role === "admin" ? "Administrador" : role === "tecnico" ? "Técnico" : "Operador";
   const [thread, setThread] = useState<InternalChatThread | null>(null);
   const [messages, setMessages] = useState<InternalChatMessage[]>([]);
   const [content, setContent] = useState("");
@@ -913,7 +914,6 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
             ) : null}
             {messages.map((message) => {
               const outbound = message.author !== "agent";
-              const humanAuthorLabel = role === "admin" ? "Administrador" : role === "tecnico" ? "Técnico" : "Operador";
               const messageRunId = message.assistant_metadata?.run_id;
               // Outbound messages only render the run's artifacts when no agent
               // reply exists for that run (see `runsWithReply` above).

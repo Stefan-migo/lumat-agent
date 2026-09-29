@@ -596,6 +596,9 @@ def create_run_message(
     run_id = uuid4().hex
     message = InternalChatMessage(
         thread_id=thread.id,
+        # A User loaded from the database carries the `UserRole` enum, but a
+        # caller holding an unrefreshed in-session row (tests construct one)
+        # still sees the raw string. Both shapes must land as the plain value.
         author=getattr(user.role, "value", user.role),
         content=content.strip(),
         status="processing",
