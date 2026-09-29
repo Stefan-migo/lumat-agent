@@ -169,30 +169,32 @@ consulted before writing:
 
 ## Tasks
 
-- [ ] **T1** — RED: `Button.test.tsx` covers `variant="danger"` — it renders the
+- [x] **T1** — RED: `Button.test.tsx` covers `variant="danger"` — it renders the
   `btn--danger` class, it stays operable and disabled-state correct, and the existing
-  hex-free assertion over `primitives.css` still holds. Observed failing against the
-  unmodified `Button`.
-- [ ] **T2** — GREEN: add `"danger"` to the `Button` variant union and the
+  hex-free assertion over `primitives.css` still holds. RED observed: 1 failed, 9
+  passed; GREEN observed: 10 passed.
+- [x] **T2** — GREEN: add `"danger"` to the `Button` variant union and the
   `.btn--danger` rule to `primitives.css`, resolving only through the existing
   `--danger` role.
-- [ ] **T3** — RED: `ClientFicha.test.tsx` covers the collapsed rail — there is one
+- [x] **T3** — RED: `ClientFicha.test.tsx` covers the collapsed rail — there is one
   `Cliente` card and no separate `Identidad` / `Estado` cards; the avatar/initials,
   name and state badge render; the facts are present; the state control and its save
   still work; there is exactly one visible `primary` action plus one menu trigger
   whose accessible name identifies the customer; no visible action label repeats the
   customer name; the menu carries `Cambiar consentimiento`, `Fusionar con otro
   cliente` and `Archivar`/`Restaurar` as a `danger`-toned item when applicable; and
-  each item still calls the same handler as before.
-- [ ] **T4** — GREEN: rewrite the rail in `ClientFicha.tsx` per D2/D3/D4, and switch
+  each item still calls the same handler as before. RED observed: 9 failed, 29
+  passed.
+- [x] **T4** — GREEN: rewrite the rail in `ClientFicha.tsx` per D2/D3/D4, and switch
   the archive and merge dialog confirms to `variant="danger"` per D1. Every existing
   handler, guard and `LocalFeedback` surface is preserved.
-- [ ] **T5** — stories: update `ClientFicha.stories.test.tsx` assertions for the new
+- [x] **T5** — stories: update `ClientFicha.stories.test.tsx` assertions for the new
   rail and add the `danger` variant to `Button.stories.tsx` if its coverage needs it.
   Viewport presets stay global.
-- [ ] **T6** — verification of record: `cd web && npm run test`,
+- [x] **T6** — verification of record: `cd web && npm run test`,
   `cd web && npx tsc -b --noEmit`, `cd web && npm run build`,
-  `cd web && npm run build-storybook`, `git diff --check`.
+  `cd web && npm run build-storybook`, `git diff --check`. All completed successfully;
+  both builds emitted the expected >500 kB chunk warning.
 
 ## Acceptance criteria
 
@@ -229,13 +231,15 @@ consulted before writing:
 - [x] Created this ODD record in the unit worktree before the first source change.
 - [x] Worktree created (`rapso worktree create clientes-surface-refinement
   --yes`, after explicit owner consent).
+- [x] B1 implementation committed: `e5a2b439` (danger button) and `5281b245`
+  (consolidated ficha rail); targeted GREEN runs passed (Button 10/10, ficha/story
+  49/49).
+- [x] Full web test suite passed: 90 files, 855 tests; typecheck and both builds passed.
 
 ## Size
 
-Forecast for slice B1 under `web/`: `Button.tsx` (+1), `Button.test.tsx` (+~25),
-`primitives.css` (+~5), `ClientFicha.tsx` (~+30/-15), `ClientFicha.test.tsx` (+~90),
-stories (+~15) — roughly **180–200 changed lines**, inside the ~400 review-focus
-budget. Running count from work-unit commits is recorded as slices land.
+Actual B1 web diff: **167 insertions, 43 deletions (210 changed lines)** across the
+seven authorized implementation/story files, inside the ~400 review-focus budget.
 
 ## Deferred and follow-ups
 
