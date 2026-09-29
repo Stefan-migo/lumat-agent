@@ -87,6 +87,9 @@ export interface CustomerEquipment {
 export interface CustomerCreateRequest { phone: string; }
 export interface CustomerProfileUpdateRequest { name?: string | null; email?: string | null; comuna?: string | null; address?: string | null; }
 export interface CustomerMutationResponse { customer: Customer; }
+export interface ClientMergeCounts { conversations: number; cases: number; customer_notes: number; customer_equipment: number; appointments: number; }
+export interface ClientMergePreview { survivor_id: number; loser_id: number; moved: ClientMergeCounts; memory_conflicts: number; scalar_conflicts: string[]; }
+export interface ClientMergeResponse { survivor: Customer; moved: ClientMergeCounts; }
 
 export interface CustomerNote {
   id: number;
