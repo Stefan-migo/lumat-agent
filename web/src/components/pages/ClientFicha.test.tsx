@@ -536,6 +536,34 @@ describe("ClientFicha slice 2 — product register", () => {
     expect(screen.getByRole("region", { name: "Mensajes" })).toBeInTheDocument();
   });
 
+  // B3 — the history is a native disclosure, collapsed by default.
+  // This stack does not apply the UA rule that hides content inside a closed
+  // <details>: a role query still finds the region, the heading and the table there
+  // (empirically verified). These tests therefore assert the mechanism — the `open`
+  // property — and never visibility. A visibility assertion here would pass in both
+  // states and be a false negative. The real hiding is the browser's, which is
+  // exactly why the native element is the right substrate.
+  it("collapses the history behind a native disclosure that starts closed", () => {
+    const { container } = render(<ClientFicha data={ficha} memories={memories} />);
+
+    const history = container.querySelector<HTMLDetailsElement>(".client-ficha__history");
+    expect(history).not.toBeNull();
+    expect(history!.tagName).toBe("DETAILS");
+    expect(history!.open).toBe(false);
+    // The heading survives inside the summary, so the outline is unchanged.
+    expect(screen.getByRole("heading", { name: "Historial" })).toBeInTheDocument();
+  });
+
+  it("opens the history disclosure when the operator activates its summary", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<ClientFicha data={ficha} memories={memories} />);
+
+    const history = container.querySelector<HTMLDetailsElement>(".client-ficha__history")!;
+    await user.click(screen.getByRole("heading", { name: "Historial" }));
+
+    expect(history.open).toBe(true);
+  });
+
   it("formats history dates in the Chilean locale instead of slicing the ISO string", () => {
     render(<ClientFicha data={ficha} memories={memories} />);
 
