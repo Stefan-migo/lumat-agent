@@ -453,10 +453,6 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <Button type="submit" disabled={amountMutation}>{amountMutation ? "Guardando…" : "Guardar monto"}</Button>
             </form>
           </Dialog>
-          <Card title="Memo del cliente">
-            <p>{data.memo || "Todavía no hay memo para este cliente."}</p>
-          </Card>
-
           <ClientMemories memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} />
 
           <section aria-label="Equipos">

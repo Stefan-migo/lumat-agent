@@ -60,10 +60,10 @@ describe("ClientFicha page", () => {
     render(<ClientFicha customerId={customer.id} />);
     expect(screen.getByRole("heading", { name: "Cargando ficha" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("heading", { name: `Ficha: ${customer.name}` })).toBeInTheDocument());
-    expect(screen.getByRole("heading", { name: "Memo del cliente" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Memo del cliente" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Memorias del cliente" })).toBeInTheDocument();
     expect(screen.getByText("Prefiere contacto por la tarde.")).toBeInTheDocument();
-    expect(screen.getByText("Acta de cierre de Marcela")).toBeInTheDocument();
+    expect(screen.queryByText("Acta de cierre de Marcela")).not.toBeInTheDocument();
   });
 
   it("renders the no-memo state without an error surface", async () => {
@@ -73,7 +73,8 @@ describe("ClientFicha page", () => {
     ));
 
     render(<ClientFicha customerId={customer.id} />);
-    await waitFor(() => expect(screen.getByText("Todavía no hay memo para este cliente.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Sin memorias todavía")).toBeInTheDocument());
+    expect(screen.queryByText("Todavía no hay memo para este cliente.")).not.toBeInTheDocument();
     expect(screen.getByText("Sin memorias todavía")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -81,7 +82,7 @@ describe("ClientFicha page", () => {
   it("preserves story wrappers for populated and no-memo variants", () => {
     render(<><ClientFichaView /><NoMemo /></>);
     expect(screen.getAllByRole("heading", { name: "Ficha: Marcela Fuentes" })).toHaveLength(2);
-    expect(screen.getByText("Todavía no hay memo para este cliente.")).toBeInTheDocument();
+    expect(screen.queryByText("Todavía no hay memo para este cliente.")).not.toBeInTheDocument();
   });
 
   it("renders appointments and actionable integration failures", async () => {
