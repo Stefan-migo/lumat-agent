@@ -14,6 +14,7 @@ import logging
 from typing import Annotated, Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
+from app.models import UserRole
 from app.chat.assistant.approval import issue_approval, validate_execution
 from app.chat.assistant.tools import fetch as webfetch
 from app.chat.assistant.tools import search as websearch
@@ -587,6 +588,33 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     "project.merge": ToolDefinition("project.merge", ProjectMergeArgs, False, _project_merge, "Merge projects after approval."),
 }
 
+ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
+    "assistant.capabilities": frozenset(UserRole),
+    "customers.search": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "customers.list": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "conversations.search": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "conversations.list": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "appointments.upcoming": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "customers.operational_history": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "cases.list": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "kb.retrieve": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "memory.read": frozenset(UserRole),
+    "memory.search": frozenset(UserRole),
+    "memory.write": frozenset(UserRole),
+    "memory.update": frozenset(UserRole),
+    "memory.delete": frozenset(UserRole),
+    "dashboard.summary": frozenset({UserRole.ADMIN, UserRole.OPERADOR}),
+    "web.search": frozenset(UserRole),
+    "web.fetch": frozenset(UserRole),
+    "automation.create_rule": frozenset({UserRole.ADMIN}),
+    "project.list": frozenset(UserRole),
+    "project.find": frozenset(UserRole),
+    "project.create": frozenset(UserRole),
+    "project.rename": frozenset(UserRole),
+    "project.archive": frozenset(UserRole),
+    "project.merge": frozenset(UserRole),
+}
+
 
 def get_tool(name: str) -> ToolDefinition:
     try:
@@ -607,6 +635,7 @@ def execute_tool(
     approval: dict | None = None,
     task_binding: dict | None = None,
     whitelist: set[str] | frozenset[str] | None = None,
+    role: str | None = None,
     cost_allowed: bool = True,
     trusted_thread_id: int | None = None,
     proyecto: str = "default",
@@ -616,6 +645,10 @@ def execute_tool(
     definition = get_tool(name)
     if whitelist is not None and name not in whitelist:
         raise ToolValidationError(f"tool is not whitelisted: {name}")
+    if not isinstance(role, str) or role not in {item.value for item in UserRole}:
+        raise ToolValidationError("unrecognized actor role")
+    if UserRole(role) not in ROLE_TOOL_ALLOWLIST.get(name, frozenset()):
+        raise ToolValidationError(f"tool is not authorized for role {role}: {name}")
     autonomous_write = name in AUTONOMOUS_WRITE_ALLOWLIST
     if autonomous_write and (type(trusted_thread_id) is not int or trusted_thread_id <= 0):
         raise ToolValidationError("autonomous memory write requires a positive trusted thread id")

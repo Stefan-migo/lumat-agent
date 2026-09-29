@@ -177,6 +177,7 @@ class AssistantState(TypedDict, total=False):
     on_token: Callable[[str], None] | None
     session: object
     actor: str
+    actor_role: str
     attachments: list[object]
     context: dict
     context_meta: dict

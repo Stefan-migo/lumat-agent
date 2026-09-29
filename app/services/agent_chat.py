@@ -191,6 +191,7 @@ def _run_sdb_tasks(session: Session, thread: InternalChatThread, run_id: str, au
                 approval=approval if not definition.read_only else None,
                 task_binding=binding,
                 whitelist=whitelist, cost_allowed=cost_allowed,
+                role=(thread.assistant_state or {}).get("actor_role"),
                 trusted_thread_id=thread.id,
                 owner_id=thread.user_id,
                 proyecto=authorization.slug if authorization is not None else "default",
@@ -1006,10 +1007,12 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
     if reject:
         message.status = "rejected"
         return message
+    actor_role = getattr(user.role, "value", user.role)
     thread.assistant_state = {
         **thread.assistant_state,
         "stage": "executing",
         "execution_status": "pending",
+        "actor_role": actor_role,
     }
     session.flush()
     if not claim_execution(session, thread):
@@ -1026,6 +1029,7 @@ def approve_plan(session: Session, thread: InternalChatThread, user: User, run_i
         "approval": thread.assistant_state["approval"],
         "session": session,
         "actor": user.username,
+        "actor_role": actor_role,
         "request_message_id": message.id,
         })
     message.status = "processed" if result.get("status") == "completed" else "failed"
@@ -1166,6 +1170,8 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
     )
     if message is None:
         return False
+    actor_role = getattr(user.role, "value", user.role)
+    thread.assistant_state = {**(thread.assistant_state or {}), "actor_role": actor_role}
     if (thread.current_plan or {}).get("sdb"):
         result = _run_sdb_tasks(session, thread, run_id, _thread_project_authorization(session, thread))
         result.update(_sdb_delivery(thread, result))
@@ -1178,6 +1184,7 @@ def resume_thread(session: Session, thread: InternalChatThread, user: User) -> b
         "approval": thread.assistant_state.get("approval"),
         "session": session,
         "actor": user.username,
+        "actor_role": actor_role,
         "request_message_id": message.id,
         })
     message.status = "processed" if result.get("status") == "completed" else "failed"
