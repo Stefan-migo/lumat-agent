@@ -45,7 +45,7 @@ def test_sdb_project_creation_is_bound_to_thread_owner():
         session.add(user)
         session.flush()
         thread = InternalChatThread(user_id=user.id, current_plan={"sdb": plan})
-        thread.assistant_state = {"sdb": {"checkpoints": []}, "approval": approval}
+        thread.assistant_state = {"sdb": {"checkpoints": []}, "approval": approval, "actor_role": "admin"}
         session.add(thread)
         session.flush()
 
@@ -88,47 +88,47 @@ def test_registry_scopes_projects_and_memory_to_authenticated_owner(fake_embedde
         )
         session.flush()
 
-        listed = execute_tool(session, "project.list", {}, owner_id=user_b.id)
+        listed = execute_tool(session, "project.list", {}, owner_id=user_b.id, role="admin")
         assert {row["owner_id"] for row in listed["result"] if row["slug"] == "field-ops"} == {user_b.id}
 
         own = execute_tool(
             session, "memory.read", {"scope": "own"}, trusted_thread_id=thread_b.id,
-            owner_id=user_b.id, proyecto="field-ops",
+            owner_id=user_b.id, proyecto="field-ops", role="admin",
         )
         assert private.id not in {row["id"] for row in own["result"]}
         with pytest.raises(ToolValidationError, match="not owned by the assistant"):
             execute_tool(
                 session, "memory.update", {"id": private.id, "titulo": "Changed"},
-                trusted_thread_id=thread_b.id, owner_id=user_b.id, proyecto="field-ops",
+                trusted_thread_id=thread_b.id, owner_id=user_b.id, proyecto="field-ops", role="admin",
             )
         with pytest.raises(ToolValidationError, match="not owned by the assistant"):
             execute_tool(
                 session, "memory.delete", {"id": private.id}, trusted_thread_id=thread_b.id,
-                owner_id=user_b.id, proyecto="field-ops",
+                owner_id=user_b.id, proyecto="field-ops", role="admin",
             )
 
         shared = execute_tool(
             session, "memory.read", {"scope": "customer", "entity_id": "customer:9"},
-            trusted_thread_id=thread_b.id, owner_id=user_b.id,
+            trusted_thread_id=thread_b.id, owner_id=user_b.id, role="admin",
         )
         assert business.id in {row["id"] for row in shared["result"]}
 
         cross = execute_tool(
             session, "memory.search", {"scope": "own", "query": "Owner A secret"},
-            trusted_thread_id=thread_b.id, owner_id=user_b.id, proyecto="field-ops",
+            trusted_thread_id=thread_b.id, owner_id=user_b.id, proyecto="field-ops", role="admin",
         )
         assert cross["result"] == []
 
         business_search = execute_tool(
             session, "memory.search", {"scope": "customer", "entity_id": "customer:9", "query": "Business memory"},
-            trusted_thread_id=thread_b.id, owner_id=user_b.id,
+            trusted_thread_id=thread_b.id, owner_id=user_b.id, role="admin",
         )
         assert business.id in {row["id"] for row in business_search["result"]}
 
         with pytest.raises(
             ToolValidationError, match="owner-scoped tool requires the authenticated owner"
         ):
-            execute_tool(session, "project.list", {})
+            execute_tool(session, "project.list", {}, role="admin")
 
 
 def test_two_users_with_same_slug_recall_only_their_private_memory_and_share_business_memory(fake_embedder):
@@ -178,17 +178,17 @@ def test_two_users_with_same_slug_recall_only_their_private_memory_and_share_bus
         ):
             own_read = execute_tool(
                 session, "memory.read", {"scope": "own"}, trusted_thread_id=threads[user.id].id,
-                owner_id=user.id, proyecto="identical-slug",
+                owner_id=user.id, proyecto="identical-slug", role="admin",
             )["result"]
             assert private_rows[user.id].id in {row["id"] for row in own_read}
             own_search = execute_tool(
                 session, "memory.search", {"scope": "own", "query": own_content},
-                trusted_thread_id=threads[user.id].id, owner_id=user.id, proyecto="identical-slug",
+                trusted_thread_id=threads[user.id].id, owner_id=user.id, proyecto="identical-slug", role="admin",
             )["result"]
             assert own_content in [row["contenido"] for row in own_search]
             cross = execute_tool(
                 session, "memory.search", {"scope": "own", "query": other_content},
-                trusted_thread_id=threads[user.id].id, owner_id=user.id, proyecto="identical-slug",
+                trusted_thread_id=threads[user.id].id, owner_id=user.id, proyecto="identical-slug", role="admin",
             )["result"]
             # Similarity search may return the caller's own nearest memory; the invariant is
             # that the other owner's row never appears.
@@ -196,38 +196,38 @@ def test_two_users_with_same_slug_recall_only_their_private_memory_and_share_bus
 
             shared_read = execute_tool(
                 session, "memory.read", {"scope": "customer", "entity_id": "customer:4242"},
-                trusted_thread_id=threads[user.id].id, owner_id=user.id,
+                trusted_thread_id=threads[user.id].id, owner_id=user.id, role="admin",
             )["result"]
             assert business.id in {row["id"] for row in shared_read}
             shared_search = execute_tool(
                 session, "memory.search", {
                     "scope": "customer", "entity_id": "customer:4242",
                     "query": "shared business marker",
-                }, trusted_thread_id=threads[user.id].id, owner_id=user.id,
+                }, trusted_thread_id=threads[user.id].id, owner_id=user.id, role="admin",
             )["result"]
             assert business.id in {row["id"] for row in shared_search}
 
         admin_read = execute_tool(
             session, "memory.read", {"scope": "own"}, trusted_thread_id=threads[stranger.id].id,
-            owner_id=stranger.id, proyecto="identical-slug",
+            owner_id=stranger.id, proyecto="identical-slug", role="admin",
         )["result"]
         assert admin_read == []
         for row in private_rows.values():
             admin_cross = execute_tool(
                 session, "memory.search", {"scope": "own", "query": row.contenido},
                 trusted_thread_id=threads[stranger.id].id, owner_id=stranger.id,
-                proyecto="identical-slug",
+                proyecto="identical-slug", role="admin",
             )["result"]
             assert row.id not in {item["id"] for item in admin_cross}
         no_project_read = execute_tool(
             session, "memory.read", {"scope": "customer", "entity_id": "customer:4242"},
-            trusted_thread_id=threads[stranger.id].id, owner_id=stranger.id,
+            trusted_thread_id=threads[stranger.id].id, owner_id=stranger.id, role="admin",
         )["result"]
         assert business.id in {row["id"] for row in no_project_read}
         no_project_search = execute_tool(
             session, "memory.search", {
                 "scope": "customer", "entity_id": "customer:4242",
                 "query": "shared business marker",
-            }, trusted_thread_id=threads[stranger.id].id, owner_id=stranger.id,
+            }, trusted_thread_id=threads[stranger.id].id, owner_id=stranger.id, role="admin",
         )["result"]
         assert business.id in {row["id"] for row in no_project_search}

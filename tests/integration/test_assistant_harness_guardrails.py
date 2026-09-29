@@ -41,7 +41,7 @@ def test_whitelist_rejects_before_handler(monkeypatch):
         lambda *args: called.append(args),
     )
     with pytest.raises(ToolValidationError, match="not whitelisted"):
-        execute_tool(SimpleNamespace(), "customers.search", {"query": "Ana"}, whitelist=set())
+        execute_tool(SimpleNamespace(), "customers.search", {"query": "Ana"}, whitelist=set(), role="admin")
     assert called == []
 
 
@@ -57,6 +57,7 @@ def test_typed_arguments_reject_before_handler(monkeypatch):
             "customers.search",
             {"query": "Ana", "limit": 999},
             whitelist={"customers.search"},
+            role="admin",
         )
     assert called == []
 
@@ -74,6 +75,7 @@ def test_cost_guard_rejects_before_handler(monkeypatch):
             {"query": "Ana"},
             whitelist={"customers.search"},
             cost_allowed=False,
+            role="admin",
         )
     assert called == []
 
@@ -92,6 +94,7 @@ def test_write_requires_exact_consumed_approval_before_handler(monkeypatch):
             {**_rule_args(), "name": "tampered"},
             whitelist={"automation.create_rule"},
             approval={**approval, "status": "consumed"},
+            role="admin",
         )
     assert called == []
 
@@ -107,6 +110,7 @@ def test_execution_audits_before_evidence(monkeypatch):
     monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: order.append("audit"))
     result = execute(
         {
+            "actor_role": "admin",
             "thread_id": 1,
             "run_id": "run-1",
             "plan": {
@@ -124,8 +128,9 @@ def test_execution_audits_before_evidence(monkeypatch):
     assert result["status"] == "completed"
 
 
-def _tool_loop_state(**overrides):
+def _tool_loop_state(*, actor_role: str, **overrides):
     state = {
+        "actor_role": actor_role,
         "thread_id": 7,
         "user_id": 7,
         "run_id": "run-tool-loop",
@@ -176,6 +181,7 @@ def test_web_search_snippets_are_grounded_and_cited(monkeypatch):
     )
 
     state = _tool_loop_state(
+        actor_role="admin",
         content="What does the web say about boiler maintenance?",
         plan={
             "kind": "tool",
@@ -204,6 +210,7 @@ def test_web_search_failure_is_visible_instead_of_empty_evidence(monkeypatch):
     )
 
     result = execute(_tool_loop_state(
+        actor_role="admin",
         content="Search the web for boiler maintenance.",
         plan={
             "kind": "tool",
@@ -257,6 +264,7 @@ def test_a_chained_search_then_fetch_turn_answers_from_the_page_text_and_cites_i
 
     content = "What does the web say about boiler maintenance?"
     search_state = _tool_loop_state(
+        actor_role="admin",
         content=content,
         plan={
             "kind": "tool",
@@ -299,6 +307,7 @@ def test_a_refused_fetch_url_reaches_the_turn_as_an_explicit_error():
     reader's refusal together without touching the network.
     """
     result = execute(_tool_loop_state(
+        actor_role="admin",
         content="Read http://127.0.0.1/admin and summarise it.",
         plan={
             "kind": "tool",
@@ -328,8 +337,8 @@ def test_completed_tool_traversal_records_one_execution_audit(monkeypatch, migra
     monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: _streaming_client(calls))
 
     with SessionLocal() as session:
-        first = execute(_tool_loop_state(session=session))
-        execute({**_tool_loop_state(session=session), **first, "on_token": lambda _token: None})
+        first = execute(_tool_loop_state(actor_role="admin", session=session))
+        execute({**_tool_loop_state(actor_role="admin", session=session), **first, "on_token": lambda _token: None})
 
         session.flush()
         audits = session.scalars(
@@ -364,6 +373,7 @@ def test_memory_read_orm_result_is_readable_tool_evidence(monkeypatch, migrated_
         session.commit()
 
         tool_state = _tool_loop_state(
+            actor_role="admin",
             session=session,
             plan={
                 "kind": "tool",
@@ -476,6 +486,7 @@ def test_responder_user_prompt_carries_the_declared_tool_inventory(monkeypatch):
 
     execute({
         "thread_id": 7,
+        "actor_role": "admin",
         "run_id": "run-tools",
         "content": "which tools do you have",
         "plan": {"kind": "respond", "tool": None, "arguments": {}, "requires_approval": False},
@@ -501,6 +512,7 @@ def test_responder_user_prompt_forbids_tool_invocation_markup(monkeypatch):
 
     execute({
         "thread_id": 7,
+        "actor_role": "admin",
         "run_id": "run-instructions",
         "content": "which tools do you have",
         "plan": {"kind": "respond", "tool": None, "arguments": {}, "requires_approval": False},
@@ -538,6 +550,7 @@ def test_responder_stream_and_persisted_response_strip_split_dsml(monkeypatch):
 
     result = execute({
         "thread_id": 7,
+        "actor_role": "admin",
         "run_id": "run-split-dsml",
         "content": "search",
         "plan": {"kind": "respond", "tool": None, "arguments": {}, "requires_approval": False},
@@ -563,7 +576,7 @@ def test_denied_approval_keeps_completed_planner_cost_but_never_executes(monkeyp
     approval = issue_approval(plan)
 
     with pytest.raises(PermissionError):
-        execute({"thread_id": 7, "run_id": "run-denied", "plan": plan, "approval": {**approval, "status": "rejected"}, "session": SimpleNamespace(add=lambda entry: None), "evidence": []})
+        execute({"actor_role": "admin", "thread_id": 7, "run_id": "run-denied", "plan": plan, "approval": {**approval, "status": "rejected"}, "session": SimpleNamespace(add=lambda entry: None), "evidence": []})
 
     assert calls == []
 
@@ -757,6 +770,7 @@ def test_delegated_customer_gathering_answers_with_cross_domain_evidence(migrate
         result = run_assistant(
             thread_id=thread_id,
             user_id=user_id,
+            actor_role="admin",
             content="Which customers have open cases and an appointment in the next 30 days?",
             run_id="delegated-cross-domain",
             session=session,
@@ -888,6 +902,7 @@ def test_delegated_customer_operational_history_uses_real_bounded_projection(mig
         result = run_assistant(
             thread_id=thread_id,
             user_id=user_id,
+            actor_role="admin",
             content="Show this customer's cases and appointments.",
             run_id="delegated-customer-operational-history",
             session=session,
@@ -940,15 +955,15 @@ def test_customer_search_real_database_payload_excludes_private_fields(migrated_
         customer_id = customer.id
         payload = execute_tool(
             session, "customers.search", {"query": "PII Search Example"},
-            whitelist={"customers.search"},
+            whitelist={"customers.search"}, role="admin",
         )
         phone_match = execute_tool(
             session, "customers.search", {"query": "00009993"},
-            whitelist={"customers.search"},
+            whitelist={"customers.search"}, role="admin",
         )["result"]
         bounded = execute_tool(
             session, "customers.search", {"query": "PII Search", "limit": 1},
-            whitelist={"customers.search"},
+            whitelist={"customers.search"}, role="admin",
         )["result"]
 
     assert payload["status"] == "completed"
@@ -985,6 +1000,7 @@ def test_other_write_guardrail_still_requires_approval_with_trusted_thread():
 def test_execute_forwards_trusted_thread_to_memory_write(migrated_db):
     with SessionLocal() as session:
         result = execute({
+            "actor_role": "admin",
             "thread_id": 7,
             "user_id": 7,
             "run_id": "run-memory-write",
@@ -1022,6 +1038,7 @@ def test_execute_forwards_trusted_thread_to_memory_correction(migrated_db, tool)
         session.flush()
         memory_id = row.id
         result = execute({
+            "actor_role": "admin",
             "thread_id": 7,
             "user_id": 7,
             "run_id": "run-memory-correction",
@@ -1042,12 +1059,12 @@ def test_execute_forwards_trusted_thread_to_memory_correction(migrated_db, tool)
 def test_memory_write_is_idempotent_in_db(migrated_db):
     first = _memory_plan()
     with SessionLocal() as session:
-        execute({"thread_id": 7, "user_id": 7, "run_id": "run-memory-first", "plan": first, "session": session, "evidence": []})
+        execute({"actor_role": "admin", "thread_id": 7, "user_id": 7, "run_id": "run-memory-first", "plan": first, "session": session, "evidence": []})
         second = {
             **first,
             "arguments": {**first["arguments"], "contenido": "Refreshed fact"},
         }
-        execute({"thread_id": 7, "user_id": 7, "run_id": "run-memory-second", "plan": second, "session": session, "evidence": []})
+        execute({"actor_role": "admin", "thread_id": 7, "user_id": 7, "run_id": "run-memory-second", "plan": second, "session": session, "evidence": []})
 
         rows = session.execute(
             select(Memory).where(Memory.topic_key == "agent:fact", Memory.entity_id == "agent:default")

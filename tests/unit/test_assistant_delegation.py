@@ -109,7 +109,7 @@ def test_valid_delegate_routes_into_span_then_grounding(monkeypatch):
          "plan": {"kind": "delegate", "sub_agent": "customer_records", "summary": "Gather."}}
     )
 
-    state = {"content": "Which customers have open cases?", "plan": {"kind": "delegate", "sub_agent": "customer_records"}, **result}
+    state = {"content": "Which customers have open cases?", "actor_role": "admin", "plan": {"kind": "delegate", "sub_agent": "customer_records"}, **result}
     assert graph._after_guardrails(state) == "delegation_span"
     wired = nodes.delegation_node(state)
     assert wired["delegation"]["steps"] == 1
@@ -142,7 +142,7 @@ def test_customer_drilldown_chain_uses_two_step_span_cap(monkeypatch):
     executed = []
 
     def execute_tool(_session, tool_name, arguments, **_kwargs):
-        executed.append((tool_name, arguments))
+        executed.append((tool_name, arguments, _kwargs["role"]))
         return {
             "tool": tool_name,
             "status": "completed",
@@ -158,6 +158,7 @@ def test_customer_drilldown_chain_uses_two_step_span_cap(monkeypatch):
     })
     state = {
         "content": "Show Ana's cases and appointments.",
+        "actor_role": "admin",
         "plan": {"kind": "delegate", "sub_agent": "customer_records"},
         **validated,
     }
@@ -168,7 +169,10 @@ def test_customer_drilldown_chain_uses_two_step_span_cap(monkeypatch):
     assert result["delegation"]["steps"] == 2
     assert result["delegation"]["cap"] == 2
     assert result["delegation"]["cap_reached"] is True
-    assert [name for name, _ in executed] == ["customers.search", "customers.operational_history"]
+    assert executed == [
+        ("customers.search", {"query": "Ana"}, "admin"),
+        ("customers.operational_history", {"customer_id": 42}, "admin"),
+    ]
     assert result["tool_results"][0]["provenance"]["step"] == 1
     assert result["tool_results"][1]["provenance"]["step"] == 2
     assert result["tool_results"][0]["result"]["source"] == "customers.search"
