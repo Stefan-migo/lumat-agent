@@ -229,7 +229,11 @@ Backend runner `uv run pytest tests/`; web runner `cd web && npm test`.
 - [x] WU4b.3 — the dashboard agent card follows the role; automation stays `admin`-only. Evidence: `36e57dc2`.
 - [x] WU4b.4 — one shared role→label map, three copies removed. Evidence: `188fdbd1`.
 - [x] WU4b.5 — tests: technician chat reachability, `operador` sidebar and footer, dashboard card per role. Evidence: `e566b48e`, `713dfbd9`, `36e57dc2`.
+- WU4b authored size: 238 changed lines (additions plus deletions; estimate 250–400) at `7e73288e`. Under the ~400 budget, so `ask-on-risk` did not trigger a split.
+- [x] Orchestrator verification — `cd web && npm run build` passed (`tsc -b` + vite); `cd web && npm test` 868/868 passed, both re-run by the orchestrator on `7e73288e`. Slice baseline was 858 passed / 1 failed, the failure being the known load-flaky `AgendaPage.test.tsx > creates and selects a manual case inline, then uses it to create the visit`, which passes in isolation.
+- Scope correction — the slice had also changed the shared `AssistantTabs.tsx` first-tab label from `"Chat"` to `"Asistente"`, which is outside WU4b's scope and alters the admin and operador UI. Reverted in `7e73288e`; the technician bottom-nav chat item keeps `"Asistente"`. Recorded because it was not in the slice's declared plan.
+- Native RDD assessment over `c0c78ebe..7e73288e`: risk `medium`, 238 changed lines, `review_due: false`, `review_due_reason: "under_budget"`.
 
 ## Next step
 
-WU1–WU3 and WU4a are delivered; the two carried follow-ups (`uv.lock`, R3-001) are closed. **WU4b is the last open slice**, in progress in `../lumat-agent-odd-agent-role-access-wu4b` on `odd/agent-role-access-wu4b` (base `c0c78ebe`).
+WU1–WU3 and WU4a are delivered; the two carried follow-ups (`uv.lock`, R3-001) are closed. **WU4b is implemented, verified and committed** in `../lumat-agent-odd-agent-role-access-wu4b` on `odd/agent-role-access-wu4b` (base `c0c78ebe`, tip `7e73288e`). Remaining: owner authorization to push and open the PR, and the pre-merge integration check over the tree merged with the current `origin/main`.
