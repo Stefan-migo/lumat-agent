@@ -224,11 +224,11 @@ Backend runner `uv run pytest tests/`; web runner `cd web && npm test`.
 - [x] Follow-up R3-001 — the capabilities catalog is filtered by role (D9). Evidence: PR #426, merge `e77da7d7`; catalog-vs-executable invariant test per role.
 - [x] WU4a — real identity in the message author, front and back: `AgentChatProps.role` is required and the author is derived from the authenticated role. Evidence: PR #431, merge `c0c78ebe`. Authored size 80 lines.
 - WU4 was split after WU4a; the remaining navigation, dashboard and technician-shell work is WU4b, the last slice.
-- [ ] WU4b.1 — `operador` reaches the chat in the sidebar and the footer; automation/kb/settings/users stay `admin`-only.
-- [ ] WU4b.2 — technician chat reachable inside `TechnicianShell` with URL-backed routing (D10) and its three tabs.
-- [ ] WU4b.3 — the dashboard agent card follows the role; automation stays `admin`-only.
-- [ ] WU4b.4 — one shared role→label map, three copies removed.
-- [ ] WU4b.5 — tests: technician chat reachability, `operador` sidebar and footer, dashboard card per role.
+- [x] WU4b.1 — `operador` reaches the chat in the sidebar and the footer; automation/kb/settings/users stay `admin`-only. Evidence: `e566b48e`.
+- [x] WU4b.2 — technician chat reachable inside `TechnicianShell` with URL-backed routing (D10) and its three tabs. Evidence: `713dfbd9`; `ff66f5fe` preserves legacy agenda story callers and desktop mobile-nav visibility.
+- [x] WU4b.3 — the dashboard agent card follows the role; automation stays `admin`-only. Evidence: `36e57dc2`.
+- [x] WU4b.4 — one shared role→label map, three copies removed. Evidence: `188fdbd1`.
+- [x] WU4b.5 — tests: technician chat reachability, `operador` sidebar and footer, dashboard card per role. Evidence: `e566b48e`, `713dfbd9`, `36e57dc2`.
 
 ## Next step
 
