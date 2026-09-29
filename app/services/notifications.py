@@ -58,6 +58,54 @@ def _send_appointment_reminder(session: Session, operation: NotificationOperatio
         return f"email:{customer.email}"
 
 
+def _send_appointment_followup(
+    session: Session, operation: NotificationOperation, outcome: str
+) -> str:
+    from app.services import notify
+    from app.services.settings import get_setting
+    from app.services.templates import TemplatePolicyError, validate_channel_policy
+
+    appointment = session.get(Appointment, int(operation.source_id))
+    if appointment is None or appointment.status.value != outcome:
+        raise RuntimeError("appointment follow-up no longer references the expected outcome")
+    customer = session.get(Customer, appointment.customer_id)
+    if customer is None:
+        raise RuntimeError("appointment follow-up customer no longer exists")
+    settings_key = (
+        "notify.followup_template_name" if outcome == "completed"
+        else "notify.followup_no_show_template_name"
+    )
+    event = f"appointment.followup.{outcome}"
+    template_name = get_setting(session, settings_key)
+    template = session.scalar(select(NotificationTemplateVersion).where(
+        NotificationTemplateVersion.event == event,
+        NotificationTemplateVersion.channel == "whatsapp",
+        NotificationTemplateVersion.locale == "es",
+    ).order_by(NotificationTemplateVersion.version.desc()).limit(1))
+    if template is None:
+        raise TemplatePolicyError(f"{event} WhatsApp template is not published")
+    validate_channel_policy(channel="whatsapp", approved=template.approved, business_initiated=True)
+    params = [
+        customer.name,
+        appointment.local_start.strftime("%d/%m/%Y"),
+        appointment.local_start.strftime("%H:%M"),
+    ]
+    try:
+        return notify.send_template(operation.recipient, params, template_name=template_name)
+    except Exception as whatsapp_error:
+        address = get_setting(session, "notify.owner_email")
+        subject = "Appointment follow-up"
+        body = f"Please follow up with {customer.name} about the appointment on {params[1]} at {params[2]}."
+        try:
+            notify.send_email(session, address, subject, body)
+        except Exception:
+            raise
+        record_audit(session, actor="system", action="notification.followup_email_fallback",
+                     entity="notification_operation", entity_id=str(operation.id),
+                     after={"recipient": address, "whatsapp_error": str(whatsapp_error)[:2000]})
+        return f"email:{address}"
+
+
 def send_whatsapp(recipient: str, content: str) -> str:
     return send_text(recipient, content)
 
@@ -210,6 +258,12 @@ def process_operation(
         if (operation.idempotency_key.endswith(":reminder:24h") and operation.source_entity == "appointment"
                 and session.get(Appointment, int(operation.source_id)) is not None):
             external_id = _send_appointment_reminder(session, operation)
+        elif operation.source_entity == "appointment" and operation.idempotency_key in {
+            f"appointment:{operation.source_id}:followup:completed",
+            f"appointment:{operation.source_id}:followup:no_show",
+        }:
+            outcome = operation.idempotency_key.rsplit(":", 1)[1]
+            external_id = _send_appointment_followup(session, operation, outcome)
         elif operation.channel == "push":
             external_id = (deliver or send_push)(operation.recipient, operation.content)
         else:

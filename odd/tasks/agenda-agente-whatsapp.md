@@ -270,10 +270,48 @@ cd web && npm run build                      # the only frontend type check (tsc
 
 ### S5 — Post-service follow-up
 
-- [ ] Publish an `appointment.completed` (and `no_show`) domain event on `scheduling.close`,
+- [x] Publish an `appointment.completed` (and `no_show`) domain event on `scheduling.close`,
       allow the event through `ALLOWED_EVENTS`, and schedule the post-service follow-up template.
-- [ ] Acceptance: closing a visit as completed produces a follow-up scheduled once, idempotently.
-- [ ] Route: delegated writer.
+- [x] Acceptance: closing a visit as completed produces a follow-up scheduled once, idempotently.
+- [x] Route: delegated writer.
+
+#### S5 apply progress
+
+- WU1 publishes completed/no-show events on close, registers both event types, and creates one
+  appointment-keyed operation due 24 hours after close for the team WhatsApp number. `close()` accepts
+  an optional aware UTC `now` while preserving existing callers.
+- Strict-TDD RED observed before WU1 implementation:
+  `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py tests/unit/test_scheduling_unit.py -o addopts='' -q`
+  → **4 failed, 20 passed** (close did not yet accept `now`; the follow-up defaults were absent).
+- WU1 GREEN:
+  `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py tests/unit/test_scheduling_unit.py -o addopts='' -q`
+  → **24 passed**.
+- WU1 commit `74e6a477` `feat(scheduling): publish close events and schedule the post-service follow-up`.
+  Rollback boundary: remove the `close()` event/follow-up behavior, two allowed events, two settings
+  defaults, and their unit assertions; the close/event integration assertions are included with WU2
+  in `tests/integration/test_notifications.py`. No schema change or migration is involved.
+- WU2 dispatch RED observed before dispatcher implementation:
+  `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py -k followup_dispatch -o addopts='' -q`
+  → **2 failed, 14 deselected** (both outcome-specific operations were handled by generic dispatch,
+  so the template send did not succeed).
+- WU2 delivers the matching outcome's latest approved Spanish WhatsApp template with customer name,
+  local date, and local time; WhatsApp send failures fall back to the configured team email and are
+  audited. The existing reminder predicate and retry semantics were left unchanged.
+- WU2 GREEN:
+  `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/integration/test_notifications.py -o addopts='' -q`
+  → **16 passed**.
+- Full backend GREEN:
+  `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/ -o addopts='' -q`
+  → **1618 passed, 2 warnings** (207.00 s).
+- WU2 commit `feat(notify): deliver the post-service follow-up to the team` (this commit). Rollback
+  boundary: remove the exact-key follow-up dispatch and sender plus its tests and this apply-progress
+  entry; WU1 close events/queue behavior remains independently revertible in its own commit.
+- Graph Check nodes consulted: `close()`, `publish_event()`, `DomainEvent`, `AppointmentStatus`,
+  `NotificationTemplateVersion`, `NotificationOperation`, `create_operation()`,
+  `_send_appointment_reminder()`, `scheduling.py`, `notifications.py`, `settings.py`,
+  `automation.py`, and `templates.py`. The report is stale at `16ba9cbf`; directed path
+  `close()` → `_send_appointment_reminder()` was not present. Graphify update was not run, per the
+  task constraint.
 
 ## Progress log
 
