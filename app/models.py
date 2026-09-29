@@ -266,6 +266,10 @@ class User(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     failed_logins: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email: Mapped[str | None] = mapped_column(String(200))
+    name: Mapped[str | None] = mapped_column(String(200))
+    phone: Mapped[str | None] = mapped_column(String(30))
+    position: Mapped[str | None] = mapped_column(String(120))
 
 
 class Conversation(Base):

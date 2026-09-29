@@ -91,7 +91,8 @@ def test_json_session_role_and_tampered_cookie_are_enforced(client, make_user):
     )
     assert resp.status_code == 200
     assert client.get("/panel/api/me").json() == {
-        "id": user_id, "username": "oper", "role": "operador"
+        "id": user_id, "username": "oper", "role": "operador",
+        "email": None, "name": None, "phone": None, "position": None,
     }
 
     client.cookies.set("session", "tampered")

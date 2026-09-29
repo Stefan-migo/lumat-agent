@@ -200,6 +200,12 @@ def to_admin_user_dict(user: User) -> dict:
         "username": user.username,
         "role": user.role.value,
         "active": user.active,
+        "email": user.email,
+        "name": user.name,
+        "phone": user.phone,
+        "position": user.position,
+        "locked_until": _iso(user.locked_until),
+        "failed_logins": user.failed_logins,
     }
 
 

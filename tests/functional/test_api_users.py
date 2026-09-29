@@ -2,6 +2,7 @@ from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.models import AuditLog, User
+from app.services.users import verify_password
 
 
 def _login(client, make_user, username, password, role):
@@ -29,6 +30,9 @@ def test_every_users_endpoint_returns_json_auth_errors(client, make_user):
         ("post", "/panel/api/users", {"json": {"username": "new", "password": "long-pass", "role": "admin"}}),
         ("post", "/panel/api/users/1/toggle-active", {}),
         ("post", "/panel/api/users/1/reset-password", {"json": {"password": "long-pass"}}),
+        ("get", "/panel/api/users/1", {}),
+        ("patch", "/panel/api/users/1", {"json": {"name": "x"}}),
+        ("post", "/panel/api/users/1/unlock", {}),
     ]
     for method, path, kwargs in requests:
         response = getattr(client, method)(path, follow_redirects=False, **kwargs)
@@ -59,8 +63,9 @@ def test_admin_list_is_ordered_and_allow_listed(client, make_user):
         (row["username"], row["id"]) for row in users
     )
     assert {row["role"] for row in users} == {"admin", "operador", "tecnico"}
-    assert all(set(row) == {"id", "username", "role", "active"} for row in users)
-    assert all("password_hash" not in row and "failed_logins" not in row and "locked_until" not in row for row in users)
+    expected = {"id", "username", "role", "active", "email", "name", "phone", "position", "locked_until", "failed_logins"}
+    assert all(set(row) == expected for row in users)
+    assert all("password_hash" not in row for row in users)
 
 
 def test_technician_list_is_operator_readable_minimal_and_ordered(client, make_user):
@@ -102,6 +107,12 @@ def test_create_accepts_each_role_and_hashes_password(client, make_user):
             "username": f"created-{role}",
             "role": role,
             "active": True,
+            "email": None,
+            "name": None,
+            "phone": None,
+            "position": None,
+            "locked_until": None,
+            "failed_logins": 0,
         }
         assert "initial-pass" not in response.text
 
@@ -171,3 +182,73 @@ def test_reset_password_audits_and_rejects_short_missing_or_self(client, make_us
         assert audit.actor == "users-admin"
         assert "new-pass" not in str(audit.after)
         assert session.get(User, target_id).password_hash != "old-pass"
+
+
+def test_user_profile_ficha_mutations_and_audit(client, make_user):
+    _admin(client, make_user)
+    target_id = make_user("profile-target", "initial-pass", role="operador")
+    assert client.get(f"/panel/api/users/{target_id}").status_code == 200
+    ficha = client.get(f"/panel/api/users/{target_id}").json()["user"]
+    assert {key: ficha[key] for key in ("email", "name", "phone", "position")} == {
+        "email": None, "name": None, "phone": None, "position": None,
+    }
+    assert client.get("/panel/api/users/999999").status_code == 404
+    for field, value in (("email", "UPPER@example.com"), ("name", "Profile Name"), ("phone", "+56912345678"), ("position", "Manager")):
+        response = client.patch(f"/panel/api/users/{target_id}", json={field: value})
+        assert response.status_code == 200, response.text
+        assert response.json()["user"][field] == (value.lower() if field == "email" else value)
+    assert client.patch(f"/panel/api/users/{target_id}", json={"name": None}).json()["user"]["name"] is None
+    for forbidden in ("role", "active"):
+        assert client.patch(f"/panel/api/users/{target_id}", json={forbidden: "admin"}).status_code == 422
+    duplicate_id = make_user("profile-duplicate", "initial-pass")
+    assert client.patch(f"/panel/api/users/{duplicate_id}", json={"email": "upper@EXAMPLE.com"}).status_code == 409
+
+    with SessionLocal() as session:
+        actions = session.scalars(select(AuditLog.action).where(AuditLog.action.in_(("user.profile_update",)))).all()
+        assert len(actions) >= 5
+
+
+def test_self_password_change_and_admin_unlock(client, make_user):
+    user_id = make_user("password-self", "current-pass", role="tecnico")
+    client.post("/panel/api/login", json={"username": "password-self", "password": "current-pass"})
+    assert client.post("/panel/api/me/password", json={"current_password": "wrong-pass", "new_password": "new-pass-123"}).status_code == 401
+    assert client.post("/panel/api/me/password", json={"current_password": "current-pass", "new_password": "short"}).status_code == 422
+    with SessionLocal() as session:
+        user = session.get(User, user_id)
+        user.failed_logins = 3
+        from datetime import datetime, timezone
+        user.locked_until = datetime.now(timezone.utc)
+        session.commit()
+    changed = client.post("/panel/api/me/password", json={"current_password": "current-pass", "new_password": "new-pass-123"})
+    assert changed.status_code == 200
+    with SessionLocal() as session:
+        user = session.get(User, user_id)
+        assert user.failed_logins == 0 and user.locked_until is None
+        assert verify_password("new-pass-123", user.password_hash)
+        assert session.scalar(select(AuditLog).where(AuditLog.action == "user.change_password")) is not None
+
+    client.post("/panel/api/logout")
+    admin_id = _admin(client, make_user, "unlock-admin")
+    target_id = make_user("unlock-target", "initial-pass")
+    with SessionLocal() as session:
+        target = session.get(User, target_id)
+        target.failed_logins = 4
+        target.locked_until = datetime.now(timezone.utc)
+        session.commit()
+    unlocked = client.post(f"/panel/api/users/{target_id}/unlock")
+    assert unlocked.status_code == 200
+    assert unlocked.json()["user"]["failed_logins"] == 0
+    assert unlocked.json()["user"]["locked_until"] is None
+    assert client.post(f"/panel/api/users/{admin_id}/unlock").status_code == 200
+    with SessionLocal() as session:
+        assert session.scalar(select(AuditLog).where(AuditLog.action == "user.unlock")) is not None
+
+
+def test_new_user_admin_routes_denied_for_each_non_admin(client, make_user):
+    target_id = make_user("matrix-target", "initial-pass")
+    routes = (("get", f"/panel/api/users/{target_id}", {}), ("patch", f"/panel/api/users/{target_id}", {"json": {"name": "x"}}), ("post", f"/panel/api/users/{target_id}/unlock", {}))
+    for role in ("operador", "tecnico"):
+        _login(client, make_user, f"matrix-{role}", "role-pass", role)
+        for method, path, kwargs in routes:
+            assert getattr(client, method)(path, **kwargs).status_code == 403
+        client.post("/panel/api/logout")
