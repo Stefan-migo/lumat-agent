@@ -233,7 +233,8 @@ cd web && npm run build                      # the only frontend type check (tsc
       business-initiated message.
 - [x] Add a periodic runner: a CLI entrypoint on `app/ops/sweep.py` plus the cron wiring already
       used for ops jobs on the VPS.
-- [x] Acceptance, clause by clause (each re-verified against `origin/main` on 2026-09-29):
+- [x] Acceptance, clause by clause — four of the five clauses verified against `origin/main` on
+      2026-09-29:
       - **booking creates exactly one reminder, due at the right UTC instant** —
         `test_appointment_reminder_is_appointment_keyed_and_due_in_utc`;
         `test_booking_inside_the_24h_window_creates_no_reminder` covers the closed-window policy.
@@ -243,10 +244,12 @@ cd web && npm run build                      # the only frontend type check (tsc
         `test_appointment_reminder_dispatches_approved_template_then_customer_email_fallback`;
         `test_appointment_reminder_without_customer_email_permanently_fails`.
       - **the sweep is idempotent and bounded** — `test_due_reminder_is_idempotent_and_sweep_is_bounded`.
-      - **the sweep runs on a schedule, not only at process start** — PARTIALLY VERIFIED, recorded rather
-        than asserted. `app/ops/sweep.py` and `app/ops/worker.py` exist in `main`, but the schedule itself
-        is the pre-existing host-level VPS cron this task reuses (`:232-233`), which lives outside this
-        repository and therefore cannot be verified from it.
+- [ ] Acceptance, fifth clause only — **the sweep runs on a schedule, not only at process start**:
+      NOT VERIFIED, and left open on purpose. `app/ops/sweep.py` and `app/ops/worker.py` exist in `main`,
+      but the schedule is the pre-existing host-level VPS cron this task reuses (`:232-233`), and it
+      lives outside this repository, so it cannot be verified from it. An independent audit rejected a
+      flat tick here on 2026-09-29 and it was right: a repo-confirmed runner is not evidence of an
+      installed, firing schedule.
 - [x] Route: delegated writer. **Reuse the existing queue, do not invent one**: `NotificationOperation`
       (`app/models.py:794`) already has `next_attempt_at`, bounded retries with backoff and a
       `FOR UPDATE SKIP LOCKED` + advisory-lock sweep (`app/services/notifications.py:204-214`), and it
