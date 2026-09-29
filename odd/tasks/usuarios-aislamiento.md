@@ -1,9 +1,9 @@
 # ODD Task: usuarios-aislamiento
 
-Status: open — WU1, WU2, WU3 merged; WU4 implemented on its branch, PR pending owner authorization
-Worktree: `../lumat-agent-odd-usuarios-aislamiento-wu4` on `odd/usuarios-aislamiento-wu4` (WU4, active; WU3's worktree was removed at cleanup)
-Branch: WU1 on `odd/usuarios-aislamiento` (merged, PR #400); WU2 on `odd/usuarios-aislamiento-wu2` (merged, PR #407); WU3 on `odd/usuarios-aislamiento-wu3` (merged, PR #412, branch deleted); WU4 on `odd/usuarios-aislamiento-wu4` (open)
-Base: `9d2f220d` (current `origin/main`, the doc-hygiene merge after WU3)
+Status: **closed** — WU1, WU2, WU3, and WU4 all merged to `main` (`2da8bd97`); this closure record is the doc-hygiene follow-up
+Worktree: none live — the WU4 worktree `../lumat-agent-odd-usuarios-aislamiento-wu4` was removed at cleanup; this closure record is written from `../lumat-agent-odd-usuarios-aislamiento-closure`
+Branch: WU1 `odd/usuarios-aislamiento` (merged, PR #400); WU2 `odd/usuarios-aislamiento-wu2` (merged, PR #407); WU3 `odd/usuarios-aislamiento-wu3` (merged, PR #412, deleted); WU4 `odd/usuarios-aislamiento-wu4` (merged, PR #417, deleted); closure record on `odd/usuarios-aislamiento-closure`
+Base: `2da8bd97` (current `origin/main`, the WU4 merge)
 Depends on: nothing
 Source: `.rapsodia-code/sessions/archived/2026-09-25-usuarios-aislamiento/report.md` (archived when this unit was opened)
 Delivery strategy: `ask-on-risk`
@@ -178,11 +178,11 @@ preserve the already-merged service ownership contract.
 **End:** explicit cross-user tests, business-memory regression coverage, migration
 verification, and full gates provide evidence for closure.
 
-- [ ] **U4.1** — Add an explicit two-user test suite: same slug, cross-user recall
+- [x] **U4.1** — Add an explicit two-user test suite: same slug, cross-user recall
   equals zero, and shared business memory remains available.
-- [ ] **U4.2** — Test owner backfill and per-user alias migration behavior, including
+- [x] **U4.2** — Test owner backfill and per-user alias migration behavior, including
   collision/error cases that the migration must handle safely.
-- [ ] **U4.3** — Run the full backend and web gates, build, migration apply, and
+- [x] **U4.3** — Run the full backend and web gates, build, migration apply, and
   documented rollback verification before deployment.
 
 **Acceptance slice:** no route or tool reads or writes another user's project or
@@ -564,24 +564,127 @@ semantics; service and route tests must establish those.
     034 for the operator to confirm before applying.
 - [x] Migration apply, verification, and rollback documentation completed (see U4.3 and the 034 rollback
   plan added in `143585c7`).
-- [ ] Acceptance criteria verified; unit closed — pending the WU4 PR merge and the `## Closure` record.
+- [x] Acceptance criteria verified; unit closed — see `## Closure`.
 
 ## Closure
 
-To be completed after implementation, verification, and the stacked PR chain are
-complete. Record merged PRs, exact test results, migration evidence, and cleanup.
+**Status: closed.** The unit shipped as a four-PR `stacked-to-main` chain; every slice merged to `main`
+with a merge commit, under maintainer-approved `size:exception` where the slice exceeded the ~400-line
+review budget.
+
+### Merged PRs
+
+| Work unit | PR | Merge commit | Scope |
+|---|---|---|---|
+| WU1 — ownership schema and project registry | #400 | `c4ad6fe2` | migration `034_project_owners.sql`; owner-aware project registry |
+| WU2 — private memory and explicit chat project binding | #407 | `16d94ced` | owner-scoped memory writes/recall; migration `037_memory_owner_dedup.sql`; owner-aware assistant tools |
+| WU3 — owner-filtered panel API and project UI | #412 | `2adc0eb9` | owner-scoped project reads; `POST /panel/api/projects`; explicit chat project selection |
+| WU4 — isolation proof and final gate | #417 | `2da8bd97` | cross-user isolation suite; migration proof; 034 rollback plan; R3-001 fix |
+
+The WU3 merge registration landed separately as PR #414 (`9d2f220d`); this record follows that same
+doc-hygiene precedent, because a reviewed branch is never mutated after its authority is burned.
+
+### Test evidence (exact, on the delivered tree)
+
+Full local integration on `main` after the WU4 merge (`2da8bd97`):
+
+- `uv run pytest tests/` → **1618 passed, 2 warnings** (the pre-existing `_publish_all` unawaited
+  coroutine and fastembed pooling warnings; no failures).
+- `cd web && npm test` → **90 test files, 840 tests passed**.
+- `cd web && npm run build` (`tsc -b` + vite) → **passed**. `tsc -b` exists only inside the build, so this
+  is the repository's only frontend type check.
+- `git diff --check` → clean.
+
+These were re-run after merging `origin/main` (`695883ab`, PR #416) into the WU4 branch, because the base
+had moved after the first review; the merged tree is what was reviewed and delivered.
+
+### Migration evidence
+
+- **001–038 applied** to a disposable scratch database through the real `db/migrate.sh`: rc=0, 37 versions
+  recorded (there is no `021`), `migrations up to date`. The immediate rerun was idempotent.
+- Present after the apply: `owner_id` on `projects`, `project_aliases`, and `memories`; indexes
+  `uq_projects_owner_normalized_slug` and `uq_memories_normalized_content`; constraints
+  `uq_project_aliases_owner_alias` and `uq_memories_owner_project_scope_entity_topic`.
+- **034's documented rollback plan** (added in `db/migrations/034_project_owners.sql` by WU4) was rehearsed
+  on that scratch database: all six steps executed and restored the exact legacy constraint and index
+  names. It is deliberately not a runnable blob, unlike 037's; it states its preconditions explicitly.
+- `db/migrate.sh` records only the version name in `schema_migrations`, with no content hash, so the
+  comment-only WU4 change to 034 cannot invalidate an already-applied database.
+- **037's documented rollback fails** when cross-owner `normalized_hash` duplicates exist
+  (`test_migration_037_documented_rollback_fails_with_cross_owner_hash_duplicates`). Recorded as evidence,
+  not corrected.
+- The 034 alias and memory composite-key **collision risks are structurally unreachable**: the legacy
+  global constraints make the colliding rows impossible to seed
+  (`test_migration_034_collision_premises_are_unreachable_in_legacy_schema`). Two documented risks are
+  therefore closed with evidence rather than left as speculation.
+
+### Review record
+
+Two native RDD reviews were required because the base moved between them. Both were approved with **zero
+findings** and no correction opened:
+
+- `review-49ab693f3db7e4fb` — base `9d2f220d`, tier high, 4 lenses, burned (`sha256:ccced160…`).
+  Invalidated when `origin/main` advanced to `695883ab` after it: a base move invalidates the receipt even
+  when the authored diff is byte-identical.
+- `review-3a55c287a1f01807` — base `695883ab` (the delivered base), tier high, 4 lenses, burned
+  (`sha256:9db438a1…`).
+
+### Acceptance criteria
+
+| Criterion | Status |
+|---|---|
+| Two users can own projects with the same slug and alias without collision | Met (WU1; same-slug proven in U4.1/U4.2) |
+| Cross-user agent-memory recall never returns another user's project memory; explicit zero-result test | Met (U4.1) |
+| Business memory stays shared and accessible | **Met for `customer` scope** (read + search proven in U4.1). The knowledge-base and bot-context paths named in this criterion were not separately asserted; U4.1 proves the shared-memory path through the real assistant tool, not those two callers. |
+| No route or tool reads or writes another user's project or memory, admin included | Met (WU2/WU3 + U4.1) |
+| `default` stays business-shared; chat requires explicit project selection, no silent fallback | Met (WU2/WU3) |
+| Project aliases are owner-scoped, migrated, and backfilled | Met (WU1; alias backfill and owner-scoped uniqueness proven in U4.2) |
+| The panel supports project creation and selection; `projects.create` remains | Met (WU3) |
+| Existing WhatsApp behavior is unchanged | Met by construction — no shared WhatsApp path was touched |
+| User administration remains unchanged and out of scope | Met (untouched) |
+| Migration 034 has an explicit backfill and a documented rollback; existing data is not silently assigned an incorrect owner | Met (U4.2 + the 034 rollback plan); see the D9 drift below |
+| The agent chat remains admin-only in this unit | Met (no role widening) |
+| Legacy non-default projects and their agent memory backfilled under D9, with the legacy list confirmed before applying | **Not yet exercised.** The migration behavior is proven on scratch databases, but the production apply has not happened; see the production gate below |
+| Backend suite, web suite, and web build/type check pass | Met (1618 / 840 / build) |
+
+### Cleanup
+
+- WU4 worktree `../lumat-agent-odd-usuarios-aislamiento-wu4` removed; branch `odd/usuarios-aislamiento-wu4`
+  deleted locally and remotely.
+- The WU4 worktree's `db-test` container and its Compose network
+  (`lumat-test-lumat-agent-odd-usuarios-aislamiento-wu4`) torn down.
+- Local `main` fast-forwarded to `2da8bd97`.
+- Earlier slices' worktrees and branches were removed at their own cleanups (WU1, WU2, WU3).
+
+### Carried forward (not blocking this closure)
+
+- **D9 documentation drift.** D9 says migration 034 must "stop for reassignment" when multiple admins make
+  a legacy project's owner ambiguous; the shipped migration is a comment-documented fail-closed no-op. The
+  behavior is safe — no row is ever assigned a wrong owner — and the pre-apply enumeration D9 requires is
+  now documented inside 034. The D9 wording itself was deliberately not rewritten inside an
+  already-reviewed candidate; correcting it is the owner's call.
+- **Production migration gate.** Migrations 034 and 037 have **not** been applied to production as part of
+  this unit. Applying 034 requires the D9 pre-apply enumeration (exactly one admin) and the documented
+  rollback plan in hand; apply only through `migrate.sh`.
+- **R2-002** (advisory, from WU2): `app/chat/assistant/tools/registry.py` infers tool families by name
+  prefix; explicit tool metadata would survive a future rename.
+- **`ready-for-odd/2026-09-25-clientes-crm` path drift** in three `odd/tasks/` files (owner decision:
+  leave it).
+- **Load-sensitive flake:** `web/src/components/pages/AgendaPage.test.tsx` timed out while the backend
+  suite and Docker ran concurrently; it passes in isolation (37 passed) and in the final clean run.
+
+### Next
+
+`agent-role-access` — opening internal agent chat to `operador` and `tecnico` with per-role tool
+authorization — may now start, based on this unit's closure commit.
 
 ## Recovery
 
-- WU3 is merged: **PR #412**, merge commit `2adc0eb9`; its worktree was removed and its branch deleted
-  locally and remotely. WU1 (PR #400) and WU2 (PR #407) were merged earlier in the same chain.
-- **WU4 is implemented and not yet pushed**: branch `odd/usuarios-aislamiento-wu4` in
-  `../lumat-agent-odd-usuarios-aislamiento-wu4`, 4 commits from `9d2f220d` (`fd16cf09`, `d530c9f9`,
-  `7a18d2be`, `143585c7`), 5 files and 357 changed lines. Every gate is green (see the Progress record).
-  Push, PR creation, and merge await explicit owner authorization.
-- **Next slice: none — WU4 closes the unit.** After the WU4 PR merges, complete `## Closure` with the
-  merged PRs, the exact test results, the migration evidence, and the cleanup; only then may
-  `agent-role-access` start, based on this unit's closure commit.
+- **This unit is closed.** `## Closure` holds the merged PRs, the exact test results, the migration
+  evidence, and the cleanup. The final slice merged as **PR #417** (merge commit `2da8bd97`).
+- **Next unit:** `agent-role-access` may now start from this unit's closure commit. Its handoff is
+  `/home/stefan/repos/lumat-agent/.rapsodia-code/handoffs/2026-09-28-agent-role-access.md`; base it on
+  `main` after this closure record merges. Do not reopen this unit.
 - Delivery is `stacked-to-main` (`ask-on-risk`); WU4 is the fourth PR of the chain and its candidate is
   its own work against the current `origin/main`. Isolate it with `git diff --stat <base-ref> HEAD`
   before any review, because a branch commit as `--base-ref` drags already-reviewed main content into
@@ -597,7 +700,8 @@ complete. Record merged PRs, exact test results, migration evidence, and cleanup
   only, never authority.
 - Migration 034 still has a production-apply gate: apply only through `migrate.sh`; verify it
   and keep rollback steps documented before any deployment.
-- Do not start `agent-role-access` until `usuarios-aislamiento` is delivered. The
-  dependent-unit handoff is `/home/stefan/repos/lumat-agent/.rapsodia-code/handoffs/2026-09-28-agent-role-access.md`;
-  its base must be this unit's closure commit.
+- This unit is delivered and closed, so `agent-role-access` is unblocked (see the `## Closure` Next
+  section). The dependent-unit handoff is
+  `/home/stefan/repos/lumat-agent/.rapsodia-code/handoffs/2026-09-28-agent-role-access.md`; its base must be
+  this unit's closure commit.
 - Do not push, open PRs, merge, or deploy without explicit owner authorization.
