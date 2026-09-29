@@ -1,16 +1,16 @@
 # ODD Task: clientes-merge-duplicados
 
-Status: in progress. Decisions closed (D3, D4, surface scope, memory-collision policy, loser identity).
-**PR 1 (backend slice) merged to `main` as `41e14a01` (PR #413). PR 2 (frontend slice, F1-F3) in flight.**
-Worktree (PR 2): `../lumat-agent-odd-clientes-merge-ui`
-Branch (PR 2): `odd/clientes-merge-ui`
-Base (PR 2): `9d2f220d` (main, 2026-09-28)
+Status: **delivered and closed.** Decisions closed (D3, D4, surface scope, memory-collision policy, loser identity).
+**PR 1 (backend slice) merged as `41e14a01` (PR #413). PR 2 (frontend slice, F1-F3) merged as `695883ab` (PR #416). No branch, no worktree and no pending task.**
+Worktree: none live. PR 2's `../lumat-agent-odd-clientes-merge-ui` and its local and remote branch were removed after the merge.
+Base of PR 2: `9d2f220d` (main, 2026-09-28)
 Depends on: nothing
 Source: split out of `odd/tasks/clientes-operativa.md` WU4 — D4 decided 2026-09-28: the duplicate merge is its own unit
 Delivery strategy: `ask-on-risk`
-Chain strategy: `stacked-to-main` (repo precedent: the Clientes campaign and `cases-route-alignment` both shipped stacked to main)
-Engram mirror: topic `odd/clientes-merge-duplicados/tasks` — **pending**: the write was blocked by ambiguous active-session attribution (2 candidates for `lumat-agent` in this directory). Resync when the ambiguity is resolved; the decisions themselves are already saved at `odd/clientes-merge/decisions`, and the PR 2 handoff at `handoff/clientes-merge-ui`.
-History: PR 1 was built in `../lumat-agent-odd-clientes-merge-duplicados` on `odd/clientes-merge-duplicados` off `16d94ced`; that worktree and both branches are gone (cleanup after the merge).
+Chain strategy: `stacked-to-main` — shipped as the two stacked PRs this doc planned.
+Engram mirror: topic `odd/clientes-merge-duplicados/tasks` — **saved** (a state mirror; this file is the canonical full text). Decisions at `odd/clientes-merge/decisions`, the receipts at `odd/clientes-merge-duplicados/review`, and PR 2's handoff at `handoff/clientes-merge-ui`.
+History: PR 1 was built in `../lumat-agent-odd-clientes-merge-duplicados` on `odd/clientes-merge-duplicados` off `16d94ced`; PR 2 in `../lumat-agent-odd-clientes-merge-ui` on `odd/clientes-merge-ui` off `9d2f220d`. Both worktrees and both branches (local and remote) are gone.
+**Note on this document's own staleness.** Between `review start` and the merge, no tracked byte may change or the native receipt is invalidated — this doc included. That is why `main` briefly carried a header saying "PR 2 in flight" and two unchecked boxes for work that was already done: the record was frozen on purpose, and the receipt lives in the PR #416 body. Reconciled afterwards in `odd/doc-close-clientes-merge`. The parent unit hit the same artifact in its WU2/WU3 deliveries.
 
 ## Objective
 
@@ -210,30 +210,45 @@ regression.
 - [x] **B4-B5 parent spot check** — re-ran the full backend suite myself: `EXIT=0`. Note for the next session: the repo's `addopts = "-q"` plus an extra `-q` makes `-qq`, which **suppresses pytest's final summary line** — read the exit code, not the tail.
 - [x] **B4-B5 diff review** — read the whole diff: the preview is genuinely read-only (the test asserts `merged_into_customer_id is None` after a preview call), and the existing `test_clients_endpoints_require_login_401_json` was extended with **both** new endpoints, so auth coverage is complete rather than assumed.
 - [x] **Doc correction** — B5 in this doc said "error mapping to 400/404/409". There is **no 409 case**: under M1 the merge always proceeds, so no conflict status exists. The route maps guards to 400 and a missing customer to 404. Corrected here rather than left to instruct a future reader.
-- [ ] F1-F3 — frontend slice implemented; verification evidence below (not marked complete here because O1 closure remains outstanding).
+- [x] F1-F3 — frontend slice delivered in PR #416 (merge commit `695883ab`). Frontend suite `90 files / 839 tests` exit 0; `npm run build` exit 0. The pre-merge integration over the merged tree re-ran frontend + build + backend, all exit 0. The boxes below stayed unchecked on `main` only because the review froze this doc — see the note in the header.
 - **F1 RED** — from `web/`, `npx vitest run src/components/pages/ClientFicha.test.tsx` → exit 1; `ClientFicha.test.tsx (34 tests | 1 failed)`, the merge dialog test failed because `Fusionar con otro cliente` was not present (33 passed). This was the intended missing-UI failure.
 - **F2 GREEN** — from `web/`, `npx vitest run src/components/pages/ClientFicha.test.tsx` → exit 0; 36 tests passed (36 total). Added the dialog, preview and merge calls, backend detail feedback, and loser-to-survivor ficha reload.
 - **F2 review corrections** — RED: the added survivor-side equipment-refresh assertion failed with `expected "spy" to be called 2 times, but got 1 times`. GREEN: focused `npx vitest run src/components/pages/ClientFicha.test.tsx` passed (37 tests); the survivor branch now bumps `equipmentRefresh`, and moved-count keys render as Spanish labels.
 - **F2 correction verification** — `npm test` exit 0 (90 files, 839 tests); `npm run build` exit 0 (`tsc -b` + Vite production build; existing >500 kB chunk advisory).
-- **F3 frontend suite** — from `web/`, `npm test` → exit 0; 90 test files and 838 tests passed. The pre-existing React `act(...)` and jsdom navigation warnings appeared; no timeout failures.
+- **F3 frontend suite** — from `web/`, `npm test` → exit 0; 90 test files and 838 tests passed at that point, before the review correction added the equipment-refresh test that brought the suite to 839. The pre-existing React `act(...)` and jsdom navigation warnings appeared; no timeout failures.
 - **F3 production build** — from `web/`, `npm run build` → exit 0; `tsc -b` and Vite production build completed. Vite emitted the existing >500 kB chunk-size advisory.
 - **Frontend graph check** — from the principal worktree, `graphify query "client ficha merge dialog and client api layer"` consulted nodes `ClientFicha.tsx`, `ClientFicha.test.tsx`, `Dialog()`, `Dialog.tsx`, `api.ts`, `apiFetch()`, `postJson()`, `fetchClients()`, `Customer`, and `ClientFichaResponse`; `graphify path "ClientFicha.tsx" "api.ts"` returned `ClientFicha.tsx --imports_from [EXTRACTED]--> api.ts`. `GRAPH_REPORT.md` hubs consulted: `types.ts`, `ClientFicha.stories.tsx`, `Dialog.tsx`, and `clients.py`.
-- [ ] O1 — assessment + review
+- [x] **O1 — assessment + review (PR 2)** — `gentle-ai review assess --base-ref 9d2f220d --committed-only` reported `risk: medium` / `review_due: false` (`under_budget`), but the preflight STATUS returned `fresh_target_ready` → `start`, and **the preflight governs** (third confirmation of this in the unit). Owner consented through the relayed `gentle-ai.review-integration.consent/v3` envelope (`granted`). Result: lineage `review-a513acfde499f5ae`, tier `medium`, **1 lens** (`review-reliability`, order 0), **approved**, 0 blocking findings; the acknowledgement consumed revision `sha256:48323325cc81ba25aa15920468bb0314495251895a9a015cbf5b426874d90c62` and reported `authority: burned`. The approved candidate was exactly the pushed head `4017e300`, and nothing was committed after the acknowledgement. **The receipt belongs in the PR #416 body, not here.**
+- [x] **Defect found by the parent before the freeze** — the first writer pass left the equipment section stale after a survivor-side merge: the merge moves `customer_equipment`, but only `refresh()` ran, so the Equipos list kept the pre-merge rows. Caught by reading the diff rather than the report, fixed in `cda38d33` with its own RED (`expected "spy" to be called 2 times, but got 1 times`) → GREEN. The same pass also stopped leaking raw English table names into a Spanish UI.
+- [x] **Advisories (non-blocking, recorded in the PR #416 body, never corrections to that candidate)** — **R3-001** (new, reliability/WARNING, `ClientFicha.tsx:159-168`): preview requests are not tied to the currently selected client, so a late response can describe a different pair than the one confirmed. **R2-001** (carried from PR 1): resolved by PR #416, which replaced the stale "No code written yet" header. **R4-001** (carried from PR 1): still open, latent and unreachable today.
+- [x] **Delivered and cleaned up** — PR #416 merged `695883ab`; PR 1 merged `41e14a01`. Remote branch deleted, worktree removed, local branch deleted, test DB torn down, `main` fast-forwarded. CI on the merged head: `test`, `panel` and GitGuardian all green; pre-merge integration green with no path overlap against the branches in flight.
 
 ## Closure
 
-Not closed. PR 1 (backend) is merged and PR 2 (frontend F1-F3) is implemented and verified. O1 assessment + review bookkeeping remains outstanding.
+**Closed.** Both slices are delivered and merged to `main`: PR #413 (backend, `41e14a01`) and PR #416 (frontend F1-F3, `695883ab`), each with an approved, authority-burned native review whose receipt lives in its own PR body. Every B-task and F-task is done and O1 is done. Nothing in this unit is pending.
+
+What remains open is **separate later work**, never a correction to those delivered candidates:
+
+- **R3-001** — the merge dialog's preview race (`web/src/components/pages/ClientFicha.tsx:159-168`): cancel the in-flight preview, or tag it with the selected client id, before applying its result.
+- **R4-001** — `app/services/customers.py`: the memory-conflict branch does not repoint `MemoryObservation.memory_id` before deleting the loser memory. Latent only, because production never sets `memory_id`.
+
+The "assisted merge UI" capability this unit set out to ship is live: the operator opens a ficha, offers to merge with another client, sees the survivor the D3 rule chose plus what will move and which memories collide, and confirms — with the loser kept as an archived tombstone that ingest follows, so the merge cannot silently undo itself.
 
 ## Recovery
 
-- Nothing to resume beyond the task list above.
-- Parent unit: `odd/tasks/clientes-operativa.md` — WU1-WU3 merged, WU4 moved here.
-- Other live worktrees — do not touch: `../lumat-agent-odd-agenda-agente-whatsapp`
-  (`odd/agenda-agente-whatsapp`) and the principal worktree. Remote branch
-  `origin/odd/agenda-operator-technicians` also exists.
+- Nothing to resume: the unit is closed. Verify the closure claim with `git log --oneline` around `695883ab` rather than trusting this file.
+- Parent unit: `odd/tasks/clientes-operativa.md` — WU1-WU3 merged, WU4 moved here and now delivered.
+- Other live worktrees — do not touch (state as of this closure): `../lumat-agent-odd-agenda-agente-whatsapp`
+  (`odd/agenda-agente-whatsapp`) and `../lumat-agent-odd-usuarios-aislamiento-wu4`
+  (`odd/usuarios-aislamiento-wu4`), plus the principal worktree. Remote branches
+  `origin/odd/agenda-agente-whatsapp`, `origin/odd/agenda-operator-technicians` and
+  `origin/odd/usuarios-aislamiento-wu4` also exist.
+- **Known cross-session risk**: `odd/usuarios-aislamiento-wu4` touches
+  `tests/integration/test_migrations.py`, which PR #413 modified when it registered migration `038`.
+  Reconciling that file is expected work for whoever merges that branch, not a defect in this unit.
 - The principal worktree's `stash@{0}` (`uv.lock regenerated locally`) is pre-existing from
   another handoff: do not touch.
-- Latest migration on `main` is `037` (`037_memory_owner_dedup.sql`); this unit's migration is `038`.
+- Latest migration on `main` is `038_customer_merge.sql` — this unit's own; PR 1 shipped it.
 - `main` moves on its own: `git fetch origin` immediately before every merge/PR.
 - Test DB: `bash infra/test-db.sh up|down|env` (project name derives from the worktree slug).
 - `graphify-out/` is gitignored; query the graph from the principal worktree.
