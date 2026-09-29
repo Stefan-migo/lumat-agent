@@ -64,7 +64,7 @@ export function patchJson<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
 }
 
-import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse, CustomerEquipment } from './types';
+import type { DocsResponse, KbDocument, KbMutationResponse, KbSearchResponse, KbVisibility, CustomerCreateRequest, CustomerProfileUpdateRequest, CustomerMutationResponse, ClientFichaResponse, CustomerEquipment, ClientMergePreview, ClientMergeResponse } from './types';
 export const uploadKbDocument = (title: string, file: File, visibility: KbVisibility) => {
   const body = new FormData();
   body.append('title', title);
@@ -166,6 +166,8 @@ export const updateCustomerConsent = (id: number, consent: boolean) => postJson<
 export const archiveCustomer = (id: number) => postJson<CustomerMutationResponse>(`/panel/api/clients/${id}/archive`);
 export const unarchiveCustomer = (id: number) => postJson<CustomerMutationResponse>(`/panel/api/clients/${id}/unarchive`);
 export const getClientFicha = (id: number) => apiFetch<ClientFichaResponse>(`/panel/api/clients/${id}`);
+export const previewClientMerge = (id: number, otherId: number) => apiFetch<ClientMergePreview>(`/panel/api/clients/${id}/merge-preview?with=${otherId}`);
+export const mergeClient = (id: number, otherId: number) => postJson<ClientMergeResponse>(`/panel/api/clients/${id}/merge`, { other_id: otherId });
 export const fetchCases = () => apiFetch<CasesResponse>('/panel/api/cases');
 export const createCase = (body: ManualCaseRequest) => postJson<{ ok: true; case: Case }>('/panel/api/cases', body);
 export const updateCaseAmount = (id: number, amount: number | null) => postJson<{ ok: true; case: Case }>(`/panel/api/cases/${id}/update`, { amount });

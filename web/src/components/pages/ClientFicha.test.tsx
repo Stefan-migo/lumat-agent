@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApiError, apiFetch, addClientNote, changeClientState, postJson, resolveMemoryRelation, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, listClientEquipment } from "../../api";
+import { ApiError, apiFetch, addClientNote, changeClientState, postJson, resolveMemoryRelation, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, listClientEquipment, fetchClients, previewClientMerge, mergeClient } from "../../api";
 import { ClientFicha } from "./ClientFicha";
 import type { ClientFichaResponse, Memory } from "../../types";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCaseAmount: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), listClientEquipment: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCaseAmount: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), listClientEquipment: vi.fn(), fetchClients: vi.fn(), previewClientMerge: vi.fn(), mergeClient: vi.fn() };
 });
 
 describe("ClientFicha equipment", () => {
@@ -359,6 +359,85 @@ describe("ClientFicha customer controls", () => {
     await user.click(screen.getByRole("button", { name: "Restaurar" }));
     expect(unarchiveCustomer).toHaveBeenCalledWith(7);
     expect(await screen.findByRole("heading", { name: "No pudimos guardar el archivo" })).toBeInTheDocument();
+  });
+});
+
+describe("ClientFicha merge dialog", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("loads the selected pair preview and confirms the merge", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ ...ficha.customer, id: 8, name: "José Soto", phone_e164: "+56987654321" }] });
+    vi.mocked(previewClientMerge).mockResolvedValue({ survivor_id: 7, loser_id: 8, moved: { conversations: 2, cases: 1, customer_notes: 3, customer_equipment: 1, appointments: 0 }, memory_conflicts: 2, scalar_conflicts: ["name"] });
+    vi.mocked(mergeClient).mockResolvedValue({ survivor: ficha.customer, moved: { conversations: 2, cases: 1, customer_notes: 3, customer_equipment: 1, appointments: 0 } });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("button", { name: "Fusionar con otro cliente" }));
+    const dialog = screen.getByRole("dialog");
+    await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
+    expect(await within(dialog).findByText("Cliente superviviente: Marcela Fuentes")).toBeInTheDocument();
+    expect(within(dialog).getByText(/Se moverán:/)).toHaveTextContent("conversaciones: 2 · casos: 1 · notas: 3 · equipos: 1 · visitas: 0");
+    expect(within(dialog).getByText(/2 conflictos de memoria/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/name/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Confirmar fusión" }));
+
+    expect(previewClientMerge).toHaveBeenCalledWith(7, 8);
+    expect(mergeClient).toHaveBeenCalledWith(7, 8);
+  });
+
+  it("reloads equipment after a survivor-side merge", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listClientEquipment).mockResolvedValue({ equipment: [] });
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ ...ficha.customer, id: 8 }] });
+    vi.mocked(previewClientMerge).mockResolvedValue({ survivor_id: 7, loser_id: 8, moved: { conversations: 0, cases: 0, customer_notes: 0, customer_equipment: 1, appointments: 0 }, memory_conflicts: 0, scalar_conflicts: [] });
+    vi.mocked(mergeClient).mockResolvedValue({ survivor: ficha.customer, moved: { conversations: 0, cases: 0, customer_notes: 0, customer_equipment: 1, appointments: 0 } });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await waitFor(() => expect(listClientEquipment).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("button", { name: "Fusionar con otro cliente" }));
+    const dialog = screen.getByRole("dialog");
+    await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
+    await user.click(await within(dialog).findByRole("button", { name: "Confirmar fusión" }));
+
+    await waitFor(() => expect(listClientEquipment).toHaveBeenCalledTimes(2));
+  });
+
+  it("loads the survivor ficha when the current client becomes the loser", async () => {
+    const user = userEvent.setup();
+    const survivor = { ...ficha.customer, id: 8, name: "José Soto" };
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [survivor] });
+    vi.mocked(previewClientMerge).mockResolvedValue({ survivor_id: 8, loser_id: 7, moved: { conversations: 0, cases: 0, customer_notes: 0, customer_equipment: 0, appointments: 0 }, memory_conflicts: 0, scalar_conflicts: [] });
+    vi.mocked(mergeClient).mockResolvedValue({ survivor, moved: { conversations: 0, cases: 0, customer_notes: 0, customer_equipment: 0, appointments: 0 } });
+    vi.mocked(apiFetch).mockImplementation(async (path) => {
+      if (path.endsWith("/memories")) return { memories };
+      if (path.endsWith("/pending")) return { relations: [] };
+      return { ...ficha, customer: survivor };
+    });
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("button", { name: "Fusionar con otro cliente" }));
+    const dialog = screen.getByRole("dialog");
+    await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
+    await user.click(await within(dialog).findByRole("button", { name: "Confirmar fusión" }));
+
+    expect(await screen.findByRole("heading", { name: "Ficha: José Soto" })).toBeInTheDocument();
+    expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/8?messages_limit=10");
+  });
+
+  it("surfaces the backend guard detail in the merge dialog", async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ ...ficha.customer, id: 8 }] });
+    vi.mocked(previewClientMerge).mockRejectedValue(new ApiError(400, "cannot merge a customer tombstone"));
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("button", { name: "Fusionar con otro cliente" }));
+    const dialog = screen.getByRole("dialog");
+    await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("cannot merge a customer tombstone");
+    expect(within(dialog).getByRole("button", { name: "Confirmar fusión" })).toBeDisabled();
   });
 });
 
