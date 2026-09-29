@@ -252,6 +252,32 @@ suite green. Backend runner `uv run pytest tests/`; web runner `cd web && npm te
   - `PATCH` validates field length but not email shape.
   - `PATCH /users/{id}` on an unknown id has no 404 test; the `GET` one does.
 
+## Native review (slice 1)
+
+Lineage `review-30fe2991c79635b9`, four lenses (risk, resilience, readability, reliability),
+risk `high`, 514 changed lines, correction budget 200 — **approved**, authority burned
+2026-09-29. Reviewed candidate revision
+`sha256:18ad619afc288bb40ec5ac2bcc1c1653ef936e9b735e1a814a6e59a7c4af28e0`.
+
+No blocker and no correction was opened. Four **non-blocking** advisories are recorded here as
+later work; none reopens this review and none is a reason to re-run it against this candidate:
+
+- **R1-001** (risk, WARNING, `app/panel/api/routes/users.py:111`) — the self-service password
+  endpoint does not limit failed current-password attempts. This independently confirms the
+  brute-force finding the orchestrator had already recorded before the review.
+- **R3-001** (reliability, WARNING, `app/panel/api/routes/users.py:83`) — any `IntegrityError`
+  raised by the profile flush is reported as an email conflict, even when a different constraint
+  caused it. The 409 mapping is broader than the constraint it names. New finding.
+- **R4-001** (resilience, WARNING, `app/panel/api/routes/users.py:107-111`) — the failed-flush path
+  calls `session.rollback()`, which rolls back the entire request-scoped session, not only the
+  profile update. New finding; bounded, because the route is not known to hold unrelated pending
+  writes, but it is a latent coupling.
+- **R3-002** (reliability, SUGGESTION, `tests/functional/test_api_users.py:195`) — email
+  normalization is tested but a malformed email shape is not. Matches the recorded validation gap.
+
 ## Next step
 
-Slice 1 is implemented, verified and committed at `b908921f`; **it is not pushed**. Owner review of this slice gates slice 2 (the frontend ficha). Open question for the owner: whether the `me/password` brute-force ceiling and its 401 status get closed inside this unit or as a follow-up.
+Slice 1 is implemented, verified, reviewed and committed at `ff0f9661`; **it is not pushed**.
+Owner review of this slice gates slice 2 (the frontend ficha). Open question for the owner: whether
+the four advisories above — in particular the `me/password` brute-force ceiling (R1-001) and the
+over-broad 409 mapping (R3-001) — are closed inside this unit or deferred.
