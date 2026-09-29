@@ -621,6 +621,17 @@ ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
 BUSINESS_MEMORY_ROLES: frozenset[str] = frozenset({"admin", "operador"})
 
 
+def is_tool_allowed_for_role(name: str, role: str) -> bool:
+    """Whether `role` may execute `name`. Unknown or non-string roles fail closed."""
+    if not isinstance(role, str):
+        return False
+    try:
+        user_role = UserRole(role)
+    except ValueError:
+        return False
+    return user_role in ROLE_TOOL_ALLOWLIST.get(name, frozenset())
+
+
 def get_tool(name: str) -> ToolDefinition:
     try:
         return TOOL_REGISTRY[name]
@@ -652,7 +663,7 @@ def execute_tool(
         raise ToolValidationError(f"tool is not whitelisted: {name}")
     if not isinstance(role, str) or role not in {item.value for item in UserRole}:
         raise ToolValidationError("unrecognized actor role")
-    if UserRole(role) not in ROLE_TOOL_ALLOWLIST.get(name, frozenset()):
+    if not is_tool_allowed_for_role(name, role):
         raise ToolValidationError(f"tool is not authorized for role {role}: {name}")
     autonomous_write = name in AUTONOMOUS_WRITE_ALLOWLIST
     if autonomous_write and (type(trusted_thread_id) is not int or trusted_thread_id <= 0):
