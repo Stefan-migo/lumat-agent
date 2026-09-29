@@ -1,9 +1,9 @@
 # ODD Task: usuarios-aislamiento
 
-Status: open — WU1, WU2, and WU3 merged; WU4 remains
-Worktree: none live — the WU3 worktree `../lumat-agent-odd-usuarios-aislamiento-wu3` was removed at cleanup
-Branch: WU1 on `odd/usuarios-aislamiento` (merged, PR #400); WU2 on `odd/usuarios-aislamiento-wu2` (merged, PR #407); WU3 on `odd/usuarios-aislamiento-wu3` (merged, PR #412, branch deleted)
-Base: `2adc0eb9` (current `origin/main`, the WU3 merge)
+Status: open — WU1, WU2, WU3 merged; WU4 implemented on its branch, PR pending owner authorization
+Worktree: `../lumat-agent-odd-usuarios-aislamiento-wu4` on `odd/usuarios-aislamiento-wu4` (WU4, active; WU3's worktree was removed at cleanup)
+Branch: WU1 on `odd/usuarios-aislamiento` (merged, PR #400); WU2 on `odd/usuarios-aislamiento-wu2` (merged, PR #407); WU3 on `odd/usuarios-aislamiento-wu3` (merged, PR #412, branch deleted); WU4 on `odd/usuarios-aislamiento-wu4` (open)
+Base: `9d2f220d` (current `origin/main`, the doc-hygiene merge after WU3)
 Depends on: nothing
 Source: `.rapsodia-code/sessions/archived/2026-09-25-usuarios-aislamiento/report.md` (archived when this unit was opened)
 Delivery strategy: `ask-on-risk`
@@ -514,9 +514,57 @@ semantics; service and route tests must establish those.
   - Cleanup after merge: worktree `../lumat-agent-odd-usuarios-aislamiento-wu3` removed, branch
     `odd/usuarios-aislamiento-wu3` deleted locally and remotely, this worktree's `db-test` container and
     network removed, and local `main` fast-forwarded to `2adc0eb9`.
-- [ ] WU4 — cross-user isolation suite and final gate.
-- [ ] Migration apply, verification, and rollback documentation completed.
-- [ ] Acceptance criteria verified; unit closed.
+- [x] WU4 — cross-user isolation suite and final gate (commits `fd16cf09`, `d530c9f9`, `7a18d2be`, `143585c7`).
+  - [x] U4.1 — explicit two-user isolation suite:
+    `test_two_users_with_same_slug_recall_only_their_private_memory_and_share_business_memory` in
+    `tests/integration/test_assistant_tool_owner_isolation.py`. Two same-slug projects carry distinct
+    private agent memory; recall as either owner never surfaces the other owner's row; `scope='customer'`
+    business memory stays readable and searchable for both; and a third admin owning the same slug sees
+    none of it. Both callers are admins, so the cross-assertions are themselves the admin non-override
+    proof. A correction was verified during this work, not assumed: `memory.search` is a similarity
+    search that legitimately returns the caller's own nearest memory, so the isolation invariant is the
+    ABSENCE of the other owner's row, not an empty result. The older same-file test could assert `== []`
+    only because its caller had zero own memories.
+  - [x] U4.2 — migration evidence in `tests/integration/test_migrations.py`, through a reusable
+    real-scratch-database helper: 034 backfills the alias owner from its project and leaves the `default`
+    alias unowned; the alias constraint is owner-scoped (cross-owner same alias allowed, same-owner
+    duplicate rejected); 037 rejects the same-owner duplicate `normalized_hash` while allowing
+    cross-owner duplicates; 037's documented rollback fails when cross-owner hash duplicates exist
+    (recorded as evidence and made explicit in the test docstring); and the 034 alias and
+    composite-key collision risks are structurally unreachable, because the legacy global constraints
+    forbid seeding the colliding rows at all. That last point is asserted directly and closes two
+    documented risks with evidence instead of speculation.
+  - [x] U4.3 — gates on the final tree: `uv run pytest tests/` → `1618 passed, 2 warnings` (the known
+    `_publish_all` unawaited and fastembed pooling warnings); `cd web && npm test` → `90 test files,
+    836 tests passed`; `cd web && npm run build` (`tsc -b` + vite) passed; `git diff --check` clean.
+  - [x] Migration apply and rollback rehearsal, on a disposable scratch database (`lumat_wu4_gate`,
+    dropped afterwards): a fresh database applied 001–038 through the real `db/migrate.sh` (rc=0, 37
+    versions recorded, `migrations up to date`), the immediate rerun was idempotent, all three `owner_id`
+    columns plus both new indexes and both new constraints were present, the D9 enumeration queries
+    execute cleanly, and the six documented 034 rollback steps executed and restored the exact legacy
+    constraint and index names. `db/migrate.sh` records only the version name in `schema_migrations` and
+    no content hash, so the comment-only 034 change cannot invalidate an already-applied database.
+  - [x] R3-001 closed by `7a18d2be`, RED first: the failing regression test showed the created project
+    missing, the refresh's `boom` detail rendered as a creation error, and the slug input still
+    populated. Creation and refresh are now independent concerns; a failed refresh keeps the created
+    project visible from the POST response and is never reported as a creation failure.
+  - Schedule finding, not corrected here: `web/src/components/pages/AgendaPage.test.tsx` timed out under
+    concurrent load while the backend suite and Docker were running. It passes in isolation (37 passed)
+    and the final clean web run is green, so it is a pre-existing load-sensitive flake, not this unit's
+    work.
+  - Size variance, stated honestly: the slice forecast 100–160 lines but landed **357 changed lines**
+    (348 net) across 5 files. The extra surface is the migration proof the estimate did not anticipate
+    (alias backfill and 037's rollback had never been tested; the collision premises had to be
+    investigated) plus R3-001's fix and regression test. Still under the ~400 review budget.
+  - Documentation drift, flagged for the owner and deliberately not rewritten: D9 says migration 034 must
+    "stop for reassignment" when multiple admins make a project's owner ambiguous, but the shipped
+    migration is a deliberate, comment-documented fail-closed no-op that leaves legacy rows ownerless
+    rather than stopping. The behavior is safe — it never assigns a wrong owner — and is asserted by the
+    existing two-admin parametrization. The pre-apply enumeration D9 requires is now documented inside
+    034 for the operator to confirm before applying.
+- [x] Migration apply, verification, and rollback documentation completed (see U4.3 and the 034 rollback
+  plan added in `143585c7`).
+- [ ] Acceptance criteria verified; unit closed — pending the WU4 PR merge and the `## Closure` record.
 
 ## Closure
 
@@ -525,12 +573,15 @@ complete. Record merged PRs, exact test results, migration evidence, and cleanup
 
 ## Recovery
 
-- WU3 is merged: **PR #412**, merge commit `2adc0eb9` (see the Progress record). Its worktree was removed
-  and its branch deleted locally and remotely.
-- Next slice: **WU4** — cross-user isolation suite, migration 034 apply/rollback verification, and the
-  final gate, plus the advisory **R3-001** from the WU3 delivery review
-  (`web/src/components/pages/ProjectsPage.tsx:35-40`). Create its worktree following the ODD convention
-  (`../lumat-agent-odd-<slug>`) from the current `origin/main` (`2adc0eb9`).
+- WU3 is merged: **PR #412**, merge commit `2adc0eb9`; its worktree was removed and its branch deleted
+  locally and remotely. WU1 (PR #400) and WU2 (PR #407) were merged earlier in the same chain.
+- **WU4 is implemented and not yet pushed**: branch `odd/usuarios-aislamiento-wu4` in
+  `../lumat-agent-odd-usuarios-aislamiento-wu4`, 4 commits from `9d2f220d` (`fd16cf09`, `d530c9f9`,
+  `7a18d2be`, `143585c7`), 5 files and 357 changed lines. Every gate is green (see the Progress record).
+  Push, PR creation, and merge await explicit owner authorization.
+- **Next slice: none — WU4 closes the unit.** After the WU4 PR merges, complete `## Closure` with the
+  merged PRs, the exact test results, the migration evidence, and the cleanup; only then may
+  `agent-role-access` start, based on this unit's closure commit.
 - Delivery is `stacked-to-main` (`ask-on-risk`); WU4 is the fourth PR of the chain and its candidate is
   its own work against the current `origin/main`. Isolate it with `git diff --stat <base-ref> HEAD`
   before any review, because a branch commit as `--base-ref` drags already-reviewed main content into
