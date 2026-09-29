@@ -277,7 +277,11 @@ later work; none reopens this review and none is a reason to re-run it against t
 
 ## Next step
 
-Slice 1 is implemented, verified, reviewed and committed at `ff0f9661`; **it is not pushed**.
-Owner review of this slice gates slice 2 (the frontend ficha). Open question for the owner: whether
-the four advisories above — in particular the `me/password` brute-force ceiling (R1-001) and the
-over-broad 409 mapping (R3-001) — are closed inside this unit or deferred.
+Slice 1 is implemented, verified, reviewed and **delivered as PR #437** (`odd/user-profiles` → `main`,
+label `type:feature`). `origin/main` (`dfb9eca2`) was still an ancestor of the branch at push time, so
+nothing needed re-integrating.
+
+**Slice 2 (the frontend ficha) is next**, on the same branch: the `users/:id` route and page, the
+corrected admin reset flow, and a reachable self-service password change for every role including the
+technician. The four advisories above remain open as later work — in particular the `me/password`
+brute-force ceiling (R1-001) and the over-broad 409 mapping (R3-001).
