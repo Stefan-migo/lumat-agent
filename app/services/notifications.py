@@ -94,8 +94,14 @@ def _send_appointment_followup(
         return notify.send_template(operation.recipient, params, template_name=template_name)
     except Exception as whatsapp_error:
         address = get_setting(session, "notify.owner_email")
-        subject = "Appointment follow-up"
-        body = f"Please follow up with {customer.name} about the appointment on {params[1]} at {params[2]}."
+        subject = "Seguimiento de visita Lumat"
+        body = (
+            f"La visita de {customer.name} del {params[1]} a las {params[2]} quedó cerrada como completada. "
+            "Contacta al cliente para hacer el seguimiento."
+            if outcome == "completed"
+            else f"La visita de {customer.name} del {params[1]} a las {params[2]} quedó marcada como no asistida. "
+            "Contacta al cliente para reagendar."
+        )
         try:
             notify.send_email(session, address, subject, body)
         except Exception:
