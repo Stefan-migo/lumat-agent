@@ -21,6 +21,7 @@ from app.models import InternalChatMessage, InternalChatThread, Message, User
 from app.services.agent_chat import (
     STALE_RUN_SECONDS,
     _generate_thread_title,
+    _opening_message,
     create_run_message,
     reap_orphaned_runs,
     reap_stale_run,
@@ -159,6 +160,22 @@ def test_create_run_message_stamps_live_state_for_stale_run_recovery(migrated_db
         # The reaper parses this value; assert the round trip, because a stamp
         # that cannot be parsed reads as stale and would fail a live run.
         assert datetime.fromisoformat(live["updated_at"]).tzinfo is not None
+        session.rollback()
+
+
+def test_non_admin_run_message_keeps_role_as_human_author_and_is_opening_message(migrated_db):
+    with SessionLocal() as session:
+        owner = User(username="assistant-tecnico-author", password_hash=hash_password("pass"), role="tecnico")
+        session.add(owner)
+        session.flush()
+        thread = InternalChatThread(user_id=owner.id)
+        session.add(thread)
+        session.flush()
+
+        message = create_run_message(session, thread, owner, "hello")
+
+        assert message.author == "tecnico"
+        assert _opening_message(session, thread.id) is message
         session.rollback()
 
 

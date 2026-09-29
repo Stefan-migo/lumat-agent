@@ -218,7 +218,7 @@ def close_planning_session(slug: str, session: Session = Depends(get_db), curren
     report = json.dumps({"topic": cortex.get("topic", ""), "decisions": [row.contenido for row in decisions if ":decision:" in row.topic_key]}, ensure_ascii=False)
     result = close_cortex_session(session, thread, report=report)
     approval = (thread.assistant_state or {}).get("approval") or {}
-    session.add(InternalChatMessage(thread_id=thread.id, author="admin", content=report,
+    session.add(InternalChatMessage(thread_id=thread.id, author=current.role.value, content=report,
                                     status="approval_pending", assistant_metadata={"run_id": result["run_id"], "approval": approval}))
     session.flush()
     return {"session": to_cortex_session_dict(thread), "report": to_cortex_report_dict(_planning_report(session, thread)),

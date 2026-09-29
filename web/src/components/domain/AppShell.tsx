@@ -121,7 +121,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
         : view === 'conversations' ? conversationId !== null ? <ConversationThread interactive conversationId={conversationId} refreshKey={conversationRefresh} onMutate={() => setConversationRefresh((value) => value + 1)} onBack={() => window.history.back()} /> : <ConversationsList currentUserId={user.id} initialQueueTab={route.conversationTab ?? 'all'} onQueueTabChange={(tab) => navigateToRoute({ view: 'conversations', conversationTab: tab })} refreshKey={conversationRefresh} onOpenThread={(id) => navigateToRoute({ view: 'conversations', conversationId: id })} />
      : view === 'notifications' ? <NotificationCenter />
      : view === 'push' ? <PushSettings />
-          : view === 'chat' ? <AgentChat sectionTabs={sectionTabs} onThreadOpened={(id) => navigateToRoute({ view: 'chat', threadId: id })} />
+           : view === 'chat' ? <AgentChat role={user.role} sectionTabs={sectionTabs} onThreadOpened={(id) => navigateToRoute({ view: 'chat', threadId: id })} />
        : view === 'kb' ? kbDocId !== null ? <KbDocumentDetail documentId={kbDocId} /> : <KbList onOpenDocument={(id) => navigateToRoute({ view: 'kb', kbDocId: id })} />
       : view === 'users' ? <UserManagement currentUser={user} />
          : view === 'projects' ? <ProjectsPage sectionTabs={sectionTabs} projectSlug={route.projectSlug} onOpenProject={(slug) => navigateToRoute({ view: 'projects', projectSlug: slug })} onOpenChat={(slug) => navigateToRoute({ view: 'chat', projectSlug: slug })} />
