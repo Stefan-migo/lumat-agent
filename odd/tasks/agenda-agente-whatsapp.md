@@ -2,7 +2,7 @@
 
 - Status: in progress
 - Branch: `odd/agenda-agente-whatsapp`
-- Base: `f27077ec` (origin/main, after PR #403 merged S1+S2); S3 re-created the worktree from here
+- Base: `9d2f220d` (origin/main, after PRs #413/#414/#415 merged); S5 re-created the worktree from here
 - Worktree: `../lumat-agent-odd-agenda-agente-whatsapp`
 - Engram mirror: `odd/agenda-agente-whatsapp/tasks`
 - Created: 2026-09-28
@@ -93,8 +93,31 @@ consequences; configurable reminder lead time; two-way external calendar sync.
 17. **S4 — email fallback recipient** (owner, 2026-09-28): the fallback goes to the **customer's own
     email** (`Customer.email`, `app/models.py:232`), because the reminder is for the customer. If the
     ficha has no email, the operation ends `permanently_failed` with audit — no recipient is invented
-    and the team's `notify.owner_email` is NOT used (that is the emergency pattern, a different
-    purpose).
+   and the team's `notify.owner_email` is NOT used (that is the emergency pattern, a different
+   purpose).
+18. **S5 — follow-up channel** (owner, 2026-09-29): both channels with fallback — an approved WhatsApp
+    template first, email as fallback. The template name is **configurable** through the settings KV,
+    same pattern as decision 16: `notify.followup_template_name` (default `appointment_followup`) for
+    `completed`, and `notify.followup_no_show_template_name` (default `appointment_followup_no_show`)
+    for `no_show`. The `approved` template policy gate of `app/services/templates.py` applies.
+19. **S5 — follow-up delay** (owner, 2026-09-29): the follow-up is due **24 h after the visit is
+    closed** (due instant = close time + 24 h). Unlike decision 15, no window-skew clause is needed:
+    the due instant is always in the future when the operation is created.
+20. **S5 — `no_show` differs from `completed`** (owner, 2026-09-29): distinct outcomes with distinct
+    templates. `close()` publishes **two** domain events — `appointment.completed` and
+    `appointment.no_show` — and both are allowed in `ALLOWED_EVENTS`.
+21. **S5 — follow-up recipient** (owner, 2026-09-29): the follow-up goes to the **team**, so an
+    operator contacts the customer again — not to the customer. Recipients are the existing settings
+    (`notify.owner_whatsapp` for the WhatsApp leg, `notify.owner_email` for the email fallback). This
+    does not contradict decision 17: that rule scoped `notify.owner_email` out of the *reminder*,
+    where the audience is the customer; here the audience is the team, a different purpose.
+22. **S5 — idempotency key** (owner, 2026-09-29): the operation is keyed
+    `appointment:{id}:followup:{outcome}` with `outcome` in `completed`/`no_show`, and the dispatcher
+    matches the **exact key**, never a loose suffix. Idempotency rides the existing
+    `NotificationOperation.idempotency_key` unique constraint. Deliberately NOT done: no `kind` column
+    on `NotificationOperation` (a migration for a single new consumer); the exact key closes the same
+    gap. Revisit `kind` when more operation types appear — that is also the root fix for the open S4
+    R3-001 advisory, which this decision refuses to widen.
 
 ## Accepted constraints (verified evidence)
 
@@ -348,3 +371,10 @@ cd web && npm run build                      # the only frontend type check (tsc
   `models.py`, `main.py`) and a stale-snapshot hit `Reminder sweep runs inside the existing webhook
   sweep (no scheduler)` (`tests/integration/test_emergency_notify.py:557`). `graphify path` did not
   resolve for module-level labels. No rebuild attempted (HTTP 402).
+- 2026-09-29: **S5 started.** Worktree re-created from `9d2f220d` (origin/main, after PRs #413/#414/#415
+  merged) on `odd/agenda-agente-whatsapp`. `rapso worktree create` created the worktree but did not
+  provision it (same no-op provisioning behaviour recorded for S4); provisioned by hand
+  (`cp ../lumat-agent/infra/.env infra/.env`, `uv sync`, `cd web && npm ci`, `infra/test-db.sh up`).
+  Unit smoke `tests/unit/test_scheduling_unit.py` = 10 passed; the test DB resolved to
+  `localhost:5945` (`lumat`).
+- 2026-09-29: S5 product decisions 18-22 closed with the owner (see Closed product decisions).
