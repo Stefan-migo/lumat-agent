@@ -361,7 +361,7 @@ Do not add autonomous-resolution, response-time, satisfaction, or revenue metric
 ### Clientes
 
 - Search, result count, export, and customer table are the primary list tools.
-- Customer name is the drill-down link; phone, state, consent, and creation date are supporting columns.
+- The customer name is the drill-down link and the row's resource cell; the phone sits muted beneath it. State, consent, and creation date are supporting columns.
 - The ficha groups identity, consent, state control, notes, and history.
 - Destructive or blocking customer-state changes require clear consequences and recovery guidance.
 
