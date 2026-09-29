@@ -349,6 +349,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} />
               <strong>{customer.name ?? customer.phone_e164 ?? "—"}</strong>
               {customer.archived_at ? <Badge tone="warning">Cliente archivado</Badge> : null}
+              <Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge>
               <Button disabled={customerId === undefined || customerMutation !== null} onClick={openProfile}>Editar identidad</Button>
               <Menu
                 trigger="icon"
@@ -377,7 +378,6 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
               <div><dt>Cliente desde</dt><dd>{formatDate(customer.created_at)}</dd></div>
             </dl>
-            <div><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div>
             <div className="client-ficha__state-control">
               <Select
                 id="client-state"
