@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Archive, ArrowRightLeft } from "lucide-react";
 import { Menu } from "./Menu";
 
 const items = [
@@ -80,5 +81,68 @@ describe("Menu (CST-PRIM-7)", () => {
     fireEvent.click(trigger);
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(onSelect).not.toHaveBeenCalled();
+  });
+});
+
+// panel-action-affordances — a row action is a single icon trigger whose accessible
+// name carries the row identity, and its items may carry an icon and a destructive
+// tone (DESIGN_SYSTEM.md:475, 509-510, 541-545).
+describe("Menu — row affordances", () => {
+  const rowItems = [
+    { value: "state", label: "Cambiar estado", icon: ArrowRightLeft },
+    { value: "archive", label: "Archivar", icon: Archive, tone: "danger" as const },
+  ];
+
+  it("an icon trigger takes its accessible name from the label and renders no visible text", async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(
+      <Menu
+        label="Acciones para Ana Pérez"
+        items={rowItems}
+        onSelect={onSelect}
+        trigger="icon"
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Acciones para Ana Pérez" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+    expect(trigger.textContent).toBe("");
+
+    await user.click(trigger);
+    expect(
+      screen.getByRole("menu", { name: "Acciones para Ana Pérez" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "Cambiar estado" }));
+    expect(onSelect).toHaveBeenCalledWith("state");
+  });
+
+  it("renders an item icon as a decorative glyph without changing the item's accessible name", async () => {
+    const user = userEvent.setup();
+    render(<Menu label="Acciones" items={rowItems} onSelect={() => {}} trigger="icon" />);
+    await user.click(screen.getByRole("button", { name: "Acciones" }));
+
+    const item = screen.getByRole("menuitem", { name: "Cambiar estado" });
+    const glyph = item.querySelector("svg");
+    expect(glyph).not.toBeNull();
+    expect(glyph).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("marks a destructive item with the danger tone, keeping an icon and its label — never colour alone", async () => {
+    const user = userEvent.setup();
+    render(<Menu label="Acciones" items={rowItems} onSelect={() => {}} trigger="icon" />);
+    await user.click(screen.getByRole("button", { name: "Acciones" }));
+
+    const destructive = screen.getByRole("menuitem", { name: "Archivar" });
+    expect(destructive).toHaveClass("menu__item--danger");
+    expect(destructive.querySelector("svg")).not.toBeNull();
+    expect(destructive).toHaveTextContent("Archivar");
+  });
+
+  it("keeps the visible-label trigger by default — the existing contract is unchanged", () => {
+    render(<Menu label="Acciones" items={items} onSelect={() => {}} />);
+    const trigger = screen.getByRole("button", { name: "Acciones" });
+    expect(trigger).toHaveTextContent("Acciones");
+    expect(trigger.querySelector("svg")).toBeNull();
   });
 });
