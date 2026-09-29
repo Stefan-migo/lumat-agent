@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Memory, Project, User
-from app.panel.api.deps import require_operator_json
+from app.panel.api.deps import require_agent_surface_json
 from app.panel.api.serializers import to_project_artifact_dict, to_project_dict
 from app.panel.deps import get_db
 from app.services import projects as project_service
@@ -27,14 +27,14 @@ class ProjectCreateRequest(BaseModel):
 
 @router.get("/projects")
 def projects_list(
-    session: Session = Depends(get_db), current: User = Depends(require_operator_json)
+    session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)
 ) -> dict:
     return {"projects": [to_project_dict(project) for project in session.scalars(select(Project).where(Project.owner_id == current.id).order_by(Project.slug))]}
 
 
 @router.get("/projects/{slug}")
 def project_detail(
-    slug: str, session: Session = Depends(get_db), current: User = Depends(require_operator_json)
+    slug: str, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)
 ) -> dict:
     project = session.scalar(select(Project).where(Project.slug == slug, Project.owner_id == current.id))
     if project is None:
@@ -53,7 +53,7 @@ def project_detail(
 @router.post("/projects", status_code=201)
 def projects_create(
     payload: ProjectCreateRequest,
-    session: Session = Depends(get_db), current: User = Depends(require_operator_json),
+    session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json),
 ) -> dict:
     try:
         project = project_service.create(session, payload.slug, payload.name, payload.purpose, owner_id=current.id)

@@ -122,12 +122,72 @@ def test_thread_creation_requires_explicit_project_and_rejects_unknown_project(c
         assert session.query(InternalChatThread).count() == 1
 
 
-def test_operator_cannot_read_or_create_internal_thread(client, migrated_db):
-    _user("chat-operator", "operador")
-    _login(client, "chat-operator")
+@pytest.mark.parametrize("role", ["admin", "operador"])
+def test_business_roles_can_create_default_thread(client, migrated_db, role):
+    _user(f"chat-{role}", role)
+    _login(client, f"chat-{role}")
     response = client.post("/panel/api/chat/threads", json={"proyecto": "default"})
-    assert response.status_code == 403
-    assert "thread" not in response.text.lower()
+    assert response.status_code == 201
+
+
+def test_tecnico_cannot_create_default_thread(client, migrated_db):
+    _user("chat-tecnico", "tecnico")
+    _login(client, "chat-tecnico")
+    response = client.post("/panel/api/chat/threads", json={"proyecto": "default"})
+    assert response.status_code == 400
+    with SessionLocal() as session:
+        assert session.query(InternalChatThread).count() == 0
+
+
+def test_tecnico_cannot_bind_thread_to_another_users_project(client, migrated_db):
+    _user("chat-project-owner", "operador")
+    _user("chat-project-intruder", "tecnico")
+    with SessionLocal() as session:
+        owner = session.scalar(select(User).where(User.username == "chat-project-owner"))
+        slug = f"foreign-{uuid4().hex[:8]}"
+        session.add(Project(slug=slug, name="Private Project", purpose="Private purpose", purpose_embedding=[0.0] * 384, owner_id=owner.id))
+        session.commit()
+    _login(client, "chat-project-intruder")
+    response = client.post("/panel/api/chat/threads", json={"proyecto": slug})
+    assert response.status_code == 400
+    assert "Private purpose" not in response.text
+    with SessionLocal() as session:
+        assert session.query(InternalChatThread).count() == 0
+
+
+@pytest.mark.parametrize("role", ["admin", "operador", "tecnico"])
+def test_chat_and_project_route_authorization_matrix(client, migrated_db, role):
+    _user(f"route-matrix-{role}", role)
+    paths = [
+        ("GET", "/panel/api/chat/threads?limit=1", None),
+        ("POST", "/panel/api/chat/threads", {"proyecto": "default"}),
+        ("PATCH", "/panel/api/chat/threads/999999", {"title": "Rename"}),
+        ("DELETE", "/panel/api/chat/threads/999999", None),
+        ("POST", "/panel/api/planning/sessions", {"topic": "Route matrix"}),
+        ("GET", "/panel/api/planning/sessions", None),
+        ("GET", "/panel/api/planning/sessions/missing", None),
+        ("POST", "/panel/api/planning/sessions/missing/close", None),
+        ("POST", "/panel/api/planning/sessions/missing/reopen", None),
+        ("GET", "/panel/api/chat/threads/999999", None),
+        ("GET", "/panel/api/assistant/capabilities", None),
+        ("POST", "/panel/api/chat/threads/999999/messages", {"content": "Hello"}),
+        ("GET", "/panel/api/chat/threads/999999/stream", None),
+        ("POST", "/panel/api/chat/threads/999999/approval", {"run_id": "missing", "token": "missing"}),
+        ("POST", "/panel/api/chat/threads/999999/attachments", None),
+        ("GET", "/panel/api/projects", None),
+        ("GET", "/panel/api/projects/missing", None),
+        ("POST", "/panel/api/projects", {"slug": f"matrix-{role}", "name": "Matrix", "purpose": f"Route matrix project for {role}"}),
+    ]
+    for method, path, payload in paths:
+        response = client.request(method, path, json=payload) if payload is not None else client.request(method, path)
+        assert response.status_code == 401, f"unauthenticated {method} {path}: {response.text}"
+    _login(client, f"route-matrix-{role}")
+    for method, path, payload in paths:
+        if path.endswith("/attachments"):
+            response = client.post(path, files={"file": ("attachment.txt", b"content", "text/plain")})
+        else:
+            response = client.request(method, path, json=payload) if payload is not None else client.request(method, path)
+        assert response.status_code != 403, f"{method} {path}: {response.text}"
 
 
 def test_privileged_request_requires_approval_without_model_call(client, migrated_db, monkeypatch):

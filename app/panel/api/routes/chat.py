@@ -1,4 +1,4 @@
-"""Owner/admin internal agent chat JSON API (IAC-1/2/3)."""
+"""Internal agent chat JSON API for every authenticated panel role (IAC-1/2/3)."""
 
 import asyncio
 import json
@@ -13,7 +13,7 @@ from app.models import AssistantAttachment, InternalChatMessage, InternalChatThr
 from app.config import get_settings
 from app.agent_registry import get_registry
 from app.chat.assistant.tools.registry import get_tool
-from app.panel.api.deps import require_admin_json
+from app.panel.api.deps import require_agent_surface_json
 from app.panel.deps import get_db
 from app.services.agent_chat import approve_plan, close_cortex_session, create_run_message, create_thread, get_thread, message_dict, read_owned_thread_run, reap_stale_run, resume_thread, run_agent_turn, stream_events_async, thread_dict
 from app.db import SessionLocal
@@ -46,6 +46,7 @@ class ApprovalBody(BaseModel):
 class PlanningSessionBody(BaseModel):
     topic: str
     thread_id: int | None = None
+    proyecto: str | None = Field(default=None, max_length=100)
 
 
 class ChatThreadTitleBody(BaseModel):
@@ -70,7 +71,7 @@ def _planning_report(session: Session, thread: InternalChatThread) -> Memory | N
 def new_thread(
     body: ChatThreadBody,
     session: Session = Depends(get_db),
-    current: User = Depends(require_admin_json),
+    current: User = Depends(require_agent_surface_json),
 ) -> dict:
     try:
         thread = create_thread(session, current, proyecto=body.proyecto)
@@ -83,7 +84,7 @@ def new_thread(
 def list_chat_threads(
     limit: int = Query(..., ge=1, le=50),
     session: Session = Depends(get_db),
-    current: User = Depends(require_admin_json),
+    current: User = Depends(require_agent_surface_json),
 ) -> dict:
     latest_created_at = (
         select(func.max(InternalChatMessage.created_at))
@@ -127,7 +128,7 @@ def rename_chat_thread(
     thread_id: int,
     body: ChatThreadTitleBody,
     session: Session = Depends(get_db),
-    current: User = Depends(require_admin_json),
+    current: User = Depends(require_agent_surface_json),
 ) -> dict:
     thread = session.get(InternalChatThread, thread_id)
     if thread is None or thread.user_id != current.id:
@@ -143,7 +144,7 @@ def rename_chat_thread(
 def delete_chat_thread(
     thread_id: int,
     session: Session = Depends(get_db),
-    current: User = Depends(require_admin_json),
+    current: User = Depends(require_agent_surface_json),
 ) -> dict:
     thread = session.get(InternalChatThread, thread_id)
     if thread is None or thread.user_id != current.id:
@@ -156,7 +157,7 @@ def delete_chat_thread(
 def open_planning_session(
     body: PlanningSessionBody,
     session: Session = Depends(get_db),
-    current: User = Depends(require_admin_json),
+    current: User = Depends(require_agent_surface_json),
 ) -> dict:
     topic = body.topic.strip()
     if not topic:
@@ -165,7 +166,10 @@ def open_planning_session(
     if body.thread_id is not None and (thread is None or thread.user_id != current.id):
         raise HTTPException(status_code=404, detail="chat thread not found")
     if thread is None:
-        thread = create_thread(session, current)
+        try:
+            thread = create_thread(session, current, proyecto=body.proyecto or "default")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     cortex = (thread.assistant_state or {}).get("cortex_session") or {}
     if cortex.get("status") == "active":
         raise HTTPException(status_code=409, detail="planning session is already active")
@@ -185,13 +189,13 @@ def open_planning_session(
 
 
 @router.get("/planning/sessions")
-def list_planning_sessions(session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
+def list_planning_sessions(session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> dict:
     threads = session.scalars(select(InternalChatThread).where(InternalChatThread.user_id == current.id).order_by(InternalChatThread.updated_at.desc())).all()
     return {"sessions": [to_cortex_session_dict(thread) for thread in threads if (thread.assistant_state or {}).get("cortex_session")]}
 
 
 @router.get("/planning/sessions/{slug}")
-def planning_session_detail(slug: str, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
+def planning_session_detail(slug: str, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> dict:
     thread = _planning_thread(session, slug, current.id)
     if thread is None:
         raise HTTPException(status_code=404, detail="planning session not found")
@@ -203,7 +207,7 @@ def planning_session_detail(slug: str, session: Session = Depends(get_db), curre
 
 
 @router.post("/planning/sessions/{slug}/close")
-def close_planning_session(slug: str, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
+def close_planning_session(slug: str, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> dict:
     thread = _planning_thread(session, slug, current.id)
     if thread is None:
         raise HTTPException(status_code=404, detail="planning session not found")
@@ -222,7 +226,7 @@ def close_planning_session(slug: str, session: Session = Depends(get_db), curren
 
 
 @router.post("/planning/sessions/{slug}/reopen")
-def reopen_planning_session(slug: str, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
+def reopen_planning_session(slug: str, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> dict:
     thread = _planning_thread(session, slug, current.id)
     if thread is None:
         raise HTTPException(status_code=404, detail="planning session not found")
@@ -238,7 +242,7 @@ def reopen_planning_session(slug: str, session: Session = Depends(get_db), curre
 
 
 @router.get("/chat/threads/{thread_id}")
-def read_thread(thread_id: int, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
+def read_thread(thread_id: int, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> dict:
     result = get_thread(session, thread_id, current.id)
     if result is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
@@ -251,7 +255,7 @@ def read_thread(thread_id: int, session: Session = Depends(get_db), current: Use
 
 
 @router.get("/assistant/capabilities")
-def assistant_capabilities(current: User = Depends(require_admin_json)) -> dict:
+def assistant_capabilities(current: User = Depends(require_agent_surface_json)) -> dict:
     """Return the validated assistant configuration without mutation controls."""
     registry = get_registry()
     assistant = registry.assistant
@@ -274,7 +278,7 @@ def assistant_capabilities(current: User = Depends(require_admin_json)) -> dict:
 
 
 @router.post("/chat/threads/{thread_id}/messages", status_code=201)
-def send_message(thread_id: int, body: ChatMessageBody, background_tasks: BackgroundTasks, session: Session = Depends(get_db), current: User = Depends(require_admin_json)) -> dict:
+def send_message(thread_id: int, body: ChatMessageBody, background_tasks: BackgroundTasks, session: Session = Depends(get_db), current: User = Depends(require_agent_surface_json)) -> dict:
     result = get_thread(session, thread_id, current.id)
     if result is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
@@ -307,7 +311,7 @@ async def stream_thread(
     thread_id: int,
     run_id: str | None = None,
     session: Session = Depends(get_db),
-    current: User = Depends(require_admin_json),
+    current: User = Depends(require_agent_surface_json),
 ):
     # Release the request-scoped connection first: FastAPI keeps the request
     # dependency open until the response is fully sent, so an open stream would
@@ -340,7 +344,7 @@ def approve_thread_plan(
     thread_id: int,
     body: ApprovalBody,
     session: Session = Depends(get_db),
-    current: User = Depends(require_admin_json),
+    current: User = Depends(require_agent_surface_json),
 ) -> dict:
     result = get_thread(session, thread_id, current.id)
     if result is None:
@@ -356,7 +360,7 @@ def upload_attachment(
     thread_id: int,
     file: UploadFile = File(...),
     session: Session = Depends(get_db),
-    current: User = Depends(require_admin_json),
+    current: User = Depends(require_agent_surface_json),
 ) -> dict:
     result = get_thread(session, thread_id, current.id)
     if result is None:
