@@ -600,6 +600,43 @@ def test_migration_037_documented_rollback_fails_with_cross_owner_hash_duplicate
         assert "uq_memories_normalized_content" in str(error.value)
 
 
+def test_migration_039_user_profile_constraints_and_rollback(tmp_path):
+    with _scratch_migration_db(tmp_path, 38, 39) as (conn, apply_039, migrations):
+        result = apply_039()
+        assert result.returncode == 0, f"039 failed:\n{result.stdout}\n{result.stderr}"
+        columns = conn.execute(
+            "SELECT column_name, character_maximum_length, is_nullable "
+            "FROM information_schema.columns WHERE table_name='users' "
+            "AND column_name IN ('email', 'name', 'phone', 'position') ORDER BY column_name"
+        ).fetchall()
+        assert columns == [
+            ("email", 200, "YES"), ("name", 200, "YES"),
+            ("phone", 30, "YES"), ("position", 120, "YES"),
+        ]
+        indexes = conn.execute(
+            "SELECT indexdef FROM pg_indexes WHERE indexname='uq_users_lower_email'"
+        ).fetchone()
+        assert indexes and "lower((email)::text)" in indexes[0] and "WHERE (email IS NOT NULL)" in indexes[0]
+        conn.execute("INSERT INTO users (username, password_hash, email) VALUES ('profile-039-a', 'x', 'Case@Example.com')")
+        conn.execute("INSERT INTO users (username, password_hash) VALUES ('profile-039-null-a', 'x'), ('profile-039-null-b', 'x')")
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute("INSERT INTO users (username, password_hash, email) VALUES ('profile-039-b', 'x', 'case@example.COM')")
+        migration = next(item for item in migrations if _migration_number(item) == 39)
+        rollback = "\n".join(
+            line.split("-- Rollback: ", 1)[1]
+            for line in migration.read_text().splitlines()
+            if line.startswith("-- Rollback: ")
+        )
+        conn.execute(rollback)
+        assert conn.execute(
+            "SELECT count(*) FROM information_schema.columns WHERE table_name='users' "
+            "AND column_name IN ('email', 'name', 'phone', 'position')"
+        ).fetchone() == (0,)
+        assert conn.execute(
+            "SELECT count(*) FROM pg_indexes WHERE indexname='uq_users_lower_email'"
+        ).fetchone() == (0,)
+
+
 def test_schema_migrations_records_version(migrated_db, admin_conn):
     rows = admin_conn.execute(
         "SELECT version FROM schema_migrations ORDER BY version"
@@ -642,6 +679,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("036_case_amount",),
         ("037_memory_owner_dedup",),
         ("038_customer_merge",),
+        ("039_user_profile",),
     ]
 
 
