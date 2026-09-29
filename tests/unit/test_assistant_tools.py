@@ -117,7 +117,7 @@ def test_customer_search_tools_project_only_public_fields(monkeypatch, tool_name
         lambda *_args: [customer],
     )
 
-    result = execute_tool(SimpleNamespace(), tool_name, {})["result"]
+    result = execute_tool(SimpleNamespace(), tool_name, {}, role="admin")["result"]
 
     assert set(result[0]) == {"id", "name", "state"}
     forbidden = {"phone_e164", "email", "address", "comuna", "consent_status", "consent_at"}
@@ -230,9 +230,9 @@ def test_project_tools_are_typed_bounded_and_classified():
         assert get_tool(name).schema()["type"] == "object"
 
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "project.find", {"query": "x" * 201}, owner_id=1)
+        execute_tool(SimpleNamespace(), "project.find", {"query": "x" * 201}, owner_id=1, role="admin")
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "project.merge", {"source": "a", "target": "b", "extra": "no"}, owner_id=1)
+        execute_tool(SimpleNamespace(), "project.merge", {"source": "a", "target": "b", "extra": "no"}, owner_id=1, role="admin")
 
 
 def test_project_tools_fail_closed_without_authenticated_owner(monkeypatch):
@@ -243,15 +243,15 @@ def test_project_tools_fail_closed_without_authenticated_owner(monkeypatch):
     with pytest.raises(
         ToolValidationError, match="owner-scoped tool requires the authenticated owner"
     ):
-        execute_tool(SimpleNamespace(), "project.list", {})
+        execute_tool(SimpleNamespace(), "project.list", {}, role="admin")
 
     # A trusted thread does not substitute for the authenticated owner.
     with pytest.raises(
         ToolValidationError, match="owner-scoped tool requires the authenticated owner"
     ):
-        execute_tool(SimpleNamespace(), "project.list", {}, trusted_thread_id=9)
+        execute_tool(SimpleNamespace(), "project.list", {}, trusted_thread_id=9, role="admin")
 
-    result = execute_tool(SimpleNamespace(), "project.list", {}, owner_id=1)
+    result = execute_tool(SimpleNamespace(), "project.list", {}, owner_id=1, role="admin")
     assert result["status"] == "completed"
 
 
@@ -263,7 +263,7 @@ def test_project_whitelist_is_checked_at_execution_boundary(monkeypatch):
     )
 
     with pytest.raises(ToolValidationError, match="not whitelisted"):
-        execute_tool(SimpleNamespace(), "project.list", {}, whitelist={"customers.list"})
+        execute_tool(SimpleNamespace(), "project.list", {}, whitelist={"customers.list"}, role="admin")
     assert called == []
 
 
@@ -274,7 +274,7 @@ def test_ambiguous_project_find_requires_approval_without_selecting_namespace(mo
         lambda *args, **kwargs: ProjectResult(None, [candidate], requires_approval=True),
     )
 
-    result = execute_tool(SimpleNamespace(), "project.find", {"query": "gas service"}, owner_id=1)
+    result = execute_tool(SimpleNamespace(), "project.find", {"query": "gas service"}, owner_id=1, role="admin")
 
     assert result["status"] == "approval_pending"
     assert result["result"]["project"] is None
@@ -308,7 +308,7 @@ def test_approved_project_find_selects_candidate(monkeypatch):
     approval = issue_approval(plan)
     assert consume_approval(approval, approval["token"]) is True
 
-    result = execute_tool(SimpleNamespace(), "project.find", plan["arguments"], approval=approval, owner_id=1)
+    result = execute_tool(SimpleNamespace(), "project.find", plan["arguments"], approval=approval, owner_id=1, role="admin")
 
     assert result["status"] == "completed"
     assert result["result"]["project"] == "gas"
@@ -330,7 +330,7 @@ def test_approved_project_create_reuses_candidate(monkeypatch):
     approval = issue_approval(plan)
     assert consume_approval(approval, approval["token"]) is True
 
-    result = execute_tool(SimpleNamespace(), "project.create", plan["arguments"], approval=approval, owner_id=1)
+    result = execute_tool(SimpleNamespace(), "project.create", plan["arguments"], approval=approval, owner_id=1, role="admin")
 
     assert result["status"] == "completed"
     assert result["result"]["slug"] == "gas"
@@ -352,7 +352,7 @@ def test_approved_project_create_creates_distinct_project(monkeypatch):
     approval = issue_approval(plan)
     assert consume_approval(approval, approval["token"]) is True
 
-    result = execute_tool(SimpleNamespace(), "project.create", plan["arguments"], approval=approval, owner_id=1)
+    result = execute_tool(SimpleNamespace(), "project.create", plan["arguments"], approval=approval, owner_id=1, role="admin")
 
     assert result["status"] == "completed"
     assert result["result"]["slug"] == "gas-new"
@@ -371,22 +371,22 @@ def test_project_approval_decision_is_required_and_replay_or_changes_select_noth
     plan = _approved_project_plan("project.find", arguments, {"selected_slug": "gas"})
     approval = issue_approval(plan)
 
-    pending = execute_tool(SimpleNamespace(), "project.find", arguments, owner_id=1)
+    pending = execute_tool(SimpleNamespace(), "project.find", arguments, owner_id=1, role="admin")
     assert pending["status"] == "approval_pending"
     assert pending["result"]["project"] is None
     assert calls == [None]
 
     assert consume_approval(approval, approval["token"]) is True
-    execute_tool(SimpleNamespace(), "project.find", arguments, approval=approval, owner_id=1)
+    execute_tool(SimpleNamespace(), "project.find", arguments, approval=approval, owner_id=1, role="admin")
     assert calls[-1] is not None
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "project.find", {"query": "changed"}, approval=approval, owner_id=1)
+        execute_tool(SimpleNamespace(), "project.find", {"query": "changed"}, approval=approval, owner_id=1, role="admin")
     assert len(calls) == 2
     assert consume_approval(approval, approval["token"]) is False
 
     expired = issue_approval(plan, expires_at=datetime.now(timezone.utc) - timedelta(seconds=1))
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "project.find", arguments, approval=expired, owner_id=1)
+        execute_tool(SimpleNamespace(), "project.find", arguments, approval=expired, owner_id=1, role="admin")
 
 
 def test_project_mutation_requires_consumed_exact_non_expired_approval(monkeypatch):
@@ -400,25 +400,25 @@ def test_project_mutation_requires_consumed_exact_non_expired_approval(monkeypat
     approval = issue_approval(plan)
 
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "project.rename", arguments, approval=approval, owner_id=1)
+        execute_tool(SimpleNamespace(), "project.rename", arguments, approval=approval, owner_id=1, role="admin")
     assert called == []
 
     assert consume_approval(approval, approval["token"]) is True
     assert validate_execution(plan, approval) is True
-    execute_tool(SimpleNamespace(), "project.rename", arguments, approval=approval, owner_id=1)
+    execute_tool(SimpleNamespace(), "project.rename", arguments, approval=approval, owner_id=1, role="admin")
     assert called == [True]
 
     changed = {"project": "gas", "name": "Changed"}
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "project.rename", changed, approval=approval, owner_id=1)
+        execute_tool(SimpleNamespace(), "project.rename", changed, approval=approval, owner_id=1, role="admin")
     assert called == [True]
 
 
 def test_unknown_and_invalid_tools_are_rejected_before_execution():
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "not-a-tool", {})
+        execute_tool(SimpleNamespace(), "not-a-tool", {}, role="admin")
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "customers.search", {"limit": 1000})
+        execute_tool(SimpleNamespace(), "customers.search", {"limit": 1000}, role="admin")
 
 
 def test_write_requires_consumed_exact_approval(monkeypatch):
@@ -436,14 +436,14 @@ def test_write_requires_consumed_exact_approval(monkeypatch):
         "cooldown_seconds": 0,
     }
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "automation.create_rule", args)
+        execute_tool(SimpleNamespace(), "automation.create_rule", args, role="admin")
     assert called == []
     approval = {
         "status": "consumed",
         "arguments_sha256": "wrong",
     }
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "automation.create_rule", args, approval=approval)
+        execute_tool(SimpleNamespace(), "automation.create_rule", args, approval=approval, role="admin")
     assert called == []
 
 
@@ -474,7 +474,7 @@ def test_sdb_project_create_uses_frozen_decision_and_real_execute_path(monkeypat
     approval, binding, task = _sdb_approved_project("project.create", arguments, {"create_distinct": True})
 
     result = execute_tool(
-        SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=binding, owner_id=1
+        SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=binding, owner_id=1, role="admin"
     )
 
     assert result["status"] == "completed"
@@ -494,7 +494,7 @@ def test_sdb_project_create_rejects_missing_or_invalid_decision_without_mutation
     approval, binding, task = _sdb_approved_project("project.create", arguments, decision)
 
     with pytest.raises(ToolValidationError, match="decision"):
-        execute_tool(SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=binding, owner_id=1)
+        execute_tool(SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=binding, owner_id=1, role="admin")
     assert called == []
 
 
@@ -514,7 +514,7 @@ def test_sdb_project_mutations_use_real_execute_path(monkeypatch, tool, argument
     )
     approval, binding, task = _sdb_approved_project(tool, arguments)
 
-    result = execute_tool(SimpleNamespace(), tool, arguments, approval=approval, task_binding=binding, owner_id=1)
+    result = execute_tool(SimpleNamespace(), tool, arguments, approval=approval, task_binding=binding, owner_id=1, role="admin")
 
     assert result["status"] == "completed"
     assert called == [True]
@@ -532,7 +532,7 @@ def test_sdb_project_binding_tampering_is_rejected_before_mutation(monkeypatch, 
     tampered = {**binding, field: value}
 
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=tampered, owner_id=1)
+        execute_tool(SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=tampered, owner_id=1, role="admin")
     assert called == []
 
 
@@ -578,13 +578,13 @@ def test_project_create_requires_exact_decision_payload(monkeypatch):
         "project_payload": {"operation": "create", "arguments": args, "decision": {"create_distinct": True}},
     })
     assert consume_approval(approval, approval["token"])
-    execute_tool(SimpleNamespace(), "project.create", args, approval=approval, owner_id=1)
+    execute_tool(SimpleNamespace(), "project.create", args, approval=approval, owner_id=1, role="admin")
     assert called == [True]
 
     bad = issue_approval({"tool": "project.create", "arguments": args, "project_payload": {"operation": "create", "arguments": args, "decision": {"unexpected": True}}})
     assert consume_approval(bad, bad["token"])
     with pytest.raises(ToolValidationError, match="decision"):
-        execute_tool(SimpleNamespace(), "project.create", args, approval=bad, owner_id=1)
+        execute_tool(SimpleNamespace(), "project.create", args, approval=bad, owner_id=1, role="admin")
     assert called == [True]
 
 
@@ -596,7 +596,7 @@ def test_write_handler_failure_is_preserved_as_error_evidence(monkeypatch):
     args = {"name": "n", "event_type": "e", "conditions": {}, "channel": "c", "template_event": "t", "cooldown_seconds": 0}
     approval = issue_approval({"tool": "automation.create_rule", "arguments": args})
     assert consume_approval(approval, approval["token"])
-    result = execute_tool(SimpleNamespace(), "automation.create_rule", args, approval=approval)
+    result = execute_tool(SimpleNamespace(), "automation.create_rule", args, approval=approval, role="admin")
     assert result["status"] == "error"
     assert result["evidence"]["status"] == "error"
 
@@ -821,8 +821,8 @@ def test_conversations_and_appointments_use_service_seams(monkeypatch):
         "app.chat.assistant.tools.registry.scheduling.list_for_range",
         lambda *args, **kwargs: [(appointment, None, None, None, None)],
     )
-    assert execute_tool(SimpleNamespace(), "conversations.search", {"query": "a"})["result"] == [{"id": 1}]
-    assert execute_tool(SimpleNamespace(), "appointments.upcoming", {})["result"][0]["id"] == 2
+    assert execute_tool(SimpleNamespace(), "conversations.search", {"query": "a"}, role="admin")["result"] == [{"id": 1}]
+    assert execute_tool(SimpleNamespace(), "appointments.upcoming", {}, role="admin")["result"][0]["id"] == 2
 
 
 def test_memory_read_is_bounded_and_uses_memory_service(monkeypatch):
@@ -835,6 +835,7 @@ def test_memory_read_is_bounded_and_uses_memory_service(monkeypatch):
         SimpleNamespace(),
         "memory.read",
         {"scope": "customer", "entity_id": "42", "topic": "topic", "limit": 5},
+        role="admin",
     )
     assert result["status"] == "completed"
     assert len(result["result"]) == 5
@@ -848,7 +849,7 @@ def test_own_memory_read_uses_trusted_thread_and_agent_axes_and_fails_closed(mon
     )
 
     result = execute_tool(
-        SimpleNamespace(), "memory.read", {"scope": "own"}, trusted_thread_id=7, owner_id=7
+        SimpleNamespace(), "memory.read", {"scope": "own"}, trusted_thread_id=7, owner_id=7, role="admin"
     )
     assert result["status"] == "completed"
     assert calls == [
@@ -857,12 +858,13 @@ def test_own_memory_read_uses_trusted_thread_and_agent_axes_and_fails_closed(mon
     ]
 
     with pytest.raises(ToolValidationError, match="positive trusted thread id"):
-        execute_tool(SimpleNamespace(), "memory.read", {"scope": "own"})
+        execute_tool(SimpleNamespace(), "memory.read", {"scope": "own"}, role="admin")
     with pytest.raises(ToolValidationError, match="authenticated owner"):
-        execute_tool(SimpleNamespace(), "memory.read", {"scope": "own"}, trusted_thread_id=7)
+        execute_tool(SimpleNamespace(), "memory.read", {"scope": "own"}, trusted_thread_id=7, role="admin")
     with pytest.raises(ToolValidationError, match="positive trusted thread id"):
         execute_tool(
             SimpleNamespace(), "memory.search", {"scope": "own", "query": "launch"}
+            , role="admin"
         )
 
 
@@ -882,6 +884,7 @@ def test_memory_search_uses_own_axes_and_bounds_content(monkeypatch):
         SimpleNamespace(),
         "memory.search", {"query": "launch", "scope": "own", "limit": 1},
         trusted_thread_id=7, owner_id=7,
+        role="admin",
     )
 
     assert result["status"] == "completed"
@@ -891,7 +894,7 @@ def test_memory_search_uses_own_axes_and_bounds_content(monkeypatch):
         {"scope": "agent", "entity_id": "agent:default", "proyecto": "default", "owner_id": None, "top_k": 1},
     ]
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), "memory.search", {"query": "x", "scope": "own", "entity_id": "customer:7"})
+        execute_tool(SimpleNamespace(), "memory.search", {"query": "x", "scope": "own", "entity_id": "customer:7"}, role="admin")
 
 
 def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkeypatch):
@@ -923,8 +926,8 @@ def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkey
         "tipo": "decision",
     }
 
-    first = execute_tool(session, "memory.write", args, trusted_thread_id=7, owner_id=7)
-    second = execute_tool(session, "memory.write", args, trusted_thread_id=7, owner_id=7)
+    first = execute_tool(session, "memory.write", args, trusted_thread_id=7, owner_id=7, role="admin")
+    second = execute_tool(session, "memory.write", args, trusted_thread_id=7, owner_id=7, role="admin")
 
     assert first["result"] == {"written": True, "id": 4, "topic_key": "agent:decision"}
     assert second["result"] == first["result"]
@@ -936,6 +939,7 @@ def test_memory_write_derives_visibility_target_and_keeps_thread_override(monkey
         {**args, "visibility": "thread"},
         trusted_thread_id=7,
         owner_id=7,
+        role="admin",
     )
     assert calls[-1]["scope"] == "panel"
     assert calls[-1]["entity_id"] == "thread:7"
@@ -1003,8 +1007,8 @@ def test_memory_correction_update_and_delete_are_autonomous(monkeypatch):
     session = SimpleNamespace(begin_nested=lambda: Savepoint(), get=lambda _model, _id: row)
     monkeypatch.setattr("app.chat.assistant.tools.registry.memory.update", lambda *_args, **_kwargs: row)
     monkeypatch.setattr("app.chat.assistant.tools.registry.memory.delete", lambda *_args, **_kwargs: row)
-    assert execute_tool(session, "memory.update", {"id": 4, "titulo": "Fixed"}, trusted_thread_id=8, owner_id=8)["result"] == {"updated": True, "id": 4}
-    assert execute_tool(session, "memory.delete", {"id": 4}, trusted_thread_id=8, owner_id=8)["result"] == {"deleted": True, "id": 4}
+    assert execute_tool(session, "memory.update", {"id": 4, "titulo": "Fixed"}, trusted_thread_id=8, owner_id=8, role="admin")["result"] == {"updated": True, "id": 4}
+    assert execute_tool(session, "memory.delete", {"id": 4}, trusted_thread_id=8, owner_id=8, role="admin")["result"] == {"deleted": True, "id": 4}
 
 
 def test_memory_service_update_reembeds_only_changed_content(monkeypatch):
@@ -1112,6 +1116,7 @@ def test_memory_write_global_visibility_uses_canonical_agent_axis(monkeypatch):
         },
         trusted_thread_id=8,
         owner_id=8,
+        role="admin",
     )
 
     assert result["result"] == {"written": True, "id": 5, "topic_key": "agent:fact"}
@@ -1142,9 +1147,9 @@ def test_memory_write_degrades_and_fails_closed_without_trusted_thread(monkeypat
         "tipo": "discovery",
     }
     with pytest.raises(ToolValidationError):
-        execute_tool(session, "memory.write", args)
+        execute_tool(session, "memory.write", args, role="admin")
 
-    result = execute_tool(session, "memory.write", args, trusted_thread_id=7, owner_id=7)
+    result = execute_tool(session, "memory.write", args, trusted_thread_id=7, owner_id=7, role="admin")
     assert result["result"]["written"] is False
     assert result["result"]["degraded_reason"] == "Memory write unavailable"
     assert "embedding unavailable" not in result["result"]["degraded_reason"]
@@ -1219,7 +1224,7 @@ def test_websearch_failure_is_error_evidence(monkeypatch):
         "app.chat.assistant.tools.registry.websearch.search",
         lambda *args, **kwargs: (_ for _ in ()).throw(SearchFailure("timeout")),
     )
-    result = execute_tool(SimpleNamespace(), "web.search", {"query": "status"})
+    result = execute_tool(SimpleNamespace(), "web.search", {"query": "status"}, role="admin")
     assert result["status"] == "error"
     assert result["evidence"]["status"] == "error"
     assert result["evidence"]["reason"] == "timeout"

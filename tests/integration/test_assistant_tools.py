@@ -42,7 +42,7 @@ def test_approved_assistant_rule_is_persisted_audited_and_worker_visible(migrate
             user_id=user.id,
             active_run_id=run_id,
             current_plan=plan,
-            assistant_state={"stage": "approval_pending", "approval": approval},
+            assistant_state={"stage": "approval_pending", "approval": approval, "actor_role": "admin"},
         )
         session.add(thread)
         session.flush()

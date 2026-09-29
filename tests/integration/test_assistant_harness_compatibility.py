@@ -139,15 +139,17 @@ def test_memory_read_rejects_cross_scope_entity_shapes(monkeypatch):
         execute_tool(
             SimpleNamespace(), "memory.read",
             {"scope": "own", "entity_id": "customer:42"},
+            role="admin",
         )
     with pytest.raises(ToolValidationError):
         execute_tool(
             SimpleNamespace(), "memory.read",
             {"scope": "own", "entity_id": "thread:999"}, trusted_thread_id=7, owner_id=7,
+            role="admin",
         )
 
     own = execute_tool(
-        SimpleNamespace(), "memory.read", {"scope": "own"}, trusted_thread_id=7, owner_id=7
+        SimpleNamespace(), "memory.read", {"scope": "own"}, trusted_thread_id=7, owner_id=7, role="admin"
     )
     assert own["status"] == "completed"
     assert calls == [
@@ -156,7 +158,7 @@ def test_memory_read_rejects_cross_scope_entity_shapes(monkeypatch):
     ]
 
     result = execute_tool(
-        SimpleNamespace(), "memory.read", {"scope": "customer", "entity_id": "42"}
+        SimpleNamespace(), "memory.read", {"scope": "customer", "entity_id": "42"}, role="admin"
     )
     assert result["status"] == "completed"
     assert calls[-1] == {"scope": "customer", "entity_id": "42"}
