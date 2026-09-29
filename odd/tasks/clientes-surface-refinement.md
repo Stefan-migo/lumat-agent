@@ -72,7 +72,8 @@ they look like the safest action on the surface.
 ## Scope
 
 **In:** `web/src/components/primitives/Button.tsx`, `Button.test.tsx`,
-`web/src/components/primitives/primitives.css` (the `.btn--danger` rule only),
+`web/src/components/primitives/primitives.css` (the `.btn--danger` and
+`.client-ficha__customer-controls` rules),
 `web/src/components/pages/ClientFicha.tsx`, `ClientFicha.test.tsx`,
 `web/src/stories/pages/ClientFicha.stories.tsx` (+ its test) and
 `web/src/stories/primitives/Button.stories.tsx` when their assertions depend on the
@@ -143,8 +144,26 @@ data presentation away from tables.
   local action group with its own primary, per `DESIGN_SYSTEM.md:441`'s "per local
   action group" wording.
 - **D5 — No new token, no new dependency.** `.btn--danger` resolves through the
-  existing `--danger` role and the shared `.btn` base. `primitives.css` stays
-  hex-free.
+  existing danger pair — `--danger` on `--danger-bg`, bordered by `--danger-border`,
+  the treatment `DESIGN_SYSTEM.md:202,510` already assigns to the danger role — plus
+  the shared `.btn` base. The token set defines no darker danger step, so the hover
+  deepens the border instead of inventing one. `primitives.css` stays hex-free.
+- **D7 — The danger variant's tokens are guarded, not assumed.** The first attempt at
+  `.btn--danger` shipped `var(--danger-700)`, a custom property that does not exist.
+  An undefined `var()` is invalid at computed-value time, so the declaration drops and
+  the variant silently loses the style while still looking green. The slice now carries
+  a regression guard in `Button.test.tsx` that resolves every `var()` inside a
+  `.btn--*` rule against the custom properties declared in `tokens.css` or scoped
+  locally in `primitives.css`. A repo-wide scan found no other real instance: the two
+  other candidates (`--bent-accent`, `--mot-accent`) are declared locally by
+  `.dashboard__card` and `.dashboard__chip`.
+- **D8 — The rail's identity header gets a deliberate layout.** The container the
+  identity block and the action group share, `.client-ficha__customer-controls`, had no
+  rule at all — at the base it was a bare `<div>` and the controls flowed inline with no
+  gap. The slice adds the minimum flex rule so the avatar, the name, the badges, the
+  single primary action and the `...` trigger read as one deliberate row. The card's own
+  grid gap owns the vertical rhythm, so the rule sets no margin. The state badge moves
+  into that header so both badges sit with the identity they describe.
 - **D6 — B2–B4 are deferred to their own slices.** The memo duplication, the
   `Historial` disclosure, and the list's Cliente cell are each their own PR so no
   single review exceeds the ~400-line focus budget.
@@ -196,6 +215,11 @@ consulted before writing:
   `cd web && npm run build-storybook`, `git diff --check`. All completed successfully;
   both builds emitted the expected >500 kB chunk warning.
 
+- [ ] **T7** — correction found in parent verification (D7, D8): the danger variant's
+  phantom token and the unstyled identity header. RED: `Button.test.tsx` gains the
+  variant-token-resolution guard and fails on `["--danger-700"]`. GREEN: `.btn--danger`
+  moves to the danger pair and `.client-ficha__customer-controls` gains its flex rule.
+
 ## Acceptance criteria
 
 1. The ficha rail renders exactly one `Cliente` card; no `Identidad` or `Estado`
@@ -211,8 +235,9 @@ consulted before writing:
 6. The state control, its save action, and every `LocalFeedback` surface behave
    exactly as before.
 7. No inline `style={{}}`, no component-owned `<style>`, no hard value and no new
-   token is introduced; `tokens.css` is unchanged and `primitives.css` stays
-   hex-free.
+   token is introduced; `tokens.css` is unchanged, `primitives.css` stays hex-free, and
+   every `var()` inside a `.btn--*` rule resolves to a declared custom property
+   (guarded by `Button.test.tsx`).
 8. Only the authorized files change.
 9. Every existing `ClientFicha` test that is not about the replaced markup keeps
    passing unchanged.
@@ -228,9 +253,44 @@ consulted before writing:
 
 ## Progress
 
-- [x] Created this ODD record in the unit worktree before the first source change.
-- [x] Worktree created (`rapso worktree create clientes-surface-refinement
-  --yes`, after explicit owner consent).
+- [x] Created this ODD record in the unit worktree before the first source change
+  (commit `99ed62d8`).
+- [x] Worktree created (`rapso worktree create clientes-surface-refinement --yes`,
+  after explicit owner consent).
+- [x] T1 — RED observed in `Button.test.tsx`: **1 failed / 9 passed** against the
+  unmodified `Button`.
+- [x] T2 — GREEN. Commit `e5a2b439`. `Button.test.tsx` 10/10; the pre-existing tests
+  are untouched and `primitives.css` stays hex-free.
+- [x] T3 — RED observed in `ClientFicha.test.tsx`: **9 failed / 29 passed** against the
+  old rail markup. The pre-existing action tests were moved to the menu contract in the
+  same step, because the old visible labels were the defect; their behavioural
+  assertions are preserved.
+- [x] T4 — GREEN. Commit `5281b245`. `ClientFicha.test.tsx` plus
+  `ClientFicha.stories.test.tsx` → **2 files, 49 tests passed**.
+- [x] T5 — stories. `Button.stories.tsx` gains the `danger` variant, its control
+  options and its matrix entry (required by `DS-STORY-4`); `ClientFicha.stories.test.tsx`
+  drives the restore action through the menu instead of a visible button.
+- [x] T6 — verification of record on the final candidate:
+  `cd web && npm run test` → **90 files, 856 tests, all passing**;
+  `cd web && npx tsc -b --noEmit` → exit 0; `cd web && npm run build` → exit 0;
+  `cd web && npm run build-storybook` → exit 0. The `>500 kB chunk` warning in both
+  builds is pre-existing and unchanged.
+- [x] T7 — correction found in parent verification (D7, D8). RED: the new
+  variant-token-resolution guard fails on `["--danger-700"]` → **1 failed / 10 passed**.
+  GREEN: commit `87a1c2e0` moves `.btn--danger` onto the danger pair; commit `d52ac650`
+  adds the `.client-ficha__customer-controls` rule and moves the state badge into the
+  header. Re-verified after the split: the three touched suites → **60 tests passed**,
+  `tsc -b --noEmit` exit 0.
+- [x] Spec check (Step 4). `DS-GRAMMAR-1`
+  (`openspec/specs/panel-design-system/spec.md:742`) requires `ClientFicha` to retain
+  the control-room `DataTable`, KPI, `Badge`, filter and state primitives — all retained.
+  `DS-UI-TONEFIX` (`:565-571`) requires case statuses to use `caseStatusTone` and never
+  `customerStateTone`; the case badge is untouched and the new badge on the customer's
+  own state correctly uses `customerStateTone`. `DS-STORY-4` (`:198-206`) requires every
+  variant of the documented primitives to render in the matrix story, which is why the
+  `danger` story is mandatory rather than optional. No OpenSpec requirement mentions
+  `danger` as a required variant, so no spec delta is needed for the drift closure.
+- [x] `git diff --check` clean; `git status --short` clean.
 - [x] B1 implementation committed: `e5a2b439` (danger button) and `5281b245`
   (consolidated ficha rail); targeted GREEN runs passed (Button 10/10, ficha/story
   49/49).
@@ -238,8 +298,12 @@ consulted before writing:
 
 ## Size
 
-Actual B1 web diff: **167 insertions, 43 deletions (210 changed lines)** across the
-seven authorized implementation/story files, inside the ~400 review-focus budget.
+Final B1 web diff, `af618303..HEAD`: **165 insertions, 44 deletions (209 changed
+lines)** across the seven authorized implementation and story files. Breakdown:
+`ClientFicha.tsx` 71, `ClientFicha.test.tsx` 54, `Button.test.tsx` 45,
+`primitives.css` 22, `Button.stories.tsx` 9, `ClientFicha.stories.test.tsx` 6,
+`Button.tsx` 2. Production code is 95 lines; the rest is tests and stories. 209 is
+inside the ~400 review-focus budget.
 
 ## Deferred and follow-ups
 
@@ -264,6 +328,16 @@ seven authorized implementation/story files, inside the ~400 review-focus budget
 - **Client KPIs** stay separate: they need a spec delta plus an aggregate endpoint,
   because `GET /panel/api/clients` is capped at 100 rows and `to_customer_dict`
   exposes only customer columns.
+
+## Open for the owner
+
+- **The danger fill treatment.** `DESIGN_SYSTEM.md:202,510` assigns the danger role a
+  *pair* — `--danger` text on `--danger-bg` — and that is what landed, matching badges,
+  flash messages and `StateMessage`. A solid `--danger` fill with white text is the other
+  defensible reading of "destructive", but the token set has no darker danger step, so a
+  solid fill plus a hover needs a new `--danger-700` token. That is a token-set decision
+  for the owner, not a defect: the pair is token-complete today and reads clearly red.
+  The cheap way to see both is the `danger` entry in the Button matrix story.
 
 ## Recovery
 
