@@ -38,6 +38,7 @@ import type {
   InternalChatThreadSummary,
   AssistantCapabilities,
   PlanningSession,
+  Role,
 } from "../../types";
 import { realtimeClient, type ConnectionStatus } from "../../realtime";
 import { Avatar } from "../primitives/Avatar";
@@ -92,7 +93,7 @@ const RUN_WATCH_TIMEOUT_MS = 30 * 60 * 1_000;
 const runStillProcessing = (result: InternalChatResponse, run: string) =>
   (result.messages ?? []).some(
     (message) =>
-      message.author === "admin" &&
+      message.author !== "agent" &&
       message.assistant_metadata?.run_id === run &&
       message.status === "processing",
   );
@@ -263,12 +264,13 @@ function AgentActivity({
 }
 
 export interface AgentChatProps {
+  role: Role;
   threadId?: number;
   sectionTabs?: ReactNode;
   onThreadOpened?: (id: number) => void;
 }
 
-export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatProps = {}) {
+export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: AgentChatProps) {
   const requestedProject = new URLSearchParams(globalThis.location.search).get("proyecto") || undefined;
   const requestedId =
     threadId ??
@@ -575,7 +577,7 @@ export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatPr
       {
         id: optimisticId,
         thread_id: thread.id,
-        author: "admin",
+        author: role,
         content: submitted,
         status: "processing",
         created_at: new Date().toISOString(),
@@ -611,7 +613,7 @@ export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatPr
         {
           id: Date.now(),
           thread_id: thread.id,
-          author: "admin",
+          author: role,
           content: submitted,
           status: "failed",
           error: "temporary",
@@ -910,7 +912,8 @@ export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatPr
               </div>
             ) : null}
             {messages.map((message) => {
-              const outbound = message.author === "admin";
+              const outbound = message.author !== "agent";
+              const humanAuthorLabel = role === "admin" ? "Administrador" : role === "tecnico" ? "Técnico" : "Operador";
               const messageRunId = message.assistant_metadata?.run_id;
               // Outbound messages only render the run's artifacts when no agent
               // reply exists for that run (see `runsWithReply` above).
@@ -952,12 +955,12 @@ export function AgentChat({ threadId, sectionTabs, onThreadOpened }: AgentChatPr
                 <article
                   key={message.id}
                   className={`ai-agent-grammar__bubble-row${outbound ? " ai-agent-grammar__bubble-row--outbound" : ""}`}
-                  aria-label={`Mensaje de ${outbound ? "administrador" : "agente"}`}
+                  aria-label={`Mensaje de ${outbound ? humanAuthorLabel.toLocaleLowerCase("es") : "agente"}`}
                 >
-                  <Avatar name={outbound ? "Administrador" : "Agente Lumat"} />
+                  <Avatar name={outbound ? humanAuthorLabel : "Agente Lumat"} />
                   <div className={`ai-agent-grammar__bubble${outbound ? " ai-agent-grammar__bubble--outbound" : ""}`}>
                     <span className="ai-agent-grammar__message-meta">
-                      {outbound ? "Administrador" : "Agente Lumat"}
+                      {outbound ? humanAuthorLabel : "Agente Lumat"}
                     </span>
                     {outbound ? (
                       <p className="assistant-chat__message-content">{message.content}</p>

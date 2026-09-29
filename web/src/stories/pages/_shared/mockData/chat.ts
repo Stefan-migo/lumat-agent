@@ -1,9 +1,9 @@
 /** Chat-with-agent mock (design D2 / R3; R-PRD-PG-12). A dedicated H4 system
  *  view on a human↔agent conversation — deliberately NOT the WhatsApp
- *  Conversation/Message model (R3). `role` is the panel user ('admin'/'agent');
+ *  Conversation/Message model (R3). `role` is a panel role or 'agent';
  *  `created_at` is an ISO string matching the serializer convention.
  *  `agentStatus` drives the ChatWithAgent idle/processing indicator (D7). */
-export type AgentChatRole = "admin" | "agent";
+export type AgentChatRole = "admin" | "operador" | "tecnico" | "agent";
 
 export interface AgentChatMessage {
   id: number;

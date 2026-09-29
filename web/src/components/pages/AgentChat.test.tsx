@@ -1,7 +1,11 @@
 import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { AgentChat, COMMAND_CENTER_BREAKPOINTS, commandCenterTier } from "./AgentChat";
+import { AgentChat as AgentChatView, COMMAND_CENTER_BREAKPOINTS, commandCenterTier, type AgentChatProps } from "./AgentChat";
+
+function AgentChat(props: Omit<AgentChatProps, "role"> & { role?: AgentChatProps["role"] }) {
+  return <AgentChatView {...props} role={props.role ?? "admin"} />;
+}
 
 const makeThread = (id = 4) => ({
   id,
@@ -361,6 +365,27 @@ describe("AgentChat", () => {
     expect(await screen.findByText("Respuesta")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Copiar mensaje" })).toHaveLength(2);
     expect(screen.getAllByRole("time")).toHaveLength(2);
+  });
+
+  it("renders role-authored human messages as outbound and agent messages as inbound", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({
+        thread: makeThread(),
+        messages: [
+          { id: 1, author: "tecnico", content: "Consulta técnica", status: "processed" },
+          { id: 2, author: "agent", content: "Respuesta", status: "processed" },
+        ],
+      }),
+    );
+
+    render(<AgentChat role="tecnico" threadId={4} />);
+
+    const human = await screen.findByLabelText("Mensaje de técnico");
+    expect(human).toHaveClass("ai-agent-grammar__bubble-row--outbound");
+    expect(within(human).getByText("Técnico")).toBeInTheDocument();
+    expect(screen.getByLabelText("Mensaje de agente")).not.toHaveClass(
+      "ai-agent-grammar__bubble-row--outbound",
+    );
   });
 
   it("auto-grows the composer and keeps Shift+Enter as a newline", async () => {
