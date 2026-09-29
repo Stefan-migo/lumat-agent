@@ -531,6 +531,28 @@ def test_migration_034_collision_premises_are_unreachable_in_legacy_schema(tmp_p
             conn.execute(memory, ("second", vector))
 
 
+def test_migration_034_rollback_precondition_fails_when_owners_share_a_slug(tmp_path):
+    """Evidence: 034's documented rollback requires no two owners to share a slug."""
+    with _scratch_migration_db(tmp_path, 33, 34) as (conn, apply_034, _):
+        owners = [conn.execute(
+            "INSERT INTO users (username, password_hash) VALUES (%s, 'test') RETURNING id",
+            (f"rollback-slug-owner-{i}",),
+        ).fetchone()[0] for i in range(2)]
+        vector = "[" + ",".join("0.0" for _ in range(384)) + "]"
+        result = apply_034()
+        assert result.returncode == 0, f"034 failed:\n{result.stdout}\n{result.stderr}"
+        for owner in owners:
+            conn.execute(
+                "INSERT INTO projects (slug, name, purpose, purpose_embedding, owner_id) "
+                "VALUES ('same-slug', 'p', 'p', %s::vector, %s)",
+                (vector, owner),
+            )
+        with pytest.raises(psycopg.errors.UniqueViolation):
+            conn.execute(
+                "CREATE UNIQUE INDEX uq_projects_normalized_slug ON projects (lower(btrim(slug)))"
+            )
+
+
 def test_migration_037_rejects_same_owner_duplicate_normalized_hash(tmp_path):
     with _scratch_migration_db(tmp_path, 36, 37) as (conn, apply_037, _):
         owners = [conn.execute(
