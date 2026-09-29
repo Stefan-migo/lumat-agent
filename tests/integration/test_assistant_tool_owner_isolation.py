@@ -129,3 +129,105 @@ def test_registry_scopes_projects_and_memory_to_authenticated_owner(fake_embedde
             ToolValidationError, match="owner-scoped tool requires the authenticated owner"
         ):
             execute_tool(session, "project.list", {})
+
+
+def test_two_users_with_same_slug_recall_only_their_private_memory_and_share_business_memory(fake_embedder):
+    with SessionLocal() as session:
+        user_a = User(username="same-slug-a", password_hash="test", role="admin")
+        user_b = User(username="same-slug-b", password_hash="test", role="admin")
+        stranger = User(username="same-slug-stranger", password_hash="test", role="admin")
+        session.add_all((user_a, user_b, stranger))
+        session.flush()
+        threads = {
+            user.id: InternalChatThread(user_id=user.id) for user in (user_a, user_b, stranger)
+        }
+        session.add_all(threads.values())
+        session.flush()
+        projects = [Project(
+            slug="identical-slug", name="Identical", purpose="Private project",
+            purpose_embedding=[0.0] * 384, owner_id=user.id,
+        ) for user in (user_a, user_b, stranger)]
+        session.add_all(projects)
+        session.flush()
+        assert {project.owner_id for project in session.scalars(
+            select(Project).where(Project.slug == "identical-slug")
+        )} == {user_a.id, user_b.id, stranger.id}
+
+        private_rows = {}
+        for user, content in ((user_a, "alpha private marker"), (user_b, "bravo private marker")):
+            authorization = agent_chat.projects.agent_context(
+                session, "identical-slug", owner_id=user.id
+            )
+            private_rows[user.id] = tukulpan.upsert(
+                session, authorization=authorization, proyecto="identical-slug", scope="agent",
+                entity_id="agent:identical-slug", topic_key="private", tipo=MemoryType.DISCOVERY,
+                titulo=content, contenido=content, visibility=MemoryVisibility.GLOBAL,
+            )
+        business = tukulpan.upsert(
+            session, proyecto="default", scope="customer", entity_id="customer:4242",
+            topic_key="shared-business", tipo=MemoryType.DISCOVERY, titulo="Shared business",
+            contenido="shared business marker", visibility=MemoryVisibility.THREAD,
+        )
+        session.flush()
+
+        assert user_a.role == "admin" and user_b.role == "admin"
+        # These cross-assertions ARE the admin non-override proof.
+        for user, own_content, other_user, other_content in (
+            (user_a, "alpha private marker", user_b, "bravo private marker"),
+            (user_b, "bravo private marker", user_a, "alpha private marker"),
+        ):
+            own_read = execute_tool(
+                session, "memory.read", {"scope": "own"}, trusted_thread_id=threads[user.id].id,
+                owner_id=user.id, proyecto="identical-slug",
+            )["result"]
+            assert private_rows[user.id].id in {row["id"] for row in own_read}
+            own_search = execute_tool(
+                session, "memory.search", {"scope": "own", "query": own_content},
+                trusted_thread_id=threads[user.id].id, owner_id=user.id, proyecto="identical-slug",
+            )["result"]
+            assert own_content in [row["contenido"] for row in own_search]
+            cross = execute_tool(
+                session, "memory.search", {"scope": "own", "query": other_content},
+                trusted_thread_id=threads[user.id].id, owner_id=user.id, proyecto="identical-slug",
+            )["result"]
+            # Similarity search may return the caller's own nearest memory; the invariant is
+            # that the other owner's row never appears.
+            assert private_rows[other_user.id].id not in {row["id"] for row in cross}
+
+            shared_read = execute_tool(
+                session, "memory.read", {"scope": "customer", "entity_id": "customer:4242"},
+                trusted_thread_id=threads[user.id].id, owner_id=user.id,
+            )["result"]
+            assert business.id in {row["id"] for row in shared_read}
+            shared_search = execute_tool(
+                session, "memory.search", {
+                    "scope": "customer", "entity_id": "customer:4242",
+                    "query": "shared business marker",
+                }, trusted_thread_id=threads[user.id].id, owner_id=user.id,
+            )["result"]
+            assert business.id in {row["id"] for row in shared_search}
+
+        admin_read = execute_tool(
+            session, "memory.read", {"scope": "own"}, trusted_thread_id=threads[stranger.id].id,
+            owner_id=stranger.id, proyecto="identical-slug",
+        )["result"]
+        assert admin_read == []
+        for row in private_rows.values():
+            admin_cross = execute_tool(
+                session, "memory.search", {"scope": "own", "query": row.contenido},
+                trusted_thread_id=threads[stranger.id].id, owner_id=stranger.id,
+                proyecto="identical-slug",
+            )["result"]
+            assert row.id not in {item["id"] for item in admin_cross}
+        no_project_read = execute_tool(
+            session, "memory.read", {"scope": "customer", "entity_id": "customer:4242"},
+            trusted_thread_id=threads[stranger.id].id, owner_id=stranger.id,
+        )["result"]
+        assert business.id in {row["id"] for row in no_project_read}
+        no_project_search = execute_tool(
+            session, "memory.search", {
+                "scope": "customer", "entity_id": "customer:4242",
+                "query": "shared business marker",
+            }, trusted_thread_id=threads[stranger.id].id, owner_id=stranger.id,
+        )["result"]
+        assert business.id in {row["id"] for row in no_project_search}
