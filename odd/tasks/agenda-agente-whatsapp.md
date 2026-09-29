@@ -93,8 +93,8 @@ consequences; configurable reminder lead time; two-way external calendar sync.
 17. **S4 — email fallback recipient** (owner, 2026-09-28): the fallback goes to the **customer's own
     email** (`Customer.email`, `app/models.py:232`), because the reminder is for the customer. If the
     ficha has no email, the operation ends `permanently_failed` with audit — no recipient is invented
-   and the team's `notify.owner_email` is NOT used (that is the emergency pattern, a different
-   purpose).
+    and the team's `notify.owner_email` is NOT used (that is the emergency pattern, a different
+    purpose).
 18. **S5 — follow-up channel** (owner, 2026-09-29): both channels with fallback — an approved WhatsApp
     template first, email as fallback. The template name is **configurable** through the settings KV,
     same pattern as decision 16: `notify.followup_template_name` (default `appointment_followup`) for
@@ -312,6 +312,13 @@ cd web && npm run build                      # the only frontend type check (tsc
   `automation.py`, and `templates.py`. The report is stale at `16ba9cbf`; directed path
   `close()` → `_send_appointment_reminder()` was not present. Graphify update was not run, per the
   task constraint.
+- Native review of the S5 slice: lineage `review-6ff12c716a939f8a`, risk `medium`, 1 lens
+  (`review-reliability`), candidate `sha256:7762844e…` (7 paths, 330 changed lines, correction budget
+  165), **findings NONE**, state `approved`, authority burned
+  (`gentle-ai.review-acknowledged/v1`, consumed revision `sha256:cb5be3de…`). The ODD budget check had
+  reported `review_due=false` (`under_budget`); the native STATUS preflighted the target as unreviewed
+  and ready, the owner granted consent, and the review approved. This receipt covers the frozen
+  candidate above; the later `docs(odd)` commit that records it changes no source byte.
 
 ## Progress log
 
