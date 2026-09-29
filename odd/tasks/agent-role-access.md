@@ -7,7 +7,7 @@ Base: `8f9d7a8e` (merge of PR #420, the `usuarios-aislamiento` closure record)
 Depends on: `usuarios-aislamiento` — **delivered and closed** (`odd/tasks/usuarios-aislamiento.md` `## Closure`)
 Source: `.rapsodia-code/handoffs/2026-09-29-agent-role-access.md`
 Delivery strategy: `ask-on-risk`
-Chain strategy: **pending owner confirmation before the first PR** (proposal: `stacked-to-main`, consistent with the previous unit)
+Chain strategy: **stacked-to-main** (owner-confirmed 2026-09-29)
 
 ## Objective
 
@@ -39,7 +39,7 @@ catalog — including `customers.search`, `conversations.list`, `kb.retrieve`, a
 | D3 (owner, 2026-09-29) | `tecnico` gets **zero** business-data reads. `appointments.upcoming` is scoped to the requesting technician. | A technician must not reach sensitive business information, and a global appointments tool would leak the whole agenda. | Give `tecnico` the global `appointments.upcoming`; this exposes every customer's visit. |
 | D4 (owner, 2026-09-29) | `admin` keeps the full catalog with one exception: no role, admin included, reads another user's agent memory. | Per-user privacy of the conversation with the agent is absolute. | Admin supervision access to another user's memory or threads. |
 | D5 (owner, 2026-09-29) | A chat thread may not be bound to the business-shared `default` namespace by a role that must not read business memory. | `default` is business-shared memory (`usuarios-aislamiento` D4); binding to it would bypass D3. | Leave the API open and rely on the UI not offering `default`. |
-| D6 (derived, pending confirmation) | `tecnico`'s private set is `memory.*`, `project.*`, `web.*`, and `assistant.capabilities`; that includes project reads and creation, which are required for `tecnico` to start a chat at all (see Verified facts). `appointments.upcoming` is granted to `tecnico` only in WU3, together with its scoping. | Without project list/create, `tecnico` cannot select a project and the chat cannot open; project namespaces are private, not business data. Withholding the global appointments tool until WU3 scopes it means no slice ever exposes it unscoped. | Grant only chat routes, which leaves `tecnico` unable to create a thread; or grant the unscoped appointments tool in WU1, which leaks the whole agenda for the window between WU2 and WU3. |
+| D6 (owner-confirmed, 2026-09-29) | `tecnico`'s private set is `memory.*`, `project.*`, `web.*`, and `assistant.capabilities`; that includes owner-scoped project reads and creation. `appointments.upcoming` is granted to `tecnico` only in WU3, together with its scoping. | Without project list/create, `tecnico` cannot select a project and the chat cannot open; project namespaces are private, not business data. Withholding the global appointments tool until WU3 scopes it means no slice ever exposes it unscoped. | Grant only chat routes, which leaves `tecnico` unable to create a thread; or grant the unscoped appointments tool in WU1, which leaks the whole agenda for the window between WU2 and WU3. |
 | D7 | `automation.create_rule` stays `admin`-only. | Its panel surface is already admin-gated, it is unreachable by a non-admin through any current request path, and D2 excludes privileged writing from `operador`. | Grant it to `operador` as a non-privileged write. |
 | D8 | The role-to-tool map is declared explicitly per tool, not inferred from name prefixes. | Replaces the advisory R2-002 name-prefix family inference as the authorization source, so a future tool rename cannot silently change coverage. | Extend the existing `project.`/`memory.` prefix inference with more prefixes. |
 
@@ -83,12 +83,14 @@ Edges consulted: `chat.py` -> `deps.py` -> `User`; `assistant/nodes.py` -> `regi
 - An explicit role-to-tool authorization map covering all 24 catalog tools.
 - Enforcement of that map at the tool execution site and at all three execution call sites.
 - Role-aware panel chat route authorization for the 15 chat routes.
+- All five planning-session routes are open to every panel role; `open_planning_session`'s implicit `default` binding is changed in WU2 to caller-selected project binding (or a role-denied 400).
 - Panel project read and creation access for `tecnico`, so the chat project selection is reachable.
 - Role-aware rejection of binding a chat thread to the business-shared `default` namespace.
 - Technician-scoped `appointments.upcoming`.
 - Frontend and backend author identity driven by the authenticated role, not a hardcoded `admin`.
 - Navigation and dashboard gating per role.
 - Route-level, tool-level, and frontend tests proving both the allowed behavior and the denial of privileged tools.
+- Delta amendments to `internal-agent-chat` and `assistant-operations` specs are included in WU2 because their live contracts contradict the approved role boundary.
 
 **Out of scope**
 
@@ -117,7 +119,7 @@ Estimated authored size: 180–260 changed lines.
 
 ### WU2 — chat routes, project access for tecnico, and the default-namespace guard
 
-- **U2.1** Replace `require_admin_json` with a role-aware chat guard on the 15 routes, preserving JSON 403 semantics and the existing admin-only behavior for anything that must stay admin-only.
+- **U2.1** Replace `require_admin_json` with a role-aware chat guard on all 15 routes, including all five planning-session routes; every panel role is allowed.
 - **U2.2** Grant `tecnico` read and create access to its own projects so the chat project picker is reachable, without weakening owner scoping for any role.
 - **U2.3** Reject binding a chat thread to the business-shared `default` namespace for roles the map excludes, and validate that the requested project belongs to the caller.
 - **U2.4** Tests: a route allow/deny matrix per role, the `default`-binding rejection, and cross-user project rejection.
@@ -175,7 +177,7 @@ Backend runner `uv run pytest tests/`; web runner `cd web && npm test`.
 - **R2-002** (advisory, from WU2 of the previous unit): tool families were inferred from name prefixes. D8 closes the authorization concern; the separate concern of renaming a tool that a *delegation scope* declares remains a registry-validation matter.
 - **Semantic-merge risk** across a four-slice chain: `registry.py`, `nodes.py`, `chat.py`, `projects.py`, `PanelShell.tsx`, and `AgentChat.tsx` are touched by more than one slice type and by other in-flight work. Merge the current base into a branch before pushing, and run the frontend suite plus `npm run build` plus the backend suite on the merged tree.
 - **Review budget:** the forecast exceeds the ~400-line budget; the chain split is required, not optional.
-- **D6 is derived, not owner-confirmed.** It should be confirmed before WU2 grants `tecnico` project access.
+- **D6 was owner-confirmed 2026-09-29.** WU2 grants `tecnico` owner-scoped project access.
 - **Planner/catalog role-coherence follow-up:** `assistant.capabilities` (`registry.py:532-544`) and the planner catalog (`nodes.py:518`, `:620`) are built from `tools_whitelist` only, not filtered by role. A non-admin planner may therefore be offered a tool its role cannot execute; execution rejects it at the authorization gate. This is a coherence/UX follow-up, not a security defect, because execution remains the boundary. Fold it into whichever later slice first makes the gap visible; do not implement it in WU1.
 - No push, PR, merge, or deploy happens without separate explicit owner authorization.
 
@@ -189,10 +191,15 @@ Backend runner `uv run pytest tests/`; web runner `cd web && npm test`.
 - [x] WU1.3 — passed `actor_role` from delegation, main graph execution, and SDB execution into the gate; declared `actor_role` in `AssistantState` so LangGraph retains it.
 - [x] WU1.4 — added role/tool matrix, completeness, fail-closed, execution-site, and delegated-scope tests; updated existing execution tests to declare their role.
 - WU1 authored size: 343 changed lines (additions plus deletions; estimate: 180–260).
-- [ ] WU2 — chat routes, `tecnico` project access, and the `default`-namespace guard.
+- [x] U2.1 — role-aware guard applied to all 15 chat routes. Evidence: `test_chat_and_project_route_authorization_matrix` checks route access for every role and unauthenticated JSON 401 responses.
+- [x] U2.2 — project list/detail/create now admit `tecnico` without altering owner filters. Evidence: technician-owned create/list coverage and existing owner-isolation tests.
+- [x] U2.3 — reject technician binding to `default`, pass optional project through planning creation, preserve owner validation. Evidence: default rejection/no persistence, planning own-project and cross-owner rejection tests.
+- [x] U2.4 — route/tool/declaration matrix coverage. Evidence: route authorization test, guard role completeness test, and business-memory/tool declaration coherence test.
+- [x] WU2 — chat routes, `tecnico` project access, and the `default`-namespace guard. Evidence: role-aware guard + 15 route dependencies; three project dependencies; route and namespace tests; updated live specs.
+- WU2 authored size: 316 changed lines (additions plus deletions).
 - [ ] WU3 — technician-scoped upcoming appointments.
 - [ ] WU4 — real identity in navigation, dashboard, and message author.
 
 ## Next step
 
-Confirm D6 and the chain strategy, then start WU1 with a RED test for the role-to-tool map.
+WU2 is implemented and verified in its feature worktree; proceed to WU3 after review.
