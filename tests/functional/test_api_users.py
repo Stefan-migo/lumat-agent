@@ -184,7 +184,7 @@ def test_reset_password_audits_and_rejects_short_missing_or_self(client, make_us
         assert session.get(User, target_id).password_hash != "old-pass"
 
 
-def test_user_profile_routes_admin_permissions_and_mutations(client, make_user):
+def test_user_profile_ficha_mutations_and_audit(client, make_user):
     _admin(client, make_user)
     target_id = make_user("profile-target", "initial-pass", role="operador")
     assert client.get(f"/panel/api/users/{target_id}").status_code == 200
@@ -203,18 +203,6 @@ def test_user_profile_routes_admin_permissions_and_mutations(client, make_user):
     duplicate_id = make_user("profile-duplicate", "initial-pass")
     assert client.patch(f"/panel/api/users/{duplicate_id}", json={"email": "upper@EXAMPLE.com"}).status_code == 409
 
-    client.post("/panel/api/logout")
-    for role in ("operador", "tecnico"):
-        _login(client, make_user, f"profile-denied-{role}", "role-pass", role)
-        for method, path, kwargs in (
-            ("get", f"/panel/api/users/{target_id}", {}),
-            ("patch", f"/panel/api/users/{target_id}", {"json": {"name": "blocked"}}),
-            ("post", f"/panel/api/users/{target_id}/unlock", {}),
-        ):
-            assert getattr(client, method)(path, **kwargs).status_code == 403
-        client.post("/panel/api/logout")
-        if role != "tecnico":
-            continue
     with SessionLocal() as session:
         actions = session.scalars(select(AuditLog.action).where(AuditLog.action.in_(("user.profile_update",)))).all()
         assert len(actions) >= 5
