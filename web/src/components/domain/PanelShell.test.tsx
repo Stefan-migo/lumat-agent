@@ -1,17 +1,135 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PanelShell } from "./PanelShell";
+import { parsePanelPath } from "./panelRoutes";
 import type { User } from "../../types";
 
 const admin: User = { username: "ana", role: "admin" };
 const operador: User = { username: "vero", role: "operador" };
 
+function mockDialogMethods() {
+  const showModal = vi.fn(function (this: HTMLDialogElement) { this.setAttribute("open", ""); });
+  const close = vi.fn(function (this: HTMLDialogElement) { this.removeAttribute("open"); });
+  Object.defineProperties(HTMLDialogElement.prototype, {
+    showModal: { configurable: true, value: showModal },
+    close: { configurable: true, value: close },
+  });
+  return { showModal, close, restore: () => {
+    delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal;
+    delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).close;
+  } };
+}
+
 function sidebar(container: HTMLElement) {
   return within(container.querySelector(".panel-shell__sidebar") as HTMLElement);
 }
 
+afterEach(() => {
+  delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal;
+  delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).close;
+});
+
 describe("PanelShell rail contract (2C-1)", () => {
+  it("falls back malformed routes and limits mobile tabs to existing destinations", () => {
+    expect(parsePanelPath("/panel/app/%E0%A4%A")).toEqual({ view: "dashboard" });
+    expect(parsePanelPath("/panel/app/unknown")).toEqual({ view: "dashboard" });
+    const { container } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    const tabs = within(container.querySelector(".panel-shell__footer-nav") as HTMLElement);
+    expect(tabs.getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Panel", "Conversaciones", "Asistente", "Agenda", "Clientes",
+    ]);
+  });
+
+  it("keeps administrator destinations out of every operator navigation surface", async () => {
+    const user = userEvent.setup();
+    const { restore } = mockDialogMethods();
+    const { container } = render(<PanelShell user={operador}><p>Contenido</p></PanelShell>);
+    const restricted = ["Base de Conocimientos", "Automatizaciones", "Configuración", "Usuarios"];
+    const tabs = within(container.querySelector(".panel-shell__footer-nav") as HTMLElement);
+    for (const label of restricted) expect(tabs.queryByRole("button", { name: label })).not.toBeInTheDocument();
+    const menu = container.querySelector(".panel-shell__menu-button") as HTMLButtonElement;
+    await user.click(menu);
+    const drawer = screen.getByRole("dialog", { name: "Navegación" });
+    for (const label of restricted) expect(within(drawer).queryByRole("button", { name: label })).not.toBeInTheDocument();
+    await user.click(within(drawer).getByRole("button", { name: "Cerrar menú de navegación" }));
+    const rail = sidebar(container);
+    await user.type(rail.getByRole("searchbox", { name: "Buscar en el menú" }), "usuarios");
+    expect(rail.queryByRole("button", { name: "Usuarios" })).not.toBeInTheDocument();
+    restore();
+  });
+
+  it("opens a native modal dialog, contains keyboard traversal, and restores trigger focus on Escape", async () => {
+    const user = userEvent.setup();
+    const { showModal, close, restore } = mockDialogMethods();
+    render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    const trigger = document.querySelector(".panel-shell__menu-button") as HTMLButtonElement;
+    await user.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "Navegación" }) as HTMLDialogElement;
+    expect(showModal).toHaveBeenCalledOnce();
+    expect(dialog).toHaveAttribute("open");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    const closeButton = within(dialog).getByRole("button", { name: "Cerrar menú de navegación" });
+    expect(closeButton).toHaveFocus();
+    await user.tab();
+    expect(within(dialog).getByRole("button", { name: "Panel unificado" })).toHaveFocus();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent(dialog, new Event("cancel", { cancelable: true }));
+    expect(close).toHaveBeenCalledOnce();
+    await waitFor(() => expect(trigger).toHaveFocus());
+    restore();
+  });
+
+  it("preserves body overflow and closes/unlocks/restores focus when resized to desktop", async () => {
+    const user = userEvent.setup();
+    const { restore } = mockDialogMethods();
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 768 });
+    document.body.style.overflow = "clip";
+    const { unmount } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    const trigger = document.querySelector(".panel-shell__menu-button") as HTMLButtonElement;
+    await user.click(trigger);
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(document.querySelector(".panel-shell__content-area")).toHaveAttribute("inert");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 640 });
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(screen.getByRole("dialog", { name: "Navegación" })).toHaveAttribute("open");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+    act(() => window.dispatchEvent(new Event("resize")));
+    expect(screen.queryByRole("dialog", { name: "Navegación" })).not.toBeInTheDocument();
+    expect(document.body.style.overflow).toBe("clip");
+    expect(document.querySelector(".panel-shell__content-area")).not.toHaveAttribute("inert");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Colapsar panel lateral" })).toHaveFocus());
+    await user.click(trigger);
+    unmount();
+    expect(document.body.style.overflow).toBe("clip");
+    document.body.style.overflow = "";
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
+    restore();
+  });
+
+  it("calls navigation once from the drawer and closes the modal", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    const { restore } = mockDialogMethods();
+    render(<PanelShell user={admin} onNavigate={onNavigate}><p>Contenido</p></PanelShell>);
+    await user.click(document.querySelector(".panel-shell__menu-button") as HTMLButtonElement);
+    await user.click(within(screen.getByRole("dialog", { name: "Navegación" })).getByRole("button", { name: "Agenda" }));
+    expect(onNavigate).toHaveBeenCalledExactlyOnceWith("agenda");
+    expect(screen.queryByRole("dialog", { name: "Navegación" })).not.toBeInTheDocument();
+    restore();
+  });
+
+  it("keeps notification and account accessible header actions functional", async () => {
+    const user = userEvent.setup();
+    render(<PanelShell user={admin} notificationState={{ status: "ready", unread: 2 }}><p>Contenido</p></PanelShell>);
+    await user.click(screen.getByRole("button", { name: "Notificaciones (2 sin leer)" }));
+    expect(screen.getByRole("dialog", { name: "Notificaciones" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cerrar notificaciones" }));
+    await user.click(screen.getByRole("button", { name: "Abrir menú de usuario" }));
+    expect(screen.getByRole("menu", { name: "Cuenta de ana" })).toBeInTheDocument();
+  });
+
   it("filters role-authorized navigation in named groups from the sidebar search", async () => {
     const user = userEvent.setup();
     const { container } = render(<PanelShell user={operador}><p>Contenido</p></PanelShell>);
@@ -52,7 +170,7 @@ describe("PanelShell rail contract (2C-1)", () => {
       expect(rail.queryByRole("button", { name: label })).not.toBeInTheDocument();
     }
     const footer = within(container.querySelector(".panel-shell__footer-nav") as HTMLElement);
-    expect(footer.getByRole("button", { name: "Agente Lumat" })).toBeInTheDocument();
+    expect(footer.getByRole("button", { name: "Asistente" })).toBeInTheDocument();
   });
 
   it("enters focus mode from the keyboard, traps focus, and restores the trigger on Escape", async () => {
