@@ -3,7 +3,6 @@ import type { CSSProperties, ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRight,
-  Briefcase,
   Calendar,
   ChartColumn,
   Clock,
@@ -24,14 +23,13 @@ import { StateMessage } from "../shared/StateMessage";
 import { StatCard } from "../shared/StatCard";
 import { Icon } from "../primitives/Icon";
 
-type IconName = "calendar" | "clock" | "message" | "users" | "case" | "agent" | "zap" | "alert" | "inbox" | "arrow" | "chart" | "tag";
+type IconName = "calendar" | "clock" | "message" | "users" | "agent" | "zap" | "alert" | "inbox" | "arrow" | "chart" | "tag";
 
 const ICONS: Record<IconName, LucideIcon> = {
   calendar: Calendar,
   clock: Clock,
   message: MessageSquare,
   users: Users,
-  case: Briefcase,
   agent: Bot,
   zap: Zap,
   alert: AlertTriangle,
@@ -128,15 +126,9 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
   const today = data?.today && Array.isArray(data.today.appointments_today) ? data.today : emptyToday;
   const hasPartialError = data?.todayError || data?.trendError;
   const navigate = (view: PanelView) => onNavigate?.(view);
-  const cards = ["Conversaciones", "Clientes", "Agenda", "Casos"] as const;
-  const viewFor = { Conversaciones: "conversations", Clientes: "clients", Agenda: "agenda", Casos: "cases" } as const;
-  const iconFor: Record<string, IconName> = { Conversaciones: "message", Clientes: "users", Agenda: "calendar", Casos: "case" };
-  const accents: Record<string, string> = {
-    Conversaciones: "var(--primary-700)",
-    Clientes: "var(--info)",
-    Agenda: "color-mix(in srgb, var(--brand-cyan) 55%, var(--primary-900))",
-    Casos: "var(--warning)",
-  };
+  const cards = ["Conversaciones", "Clientes", "Agenda"] as const;
+  const viewFor = { Conversaciones: "conversations", Clientes: "clients", Agenda: "agenda" } as const;
+  const iconFor: Record<(typeof cards)[number], IconName> = { Conversaciones: "message", Clientes: "users", Agenda: "calendar" };
   const bars = data?.trend ?? [];
   const max = Math.max(...bars.map((bar) => bar.count), 1);
   const chartTotal = bars.reduce((sum, bar) => sum + bar.count, 0);
@@ -197,13 +189,13 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
             <span className="dashboard__card__hint">Abrir <Icon icon={ICONS.arrow} size="sm" /></span>
           </button>
           {cards.map((label) => (
-            <button className="dashboard__card" type="button" key={label} onClick={() => navigate(viewFor[label])} aria-label={`Abrir ${label}`} style={{ "--bent-accent": accents[label] } as CSSProperties}>
+            <button className="dashboard__card" type="button" key={label} onClick={() => navigate(viewFor[label])} aria-label={`Abrir ${label}`}>
               <span className="dashboard__card__icon"><Icon icon={ICONS[iconFor[label]]} size="md" /></span>
               <span className="dashboard__card__label">{label}</span>
               <span className="dashboard__card__hint">Abrir <Icon icon={ICONS.arrow} size="sm" /></span>
             </button>
           ))}
-          {role === "admin" ? <button className="dashboard__card dashboard__card--wide" type="button" onClick={() => navigate("automation-rules")} aria-label="Abrir Automatizaciones" style={{ "--bent-accent": "var(--brand-graphite)" } as CSSProperties}>
+          {role === "admin" ? <button className="dashboard__card dashboard__card--wide" type="button" onClick={() => navigate("automation-rules")} aria-label="Abrir Automatizaciones">
             <span className="dashboard__card__icon"><Icon icon={ICONS.zap} size="md" /></span>
             <span className="dashboard__card__label">Automatizaciones</span>
             <span className="dashboard__card__hint">Abrir <Icon icon={ICONS.arrow} size="sm" /></span>

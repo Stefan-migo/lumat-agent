@@ -213,10 +213,7 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
-  it.each([
-    ['shortcut card', async (user: ReturnType<typeof userEvent.setup>) => user.click(screen.getByRole('button', { name: 'Abrir Casos' }))],
-    ['urgent case row', async (user: ReturnType<typeof userEvent.setup>) => user.click(screen.getByRole('button', { name: 'Lucía' }))],
-  ])('routes the dashboard %s to the rendered Casos queue', async (_source, activate) => {
+  it('keeps urgent cases in Hoy and routes them to the Casos queue without a dashboard shortcut', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const path = new URL(String(input), 'http://localhost').pathname;
       if (path === '/panel/api/kpis') return new Response(JSON.stringify({ contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-09-27' }), { status: 200 });
@@ -226,8 +223,9 @@ describe('AppShell (T6.4)', () => {
     });
     const user = userEvent.setup();
     render(<AppShell user={operador} />);
-    await screen.findByRole('button', { name: _source === 'shortcut card' ? 'Abrir Casos' : 'Lucía' });
-    await activate(user);
+    await screen.findByRole('button', { name: 'Lucía' });
+    expect(screen.queryByRole('button', { name: 'Abrir Casos' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Lucía' }));
     expect(screen.getByRole('heading', { name: 'Conversaciones', level: 1 })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /casos/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByLabelText('Tono')).not.toBeInTheDocument();
