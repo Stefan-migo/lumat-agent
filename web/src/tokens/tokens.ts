@@ -19,8 +19,8 @@ export const spacing: Record<number, string> = {
 export const radius: Record<'sm' | 'md' | 'lg' | 'xl' | 'pill', string> = {
   sm: '6px',
   md: '8px',
-  lg: '12px',
-  xl: '16px',
+  lg: '10px',
+  xl: '14px',
   pill: '9999px',
 };
 
