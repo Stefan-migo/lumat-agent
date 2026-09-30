@@ -37,7 +37,9 @@ describe("PanelShell rail contract (2C-1)", () => {
     const { container } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
     const tabs = within(container.querySelector(".panel-shell__footer-nav") as HTMLElement);
     expect(tabs.getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual([
-      "Panel", "Conversaciones", "Asistente", "Agenda", "Clientes",
+      // The mobile tab uses the short display label from the reference; the destination keeps its canonical
+      // name in NAVIGATION, which is what the sidebar, the drawer and the breadcrumb render.
+      "Panel", "Chats", "Asistente", "Agenda", "Clientes",
     ]);
   });
 

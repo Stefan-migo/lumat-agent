@@ -494,7 +494,7 @@ describe('AppShell — agent shell grammar', () => {
     const { container, rerender } = render(<AppShell user={admin} />);
     const footer = within(container.querySelector('.panel-shell__footer-nav') as HTMLElement);
     expect(footer.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
-      'Panel', 'Conversaciones', 'Asistente', 'Agenda', 'Clientes',
+      'Panel', 'Chats', 'Asistente', 'Agenda', 'Clientes',
     ]);
     expect(footer.getByRole('button', { name: 'Panel' })).toHaveAttribute('aria-current', 'page');
     expect(footer.getByRole('button', { name: 'Asistente' })).toHaveClass('panel-shell__footer-nav--primary');
@@ -506,7 +506,7 @@ describe('AppShell — agent shell grammar', () => {
     rerender(<AppShell user={operador} />);
     expect(within(container.querySelector('.panel-shell__footer-nav') as HTMLElement)
       .getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
-        'Panel', 'Conversaciones', 'Asistente', 'Agenda', 'Clientes',
+        'Panel', 'Chats', 'Asistente', 'Agenda', 'Clientes',
       ]);
   });
 

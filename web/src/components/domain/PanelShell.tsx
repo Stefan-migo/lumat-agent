@@ -462,9 +462,11 @@ export function PanelShell({
            {children}
         </div>
        </div>
+        {/* Mobile tabs use short display labels so all five fit without clipping. The destination itself keeps its
+            canonical label in NAVIGATION, which is what the sidebar, the drawer and the breadcrumb render. */}
         <nav className="panel-shell__footer-nav" aria-label="Navegación inferior">
           {(["dashboard", "conversations", "chat", "agenda", "clients"] as PanelView[]).map((view) => {
-            const item = view === "dashboard" ? { label: "Panel", icon: PanelLeft } : view === "chat" ? { label: "Asistente", icon: Bot } : view === "conversations" ? { label: "Conversaciones", icon: MessageSquare } : view === "agenda" ? { label: "Agenda", icon: Calendar } : { label: "Clientes", icon: Users };
+            const item = view === "dashboard" ? { label: "Panel", icon: PanelLeft } : view === "chat" ? { label: "Asistente", icon: Bot } : view === "conversations" ? { label: "Chats", icon: MessageSquare } : view === "agenda" ? { label: "Agenda", icon: Calendar } : { label: "Clientes", icon: Users };
             return <button key={view} type="button" className={view === "chat" ? "panel-shell__footer-nav--primary" : undefined} aria-current={currentView === view ? "page" : undefined} aria-label={item.label} onClick={() => handleNavigation(view)}><Icon icon={item.icon} /><span>{item.label}</span></button>;
          })}
        </nav>

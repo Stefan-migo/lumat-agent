@@ -91,7 +91,7 @@ collapse behaviour, the desktop expanded section separators (owner accepted as-i
   with a single separator line. Removes problem 5. Must not change the expanded named separators.
 - [ ] **S5 — search affordance in compact modes.** Icon-only control styled like the other rail icons (no button frame),
   reachable and named, per owner instruction. Removes problem 4.
-- [ ] **S6 — mobile display label.** Mobile bottom tab renders a short display label so all five fit without clipping;
+- [x] **S6 — mobile display label.** Mobile bottom tab renders a short display label so all five fit without clipping;
   sidebar and drawer keep the canonical `NAVIGATION` label. Removes problem 8. Owner decision; canonical line noted above.
 - [ ] **S7 — sidebar footer.** Remove the visible "Cerrar sesión" button; expose logout from a footer overflow menu
   (reusing the existing account-menu treatment) with focus return to the trigger. Removes problem 6.
@@ -224,3 +224,17 @@ Rendered verification (fresh `build-storybook`, Chrome):
 | tablet rail 768 | `1px` + 8px padding on groups 2 and 3 | none | 900 of 900 |
 | desktop collapsed 1440 | `1px` + 8px padding on groups 2 and 3 | none | 900 of 900 |
 | desktop expanded 1440 | **none — unchanged** (the named separators the owner accepted stay as they are) | — | 900 of 900 |
+
+**S6 — mobile display label. DONE.**
+Solution: the mobile tab bar now renders "Chats" for the conversations destination, so all five labels fit. The visible text
+and the accessible name are the same string, which keeps WCAG 2.5.3 (Label in Name) satisfied; naming them differently would
+have broken it. The destination keeps its canonical `NAVIGATION` label, which is what the sidebar, the drawer and the
+breadcrumb render, so the destination set is unchanged. This is the owner decision recorded above and it deliberately
+diverges from the literal DS-SHELL sentence that names the five destinations "Panel, Conversaciones, Asistente, Agenda,
+Clientes" — that sentence is about the destination set, and the reference does exactly this. Recorded here rather than
+silently amended.
+Tests updated: `PanelShell.test.tsx`, `AppShell.test.tsx` (two footer-nav assertions). The sidebar and drawer assertions were
+left alone because those surfaces keep the canonical label.
+Checks: `npm run build` OK. Affected test files → 77 tests passed.
+Rendered verification at 390 (Chrome): Panel 31px, **Chats 33px**, Asistente 53px, Agenda 44px, Clientes 46px, none clipped.
+Before: "Conversaciones" measured a 68px span against 91px of content, so it clipped to "Conversa…".
