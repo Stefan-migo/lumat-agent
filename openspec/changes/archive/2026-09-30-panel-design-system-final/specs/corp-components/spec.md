@@ -1,5 +1,11 @@
 # Delta for corp-components
 
+## RENAMED Requirements
+
+### Requirement: CORP-DIALOG-4 — No Token Value Changes → CORP-DIALOG-4 — No Unapproved Token Value Changes
+
+(Reason: the requirement now scopes the token-value freeze to the approved palette revision instead of a blanket prohibition.)
+
 ## MODIFIED Requirements
 
 ### Requirement: CORP-TABLE-1 — Table Contract Alignment

@@ -1,5 +1,11 @@
 # Delta for panel-design-system
 
+## RENAMED Requirements
+
+### Requirement: DS-TKN-2 — Additive-Only Token Evolution → DS-TKN-2 — Approved Palette Revision and Token Integrity
+
+(Reason: the requirement now governs the approved palette revision, narrowly superseding the former additive-only byte-identical ban.)
+
 ## MODIFIED Requirements
 
 ### Requirement: DS-TKN-2 — Approved Palette Revision and Token Integrity
@@ -22,7 +28,7 @@ A specifically approved palette revision MAY change or remove prior color-token 
 - WHEN alias resolution and affected foreground/background and boundary pairs are checked
 - THEN aliases resolve to canonical tokens without raw values, and every affected pair has measured applicable WCAG 2.2 AA evidence
 
-### Requirement: DS-TKN-7 — Elevation Tokens
+### Requirement: DS-TKN-7 — Elevation Tokens (PDW-TKN-3)
 
 The design system MUST retain `--shadow-1`, `--shadow-2`, and `--shadow-3` tokens, with `--shadow-3` available for overlays/drawers. Cards MUST carry no material elevation shadow; `--shadow-3` MUST remain available for overlay, drawer, and dialog affordance.
 (Previously: `--shadow-3` was added for overlays/drawers while the first two values remained unchanged.)
@@ -42,7 +48,7 @@ The design system MUST retain `--shadow-1`, `--shadow-2`, and `--shadow-3` token
 - WHEN overlay elevation is specified
 - THEN `--shadow-3` remains available for affordance
 
-### Requirement: DS-TKN-8 — Drift Guard Stays Green
+### Requirement: DS-TKN-8 — Drift Guard Stays Green (PDW-TKN-2)
 
 `web/src/tokens/tokens.test.ts` MUST assert the exact locked palette roles in DS-TKN-13, resolved non-white surfaces, `tokens.ts` mirror equality, alias resolution/integrity, contrast measurements for affected pairs, and the no-hard-coded-hex walk. It MUST retain unchanged-value checks for non-palette tokens and MUST NOT preserve obsolete old-palette assertions as acceptance criteria.
 (Previously: the guard pinned the prior palette and required all pre-existing assertions to remain.)
@@ -117,7 +123,7 @@ Desktop sidebar navigation paint MUST remain within its allocated expanded or co
 - WHEN a long navigation label is hovered or marked current
 - THEN its visual state remains contained and the navigation remains usable
 
-### Requirement: DS-SHELL-3 — Tokenized Shell Styles Without Injection
+### Requirement: DS-SHELL-3 — Tokenized Shell Styles Without Injection (Slice 2)
 
 Shell layout, navigation, drawer, focus, motion, and responsive styles MUST consume semantic design tokens or `--corp-*` aliases, MUST contain no hard-coded hex values, and MUST use the shared tokenized stylesheet boundary. PanelShell MUST NOT inject component-owned `<style>` content. The shell MUST satisfy DS-SHELL-8 and DS-RESP-1; this requirement does not freeze prior shell appearance or responsive behavior.
 (Previously: existing shell visual and responsive behavior was required to remain unchanged.)
