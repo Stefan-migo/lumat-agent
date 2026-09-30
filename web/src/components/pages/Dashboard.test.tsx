@@ -45,11 +45,13 @@ describe("Dashboard operational surface", () => {
   it("splits bento navigation by role and renders the complete period block", () => {
     const { rerender } = render(<Dashboard data={data} state="ready" role="admin" />);
     expect(screen.getByText("Agente Lumat")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Abrir Casos" })).not.toBeInTheDocument();
     expect(screen.getByText("Automatizaciones")).toBeInTheDocument();
     expect(screen.getByText("Contactos")).toBeInTheDocument();
     expect(screen.getByText("Nuevos clientes")).toBeInTheDocument();
     expect(screen.getByText("calefont · 3")).toBeInTheDocument();
     expect(screen.getByLabelText("Tendencia de contactos de 7 días")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lucía" })).toHaveTextContent("Urgente");
 
     rerender(<Dashboard data={data} state="ready" role="operador" />);
     expect(screen.getByText("Agente Lumat")).toBeInTheDocument();
