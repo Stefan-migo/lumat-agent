@@ -1063,11 +1063,15 @@
 .panel-shell__mobile-brand .panel-shell__brand-mark { display: none; }
 .panel-shell__brand-image,
 .panel-shell__brand-mark {
-  display: block;
   width: 100%;
   object-fit: contain;
   object-position: center;
 }
+/* The expanded sidebar shows the wordmark lockup only; the mark is the compact brand and is
+   revealed again by the tablet rail and by the collapsed sidebar below. Rendering both left
+   the mark duplicated underneath the lockup (S1). */
+.panel-shell__brand-image { display: block; }
+.panel-shell__brand-mark { display: none; }
 .panel-shell__brand-image {
   max-width: var(--brand-logo-max-width);
   max-height: var(--brand-logo-max-height);
@@ -1601,6 +1605,7 @@
     padding: var(--space-5) var(--space-2);
   }
   .panel-shell--collapsed .panel-shell__brand-mark {
+    display: block;
     width: var(--brand-mark-size);
   }
   .panel-shell--collapsed .panel-shell__navigation {
