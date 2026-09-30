@@ -87,8 +87,8 @@ collapse behaviour, the desktop expanded section separators (owner accepted as-i
 - [x] **S3 — compact rail is icon-only (BLOCKER).** Visually hide `.panel-shell__nav-label` whenever the rail is compact
   (desktop collapsed **and** tablet tier), keeping the accessible name; assert no vertical text and no viewport overflow.
   Removes problem 1.
-- [ ] **S4 — one divider between groups in compact modes.** Keep the expanded grouping, replace reliance on hidden titles with
-  a single separator line. Removes problem 5. Must not change the expanded named separators.
+- [x] **S4 — one divider between groups in compact modes.** Keep the expanded grouping, replace reliance on hidden titles
+  with a single separator line. Removes problem 5. Must not change the expanded named separators.
 - [ ] **S5 — search affordance in compact modes.** Icon-only control styled like the other rail icons (no button frame),
   reachable and named, per owner instruction. Removes problem 4.
 - [ ] **S6 — mobile display label.** Mobile bottom tab renders a short display label so all five fit without clipping;
@@ -210,3 +210,17 @@ Rendered verification (fresh `build-storybook`, Chrome):
 Flag for the owner: the toggle box is 32px. DS-SHELL-1 asks for an "adequately sized hit target" and its previous revision
 required ≥40px, which the current text relaxed. WCAG 2.5.8 AA needs 24px, so 32px passes, but it is below the 44px house
 convention used elsewhere in the shell. One token raises it if wanted.
+
+**S4 — one divider between groups in compact modes. DONE.**
+Solution: the `+ .panel-shell__navigation-group` rule in the tablet block and in the collapsed-desktop block gained
+`padding-top: var(--space-2)` and `border-top: 1px solid color-mix(in srgb, var(--corp-primary-fg) 25%, transparent)`,
+the same hairline treatment the sidebar edge and the drawer heading already use, so the divider is a token, not a new value.
+The first group keeps no divider.
+Checks: `npm run build` OK. Affected test files → 77 tests passed.
+Rendered verification (fresh `build-storybook`, Chrome):
+
+| State | Group dividers | First group | `railScrollHeight` |
+| --- | --- | --- | --- |
+| tablet rail 768 | `1px` + 8px padding on groups 2 and 3 | none | 900 of 900 |
+| desktop collapsed 1440 | `1px` + 8px padding on groups 2 and 3 | none | 900 of 900 |
+| desktop expanded 1440 | **none — unchanged** (the named separators the owner accepted stay as they are) | — | 900 of 900 |
