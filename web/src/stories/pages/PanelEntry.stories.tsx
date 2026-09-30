@@ -2,6 +2,10 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { DashboardOverview } from "./Dashboard.stories";
 import { PanelShell } from "../../components/domain/PanelShell";
 
+/** The footer account options only render when a logout handler exists, so stories supply one: without it the
+ *  prop-dependent chrome is invisible to the rendered review. */
+const onLogout = () => undefined;
+
 const meta = {
   title: "pages/Panel Entry",
   component: PanelShell,
@@ -25,6 +29,7 @@ export const DesktopAdmin: Story = {
     user: { username: "ana", role: "admin" },
     currentView: "dashboard",
     children: <DashboardOverview />,
+    onLogout,
   },
   parameters: { viewport: { width: 1280, height: 900 } },
 };
@@ -61,6 +66,7 @@ export const TabletDrawerOpen: Story = {
     currentView: "dashboard",
     drawerInitiallyOpen: true,
     children: <DashboardOverview />,
+    onLogout,
   },
   parameters: { viewport: { width: 768, height: 900 } },
 };
@@ -76,6 +82,7 @@ export const MobileDrawerOpen: Story = {
     currentView: "dashboard",
     drawerInitiallyOpen: true,
     children: <DashboardOverview />,
+    onLogout,
   },
   parameters: { viewport: { width: 390, height: 844 } },
 };

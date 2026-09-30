@@ -91,9 +91,9 @@ collapse behaviour, the desktop expanded section separators (owner accepted as-i
   with a single separator line. Removes problem 5. Must not change the expanded named separators.
 - [ ] **S5 — search affordance in compact modes.** Icon-only control styled like the other rail icons (no button frame),
   reachable and named, per owner instruction. Removes problem 4.
-- [ ] **S6 — mobile display label.** Mobile bottom tab renders a short display label so all five fit without clipping;
+- [x] **S6 — mobile display label.** Mobile bottom tab renders a short display label so all five fit without clipping;
   sidebar and drawer keep the canonical `NAVIGATION` label. Removes problem 8. Owner decision; canonical line noted above.
-- [ ] **S7 — sidebar footer.** Remove the visible "Cerrar sesión" button; expose logout from a footer overflow menu
+- [x] **S7 — sidebar footer.** Remove the visible "Cerrar sesión" button; expose logout from a footer overflow menu
   (reusing the existing account-menu treatment) with focus return to the trigger. Removes problem 6.
 - [ ] **S8 — mobile drawer header.** Center the lockup and add the search field, matching the expanded sidebar behaviour.
   Removes problem 7.
@@ -113,8 +113,9 @@ collapse behaviour, the desktop expanded section separators (owner accepted as-i
 ## Debt recorded (NOT part of this unit)
 
 - **User profile page does not exist.** The footer overflow menu should eventually offer it; do not add a dead entry.
-- **Storybook stories do not pass `onLogout`**, so any prop-dependent chrome is invisible to Storybook-based visual review.
-  This is why the visible logout button escaped the first rendered pass. Stories should supply the full prop surface.
+- **Storybook stories did not pass `onLogout`**, so prop-dependent chrome was invisible to Storybook-based visual review.
+  This is why the visible logout button escaped the first rendered pass and was only caught by the owner running
+  `npm run dev`. **PAID in S7:** the PanelEntry and AppShell stories now supply `onLogout`.
 - **Per-story `parameters.viewport.{width,height}` is inert config** in Storybook 8 (the addon reads `viewports` /
   `defaultViewport`), so story names like `TabletRail` / `MobileDrawerOpen` do not control the rendered width.
 - **System-level decision pending:** the active mobile tab renders `--lime-500` 12px on `--primary-700` = 3.73:1
@@ -153,7 +154,8 @@ Before: desktop expanded rendered both (`lumat-logo.png` 176×64 **and** `lumat-
 
 **S3 — compact rail is icon-only. DONE.**
 Solution: CSS only, in the tablet media block of `primitives.css`. The label is visually hidden with the same sr-only
-pattern already used by `.panel-shell__logout-label` (`position: absolute; 1px; overflow: hidden; clip; clip-path`), scoped
+pattern (`position: absolute; 1px; overflow: hidden; clip; clip-path`), which the sheet already used for its sr-only
+labels (that specific rule was later removed by S7 along with the logout button it belonged to), scoped
 to `.panel-shell__sidebar` so the drawer keeps its readable labels. The scoping matters: the tablet tier is CSS-only, so the
 drawer (which renders the same `Navigation` without `collapsed`) must not inherit the hidden treatment. The compact rail
 button became a 44px square to meet the stated 44px touch-target contract while staying inside the 64px rail.
@@ -232,3 +234,56 @@ Rendered verification (fresh `build-storybook`, Chrome):
 | tablet rail 768 | `1px` + 8px padding on groups 2 and 3 | none | 900 of 900 |
 | desktop collapsed 1440 | `1px` + 8px padding on groups 2 and 3 | none | 900 of 900 |
 | desktop expanded 1440 | **none — unchanged** (the named separators the owner accepted stay as they are) | — | 900 of 900 |
+
+**S6 — mobile display label. DONE.**
+Solution: the mobile tab bar now renders "Chats" for the conversations destination, so all five labels fit. The visible text
+and the accessible name are the same string, which keeps WCAG 2.5.3 (Label in Name) satisfied; naming them differently would
+have broken it. The destination keeps its canonical `NAVIGATION` label, which is what the sidebar, the drawer and the
+breadcrumb render, so the destination set is unchanged. This is the owner decision recorded above and it deliberately
+diverges from the literal DS-SHELL sentence that names the five destinations "Panel, Conversaciones, Asistente, Agenda,
+Clientes" — that sentence is about the destination set, and the reference does exactly this. Recorded here rather than
+silently amended.
+Tests updated: `PanelShell.test.tsx`, `AppShell.test.tsx` (two footer-nav assertions). The sidebar and drawer assertions were
+left alone because those surfaces keep the canonical label.
+Checks: `npm run build` OK. Affected test files → 77 tests passed.
+Rendered verification at 390 (Chrome): Panel 31px, **Chats 33px**, Asistente 53px, Agenda 44px, Clientes 46px, none clipped.
+Before: "Conversaciones" measured a 68px span against 91px of content, so it clipped to "Conversa…".
+
+**S7 — sidebar footer. DONE.**
+Root cause of the ugly footer: `.panel-shell__user` was a **single-column** grid, so the logout button rendered as a
+full-width bordered bar stacked under the identity, which is what the owner saw in the running app. (It was invisible to the
+first rendered pass because the Storybook stories never passed `onLogout`, so the button never rendered there at all.)
+Solution: the footer is now a two-column grid. The identity itself is the account-options trigger (so the footer stays
+reachable in the compact tiers where the overflow control is hidden) and a `⋮` overflow button sits beside it. Both open one
+`role="menu"` panel that opens **upward** (`bottom: calc(100% + var(--space-2))`) because the trigger sits at the sidebar
+bottom; it reuses the account-menu surface treatment (border-strong, radius-md, `--shadow-3`). Escape and outside click
+close it and focus returns to whichever trigger opened it. The `.panel-shell__logout` button, its label span, and all four
+of its rule blocks were removed.
+**Harness debt paid:** the PanelEntry and AppShell stories now pass `onLogout`, so prop-dependent footer chrome is no longer
+invisible to the rendered review. That blind spot is why the owner's `npm run dev` pass caught this and the rendered pass did
+not.
+Tests: the `PanelEntry.stories.test.tsx` test that pinned the standing button was rewritten to the new contract (no
+`.panel-shell__logout`; the overflow control opens the options and its menuitem calls `onLogout`; collapsed, the identity
+opens the same options; Escape closes and restores focus).
+Checks: `npm run build` OK. Affected test files → 77 tests passed.
+Rendered verification (fresh `build-storybook`, Chrome):
+
+| Check | Result |
+| --- | --- |
+| expanded 1440, legacy logout button | absent |
+| expanded 1440, footer grid | two columns (`159px 40px`, `position: relative`) |
+| expanded 1440, overflow trigger | visible, named "Más opciones de la cuenta" |
+| overflow opened | `role="menu"`, "Cuenta de ana", one menuitem "Cerrar sesión", **opens upward**, **not clipped by the sidebar's `overflow: hidden`** |
+| Escape | menu gone, focus restored to the opening trigger |
+| collapsed 1440 | overflow control hidden, identity trigger visible and named "Opciones de ana", 32×32, single column |
+
+Follow-up commit: the **full suite** caught what the per-task targeted runs missed — `app.test.tsx > returns to the login gate
+after logout` clicked a standing "Cerrar sesión" button inside the drawer, which S7 replaced with the account options. The
+test now opens the drawer's overflow control and clicks the menuitem. This is the concrete argument for the verification
+strategy below: per task I ran `npm run build` plus the affected test files, and the full `npm run test` once at the end. The
+targeted runs were green while the tree was not.
+
+**Verification strategy actually used (honest record).** Per task: `npm run build` (the only type-check path) plus the
+affected test files. Once at the end: the full `npm run test` and a rendered pass per task with a fresh `build-storybook` and
+Chrome. The unit is not complete until the full suite and the rendered pass are green; the app-level test above is exactly
+why.
