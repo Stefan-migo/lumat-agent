@@ -41,25 +41,47 @@ Owner directive 2026-09-30: the focus mode is not used and must be deprecated. M
    violation: `openspec/specs/ui-command-center/spec.md:25` (CC-2), `openspec/specs/panel-design-system/spec.md:851`
    (DS-CC-2), and CC-4's verification clause plus its focus-mode scenario (`ui-command-center/spec.md:57,65-69`).
 
-### Pending: the visual header gap
+### Owner visual analysis (2026-09-30) — the scope authority
 
-**Blocked on the owner's own visual analysis of the header (owner statement 2026-09-30).** Source-measured
-candidates, to be confirmed or replaced by that analysis before any visual task is written:
+**Desktop:**
+1. **The header background is no longer green — the reference is right.** Today `.panel-shell__header-row` uses
+   `--corp-primary` (dark forest) with `--surface` text. The reference band measures **(222,228,218)** and the
+   dedicated token **`--header-bg: #dee4db` = (222,228,219) already exists** (`tokens.css:44`) and was never consumed.
+2. **Focus mode disappears.** Done in H0.
+3. **The bell and the account control must sit at the END of the header**; today they do not. Cause: the header's
+   `max-width: 78rem` (`primitives.css:1167`) caps the row on wide viewports and leaves the actions floating mid-header.
 
-- `.panel-shell__header-action` declares no `font`/`font-family` (`primitives.css:1409-1420`) → computes Arial.
-  (Also recorded as debt in `odd/tasks/panel-sidebar-refine.md`.)
-- The reference shows a **vertical divider between the notification bell and the account control**; none exists today.
-- The reference's back control is a **bordered rounded square**; today it is `border: 1px solid transparent`
-  (`primitives.css:1425-1440`). Boundary colour must resolve through `--border-strong`, not decorative `--border`
-  (DS-TKN-13, spec ~913).
-- Breadcrumb button has zero padding and no focus-visible rule (`primitives.css:1186`).
-- Notification popover close and footer controls have no 44px target and no focus-visible rule
-  (`primitives.css:1459, 1469`); account menu items have no explicit focus-visible rule.
-- **PNL-APP-10** (`openspec/specs/panel-app/spec.md:149`) requires the header to expose notification-bell and avatar
-  affordances for any authenticated user, tier-unqualified. Today the mobile bar exposes neither (brand + menu only)
-  and the tablet tier exposes no header at all (`.panel-shell__header-row` is hidden below 64rem,
-  `primitives.css:1226-1229`). The references agree: `mobilePanelShell.png` shows menu + brand + bell + avatar;
-  `TabletPanelShell.png` shows bell + avatar at the top-right of the content.
+**Mobile:**
+4. **A new mobile logo is needed: mark + wordmark on one line.** **Owner will deliver the asset** — pending, not
+   implementable yet.
+5. **The rest of the mobile header is fine; add the notification bell.**
+
+### Measured evidence for the desktop inversion
+
+- Reference band `headerShell.png` = (222,228,218); token `--header-bg` = (222,228,219) → **1.00:1 difference**.
+- `Dashboard.png` renders the tokens exactly (`#e8ebe4` `--surface`, `#dbe1d6` `--bg`), so the mockups are
+  colour-accurate and the band match is real, not a compression artifact.
+- `tokens.test.ts:239-244` **already measures** `contrast(--text, --header-bg) >= 4.5` and
+  `contrast(--text-muted, --header-bg) >= 4.5`: the design system was built for a light header using `--text` /
+  `--text-muted`, and the implementation simply never used the token. DS-TKN-13 is satisfied by that existing
+  measurement, re-confirmed by hand — `--text` **13.40:1**, `--text-muted` **4.69:1**, `--focus-ring` **4.67:1**,
+  `--border` **1.10:1** (decorative hairline, no threshold; the reference band does not separate from the page either).
+- Right-edge geometry: `headerShell.png` content ends 72 units from the image edge; scaled by the crop width
+  (viewport − sidebar) that is **40px** = `--space-4` + `--space-6`, which is exactly the gap the implementation now
+  renders (account right edge 1400 in a 1440 viewport). The left gap scales to ~24px = `--space-6`, also matching.
+
+### Still open after the owner's analysis
+
+- **Mobile bell behaviour**: the notifications popover lives inside the desktop header, which is `display: none`
+  below 64rem, so a mobile bell cannot simply toggle it. Options: navigate to the notifications view, or move the
+  popover out of the desktop header. **Owner decision pending.**
+- **Mobile avatar**: PNL-APP-10 requires bell **and avatar** affordances tier-unqualified; the owner asked only for the
+  bell. Either the avatar ships on mobile/tablet or PNL-APP-10 is amended. **Owner decision pending.**
+- **Tablet header surface**: approved earlier as in scope but absent from the owner's analysis. `TabletPanelShell.png`
+  shows bell + avatar at the top-right of the content. **Owner decision pending.**
+- Reference-only details the owner did not raise: the **bell|account vertical divider** and the **bordered back
+  square** in `headerShell.png`, plus the unaddressed 44px/focus-visible gaps in the notification popover and account
+  menu (`primitives.css:1459, 1469`).
 
 ## Adjudication rules applied
 
@@ -107,7 +129,18 @@ sidebar/drawer surfaces already adjudicated in `odd/tasks/panel-sidebar-refine.m
   `role`/`aria-label` on `#panel-main-content`, and the "Salir del modo foco" button. **Kept** `#panel-main-content`
   `tabIndex={-1}` (the skip-link target) and the drawer's own focus behaviour. Deleted the focus-mode test. Deleted
   CC-2, DS-CC-2, and the unsatisfiable CC-4 clause/scenario. No CSS to delete — no rules existed.
-- [ ] **H1+ — visual header.** Not written yet: blocked on the owner's visual analysis of the header.
+- [x] **D1 — desktop header chrome inversion. DONE.** `.panel-shell__header-row` uses `--header-bg` with
+  `--corp-text` and a `--border` hairline; the header, the breadcrumb separator, the breadcrumb link, the
+  current-page crumb, the header action buttons and the back/account controls all flip to `--corp-text` /
+  `--corp-fg-muted` with `--surface-subtle` hovers. `font: inherit` was added to `.panel-shell__header-action`,
+  killing the recorded Arial debt.
+- [x] **D2 — header actions at the end. DONE.** Removed `max-width: 78rem` from `.panel-shell__header`; the actions
+  now end at the row's right padding on wide viewports.
+- [ ] **M1 — mobile header: bell + the owner's new one-line logo.** Blocked: the logo asset is an owner deliverable
+  and the bell behaviour is undecided (popover vs navigation).
+- [ ] **M2 — mobile/tablet avatar + tablet header surface.** Pending the PNL-APP-10 decision.
+- [ ] **Reference-only details** (bell|account divider, bordered back square, popover 44px/focus-visible) — pending
+  the owner's call.
 
 ## Acceptance criteria
 
@@ -132,6 +165,29 @@ sidebar/drawer surfaces already adjudicated in `odd/tasks/panel-sidebar-refine.m
 | H1+ | pending | decided with the owner's visual analysis |
 
 ## Progress and evidence
+
+**D1 — desktop header chrome inversion. DONE.**
+Solution: CSS only, in `primitives.css`. `.panel-shell__header-row` background `--corp-primary` → `--header-bg`,
+colour `--surface` → `--corp-text`, border-bottom `color-mix(--surface 30%)` → `var(--border)`. `.panel-shell__header`
+colour → `--corp-text`. Breadcrumbs: separator and link → `--corp-fg-muted`, current crumb and link hover →
+`--corp-text`. `.panel-shell__header-action` colour → `--corp-text`, hover → `--surface-subtle`, plus `font: inherit`.
+`.panel-shell__back` / `.panel-shell__account-trigger` colour → `--corp-text`, hover → `--surface-subtle`.
+Checks: `npm run build` → `tsc -b` + vite OK. Affected test files (AppShell.stories, PanelEntry.stories, PanelShell,
+AppShell, app, tokens) → 6 files / 110 tests passed. Two brittle CSS-text assertions in
+`AppShell.stories.test.tsx` were rewritten toward the contract: the breadcrumb current-crumb colour now asserts
+`var(--corp-text)` (it pinned `color-mix(--surface 70%)`, a dark-chrome value), and the "no green fill" test gained a
+positive assertion that `.panel-shell__header-row` uses `var(--header-bg)`.
+Rendered verification (fresh `build-storybook`, Chrome, `domain-appshell--desktop-admin-1280` at 1440):
+`rowBg rgb(222,228,219)` = `--header-bg` exact; `rowColor`/`headerColor`/`breadcrumbCurrent` `rgb(17,26,46)` =
+`--text`; `rowBorderBottom rgb(213,218,209)` = `--border`; `actionFontFamily` = `Inter, system-ui, sans-serif`
+(was Arial).
+
+**D2 — header actions at the end. DONE.**
+Solution: removed `max-width: 78rem` from `.panel-shell__header` (`primitives.css:1167`). It never bound at 1440
+(row 1200px) but capped the row on wide viewports, leaving the actions floating mid-header.
+Rendered verification (same story, 1440): `headerMaxWidth: none`; the account control's right edge is **1400** of
+1440 → a **40px** gap = `--space-4` + `--space-6`, which matches the reference (`headerShell.png` content ends 72
+units from the edge; scaled by the crop width that is 40px).
 
 **H0 — retire focus mode. DONE.**
 Solution: deleted the feature in `PanelShell.tsx` — the `focusMode`/`onFocusModeChange` props, `internalFocusMode`,
