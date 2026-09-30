@@ -22,7 +22,6 @@ beforeEach(() => {
   vi.mocked(createUser).mockResolvedValue({ user: { id: 4, username: "new", role: "operador", active: true } });
   vi.mocked(toggleUserActive).mockResolvedValue({ user: { ...users[1], active: true } });
   vi.mocked(resetUserPassword).mockResolvedValue({ user: users[1] });
-  vi.stubGlobal("confirm", vi.fn(() => true));
 });
 
 describe("UserManagement", () => {
@@ -102,7 +101,62 @@ describe("UserManagement", () => {
     expect(toggleUserActive).toHaveBeenCalledWith(2);
     expect(await screen.findByText("Estado actualizado")).toBeInTheDocument();
     await user.click(within(otherRow).getByRole("button", { name: /restablecer/i }));
-    expect(confirm).toHaveBeenCalled();
-    expect(resetUserPassword).toHaveBeenCalledWith(2, expect.any(String));
+    expect(await screen.findByRole("dialog", { name: "Restablecer contraseña" })).toBeInTheDocument();
+    expect(resetUserPassword).not.toHaveBeenCalled();
+  });
+
+  it("enables password reset only at the eight-character minimum", async () => {
+    const user = userEvent.setup();
+    render(<UserManagement currentUser={admin} />);
+    await screen.findByText("ana");
+    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /restablecer/i }));
+    const field = screen.getByLabelText("Nueva contraseña");
+    const dialog = screen.getByRole("dialog");
+    const submit = within(dialog).getByRole("button", { name: "Restablecer contraseña" });
+    expect(submit).toBeDisabled();
+    await user.type(field, "1234567");
+    expect(submit).toBeDisabled();
+    await user.type(field, "8");
+    expect(submit).toBeEnabled();
+  });
+
+  it("generates a readable password and submits that exact value", async () => {
+    const user = userEvent.setup();
+    render(<UserManagement currentUser={admin} />);
+    await screen.findByText("ana");
+    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /restablecer/i }));
+    await user.click(screen.getByRole("button", { name: "Generar" }));
+    const field = screen.getByLabelText("Nueva contraseña");
+    const generated = (field as HTMLInputElement).value;
+    expect(generated).toHaveLength(16);
+    expect(field).toHaveAttribute("type", "text");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Restablecer contraseña" }));
+    await waitFor(() => expect(resetUserPassword).toHaveBeenCalledExactlyOnceWith(2, generated));
+  });
+
+  it("keeps the successful password visible until the admin closes the dialog", async () => {
+    const user = userEvent.setup();
+    render(<UserManagement currentUser={admin} />);
+    await screen.findByText("ana");
+    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /restablecer/i }));
+    await user.type(screen.getByLabelText("Nueva contraseña"), "typed-secret");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Restablecer contraseña" }));
+    expect(await within(screen.getByRole("dialog")).findByRole("status")).toHaveTextContent("Contraseña restablecida");
+    expect(screen.getByLabelText("Nueva contraseña")).toHaveValue("typed-secret");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Listo" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps the dialog open and explains a rejected short password", async () => {
+    const user = userEvent.setup();
+    vi.mocked(resetUserPassword).mockRejectedValue(new ApiError(422, "Unprocessable Entity"));
+    render(<UserManagement currentUser={admin} />);
+    await screen.findByText("ana");
+    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /restablecer/i }));
+    await user.type(screen.getByLabelText("Nueva contraseña"), "long enough");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Restablecer contraseña" }));
+    expect(await within(screen.getByRole("dialog")).findByRole("alert")).toHaveTextContent("al menos 8 caracteres");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });
