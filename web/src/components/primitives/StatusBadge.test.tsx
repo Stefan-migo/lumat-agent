@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { StatusBadge, statusTone } from "./StatusBadge";
 import type { Status } from "./StatusBadge";
 
@@ -32,6 +34,16 @@ describe("StatusBadge (T8.4)", () => {
       expect(screen.getByText(label)).toHaveAttribute("data-tone", statusTone[status]);
       unmount();
     }
+  });
+
+  it("keeps status meaning in visible text, independent of decorative badge borders", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    const { unmount } = render(<StatusBadge status="escalated" />);
+    const badge = screen.getByText("Escalado");
+    expect(badge).toHaveAttribute("data-tone", "danger");
+    expect(badge).toHaveTextContent("Escalado");
+    expect(css).toMatch(/\.badge--danger\s*\{[^}]*border-color:\s*var\(--danger-border\)/s);
+    unmount();
   });
 
   it("never renders the raw status value", () => {
