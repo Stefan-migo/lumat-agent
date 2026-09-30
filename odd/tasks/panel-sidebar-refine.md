@@ -54,6 +54,10 @@ without rebuilding the design system and without inventing destinations, routes 
   so the collapse toggle may move into the sidebar header without dropping a control.
 - Owner decision recorded: the toggle is a small explicit chevron control, **not** the brand logo made clickable (the brand is
   `role="img"` with accessible name "Lumat, panel operativo"; making it a button would pollute that name).
+- Owner decision recorded for **S5 (2026-09-30)**: the compact search control uses **two behaviours by tier** — on the desktop
+  collapsed sidebar it expands the sidebar and focuses the search input; on the tablet rail it opens the drawer, where the
+  search field lives after S8. This is why **S8 must land before S5**: the drawer's search field is the destination for the
+  tablet behaviour, so implementing S5 first would mean inventing a target.
 
 ## Scope
 
@@ -90,7 +94,8 @@ collapse behaviour, the desktop expanded section separators (owner accepted as-i
 - [x] **S4 — one divider between groups in compact modes.** Keep the expanded grouping, replace reliance on hidden titles
   with a single separator line. Removes problem 5. Must not change the expanded named separators.
 - [ ] **S5 — search affordance in compact modes.** Icon-only control styled like the other rail icons (no button frame),
-  reachable and named, per owner instruction. Removes problem 4.
+  reachable and named, per owner instruction. Removes problem 4. **Decision (b) recorded above: expand + focus on the desktop
+  collapsed sidebar, open the drawer on the tablet rail. Depends on S8 — do S8 first.**
 - [x] **S6 — mobile display label.** Mobile bottom tab renders a short display label so all five fit without clipping;
   sidebar and drawer keep the canonical `NAVIGATION` label. Removes problem 8. Owner decision; canonical line noted above.
 - [x] **S7 — sidebar footer.** Remove the visible "Cerrar sesión" button; expose logout from a footer overflow menu
