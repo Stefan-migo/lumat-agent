@@ -84,7 +84,7 @@ collapse behaviour, the desktop expanded section separators (owner accepted as-i
 - [ ] **S2 — toggle into the sidebar header.** Small explicit chevron control inside the sidebar header (`«` expanded,
   `»` collapsed), keyboard reachable, focus-visible token ring; remove the oversized control from the content header.
   Removes problem 3. `aria-expanded`/`aria-controls` preserved.
-- [ ] **S3 — compact rail is icon-only (BLOCKER).** Visually hide `.panel-shell__nav-label` whenever the rail is compact
+- [x] **S3 — compact rail is icon-only (BLOCKER).** Visually hide `.panel-shell__nav-label` whenever the rail is compact
   (desktop collapsed **and** tablet tier), keeping the accessible name; assert no vertical text and no viewport overflow.
   Removes problem 1.
 - [ ] **S4 — one divider between groups in compact modes.** Keep the expanded grouping, replace reliance on hidden titles with
@@ -150,3 +150,26 @@ Rendered verification (fresh `build-storybook`, Chrome, `iframe.html`):
 | tablet rail | 640 | mark only |
 
 Before: desktop expanded rendered both (`lumat-logo.png` 176×64 **and** `lumat-mark.png` 40×38).
+
+**S3 — compact rail is icon-only. DONE.**
+Solution: CSS only, in the tablet media block of `primitives.css`. The label is visually hidden with the same sr-only
+pattern already used by `.panel-shell__logout-label` (`position: absolute; 1px; overflow: hidden; clip; clip-path`), scoped
+to `.panel-shell__sidebar` so the drawer keeps its readable labels. The scoping matters: the tablet tier is CSS-only, so the
+drawer (which renders the same `Navigation` without `collapsed`) must not inherit the hidden treatment. The compact rail
+button became a 44px square to meet the stated 44px touch-target contract while staying inside the 64px rail.
+Guard added: `PanelShell.test.tsx` asserts all nine rail controls keep a non-empty accessible name, which fails if someone
+deletes the label text to stop the wrapping.
+Checks: `npm run test` → 92 files / 901 tests passed. `npm run build` → OK. Targeted `PanelShell.test.tsx` → 15 tests passed.
+Rendered verification (fresh `build-storybook`, Chrome):
+
+| State | Sidebar labels | Drawer labels | `railScrollHeight` | Rail button |
+| --- | --- | --- | --- | --- |
+| desktop expanded 1024 / 1280 / 1440 | 9 visible (102×16, `static`, no clip) | closed | 900 | 215×44 |
+| desktop collapsed 1440 | none in the DOM (JSX omits them) | closed | 900 | 40×44 |
+| tablet rail 640 / 768 | 9 hidden (1×1, `position: absolute`, `clip-path: inset(50%)`) | closed | **900 (was 2197)** | **44×44** |
+| tablet drawer open 768 | 9 hidden | 9 visible (102×16) | 900 | 44×44 |
+
+`everyBtnNamed` true in every state. The rule does not leak into the expanded desktop (labels report `static` + no clip).
+
+Known remaining detail, folded into S4: the collapsed-desktop rail button is 40px wide while the tablet rail button is now
+44px, so the two compact rails are slightly different sizes. Height is 44 in both.

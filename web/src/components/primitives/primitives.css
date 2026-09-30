@@ -1657,7 +1657,20 @@
   .panel-shell__sidebar .panel-shell__brand-mark { display: block; width: var(--brand-mark-size); }
   .panel-shell__sidebar .panel-shell__navigation { padding-inline: var(--space-2); }
   .panel-shell__sidebar .panel-shell__navigation-group + .panel-shell__navigation-group { margin-top: var(--space-2); }
-  .panel-shell__sidebar .panel-shell__navigation-button { justify-content: center; width: calc(var(--space-8) + var(--space-2)); margin-inline: auto; padding: var(--space-2); }
+  /* Tablet is an icon rail. The label stayed in the flow here, so inside a 40px button it wrapped one
+     character per line, stretching every control past 200px tall and pushing the rail content to 2197px
+     inside a 900px viewport, where `overflow: hidden` made the lower destinations unreachable (S3).
+     Visually hidden, the text still supplies each control's accessible name. */
+  .panel-shell__sidebar .panel-shell__nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .panel-shell__sidebar .panel-shell__navigation-button { justify-content: center; width: calc(var(--space-8) + var(--space-3)); min-width: calc(var(--space-8) + var(--space-3)); min-height: calc(var(--space-8) + var(--space-3)); margin-inline: auto; padding: var(--space-2); }
   .panel-shell__sidebar .panel-shell__user { justify-items: center; padding: var(--space-3) var(--space-2); }
   .panel-shell__sidebar .panel-shell__user-identity { grid-template-columns: 1fr; justify-items: center; }
   .panel-shell__tablet-menu { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-on-dark); cursor: pointer; }

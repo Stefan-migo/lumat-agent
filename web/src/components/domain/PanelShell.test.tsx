@@ -41,6 +41,18 @@ describe("PanelShell rail contract (2C-1)", () => {
     ]);
   });
 
+  it("keeps every rail control named when the compact tier visually hides its label", () => {
+    // The tablet rail hides the label text visually instead of removing it, because the text is what
+    // supplies each control's accessible name (canonical: compact sidebar navigation with accessible
+    // names). This guards the tempting shortcut of deleting the label to stop it wrapping.
+    const { container } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    const rail = container.querySelectorAll(".panel-shell__sidebar .panel-shell__navigation-button");
+    expect(rail).toHaveLength(9);
+    for (const button of rail) {
+      expect((button.getAttribute("aria-label") ?? button.textContent ?? "").trim()).not.toBe("");
+    }
+  });
+
   it("keeps administrator destinations out of every operator navigation surface", async () => {
     const user = userEvent.setup();
     const { restore } = mockDialogMethods();
