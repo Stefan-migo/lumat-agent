@@ -218,6 +218,14 @@ Flag for the owner: the toggle box is 32px. DS-SHELL-1 asks for an "adequately s
 required ≥40px, which the current text relaxed. WCAG 2.5.8 AA needs 24px, so 32px passes, but it is below the 44px house
 convention used elsewhere in the shell. One token raises it if wanted.
 
+**Post-delivery regression and fix (2026-09-30).** The owner caught it while reviewing PR1: centring the brand as a flex
+item inside the new header shrank it to content width and dragged its `border-left` lime accent from the sidebar's left edge
+into the middle of the header. Fix: `.panel-shell__sidebar-header .panel-shell__brand { width: 100% }` so the brand fills the
+header again and the accent sits on the sidebar edge, while the brand's own `justify-items: center` keeps the lockup centred.
+Verified rendered: accent offset from the sidebar edge is **0px** at 1440 expanded (240px rail) and 1440 collapsed (64px
+rail); the tablet rail is unchanged (already flush at 2px, no regression). CSS-only, so it has no jsdom guard — the rendered
+pass is the evidence.
+
 **S4 — one divider between groups in compact modes. DONE.**
 Solution: the `+ .panel-shell__navigation-group` rule in the tablet block and in the collapsed-desktop block gained
 `padding-top: var(--space-2)` and `border-top: 1px solid color-mix(in srgb, var(--corp-primary-fg) 25%, transparent)`,
