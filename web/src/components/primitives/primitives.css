@@ -1063,11 +1063,15 @@
 .panel-shell__mobile-brand .panel-shell__brand-mark { display: none; }
 .panel-shell__brand-image,
 .panel-shell__brand-mark {
-  display: block;
   width: 100%;
   object-fit: contain;
   object-position: center;
 }
+/* The expanded sidebar shows the wordmark lockup only; the mark is the compact brand and is
+   revealed again by the tablet rail and by the collapsed sidebar below. Rendering both left
+   the mark duplicated underneath the lockup (S1). */
+.panel-shell__brand-image { display: block; }
+.panel-shell__brand-mark { display: none; }
 .panel-shell__brand-image {
   max-width: var(--brand-logo-max-width);
   max-height: var(--brand-logo-max-height);
@@ -1351,18 +1355,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  min-height: 2.25rem;
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
   margin: 0;
   padding: 0;
-  border-color: color-mix(in srgb, var(--surface) 45%, transparent);
-  background: color-mix(in srgb, var(--surface) 16%, transparent);
-  color: var(--surface);
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-on-dark);
 }
 .panel-shell__collapse-button:hover {
-  border-color: var(--surface);
-  background: color-mix(in srgb, var(--surface) 28%, transparent);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--text-on-dark) 18%, transparent);
 }
 .panel-shell__navigation-button:focus-visible,
 .panel-shell__collapse-button:focus-visible,
@@ -1532,9 +1536,26 @@
 @media (min-width: 64rem) {
   .panel-shell__footer-nav { display: none; }
 }
-.panel-shell__header .panel-shell__collapse-button {
+/* The collapse toggle belongs to the sidebar header, beside the brand, as the reference shows. It used to
+   render inside the content header as a 40px translucent light square next to the back control (S2). */
+.panel-shell__sidebar-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* The brand fills the header so its lime accent stays on the sidebar's left edge; the lockup keeps
+   centring through the brand's own grid. Centring the flex item shrank it to content and dragged the
+   accent into the middle of the sidebar. */
+.panel-shell__sidebar-header .panel-shell__brand {
+  width: 100%;
+}
+.panel-shell__sidebar-header .panel-shell__collapse-button {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
   display: none;
-  flex: none;
+  transform: translateY(-50%);
 }
 .panel-shell__drawer-layer {
   position: fixed;
@@ -1589,8 +1610,17 @@
     display: flex;
     flex-direction: column;
   }
-  .panel-shell__header .panel-shell__collapse-button {
+  .panel-shell__sidebar-header .panel-shell__collapse-button {
     display: flex;
+  }
+  /* Compact rail: the toggle drops below the brand instead of being crushed beside it in a 64px column. */
+  .panel-shell--collapsed .panel-shell__sidebar-header {
+    flex-direction: column;
+  }
+  .panel-shell--collapsed .panel-shell__sidebar-header .panel-shell__collapse-button {
+    position: static;
+    margin: var(--space-2) auto 0;
+    transform: none;
   }
   .panel-shell__header-actions { flex-wrap: nowrap; }
   .panel-shell.panel-shell--collapsed {
@@ -1601,12 +1631,13 @@
     padding: var(--space-5) var(--space-2);
   }
   .panel-shell--collapsed .panel-shell__brand-mark {
+    display: block;
     width: var(--brand-mark-size);
   }
   .panel-shell--collapsed .panel-shell__navigation {
     padding: var(--space-4) var(--space-2);
   }
-  .panel-shell--collapsed .panel-shell__navigation-group + .panel-shell__navigation-group { margin-top: var(--space-2); }
+  .panel-shell--collapsed .panel-shell__navigation-group + .panel-shell__navigation-group { margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid color-mix(in srgb, var(--corp-primary-fg) 25%, transparent); }
   .panel-shell--collapsed .panel-shell__navigation-button {
     justify-content: center;
     width: calc(var(--space-8) + var(--space-2));
@@ -1651,8 +1682,22 @@
   .panel-shell__user-copy, .panel-shell__logout-label { display: none; }
   .panel-shell__sidebar .panel-shell__brand-mark { display: block; width: var(--brand-mark-size); }
   .panel-shell__sidebar .panel-shell__navigation { padding-inline: var(--space-2); }
-  .panel-shell__sidebar .panel-shell__navigation-group + .panel-shell__navigation-group { margin-top: var(--space-2); }
-  .panel-shell__sidebar .panel-shell__navigation-button { justify-content: center; width: calc(var(--space-8) + var(--space-2)); margin-inline: auto; padding: var(--space-2); }
+  /* Compact rail: the group titles are hidden, so a single divider keeps the expanded grouping legible. */
+  .panel-shell__sidebar .panel-shell__navigation-group + .panel-shell__navigation-group { margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px solid color-mix(in srgb, var(--corp-primary-fg) 25%, transparent); }
+  /* Tablet is an icon rail. The label stayed in the flow here, so inside a 40px button it wrapped one
+     character per line, stretching every control past 200px tall and pushing the rail content to 2197px
+     inside a 900px viewport, where `overflow: hidden` made the lower destinations unreachable (S3).
+     Visually hidden, the text still supplies each control's accessible name. */
+  .panel-shell__sidebar .panel-shell__nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .panel-shell__sidebar .panel-shell__navigation-button { justify-content: center; width: calc(var(--space-8) + var(--space-3)); min-width: calc(var(--space-8) + var(--space-3)); min-height: calc(var(--space-8) + var(--space-3)); margin-inline: auto; padding: var(--space-2); }
   .panel-shell__sidebar .panel-shell__user { justify-items: center; padding: var(--space-3) var(--space-2); }
   .panel-shell__sidebar .panel-shell__user-identity { grid-template-columns: 1fr; justify-items: center; }
   .panel-shell__tablet-menu { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-on-dark); cursor: pointer; }
