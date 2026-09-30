@@ -210,6 +210,39 @@ describe("PanelShell rail contract (2C-1)", () => {
     restore();
   });
 
+  it("expands the sidebar and focuses the field from the compact search control at desktop width", async () => {
+    const user = userEvent.setup();
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
+    const { container } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    const root = container.querySelector(".panel-shell") as HTMLElement;
+
+    await user.click(container.querySelector(".panel-shell__collapse-button") as HTMLButtonElement);
+    expect(root).toHaveClass("panel-shell--collapsed");
+
+    await user.click(container.querySelector(".panel-shell__search-toggle") as HTMLButtonElement);
+    expect(root).not.toHaveClass("panel-shell--collapsed");
+    expect(sidebar(container).getByRole("searchbox", { name: "Buscar en el menú" })).toHaveFocus();
+
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
+  });
+
+  it("opens the drawer from the compact search control at tablet width", async () => {
+    const user = userEvent.setup();
+    const { restore } = mockDialogMethods();
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 768 });
+    render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+
+    await user.click(document.querySelector(".panel-shell__search-toggle") as HTMLButtonElement);
+    const drawer = screen.getByRole("dialog", { name: "Navegación" });
+    expect(within(drawer).getByRole("searchbox", { name: "Buscar en el menú" })).toBeInTheDocument();
+
+    await user.click(within(drawer).getByRole("button", { name: "Cerrar menú de navegación" }));
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
+    restore();
+  });
+
   it("provides desktop back, breadcrumb, notification, and account actions", async () => {
     const user = userEvent.setup();
     const logout = vi.fn();

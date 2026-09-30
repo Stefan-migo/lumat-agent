@@ -248,12 +248,14 @@ export function PanelShell({
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
   const [navigationSearch, setNavigationSearch] = useState("");
+  const [pendingSearchFocus, setPendingSearchFocus] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const drawerTriggerRef = useRef<HTMLElement | null>(null);
   const drawerOpenedWidthRef = useRef(window.innerWidth);
   const desktopTriggerRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDialogElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -290,6 +292,23 @@ export function PanelShell({
     drawerOpenedWidthRef.current = window.innerWidth;
     setDrawerOpen(true);
   };
+
+  // The compact search control behaves by tier (S5): the desktop collapsed sidebar expands and focuses the
+  // field, while the tablet rail opens the drawer, where the shared filter already lives (S8).
+  const activateCompactSearch = (trigger: HTMLButtonElement) => {
+    if (window.innerWidth >= 1024) {
+      setPendingSearchFocus(true);
+      setCollapsed(false);
+      return;
+    }
+    openDrawer(trigger);
+  };
+
+  useEffect(() => {
+    if (!pendingSearchFocus || collapsed) return;
+    searchInputRef.current?.focus();
+    setPendingSearchFocus(false);
+  }, [pendingSearchFocus, collapsed]);
 
   useEffect(() => {
     if (!focusMode) return;
@@ -411,8 +430,13 @@ export function PanelShell({
           </div>
           {!collapsed ? <label className="panel-shell__search">
             <Icon icon={Search} />
-            <input type="search" aria-label="Buscar en el menú" placeholder="Buscar" value={navigationSearch} onChange={(event) => setNavigationSearch(event.target.value)} />
+            <input ref={searchInputRef} type="search" aria-label="Buscar en el menú" placeholder="Buscar" value={navigationSearch} onChange={(event) => setNavigationSearch(event.target.value)} />
           </label> : null}
+          {/* Icon-only search affordance for the compact tiers, where the field above is not rendered (desktop
+              collapsed) or is hidden (tablet rail). It looks like the other rail icons — no button frame (S5). */}
+          <button type="button" className="panel-shell__search-toggle" aria-label="Buscar en el menú" title="Buscar en el menú" onClick={(event) => activateCompactSearch(event.currentTarget)}>
+            <Icon icon={Search} />
+          </button>
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} collapsed={collapsed} search={navigationSearch} />
           <UserContext user={user} compact={collapsed} onLogout={onLogout} />
         </div>

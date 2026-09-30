@@ -1119,6 +1119,25 @@
 }
 .panel-shell__search input::placeholder { color: var(--text-on-dark-2); }
 .panel-shell__search:focus-within { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+/* Icon-only search control for the compact tiers (S5). Hidden by default because the expanded sidebar already
+   renders the real field; it takes the rail-icon treatment — transparent, no button frame, 44px. */
+.panel-shell__search-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--space-8) + var(--space-3));
+  height: calc(var(--space-8) + var(--space-3));
+  margin-inline: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-on-dark);
+  cursor: pointer;
+}
+.panel-shell__search-toggle:hover {
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text-on-dark) 18%, transparent);
+}
 .panel-shell__navigation-group + .panel-shell__navigation-group { margin-top: var(--space-4); }
 .panel-shell__group-title { margin: 0 0 var(--space-2); padding-inline: var(--space-3); color: var(--text-on-dark-2); font-size: var(--text-xs); font-weight: var(--weight-semibold); }
 .panel-shell__content-area {
@@ -1270,6 +1289,7 @@
   color: var(--corp-primary-fg);
 }
 .panel-shell__sidebar .panel-shell__collapse-button:focus-visible,
+.panel-shell__sidebar .panel-shell__search-toggle:focus-visible,
 .panel-shell__sidebar .panel-shell__navigation-button:focus-visible {
   outline: var(--focus-ring-width) solid var(--brand-lime);
   outline-offset: var(--focus-ring-offset);
@@ -1663,6 +1683,10 @@
     display: block;
     width: var(--brand-mark-size);
   }
+  .panel-shell--collapsed .panel-shell__search-toggle {
+    display: flex;
+    margin: var(--space-2) auto;
+  }
   .panel-shell--collapsed .panel-shell__navigation {
     padding: var(--space-4) var(--space-2);
   }
@@ -1698,6 +1722,7 @@
   .panel-shell__brand { padding: var(--space-4) var(--space-2); }
   .panel-shell__brand-image, .panel-shell__sidebar .panel-shell__search, .panel-shell__group-title,
   .panel-shell__user-copy { display: none; }
+  .panel-shell__sidebar .panel-shell__search-toggle { display: flex; margin: var(--space-2) auto; }
   .panel-shell__sidebar .panel-shell__brand-mark { display: block; width: var(--brand-mark-size); }
   .panel-shell__sidebar .panel-shell__navigation { padding-inline: var(--space-2); }
   /* Compact rail: the group titles are hidden, so a single divider keeps the expanded grouping legible. */
