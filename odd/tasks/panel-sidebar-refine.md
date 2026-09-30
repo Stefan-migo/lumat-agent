@@ -268,3 +268,14 @@ Rendered verification (fresh `build-storybook`, Chrome):
 | overflow opened | `role="menu"`, "Cuenta de ana", one menuitem "Cerrar sesión", **opens upward**, **not clipped by the sidebar's `overflow: hidden`** |
 | Escape | menu gone, focus restored to the opening trigger |
 | collapsed 1440 | overflow control hidden, identity trigger visible and named "Opciones de ana", 32×32, single column |
+
+Follow-up commit: the **full suite** caught what the per-task targeted runs missed — `app.test.tsx > returns to the login gate
+after logout` clicked a standing "Cerrar sesión" button inside the drawer, which S7 replaced with the account options. The
+test now opens the drawer's overflow control and clicks the menuitem. This is the concrete argument for the verification
+strategy below: per task I ran `npm run build` plus the affected test files, and the full `npm run test` once at the end. The
+targeted runs were green while the tree was not.
+
+**Verification strategy actually used (honest record).** Per task: `npm run build` (the only type-check path) plus the
+affected test files. Once at the end: the full `npm run test` and a rendered pass per task with a fresh `build-storybook` and
+Chrome. The unit is not complete until the full suite and the rendered pass are green; the app-level test above is exactly
+why.

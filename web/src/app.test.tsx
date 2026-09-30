@@ -176,7 +176,10 @@ describe('App /me auth gate (T6.4)', () => {
     await waitFor(() => expect(sidebar(container).getByText('ana')).toBeInTheDocument());
     await user.click(within(container.querySelector('.panel-shell__mobile-bar') as HTMLElement)
       .getByRole('button', { name: 'Abrir menú de navegación' }));
-    await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: /cerrar sesión/i }));
+    // Logout lives in the drawer footer's account options, not in a standing button (S7).
+    const drawer = screen.getByRole('dialog', { name: 'Navegación' });
+    await user.click(within(drawer).getByRole('button', { name: 'Más opciones de la cuenta' }));
+    await user.click(within(drawer).getByRole('menuitem', { name: 'Cerrar sesión' }));
 
     expect(await screen.findByLabelText(/usuario/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/usuario/i)).toBeInTheDocument();
