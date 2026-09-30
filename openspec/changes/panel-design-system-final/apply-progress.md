@@ -243,6 +243,65 @@ No push, PR creation, merge, branch, or worktree operation was performed.
 
 PR 3 tasks 2.4–2.5 are complete. Do not touch slice 3/4 work, especially `style-boundary.test.ts`, or consolidate its duplicate `--bg` assertion here.
 
+---
+
+# Apply Progress: panel-design-system-final — Slice 3 (PR 4)
+
+## Status
+
+Task 3.1 (WU6, desktop shell) is complete. Scope is limited to the desktop sidebar/header presentation and paired behavioral tests; tablet/mobile/drawer behavior and deferred story/token assertions remain untouched.
+
+## Task completion
+
+- [x] 1.1 — WU1 palette and token guard (Slice 1 record preserved).
+- [x] 1.2 — WU2 direction documentation (Slice 1 record preserved).
+- [x] 2.1 — WU4a Button/Input.
+- [x] 2.2 — WU4b Select/Textarea/SearchInput.
+- [x] 2.3 — WU4c Badge/StatusBadge/Tabs.
+- [x] 2.4 — WU4d shared page primitives.
+- [x] 2.5 — WU5 cards, tables and dialogs.
+- [x] 3.1 — WU6 desktop shell.
+- [ ] 3.2 — WU7 tablet/mobile surfaces and modal drawer.
+- [ ] 3.3 — WU8 shell stories and boundary guard.
+- [ ] 4.1 — WU9 dashboard consumer.
+- [ ] 4.2 — WU10 dashboard stories and responsive regression coverage.
+
+## WU6 — task 3.1 evidence
+
+- The sidebar search filters only role-authorized entries derived from `NAVIGATION`; those same entries are presented in General, Operación and Administración sections. Search is not shown in the compact rail state. Existing brand assets, expanded/collapsed navigation and user footer are preserved.
+- Desktop header now includes a browser-history back action, existing route breadcrumb, notification surface, avatar/account menu and chevron. Account menu uses the existing identity/role and logout contract. Existing route bridge, notification behavior, role logic and `panelRoutes.ts` remain unchanged.
+- RED: baseline focused tests passed (2 files / 34 tests); then full `cd web && npm run test` failed on both new expectations (missing in-sidebar search and missing Volver action): 1 failed file, 91 passed; 2 failed tests, 893 passed. No production code had changed at RED.
+- GREEN: first focused cycle exposed an interaction with a pre-existing assertion that the account trigger is absent while the notifications popover is open; kept that established behavior by suppressing the account trigger while notifications are open. Focused result: 2 files / 36 tests passed.
+- REFACTOR: retained local grouping/filtering in the existing `Navigation` renderer and made account/notification overlap mutually exclusive without touching their existing contracts. Re-ran focused tests and the full suite after the final implementation; both passed.
+- Work Unit Evidence: focused `npm run test -- src/components/domain/PanelShell.test.tsx src/components/domain/AppShell.test.tsx` — 2 files / 36 tests passed. Runtime harness: same RTL component tests exercised search input, role-filtered groups, history back, notification availability, account menu, and logout callback; no browser/Storybook visual session was performed (visual conformance remains unclaimed). Rollback boundary: revert `PanelShell.tsx`, `PanelShell.test.tsx`, the desktop additions in `primitives.css`, and the 3.1 task/apply-progress records together.
+
+## TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 3.1 | `PanelShell.test.tsx` | React Testing Library component/runtime | 2 files / 34 tests passed | Full suite: 2 tests failed on absent search and back control (91 files passed, 1 failed; 893 tests passed, 2 failed) | Focused: 2 files / 36 tests passed | Operator role omits admin group; search returns matching existing entry; back action and account/logout exercised | Preserved notification/account mutual exclusion; focused and complete suite passed |
+
+## Verification
+
+| Command | Observed result |
+|---|---|
+| `cd web && npm run test` (RED) | Expected failure: 91 files passed, 1 failed; 893 passed, 2 failed. Both failures were new desktop-shell acceptance assertions. |
+| `cd web && npm run test -- src/components/domain/PanelShell.test.tsx src/components/domain/AppShell.test.tsx` (GREEN) | Passed: 2 files, 36 tests. |
+| `cd web && npm run test` (final) | Passed: 92 files, 895 tests. Existing React `act(...)` and jsdom navigation warnings were present; no failures. |
+| `cd web && npm run build` (final) | Passed: `tsc -b` and Vite production build; Vite emitted its existing >500 kB chunk warning. |
+
+## Graph check
+
+- Read `graphify-out/GRAPH_REPORT.md`; its recorded source commit is stale (`96a6f69b`) and freshness metadata inconsistent. Used structurally and verified exact behavior against source; no rebuild.
+- Queried the desktop `PanelShell` sidebar/search/grouping/header surface; graph surfaced `PanelShell()`, `NAVIGATION`, `AppShell.tsx`, shell test, and shared stylesheet nodes.
+- Path checks confirmed `AppShell.tsx --imports_from--> PanelShell.tsx` and `PanelShell.tsx --references--> panelRoutes.ts`. `panelRoutes.ts` remains read-only. Relevant additional consulted nodes: `PanelShell.test.tsx`, `AppShell.test.tsx`, `primitives.css`, `NAVIGATION`, and the `PanelShell()` component.
+
+## Scope and delivery
+
+- Stacked-to-main PR 4 boundary: existing desktop `AppShell` → `PanelShell` through expanded/collapsed sidebar, search, grouped authorized navigation, footer and desktop header; PR 5 responsive surfaces remain pending.
+- Changed files remain within the ≤5-file ceiling including the OpenSpec task/progress records. No AppShell route bridge, Dashboard, panelRoutes inventory, story, token test, logo asset, tablet/mobile surface or drawer lifecycle was changed.
+- No push, PR creation, merge, branch or worktree operation was performed.
+
 ## Parent-authorized scope adjustment — WU5 correction
 
 - Parent authorized exactly one assertion change in `web/src/tokens/tokens.test.ts`: replaced the `.card` `box-shadow: var(--elevation-raised)` required-match with a negative assertion that `.card` does not declare `box-shadow`.
