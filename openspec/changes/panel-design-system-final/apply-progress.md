@@ -152,6 +152,7 @@ Complete — assigned tasks 2.1, 2.2, and 2.3 are implemented and verified. Scop
 - WU4b query consulted `Select()`, `Textarea()`, `SearchInput()`, their tests, and `primitives.css`. Directed path query from `Select.test.tsx` to `primitives.css` found no directed edge.
 - WU4c query consulted `Badge()`, `StatusBadge()`, `Tabs()`, their tests, and `primitives.css`. Directed path query from `Badge.test.tsx` to `primitives.css` found no directed edge.
 - No graph edges were represented as direct dependencies absent source evidence. God nodes in the report include AppShell, Dashboard, and token/test hubs; the affected primitive nodes appear in the primitive/style community.
+- Session-close incremental refresh was attempted once: `graphify /home/stefan/repos/lumat-agent-odd-design-system-primitives --update`. It exceeded the 120-second timeout after scanning 56 code and 36 documentation files; Graphify emitted a fail-closed warning about seven source files excluded from the current scan corpus, and skipped `tokens.css` as potentially sensitive. The command did not report successful completion; no second refresh or full rebuild was attempted.
 
 ## Commits
 
