@@ -3,14 +3,11 @@
 @import "@fontsource/inter/600.css";
 @import "@fontsource/inter/700.css";
 
-/* Lumat Panel design tokens (B6/T6.1) — SINGLE token source (PDW-TKN-1/2).
+/* Lumat Panel design tokens — SINGLE token source (DS-TKN-1/2).
  *
- * Port of the panel's inline CSS palette (brand #143c2c seed), NOT a redesign.
  * Component sources MUST reference these custom properties only — no hardcoded
  * hex or magic spacing values (enforced by token guards, T6.2).
  *
- * Spot-checked equivalence (PDW-TKN-1): primary #143c2c, bg #F1F1E8,
- * text #1a202c, danger #b71c1c, success #1b5e20, radii 6px/8px.
  */
 
 /* The SPA owns the viewport. Keep the browser's user-agent margin from
@@ -39,19 +36,25 @@ body {
   --primary-800: #143c2c; /* brand */
   --primary-900: #0d261c;
 
-  /* Neutrals (base.html port) — v1 shell uses cream warm off-white bg (DS-V1-SHELL)
-   * with a pure-white `--surface` so cards read as crisp white tiles on a cream
-   * page (per the friendly-dashboard reference; the previous `#FAF8F0` was too
-   * close to the bg and dropped cards out of the palette).
-   * The V2 proposal had cream scoped under a separate `--v2-bg-cream`; the
-   * pivot kept the V1 `--bg` slot and lifted cream straight into it (PDW-TKN-1). */
-  --bg: #F1F1E8;
-  --surface: #fff;
-  --border: #d8dde3;
+  /* Approved forest chrome, sage surfaces, and semantic text roles. */
+  --chrome-950: #012f1d;
+  --chrome-900: #073d2b;
+  --chrome-active: #012214;
+  --bg: #dbe1d6;
+  --header-bg: #dee4db;
+  --surface: #e8ebe4;
+  --border: #d5dad1; /* Decorative container hairline; not a control boundary. */
   --border-strong: #7e858f;
-  --text: #1a202c;
-  --text-muted: #4a5568;
-  --table-head-bg: #eef1f4;
+  --text: #111a2e;
+  --text-muted: #5a6469;
+  --text-on-dark: #e9f0e9;
+  --text-on-dark-2: #88a599;
+  --lime-500: #c6d529;
+  --lime-600: #d3e41d;
+  --lime-700: #a2c312; /* Decorative title accent rule. */
+  --teal-500: #52babb;
+  --teal-400: #6adbdf;
+  --table-head-bg: var(--surface);
 
   /* Semantic pairs (text / bg / border) */
   --danger: #b71c1c;
@@ -60,9 +63,10 @@ body {
   --success: #1b5e20;
   --success-bg: #e8f5e9;
   --success-border: #81c784;
-  --warning: #a05e07;
+  --warning: #8f5406;
   --warning-bg: #fef3c7;
   --warning-border: #fcd34d; /* new: StatusBadge human/pending */
+  /* Status badge borders are decorative reinforcement, never the sole status channel. */
 
   /* Semantic tints — very light backgrounds for subtle inline banners
    * (StateMessage); the colored tone comes from the left bar + icon, the
@@ -144,8 +148,6 @@ body {
   --brand-forest: #576f31;
   --brand-graphite: #656665;
   --brand-bg: #dde2d6f5;
-  /* Elevated surface for cards/components sitting on --brand-bg: a lighter
-   * sage (mixed toward white) so tiles lift off the section background. */
   --brand-bg-elevated: color-mix(in srgb, var(--brand-bg) 60%, var(--surface));
   --info: #14788f;
 
@@ -185,11 +187,11 @@ body {
    * token-only. */
 
   /* Visual foundation additions — ChatGPT structure on Lumat's palette. */
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
   --radius-pill: 9999px;
   --surface-subtle: var(--table-head-bg);
-  --elevation-raised: var(--shadow-1);
+  --elevation-raised: none;
   --elevation-overlay: var(--shadow-3);
   --icon-sm: 16px;
   --icon-md: 20px;

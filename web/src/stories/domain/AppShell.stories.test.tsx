@@ -94,8 +94,8 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
     expect(screen.getAllByAltText('Lumat').length).toBeGreaterThan(0);
   });
 
-  it('uses cream (#F1F1E8) as the v1 page bg', () => {
-    expect(tokensRaw).toMatch(/--bg:\s*#F1F1E8/);
+  it('uses the approved sage (#dbe1d6) as the page bg', () => {
+    expect(tokensRaw).toMatch(/--bg:\s*#dbe1d6/);
   });
 
   it('does not reintroduce the dropped --header-gradient token', () => {
