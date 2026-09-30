@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { DashboardOverview } from "./Dashboard.stories";
+import { DashboardOverview, Desktop, Mobile, Tablet } from "./Dashboard.stories";
 
 describe("Dashboard page story (R-PRD-PG-6)", () => {
   it("renders real KPI cards, motivos, and the window caption", () => {
@@ -19,6 +19,15 @@ describe("Dashboard page story (R-PRD-PG-6)", () => {
     expect(screen.queryByText("Resolución autónoma")).not.toBeInTheDocument();
     expect(screen.queryByText("Tiempo de respuesta")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Actividad reciente" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the owner override and urgent cases in the responsive dashboard stories", () => {
+    render(<DashboardOverview />);
+    expect(screen.queryByRole("button", { name: "Abrir Casos" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rosa" })).toHaveTextContent("Urgente");
+    expect(Desktop.parameters?.viewport).toEqual({ width: 1280, height: 900 });
+    expect(Tablet.parameters?.viewport).toEqual({ width: 768, height: 1024 });
+    expect(Mobile.parameters?.viewport).toEqual({ width: 390, height: 844 });
   });
 
   it.each([

@@ -62,6 +62,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Overview: Story = { render: () => <DashboardOverview /> };
+export const Desktop: Story = { ...Overview, parameters: { viewport: { width: 1280, height: 900 } } };
+export const Tablet: Story = { ...Overview, parameters: { viewport: { width: 768, height: 1024 } } };
+export const Mobile: Story = { ...Overview, parameters: { viewport: { width: 390, height: 844 } } };
 export const Loading: Story = { render: () => <DashboardOverview state="loading" /> };
 export const Empty: Story = { render: () => <DashboardOverview state="empty" /> };
 export const Stale: Story = { render: () => <DashboardOverview state="stale" /> };
