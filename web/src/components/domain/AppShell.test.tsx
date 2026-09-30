@@ -22,6 +22,12 @@ function sidebar(container: HTMLElement) {
   return within(container.querySelector('.panel-shell__sidebar') as HTMLElement);
 }
 
+/** Mobile shell trigger; jsdom does not apply the breakpoint styles that hide the tablet trigger. */
+function mobileDrawerTrigger(container: HTMLElement) {
+  return within(container.querySelector('.panel-shell__mobile-bar') as HTMLElement)
+    .getByRole('button', { name: 'Abrir menú de navegación' });
+}
+
 describe('AppShell (T6.4)', () => {
   it('shows the authenticated user (username + role) and the app name', () => {
     const { container } = render(<AppShell user={admin} />);
@@ -32,16 +38,16 @@ describe('AppShell (T6.4)', () => {
 
   it('renders admin sections for an admin, but hides them for an operador', async () => {
     const user = userEvent.setup();
-    const { unmount } = render(<AppShell user={admin} />);
-    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+    const { container, unmount } = render(<AppShell user={admin} />);
+    await user.click(mobileDrawerTrigger(container));
     const adminDrawer = screen.getByRole('dialog', { name: 'Navegación' });
     expect(within(adminDrawer).getByRole('button', { name: /base de conocimientos/i })).toBeInTheDocument();
      expect(within(adminDrawer).getByRole('button', { name: /configuraci[oó]n/i })).toBeInTheDocument();
      expect(within(adminDrawer).getByRole('button', { name: 'Usuarios' })).toBeInTheDocument();
     unmount();
 
-    render(<AppShell user={operador} />);
-    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+    const { container: operadorContainer } = render(<AppShell user={operador} />);
+    await user.click(mobileDrawerTrigger(operadorContainer));
     const operadorDrawer = screen.getByRole('dialog', { name: 'Navegación' });
     expect(
       within(operadorDrawer).queryByRole('button', { name: /base de conocimientos/i }),
@@ -53,8 +59,8 @@ describe('AppShell (T6.4)', () => {
 
    it('exposes approved destinations and keeps legacy routes out of navigation', async () => {
     const user = userEvent.setup();
-    render(<AppShell user={admin} />);
-    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+    const { container } = render(<AppShell user={admin} />);
+    await user.click(mobileDrawerTrigger(container));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
        expect(drawer.querySelectorAll('.panel-shell__navigation-button')).toHaveLength(9);
     for (const label of [
@@ -85,7 +91,7 @@ describe('AppShell (T6.4)', () => {
     const { container } = render(<AppShell user={operador} />);
     expect(await screen.findByRole('heading', { name: 'Panel', level: 1 })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+    await user.click(mobileDrawerTrigger(container));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
     const panelBtn = within(drawer).getByRole('button', { name: 'Panel unificado' });
     expect(panelBtn).toHaveAttribute('aria-current', 'page');
@@ -129,7 +135,7 @@ describe('AppShell (T6.4)', () => {
     const user = userEvent.setup();
     const { container } = render(<AppShell user={admin} />);
     const drawer = async () => {
-      await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+      await user.click(mobileDrawerTrigger(container));
       return screen.getByRole('dialog', { name: 'Navegación' });
     };
 
@@ -156,7 +162,7 @@ describe('AppShell (T6.4)', () => {
     expect(await screen.findByRole('heading', { name: 'Agenda', level: 1 })).toBeInTheDocument();
     expect(sidebar(container).getByText('Agenda').closest('button')).toHaveAttribute('aria-current', 'page');
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+    await userEvent.setup().click(mobileDrawerTrigger(container));
     expect(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Agenda' })).toBeInTheDocument();
     vi.restoreAllMocks();
   });
@@ -190,7 +196,7 @@ describe('AppShell (T6.4)', () => {
     const { container } = render(<AppShell user={operador} />);
     expect(await screen.findByText('Indicadores operacionales')).toBeInTheDocument();
     expect(sidebar(container).queryByText('Dashboard avanzado')).not.toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+    await userEvent.setup().click(mobileDrawerTrigger(container));
     expect(within(screen.getByRole('dialog', { name: 'Navegación' })).queryByRole('button', { name: 'Dashboard avanzado' })).not.toBeInTheDocument();
     vi.restoreAllMocks();
   });
@@ -294,7 +300,7 @@ describe('AppShell (T6.4)', () => {
     const { container } = render(<AppShell user={operador} />);
     expect(await screen.findByText(/no tienes permiso|acceso denegado|forbidden/i)).toBeInTheDocument();
     expect(sidebar(container).queryByText('Automatizaciones')).not.toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+    await userEvent.setup().click(mobileDrawerTrigger(container));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
     expect(within(drawer).queryByRole('button', { name: 'Automatizaciones' })).not.toBeInTheDocument();
     vi.restoreAllMocks();
@@ -329,13 +335,13 @@ describe('AppShell (T6.4)', () => {
       return new Response(JSON.stringify(bodies[path] ?? { contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' }), { status: 200 });
     });
     const user = userEvent.setup();
-    render(<AppShell user={admin} />);
-    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+    const { container } = render(<AppShell user={admin} />);
+    await user.click(mobileDrawerTrigger(container));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Clientes' }));
     await user.click(await screen.findByRole('link', { name: 'Cliente vivo' }));
     expect(await screen.findByText('Ficha: Cliente vivo')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+    await user.click(mobileDrawerTrigger(container));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Conversaciones' }));
     await user.click(await screen.findByRole('button', { name: 'Abrir conversación #9' }));
     expect(await screen.findByText(/#9/)).toBeInTheDocument();
@@ -418,7 +424,7 @@ describe('AppShell — native History API routing', () => {
     expect(screen.getByRole('heading', { name: 'Clientes', level: 1 })).toBeInTheDocument();
     expect(sidebar(container).getByText('Clientes').closest('button')).toHaveAttribute('aria-current', 'page');
 
-    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+    await user.click(mobileDrawerTrigger(container));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Conversaciones' }));
     expect(window.location.pathname).toBe('/panel/app/conversations');
     expect(screen.getByRole('heading', { name: 'Conversaciones', level: 1 })).toBeInTheDocument();
@@ -428,9 +434,9 @@ describe('AppShell — native History API routing', () => {
     const user = userEvent.setup();
     const addSpy = vi.spyOn(window, 'addEventListener');
     const removeSpy = vi.spyOn(window, 'removeEventListener');
-    const { unmount } = render(<AppShell user={operador} />);
+    const { container, unmount } = render(<AppShell user={operador} />);
 
-    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+    await user.click(mobileDrawerTrigger(container));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Clientes' }));
     window.history.pushState({}, '', '/panel/app/conversations');
     window.dispatchEvent(new PopStateEvent('popstate'));
@@ -485,15 +491,25 @@ describe('AppShell — agent shell grammar', () => {
     expect(requests.filter((path) => path.includes('/notifications'))).toHaveLength(1);
   });
 
-  it('renders the responsive footer navigation with chat for every panel role', () => {
+  it('renders the five approved mobile destinations and keeps notifications reachable in the header', async () => {
+    const user = userEvent.setup();
     const { container, rerender } = render(<AppShell user={admin} />);
     const footer = within(container.querySelector('.panel-shell__footer-nav') as HTMLElement);
-    expect(footer.getByRole('button', { name: 'Notificaciones' })).toBeInTheDocument();
+    expect(footer.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Panel', 'Conversaciones', 'Asistente', 'Agenda', 'Clientes',
+    ]);
     expect(footer.getByRole('button', { name: 'Panel' })).toHaveAttribute('aria-current', 'page');
-    expect(footer.getByRole('button', { name: 'Agente Lumat' })).toHaveClass('panel-shell__footer-nav--primary');
-    expect(footer.getAllByRole('button')).toHaveLength(5);
+    expect(footer.getByRole('button', { name: 'Asistente' })).toHaveClass('panel-shell__footer-nav--primary');
+    const notificationButton = screen.getByRole('button', { name: /notificaciones/i });
+    expect(notificationButton).toBeInTheDocument();
+    await user.click(notificationButton);
+    expect(screen.getByRole('dialog', { name: 'Notificaciones' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cerrar notificaciones' }));
     rerender(<AppShell user={operador} />);
-    expect(within(container.querySelector('.panel-shell__footer-nav') as HTMLElement).getByRole('button', { name: 'Agente Lumat' })).toBeInTheDocument();
+    expect(within(container.querySelector('.panel-shell__footer-nav') as HTMLElement)
+      .getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+        'Panel', 'Conversaciones', 'Asistente', 'Agenda', 'Clientes',
+      ]);
   });
 
   it('renders the optional inspector without active-thread chrome', () => {

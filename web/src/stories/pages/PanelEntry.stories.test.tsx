@@ -20,6 +20,11 @@ const tokensRaw = readFileSync(join(process.cwd(), "src", "tokens", "tokens.css"
 const previewRaw = readFileSync(join(process.cwd(), ".storybook", "preview.ts"), "utf8");
 const panelEntryStoryRaw = readFileSync(join(process.cwd(), "src", "stories", "pages", "PanelEntry.stories.tsx"), "utf8");
 
+function mobileDrawerTrigger(container: HTMLElement) {
+  return within(container.querySelector(".panel-shell__mobile-bar") as HTMLElement)
+    .getByRole("button", { name: "Abrir menú de navegación" });
+}
+
 describe("Panel entry layout", () => {
   it("publishes the final shell state stories without duplicating the base tiers", () => {
     expect(panelEntryStories.HeaderZero).toBeDefined();
@@ -69,7 +74,7 @@ describe("Panel entry layout", () => {
     expect(sidebar.querySelector(".panel-shell__brand-mark")).toHaveAttribute("alt", "");
     expect(sidebar.querySelector(".panel-shell__brand")).toHaveAttribute("aria-label", "Lumat, panel operativo");
 
-    await user.click(screen.getByRole("button", { name: "Abrir menú de navegación" }));
+    await user.click(mobileDrawerTrigger(container));
     const drawer = screen.getByRole("dialog", { name: "Navegación" });
     expect(within(drawer).getByAltText("Lumat")).toHaveAttribute("src", "/panel/app/brand/lumat-logo.png");
   });
@@ -139,13 +144,13 @@ describe("Panel entry layout", () => {
 
   it("exposes the drawer state and restores focus after Escape", async () => {
     const user = userEvent.setup();
-    render(
+    const { container } = render(
       <PanelShell user={{ username: "ana", role: "admin" }}>
         {dashboard}
       </PanelShell>,
     );
 
-    const menu = screen.getByRole("button", { name: "Abrir menú de navegación" });
+    const menu = mobileDrawerTrigger(container);
     expect(menu).toHaveAttribute("aria-expanded", "false");
     expect(menu).toHaveAttribute("aria-controls", "panel-navigation-drawer");
 
@@ -160,7 +165,7 @@ describe("Panel entry layout", () => {
 
   it("closes on backdrop activation and forwards navigation intent", async () => {
     const onNavigate = vi.fn();
-    render(
+    const { container } = render(
       <PanelShell user={{ username: "ana", role: "admin" }} drawerInitiallyOpen onNavigate={onNavigate}>
         {dashboard}
       </PanelShell>,
@@ -170,7 +175,7 @@ describe("Panel entry layout", () => {
     fireEvent.click(within(drawer).getByRole("button", { name: "Clientes" }));
     expect(onNavigate).toHaveBeenCalledWith("clients");
 
-    const menu = screen.getByRole("button", { name: "Abrir menú de navegación" });
+    const menu = mobileDrawerTrigger(container);
     fireEvent.click(menu);
     fireEvent.mouseDown(screen.getByTestId("panel-drawer-backdrop"));
     expect(menu).toHaveAttribute("aria-expanded", "false");
@@ -217,8 +222,8 @@ describe("Panel entry layout", () => {
 
   it("closes the drawer when the viewport reaches the desktop rail tier", async () => {
     const user = userEvent.setup();
-    render(<PanelShell user={{ username: "ana", role: "admin" }}>{dashboard}</PanelShell>);
-    const menu = screen.getByRole("button", { name: "Abrir menú de navegación" });
+    const { container } = render(<PanelShell user={{ username: "ana", role: "admin" }}>{dashboard}</PanelShell>);
+    const menu = mobileDrawerTrigger(container);
     await user.click(menu);
     expect(screen.getByRole("dialog", { name: "Navegación" })).toBeVisible();
 

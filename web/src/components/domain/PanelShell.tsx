@@ -84,7 +84,10 @@ function Brand({ mobile = false, compact = false }: { mobile?: boolean; compact?
       {compact ? (
         <img className="panel-shell__brand-mark" src={`${BRAND_ASSET_BASE}/lumat-mark.png`} alt="" aria-hidden="true" />
       ) : (
-        <img className="panel-shell__brand-image" src={`${BRAND_ASSET_BASE}/lumat-logo.png`} alt="Lumat" />
+        <>
+          <img className="panel-shell__brand-image" src={`${BRAND_ASSET_BASE}/lumat-logo.png`} alt="Lumat" />
+          <img className="panel-shell__brand-mark" src={`${BRAND_ASSET_BASE}/lumat-mark.png`} alt="" aria-hidden="true" />
+        </>
       )}
     </div>
   );
@@ -188,8 +191,10 @@ export function PanelShell({
   const [navigationSearch, setNavigationSearch] = useState("");
   const [accountOpen, setAccountOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const drawerRef = useRef<HTMLElement>(null);
+  const drawerTriggerRef = useRef<HTMLElement | null>(null);
+  const drawerOpenedWidthRef = useRef(window.innerWidth);
+  const desktopTriggerRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDialogElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -211,8 +216,20 @@ export function PanelShell({
   };
 
   const closeDrawer = () => {
+    if (drawerRef.current?.open) drawerRef.current.close();
     setDrawerOpen(false);
-    queueMicrotask(() => menuButtonRef.current?.focus());
+    queueMicrotask(() => {
+      const trigger = drawerOpenedWidthRef.current < 1024 && window.innerWidth >= 1024
+        ? desktopTriggerRef.current
+        : drawerTriggerRef.current?.isConnected ? drawerTriggerRef.current : menuButtonRef.current;
+      trigger?.focus();
+    });
+  };
+
+  const openDrawer = (trigger: HTMLElement) => {
+    drawerTriggerRef.current = trigger;
+    drawerOpenedWidthRef.current = window.innerWidth;
+    setDrawerOpen(true);
   };
 
   useEffect(() => {
@@ -246,54 +263,28 @@ export function PanelShell({
   };
 
   useEffect(() => {
-    if (drawerOpen) closeButtonRef.current?.focus();
-  }, [drawerOpen]);
-
-  useEffect(() => {
     const contentArea = contentAreaRef.current;
-    if (!contentArea) return;
-
-    if (!drawerOpen) {
-      contentArea.removeAttribute("inert");
-      document.body.style.overflow = "";
-      return;
-    }
+    const dialog = drawerRef.current;
+    if (!drawerOpen || !dialog || !contentArea) return;
 
     const previousOverflow = document.body.style.overflow;
-    if (drawerOpen) contentArea.setAttribute("inert", "");
+    const previousInert = contentArea.hasAttribute("inert");
     document.body.style.overflow = "hidden";
-    const handleEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") closeDrawer();
-    };
+    contentArea.setAttribute("inert", "");
+    if (!dialog.open) dialog.showModal();
+    dialog.querySelector<HTMLButtonElement>(".panel-shell__drawer-close")?.focus();
     const handleResize = () => {
       if (window.innerWidth >= 1024) closeDrawer();
     };
-    document.addEventListener("keydown", handleEscape);
     window.addEventListener("resize", handleResize);
     return () => {
-      document.removeEventListener("keydown", handleEscape);
       window.removeEventListener("resize", handleResize);
-      contentArea.removeAttribute("inert");
+      if (dialog.open) dialog.close();
+      if (previousInert) contentArea.setAttribute("inert", "");
+      else contentArea.removeAttribute("inert");
       document.body.style.overflow = previousOverflow;
     };
   }, [drawerOpen]);
-
-  const keepFocusInDrawer = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key !== "Tab") return;
-    const focusable = [...(drawerRef.current?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-    ) ?? [])];
-    if (focusable.length === 0) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
 
   const closeNotifications = () => {
     setNotificationsOpen(false);
@@ -341,6 +332,9 @@ export function PanelShell({
 
       <aside id="panel-shell-sidebar" className="panel-shell__sidebar panel-shell__rail" aria-label="Panel de navegación" aria-hidden={focusMode || undefined}>
         <div className="panel-shell__sidebar-inner">
+          <button type="button" className="panel-shell__tablet-menu" aria-label="Abrir menú de navegación" aria-expanded={drawerOpen} aria-controls="panel-navigation-drawer" onClick={(event) => openDrawer(event.currentTarget)}>
+            <Icon icon={Menu} />
+          </button>
           <Brand compact={collapsed} />
           {!collapsed ? <label className="panel-shell__search">
             <Icon icon={Search} />
@@ -361,44 +355,41 @@ export function PanelShell({
           aria-controls="panel-navigation-drawer"
           aria-label="Abrir menú de navegación"
           title="Abrir menú de navegación"
-          onClick={() => setDrawerOpen(true)}
+          onClick={(event) => openDrawer(event.currentTarget)}
         >
           <Icon icon={Menu} />
         </button>
       </header>
 
-      <div
-        className="panel-shell__drawer-layer"
-        data-testid="panel-drawer-backdrop"
-        hidden={!drawerOpen}
-        onMouseDown={(event) => {
-          if (event.target === event.currentTarget) closeDrawer();
-        }}
-      >
-        <section
+      <dialog
           ref={drawerRef}
           id="panel-navigation-drawer"
-          className="panel-shell__drawer"
-          role="dialog"
+          className="panel-shell__drawer-layer"
+          data-testid="panel-drawer-backdrop"
           aria-label="Navegación"
           aria-modal="true"
-          onKeyDown={keepFocusInDrawer}
+          onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closeDrawer(); } }}
+          onCancel={(event) => { event.preventDefault(); closeDrawer(); }}
+          onMouseDown={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}
+          onClick={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}
         >
+        <section className="panel-shell__drawer">
           <div className="panel-shell__drawer-heading">
             <Brand mobile />
-            <button ref={closeButtonRef} type="button" className="panel-shell__drawer-close" aria-label="Cerrar menú de navegación" title="Cerrar menú de navegación" onClick={closeDrawer}>
+            <button type="button" className="panel-shell__drawer-close" aria-label="Cerrar menú de navegación" title="Cerrar menú de navegación" onClick={closeDrawer}>
               <Icon icon={X} />
             </button>
           </div>
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} />
           <UserContext user={user} onLogout={onLogout} />
         </section>
-      </div>
+      </dialog>
 
       <div ref={contentAreaRef} className="panel-shell__content-area" onKeyDown={focusMode ? keepFocusInFocusMode : undefined}>
         <div className="panel-shell__header-row">
           <header className="panel-shell__header" aria-label="Encabezado de la vista">
             <button
+              ref={desktopTriggerRef}
               type="button"
               className="panel-shell__collapse-button"
               aria-expanded={!collapsed}
@@ -469,9 +460,9 @@ export function PanelShell({
            {children}
         </div>
        </div>
-        <nav className="panel-shell__footer-nav panel-shell__footer-nav--admin" aria-label="Navegación inferior">
-          {(["notifications", "dashboard", "chat", "conversations", "agenda"] as PanelView[]).map((view) => {
-            const item = view === "notifications" ? { label: "Notificaciones", icon: Bell } : view === "dashboard" ? { label: "Panel", icon: PanelLeft } : view === "chat" ? { label: "Agente Lumat", icon: Bot } : view === "conversations" ? { label: "Conversaciones", icon: MessageSquare } : { label: "Agenda", icon: Calendar };
+        <nav className="panel-shell__footer-nav" aria-label="Navegación inferior">
+          {(["dashboard", "conversations", "chat", "agenda", "clients"] as PanelView[]).map((view) => {
+            const item = view === "dashboard" ? { label: "Panel", icon: PanelLeft } : view === "chat" ? { label: "Asistente", icon: Bot } : view === "conversations" ? { label: "Conversaciones", icon: MessageSquare } : view === "agenda" ? { label: "Agenda", icon: Calendar } : { label: "Clientes", icon: Users };
             return <button key={view} type="button" className={view === "chat" ? "panel-shell__footer-nav--primary" : undefined} aria-current={currentView === view ? "page" : undefined} aria-label={item.label} onClick={() => handleNavigation(view)}><Icon icon={item.icon} /><span>{item.label}</span></button>;
          })}
        </nav>

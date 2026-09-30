@@ -307,3 +307,44 @@ Task 3.1 (WU6, desktop shell) is complete. Scope is limited to the desktop sideb
 - Parent authorized exactly one assertion change in `web/src/tokens/tokens.test.ts`: replaced the `.card` `box-shadow: var(--elevation-raised)` required-match with a negative assertion that `.card` does not declare `box-shadow`.
 - This follows design.md lines 45, 48–49 and 143 plus CST-PRIM-9 / DS-TKN-7. No other assertion in `tokens.test.ts` changed. `--elevation-raised: none`, `--elevation-overlay: var(--shadow-3)`, and all `--shadow-1..3` declarations remain unchanged.
 - Strict TDD: focused RED observed 1 failed / 22 passed on the obsolete assertion; after replacing that single expectation, final full suite passed 92 files / 893 tests. Build passed.
+
+---
+
+# Apply Progress: panel-design-system-final — Slice 3 (PR 5, task 3.2 only)
+
+## Status
+
+Task 3.2 (WU7) is complete for PR 5. Parent split task 3.3/WU8 into PR 6 because the combined change approached the 400-line review budget. No task 3.3 work or `--bg` consolidation is included here.
+
+## Scope and changed files
+
+- WU7 shell implementation is in `web/src/components/domain/PanelShell.tsx` and `web/src/components/primitives/primitives.css`; focused behavior is tested in `PanelShell.test.tsx`. It adds the tablet icon rail, dark mobile header, exactly five approved tabs, and a native modal drawer, retaining route/role authority and handling focus, inertness, scroll restoration, Escape, navigation, resize, reduced motion, and 44px targets.
+- Authorized query reconciliation: `AppShell.test.tsx` scopes all 12 duplicate-prone drawer-trigger queries to `.panel-shell__mobile-bar`. Its stale footer assertion now checks the ordered labels Panel, Conversaciones, Asistente, Agenda, Clientes, retains active/primary styling assertions, and opens/closes the header notifications dialog. `app.test.tsx` scopes its logout-flow trigger to the same mobile header.
+- `PanelEntry.stories.test.tsx` changes only four drawer-trigger queries (original lines 72, 148, 173, 221) to a helper scoped within `.panel-shell__mobile-bar`; no story fixture or visual assertion changed.
+- `web/src/test/setup.ts` provides jsdom defaults: `showModal()` sets `open`, `close()` removes `open`; configurable/writable descriptors preserve local spy overrides. Removed the unused resize-test mock bindings from `PanelShell.test.tsx`.
+- No route authority, token tests, Dashboard, story content, or production code for the harness was changed. No style-boundary assertion was needed; no new shell source was introduced.
+
+## TDD / verification evidence
+
+| Evidence | Observed result |
+|---|---|
+| Initial focused RED: `npm run test -- src/components/domain/PanelShell.test.tsx src/components/domain/AppShell.test.tsx` | Failed: 11 failures / 31 passed; includes the old footer destinations and ambiguous tier trigger selectors. |
+| Native dialog RED before shared setup: same focused command after the authorized query/footer fixes | Failed on jsdom `dialog.showModal is not a function` when AppShell tests opened the drawer. |
+| Focused GREEN: `npm run test -- src/components/domain/PanelShell.test.tsx src/components/domain/AppShell.test.tsx src/components/primitives/Dialog.test.tsx` | Passed: 3 files / 47 tests after the shared setup methods were added. |
+| Story-query GREEN: `npm run test -- src/stories/pages/PanelEntry.stories.test.tsx` | Passed: 1 file / 16 tests after the four queries were scoped to the mobile header. |
+| `cd web && npm run test` | Passed: 92 files / 901 tests. Existing React `act(...)` and jsdom navigation warnings remain; no failures. |
+| `cd web && npm run build` | Passed: `tsc -b` and Vite production build; existing >500 kB chunk warning. |
+
+## Browser / graph / rollback
+
+- Native browser support is evidenced by `web/playwright.config.ts` (`channel: "chrome"`, installed `@playwright/test`). The shared setup is a jsdom-only harness, not a production fallback or dependency.
+- Graph check consulted `PanelShell()`, `NAVIGATION`, `AppShell.tsx`, `AppShell.test.tsx`, `PanelShell.test.tsx`, `PanelEntry.stories.test.tsx`, `setup.ts`, `primitives.css`, and `panelRoutes.ts`; confirmed `AppShell.tsx --imports_from--> PanelShell.tsx` and `PanelShell.tsx --references--> panelRoutes.ts`. `panelRoutes.ts` remains read-only. Graph report is stale at `96a6f69b`; no rebuild was performed.
+- Rollback boundaries: responsive behavior — `PanelShell.tsx`, `PanelShell.test.tsx`, `primitives.css`; shared dialog shim and associated shell test reconciliations — `setup.ts`, `AppShell.test.tsx`, `app.test.tsx`, `PanelEntry.stories.test.tsx`; task record — `tasks.md` and this apply-progress section.
+- PR boundary is PR 5 = task 3.2 only; PR 6 = task 3.3. No push, PR creation, merge, branch, or worktree operation was performed.
+
+## Completion state
+
+- [x] 1.1–1.2, 2.1–2.5, 3.1 (prior records preserved).
+- [x] 3.2 — WU7 complete and verified.
+- [ ] 3.3 — deferred to PR 6; no task 3.3 implementation is included here.
+- Tasks 4.1 and 4.2 remain pending.

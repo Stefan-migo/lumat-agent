@@ -174,7 +174,8 @@ describe('App /me auth gate (T6.4)', () => {
     const { container } = render(<App />);
 
     await waitFor(() => expect(sidebar(container).getByText('ana')).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: 'Abrir menú de navegación' }));
+    await user.click(within(container.querySelector('.panel-shell__mobile-bar') as HTMLElement)
+      .getByRole('button', { name: 'Abrir menú de navegación' }));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: /cerrar sesión/i }));
 
     expect(await screen.findByLabelText(/usuario/i)).toBeInTheDocument();
