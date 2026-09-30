@@ -401,3 +401,80 @@ Task 3.3 (WU8) is complete. The existing responsive shell is represented by name
 - Changed project files are limited to two requested story modules, their existing AppShell story test for responsive exports and token assertion consolidation, and the OpenSpec task/progress records (5 files total). `style-boundary.test.ts`, `dependency-boundary.test.ts`, production shell, and Dashboard are unchanged.
 - Authored changed-line count: 129 additions plus deletions (≤400); changed files: 5. Commits: `ff734a2b` (`test(shell): cover responsive story states`), `8c3be353` (`docs(sdd): record responsive story apply evidence`).
 - No push or remote operation was performed.
+
+---
+
+# Apply Progress: panel-design-system-final — Slice 4 (PR 7, tasks 4.1–4.2)
+
+## Status
+
+Tasks 4.1 (WU9) and 4.2 (WU10) are complete and verified. This is the final assigned slice; prior slice records above remain intact. The dashboard shortcut to Casos is removed per the explicit owner override, while urgent cases remain in Hoy and the separate Casos queue route is unchanged.
+
+## Task completion
+
+- [x] 1.1–1.2, 2.1–2.5, 3.1–3.3 — prior completed records preserved.
+- [x] 4.1 — WU9 dashboard behavior and visual consumer.
+- [x] 4.2 — WU10 dashboard stories and responsive regression coverage.
+
+## Completed work and TDD evidence
+
+### WU9 — task 4.1
+
+- Removed only the `Casos` item from dashboard quick-access destinations; urgent-case rows still navigate to the existing Casos queue. Existing API data, role-conditioned automation shortcut, Hoy entries, KPI/trend/motivo content, and loading/empty/error/denied/stale/partial states remain covered and unchanged.
+- Dashboard styles now use flat non-white surfaces, semantic foregrounds, strong boundaries for interactive rows/cards, a dark semantic assistant card, and a two-column KPI layout at mobile widths. Urgent status remains explicit in text and icon; color is not its only signal. Obsolete per-destination accent styles were removed.
+- RED: revised Dashboard/AppShell expectations first, then `cd web && npm run test` failed exactly on the two old `Abrir Casos` card renderings; 90 files passed, 2 failed; 897 passed, 2 failed (899 total). No production code had changed at RED.
+- GREEN: `npm run test -- src/components/pages/Dashboard.test.tsx src/components/domain/AppShell.test.tsx src/stories/pages/Dashboard.stories.test.tsx` passed 3 files / 49 tests after implementation. Urgent-row routing remains to Casos; the bookmarked separate route/queue tests still pass.
+- REFACTOR: removed the now-unused Case shortcut icon, destination accent map and inline accent styles; no extra abstraction or dependency added. Final full suite and build passed.
+- Work Unit Evidence: focused command/result as above. Runtime harness: RTL rendered dashboard records and exercised urgent-case navigation into the real existing Casos queue; no browser/Storybook session was run. Rollback boundary: revert commit `8929476a` and its four files (`Dashboard.tsx`, `primitives.css`, `Dashboard.test.tsx`, `AppShell.test.tsx`) together.
+
+### WU10 — task 4.2
+
+- Added named `Desktop` (1280×900), `Tablet` (768×1024), and `Mobile` (390×844) Dashboard stories, reusing the existing Overview fixture and state stories. Story assertions verify the three viewports, no dashboard Casos shortcut, and the urgent Rosa row. No reference-driven Casos card was reintroduced.
+- RED: added the responsive story contract first; `npm run test -- src/stories/pages/Dashboard.stories.test.tsx` failed because the named viewport exports were absent (1 failed / 7 passed). This was the deliberately stale expectation; not inferred.
+- GREEN: the same story test passed 1 file / 8 tests; final full suite and build passed.
+- REFACTOR: shared Overview story setup is reused directly; no additional fixture or component wrapper was needed.
+- Work Unit Evidence: focused command/result above. Runtime harness: story module/RTL contract exercised via the focused Vitest command; no standalone Storybook/browser viewport rendering was run. Rollback boundary: revert commit `928ae00f` and the two Dashboard story files only.
+
+## Contrast evidence and limitations
+
+Measured exact semantic token pairs used by the revised dashboard stylesheet using WCAG 2.x sRGB relative luminance (normal text threshold 4.5:1; control boundary threshold 3:1):
+
+| Actual role pairing | Ratio | Result / disposition |
+|---|---:|---|
+| `--text` on `--surface` | 14.40:1 | Pass |
+| `--text-muted` on `--surface` | 5.04:1 | Pass |
+| `--text-on-dark` on `--chrome-950` / `--chrome-900` | 12.70:1 / 10.58:1 | Pass |
+| `--primary-200` assistant subcopy on `--chrome-950` | 11.36:1 | Pass; existing semantic brand text retained |
+| `--danger` on `--danger-bg` (urgent label hover) | 5.74:1 | Pass |
+| `--danger` on `--danger-tint` (urgent count/icon) | 6.01:1 | Pass |
+| `--info` on `--info-tint` | 4.79:1 | Pass |
+| `--border-strong` on `--surface` / `--danger-tint` urgent row | 3.09:1 / 3.40:1 | Pass as interactive boundary |
+| `--focus-ring` on `--surface` | 5.02:1 | Pass for non-text focus indicator |
+
+These are token-pair measurements, not a browser-computed audit of every rendered pixel, text size, state, or composited surface. No Storybook/browser screenshot review or assistive-technology run was performed; rendered WCAG conformance and visual-reference fidelity are therefore not claimed. No unresolved measured pair was found among the listed revised roles; unmeasured inherited combinations remain unverified.
+
+## Verification
+
+| Command | Observed result |
+|---|---|
+| `cd web && npm run test` (WU9 RED) | Expected RED: 90 files passed, 2 failed; 897 passed, 2 failed (899 total). Both failures were the new no-Casos-card assertions. |
+| `cd web && npm run test -- src/components/pages/Dashboard.test.tsx src/components/domain/AppShell.test.tsx src/stories/pages/Dashboard.stories.test.tsx` | Passed: 3 files, 49 tests. |
+| `cd web && npm run test -- src/stories/pages/Dashboard.stories.test.tsx` (WU10 RED) | Expected RED: missing responsive story export; 1 test failed, 7 passed. |
+| `cd web && npm run test` (final) | Passed: 92 files, 900 tests. Existing React `act(...)` and jsdom navigation warnings remain. |
+| `cd web && npm run build` | Passed: `tsc -b` and Vite production build. Existing >500 kB chunk-size warning remains. |
+| `git diff --check` | Passed before commits; no whitespace errors. |
+
+## Graph check
+
+- Read the stale `graphify-out/GRAPH_REPORT.md` (built from `96a6f69b`; current branch was newer); used only structurally and verified details against source. No rebuild or refresh performed.
+- Dashboard query consulted `Dashboard()`, `Dashboard.tsx`, `Dashboard.stories.tsx`, and nodes for Hoy urgent cases/data states. Path query established `Dashboard() <--imports-- Dashboard.stories.tsx`.
+- Initial `Dashboard` → `primitives.css` path query found no directed path and reported ambiguous matches; a narrower area query surfaced Dashboard, Dashboard stories and urgent-case nodes, without evidence of a direct graph edge to the stylesheet. Source directly confirmed `.dashboard*` selectors in `primitives.css` style Dashboard.
+- AppShell/Dashboard query consulted `AppShell()`, `Dashboard()`, `AppShell.test.tsx`, `Dashboard.test.tsx`, dashboard API and route nodes. No route inventory or route implementation node was edited. The separate Casos queue is verified by existing deep-link and navigation tests.
+
+## Scope and delivery
+
+- PR 7 boundary: tasks 4.1 + 4.2, stacked-to-main; no push, PR creation, merge, branch or worktree operation.
+- Authored implementation diff: 47 additions + 43 deletions = 90 changed lines in six code/test/story files (≤400). Two OpenSpec bookkeeping artifacts are updated separately; total apply-record additions do not change the review-slice implementation budget.
+- Commits: `8929476a` (`feat(dashboard): apply final system and remove Casos shortcut`), `928ae00f` (`test(dashboard): cover responsive states and owner override`); apply-progress/task bookkeeping commit follows.
+- Skill resolution: `paths-injected`; no ponytail-review skill read was attempted.
+- No push or remote operation was performed.
