@@ -72,6 +72,24 @@ export interface PanelShellProps {
 
 export type NotificationState = { status: "loading" } | { status: "ready"; unread: number } | { status: "error" };
 
+/** The account affordance (avatar trigger + menu). Controlled so the desktop header and the mobile bar each own
+ *  their open state without duplicating the popover markup. */
+function AccountControl({ user, onLogout, open, onToggle }: { user: User; onLogout?: () => void | Promise<void>; open: boolean; onToggle: () => void }) {
+  return (
+    <div className="panel-shell__account">
+      <button type="button" className="panel-shell__account-trigger" aria-label="Abrir menú de usuario" aria-expanded={open} aria-haspopup="menu" onClick={onToggle}>
+        <Avatar name={user.username} className="panel-shell__account-avatar" />
+        <span className="panel-shell__account-name">{user.username}</span>
+        <Icon icon={ChevronDown} />
+      </button>
+      {open ? <div className="panel-shell__account-menu" role="menu" aria-label={`Cuenta de ${user.username}`}>
+        <span>{user.username} · {roleLabels[user.role]}</span>
+        {onLogout ? <button type="button" role="menuitem" onClick={() => void onLogout()}>Cerrar sesión</button> : null}
+      </div> : null}
+    </div>
+  );
+}
+
 function Brand({ mobile = false, compact = false }: { mobile?: boolean; compact?: boolean }) {
   return (
     <div
@@ -246,6 +264,7 @@ export function PanelShell({
   const [navigationSearch, setNavigationSearch] = useState("");
   const [pendingSearchFocus, setPendingSearchFocus] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const drawerTriggerRef = useRef<HTMLElement | null>(null);
   const drawerOpenedWidthRef = useRef(window.innerWidth);
@@ -355,6 +374,15 @@ export function PanelShell({
     if (drawerOpen) closeDrawer();
   };
 
+  // One label for the bell wherever it renders (desktop header popover, mobile bar navigation).
+  const bellLabel = notificationState.status === "loading"
+    ? "Cargando notificaciones"
+    : notificationState.status === "error"
+      ? "Notificaciones no disponibles"
+      : notificationState.unread > 0
+        ? `Notificaciones (${notificationState.unread} sin leer)`
+        : "Notificaciones";
+
   return (
     <div className={`panel-shell${collapsed ? " panel-shell--collapsed" : ""}${inspector ? " panel-shell--with-inspector" : ""}`}>
       <a className="panel-shell__skip-link" href="#panel-main-content">Saltar al contenido</a>
@@ -395,18 +423,27 @@ export function PanelShell({
 
       <header className="panel-shell__mobile-bar">
         <Brand mobile />
-        <button
-          ref={menuButtonRef}
-          type="button"
-          className="panel-shell__menu-button"
-          aria-expanded={drawerOpen}
-          aria-controls="panel-navigation-drawer"
-          aria-label="Abrir menú de navegación"
-          title="Abrir menú de navegación"
-          onClick={(event) => openDrawer(event.currentTarget)}
-        >
-          <Icon icon={Menu} />
-        </button>
+        <div className="panel-shell__mobile-actions">
+          {/* PNL-APP-10: the header exposes the bell and the avatar at every tier. The mobile popover lives inside
+              the desktop header (hidden below 64rem), so the mobile bell navigates to the notification center. */}
+          <button type="button" className="panel-shell__header-action" aria-label={bellLabel} title="Notificaciones" onClick={() => handleNavigation("notifications")}>
+            <Icon icon={Bell} />
+            {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
+          </button>
+          <AccountControl user={user} onLogout={onLogout} open={mobileAccountOpen} onToggle={() => setMobileAccountOpen((open) => !open)} />
+          <button
+            ref={menuButtonRef}
+            type="button"
+            className="panel-shell__menu-button"
+            aria-expanded={drawerOpen}
+            aria-controls="panel-navigation-drawer"
+            aria-label="Abrir menú de navegación"
+            title="Abrir menú de navegación"
+            onClick={(event) => openDrawer(event.currentTarget)}
+          >
+            <Icon icon={Menu} />
+          </button>
+        </div>
       </header>
 
       <dialog
@@ -454,7 +491,7 @@ export function PanelShell({
              </nav>
               <div className="panel-shell__header-actions">
                 <div ref={notificationsRef} className="panel-shell__notifications">
-               <button ref={bellRef} type="button" className="panel-shell__header-action" aria-expanded={notificationsOpen} aria-haspopup="dialog" aria-label={notificationState.status === "loading" ? "Cargando notificaciones" : notificationState.status === "error" ? "Notificaciones no disponibles" : notificationState.unread > 0 ? `Notificaciones (${notificationState.unread} sin leer)` : "Notificaciones"} title="Notificaciones" onClick={() => setNotificationsOpen((open) => !open)}>
+               <button ref={bellRef} type="button" className="panel-shell__header-action" aria-expanded={notificationsOpen} aria-haspopup="dialog" aria-label={bellLabel} title="Notificaciones" onClick={() => setNotificationsOpen((open) => !open)}>
                  <Icon icon={Bell} />
                  {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
                </button>
@@ -467,17 +504,7 @@ export function PanelShell({
                  <div className="panel-shell__notifications-footer"><button type="button" onClick={() => void onMarkAllNotificationsRead?.()}>Marcar todas como leídas</button><button type="button" onClick={() => { closeNotifications(); handleNavigation("notifications"); }}>Ver todas las notificaciones</button></div>
                </section> : null}
                 </div>
-                {!notificationsOpen ? <div className="panel-shell__account">
-                  <button type="button" className="panel-shell__account-trigger" aria-label="Abrir menú de usuario" aria-expanded={accountOpen} aria-haspopup="menu" onClick={() => setAccountOpen((open) => !open)}>
-                    <Avatar name={user.username} className="panel-shell__account-avatar" />
-                    <span className="panel-shell__account-name">{user.username}</span>
-                    <Icon icon={ChevronDown} />
-                  </button>
-                  {accountOpen ? <div className="panel-shell__account-menu" role="menu" aria-label={`Cuenta de ${user.username}`}>
-                    <span>{user.username} · {roleLabels[user.role]}</span>
-                    {onLogout ? <button type="button" role="menuitem" onClick={() => void onLogout()}>Cerrar sesión</button> : null}
-                  </div> : null}
-                </div> : null}
+                {!notificationsOpen ? <AccountControl user={user} onLogout={onLogout} open={accountOpen} onToggle={() => setAccountOpen((open) => !open)} /> : null}
              </div>
           </header>
           {statusBadge ? (

@@ -171,12 +171,29 @@ describe("PanelShell rail contract (2C-1)", () => {
 
   it("keeps notification and account accessible header actions functional", async () => {
     const user = userEvent.setup();
-    render(<PanelShell user={admin} notificationState={{ status: "ready", unread: 2 }}><p>Contenido</p></PanelShell>);
-    await user.click(screen.getByRole("button", { name: "Notificaciones (2 sin leer)" }));
+    const { container } = render(<PanelShell user={admin} notificationState={{ status: "ready", unread: 2 }}><p>Contenido</p></PanelShell>);
+    // The mobile bar exposes the same bell and account names, so the desktop assertions stay scoped to the header group.
+    const header = within(container.querySelector(".panel-shell__header-actions") as HTMLElement);
+    await user.click(header.getByRole("button", { name: "Notificaciones (2 sin leer)" }));
     expect(screen.getByRole("dialog", { name: "Notificaciones" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Cerrar notificaciones" }));
-    await user.click(screen.getByRole("button", { name: "Abrir menú de usuario" }));
+    await user.click(header.getByRole("button", { name: "Abrir menú de usuario" }));
     expect(screen.getByRole("menu", { name: "Cuenta de ana" })).toBeInTheDocument();
+  });
+
+  it("exposes the bell and the account affordance in the mobile header (PNL-APP-10)", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    const { container } = render(<PanelShell user={admin} notificationState={{ status: "ready", unread: 3 }} onNavigate={onNavigate}><p>Contenido</p></PanelShell>);
+    const bar = within(container.querySelector(".panel-shell__mobile-bar") as HTMLElement);
+
+    expect(bar.getByRole("button", { name: "Notificaciones (3 sin leer)" })).toBeInTheDocument();
+    await user.click(bar.getByRole("button", { name: "Abrir menú de usuario" }));
+    expect(bar.getByRole("menu", { name: "Cuenta de ana" })).toBeInTheDocument();
+
+    // The popover lives in the desktop header, which is hidden below 64rem, so the mobile bell navigates instead.
+    await user.click(bar.getByRole("button", { name: "Notificaciones (3 sin leer)" }));
+    expect(onNavigate).toHaveBeenCalledExactlyOnceWith("notifications");
   });
 
   it("filters role-authorized navigation in named groups from the sidebar search", async () => {
@@ -247,13 +264,14 @@ describe("PanelShell rail contract (2C-1)", () => {
     const user = userEvent.setup();
     const logout = vi.fn();
     const back = vi.spyOn(window.history, "back");
-    render(<PanelShell user={admin} currentView="clients" onLogout={logout}><p>Contenido</p></PanelShell>);
+    const { container } = render(<PanelShell user={admin} currentView="clients" onLogout={logout}><p>Contenido</p></PanelShell>);
+    const header = within(container.querySelector(".panel-shell__header-actions") as HTMLElement);
 
     expect(screen.getByRole("navigation", { name: "Ruta de navegación" })).toHaveTextContent("Clientes");
     await user.click(screen.getByRole("button", { name: "Volver" }));
     expect(back).toHaveBeenCalledOnce();
-    expect(screen.getByRole("button", { name: "Cargando notificaciones" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /abrir menú de usuario/i }));
+    expect(header.getByRole("button", { name: "Cargando notificaciones" })).toBeInTheDocument();
+    await user.click(header.getByRole("button", { name: /abrir menú de usuario/i }));
     expect(screen.getByRole("menu", { name: "Cuenta de ana" })).toBeInTheDocument();
     await user.click(within(screen.getByRole("menu", { name: "Cuenta de ana" })).getByRole("menuitem", { name: "Cerrar sesión" }));
     expect(logout).toHaveBeenCalledOnce();
