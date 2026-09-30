@@ -18,11 +18,11 @@ This document defines how Lumat should look, read, and behave across the current
 |---|---|
 | Design mode | Calm service control room; operational workspace plus dense dashboard patterns |
 | Grammar scope | Agent-app appearance across the whole panel; control-room physiology inside dense content primitives (tables, KPIs, badges) |
-| Primary authority | Deep forest `--primary-800`; not logo lime |
+| Primary authority | Deep forest chrome; `--primary-*` remains the existing action/brand scale |
 | Brand expression | Cyan for information, lime for recognition/selection, graphite for grounding |
 | Typography | Inter UI font, composed through additive `--font-ui` |
-| Shape | ChatGPT structure: large radii/pills, 12–16px cards, and 4px spacing scale |
-| Theme | Light theme; theme scope is owned by the relevant product change |
+| Shape | Flat cards with fill and hairline separation, approximately 10px card and 14px dialog radii, and the existing 4px spacing scale |
+| Theme | Light system with dark shell chrome; no dark mode |
 | Language | Neutral Chilean Spanish in the UI; English in code and technical artifacts |
 | Verification | WCAG 2.2 AA, complete states, Storybook, responsive and keyboard checks |
 
@@ -82,15 +82,11 @@ Role restrictions must be visible through available navigation and actions. Do n
 
 ### Visual thesis
 
-Lumat applies ChatGPT's visual language on Lumat's palette (option B): keep the
-cream canvas `--bg` and forest primary `--primary-800`, then adopt ChatGPT's
-structure — large radii and pills on buttons and the composer, approximately
-12–16px cards, approximately 16px body text, outline icons, flat depth, and
-quiet hover.
-
-Forest is reserved for the primary action and the active navigation state.
-Large surfaces stay cream, white, or neutral. Color remains sparse so the
-warmer cream canvas reads calm rather than saturated.
+The final panel direction uses a sage canvas and light sage surfaces with deep
+forest shell chrome. Keep the established `--primary-*` action/brand scale
+unchanged; use the named chrome, lime, teal, and text roles for their distinct
+semantic jobs. Resolved surfaces must never be pure white. Cards are flat,
+separated by fill and a decorative hairline rather than material shadow.
 
 Read surfaces (assistant, detail, forms, login, empty/error states, and dialogs)
 use ChatGPT's rhythm. Scan surfaces (tables, KPI rows, and queues) use the same
@@ -180,28 +176,62 @@ The vertical, faceted logo mark suggests infrastructure, water, heating equipmen
 - Use a compact mark or small lockup in the application shell.
 - Keep clear space of at least one mark-facet width around the lockup.
 - Never recolor individual facets with semantic status colors.
-- Do not use the low-resolution JPG as the final production asset. Obtain or create an SVG or transparent high-resolution master before shipping the logo in the React panel.
+- Use the committed `web/public/brand/lumat-logo.png` horizontal lockup and
+  `web/public/brand/lumat-mark.png` compact mark as-is. This change does not
+  produce or require a replacement asset.
 - Avoid robots, glowing brains, circuit-board backgrounds, and stock “AI” imagery.
 
 ## Color system
 
+### Final canonical panel roles
+
+| Role family | Token values |
+|---|---|
+| Chrome | `--chrome-950: #012f1d`, `--chrome-900: #073d2b`, `--chrome-active: #012214` |
+| Surfaces | `--bg: #dbe1d6`, `--header-bg: #dee4db`, `--surface: #e8ebe4`, `--border: #d5dad1` |
+| Lime | `--lime-500: #c6d529`, `--lime-600: #d3e41d`, `--lime-700: #a2c312` |
+| Teal | `--teal-500: #52babb`, `--teal-400: #6adbdf` |
+| Text | `--text: #111a2e`, `--text-muted: #5a6469`, `--text-on-dark: #e9f0e9`, `--text-on-dark-2: #88a599` |
+| Warning | `--warning: #8f5406` |
+
+`--corp-*` remains an indirection layer to canonical roles, never duplicate
+raw values. `--primary-50..900` keeps its existing values and action/brand
+semantics. Canonical, aliased, and derived surfaces (including retained
+`color-mix()` values) resolve away from pure white; unsupported surface
+expressions fail the token guard closed.
+
+Measured WCAG 2.x sRGB pairs: `--text` on `--bg`/`--surface`/`--header-bg` is
+13.01:1 / 14.40:1 / 13.40:1; `--text-muted` is 4.55:1 / 5.04:1 / 4.69:1;
+`--text-on-dark` on `--chrome-950`/`--chrome-900`/`--chrome-active` is
+12.70:1 / 10.58:1 / 14.60:1; `--text-on-dark-2` is 5.53:1 / 4.61:1 / 6.36:1;
+`--warning` on `--bg`/`--surface`/`--warning-bg` is 4.58:1 / 5.07:1 / 5.48:1.
+`--teal-500` and `--teal-400` on `--chrome-950` are 6.38:1 and 8.99:1 as
+labels; `--lime-500` there is 9.08:1 as a non-text active bar. Token
+measurements do not certify unmeasured rendered component combinations.
+
+Decorative dispositions: `--border` is a container hairline, not a required
+interactive boundary; `--lime-700` is a decorative title accent rule; semantic
+status badge borders are decorative reinforcement, never the only status
+channel. `--border-strong` is a required control boundary only on `--surface`
+(3.09:1); it does not meet 3:1 on `--bg` (2.79:1), so do not rely on it there.
+
 ### Shipped operational foundation
 
-The current primary scale, neutrals, and semantic pairs in `tokens.css` remain the baseline. In particular:
+The primary scale and semantic status pairs in `tokens.css` remain the baseline. In particular:
 
 | Role | Token | Current value | Rule |
 |---|---|---:|---|
 | Primary action / deep navigation | `--primary-800` | `#143C2C` | White text; measured 12.26:1 |
 | Primary hover / accessible link | `--primary-700` | `#256F51` | Use for normal-size links on light surfaces; measured 6.05:1 |
-| Canvas | `--bg` | `#F1F1E8` | Default page background |
-| Surface | `--surface` | `#FFFFFF` | Cards, tables, controls, dialogs |
-| Text | `--text` | `#1A202C` | Default readable text |
-| Muted text | `--text-muted` | `#4A5568` | Metadata and supporting text, never disabled semantics alone |
+| Canvas | `--bg` | `#dbe1d6` | Default page background |
+| Surface | `--surface` | `#e8ebe4` | Cards, tables, controls, dialogs; never pure white |
+| Text | `--text` | `#111a2e` | Default readable text |
+| Muted text | `--text-muted` | `#5a6469` | Supporting text, measured ≥4.5:1 on canvas/header/surface |
 | Success | `--success` | `#1B5E20` | Confirmed success or healthy completion |
-| Warning | `--warning` | `#A05E07` | Attention, handoff, approaching limits |
+| Warning | `--warning` | `#8f5406` | Attention, handoff, approaching limits; measured on named light surfaces |
 | Danger | `--danger` | `#B71C1C` | Emergency, destructive action, fatal failure |
 
-Do not use `--primary-600` for normal-size links on white. Its current 3.38:1 contrast fails WCAG AA. Use `--primary-700` until an explicit semantic link token is introduced.
+Measure normal-size links against their actual light surface; do not infer compliance from the `--primary-*` name or palette membership.
 
 ### Brand token additions
 
@@ -274,12 +304,13 @@ The shipped 4px spacing scale is canonical. Prefer `--space-2`, `--space-3`, and
 
 - Controls and compact indicators use `--radius-sm` (6px) unless the surface
   calls for the ChatGPT-style pill (`--radius-pill`).
-- Cards use `--radius-lg` (12px); dialogs and larger containers may use
-  `--radius-xl` (16px).
-- Borders are the default separation mechanism.
-- Use the flat surface/elevation vocabulary before shadows. `--shadow-1` is for
-  subtle raised cards; overlay elevation is reserved for menus, dialogs,
-  drawers, and overlays.
+- Keep the existing `--radius-*` taxonomy. `--radius-lg` is tuned to 10px for
+  cards; `--radius-xl` is tuned to 14px for dialogs. `tokens.ts` remains the
+  spacing/radius/z-index mirror subset.
+- Cards use their light fill plus a hairline for separation and have no material
+  shadow. The container hairline is decorative, not a required control boundary.
+- Keep `--shadow-1..3` available; reserve `--shadow-3` for overlay, drawer, and
+  dialog affordance, not cards.
 - Prefer regions and dividers over nested cards. Nesting is allowed only when
   it expresses real hierarchy (container → item).
 
@@ -305,13 +336,17 @@ Customer ficha, conversation thread, and human inbox thread are drill-down views
 
 ### Shell contract
 
-- Preserve the current compact 192px desktop sidebar until content testing demonstrates a need to widen it.
-- Place the Lumat mark/lockup, primary navigation, and signed-in user context in the sidebar.
-- Use a leading lime rail plus a soft forest tint for the active item. Keep the label dark and readable.
-- Set `aria-current="page"` on the active item.
-- The main region owns page title, context/freshness, and local actions.
-- Do not add a redundant top bar until a real cross-page job requires it.
-- Avoid permanent chrome that reduces the working area without adding navigation or context.
+- Desktop uses an expanded/collapsed forest sidebar with in-sidebar search,
+  grouped existing navigation, and a user footer; the top header provides back,
+  breadcrumb, notifications, avatar/account, and chevron controls.
+- Tablet uses an icon rail and overlay drawer. Mobile uses a dark header, five
+  bottom tabs (Panel, Conversaciones, Asistente, Agenda, Clientes), and a drawer
+  for other authorized destinations.
+- Derive destinations and role filtering from existing navigation authority;
+  do not invent routes. Keep active states readable and set
+  `aria-current="page"`.
+- Dark shell chrome is not dark mode. The main region retains page title,
+  context/freshness, and local actions.
 
 ### Responsive behavior
 
@@ -319,10 +354,10 @@ Use the existing reference breakpoints:
 
 | Width | Target behavior |
 |---|---|
-| `< 640px` | Single-column content; navigation drawer; 16px page padding; tables use controlled horizontal scroll or a purpose-built compact row |
-| `640–1023px` | Collapsible navigation; one or two content columns based on content; actions wrap without reordering the primary task |
-| `1024–1279px` | Persistent compact sidebar; standard operational layout |
-| `>= 1280px` | Persistent sidebar; expanded tables and multi-region detail, bounded by readable line lengths |
+| `< 640px` | Dark header, five bottom tabs, modal navigation drawer, single-column content |
+| `640–1023px` | Tablet icon rail and modal drawer; content columns follow available width |
+| `1024–1279px` | Desktop sidebar and header; collapse supported |
+| `>= 1280px` | Expanded desktop sidebar by default; collapse supported |
 
 Breakpoints respond to content, not device names. Never hide emergency, handoff, send, acknowledge, save, or retry actions to produce a cleaner screenshot.
 
@@ -602,7 +637,6 @@ Known convergence work:
 - translate remaining English UI labels to approved Spanish;
 - replace inaccessible `--primary-600` text links with the `--primary-700` role;
 - align focus styles with the existing `--focus-ring*` tokens;
-- obtain a production-ready logo asset;
 - wire React pages only when their backend contracts exist.
 
 ## Implementation rules for coding agents
