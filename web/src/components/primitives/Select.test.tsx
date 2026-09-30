@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Select } from "./Select";
 
 const options = [
@@ -85,5 +87,11 @@ describe("Select (T7.3)", () => {
       <Select label="Estado" options={options} defaultValue="" disabled />,
     );
     expect(screen.getByLabelText("Estado")).toBeDisabled();
+  });
+
+  it("keeps a measured surface boundary and keyboard focus indicator", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    expect(css).toMatch(/\.field__control\s*\{[^}]*border:\s*1px solid var\(--border-strong\)[^}]*background:\s*var\(--surface\)/s);
+    expect(css).toMatch(/\.field__control:focus-visible\s*\{[^}]*outline:\s*var\(--focus-ring-width\) solid var\(--focus-ring\)/s);
   });
 });
