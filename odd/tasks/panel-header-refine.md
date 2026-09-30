@@ -136,9 +136,14 @@ sidebar/drawer surfaces already adjudicated in `odd/tasks/panel-sidebar-refine.m
   killing the recorded Arial debt.
 - [x] **D2 — header actions at the end. DONE.** Removed `max-width: 78rem` from `.panel-shell__header`; the actions
   now end at the row's right padding on wide viewports.
-- [ ] **M1 — mobile header: bell + the owner's new one-line logo.** Blocked: the logo asset is an owner deliverable
-  and the bell behaviour is undecided (popover vs navigation).
-- [ ] **M2 — mobile/tablet avatar + tablet header surface.** Pending the PNL-APP-10 decision.
+- [x] **M1 — mobile header bell + avatar. DONE.** The mobile bar exposes the bell (navigates to the notification
+  center, because the popover lives in the desktop header which is `display: none` below 64rem) and the account
+  avatar, both keeping the dark-chrome treatment. A controlled `AccountControl` was extracted so the desktop header
+  and the mobile bar share one popover implementation with independent open state.
+- [x] **M2 — tablet header surface. DONE.** At 640–1023 the header row is transparent with no border, the back and
+  breadcrumbs are hidden, and the row carries only the bell and account affordances at the top-right of the content.
+- [ ] **M3 — mobile one-line logo (mark + wordmark).** BLOCKED: the asset is an owner deliverable. The bar layout
+  will be revisited with it.
 - [ ] **Reference-only details** (bell|account divider, bordered back square, popover 44px/focus-visible) — pending
   the owner's call.
 
@@ -156,6 +161,8 @@ sidebar/drawer surfaces already adjudicated in `odd/tasks/panel-sidebar-refine.m
 - `.kpi` carries `--shadow-1` and `--radius-md` (8px) against the "cards carry no material shadow, ~10px" contract.
 - Raw unstyled `<button>Reintentar` at `Dashboard.tsx:104`.
 - The user profile page does not exist; do not add a dead menu entry.
+- **The account menu (desktop header and mobile bar) has no outside-click or Escape close** — a pre-existing gap the
+  notifications popover already solves (`closeOnOutsideClick`). Duplicated by M1, recorded, not fixed here.
 
 ## Route decisions
 
@@ -165,6 +172,32 @@ sidebar/drawer surfaces already adjudicated in `odd/tasks/panel-sidebar-refine.m
 | H1+ | pending | decided with the owner's visual analysis |
 
 ## Progress and evidence
+
+**M1 — mobile header bell + avatar. DONE.**
+Solution: extracted a controlled `AccountControl` (avatar trigger + menu) and reused it in the desktop header and the
+mobile bar, each owning its open state; the bell's accessible label is computed once (`bellLabel`) and shared by both
+bells. The mobile bell navigates to the notification center rather than opening a popover that is CSS-hidden at that
+tier. The mobile bar's bell and account trigger keep the dark-chrome colours through `.panel-shell__mobile-bar`
+scoping, and the compact account hides the identity and the chevron.
+
+**M2 — tablet header surface. DONE.**
+Solution: in the tablet media block the header row becomes `display: flex` with a transparent background and no
+border, the back and breadcrumbs are hidden, and the header is right-aligned — the row carries only the bell and the
+account affordances above the content.
+
+Checks: `npm run build` OK. Affected test files → 6 files / 111 tests passed. Full suite → 92 files / 906 tests, exit 0.
+Five existing tests were scoped to `.panel-shell__header-actions` (new `headerActions` helper in `AppShell.test.tsx`)
+because the bell and account affordances now legitimately exist twice in the DOM and jsdom does not apply the tier CSS;
+this follows the repo's existing convention of duplicating `Navigation` across the sidebar and the drawer. A new
+DOM-level test asserts the mobile bar exposes a named bell and a named account affordance, that the account menu
+opens, and that the mobile bell navigates.
+Rendered verification (fresh `build-storybook`, Chrome):
+
+| Tier | Mobile bar | Header row | Bell / account |
+| --- | --- | --- | --- |
+| desktop 1440 | `display:none` | `flex`, `rgb(222,228,219)` = `--header-bg` | bell 1235-1279, account 1287-1400 (40px gap) |
+| tablet 768 | `display:none` | `flex`, transparent, no border | back + breadcrumbs `display:none`; bell 567-611, account 619-732 |
+| mobile 390 | `flex`, `rgb(20,60,44)` dark chrome | `display:none` | bell + avatar present in `--surface`; identity + chevron `display:none` |
 
 **D1 — desktop header chrome inversion. DONE.**
 Solution: CSS only, in `primitives.css`. `.panel-shell__header-row` background `--corp-primary` → `--header-bg`,
