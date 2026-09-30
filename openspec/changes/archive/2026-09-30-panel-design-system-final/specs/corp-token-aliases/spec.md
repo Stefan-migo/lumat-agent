@@ -1,5 +1,15 @@
 # Delta for corp-token-aliases
 
+## RENAMED Requirements
+
+### Requirement: CST-ALIAS-2 — Additive-Only Alias Evolution → CST-ALIAS-2 — Approved Palette Alias Evolution
+
+(Reason: the requirement now permits approved palette-driven alias target changes instead of an additive-only alias freeze.)
+
+### Requirement: CST-ALIAS-3 — Frozen Alias Principle → CST-ALIAS-3 — Canonical Alias Principle
+
+(Reason: retitled to reflect that aliases are stable indirections to canonical roles rather than frozen values.)
+
 ## MODIFIED Requirements
 
 ### Requirement: CST-ALIAS-2 — Approved Palette Alias Evolution
