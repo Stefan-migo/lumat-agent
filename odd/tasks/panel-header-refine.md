@@ -37,9 +37,9 @@ Owner directive 2026-09-30: the focus mode is not used and must be deprecated. M
    `AppShell` passes them; the only other reference in the repo is one test (`PanelShell.test.tsx:274-287`).
 3. **No browser coverage remains.** `web/playwright/command-center.spec.ts` contains no focus-mode reference, although
    the archived `2026-09-15-ui-command-center` change once added one.
-4. **Two canonical requirements still mandate it**, so deleting the code without amending them leaves the tree in
-   violation: `openspec/specs/ui-command-center/spec.md:25` (CC-2) and
-   `openspec/specs/panel-design-system/spec.md:851` (DS-CC-2).
+4. **Three canonical clauses still mandate it**, so deleting the code without amending them leaves the tree in
+   violation: `openspec/specs/ui-command-center/spec.md:25` (CC-2), `openspec/specs/panel-design-system/spec.md:851`
+   (DS-CC-2), and CC-4's verification clause plus its focus-mode scenario (`ui-command-center/spec.md:57,65-69`).
 
 ### Pending: the visual header gap
 
@@ -64,10 +64,12 @@ candidates, to be confirmed or replaced by that analysis before any visual task 
 ## Adjudication rules applied
 
 - **The archived canonical spec beats the reference image.** References control **geometry and layout, not palette**.
-- **Recorded interpretation (owner, 2026-09-30): the reference header omits the focus control, but the canonical
-  CC-2 / DS-CC-2 require a keyboard-operable activating control.** The owner has now resolved this by retiring the
-  feature instead of keeping the control: the two requirements MUST be amended in the same change, never silently
-  dropped (same rule the sidebar unit applied to DS-SHELL-1).
+- **Recorded decision (owner, 2026-09-30): retire the focus mode instead of keeping its control.** The reference
+  header omits the control while canonical CC-2 / DS-CC-2 required it; the owner resolved the conflict by deleting the
+  feature. **Spec-amendment form: the owner chose to delete CC-2 and DS-CC-2 outright.** The adjacent CC-4 clause that
+  required Playwright coverage of "focus entry/escape/restoration", plus its focus-mode-only scenario, were also
+  removed because they had become unsatisfiable; no replacement coverage obligation was invented. Recorded here so the
+  amendment is deliberate, not silent (the same rule the sidebar unit applied to DS-SHELL-1).
 - The drawer's top row in `mobilePanelShell.png` shows bell + avatar, but the canonical spec does not require the
   drawer to expose them and the mobile bar will; adding them there is reference-only and is **not** in scope
   (YAGNI) unless the owner asks.
@@ -99,13 +101,12 @@ sidebar/drawer surfaces already adjudicated in `odd/tasks/panel-sidebar-refine.m
 
 ## Tasks
 
-- [ ] **H0 — retire focus mode (settled).** Remove the `focusMode`/`onFocusModeChange` props, the internal state,
+- [x] **H0 — retire focus mode. DONE.** Removed the `focusMode`/`onFocusModeChange` props, the internal state,
   `setFocusMode`, `closeFocusMode`, the Escape effect, `keepFocusInFocusMode`, the header control, the
   `panel-shell--focus-mode` class, the `focusMode`-driven `aria-hidden` on the sidebar and inspector, the
-  `role`/`aria-label` on `#panel-main-content`, and the "Salir del modo foco" button. **Keep** `#panel-main-content`
-  `tabIndex={-1}` (the skip-link target) and the drawer's own focus behaviour. Delete the focus-mode test
-  (`PanelShell.test.tsx:274-287`). Amend CC-2 and DS-CC-2 in the canonical specs. No CSS to delete — no rules exist.
-  Removes the dead feature and its canonical liability. **Spec-amendment form pending owner confirmation.**
+  `role`/`aria-label` on `#panel-main-content`, and the "Salir del modo foco" button. **Kept** `#panel-main-content`
+  `tabIndex={-1}` (the skip-link target) and the drawer's own focus behaviour. Deleted the focus-mode test. Deleted
+  CC-2, DS-CC-2, and the unsatisfiable CC-4 clause/scenario. No CSS to delete — no rules existed.
 - [ ] **H1+ — visual header.** Not written yet: blocked on the owner's visual analysis of the header.
 
 ## Acceptance criteria
@@ -132,4 +133,14 @@ sidebar/drawer surfaces already adjudicated in `odd/tasks/panel-sidebar-refine.m
 
 ## Progress and evidence
 
-_None yet. H0 has not started; the spec-amendment form is pending owner confirmation._
+**H0 — retire focus mode. DONE.**
+Solution: deleted the feature in `PanelShell.tsx` — the `focusMode`/`onFocusModeChange` props, `internalFocusMode`,
+`setFocusMode`, `closeFocusMode`, the Escape effect, `keepFocusInFocusMode`, the three focus refs, the header control,
+the `panel-shell--focus-mode` class, the `focusMode`-driven `aria-hidden` on the sidebar and inspector, the
+`role`/`aria-label` on `#panel-main-content`, and the "Salir del modo foco" button. Kept `#panel-main-content`
+`tabIndex={-1}` (skip-link target) and the drawer's focus containment/restoration. Deleted the focus-mode test from
+`PanelShell.test.tsx`. Canonical amendment: removed CC-2 (`ui-command-center`), DS-CC-2 (`panel-design-system`), and
+CC-4's "focus entry/escape/restoration" clause plus its focus-mode-only scenario.
+Checks: `npm run build` → `tsc -b` + vite build OK. Affected test files (PanelShell, AppShell, AppShell.stories,
+PanelEntry.stories, app) → 5 files / 87 tests passed.
+No CSS was removed because none existed for the feature.
