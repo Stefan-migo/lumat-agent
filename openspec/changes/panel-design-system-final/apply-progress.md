@@ -399,5 +399,5 @@ Task 3.3 (WU8) is complete. The existing responsive shell is represented by name
 
 - PR 6 boundary: task 3.3 only, stacked-to-main; no push, PR, merge, branch, or worktree operation.
 - Changed project files are limited to two requested story modules, their existing AppShell story test for responsive exports and token assertion consolidation, and the OpenSpec task/progress records (5 files total). `style-boundary.test.ts`, `dependency-boundary.test.ts`, production shell, and Dashboard are unchanged.
-- Authored changed-line count: 128 additions plus deletions (≤400); changed files: 5. Work-unit commit: `ff734a2b` (`test(shell): cover responsive story states`).
+- Authored changed-line count: 129 additions plus deletions (≤400); changed files: 5. Commits: `ff734a2b` (`test(shell): cover responsive story states`), `8c3be353` (`docs(sdd): record responsive story apply evidence`).
 - No push or remote operation was performed.
