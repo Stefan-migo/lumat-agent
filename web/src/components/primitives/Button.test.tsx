@@ -67,6 +67,18 @@ describe("Button (T7.1)", () => {
     expect(css).toMatch(/\.btn--danger\s*\{[^}]*var\(--danger\)/s);
   });
 
+  it("uses the measured dark semantic pair for primary actions and a distinct surface secondary", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    expect(css).toMatch(/\.btn--primary\s*\{[^}]*background:\s*var\(--chrome-950\)[^}]*color:\s*var\(--text-on-dark\)/s);
+    expect(css).toMatch(/\.btn--primary:hover\s*\{[^}]*background:\s*var\(--chrome-900\)/s);
+    expect(css).toMatch(/\.btn--secondary\s*\{[^}]*background:\s*var\(--surface\)[^}]*border-color:\s*var\(--border-strong\)/s);
+  });
+
+  it("keeps visible keyboard focus on action controls", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    expect(css).toMatch(/\.btn:focus-visible[\s\S]*?outline:\s*var\(--focus-ring-width\) solid var\(--focus-ring\)/);
+  });
+
   it("resolves every variant token reference against the token source — no phantom custom property", () => {
     const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
     const tokens = readFileSync(join(process.cwd(), "src/tokens/tokens.css"), "utf8");
