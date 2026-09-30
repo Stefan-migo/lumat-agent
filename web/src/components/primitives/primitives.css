@@ -68,12 +68,12 @@
    existing danger pair (DESIGN_SYSTEM.md:202,510); the token set defines no darker
    danger step, so the hover deepens the border rather than inventing a token. */
 .btn--danger {
-  background: var(--danger-bg);
+  background: var(--surface);
   color: var(--danger);
   border-color: var(--border-strong);
 }
 .btn--danger:hover {
-  background: var(--danger-tint);
+  background: var(--surface);
   border-color: var(--danger);
 }
 .btn > svg,
