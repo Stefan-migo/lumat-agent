@@ -166,3 +166,85 @@ No push, PR creation, merge, branch, or worktree operation was performed.
 ## Next step
 
 PR 2 is complete at tasks 2.1–2.3. Next slice is PR 3: tasks 2.4–2.5 only. This apply did not run independent browser Storybook visual review; review those controls at the supplied reference viewports before claiming rendered visual conformance.
+
+---
+
+# Apply Progress: panel-design-system-final — Slice 2 (PR 3)
+
+## Status
+
+Tasks 2.4 and 2.5 are complete and verified. The parent-authorized one-assertion correction reconciled the token guard with the approved flat-card contract; no token declarations or other assertions were changed.
+
+## Task completion
+
+- [x] 1.1 — WU1 palette and token guard (prior Slice 1 record preserved).
+- [x] 1.2 — WU2 direction documentation (prior Slice 1 record preserved).
+- [x] 2.1 — WU4a Button/Input.
+- [x] 2.2 — WU4b Select/Textarea/SearchInput.
+- [x] 2.3 — WU4c Badge/StatusBadge/Tabs.
+- [x] 2.4 — WU4d Avatar/PageHeader/PageFrame/StatCard/EmptyState styles and shared contracts.
+- [x] 2.5 — WU5 Card/DataTable/Dialog; flat non-white surfaces and dialog contract verified.
+
+## Completed work and evidence
+
+### WU4d — task 2.4
+
+- Avatar initials and image APIs remain unchanged; initials now use the semantic `--surface-subtle` fill and `--text` foreground. PageHeader's decorative accent uses `--lime-700`; PageFrame structure and responsive action behavior are unchanged. StatCard/EmptyState markup and state behavior were untouched; their existing owning tests remain in place.
+- RED: focused assertions failed on the old Avatar and PageHeader role declarations: 3 test files failed, 3 assertions failed, 5 passed.
+- GREEN: `npm run test -- src/components/primitives/Avatar.test.tsx src/components/shared/PageHeader.test.tsx src/components/shared/PageFrame.test.tsx` passed, 3 files / 8 tests.
+- REFACTOR: no behavior-preserving simplification remained; no new abstraction or component API change was introduced.
+- Work Unit Evidence: focused command/result as above. Runtime harness: React Testing Library rendered initials/image and the shared page header/frame; no browser/Storybook runtime was used. Rollback boundary: revert commit `b4df9bc0` (stylesheet and its three paired tests) without touching the other unit.
+
+### WU5 — task 2.5 (complete)
+
+- Card and `.data-region` now use `--surface` with decorative `--border` hairlines and no material shadow. Dialog uses the non-white `--surface`, `--radius-xl` (~14px), decorative `--border`, and `--shadow-3`. DataTable semantics/API and dialog accessible name, modal semantics, close behavior, and controlled lifecycle remain unchanged. The existing DataTable-focused test did not pin an obsolete color/surface assumption, so it was not modified.
+- RED: new focused Card/Dialog visual-role assertions failed before CSS changes: 2 files failed / 2 assertions failed; the pre-existing content and dialog behavior tests passed (5 passed).
+- GREEN: `npm run test -- src/components/primitives/Card.test.tsx src/components/primitives/Dialog.test.tsx` passed, 2 files / 7 tests.
+- REFACTOR: no extra abstraction added; styles remain token-only. Initial full suite identified a stale guard, resolved below under the exact parent authorization; final full suite and build pass.
+- Work Unit Evidence: focused command/result as above. Runtime harness: React Testing Library rendered the Card and native Dialog and exercised modal/name/close lifecycle; no browser/Storybook inspection was run. Rollback boundary: revert commit `e005f226` (stylesheet and its two paired tests).
+
+## TDD Cycle Evidence
+
+| Task | Test files | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 2.4 | `Avatar.test.tsx`, `PageHeader.test.tsx`, `PageFrame.test.tsx` | Component/unit (RTL + stylesheet role contracts) | Passed: 3 files / 6 tests (included in initial five-file baseline) | 3 files failed, 3 failed / 5 passed | 3 files / 8 tests passed | Initials and source image; title/action layouts and PageFrame action fit | No API/state changes; focused, full suite, build passed before WU5 changes |
+| 2.5 | `Card.test.tsx`, `Dialog.test.tsx`, `tokens.test.ts` | Component/unit (RTL + stylesheet role contracts) | Passed: 2 files / 5 tests (initial baseline) | 2 failures / 5 passed; later stale token guard RED 1 failure / 22 passed | Focused: 2 files / 7 tests; final full suite 92 files / 893 tests | Card surface vs Dialog surface/radius/shadow; existing Dialog modal name/close lifecycle retained | Parent-authorized single assertion updated to require no Card box-shadow; no token declarations changed |
+
+## Verification
+
+| Command | Observed result |
+|---|---|
+| `cd web && npm run test` (after WU4d, before WU5 CSS) | Passed: 92 test files, 891 tests. Existing React `act(...)` / jsdom navigation warnings; no failed tests. |
+| `cd web && npm run build` (after WU4d, before WU5 CSS) | Passed: `tsc -b` and Vite build; existing >500 kB chunk warning. |
+| `cd web && npm run test` (after WU5) | Failed: 91 files passed, 1 failed; 892 passed, 1 failed. Exact failing assertion: `web/src/tokens/tokens.test.ts:211` expects `.card` to set `box-shadow: var(--elevation-raised)`, contradicting the approved flat-card contract. Not edited because the assigned scope forbids token guard edits. |
+| `cd web && npm run build` (after WU5) | Passed: `tsc -b` and Vite build; existing >500 kB chunk warning. |
+| `cd web && npm run test` (parent-authorized assertion RED) | Failed as expected: `tokens.test.ts` 1 failed / 22 passed on the obsolete `.card` shadow expectation. |
+| `cd web && npm run test` (final) | Passed: 92 test files, 893 tests. Existing React `act(...)` and jsdom navigation warnings; no failures. |
+| `cd web && npm run build` (final) | Passed: `tsc -b` and Vite production build; existing >500 kB chunk warning. |
+| `git diff --check` | Passed before WU5 commit. |
+| `git diff --check` (authorized correction) | Passed. |
+
+## Graph check
+
+- Read the stale `graphify-out/GRAPH_REPORT.md`; build commit listed as `96a6f69b`, freshness metadata inconsistent. Used structurally and verified source directly; no graph rebuild.
+- WU4d query surfaced `Avatar()`, `PageHeader()`, `PageFrame()`, `StatCard()`, `EmptyState()`, their named tests, and `primitives.css`; path query Avatar → stylesheet returned no directed edge (ambiguous source/target match warning).
+- WU5 query surfaced `Card()`, `DataTable()`, `Dialog()`, their focused tests, and `primitives.css`; path Card → Dialog returned no directed edge (ambiguous target warning).
+- Graph structure consulted: Avatar and Avatar.test in ConversationThread community; PageHeader, PageFrame, StatCard and EmptyState in shared component community; Card/DataTable in shared/toneMaps community; Dialog and Dialog.test in Dialog community; `primitives.css` as the shared stylesheet node. The relevant relationship is confirmed directly in component imports/tests and stylesheet class selectors.
+
+## Commits
+
+- `b4df9bc0` — `feat(ui): restyle shared page primitives`
+- `e005f226` — `feat(ui): flatten panel surfaces and dialogs`
+- `6cec4b22` — `fix(test): align card guard with flat-card contract`
+
+No push, PR creation, merge, branch, or worktree operation was performed.
+
+## Next step
+
+PR 3 tasks 2.4–2.5 are complete. Do not touch slice 3/4 work, especially `style-boundary.test.ts`, or consolidate its duplicate `--bg` assertion here.
+
+## Parent-authorized scope adjustment — WU5 correction
+
+- Parent authorized exactly one assertion change in `web/src/tokens/tokens.test.ts`: replaced the `.card` `box-shadow: var(--elevation-raised)` required-match with a negative assertion that `.card` does not declare `box-shadow`.
+- This follows design.md lines 45, 48–49 and 143 plus CST-PRIM-9 / DS-TKN-7. No other assertion in `tokens.test.ts` changed. `--elevation-raised: none`, `--elevation-overlay: var(--shadow-3)`, and all `--shadow-1..3` declarations remain unchanged.
+- Strict TDD: focused RED observed 1 failed / 22 passed on the obsolete assertion; after replacing that single expectation, final full suite passed 92 files / 893 tests. Build passed.

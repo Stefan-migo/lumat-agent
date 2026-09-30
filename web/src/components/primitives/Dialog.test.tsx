@@ -1,10 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { Dialog } from "./Dialog";
 
 const dialogPrototype = HTMLDialogElement.prototype;
 const nativeShowModal = dialogPrototype.showModal;
 const nativeClose = dialogPrototype.close;
+const primitives = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
 
 beforeAll(() => {
   if (typeof nativeShowModal !== "function") {
@@ -55,6 +58,12 @@ describe("Dialog (CST-PRIM-7, CORP-DIALOG-1)", () => {
     expect(close.querySelector("svg")).toHaveClass("icon", "icon--md");
     expect(close).not.toHaveTextContent("✕");
     expect(screen.getByRole("button", { name: "Confirmar" })).toBeInTheDocument();
+  });
+  it("uses a non-white dialog surface, distinct radius, and overlay shadow token", () => {
+    const dialog = primitives.match(/\.dialog\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(dialog).toMatch(/background:\s*var\(--surface\)/);
+    expect(dialog).toMatch(/border-radius:\s*var\(--radius-xl\)/);
+    expect(dialog).toMatch(/box-shadow:\s*var\(--shadow-3\)/);
   });
   it("calls onClose for the native close event", () => {
     const onClose = vi.fn();

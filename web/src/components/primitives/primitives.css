@@ -235,10 +235,9 @@
   display: grid;
   gap: var(--corp-gap);
   padding: var(--space-4);
-  border: 1px solid var(--corp-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--brand-bg-elevated);
-  box-shadow: var(--elevation-raised);
+  background: var(--surface);
 }
 .card__title {
   margin: 0;
@@ -283,8 +282,8 @@
   place-items: center;
   overflow: hidden;
   border-radius: var(--radius-md);
-  background: var(--primary-100);
-  color: var(--primary-800);
+  background: var(--surface-subtle);
+  color: var(--text);
   font-family: var(--font-ui);
   font-size: var(--text-sm);
 }
@@ -373,10 +372,9 @@
    table only, never an `.empty-state`, which is already a surface of its own (no card-on-card).
    Consumers: the Clientes list and the ClientFicha history tables. */
 .data-region {
-  border: 1px solid var(--corp-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--brand-bg-elevated);
-  box-shadow: var(--elevation-raised);
+  background: var(--surface);
   overflow-x: auto;
 }
 /* ---- CaseActions ---- */
@@ -552,10 +550,10 @@
   width: min(28rem, calc(100vw - var(--space-5)));
   margin: auto;
   padding: 0;
-  background: var(--corp-surface);
-  border: 1px solid var(--corp-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  box-shadow: var(--elevation-overlay);
+  box-shadow: var(--shadow-3);
   color: var(--corp-fg);
 }
 .dialog::backdrop {
@@ -884,7 +882,7 @@
   bottom: var(--space-1);
   width: var(--space-1);
   border-radius: 999px;
-  background: var(--brand-lime);
+  background: var(--lime-700);
 }
 .conversations-page { gap: var(--space-3); }
 .realtime-status { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--info); border-radius: var(--radius-md); font-size: var(--text-xs); color: var(--corp-fg-muted); }
