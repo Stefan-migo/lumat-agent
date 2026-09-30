@@ -54,6 +54,10 @@ without rebuilding the design system and without inventing destinations, routes 
   so the collapse toggle may move into the sidebar header without dropping a control.
 - Owner decision recorded: the toggle is a small explicit chevron control, **not** the brand logo made clickable (the brand is
   `role="img"` with accessible name "Lumat, panel operativo"; making it a button would pollute that name).
+- Owner decision recorded for **S5 (2026-09-30)**: the compact search control uses **two behaviours by tier** — on the desktop
+  collapsed sidebar it expands the sidebar and focuses the search input; on the tablet rail it opens the drawer, where the
+  search field lives after S8. This is why **S8 must land before S5**: the drawer's search field is the destination for the
+  tablet behaviour, so implementing S5 first would mean inventing a target.
 
 ## Scope
 
@@ -89,13 +93,14 @@ collapse behaviour, the desktop expanded section separators (owner accepted as-i
   Removes problem 1.
 - [x] **S4 — one divider between groups in compact modes.** Keep the expanded grouping, replace reliance on hidden titles
   with a single separator line. Removes problem 5. Must not change the expanded named separators.
-- [ ] **S5 — search affordance in compact modes.** Icon-only control styled like the other rail icons (no button frame),
-  reachable and named, per owner instruction. Removes problem 4.
+- [x] **S5 — search affordance in compact modes.** Icon-only control styled like the other rail icons (no button frame),
+  reachable and named, per owner instruction. Removes problem 4. **Decision (b) recorded above: expand + focus on the desktop
+  collapsed sidebar, open the drawer on the tablet rail. Depends on S8 — do S8 first.**
 - [x] **S6 — mobile display label.** Mobile bottom tab renders a short display label so all five fit without clipping;
   sidebar and drawer keep the canonical `NAVIGATION` label. Removes problem 8. Owner decision; canonical line noted above.
 - [x] **S7 — sidebar footer.** Remove the visible "Cerrar sesión" button; expose logout from a footer overflow menu
   (reusing the existing account-menu treatment) with focus return to the trigger. Removes problem 6.
-- [ ] **S8 — mobile drawer header.** Center the lockup and add the search field, matching the expanded sidebar behaviour.
+- [x] **S8 — mobile drawer header.** Center the lockup and add the search field, matching the expanded sidebar behaviour.
   Removes problem 7.
 
 ## Acceptance criteria
@@ -282,6 +287,56 @@ after logout` clicked a standing "Cerrar sesión" button inside the drawer, whic
 test now opens the drawer's overflow control and clicks the menuitem. This is the concrete argument for the verification
 strategy below: per task I ran `npm run build` plus the affected test files, and the full `npm run test` once at the end. The
 targeted runs were green while the tree was not.
+
+**S8 — mobile drawer header. DONE.**
+Solution: the drawer heading now centres the mobile lockup (`justify-content: center`, `position: relative`) and pins the
+close control top-right (`position: absolute; top: 50%; right: var(--space-3); transform: translateY(-50%)`), the same
+pattern the sidebar header uses for its toggle. A search control reuses the existing `.panel-shell__search` markup and the
+existing `navigationSearch` state, so the drawer and the sidebar share one filter, and the drawer's `<Navigation>` now
+receives `search={navigationSearch}`.
+One scoping correction was required: the tablet media block hid `.panel-shell__search` with a global rule, which would have
+hidden the new drawer field at tablet too (the trap the handoff names — the drawer renders the same components as the
+sidebar). The selector is now `.panel-shell__sidebar .panel-shell__search`, so the rail keeps no search and the drawer gets
+the field.
+Tests: the drawer keyboard-traversal test now expects the search input between the close control and the first destination
+(the added field changes the focus order), and a new DOM-level test asserts the drawer exposes a named search field that
+filters its destinations. This is the behaviour the S5 tablet branch depends on.
+Checks: `npm run build` OK. Affected test files (PanelShell, AppShell, PanelEntry.stories, AppShell.stories) → 78 tests passed.
+Rendered verification (fresh `build-storybook`, Chrome, `iframe.html` + `globals=viewport:responsive`):
+
+| State | `justify-content` | Brand offset | Close | Search | Filter `cliente` | Close works |
+| --- | --- | --- | --- | --- | --- | --- |
+| mobile 390 (drawer open) | `center` | 0px | absolute, right, visible | present, visible, 210px | 5 → 1 (Clientes) | yes |
+| tablet 768 (drawer open) | `center` | 0px | absolute, right, visible | present, visible, 274px | 9 → 1 (Clientes) | yes |
+
+Scoping check: sidebar search reports `display: none` at 768 (rail) and `display: flex` at 1440 (expanded) — the drawer
+change did not leak into the rail, and the desktop field is unaffected.
+
+**S5 — search affordance in compact modes. DONE.**
+Solution: a new `.panel-shell__search-toggle` button lives in the sidebar and is rendered unconditionally, then shown only in
+the compact tiers through CSS (base `display: none`; `display: flex` in the collapsed-desktop block and in the tablet block).
+CSS is the only correct switch here: the tablet tier is CSS-only, so a `collapsed` JSX guard would never render the control
+at 640–1023 — the same trap as S3. Behaviour branches on `window.innerWidth >= 1024`: the desktop collapsed sidebar sets the
+focus intent and `setCollapsed(false)`, and an effect focuses the field once it renders; below 1024 it calls the existing
+`openDrawer(trigger)`, where S8's field already lives. Styling is the rail-icon treatment the owner asked for — 44px square,
+transparent background, `border: 0`, `--text-on-dark`, hover tint matching the collapse button — and the lime focus ring was
+added to the existing `.panel-shell__sidebar … :focus-visible` group.
+Tests: two DOM-level tests — desktop collapsed expands the sidebar and focuses the field; tablet opens the drawer and exposes
+the shared field. (CSS visibility itself cannot be asserted in jsdom, so the "hidden in the expanded sidebar" half is proven
+by the rendered pass, a known named class in this repo.)
+Checks: `npm run build` OK. Affected test files (PanelShell, AppShell, PanelEntry.stories, AppShell.stories) → 80 tests passed.
+Full suite `npm run test`: first run under host load reported 7 failures across 6 files plus a worker RPC timeout
+(`onTaskUpdate`); a clean re-run went **92 files / 906 tests, all green (exit 0)**. The failures moved between runs and none
+of them touched the files this unit changes; each one was checked once against the affected set (PanelShell, AppShell,
+PanelEntry.stories, AppShell.stories, `app.test.tsx`, `style-boundary.test.ts` all pass). This is the load-flakiness the
+handoff names, not a regression.
+Rendered verification (fresh `build-storybook`, Chrome, `iframe.html` + `globals=viewport:responsive`):
+
+| State | Toggle | Size | Frame | Name | Activation result |
+| --- | --- | --- | --- | --- | --- |
+| desktop 1440 collapsed | `display: flex` (visible) | 44×44 | `border: 0`, transparent | "Buscar en el menú" | sidebar expands, focus lands in the search input |
+| tablet 768 rail | `display: flex` (visible) | 44×44 | `border: 0` | "Buscar en el menú" | drawer opens, its search field visible |
+| desktop 1440 expanded | `display: none` | — | — | — | — (the real field is already visible) |
 
 **Verification strategy actually used (honest record).** Per task: `npm run build` (the only type-check path) plus the
 affected test files. Once at the end: the full `npm run test` and a rendered pass per task with a fresh `build-storybook` and
