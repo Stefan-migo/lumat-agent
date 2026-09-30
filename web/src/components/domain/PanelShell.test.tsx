@@ -108,6 +108,29 @@ describe("PanelShell rail contract (2C-1)", () => {
     restore();
   });
 
+  it("restores body overflow and clears inert when unmounted while the drawer is open", async () => {
+    const user = userEvent.setup();
+    const { restore } = mockDialogMethods();
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 768 });
+    document.body.style.overflow = "clip";
+    const { unmount } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    const contentArea = document.querySelector(".panel-shell__content-area") as HTMLElement;
+    const trigger = document.querySelector(".panel-shell__menu-button") as HTMLButtonElement;
+    await user.click(trigger);
+    expect(screen.getByRole("dialog", { name: "Navegación" })).toHaveAttribute("open");
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(contentArea).toHaveAttribute("inert");
+
+    unmount();
+
+    expect(document.body.style.overflow).toBe("clip");
+    expect(contentArea).not.toHaveAttribute("inert");
+    document.body.style.overflow = "";
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
+    restore();
+  });
+
   it("calls navigation once from the drawer and closes the modal", async () => {
     const user = userEvent.setup();
     const onNavigate = vi.fn();
