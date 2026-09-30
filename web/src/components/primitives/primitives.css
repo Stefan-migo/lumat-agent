@@ -36,14 +36,14 @@
   transition: background-color var(--duration-base) var(--ease-out);
 }
 .btn--primary {
-  background: var(--corp-primary);
-  color: var(--corp-primary-fg);
+  background: var(--chrome-950);
+  color: var(--text-on-dark);
 }
 .btn--primary:hover {
-  background: var(--primary-700);
+  background: var(--chrome-900);
 }
 .btn--secondary {
-  background: var(--brand-bg-elevated);
+  background: var(--surface);
   color: var(--corp-text);
   border-color: var(--border-strong);
 }
@@ -68,12 +68,12 @@
    existing danger pair (DESIGN_SYSTEM.md:202,510); the token set defines no darker
    danger step, so the hover deepens the border rather than inventing a token. */
 .btn--danger {
-  background: var(--danger-bg);
+  background: var(--surface);
   color: var(--danger);
-  border-color: var(--danger-border);
+  border-color: var(--border-strong);
 }
 .btn--danger:hover {
-  background: var(--danger-tint);
+  background: var(--surface);
   border-color: var(--danger);
 }
 .btn > svg,
@@ -129,9 +129,9 @@
   font-family: var(--font-ui);
   font-size: var(--text-md);
   padding: var(--space-2);
-  border: 1px solid var(--corp-border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--corp-radius);
-  background: var(--brand-bg-elevated);
+  background: var(--surface);
   color: var(--corp-text);
   width: 100%;
 }
@@ -144,11 +144,16 @@
   outline-offset: var(--focus-ring-offset);
   border-color: var(--focus-ring);
 }
+.field__control:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
 .field__control[aria-invalid="true"] {
-  border-color: var(--danger-border);
+  border-color: var(--border-strong);
+  box-shadow: inset 0 0 0 1px var(--danger-border);
 }
 .field__control:disabled {
-  background: var(--corp-surface-hover);
+  background: var(--surface-subtle);
   color: var(--corp-fg-muted);
   cursor: not-allowed;
 }
@@ -208,9 +213,9 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2);
-  border: 1px solid var(--corp-border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--corp-radius);
-  background: var(--brand-bg-elevated);
+  background: var(--surface);
   color: var(--corp-fg-muted);
 }
 .search-input:focus-within {
@@ -250,8 +255,10 @@
   font-family: var(--font-ui);
   font-size: var(--text-sm);
 }
+/* Status text and semantic fills carry meaning; the low-contrast tone borders
+   are decorative reinforcement only. */
 .badge--neutral {
-  color: var(--corp-fg-muted);
+  color: var(--text-muted);
   background: var(--surface-subtle);
 }
 .badge--success {
@@ -521,7 +528,7 @@
   background: none;
   border: 0;
   padding: var(--space-2) var(--space-3);
-  color: var(--corp-muted);
+  color: var(--text-muted);
   font-family: var(--font-ui);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -529,12 +536,12 @@
   margin-bottom: -1px;
 }
 .tabs__tab[aria-selected="true"] {
-  color: var(--corp-text);
-  border-bottom-color: var(--corp-accent);
+  color: var(--text);
+  border-bottom-color: var(--chrome-950);
 }
 .tabs__tab:focus-visible {
-  outline: 2px solid var(--corp-accent);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .tabs__panel {
   padding: var(--space-3) 0;

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Textarea } from "./Textarea";
 
 // T7.4 — Textarea (PDW-CMP-1). Label association, controlled onChange,
@@ -34,5 +36,11 @@ describe("Textarea (T7.4)", () => {
   it("disables the textarea when disabled is set", () => {
     render(<Textarea label="Resumen" disabled />);
     expect(screen.getByLabelText("Resumen")).toBeDisabled();
+  });
+
+  it("keeps a measured surface boundary and keyboard focus indicator", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    expect(css).toMatch(/\.field__control\s*\{[^}]*border:\s*1px solid var\(--border-strong\)[^}]*background:\s*var\(--surface\)/s);
+    expect(css).toMatch(/\.field__control:focus-visible\s*\{[^}]*outline:\s*var\(--focus-ring-width\) solid var\(--focus-ring\)/s);
   });
 });

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Input } from "./Input";
 
 // T7.2 — Input (PDW-CMP-1). Label association (htmlFor+id), size via the
@@ -50,5 +52,12 @@ describe("Input (T7.2)", () => {
     expect(screen.getByLabelText("Nombre")).toBeDisabled();
     // The label stays readable text (muted via .field--disabled), not dropped.
     expect(screen.getByText("Nombre")).toBeInTheDocument();
+  });
+
+  it("uses a non-white surface and measured boundary role with visible focus", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    expect(css).toMatch(/\.field__control\s*\{[^}]*border:\s*1px solid var\(--border-strong\)[^}]*background:\s*var\(--surface\)/s);
+    expect(css).toMatch(/\.field__control:focus\s*\{[^}]*outline:\s*var\(--focus-ring-width\) solid var\(--focus-ring\)/s);
+    expect(css).toMatch(/\.field__control:disabled\s*\{[^}]*background:\s*var\(--surface-subtle\)/s);
   });
 });
