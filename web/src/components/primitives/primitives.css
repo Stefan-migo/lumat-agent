@@ -1599,15 +1599,25 @@
   animation: panel-drawer-in var(--duration-slow) var(--ease-out);
 }
 .panel-shell__tablet-menu { display: none; }
+/* The reference centres the lockup and pins the close control top-right, the same pattern the sidebar
+   header uses for its toggle (S8). */
 .panel-shell__drawer-heading {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid color-mix(in srgb, var(--corp-primary-fg) 25%, transparent);
 }
+.panel-shell__drawer .panel-shell__search {
+  margin-top: var(--space-3);
+}
 .panel-shell__drawer .panel-shell__drawer-close {
+  position: absolute;
+  top: 50%;
+  right: var(--space-3);
+  transform: translateY(-50%);
   border-color: transparent;
   background: transparent;
   color: var(--corp-primary-fg);
@@ -1686,7 +1696,7 @@
   .panel-shell__sidebar { position: sticky; top: 0; display: flex; height: 100vh; }
   .panel-shell__sidebar-inner { align-items: center; }
   .panel-shell__brand { padding: var(--space-4) var(--space-2); }
-  .panel-shell__brand-image, .panel-shell__search, .panel-shell__group-title,
+  .panel-shell__brand-image, .panel-shell__sidebar .panel-shell__search, .panel-shell__group-title,
   .panel-shell__user-copy { display: none; }
   .panel-shell__sidebar .panel-shell__brand-mark { display: block; width: var(--brand-mark-size); }
   .panel-shell__sidebar .panel-shell__navigation { padding-inline: var(--space-2); }

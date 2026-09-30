@@ -100,7 +100,7 @@ collapse behaviour, the desktop expanded section separators (owner accepted as-i
   sidebar and drawer keep the canonical `NAVIGATION` label. Removes problem 8. Owner decision; canonical line noted above.
 - [x] **S7 — sidebar footer.** Remove the visible "Cerrar sesión" button; expose logout from a footer overflow menu
   (reusing the existing account-menu treatment) with focus return to the trigger. Removes problem 6.
-- [ ] **S8 — mobile drawer header.** Center the lockup and add the search field, matching the expanded sidebar behaviour.
+- [x] **S8 — mobile drawer header.** Center the lockup and add the search field, matching the expanded sidebar behaviour.
   Removes problem 7.
 
 ## Acceptance criteria
@@ -279,6 +279,30 @@ after logout` clicked a standing "Cerrar sesión" button inside the drawer, whic
 test now opens the drawer's overflow control and clicks the menuitem. This is the concrete argument for the verification
 strategy below: per task I ran `npm run build` plus the affected test files, and the full `npm run test` once at the end. The
 targeted runs were green while the tree was not.
+
+**S8 — mobile drawer header. DONE.**
+Solution: the drawer heading now centres the mobile lockup (`justify-content: center`, `position: relative`) and pins the
+close control top-right (`position: absolute; top: 50%; right: var(--space-3); transform: translateY(-50%)`), the same
+pattern the sidebar header uses for its toggle. A search control reuses the existing `.panel-shell__search` markup and the
+existing `navigationSearch` state, so the drawer and the sidebar share one filter, and the drawer's `<Navigation>` now
+receives `search={navigationSearch}`.
+One scoping correction was required: the tablet media block hid `.panel-shell__search` with a global rule, which would have
+hidden the new drawer field at tablet too (the trap the handoff names — the drawer renders the same components as the
+sidebar). The selector is now `.panel-shell__sidebar .panel-shell__search`, so the rail keeps no search and the drawer gets
+the field.
+Tests: the drawer keyboard-traversal test now expects the search input between the close control and the first destination
+(the added field changes the focus order), and a new DOM-level test asserts the drawer exposes a named search field that
+filters its destinations. This is the behaviour the S5 tablet branch depends on.
+Checks: `npm run build` OK. Affected test files (PanelShell, AppShell, PanelEntry.stories, AppShell.stories) → 78 tests passed.
+Rendered verification (fresh `build-storybook`, Chrome, `iframe.html` + `globals=viewport:responsive`):
+
+| State | `justify-content` | Brand offset | Close | Search | Filter `cliente` | Close works |
+| --- | --- | --- | --- | --- | --- | --- |
+| mobile 390 (drawer open) | `center` | 0px | absolute, right, visible | present, visible, 210px | 5 → 1 (Clientes) | yes |
+| tablet 768 (drawer open) | `center` | 0px | absolute, right, visible | present, visible, 274px | 9 → 1 (Clientes) | yes |
+
+Scoping check: sidebar search reports `display: none` at 768 (rail) and `display: flex` at 1440 (expanded) — the drawer
+change did not leak into the rail, and the desktop field is unaffected.
 
 **Verification strategy actually used (honest record).** Per task: `npm run build` (the only type-check path) plus the
 affected test files. Once at the end: the full `npm run test` and a rendered pass per task with a fresh `build-storybook` and

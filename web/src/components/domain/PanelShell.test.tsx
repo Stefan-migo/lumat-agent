@@ -96,6 +96,8 @@ describe("PanelShell rail contract (2C-1)", () => {
     const closeButton = within(dialog).getByRole("button", { name: "Cerrar menú de navegación" });
     expect(closeButton).toHaveFocus();
     await user.tab();
+    expect(within(dialog).getByRole("searchbox", { name: "Buscar en el menú" })).toHaveFocus();
+    await user.tab();
     expect(within(dialog).getByRole("button", { name: "Panel unificado" })).toHaveFocus();
     expect(dialog.contains(document.activeElement)).toBe(true);
     fireEvent(dialog, new Event("cancel", { cancelable: true }));
@@ -190,6 +192,22 @@ describe("PanelShell rail contract (2C-1)", () => {
     await user.type(rail.getByRole("searchbox", { name: "Buscar en el menú" }), "cliente");
     expect(rail.getByRole("button", { name: "Clientes" })).toBeInTheDocument();
     expect(rail.queryByRole("button", { name: "Conversaciones" })).not.toBeInTheDocument();
+  });
+
+  it("offers a named search in the drawer that filters its destinations", async () => {
+    const user = userEvent.setup();
+    const { restore } = mockDialogMethods();
+    render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    await user.click(document.querySelector(".panel-shell__menu-button") as HTMLButtonElement);
+    const drawer = screen.getByRole("dialog", { name: "Navegación" });
+
+    expect(within(drawer).getByRole("button", { name: "Conversaciones" })).toBeInTheDocument();
+    await user.type(within(drawer).getByRole("searchbox", { name: "Buscar en el menú" }), "cliente");
+    expect(within(drawer).getByRole("button", { name: "Clientes" })).toBeInTheDocument();
+    expect(within(drawer).queryByRole("button", { name: "Conversaciones" })).not.toBeInTheDocument();
+
+    await user.click(within(drawer).getByRole("button", { name: "Cerrar menú de navegación" }));
+    restore();
   });
 
   it("provides desktop back, breadcrumb, notification, and account actions", async () => {

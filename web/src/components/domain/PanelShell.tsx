@@ -453,7 +453,12 @@ export function PanelShell({
               <Icon icon={X} />
             </button>
           </div>
-          <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} />
+          {/* The drawer shares the sidebar's filter so both surfaces narrow the same destination list (S8). */}
+          <label className="panel-shell__search">
+            <Icon icon={Search} />
+            <input type="search" aria-label="Buscar en el menú" placeholder="Buscar" value={navigationSearch} onChange={(event) => setNavigationSearch(event.target.value)} />
+          </label>
+          <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} search={navigationSearch} />
           <UserContext user={user} onLogout={onLogout} />
         </section>
       </dialog>
