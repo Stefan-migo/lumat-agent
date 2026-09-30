@@ -235,7 +235,7 @@ Tasks 2.4 and 2.5 are complete and verified. The parent-authorized one-assertion
 
 - `b4df9bc0` — `feat(ui): restyle shared page primitives`
 - `e005f226` — `feat(ui): flatten panel surfaces and dialogs`
-- Pending correction commit — parent-authorized one-assertion flat-card guard update.
+- `6cec4b22` — `fix(test): align card guard with flat-card contract`
 
 No push, PR creation, merge, branch, or worktree operation was performed.
 
