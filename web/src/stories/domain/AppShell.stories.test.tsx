@@ -111,26 +111,24 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
 });
 
 describe('AppShell — shell contract port + sidebar bug fixes (DS-SHELL-1..5)', () => {
-  it('sizes the collapse toggle 32-36px with a >=40px hit target (DS-SHELL-1)', () => {
-    // Bug 1: the shared 44px min-height (calc(space-8 + space-3)) must be
-    // escaped by an explicit min-height while the 2.5rem box keeps the hit target.
+  it('anchors the collapse toggle inside the sidebar (DS-SHELL-1)', () => {
+    // DS-SHELL-1 requires the toggle to stay anchored within the sidebar. It previously rendered inside
+    // the content header, which is exactly what this contract forbids, and these assertions used to pin
+    // that placement.
+    expect(primitivesRaw).toMatch(/\.panel-shell__sidebar-header \.panel-shell__collapse-button/);
+    expect(primitivesRaw).not.toMatch(/\.panel-shell__header \.panel-shell__collapse-button/);
     expect(primitivesRaw).toMatch(
-      /\.panel-shell__collapse-button\s*\{[^}]*min-height:\s*2\.25rem/,
-    );
-    expect(primitivesRaw).toMatch(
-      /\.panel-shell__collapse-button\s*\{[^}]*width:\s*2\.5rem/,
-    );
-    expect(primitivesRaw).toMatch(
-      /\.panel-shell__collapse-button\s*\{[^}]*height:\s*2\.5rem/,
+      /\.panel-shell__sidebar \.panel-shell__collapse-button:focus-visible[\s\S]{0,220}var\(--brand-lime\)/,
     );
   });
 
-  it('anchors the toggle beside the content heading (DS-SHELL-1)', () => {
-    // The control is no longer competing with the sidebar brand/navigation.
+  it('gives the collapse toggle an adequate hit target (DS-SHELL-1)', () => {
     expect(primitivesRaw).toMatch(
-      /\.panel-shell__header \.panel-shell__collapse-button\s*\{[^}]*display:\s*none/,
+      /\.panel-shell__collapse-button\s*\{[^}]*min-height:\s*2rem/,
     );
-    expect(primitivesRaw).toMatch(/\.panel-shell__header \.panel-shell__collapse-button/);
+    expect(primitivesRaw).toMatch(
+      /\.panel-shell__collapse-button\s*\{[^}]*width:\s*2rem/,
+    );
   });
 
   it('contains sidebar hover paint via the min-width chain + overflow (DS-SHELL-2)', () => {

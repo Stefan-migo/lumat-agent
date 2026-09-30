@@ -41,6 +41,16 @@ describe("PanelShell rail contract (2C-1)", () => {
     ]);
   });
 
+  it("keeps the collapse toggle anchored inside the sidebar (DS-SHELL-1)", () => {
+    // DS-SHELL-1: the toggle must stay anchored within the sidebar. It used to render in the content
+    // header, which the canonical requirement forbids; this asserts the placement at the DOM level
+    // instead of pinning CSS text.
+    const { container } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    const sidebarEl = container.querySelector(".panel-shell__sidebar");
+    expect(sidebarEl?.querySelector(".panel-shell__collapse-button")).not.toBeNull();
+    expect(container.querySelector(".panel-shell__header .panel-shell__collapse-button")).toBeNull();
+  });
+
   it("keeps every rail control named when the compact tier visually hides its label", () => {
     // The tablet rail hides the label text visually instead of removing it, because the text is what
     // supplies each control's accessible name (canonical: compact sidebar navigation with accessible

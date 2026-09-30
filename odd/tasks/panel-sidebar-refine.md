@@ -81,9 +81,9 @@ collapse behaviour, the desktop expanded section separators (owner accepted as-i
 ## Tasks
 
 - [x] **S1 — single brand per state.** Expanded renders the lockup only; compact renders the mark only. Removes problem 2.
-- [ ] **S2 — toggle into the sidebar header.** Small explicit chevron control inside the sidebar header (`«` expanded,
+- [x] **S2 — toggle into the sidebar header.** Small explicit chevron control inside the sidebar header (`«` expanded,
   `»` collapsed), keyboard reachable, focus-visible token ring; remove the oversized control from the content header.
-  Removes problem 3. `aria-expanded`/`aria-controls` preserved.
+  Removes problem 3. **This restores canonical compliance, it does not deviate** — see the note below. `aria-expanded`/`aria-controls` preserved.
 - [x] **S3 — compact rail is icon-only (BLOCKER).** Visually hide `.panel-shell__nav-label` whenever the rail is compact
   (desktop collapsed **and** tablet tier), keeping the accessible name; assert no vertical text and no viewport overflow.
   Removes problem 1.
@@ -173,3 +173,40 @@ Rendered verification (fresh `build-storybook`, Chrome):
 
 Known remaining detail, folded into S4: the collapsed-desktop rail button is 40px wide while the tablet rail button is now
 44px, so the two compact rails are slightly different sizes. Height is 44 in both.
+
+**S2 — toggle into the sidebar header. DONE.**
+**Adjudication reversed mid-task, and this is the important part.** Before editing I checked the canonical requirement and
+found that the implementation was the one in violation, not the reference:
+`openspec/specs/panel-design-system/spec.md:672` — **DS-SHELL-1** says the toggle "MUST remain operable in expanded and
+collapsed states, have a visible focus indicator and an adequately sized hit target, and **stay anchored within the
+sidebar**". The toggle rendered inside the content header, and two tests in `AppShell.stories.test.tsx` pinned that
+placement by asserting CSS text (`width: 2.5rem`, and `.panel-shell__header .panel-shell__collapse-button { display: none }`)
+under a comment claiming the control "is no longer competing with the sidebar brand/navigation". So the tests encoded a
+violation of the very requirement they were named after. I nearly reported the move as a spec deviation; the canonical text
+settled it in the reference's favour.
+Solution: a `.panel-shell__sidebar-header` wrapper inside the sidebar holds the brand plus the toggle. The toggle is a 32px
+box, dark-chrome treatment (transparent background, `--text-on-dark`), absolutely positioned at the top-right of the brand
+row when expanded and dropped below the brand (`flex-direction: column`, static, centred) when collapsed, matching the
+reference. It stays hidden at the tablet tier. The stale `.panel-shell__header .panel-shell__collapse-button` rules were
+removed. The focus ring is the pre-existing `.panel-shell__sidebar .panel-shell__collapse-button:focus-visible` lime rule,
+which was already in the sheet and had been orphaned by the move into the header — independent evidence that the sidebar was
+always the intended home.
+Tests: the two brittle CSS-text assertions were rewritten toward the contract (anchored under `.panel-shell__sidebar-header`,
+no `.panel-shell__header` rule, tokenized lime focus, `min-height`/`width: 2rem`), and a **DOM-level** guard was added in
+`PanelShell.test.tsx` asserting the toggle lives inside `.panel-shell__sidebar` and not inside `.panel-shell__header`. This
+is a fifth instance of the test-brittleness class the handoff described: the CSS-text test pinned a rule location instead of
+behaviour, so moving the control broke it.
+Checks: `npm run build` OK. Affected test files (PanelShell, AppShell, AppShell.stories, PanelEntry.stories) → 77 tests passed.
+Rendered verification (fresh `build-storybook`, Chrome):
+
+| State | Toggle | Position | Size | Content header |
+| --- | --- | --- | --- | --- |
+| expanded 1440 | visible, "Colapsar panel lateral" | `absolute`, top-right of the brand row | 32×32 | back, breadcrumbs, actions (no toggle) |
+| collapsed 1440 | visible, "Expandir panel lateral" | `static`, centred below the brand | 32×32 | back, breadcrumbs, actions |
+| tablet 768 / 640 | hidden | — | — | back, breadcrumbs, actions |
+
+`sidebarScrollHeight` stays 900 of 900 in every state.
+
+Flag for the owner: the toggle box is 32px. DS-SHELL-1 asks for an "adequately sized hit target" and its previous revision
+required ≥40px, which the current text relaxed. WCAG 2.5.8 AA needs 24px, so 32px passes, but it is below the 44px house
+convention used elsewhere in the shell. One token raises it if wanted.

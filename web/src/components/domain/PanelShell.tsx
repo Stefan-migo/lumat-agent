@@ -335,7 +335,21 @@ export function PanelShell({
           <button type="button" className="panel-shell__tablet-menu" aria-label="Abrir menú de navegación" aria-expanded={drawerOpen} aria-controls="panel-navigation-drawer" onClick={(event) => openDrawer(event.currentTarget)}>
             <Icon icon={Menu} />
           </button>
-          <Brand compact={collapsed} />
+          <div className="panel-shell__sidebar-header">
+            <Brand compact={collapsed} />
+            <button
+              ref={desktopTriggerRef}
+              type="button"
+              className="panel-shell__collapse-button"
+              aria-expanded={!collapsed}
+              aria-controls="panel-shell-sidebar"
+              aria-label={collapsed ? "Expandir panel lateral" : "Colapsar panel lateral"}
+              title={collapsed ? "Expandir panel lateral" : "Colapsar panel lateral"}
+              onClick={() => setCollapsed((value) => !value)}
+            >
+              <PanelToggleIcon collapsed={collapsed} />
+            </button>
+          </div>
           {!collapsed ? <label className="panel-shell__search">
             <Icon icon={Search} />
             <input type="search" aria-label="Buscar en el menú" placeholder="Buscar" value={navigationSearch} onChange={(event) => setNavigationSearch(event.target.value)} />
@@ -388,18 +402,6 @@ export function PanelShell({
       <div ref={contentAreaRef} className="panel-shell__content-area" onKeyDown={focusMode ? keepFocusInFocusMode : undefined}>
         <div className="panel-shell__header-row">
           <header className="panel-shell__header" aria-label="Encabezado de la vista">
-            <button
-              ref={desktopTriggerRef}
-              type="button"
-              className="panel-shell__collapse-button"
-              aria-expanded={!collapsed}
-              aria-controls="panel-shell-sidebar"
-              aria-label={collapsed ? "Expandir panel lateral" : "Colapsar panel lateral"}
-              title={collapsed ? "Expandir panel lateral" : "Colapsar panel lateral"}
-              onClick={() => setCollapsed((value) => !value)}
-            >
-              <PanelToggleIcon collapsed={collapsed} />
-            </button>
             <button type="button" className="panel-shell__back" aria-label="Volver" title="Volver" onClick={() => window.history.back()}>
               <Icon icon={ArrowLeft} />
             </button>
