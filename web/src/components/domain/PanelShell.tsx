@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import {
+  ArrowLeft,
   Bell,
   BookOpen,
   Bot,
   Calendar,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   LogOut,
   Menu,
   MessageSquare,
   PanelLeft,
   Settings,
+  Search,
   UserRound,
   Users,
   X,
@@ -125,33 +128,42 @@ function Navigation({
   onNavigate,
   user,
   collapsed = false,
-}: Pick<PanelShellProps, "currentView" | "onNavigate" | "user"> & { collapsed?: boolean }) {
+  search = "",
+}: Pick<PanelShellProps, "currentView" | "onNavigate" | "user"> & { collapsed?: boolean; search?: string }) {
   const items = (Object.keys(NAVIGATION) as Array<keyof typeof NAVIGATION>).filter(
-    (view) => !NAVIGATION[view].adminOnly || user.role === "admin",
+    (view) => (!NAVIGATION[view].adminOnly || user.role === "admin")
+      && NAVIGATION[view].label.toLocaleLowerCase("es-CL").includes(search.toLocaleLowerCase("es-CL")),
   );
+  const groups: Array<[string, typeof items]> = [
+    ["General", items.filter((view) => view === "dashboard")],
+    ["Operación", items.filter((view) => ["chat", "conversations", "clients", "agenda"].includes(view))],
+    ["Administración", items.filter((view) => NAVIGATION[view].adminOnly)],
+  ];
 
   return (
     <nav className="panel-shell__navigation" aria-label="Navegación principal">
-      <ul className="panel-shell__navigation-list">
-        {items.map((view) => {
-          const glyph = NAVIGATION[view].icon;
-          return (
-            <li key={view}>
-              <button
-                type="button"
-                className="panel-shell__navigation-button"
-                aria-current={currentView === view ? "page" : undefined}
-                aria-label={collapsed ? NAVIGATION[view].label : undefined}
-                title={collapsed ? NAVIGATION[view].label : undefined}
-                onClick={() => onNavigate?.(view)}
-              >
-                <Icon icon={glyph} />
-                {collapsed ? null : <span className="panel-shell__nav-label">{NAVIGATION[view].label}</span>}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {groups.map(([group, views]) => views.length > 0 ? (
+        <section className="panel-shell__navigation-group" role="group" aria-label={group} key={group}>
+          {collapsed ? null : <h2 className="panel-shell__group-title">{group}</h2>}
+          <ul className="panel-shell__navigation-list">
+            {views.map((view) => (
+              <li key={view}>
+                <button
+                  type="button"
+                  className="panel-shell__navigation-button"
+                  aria-current={currentView === view ? "page" : undefined}
+                  aria-label={collapsed ? NAVIGATION[view].label : undefined}
+                  title={collapsed ? NAVIGATION[view].label : undefined}
+                  onClick={() => onNavigate?.(view)}
+                >
+                  <Icon icon={NAVIGATION[view].icon} />
+                  {collapsed ? null : <span className="panel-shell__nav-label">{NAVIGATION[view].label}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null)}
     </nav>
   );
 }
@@ -173,6 +185,8 @@ export function PanelShell({
 }: PanelShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
+  const [navigationSearch, setNavigationSearch] = useState("");
+  const [accountOpen, setAccountOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
@@ -328,7 +342,11 @@ export function PanelShell({
       <aside id="panel-shell-sidebar" className="panel-shell__sidebar panel-shell__rail" aria-label="Panel de navegación" aria-hidden={focusMode || undefined}>
         <div className="panel-shell__sidebar-inner">
           <Brand compact={collapsed} />
-          <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} collapsed={collapsed} />
+          {!collapsed ? <label className="panel-shell__search">
+            <Icon icon={Search} />
+            <input type="search" aria-label="Buscar en el menú" placeholder="Buscar" value={navigationSearch} onChange={(event) => setNavigationSearch(event.target.value)} />
+          </label> : null}
+          <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} collapsed={collapsed} search={navigationSearch} />
           <UserContext user={user} compact={collapsed} onLogout={onLogout} />
         </div>
       </aside>
@@ -391,6 +409,9 @@ export function PanelShell({
             >
               <PanelToggleIcon collapsed={collapsed} />
             </button>
+            <button type="button" className="panel-shell__back" aria-label="Volver" title="Volver" onClick={() => window.history.back()}>
+              <Icon icon={ArrowLeft} />
+            </button>
              <nav className="panel-shell__breadcrumbs" aria-label="Ruta de navegación">
                <ol>
                  {currentView === "dashboard" ? <li aria-current="page">Panel unificado</li> : <>
@@ -423,7 +444,18 @@ export function PanelShell({
                  </ul>
                  <div className="panel-shell__notifications-footer"><button type="button" onClick={() => void onMarkAllNotificationsRead?.()}>Marcar todas como leídas</button><button type="button" onClick={() => { closeNotifications(); handleNavigation("notifications"); }}>Ver todas las notificaciones</button></div>
                </section> : null}
-               </div>
+                </div>
+                {!notificationsOpen ? <div className="panel-shell__account">
+                  <button type="button" className="panel-shell__account-trigger" aria-label="Abrir menú de usuario" aria-expanded={accountOpen} aria-haspopup="menu" onClick={() => setAccountOpen((open) => !open)}>
+                    <Avatar name={user.username} className="panel-shell__account-avatar" />
+                    <span className="panel-shell__account-name">{user.username}</span>
+                    <Icon icon={ChevronDown} />
+                  </button>
+                  {accountOpen ? <div className="panel-shell__account-menu" role="menu" aria-label={`Cuenta de ${user.username}`}>
+                    <span>{user.username} · {roleLabels[user.role]}</span>
+                    {onLogout ? <button type="button" role="menuitem" onClick={() => void onLogout()}>Cerrar sesión</button> : null}
+                  </div> : null}
+                </div> : null}
              </div>
           </header>
           {statusBadge ? (

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PanelShell } from "./PanelShell";
@@ -12,6 +12,38 @@ function sidebar(container: HTMLElement) {
 }
 
 describe("PanelShell rail contract (2C-1)", () => {
+  it("filters role-authorized navigation in named groups from the sidebar search", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<PanelShell user={operador}><p>Contenido</p></PanelShell>);
+    const rail = sidebar(container);
+
+    expect(rail.getByRole("searchbox", { name: "Buscar en el menú" })).toBeInTheDocument();
+    expect(rail.getByRole("group", { name: "General" })).toHaveTextContent("Panel unificado");
+    expect(rail.getByRole("group", { name: "Operación" })).toHaveTextContent("Conversaciones");
+    expect(rail.queryByRole("group", { name: "Administración" })).not.toBeInTheDocument();
+
+    await user.type(rail.getByRole("searchbox", { name: "Buscar en el menú" }), "cliente");
+    expect(rail.getByRole("button", { name: "Clientes" })).toBeInTheDocument();
+    expect(rail.queryByRole("button", { name: "Conversaciones" })).not.toBeInTheDocument();
+  });
+
+  it("provides desktop back, breadcrumb, notification, and account actions", async () => {
+    const user = userEvent.setup();
+    const logout = vi.fn();
+    const back = vi.spyOn(window.history, "back");
+    render(<PanelShell user={admin} currentView="clients" onLogout={logout}><p>Contenido</p></PanelShell>);
+
+    expect(screen.getByRole("navigation", { name: "Ruta de navegación" })).toHaveTextContent("Clientes");
+    await user.click(screen.getByRole("button", { name: "Volver" }));
+    expect(back).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Cargando notificaciones" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /abrir menú de usuario/i }));
+    expect(screen.getByRole("menu", { name: "Cuenta de ana" })).toBeInTheDocument();
+    await user.click(within(screen.getByRole("menu", { name: "Cuenta de ana" })).getByRole("menuitem", { name: "Cerrar sesión" }));
+    expect(logout).toHaveBeenCalledOnce();
+    back.mockRestore();
+  });
+
   it("shows chat to an operador while keeping privileged sections hidden", () => {
     const { container } = render(<PanelShell user={operador}><p>Contenido</p></PanelShell>);
     const rail = sidebar(container);
