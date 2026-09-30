@@ -29,6 +29,23 @@ export const DesktopAdmin: Story = {
   parameters: { viewport: { width: 1280, height: 900 } },
 };
 
+export const DesktopExpanded1024: Story = {
+  ...DesktopAdmin,
+  parameters: { viewport: { width: 1024, height: 900 } },
+};
+
+export const DesktopExpanded1280: Story = {
+  ...DesktopAdmin,
+  parameters: { viewport: { width: 1280, height: 900 } },
+};
+
+export const DesktopCollapsed1280: Story = {
+  ...DesktopExpanded1280,
+  play: async ({ canvasElement }) => {
+    canvasElement.querySelector<HTMLButtonElement>(".panel-shell__collapse-button")?.click();
+  },
+};
+
 export const DesktopOperator: Story = {
   args: {
     user: { username: "veronica", role: "operador" },
@@ -48,6 +65,11 @@ export const TabletDrawerOpen: Story = {
   parameters: { viewport: { width: 768, height: 900 } },
 };
 
+export const TabletRail: Story = {
+  ...TabletDrawerOpen,
+  args: { ...TabletDrawerOpen.args, drawerInitiallyOpen: false },
+};
+
 export const MobileDrawerOpen: Story = {
   args: {
     user: { username: "veronica", role: "operador" },
@@ -59,8 +81,13 @@ export const MobileDrawerOpen: Story = {
 };
 
 export const Narrow640: Story = {
-  ...TabletDrawerOpen,
+  ...TabletRail,
   parameters: { viewport: { width: 640, height: 900 } },
+};
+
+export const MobileHeaderAndTabs: Story = {
+  ...MobileDrawerOpen,
+  args: { ...MobileDrawerOpen.args, drawerInitiallyOpen: false },
 };
 
 export const Rail1024: Story = {
