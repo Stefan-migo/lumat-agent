@@ -9,9 +9,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  LogOut,
   Menu,
   MessageSquare,
+  MoreVertical,
   PanelLeft,
   Settings,
   Search,
@@ -95,32 +95,91 @@ function Brand({ mobile = false, compact = false }: { mobile?: boolean; compact?
 
 function UserContext({ user, compact = false, onLogout }: { user: User; compact?: boolean; onLogout?: () => void | Promise<void> }) {
   const role = roleLabels[user.role];
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const optionsRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const openOptions = (trigger: HTMLButtonElement) => {
+    triggerRef.current = trigger;
+    setOptionsOpen(true);
+  };
+
+  const closeOptions = () => {
+    setOptionsOpen(false);
+    queueMicrotask(() => triggerRef.current?.focus());
+  };
+
+  useEffect(() => {
+    if (!optionsOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!optionsRef.current?.contains(event.target as Node)) setOptionsOpen(false);
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      closeOptions();
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [optionsOpen]);
+
   return (
     <div
       className="panel-shell__user"
       aria-label={compact ? `${user.username} — ${role}` : undefined}
       title={compact ? `${user.username} — ${role}` : undefined}
     >
-      <span className="panel-shell__user-identity">
-        <Avatar name={user.username} className="panel-shell__user-avatar" />
-        {compact ? null : (
-          <span className="panel-shell__user-copy">
-            <span className="panel-shell__username">{user.username}</span>
-            <span className="panel-shell__role">{role}</span>
-          </span>
-        )}
-      </span>
+      {/* The identity itself opens the account options, which is what makes the control reachable in the
+          compact tiers where the overflow button is hidden (S7). */}
+      <button
+        type="button"
+        className="panel-shell__user-trigger"
+        aria-haspopup="menu"
+        aria-expanded={optionsOpen}
+        aria-label={compact ? `Opciones de ${user.username}` : undefined}
+        onClick={(event) => openOptions(event.currentTarget)}
+      >
+        <span className="panel-shell__user-identity">
+          <Avatar name={user.username} className="panel-shell__user-avatar" />
+          {compact ? null : (
+            <span className="panel-shell__user-copy">
+              <span className="panel-shell__username">{user.username}</span>
+              <span className="panel-shell__role">{role}</span>
+            </span>
+          )}
+        </span>
+      </button>
       {onLogout ? (
         <button
           type="button"
-          className="panel-shell__logout"
-          aria-label="Cerrar sesión"
-          title="Cerrar sesión"
-          onClick={() => void onLogout()}
+          className="panel-shell__user-options-trigger"
+          aria-haspopup="menu"
+          aria-expanded={optionsOpen}
+          aria-label="Más opciones de la cuenta"
+          title="Más opciones de la cuenta"
+          onClick={(event) => openOptions(event.currentTarget)}
         >
-          <Icon icon={LogOut} />
-          <span className="panel-shell__logout-label">Cerrar sesión</span>
+          <Icon icon={MoreVertical} />
         </button>
+      ) : null}
+      {optionsOpen && onLogout ? (
+        <div ref={optionsRef} className="panel-shell__user-options" role="menu" aria-label={`Cuenta de ${user.username}`}>
+          <span>{user.username} · {role}</span>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOptionsOpen(false);
+              void onLogout();
+            }}
+          >
+            Cerrar sesión
+          </button>
+        </div>
       ) : null}
     </div>
   );

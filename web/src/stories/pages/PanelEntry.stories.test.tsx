@@ -36,7 +36,7 @@ describe("Panel entry layout", () => {
     expect(panelEntryStories.Rail1024.parameters?.viewport?.width).toBe(1024);
   });
 
-  it("keeps logout visible and accessible in expanded and collapsed account blocks", async () => {
+  it("reaches logout from the footer account options instead of a standing button (S7)", async () => {
     const onLogout = vi.fn();
     const user = userEvent.setup();
     const { container } = render(
@@ -46,19 +46,25 @@ describe("Panel entry layout", () => {
     );
 
     const sidebar = container.querySelector(".panel-shell__sidebar") as HTMLElement;
-    const logout = sidebar.querySelector<HTMLButtonElement>(".panel-shell__logout")!;
-    expect(logout).toHaveAccessibleName("Cerrar sesión");
-    expect(logout).toHaveAttribute("title", "Cerrar sesión");
-    await user.click(logout);
+    // The footer no longer carries a standing logout button; it used to render full width under the identity.
+    expect(sidebar.querySelector(".panel-shell__logout")).toBeNull();
+
+    // The overflow control opens the account options, which is where logout lives now.
+    await user.click(within(sidebar).getByRole("button", { name: "Más opciones de la cuenta" }));
+    const options = within(sidebar).getByRole("menu", { name: "Cuenta de ana" });
+    await user.click(within(options).getByRole("menuitem", { name: "Cerrar sesión" }));
     expect(onLogout).toHaveBeenCalledOnce();
 
-    const toggle = container.querySelector<HTMLButtonElement>(".panel-shell__collapse-button")!;
-    expect(toggle).toHaveAttribute("aria-label", "Colapsar panel lateral");
-    expect(toggle).toHaveAttribute("title", "Colapsar panel lateral");
-    await user.click(toggle);
-    const compactLogout = sidebar.querySelector<HTMLButtonElement>(".panel-shell__logout")!;
-    expect(compactLogout).toHaveAccessibleName("Cerrar sesión");
-    expect(compactLogout).toHaveAttribute("aria-label", "Cerrar sesión");
+    // Collapsed, the overflow control is hidden and the identity itself opens the same options.
+    await user.click(container.querySelector<HTMLButtonElement>(".panel-shell__collapse-button")!);
+    const identity = within(sidebar).getByRole("button", { name: "Opciones de ana" });
+    await user.click(identity);
+    expect(within(sidebar).getByRole("menu", { name: "Cuenta de ana" })).toBeInTheDocument();
+
+    // Escape closes the options and returns focus to the trigger.
+    await user.keyboard("{Escape}");
+    expect(within(sidebar).queryByRole("menu", { name: "Cuenta de ana" })).not.toBeInTheDocument();
+    await waitFor(() => expect(identity).toHaveFocus());
   });
 
   it("renders the confirmed logo assets for expanded, collapsed, and drawer brands", async () => {

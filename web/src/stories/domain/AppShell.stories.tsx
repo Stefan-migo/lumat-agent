@@ -2,6 +2,10 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Matrix as MatrixGrid } from '../helpers/matrix';
 import { AppShell } from '../../components/domain/AppShell';
 
+/** The footer account options only render when a logout handler exists, so stories supply one: without it the
+ *  prop-dependent chrome is invisible to the rendered review. */
+const onLogout = () => undefined;
+
 const meta = {
   title: 'domain/AppShell',
   component: AppShell,
@@ -33,12 +37,12 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Admin: Story = {
-  args: { user: { username: 'ana', role: 'admin' } },
+  args: { user: { username: 'ana', role: 'admin' }, onLogout },
   render: (args) => <AppShell {...args} />,
 };
 
 export const Operador: Story = {
-  args: { user: { username: 'vero', role: 'operador' } },
+  args: { user: { username: 'vero', role: 'operador' }, onLogout },
   render: (args) => <AppShell {...args} />,
 };
 
