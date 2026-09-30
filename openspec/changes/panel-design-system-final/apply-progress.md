@@ -348,3 +348,56 @@ Task 3.2 (WU7) is complete for PR 5. Parent split task 3.3/WU8 into PR 6 because
 - [x] 3.2 — WU7 complete and verified.
 - [ ] 3.3 — deferred to PR 6; no task 3.3 implementation is included here.
 - Tasks 4.1 and 4.2 remain pending.
+
+---
+
+# Apply Progress: panel-design-system-final — Slice 3 (PR 6, task 3.3 only)
+
+## Status
+
+Task 3.3 (WU8) is complete. The existing responsive shell is represented by named Storybook states at all requested widths; no production shell code or boundary rules needed modification.
+
+## Task completion
+
+- [x] 1.1–1.2, 2.1–2.5, 3.1–3.2 — prior completed records preserved.
+- [x] 3.3 — WU8 shell stories, responsive states and redundant token assertion consolidation.
+- [ ] 4.1–4.2 — remain pending and untouched.
+
+## WU8 — task 3.3 evidence
+
+- `AppShell.stories.tsx` now has named mobile states at 390px and 640px, tablet at 768px, desktop at 1024px and 1280px, and a 1280px collapsed desktop state. `PanelEntry.stories.tsx` includes mobile header/tabs and drawer-open states, tablet rail/drawer states, and expanded/collapsed desktop states at 1024px/1280px. Existing story state fixtures were extended rather than duplicated.
+- The `--bg` exact value check was removed from `AppShell.stories.test.tsx`; `tokens.test.ts` remains the canonical value guard. The separate no-`--header-gradient` check remains.
+- No `style-boundary.test.ts` update was appropriate: no newly introduced shell source exists; the current shell source is already covered for inline SVG and the source-wide style-tag guard. No `dependency-boundary.test.ts` change was needed because no production-to-story import risk was introduced.
+- Safety net: focused existing suite passed 3 files / 37 tests before changes. The authored story-coverage test RED failed because the new story exports were absent (1 expected failure); an intermediate failure after removing the duplicate fixture also caught its accidental coupling to the separate header-gradient check, which was preserved by retaining the token file read. No production behavior changed.
+- GREEN: focused suite passed 3 files / 36 tests after removing the redundant `--bg` assertion and adding the named story exports. REFACTOR: no redundant new fixtures remained; the final full suite and build passed.
+- Work Unit Evidence: `cd web && npm run test` passed 92 files / 900 tests; `cd web && npm run build` passed including `tsc -b` and Vite. Runtime harness: N/A — this work unit changes Storybook configurations only; existing RTL tests already exercise shell behavior, and no standalone Storybook/browser runtime was launched. Rollback boundary: revert only the two story files, `AppShell.stories.test.tsx`, this record and the task checkbox as one unit.
+- Visual review limitation: stories configure the requested viewport/state combinations, but no browser screenshot inspection was run; rendered visual conformance is not claimed.
+
+## TDD Cycle Evidence
+
+| Task | Test file | Layer | Safety net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 3.3 | `AppShell.stories.test.tsx`, `PanelEntry.stories.test.tsx`, `style-boundary.test.ts` | Story module/guard unit tests and existing RTL | 3 files / 37 tests passed | New story export checks failed before story changes; no boundary assertion was applicable | Focused: 3 files / 36 tests passed | Named cases cover both desktop widths/states and mobile/tablet surfaces across 390/640/768/1024/1280 | Removed duplicate token assertion; retained the independent header-gradient guard; full suite/build passed |
+
+## Verification
+
+| Command | Observed result |
+|---|---|
+| `cd web && npm run test` (focused safety net) | Passed: 3 files, 37 tests. Existing React `act(...)` warnings. |
+| `cd web && npm run test -- src/stories/domain/AppShell.stories.test.tsx` (RED) | Failed as expected on missing new responsive story export; an unrelated broken-reference failure from removing the shared token-source read was fixed by retaining that read for the independent header-gradient guard. |
+| `cd web && npm run test -- src/stories/domain/AppShell.stories.test.tsx src/components/style-boundary.test.ts src/stories/pages/PanelEntry.stories.test.tsx` (GREEN) | Passed: 3 files, 36 tests. |
+| `cd web && npm run test` (final) | Passed: 92 files, 900 tests. Existing React `act(...)` and jsdom navigation warnings. |
+| `cd web && npm run build` | Passed: `tsc -b` and Vite production build; existing >500 kB chunk warning. |
+
+## Graph check
+
+- Read the stale `graphify-out/GRAPH_REPORT.md`; it identifies AppShell and shared story/test hubs; its source commit is `96a6f69b`, so it was used structurally and not rebuilt.
+- Graph query surfaced `AppShell.stories.tsx`, `PanelEntry.stories.tsx`, `AppShell()`, `PanelShell()`, `style-boundary.test.ts`, and story test nodes. Path queries found no directed edge between AppShell and PanelEntry stories or from AppShell stories to the style boundary; no directed path was found from the AppShell story test to `tokens.test.ts`.
+- Direct source confirms AppShell composes PanelShell; PanelEntry imports the Dashboard story and PanelShell. Both story modules are presentation consumers; the existing source-wide style-tag check, shell SVG check, and current dynamic style exception list were verified directly.
+
+## Scope and delivery
+
+- PR 6 boundary: task 3.3 only, stacked-to-main; no push, PR, merge, branch, or worktree operation.
+- Changed project files are limited to two requested story modules, their existing AppShell story test for responsive exports and token assertion consolidation, and the OpenSpec task/progress records (5 files total). `style-boundary.test.ts`, `dependency-boundary.test.ts`, production shell, and Dashboard are unchanged.
+- Authored changed-line count: 129 additions plus deletions (≤400); changed files: 5. Commits: `ff734a2b` (`test(shell): cover responsive story states`), `8c3be353` (`docs(sdd): record responsive story apply evidence`).
+- No push or remote operation was performed.

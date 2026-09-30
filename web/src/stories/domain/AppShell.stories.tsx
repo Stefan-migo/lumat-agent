@@ -47,9 +47,31 @@ export const MobileOperator: Story = {
   parameters: { viewport: { width: 390, height: 844 } },
 };
 
+export const TabletOperator640: Story = {
+  ...Operador,
+  parameters: { viewport: { width: 640, height: 900 } },
+};
+
 export const TabletAdmin: Story = {
   ...Admin,
   parameters: { viewport: { width: 768, height: 900 } },
+};
+
+export const DesktopAdmin1024: Story = {
+  ...Admin,
+  parameters: { viewport: { width: 1024, height: 900 } },
+};
+
+export const DesktopAdmin1280: Story = {
+  ...Admin,
+  parameters: { viewport: { width: 1280, height: 900 } },
+};
+
+export const DesktopAdminCollapsed: Story = {
+  ...DesktopAdmin1280,
+  play: async ({ canvasElement }) => {
+    canvasElement.querySelector<HTMLButtonElement>('.panel-shell__collapse-button')?.click();
+  },
 };
 
 export const Matrix: StoryObj = {

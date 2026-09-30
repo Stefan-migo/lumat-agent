@@ -5,14 +5,13 @@ import { render, screen, within } from '@testing-library/react';
 import { AppShell } from '../../components/domain/AppShell';
 import type { User } from '../../types';
 import * as appShellStories from './AppShell.stories';
+import * as panelEntryStories from '../pages/PanelEntry.stories';
+
+const tokensRaw = readFileSync(join(process.cwd(), 'src', 'tokens', 'tokens.css'), 'utf8');
 
 const admin: User = { username: 'ana', role: 'admin' };
 const operador: User = { username: 'vero', role: 'operador' };
 
-const tokensRaw = readFileSync(
-  join(process.cwd(), 'src', 'tokens', 'tokens.css'),
-  'utf8',
-);
 const panelShellRaw = readFileSync(
   join(process.cwd(), 'src', 'components', 'domain', 'PanelShell.tsx'),
   'utf8',
@@ -35,6 +34,18 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
     expect(appShellStories.Operador).toBeDefined();
     expect(appShellStories.MobileOperator).toBeDefined();
     expect(appShellStories.TabletAdmin).toBeDefined();
+    expect(appShellStories.TabletOperator640).toBeDefined();
+    expect(appShellStories.DesktopAdmin1024).toBeDefined();
+    expect(appShellStories.DesktopAdmin1280).toBeDefined();
+    expect(appShellStories.DesktopAdminCollapsed).toBeDefined();
+    expect(panelEntryStories.DesktopExpanded1024).toBeDefined();
+    expect(panelEntryStories.DesktopExpanded1280).toBeDefined();
+    expect(panelEntryStories.DesktopCollapsed1280).toBeDefined();
+    expect(panelEntryStories.TabletRail).toBeDefined();
+    expect(panelEntryStories.TabletDrawerOpen).toBeDefined();
+    expect(panelEntryStories.MobileHeaderAndTabs).toBeDefined();
+    expect(panelEntryStories.MobileDrawerOpen).toBeDefined();
+    expect(panelEntryStories.Narrow640).toBeDefined();
   });
 
   it('renders the sidebar brand image and accessible name with no tag', () => {
@@ -92,10 +103,6 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
   it('also renders the brand image for the operador shell', () => {
     render(<AppShell user={operador} />);
     expect(screen.getAllByAltText('Lumat').length).toBeGreaterThan(0);
-  });
-
-  it('uses the approved sage (#dbe1d6) as the page bg', () => {
-    expect(tokensRaw).toMatch(/--bg:\s*#dbe1d6/);
   });
 
   it('does not reintroduce the dropped --header-gradient token', () => {
