@@ -165,19 +165,44 @@ Edges consulted: `UserManagement.tsx -> api.ts -> types.ts`;
 
 Estimated authored size: 250–380 changed lines.
 
-### Slice 2 — frontend ficha
+### Slice 2 — frontend, split into 2a and 2b
+
+The original slice 2 was split on 2026-09-29 after being evaluated against the active
+`openspec/changes/panel-design-system-final` change (at the time: proposal stage, uncommitted,
+four open questions for the owner). That change rebuilds `AppShell.tsx` and `PanelShell.tsx` in
+its third slice, restyles every primitive in its second, and replaces `--bg`, `--surface`,
+`--text` and `--border`. S2.1 and S2.4 edit exactly the two shells that change rebuilds, and a
+new page built now would be built against the outgoing palette. `panel-grammar-global` is also
+active with 5 tasks and 0 applied, racing the same `DS-GRAMMAR-1`.
+
+#### Slice 2a — admin reset flow (delivered)
+
+- **S2.3** Fix the admin reset flow: a dialog where the admin types the password,
+  with a generate button that shows it in the field (P6).
+
+Touches only `UserManagement.tsx`, which the design-system change does not touch, so it carries
+zero collision. Estimated 80–120 changed lines.
+
+#### Slice 2b — frontend ficha (deferred)
+
+Blocked on `panel-design-system-final` **slice 3 (responsive shell) landing in `main`** — not on
+the whole change. The ficha does not need new tokens or restyled primitives to *function*; it
+needs a stable shell so the shell edits happen once instead of twice.
 
 - **S2.1** `users/:id` on `PanelRoute` + parse + `AppShell` drill-down + clickable
   rows in `UserManagement`.
 - **S2.2** `UserProfile.tsx`: identity header, the four editable fields, lockout
   state with unlock, and a password card when viewing self.
-- **S2.3** Fix the admin reset flow: a dialog where the admin types the password,
-  with a generate button that shows it in the field (P6).
 - **S2.4** Reach the profile / password change from the panel user menu and from
   `TechnicianShell`, so every role has a path.
 - **S2.5** Tests for all of the above, including the technician path.
 
 Estimated authored size: 300–450 changed lines.
+
+Carried consequence: once the shell is rebuilt, the verified line-number anchors for
+`AppShell.tsx` and `PanelShell.tsx` in `handoff/user-profiles-slice2` (Engram) and in
+`.rapsodia-code/handoffs/2026-09-29-user-profiles-slice2.md` go stale. Refresh the handoff
+before 2b starts.
 
 ## Acceptance criteria
 
@@ -223,7 +248,9 @@ suite green. Backend runner `uv run pytest tests/`; web runner `cd web && npm te
   `tests/integration/test_assistant_harness_compatibility.py::test_exact_approval_replay_is_rejected_after_first_consumption`.
   Not caused by this unit; report if they fire.
 - **`AgendaPage.test.tsx` is load-flaky** under concurrent suite load; passes in
-  isolation.
+  isolation. `AppShell.test.tsx` belongs to the same class: its `renders live data pages for
+  every navigation view` case exceeded the 5s timeout under full-suite load on 2026-09-29
+  while passing in isolation at 1.44s and passing in the immediate re-run.
 - Carried from the thread audit, not fixed here: `assistant.capabilities` and the
   planner catalog remain unfiltered by role (`agent-role-access.md:200`).
 - No push, PR, or merge happens without separate explicit owner authorization.
@@ -251,6 +278,35 @@ suite green. Backend runner `uv run pytest tests/`; web runner `cd web && npm te
   - `change_own_password` re-fetches the entity with `_get_user(session, current.id)` although the `current` dependency already is that entity.
   - `PATCH` validates field length but not email shape.
   - `PATCH /users/{id}` on an unknown id has no 404 test; the `GET` one does.
+
+### Progress — slice 2a (`odd/user-profiles-slice2a`, base `96a6f69b`)
+
+- [x] Slice 2 evaluated against `panel-design-system-final` and **split** into 2a and 2b; the
+  collision evidence is recorded under `## Slices`.
+- [x] Graph check run by the orchestrator from the primary worktree. `graphify-out/` is
+  gitignored, so it does not exist in the worktree; it was not rebuilt, and the graph is fresh
+  for `96a6f69b`.
+- [x] S2.3 — the admin reset flow is a dialog the admin can read. (`f33336e2`)
+- [x] Orchestrator normalization: the delegate's diff carried the "at least 8 characters" hint
+  twice — once in the intro paragraph and once under the field. The duplicate was removed; the
+  single remaining mention sits next to the field, where it explains why the submit is inert.
+  (`8be7469a`)
+- Orchestrator verification on `8be7469a`: `cd web && npm test` → **92 files / 876 tests passed**;
+  `cd web && npm run build` → `tsc -b` and the Vite build both passed. The first full-suite run
+  reported one failure (`AppShell.test.tsx`, 5s timeout) which was resolved as the documented
+  load flakiness — green in isolation at 1.44s, green in the re-run. Verification is the
+  orchestrator's own run, not the delegate's report.
+- **Review status: not yet due.** `gentle-ai review assess --base-ref 96a6f69b --committed-only
+  --json` reports risk `medium`, 2 paths, **117 changed lines across the two code commits
+  `f33336e2`/`8be7469a`**, and `review_due: false` with reason `under_budget`. Per the commit-level
+  rule the review stays pending in the slice until a later commit reaches the delivery budget. No
+  review lineage exists for slice 2a. This record commit is documentation-only and is assessed as
+  its own delta.
+- Accepted tradeoff, recorded not fixed: `generatePassword()` maps raw bytes onto a 62-character
+  alphabet with `%`, which is very slightly biased. For a temporary password handed over by an
+  admin, the bias is negligible and not worth the extra code. `globalThis.crypto.getRandomValues`
+  is intentionally not optional-chained — unlike `randomUUID`, it does not require a secure
+  context.
 
 ## Native review (slice 1)
 
@@ -281,7 +337,14 @@ Slice 1 is implemented, verified, reviewed and **delivered as PR #437** (`odd/us
 label `type:feature`). `origin/main` (`dfb9eca2`) was still an ancestor of the branch at push time, so
 nothing needed re-integrating.
 
-**Slice 2 (the frontend ficha) is next**, on the same branch: the `users/:id` route and page, the
-corrected admin reset flow, and a reachable self-service password change for every role including the
-technician. The four advisories above remain open as later work — in particular the `me/password`
-brute-force ceiling (R1-001) and the over-broad 409 mapping (R3-001).
+**Slice 2a is implemented and verified** on `odd/user-profiles-slice2a` (base `96a6f69b`),
+awaiting the owner's separate authorization to push and open a PR. Its native review is not yet
+due (`under_budget`, 117 changed lines).
+
+**Slice 2b (the frontend ficha) is deferred** until `panel-design-system-final` slice 3 (responsive
+shell) lands in `main`, because S2.1 and S2.4 edit the same `AppShell.tsx` and `PanelShell.tsx` that
+slice rebuilds. Refresh the slice-2 handoff's line anchors at that point.
+
+The four advisories above remain open as later work — in particular the `me/password` brute-force
+ceiling (R1-001) and the over-broad 409 mapping (R3-001). They are backend-only, collide with
+nothing in flight, and can proceed in parallel with the design-system work whenever the owner wants.
