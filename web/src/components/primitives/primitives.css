@@ -1569,6 +1569,12 @@
   align-items: center;
   justify-content: center;
 }
+/* The brand fills the header so its lime accent stays on the sidebar's left edge; the lockup keeps
+   centring through the brand's own grid. Centring the flex item shrank it to content and dragged the
+   accent into the middle of the sidebar. */
+.panel-shell__sidebar-header .panel-shell__brand {
+  width: 100%;
+}
 .panel-shell__sidebar-header .panel-shell__collapse-button {
   position: absolute;
   top: 50%;
