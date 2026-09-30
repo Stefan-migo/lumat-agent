@@ -113,7 +113,7 @@ export function UserManagement({ currentUser }: UserManagementProps) {
     {data.state === "empty" || (data.state === "ready" && users.length === 0) ? <p>No hay usuarios</p> : <DataTable columns={columns} rows={users} rowKey={(user) => String(user.id)} actions={(user) => <><Button variant="secondary" disabled={(user.id === currentUser.id || user.username === currentUser.username) || busyId === user.id} onClick={() => void toggle(user)}>{user.active ? "Desactivar" : "Activar"}</Button><Button variant="secondary" disabled={(user.id === currentUser.id || user.username === currentUser.username) || busyId === user.id} onClick={() => { setResetTarget(user); setResetDraft(""); setResetDone(false); setMutationState(null); }}>Restablecer contraseña</Button></>} />}
     <Dialog open={resetTarget !== null} onClose={closeReset} title="Restablecer contraseña">
       {resetTarget ? <>
-        <p>Define una nueva contraseña para {resetTarget.username}. Debe tener al menos 8 caracteres.</p>
+        <p>Define una nueva contraseña para {resetTarget.username}.</p>
         <Input label="Nueva contraseña" type="text" value={resetDraft} onChange={(event) => setResetDraft(event.target.value)} disabled={resetBusy || resetDone} />
         <p>La contraseña debe tener al menos 8 caracteres.</p>
         {mutationState ? <StateMessage {...mutationState} role={mutationState.tone === "danger" ? "alert" : "status"} /> : null}
