@@ -8,7 +8,8 @@ Source: `odd/analysis/findings-ledger.md` on `main` (commits `c0d24805`, `747687
 dashboard section run of the `panel-section-analysis` machine.
 Depends on: nothing.
 Delivery strategy: `ask-on-risk`
-Chain strategy: **pending owner decision** (forecast exceeds the ~400-line budget).
+Chain strategy: `stacked-to-main` (owner decision 2026-10-01) — PR1 = the visual pass
+(WU1 + WU2), PR2 = the functional period selector (WU3).
 TDD: Strict TDD ON — frontend `cd web && npm run test`; backend `uv run pytest tests/`.
 
 ## Objective
