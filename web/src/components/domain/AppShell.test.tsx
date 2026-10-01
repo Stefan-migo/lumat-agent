@@ -221,6 +221,15 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
+  it('blocks a non-admin from a direct user ficha URL without requesting user data', async () => {
+    window.history.replaceState({}, '', '/panel/app/users/8');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ notifications: [] }), { status: 200 }));
+    render(<AppShell user={operador} />);
+    expect(await screen.findByText('No tienes permiso para ver este panel')).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith('/panel/api/users/8', expect.anything());
+    vi.restoreAllMocks();
+  });
+
   it('keeps the bookmarked cases path canonical in the unified conversations section', async () => {
     window.history.replaceState({}, '', '/panel/app/cases');
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0, offset: 0, limit: 20, counts: { all: 0, human: 0, emergency: 0, case: 0, closed: 0 } }), { status: 200 }));

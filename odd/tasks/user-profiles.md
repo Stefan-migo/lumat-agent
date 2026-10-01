@@ -1,15 +1,15 @@
 # ODD Task: user-profiles
 
-Status: **in progress** — slice 1 (backend) and slice 2a merged 2026-09-30; **slice 3 (A: self profile) authorized 2026-10-01**
-Worktree: `../lumat-agent-odd-user-profiles-self-profile`
-Branch: `odd/user-profiles-self-profile`
-Base: `7aee1b2e` (`main`, merge of PR #454)
+Status: **in progress** — slices 1, 2a and 3 (A: self profile) merged 2026-10-01; **slice 4 (B: admin user view) authorized 2026-10-01**
+Worktree: `../lumat-agent-odd-user-profiles-admin-view`
+Branch: `odd/user-profiles-admin-view`
+Base: `171f59e0` (`main`, merge of PR #456)
 Thread: **hilo multi usuarios** (Engram `odd/multi-usuarios/thread-status`)
 Source: investigation of the panel users surface, 2026-09-29
 Delivery strategy: `ask-on-risk`
 Chain strategy: **stacked-to-main** (owner-confirmed 2026-09-29)
 
-**Delivered earlier in this unit:** slice 1 backend — PR **#437** (merged); slice 2a admin reset dialog — PR **#438**, merge `e6884bf8`; `main` later advanced to `7aee1b2e`. The original single-page "slice 2b" was **never built**; it is replaced by the two pages below.
+**Delivered earlier in this unit:** slice 1 backend — PR **#437** (merged); slice 2a admin reset dialog — PR **#438**, merge `e6884bf8`; slice 3 page (A) self profile — PR **#456**, merge `171f59e0`. The original single-page "slice 2b" was **never built**; it is replaced by the two pages below.
 
 ## Objective
 
@@ -210,16 +210,34 @@ self-edit endpoint does not exist.
 
 Estimated authored size: 250–400 changed lines.
 
-### Slice 4 — page (B): admin individual user view (not this slice)
+### Slice 4 — page (B): admin individual user view (this slice, authorized 2026-10-01)
 
 Frontend-only. The admin's view of one user, reached from the `Usuarios` list.
 
+**P10 (owner, 2026-10-01):** (B) is **ficha + unlock only**. It does **not**
+duplicate the actions that already live on the users list — password reset and
+activate/deactivate stay there and are not repeated in the ficha.
+
 - **S4.1** `users/:id` on `PanelRoute` + parse + `AppShell` drill-down + clickable
   rows in `UserManagement` (mirrors the `clients/:id` precedent).
-- **S4.2** A user-ficha component: identity header, the **four** editable fields
-  (`name`, `phone`, `email`, `position`), lockout state with unlock
-  (`POST /users/{id}/unlock`), and the existing admin actions (reset, toggle).
+- **S4.2** A user-ficha component: identity header (`username`, `role` via
+  `roleLabels.ts`), the **four** editable fields (`name`, `phone`, `email`,
+  `position`), and the lockout state with `POST /users/{id}/unlock`. No reset and
+  no toggle-active (P10).
 - **S4.3** Tests, including the per-role denial boundary.
+
+Backend is already in place and unchanged: `GET /users/{id}` (admin),
+`PATCH /users/{id}` (admin), `POST /users/{id}/unlock` (admin), and the admin
+serializer already exposes `locked_until`/`failed_logins`.
+
+Open debts this slice must handle:
+- `AdminUser` in `web/src/types.ts` declares only `{id, username, role, active}` —
+  extend it to the admin shape (`email`, `name`, `phone`, `position`,
+  `locked_until`, `failed_logins`).
+- `PATCH /users/{id}` answers **409** on a duplicate email; the save path must
+  surface it (no 409 branch exists in the `ClientFicha` pattern).
+- `PATCH` semantics: `null` clears, `""` → 400 (same as (A)).
+- `PATCH` validates length but not email shape (advisory R3-002).
 
 Estimated authored size: 300–450 changed lines.
 
@@ -348,11 +366,30 @@ suite green. Backend runner `uv run pytest tests/`; web runner `cd web && npm te
   consulted: `User` (`models.py:255`), `routes/users.py`, `serializers.py`,
   `services/users.py`, `api.ts`, `types.ts`, `UserManagement.tsx`, `AppShell.tsx`,
   `ClientFicha.tsx`, `PageFrame()`.
-- [ ] S3.1 — `PATCH /panel/api/me` (name + phone only) + audit.
-- [ ] S3.2 — confirm `GET /me` self shape.
-- [ ] S3.3 — self-profile route for every role + `AccountControl`/`TechnicianShell` entry.
-- [ ] S3.4 — self-profile component (identity, two fields, password card).
-- [ ] S3.5 — backend + frontend tests.
+- [x] S3.1 — `PATCH /panel/api/me` (name + phone only) + audit. (`80b51438`)
+- [x] S3.2 — `GET /me` unchanged; still returns `name`/`phone` and no lockout fields.
+- [x] S3.3 — self-profile route for every role + `AccountControl` (desktop/mobile) and `TechnicianShell` entry. (`ad2b74ab`, `230274fb`, `7ad46a6a`)
+- [x] S3.4 — self-profile component (identity, two fields, password card). (`ecac06ab`)
+- [x] S3.5 — backend + frontend tests. (`80b51438`, `c1c4be0a`)
+- Slice 3 delivered as PR **#456**, merge `171f59e0` (16 files, +445/−63), base `main` `a0a53310`.
+- Verification on the merged tree: backend **1734 passed**; web **93 files / 917 tests**; `npm run build` green.
+- Native review: `review-1aab957def976d29` (pre-integration) and `review-98b2bbfe5b0192d5` (integrated) — both **approved**, authority burned.
+- Defect caught by the orchestrator during its own diff review and fixed before freeze: with `name === null` the form sent `name: ""`, the backend answered 400, and an empty-profile user could not save even their phone. (`c1c4be0a`)
+- Advisory **R3-001** (reliability, WARNING, non-blocking) claims an emptied field could implicitly clear a stored value. The empty-field guard rejects that submit today and points the user to the explicit **Borrar** action, so it reads as a false positive; recorded as later work.
+
+### Progress — slice 4 (page B: admin user view)
+
+- [x] Decision P10: ficha + unlock only; reset/toggle stay on the list.
+- [x] Graph check from the **primary** worktree. Nodes consulted: `routes/users.py`,
+  `list_users()`, `unlock_user()`, `User`, `serializers.py`, `UserManagement.tsx`,
+  `ClientFicha.tsx`, `PageFrame()`, `StateMessage()`, `panel/deps.py`,
+  `record_audit()`. (Graph built at `7aee1b2e`; refresh runs once at session close.)
+- [x] S4.1 — `users/:id` route + parse + `AppShell` drill-down + clickable rows. (`be77f3a2`, `131b3c13`)
+- [x] S4.2 — admin ficha: identity, four fields, lockout state + unlock. (`a6df2ee6`)
+- [x] S4.3 — tests. (`a6df2ee6`, `be77f3a2`, `131b3c13`, `c5df72ea`)
+- Verification: web **94 files / 925 tests**; `npm run build` green. Risk `medium`, 288 changed lines, `review_due: false` (`under_budget`) — no native review due in this slice.
+- Defect caught by the orchestrator during its own diff review and fixed before freeze: `GET /users/{id}` returns the user **wrapped** (`{"user": ...}`), but `getAdminUser` was typed as a bare `AdminUser` and the ficha read the wrong shape — the tests hid it by mocking the unwrapped object. Fixed by typing the wrapped response and reading `data.data.user`. (`c5df72ea`)
+- Non-blocking observations, recorded not fixed: "Volver a usuarios" uses `window.history.back()` (leaves the panel on direct entry); the ficha clears a field by emptying it, with no explicit **Borrar** action as in page (A).
 
 ## Native review (slice 1)
 
@@ -379,17 +416,11 @@ later work; none reopens this review and none is a reason to re-run it against t
 
 ## Next step
 
-Slice 1 (`odd/user-profiles`, PR **#437**) and slice 2a (PR **#438**) are both
-merged; `main` is at `7aee1b2e`.
-
-**Slice 3 — page (A), self profile — is authorized and in progress** on
-`odd/user-profiles-self-profile` (base `7aee1b2e`). It is backend + frontend:
-`PATCH /panel/api/me` (name + phone only, P8) plus the self-profile page and its
-entry points for every role.
-
-**Slice 4 — page (B), admin individual user view — is not started.** It is
-frontend-only and touches the same shell surfaces slice 3 touches, so it follows
-slice 3.
+Snapshot: `user-profiles` is complete — page (A) merged as PR **#456** (`171f59e0`),
+page (B) implemented and verified on `odd/user-profiles-admin-view` (base
+`171f59e0`), awaiting the owner's separate authorization to push and open a PR.
+Per P10, (B) is ficha + unlock only; reset/toggle stay on the users list. No
+native review is due for (B) yet (`under_budget`).
 
 The four advisories above remain open as later work — in particular the
 `me/password` brute-force ceiling (R1-001) and the over-broad 409 mapping

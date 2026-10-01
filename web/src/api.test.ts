@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword, getAdminUser, updateAdminUser, unlockUser } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -215,6 +215,22 @@ describe('planning session API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, thread_id: 8 }), { status: 200 }));
     await reopenPlanningSession('budget-review-8');
     expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/planning/sessions/budget-review-8/reopen', expect.objectContaining({ method: 'POST' }));
+  });
+});
+
+describe('admin user ficha API contracts', () => {
+  beforeEach(() => { globalThis.fetch = vi.fn(); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('uses the typed profile and unlock endpoints', async () => {
+    const response = { user: { id: 8, username: 'carlos', role: 'tecnico', active: true, email: null, name: 'Carlos', phone: null, position: null, locked_until: null, failed_logins: 0 } };
+    vi.mocked(globalThis.fetch).mockImplementation(async () => new Response(JSON.stringify(response), { status: 200 }));
+    await expect(getAdminUser(8)).resolves.toEqual(response);
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/users/8', expect.anything());
+    await updateAdminUser(8, { name: null, phone: '123', email: null, position: 'Técnico' });
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/users/8', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ name: null, phone: '123', email: null, position: 'Técnico' }) }));
+    await unlockUser(8);
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/users/8/unlock', expect.objectContaining({ method: 'POST' }));
   });
 });
 
