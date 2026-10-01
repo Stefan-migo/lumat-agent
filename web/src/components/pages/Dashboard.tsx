@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { ReactNode } from "react";
 import {
   AlertTriangle,
@@ -15,7 +15,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { apiFetch, getDashboardToday, getDashboardTrend } from "../../api";
+import { getDashboardKpis, getDashboardToday, getDashboardTrend } from "../../api";
 import type { DashboardToday, Kpis, Role } from "../../types";
 import type { PanelView } from "../domain/PanelShell";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -23,6 +23,7 @@ import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { StatCard } from "../shared/StatCard";
 import { Icon } from "../primitives/Icon";
+import { Select } from "../primitives/Select";
 
 type IconName = "calendar" | "clock" | "message" | "users" | "agent" | "zap" | "alert" | "inbox" | "arrow" | "chart" | "tag" | "settings";
 
@@ -68,6 +69,16 @@ function dayShort(start: string): string {
   }
 }
 
+function periodStartLabel(start: string): string {
+  try {
+    const date = new Date(`${start}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return start;
+    return new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric" }).format(date);
+  } catch {
+    return start;
+  }
+}
+
 export interface DashboardProps {
   data?: Kpis | null;
   state?: DashboardState;
@@ -91,20 +102,21 @@ function stateMessage(state: DashboardState, retry: () => void) {
 }
 
 export function Dashboard({ data: controlledData, state: controlledState, onRetry, role = "admin", onNavigate }: DashboardProps) {
+  const [windowDays, setWindowDays] = useState(7);
   const fetchDashboard = useCallback(async (): Promise<DashboardData> => {
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const kpis = await apiFetch<Kpis>("/panel/api/kpis");
+    const kpis = await getDashboardKpis(windowDays);
     const fetchToday = (): Promise<{ today?: DashboardToday; todayError?: boolean }> =>
       getDashboardToday(timezone).then((today) => ({ today })).catch(() => ({ todayError: true }));
     const fetchTrend = (): Promise<{ trend?: { buckets: DashboardData["trend"] }; trendError?: boolean }> =>
-      getDashboardTrend(timezone).then((trend) => ({ trend })).catch(() => ({ trendError: true }));
+      getDashboardTrend(timezone, windowDays).then((trend) => ({ trend })).catch(() => ({ trendError: true }));
     const [todayResult, trendResult] = await Promise.all([
       fetchToday(),
       fetchTrend(),
     ]);
     return { ...kpis, today: todayResult.today, todayError: todayResult.todayError, trend: trendResult.trend?.buckets ?? [], trendError: trendResult.trendError };
-  }, []);
-  const fetched = useAsyncData(fetchDashboard, controlledData === undefined);
+  }, [windowDays]);
+  const fetched = useAsyncData(fetchDashboard, controlledData === undefined, windowDays);
   const data = (controlledData === undefined ? fetched.data : controlledData) as DashboardData | null | undefined;
   const state = controlledState ?? fetched.state;
   const retry = onRetry ?? fetched.retry;
@@ -190,7 +202,25 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
         </div>
       </section>
       <section className="dashboard__section" aria-labelledby="period-title">
-        <div className="dashboard__section-head"><h2 id="period-title">Actividad del período</h2></div>
+        <div className="dashboard__section-head dashboard__period-head">
+          <h2 id="period-title">Actividad del período</h2>
+          <div className="dashboard__period-control">
+            <Icon icon={ICONS.calendar} size="sm" />
+            <Select
+              className="dashboard__period-select"
+              label="Período de actividad"
+              aria-label="Período de actividad"
+              value={windowDays}
+              onChange={(event) => setWindowDays(Number(event.target.value))}
+              options={[
+                { value: "7", label: "Últimos 7 días" },
+                { value: "14", label: "Últimos 14 días" },
+                { value: "30", label: "Últimos 30 días" },
+              ]}
+            />
+            {data.window_start ? <span className="dashboard__period-caption">Desde el {periodStartLabel(data.window_start)}</span> : null}
+          </div>
+        </div>
         <div className="kpi-grid">
           <StatCard label="Contactos" value={data.contacts} accent="var(--primary-700)" />
           <StatCard label="Derivados" value={data.derived} accent="var(--warning)" />
@@ -198,7 +228,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
           <StatCard label="Nuevos clientes" value={data.new_customers ?? 0} accent="var(--success)" />
         </div>
         <div className="dashboard__period">
-          <div className="dashboard__chart" aria-label="Tendencia de contactos de 7 días">
+          <div className="dashboard__chart" aria-label={`Tendencia de contactos de ${windowDays} días`}>
             <div className="dashboard__chart__head"><Icon icon={ICONS.chart} size="sm" /><h3>Contactos por día</h3>{bars.length ? <span className="dashboard__chart__total">{chartTotal} contactos · {bars.length} días</span> : null}</div>
             {bars.length ? <div className="dashboard__bars">{bars.map((bar) => {
               const pct = max > 0 && bar.count > 0 ? Math.max((bar.count / max) * 100, 6) : 0;
