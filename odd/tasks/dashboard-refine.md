@@ -162,6 +162,29 @@ the chain-strategy decision before the slice that crosses it. Measure with
       Communities: `Dashboard.tsx`, `AppShell.tsx`, `useAsyncData`. The graph report is built
       from `71b9d8ec` (advisory only; anchors verified by reading the files directly).
 
+### WU1 record
+
+- [x] **WU1 implemented** — commit `9e0565d6` (`feat(dashboard): refine navigation and motive rows`),
+      3 files, 76 insertions / 51 deletions: `Dashboard.tsx`, `Dashboard.test.tsx`,
+      `primitives.css`. T1–T5 done; urgent-case rows still call `navigate("cases")` (AD-HOY-1 holds).
+- [x] **WU1 verification of record** — `cd web && npm run test` → **94 files / 940 tests passed**;
+      `npx tsc -b --noEmit` → exit 0; `npm run build` → exit 0 (pre-existing >500 kB chunk warning);
+      `git diff --check` → clean.
+- [x] **WU1 parent spot check** — the orchestrator re-ran `npm run build` → exit 0.
+- [x] **WU1 independent verification** (required: the writer returned `partial`, having not observed
+      RED independently for T3/T4) — fresh-context read-only verifier; all five claims CONFIRMED, no
+      false claims, no scope violations, no weakened tests for T1/T5.
+- [x] **WU1 native review measurement** — `gentle-ai review assess --base-ref 1c6e9595
+      --committed-only` → `risk: medium`, 300 changed lines, `review_due: false`
+      (`under_budget`). The reviewed boundary stays at `1c6e9595`.
+- [x] **dashboard-006 applied early** — T2 rewrote the assistant JSX, so the "Asistente Lumat" label
+      and its `aria-label` were corrected inside WU1 rather than left as "Agente Lumat" in rewritten
+      code. WU2 keeps only its confirmation.
+- [ ] **WU1 recorded gaps** — (a) T2/T3/T4 responsive behaviour is implemented in CSS media queries but
+      is NOT pinned by viewport-sensitive tests; a regression would be silent. (b) Visual fidelity
+      against the three reference images was NOT machine-verified — the independent verifier could not
+      read them. The owner's own comparison is the instrument for this one.
+
 ## Recovery
 
 - Test DB (if used): `bash infra/test-db.sh up|down|env`, project
