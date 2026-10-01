@@ -349,6 +349,15 @@ describe("PanelShell rail contract (2C-1)", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("anchors the sidebar account menu to the viewport so the sidebar clip cannot cut it", async () => {
+    const user = userEvent.setup();
+    render(<PanelShell user={admin} onLogout={vi.fn()}><p>Contenido</p></PanelShell>);
+    await user.click(screen.getByRole("button", { name: "Más opciones de la cuenta" }));
+    const menu = screen.getByRole("menu", { name: "Cuenta de ana" });
+    expect(Number.parseFloat(menu.style.left)).toBeGreaterThanOrEqual(12);
+    expect(Number.parseFloat(menu.style.bottom)).toBeGreaterThan(0);
+  });
+
   it("renders the back action only when supplied and calls it", async () => {
     const user = userEvent.setup();
     const onBack = vi.fn();

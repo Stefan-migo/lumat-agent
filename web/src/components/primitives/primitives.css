@@ -1597,16 +1597,16 @@
   outline: var(--focus-ring-width) solid var(--brand-lime);
   outline-offset: var(--focus-ring-offset);
 }
-/* Opens upward: the trigger sits at the bottom of the sidebar. Anchored to the LEFT edge: both surfaces
-   that host this menu (the sidebar and the drawer) sit against the left edge of the viewport, so
-   right-anchoring pushed the 20rem card off-screen to the left. Left-anchoring opens it rightward. */
+/* Opens upward from the sidebar/drawer footer. The sidebar clips its descendants (`overflow: hidden`) and
+   does not scroll, so an absolutely positioned card is cut at the sidebar edge. `fixed` escapes that clip
+   and overlays the content; the component supplies the trigger-relative `left`/`bottom`. */
 .panel-shell__user-options {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + var(--space-2));
+  position: fixed;
   z-index: var(--z-modal);
   display: grid;
   width: min(20rem, calc(100vw - var(--space-6)));
+  max-height: min(24rem, calc(100vh - var(--space-8)));
+  overflow-y: auto;
   gap: var(--space-3);
   padding: var(--space-4);
   border: 1px solid var(--border-strong);

@@ -175,11 +175,21 @@ function Brand({ mobile = false, compact = false, line = false }: { mobile?: boo
 function UserContext({ user, compact = false, onLogout }: { user: User; compact?: boolean; onLogout?: () => void | Promise<void> }) {
   const role = roleLabels[user.role];
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [optionsPosition, setOptionsPosition] = useState<{ left: number; bottom: number } | null>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const openOptions = (trigger: HTMLButtonElement) => {
     triggerRef.current = trigger;
+    // The sidebar clips its descendants (`overflow: hidden`) and does not scroll, so an absolutely
+    // positioned menu is cut at the sidebar edge. Position it against the viewport instead: that escapes
+    // the clip, lets the card overlay the content, and clamping keeps it on screen.
+    const rect = trigger.getBoundingClientRect();
+    const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const width = Math.min(20 * rootFontSize, window.innerWidth - 24);
+    const margin = 12;
+    const left = Math.min(Math.max(margin, rect.left), Math.max(margin, window.innerWidth - width - margin));
+    setOptionsPosition({ left, bottom: window.innerHeight - rect.top + 8 });
     setOptionsOpen(true);
   };
 
@@ -246,7 +256,7 @@ function UserContext({ user, compact = false, onLogout }: { user: User; compact?
         </button>
       ) : null}
       {optionsOpen && onLogout ? (
-        <div ref={optionsRef} className="panel-shell__user-options" role="menu" aria-label={`Cuenta de ${user.username}`}>
+        <div ref={optionsRef} className="panel-shell__user-options" role="menu" aria-label={`Cuenta de ${user.username}`} style={optionsPosition ? { left: optionsPosition.left, bottom: optionsPosition.bottom } : undefined}>
           <div className="panel-shell__account-identity">
             <Avatar name={user.username} className="panel-shell__account-menu-avatar" />
             <span className="panel-shell__account-copy"><strong>{user.username}</strong><span>{role}</span></span>
