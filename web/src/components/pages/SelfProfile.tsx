@@ -27,8 +27,8 @@ export function SelfProfile() {
     event.preventDefault();
     if (!profile || savingProfile) return;
     const body = {
-      name: cleared.name ? null : fields.name.trim(),
-      phone: cleared.phone ? null : fields.phone.trim(),
+      name: cleared.name ? null : (fields.name.trim() || null),
+      phone: cleared.phone ? null : (fields.phone.trim() || null),
     };
     if ((!cleared.name && !body.name && profile.name !== null) || (!cleared.phone && !body.phone && profile.phone !== null)) {
       setProfileFeedback({ tone: "danger", title: "Usa “Borrar” para quitar un dato; no dejes el campo vacío." });

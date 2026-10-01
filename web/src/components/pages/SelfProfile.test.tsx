@@ -37,6 +37,16 @@ describe("SelfProfile", () => {
     await waitFor(() => expect(updateMe).toHaveBeenCalledExactlyOnceWith({ name: null, phone: "+56912345678" }));
   });
 
+  it("allows saving a phone when no name has ever been stored", async () => {
+    vi.mocked(fetchMe).mockResolvedValue({ ...profile, name: null, phone: null });
+    const user = userEvent.setup();
+    render(<SelfProfile />);
+    await screen.findByLabelText("Teléfono");
+    await user.type(screen.getByLabelText("Teléfono"), "+56987654321");
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    await waitFor(() => expect(updateMe).toHaveBeenCalledExactlyOnceWith({ name: null, phone: "+56987654321" }));
+  });
+
   it("submits the current and new password and explains 401 and 422 responses", async () => {
     const user = userEvent.setup();
     vi.mocked(changePassword).mockRejectedValueOnce(new ApiError(401, "password change failed"));
