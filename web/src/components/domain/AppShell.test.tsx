@@ -173,6 +173,20 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
+  it('renders the self-profile route for an operador', async () => {
+    window.history.replaceState({}, '', '/panel/app/profile');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      return path === '/panel/api/me'
+        ? new Response(JSON.stringify({ id: 2, username: 'vero', role: 'operador', email: null, name: 'Verónica', phone: null, position: null }), { status: 200 })
+        : new Response(JSON.stringify({ notifications: [] }), { status: 200 });
+    });
+    render(<AppShell user={operador} />);
+    expect(await screen.findByLabelText('Nombre')).toHaveValue('Verónica');
+    expect(window.location.pathname).toBe('/panel/app/profile');
+    vi.restoreAllMocks();
+  });
+
   it('renders appointment details from the appointment route', async () => {
     window.history.replaceState({}, '', '/panel/app/agenda/7');
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {

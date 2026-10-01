@@ -25,6 +25,7 @@ import { AdvancedDashboard } from '../pages/AdvancedDashboard';
 import { UserManagement } from '../pages/UserManagement';
 import { ProjectsPage } from '../pages/ProjectsPage';
 import { PlanningSessions } from '../pages/PlanningSessions';
+import { SelfProfile } from '../pages/SelfProfile';
 import { AssistantTabs, type AssistantView } from '../pages/AssistantTabs';
 
 /** Top-level SPA views. Client ficha and conversation thread are drill-downs
@@ -123,7 +124,8 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
      : view === 'push' ? <PushSettings />
            : view === 'chat' ? <AgentChat role={user.role} sectionTabs={sectionTabs} onThreadOpened={(id) => navigateToRoute({ view: 'chat', threadId: id })} />
        : view === 'kb' ? kbDocId !== null ? <KbDocumentDetail documentId={kbDocId} /> : <KbList onOpenDocument={(id) => navigateToRoute({ view: 'kb', kbDocId: id })} />
-      : view === 'users' ? <UserManagement currentUser={user} />
+       : view === 'users' ? <UserManagement currentUser={user} />
+       : view === 'profile' ? <SelfProfile />
          : view === 'projects' ? <ProjectsPage sectionTabs={sectionTabs} projectSlug={route.projectSlug} onOpenProject={(slug) => navigateToRoute({ view: 'projects', projectSlug: slug })} onOpenChat={(slug) => navigateToRoute({ view: 'chat', projectSlug: slug })} />
         : view === 'planning-sessions' ? <PlanningSessions sectionTabs={sectionTabs} sessionSlug={route.planningSessionSlug} onOpenSession={(slug) => navigateToRoute({ view: 'planning-sessions', planningSessionSlug: slug })} onOpenThread={(id) => { window.history.pushState({}, '', `${pathForView('chat')}?thread_id=${id}`); setRoute({ view: 'chat' }); }} />
       : <Settings />;
