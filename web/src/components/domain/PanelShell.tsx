@@ -6,6 +6,9 @@ import {
   BookOpen,
   Bot,
   Calendar,
+  CalendarDays,
+  Check,
+  CheckCheck,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -20,6 +23,7 @@ import {
   Users,
   X,
   Zap,
+  ArrowRight,
   type LucideIcon,
 } from "lucide-react";
 import type { PanelNotification, User } from "../../types";
@@ -27,6 +31,27 @@ import { roleLabels } from "../../roleLabels";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 import { Icon } from "../primitives/Icon";
+import { Tabs } from "../primitives/Tabs";
+
+export function formatNotificationTime(createdAt: string | null, now = new Date()): string {
+  if (!createdAt) return "";
+  const elapsedSeconds = (new Date(createdAt).getTime() - now.getTime()) / 1000;
+  if (!Number.isFinite(elapsedSeconds)) return "";
+  const units: Array<[Intl.RelativeTimeFormatUnit, number, string]> = [
+    ["year", 31_536_000, "año"], ["month", 2_592_000, "mes"], ["week", 604_800, "sem"],
+    ["day", 86_400, "d"], ["hour", 3_600, "h"], ["minute", 60, "min"], ["second", 1, "s"],
+  ];
+  const [unit, seconds, shortUnit] = units.find(([, seconds]) => Math.abs(elapsedSeconds) >= seconds) ?? units[units.length - 1];
+  const value = Math.round(elapsedSeconds / seconds);
+  const relative = new Intl.RelativeTimeFormat("es-CL", { numeric: "always" }).format(value, unit);
+  return relative.replace(/^hace\s+/i, "Hace ").replace(new RegExp(`\\s${unit === "month" ? "mes(es)?" : unit === "year" ? "año(s)?" : unit === "week" ? "semana(s)?" : unit === "day" ? "día(s)?" : unit === "hour" ? "hora(s)?" : unit === "minute" ? "minuto(s)?" : "segundo(s)?"}$`, "i"), ` ${shortUnit}`);
+}
+
+const NOTIFICATION_SOURCE_ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
+  case: { icon: UserRound, tone: "case" },
+  appointment: { icon: CalendarDays, tone: "appointment" },
+  customer: { icon: Users, tone: "customer" },
+};
 
 export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "users" | "projects" | "planning-sessions";
 
@@ -320,6 +345,7 @@ export function PanelShell({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationTab, setNotificationTab] = useState("all");
   const notificationsRef = useRef<HTMLDivElement>(null);
   const bellRef = useRef<HTMLButtonElement>(null);
   const notificationCloseRef = useRef<HTMLButtonElement>(null);
@@ -542,14 +568,35 @@ export function PanelShell({
                  <Icon icon={Bell} />
                  {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
                </button>
-               {notificationsOpen ? <section className="panel-shell__notifications-panel" role="dialog" aria-modal="true" aria-labelledby="panel-notifications-title" onKeyDown={keepFocusInNotifications}>
-                  <div className="panel-shell__notifications-heading"><h2 id="panel-notifications-title">Notificaciones</h2><button ref={notificationCloseRef} type="button" className="panel-shell__notifications-close" aria-label="Cerrar notificaciones" onClick={closeNotifications}><Icon icon={X} /></button></div>
-                 <ul className="panel-shell__notifications-list">
-                   {notifications.slice(0, 5).map((notification) => <li key={notification.id} className={notification.read_at === null ? "panel-shell__notification panel-shell__notification--unread" : "panel-shell__notification"}><span className="panel-shell__notification-dot" aria-hidden="true" /><strong>{notification.title}</strong><p>{notification.content}</p><small>{notification.source} · {notification.created_at ?? "Sin fecha"}</small></li>)}
-                   {notifications.length === 0 ? <li className="panel-shell__notification-empty">No hay notificaciones.</li> : null}
-                 </ul>
-                 <div className="panel-shell__notifications-footer"><button type="button" onClick={() => void onMarkAllNotificationsRead?.()}>Marcar todas como leídas</button><button type="button" onClick={() => { closeNotifications(); handleNavigation("notifications"); }}>Ver todas las notificaciones</button></div>
-               </section> : null}
+                {notificationsOpen ? <section className="panel-shell__notifications-panel" role="dialog" aria-modal="true" aria-labelledby="panel-notifications-title" onKeyDown={keepFocusInNotifications}>
+                  <div className="panel-shell__notifications-heading"><div className="panel-shell__notifications-title"><h2 id="panel-notifications-title">Notificaciones</h2>{notificationState.status === "ready" && notificationState.unread > 0 ? <span className="panel-shell__notifications-new">{notificationState.unread} nuevas</span> : null}</div><button ref={notificationCloseRef} type="button" className="panel-shell__notifications-close" aria-label="Cerrar notificaciones" onClick={closeNotifications}><Icon icon={X} /></button></div>
+                  {(() => {
+                    const unread = notifications.filter((notification) => notification.read_at === null);
+                    const visible = (notificationTab === "unread" ? unread : notifications).slice(0, 5);
+                    return <>
+                      {notifications.length > 0 ? <div className="panel-shell__notifications-toolbar">
+                        <Tabs ariaLabel="Filtrar notificaciones" activeTab={notificationTab} onTabChange={setNotificationTab} tabs={[
+                          { id: "all", label: "Todas" }, { id: "unread", label: <>No leídas <span className="panel-shell__notifications-count">{unread.length}</span></> },
+                        ]}>{() => null}</Tabs>
+                        {unread.length > 0 ? <button type="button" className="panel-shell__notifications-mark-all" onClick={() => void onMarkAllNotificationsRead?.()}><Icon icon={CheckCheck} />Marcar todas como leídas</button> : null}
+                      </div> : null}
+                      <ul className="panel-shell__notifications-list">
+                        {visible.map((notification) => {
+                          const source = NOTIFICATION_SOURCE_ICONS[notification.source] ?? { icon: Bell, tone: "default" };
+                          return <li key={notification.id} className={`panel-shell__notification${notification.read_at === null ? " panel-shell__notification--unread" : ""}`}>
+                            <span className={`panel-shell__notification-icon panel-shell__notification-icon--${source.tone}`}><Icon icon={source.icon} /></span>
+                            {notification.read_at === null ? <span className="panel-shell__notification-dot" aria-label="No leída" /> : null}
+                            <div className="panel-shell__notification-copy"><strong>{notification.title}</strong><p>{notification.content}</p></div>
+                            <small>{formatNotificationTime(notification.created_at)}</small>
+                            {/* PanelNotification has no destination entity id; rows intentionally do not navigate. */}
+                          </li>;
+                        })}
+                        {notifications.length === 0 ? <li className="panel-shell__notification-empty"><span className="panel-shell__notification-empty-icon"><Icon icon={Bell} /><Icon icon={Check} /></span><strong>No tienes notificaciones</strong><p>Aquí verás las novedades de tus conversaciones, visitas y documentos.</p></li> : visible.length === 0 ? <li className="panel-shell__notification-empty"><strong>No hay notificaciones no leídas</strong></li> : null}
+                      </ul>
+                      {notifications.length > 0 ? <div className="panel-shell__notifications-footer"><button type="button" onClick={() => { closeNotifications(); handleNavigation("notifications"); }}>Ver todas las notificaciones<Icon icon={ArrowRight} /></button></div> : null}
+                    </>;
+                  })()}
+                </section> : null}
                 </div>
                  <span className="panel-shell__header-divider" aria-hidden="true" />
                  <AccountControl user={user} onLogout={onLogout} open={accountOpen} onToggle={() => { setNotificationsOpen(false); setAccountOpen((open) => !open); }} />

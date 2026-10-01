@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { PanelShell } from "./PanelShell";
+import { formatNotificationTime, PanelShell } from "./PanelShell";
 import { parsePanelPath } from "./panelRoutes";
 import type { User } from "../../types";
 
 const admin: User = { username: "ana", role: "admin" };
 const operador: User = { username: "vero", role: "operador" };
+const notifications = [
+  { id: 1, user_id: 1, operation_id: 1, title: "Atención humana requerida", content: "Carla necesita hablar con una persona.", source: "case", channel: "whatsapp", status: "sent", read_at: null, created_at: "2026-10-01T12:55:00Z" },
+  { id: 2, user_id: 1, operation_id: 2, title: "Nueva visita agendada", content: "Pedro Soto · Visita de diagnóstico", source: "appointment", channel: "whatsapp", status: "sent", read_at: null, created_at: "2026-10-01T12:40:00Z" },
+  { id: 3, user_id: 1, operation_id: 3, title: "Documento procesado", content: "El manual ya está disponible.", source: "document", channel: "email", status: "sent", read_at: "2026-10-01T11:00:00Z", created_at: "2026-10-01T11:00:00Z" },
+];
 
 function mockDialogMethods() {
   const showModal = vi.fn(function (this: HTMLDialogElement) { this.setAttribute("open", ""); });
@@ -31,6 +36,39 @@ afterEach(() => {
 });
 
 describe("PanelShell rail contract (2C-1)", () => {
+  it("filters notification rows by tab and shows unread counts and bulk action", async () => {
+    const user = userEvent.setup();
+    const onMarkAllNotificationsRead = vi.fn();
+    render(<PanelShell user={admin} notifications={notifications} notificationState={{ status: "ready", unread: 2 }} onMarkAllNotificationsRead={onMarkAllNotificationsRead}><p>Contenido</p></PanelShell>);
+    await user.click(within(document.querySelector(".panel-shell__header-actions") as HTMLElement).getByRole("button", { name: "Notificaciones (2 sin leer)" }));
+    const dialog = screen.getByRole("dialog", { name: "Notificaciones" });
+    expect(within(dialog).getByText("2 nuevas")).toBeInTheDocument();
+    expect(within(dialog).getByRole("tab", { name: "No leídas 2" })).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("listitem")).toHaveLength(3);
+    await user.click(within(dialog).getByRole("tab", { name: "No leídas 2" }));
+    expect(within(dialog).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(dialog).queryByText("Documento procesado")).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Marcar todas como leídas" }));
+    expect(onMarkAllNotificationsRead).toHaveBeenCalledOnce();
+  });
+
+  it("renders the designed empty state", async () => {
+    const user = userEvent.setup();
+    render(<PanelShell user={admin} notifications={[]} notificationState={{ status: "ready", unread: 0 }}><p>Contenido</p></PanelShell>);
+    await user.click(within(document.querySelector(".panel-shell__header-actions") as HTMLElement).getByRole("button", { name: "Notificaciones" }));
+    const dialog = screen.getByRole("dialog", { name: "Notificaciones" });
+    expect(within(dialog).getByText("No tienes notificaciones")).toBeInTheDocument();
+    expect(within(dialog).getByText("Aquí verás las novedades de tus conversaciones, visitas y documentos.")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Marcar todas como leídas" })).not.toBeInTheDocument();
+  });
+
+  it("formats notification timestamps as Chilean relative time", () => {
+    const now = new Date("2026-10-01T13:00:00Z");
+    expect(formatNotificationTime("2026-10-01T12:55:00Z", now)).toBe("Hace 5 min");
+    expect(formatNotificationTime("2026-10-01T12:00:00Z", now)).toBe("Hace 1 h");
+    expect(formatNotificationTime(null, now)).toBe("");
+  });
+
   it("falls back malformed routes and limits mobile tabs to existing destinations", () => {
     expect(parsePanelPath("/panel/app/%E0%A4%A")).toEqual({ view: "dashboard" });
     expect(parsePanelPath("/panel/app/unknown")).toEqual({ view: "dashboard" });
