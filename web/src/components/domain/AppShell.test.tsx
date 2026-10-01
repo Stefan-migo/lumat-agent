@@ -205,6 +205,19 @@ describe('AppShell (T6.4)', () => {
     fetchMock.mockRestore();
   });
 
+  it('returns from a client detail route to its parent list using the header back action', async () => {
+    window.history.replaceState({}, '', '/panel/app/clients/7');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      customer: { id: 7, name: 'Cliente vivo', phone_e164: '+56911111111', state: 'activo', consent_status: true, created_at: '2026-08-25' },
+      memo: '', notes: [], history: { conversations: [], cases: [], messages: [] }, memories: [],
+    }), { status: 200 }));
+    const user = userEvent.setup();
+    render(<AppShell user={admin} />);
+    await user.click(await screen.findByRole('button', { name: 'Volver' }));
+    expect(window.location.pathname).toBe('/panel/app/clients');
+    vi.restoreAllMocks();
+  });
+
   it('deep-links to AdvancedDashboard without exposing a visible navigation item', async () => {
     window.history.replaceState({}, '', '/panel/app/advanced-dashboard');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
@@ -496,11 +509,24 @@ describe('AppShell — agent shell grammar', () => {
     await user.click(bell);
     const popover = screen.getByRole('dialog', { name: 'Notificaciones' });
     expect(popover).toBeInTheDocument();
-    expect(headerActions(container).queryByRole('button', { name: /abrir menú de usuario/i })).not.toBeInTheDocument();
+    expect(headerActions(container).getByRole('button', { name: /notificaciones \(1 sin leer\)/i })).toBeInTheDocument();
+    expect(headerActions(container).getByRole('button', { name: /abrir menú de usuario/i })).toBeInTheDocument();
     await user.click(within(popover).getByRole('button', { name: 'Ver todas las notificaciones' }));
     expect(window.location.pathname).toBe('/panel/app/notifications');
     expect(await screen.findByRole('heading', { name: 'Notificaciones' })).toBeInTheDocument();
     expect(logout).not.toHaveBeenCalled();
+  });
+
+  it('closes an open account menu when notifications are opened', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<AppShell user={admin} />);
+    const header = headerActions(container);
+    await user.click(header.getByRole('button', { name: /abrir menú de usuario/i }));
+    expect(header.getByRole('menu', { name: 'Cuenta de ana' })).toBeInTheDocument();
+    await user.click(header.getByRole('button', { name: /notificaciones/i }));
+    expect(screen.getByRole('dialog', { name: 'Notificaciones' })).toBeInTheDocument();
+    expect(header.queryByRole('menu', { name: 'Cuenta de ana' })).not.toBeInTheDocument();
+    expect(header.getByRole('button', { name: /abrir menú de usuario/i })).toBeInTheDocument();
   });
 
   it('shows a truthful notification loading and error state without polling', async () => {

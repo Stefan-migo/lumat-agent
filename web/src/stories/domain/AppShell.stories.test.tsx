@@ -73,10 +73,12 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
     );
   });
 
-  it('renders the panel header with the approved Panel unificado breadcrumb by default', () => {
+  it('renders the panel header with the approved Panel / Dashboard breadcrumb by default', () => {
     render(<AppShell user={admin} />);
     const header = screen.getByLabelText(/encabezado de la vista/i);
-    expect(within(header).getByRole('navigation', { name: 'Ruta de navegación' })).toHaveTextContent('Panel unificado');
+    const breadcrumb = within(header).getByRole('navigation', { name: 'Ruta de navegación' });
+    expect(breadcrumb).toHaveTextContent('Panel');
+    expect(breadcrumb).toHaveTextContent('Dashboard');
   });
 
   it('renders the panel header as text-only — no green fill, no lime rule', () => {

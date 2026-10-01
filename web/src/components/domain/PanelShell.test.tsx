@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { PanelShell } from "./PanelShell";
+import { formatNotificationTime, PanelShell } from "./PanelShell";
 import { parsePanelPath } from "./panelRoutes";
 import type { User } from "../../types";
 
 const admin: User = { username: "ana", role: "admin" };
 const operador: User = { username: "vero", role: "operador" };
+const notifications = [
+  { id: 1, user_id: 1, operation_id: 1, title: "Atención humana requerida", content: "Carla necesita hablar con una persona.", source: "case", channel: "whatsapp", status: "sent", read_at: null, created_at: "2026-10-01T12:55:00Z" },
+  { id: 2, user_id: 1, operation_id: 2, title: "Nueva visita agendada", content: "Pedro Soto · Visita de diagnóstico", source: "appointment", channel: "whatsapp", status: "sent", read_at: null, created_at: "2026-10-01T12:40:00Z" },
+  { id: 3, user_id: 1, operation_id: 3, title: "Documento procesado", content: "El manual ya está disponible.", source: "document", channel: "email", status: "sent", read_at: "2026-10-01T11:00:00Z", created_at: "2026-10-01T11:00:00Z" },
+];
 
 function mockDialogMethods() {
   const showModal = vi.fn(function (this: HTMLDialogElement) { this.setAttribute("open", ""); });
@@ -31,6 +36,39 @@ afterEach(() => {
 });
 
 describe("PanelShell rail contract (2C-1)", () => {
+  it("filters notification rows by tab and shows unread counts and bulk action", async () => {
+    const user = userEvent.setup();
+    const onMarkAllNotificationsRead = vi.fn();
+    render(<PanelShell user={admin} notifications={notifications} notificationState={{ status: "ready", unread: 2 }} onMarkAllNotificationsRead={onMarkAllNotificationsRead}><p>Contenido</p></PanelShell>);
+    await user.click(within(document.querySelector(".panel-shell__header-actions") as HTMLElement).getByRole("button", { name: "Notificaciones (2 sin leer)" }));
+    const dialog = screen.getByRole("dialog", { name: "Notificaciones" });
+    expect(within(dialog).getByText("2 nuevas")).toBeInTheDocument();
+    expect(within(dialog).getByRole("tab", { name: "No leídas 2" })).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("listitem")).toHaveLength(3);
+    await user.click(within(dialog).getByRole("tab", { name: "No leídas 2" }));
+    expect(within(dialog).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(dialog).queryByText("Documento procesado")).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Marcar todas como leídas" }));
+    expect(onMarkAllNotificationsRead).toHaveBeenCalledOnce();
+  });
+
+  it("renders the designed empty state", async () => {
+    const user = userEvent.setup();
+    render(<PanelShell user={admin} notifications={[]} notificationState={{ status: "ready", unread: 0 }}><p>Contenido</p></PanelShell>);
+    await user.click(within(document.querySelector(".panel-shell__header-actions") as HTMLElement).getByRole("button", { name: "Notificaciones" }));
+    const dialog = screen.getByRole("dialog", { name: "Notificaciones" });
+    expect(within(dialog).getByText("No tienes notificaciones")).toBeInTheDocument();
+    expect(within(dialog).getByText("Aquí verás las novedades de tus conversaciones, visitas y documentos.")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Marcar todas como leídas" })).not.toBeInTheDocument();
+  });
+
+  it("formats notification timestamps as Chilean relative time", () => {
+    const now = new Date("2026-10-01T13:00:00Z");
+    expect(formatNotificationTime("2026-10-01T12:55:00Z", now)).toBe("Hace 5 min");
+    expect(formatNotificationTime("2026-10-01T12:00:00Z", now)).toBe("Hace 1 h");
+    expect(formatNotificationTime(null, now)).toBe("");
+  });
+
   it("falls back malformed routes and limits mobile tabs to existing destinations", () => {
     expect(parsePanelPath("/panel/app/%E0%A4%A")).toEqual({ view: "dashboard" });
     expect(parsePanelPath("/panel/app/unknown")).toEqual({ view: "dashboard" });
@@ -280,22 +318,78 @@ describe("PanelShell rail contract (2C-1)", () => {
     restore();
   });
 
-  it("provides desktop back, breadcrumb, notification, and account actions", async () => {
+  it("hides the back action on list routes and provides breadcrumb, notification, and account actions", async () => {
     const user = userEvent.setup();
     const logout = vi.fn();
-    const back = vi.spyOn(window.history, "back");
     const { container } = render(<PanelShell user={admin} currentView="clients" onLogout={logout}><p>Contenido</p></PanelShell>);
     const header = within(container.querySelector(".panel-shell__header-actions") as HTMLElement);
 
     expect(screen.getByRole("navigation", { name: "Ruta de navegación" })).toHaveTextContent("Clientes");
-    await user.click(screen.getByRole("button", { name: "Volver" }));
-    expect(back).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Volver" })).not.toBeInTheDocument();
     expect(header.getByRole("button", { name: "Cargando notificaciones" })).toBeInTheDocument();
     await user.click(header.getByRole("button", { name: /abrir menú de usuario/i }));
     expect(screen.getByRole("menu", { name: "Cuenta de ana" })).toBeInTheDocument();
     await user.click(within(screen.getByRole("menu", { name: "Cuenta de ana" })).getByRole("menuitem", { name: "Cerrar sesión" }));
     expect(logout).toHaveBeenCalledOnce();
-    back.mockRestore();
+  });
+
+  it("closes the header account menu on outside click", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    const headerActions = container.querySelector(".panel-shell__header-actions") as HTMLElement;
+    const trigger = within(headerActions).getByRole("button", { name: /abrir menú de usuario/i });
+
+    await user.click(trigger);
+    expect(screen.getByRole("menu", { name: "Cuenta de ana" })).toBeInTheDocument();
+    await user.click(screen.getByText("Contenido"));
+
+    expect(screen.queryByRole("menu", { name: "Cuenta de ana" })).not.toBeInTheDocument();
+  });
+
+  it("closes the header account menu on Escape and restores trigger focus", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    const headerActions = container.querySelector(".panel-shell__header-actions") as HTMLElement;
+    const trigger = within(headerActions).getByRole("button", { name: /abrir menú de usuario/i });
+
+    await user.click(trigger);
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("menu", { name: "Cuenta de ana" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("anchors the sidebar account menu to the viewport so the sidebar clip cannot cut it", async () => {
+    const user = userEvent.setup();
+    render(<PanelShell user={admin} onLogout={vi.fn()}><p>Contenido</p></PanelShell>);
+    await user.click(screen.getByRole("button", { name: "Más opciones de la cuenta" }));
+    const menu = screen.getByRole("menu", { name: "Cuenta de ana" });
+    expect(Number.parseFloat(menu.style.left)).toBeGreaterThanOrEqual(12);
+    expect(Number.parseFloat(menu.style.bottom)).toBeGreaterThan(0);
+  });
+
+  it("renders the back action only when supplied and calls it", async () => {
+    const user = userEvent.setup();
+    const onBack = vi.fn();
+    render(<PanelShell user={admin} currentView="clients" onBack={onBack}><p>Contenido</p></PanelShell>);
+    await user.click(screen.getByRole("button", { name: "Volver" }));
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it("labels the dashboard breadcrumb and keeps its Panel segment unlinked", () => {
+    render(<PanelShell user={admin} currentView="dashboard"><p>Contenido</p></PanelShell>);
+    const breadcrumb = screen.getByRole("navigation", { name: "Ruta de navegación" });
+    expect(breadcrumb).toHaveTextContent("PanelDashboard");
+    expect(within(breadcrumb).queryByRole("button", { name: "Panel" })).not.toBeInTheDocument();
+    expect(within(breadcrumb).getByText("Dashboard")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("links Panel to Dashboard and uses the section label in the breadcrumb", () => {
+    const onNavigate = vi.fn();
+    render(<PanelShell user={admin} currentView="notifications" onNavigate={onNavigate}><p>Contenido</p></PanelShell>);
+    const breadcrumb = within(screen.getByRole("navigation", { name: "Ruta de navegación" }));
+    expect(breadcrumb.getByRole("button", { name: "Panel" })).toBeInTheDocument();
+    expect(breadcrumb.getByText("Notificaciones")).toHaveAttribute("aria-current", "page");
   });
 
   it("shows chat to an operador while keeping privileged sections hidden", () => {

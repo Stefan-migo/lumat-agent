@@ -6,10 +6,14 @@ import {
   BookOpen,
   Bot,
   Calendar,
+  CalendarDays,
+  Check,
+  CheckCheck,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   Menu,
+  LogOut,
   MessageSquare,
   MoreVertical,
   PanelLeft,
@@ -19,6 +23,7 @@ import {
   Users,
   X,
   Zap,
+  ArrowRight,
   type LucideIcon,
 } from "lucide-react";
 import type { PanelNotification, User } from "../../types";
@@ -26,6 +31,27 @@ import { roleLabels } from "../../roleLabels";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 import { Icon } from "../primitives/Icon";
+import { Tabs } from "../primitives/Tabs";
+
+export function formatNotificationTime(createdAt: string | null, now = new Date()): string {
+  if (!createdAt) return "";
+  const elapsedSeconds = (new Date(createdAt).getTime() - now.getTime()) / 1000;
+  if (!Number.isFinite(elapsedSeconds)) return "";
+  const units: Array<[Intl.RelativeTimeFormatUnit, number, string]> = [
+    ["year", 31_536_000, "año"], ["month", 2_592_000, "mes"], ["week", 604_800, "sem"],
+    ["day", 86_400, "d"], ["hour", 3_600, "h"], ["minute", 60, "min"], ["second", 1, "s"],
+  ];
+  const [unit, seconds, shortUnit] = units.find(([, seconds]) => Math.abs(elapsedSeconds) >= seconds) ?? units[units.length - 1];
+  const value = Math.round(elapsedSeconds / seconds);
+  const relative = new Intl.RelativeTimeFormat("es-CL", { numeric: "always" }).format(value, unit);
+  return relative.replace(/^hace\s+/i, "Hace ").replace(new RegExp(`\\s${unit === "month" ? "mes(es)?" : unit === "year" ? "año(s)?" : unit === "week" ? "semana(s)?" : unit === "day" ? "día(s)?" : unit === "hour" ? "hora(s)?" : unit === "minute" ? "minuto(s)?" : "segundo(s)?"}$`, "i"), ` ${shortUnit}`);
+}
+
+const NOTIFICATION_SOURCE_ICONS: Record<string, { icon: LucideIcon; tone: string }> = {
+  case: { icon: UserRound, tone: "case" },
+  appointment: { icon: CalendarDays, tone: "appointment" },
+  customer: { icon: Users, tone: "customer" },
+};
 
 export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "users" | "projects" | "planning-sessions" | "profile";
 
@@ -51,13 +77,25 @@ const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" |
   users: { label: "Usuarios", icon: UserRound, adminOnly: true },
 };
 
+const BREADCRUMB_OVERRIDES: Partial<Record<PanelView, string>> = {
+  dashboard: "Dashboard",
+  notifications: "Notificaciones",
+  push: "Notificaciones push",
+  "advanced-dashboard": "Panel avanzado",
+  profile: "Mi perfil",
+  projects: "Proyectos",
+  "planning-sessions": "Sesiones de planificación",
+};
+
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
 
 export interface PanelShellProps {
   children: ReactNode;
   currentView?: PanelView;
+  breadcrumbView?: PanelView;
   drawerInitiallyOpen?: boolean;
   onNavigate?: (view: PanelView) => void;
+  onBack?: () => void;
   onLogout?: () => void | Promise<void>;
   user: User;
   /** Optional badge/chip rendered to the right of the panel header (e.g. a
@@ -75,17 +113,42 @@ export type NotificationState = { status: "loading" } | { status: "ready"; unrea
 /** The account affordance (avatar trigger + menu). Controlled so the desktop header and the mobile bar each own
  *  their open state without duplicating the popover markup. */
 function AccountControl({ user, onLogout, onNavigate, open, onToggle }: { user: User; onLogout?: () => void | Promise<void>; onNavigate?: (view: PanelView) => void; open: boolean; onToggle: () => void }) {
+  const accountRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!accountRef.current?.contains(event.target as Node)) onToggle();
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onToggle();
+      queueMicrotask(() => triggerRef.current?.focus());
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onToggle, open]);
   return (
-    <div className="panel-shell__account">
-      <button type="button" className="panel-shell__account-trigger" aria-label="Abrir menú de usuario" aria-expanded={open} aria-haspopup="menu" onClick={onToggle}>
+    <div ref={accountRef} className="panel-shell__account">
+      <button ref={triggerRef} type="button" className="panel-shell__account-trigger" aria-label="Abrir menú de usuario" aria-expanded={open} aria-haspopup="menu" onClick={onToggle}>
         <Avatar name={user.username} className="panel-shell__account-avatar" />
         <span className="panel-shell__account-name">{user.username}</span>
         <Icon icon={ChevronDown} />
       </button>
       {open ? <div className="panel-shell__account-menu" role="menu" aria-label={`Cuenta de ${user.username}`}>
-        <span>{user.username} · {roleLabels[user.role]}</span>
-        <button type="button" role="menuitem" onClick={() => { onNavigate?.("profile"); onToggle(); }}>Mi perfil</button>
-        {onLogout ? <button type="button" role="menuitem" onClick={() => void onLogout()}>Cerrar sesión</button> : null}
+        <div className="panel-shell__account-identity">
+          <Avatar name={user.username} className="panel-shell__account-menu-avatar" />
+          <span className="panel-shell__account-copy"><strong>{user.username}</strong><span>{roleLabels[user.role]}</span></span>
+        </div>
+        <div className="panel-shell__account-divider" />
+        <button type="button" className="panel-shell__account-item" role="menuitem" onClick={() => { onNavigate?.("profile"); onToggle(); }}><Icon icon={UserRound} />Mi perfil</button>
+        {onLogout ? <button type="button" className="panel-shell__account-logout" role="menuitem" onClick={() => void onLogout()}><Icon icon={LogOut} />Cerrar sesión</button> : null}
       </div> : null}
     </div>
   );
@@ -113,11 +176,21 @@ function Brand({ mobile = false, compact = false, line = false }: { mobile?: boo
 function UserContext({ user, compact = false, onLogout }: { user: User; compact?: boolean; onLogout?: () => void | Promise<void> }) {
   const role = roleLabels[user.role];
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [optionsPosition, setOptionsPosition] = useState<{ left: number; bottom: number } | null>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   const openOptions = (trigger: HTMLButtonElement) => {
     triggerRef.current = trigger;
+    // The sidebar clips its descendants (`overflow: hidden`) and does not scroll, so an absolutely
+    // positioned menu is cut at the sidebar edge. Position it against the viewport instead: that escapes
+    // the clip, lets the card overlay the content, and clamping keeps it on screen.
+    const rect = trigger.getBoundingClientRect();
+    const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const width = Math.min(20 * rootFontSize, window.innerWidth - 24);
+    const margin = 12;
+    const left = Math.min(Math.max(margin, rect.left), Math.max(margin, window.innerWidth - width - margin));
+    setOptionsPosition({ left, bottom: window.innerHeight - rect.top + 8 });
     setOptionsOpen(true);
   };
 
@@ -184,16 +257,22 @@ function UserContext({ user, compact = false, onLogout }: { user: User; compact?
         </button>
       ) : null}
       {optionsOpen && onLogout ? (
-        <div ref={optionsRef} className="panel-shell__user-options" role="menu" aria-label={`Cuenta de ${user.username}`}>
-          <span>{user.username} · {role}</span>
+        <div ref={optionsRef} className="panel-shell__user-options" role="menu" aria-label={`Cuenta de ${user.username}`} style={optionsPosition ? { left: optionsPosition.left, bottom: optionsPosition.bottom } : undefined}>
+          <div className="panel-shell__account-identity">
+            <Avatar name={user.username} className="panel-shell__account-menu-avatar" />
+            <span className="panel-shell__account-copy"><strong>{user.username}</strong><span>{role}</span></span>
+          </div>
+          <div className="panel-shell__account-divider" />
           <button
             type="button"
+            className="panel-shell__account-logout"
             role="menuitem"
             onClick={() => {
               setOptionsOpen(false);
               void onLogout();
             }}
           >
+            <Icon icon={LogOut} />
             Cerrar sesión
           </button>
         </div>
@@ -250,8 +329,10 @@ function Navigation({
 export function PanelShell({
   children,
   currentView = "dashboard",
+  breadcrumbView,
   drawerInitiallyOpen = false,
   onNavigate,
+  onBack,
   user,
   statusBadge,
   onLogout,
@@ -260,6 +341,7 @@ export function PanelShell({
   notifications = [],
   onMarkAllNotificationsRead,
 }: PanelShellProps) {
+  const currentBreadcrumbView = breadcrumbView ?? currentView;
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
   const [navigationSearch, setNavigationSearch] = useState("");
@@ -274,6 +356,7 @@ export function PanelShell({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationTab, setNotificationTab] = useState("all");
   const notificationsRef = useRef<HTMLDivElement>(null);
   const bellRef = useRef<HTMLButtonElement>(null);
   const notificationCloseRef = useRef<HTMLButtonElement>(null);
@@ -479,36 +562,55 @@ export function PanelShell({
       <div ref={contentAreaRef} className="panel-shell__content-area">
         <div className="panel-shell__header-row">
           <header className="panel-shell__header" aria-label="Encabezado de la vista">
-            <button type="button" className="panel-shell__back" aria-label="Volver" title="Volver" onClick={() => window.history.back()}>
+            {onBack ? <button type="button" className="panel-shell__back" aria-label="Volver" title="Volver" onClick={onBack}>
               <Icon icon={ArrowLeft} />
-            </button>
+            </button> : null}
              <nav className="panel-shell__breadcrumbs" aria-label="Ruta de navegación">
                <ol>
-                 {currentView === "dashboard" ? <li aria-current="page">Panel unificado</li> : <>
-                   <li><button type="button" onClick={() => handleNavigation("dashboard")}>Panel</button></li>
-                    <li aria-current="page">{NAVIGATION[currentView as keyof typeof NAVIGATION]?.label ?? (currentView === "notifications" ? "Notificaciones" : currentView === "profile" ? "Mi perfil" : "Panel")}</li>
+                  {currentBreadcrumbView === "dashboard" ? <><li>Panel</li><li aria-current="page">Dashboard</li></> : <>
+                    <li><button type="button" onClick={() => handleNavigation("dashboard")}>Panel</button></li>
+                    <li aria-current="page">{BREADCRUMB_OVERRIDES[currentBreadcrumbView] ?? NAVIGATION[currentBreadcrumbView as keyof typeof NAVIGATION]?.label ?? "Panel"}</li>
                  </>}
                </ol>
              </nav>
               <div className="panel-shell__header-actions">
                 <div ref={notificationsRef} className="panel-shell__notifications">
-               <button ref={bellRef} type="button" className="panel-shell__header-action" aria-expanded={notificationsOpen} aria-haspopup="dialog" aria-label={bellLabel} title="Notificaciones" onClick={() => setNotificationsOpen((open) => !open)}>
+                <button ref={bellRef} type="button" className="panel-shell__header-action" aria-expanded={notificationsOpen} aria-haspopup="dialog" aria-label={bellLabel} title="Notificaciones" onClick={() => { setAccountOpen(false); setNotificationsOpen((open) => !open); }}>
                  <Icon icon={Bell} />
                  {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
                </button>
-               {notificationsOpen ? <section className="panel-shell__notifications-panel" role="dialog" aria-modal="true" aria-labelledby="panel-notifications-title" onKeyDown={keepFocusInNotifications}>
-                  <div className="panel-shell__notifications-heading"><h2 id="panel-notifications-title">Notificaciones</h2><button ref={notificationCloseRef} type="button" className="panel-shell__notifications-close" aria-label="Cerrar notificaciones" onClick={closeNotifications}><Icon icon={X} /></button></div>
-                 <ul className="panel-shell__notifications-list">
-                   {notifications.slice(0, 5).map((notification) => <li key={notification.id} className={notification.read_at === null ? "panel-shell__notification panel-shell__notification--unread" : "panel-shell__notification"}><span className="panel-shell__notification-dot" aria-hidden="true" /><strong>{notification.title}</strong><p>{notification.content}</p><small>{notification.source} · {notification.created_at ?? "Sin fecha"}</small></li>)}
-                   {notifications.length === 0 ? <li className="panel-shell__notification-empty">No hay notificaciones.</li> : null}
-                 </ul>
-                 <div className="panel-shell__notifications-footer"><button type="button" onClick={() => void onMarkAllNotificationsRead?.()}>Marcar todas como leídas</button><button type="button" onClick={() => { closeNotifications(); handleNavigation("notifications"); }}>Ver todas las notificaciones</button></div>
-               </section> : null}
+                {notificationsOpen ? <section className="panel-shell__notifications-panel" role="dialog" aria-modal="true" aria-labelledby="panel-notifications-title" onKeyDown={keepFocusInNotifications}>
+                  <div className="panel-shell__notifications-heading"><div className="panel-shell__notifications-title"><h2 id="panel-notifications-title">Notificaciones</h2>{notificationState.status === "ready" && notificationState.unread > 0 ? <span className="panel-shell__notifications-new">{notificationState.unread} nuevas</span> : null}</div><button ref={notificationCloseRef} type="button" className="panel-shell__notifications-close" aria-label="Cerrar notificaciones" onClick={closeNotifications}><Icon icon={X} /></button></div>
+                  {(() => {
+                    const unread = notifications.filter((notification) => notification.read_at === null);
+                    const visible = (notificationTab === "unread" ? unread : notifications).slice(0, 5);
+                    return <>
+                      {notifications.length > 0 ? <div className="panel-shell__notifications-toolbar">
+                        <Tabs ariaLabel="Filtrar notificaciones" activeTab={notificationTab} onTabChange={setNotificationTab} tabs={[
+                          { id: "all", label: "Todas" }, { id: "unread", label: <>No leídas <span className="panel-shell__notifications-count">{unread.length}</span></> },
+                        ]}>{() => null}</Tabs>
+                        {unread.length > 0 ? <button type="button" className="panel-shell__notifications-mark-all" onClick={() => void onMarkAllNotificationsRead?.()}><Icon icon={CheckCheck} />Marcar todas como leídas</button> : null}
+                      </div> : null}
+                      <ul className="panel-shell__notifications-list">
+                        {visible.map((notification) => {
+                          const source = NOTIFICATION_SOURCE_ICONS[notification.source] ?? { icon: Bell, tone: "default" };
+                          return <li key={notification.id} className={`panel-shell__notification${notification.read_at === null ? " panel-shell__notification--unread" : ""}`}>
+                            <span className={`panel-shell__notification-icon panel-shell__notification-icon--${source.tone}`}><Icon icon={source.icon} /></span>
+                            {notification.read_at === null ? <span className="panel-shell__notification-dot" aria-label="No leída" /> : null}
+                            <div className="panel-shell__notification-copy"><strong>{notification.title}</strong><p>{notification.content}</p></div>
+                            <small>{formatNotificationTime(notification.created_at)}</small>
+                            {/* PanelNotification has no destination entity id; rows intentionally do not navigate. */}
+                          </li>;
+                        })}
+                        {notifications.length === 0 ? <li className="panel-shell__notification-empty"><span className="panel-shell__notification-empty-icon"><Icon icon={Bell} /><Icon icon={Check} /></span><strong>No tienes notificaciones</strong><p>Aquí verás las novedades de tus conversaciones, visitas y documentos.</p></li> : visible.length === 0 ? <li className="panel-shell__notification-empty"><strong>No hay notificaciones no leídas</strong></li> : null}
+                      </ul>
+                      {notifications.length > 0 ? <div className="panel-shell__notifications-footer"><button type="button" onClick={() => { closeNotifications(); handleNavigation("notifications"); }}>Ver todas las notificaciones<Icon icon={ArrowRight} /></button></div> : null}
+                    </>;
+                  })()}
+                </section> : null}
                 </div>
-                {!notificationsOpen ? <>
-                  <span className="panel-shell__header-divider" aria-hidden="true" />
-                  <AccountControl user={user} onLogout={onLogout} onNavigate={handleNavigation} open={accountOpen} onToggle={() => setAccountOpen((open) => !open)} />
-                </> : null}
+                 <span className="panel-shell__header-divider" aria-hidden="true" />
+                 <AccountControl user={user} onLogout={onLogout} onNavigate={handleNavigation} open={accountOpen} onToggle={() => { setNotificationsOpen(false); setAccountOpen((open) => !open); }} />
              </div>
           </header>
           {statusBadge ? (
