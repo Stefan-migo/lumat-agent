@@ -270,22 +270,43 @@ describe("PanelShell rail contract (2C-1)", () => {
     restore();
   });
 
-  it("provides desktop back, breadcrumb, notification, and account actions", async () => {
+  it("hides the back action on list routes and provides breadcrumb, notification, and account actions", async () => {
     const user = userEvent.setup();
     const logout = vi.fn();
-    const back = vi.spyOn(window.history, "back");
     const { container } = render(<PanelShell user={admin} currentView="clients" onLogout={logout}><p>Contenido</p></PanelShell>);
     const header = within(container.querySelector(".panel-shell__header-actions") as HTMLElement);
 
     expect(screen.getByRole("navigation", { name: "Ruta de navegación" })).toHaveTextContent("Clientes");
-    await user.click(screen.getByRole("button", { name: "Volver" }));
-    expect(back).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Volver" })).not.toBeInTheDocument();
     expect(header.getByRole("button", { name: "Cargando notificaciones" })).toBeInTheDocument();
     await user.click(header.getByRole("button", { name: /abrir menú de usuario/i }));
     expect(screen.getByRole("menu", { name: "Cuenta de ana" })).toBeInTheDocument();
     await user.click(within(screen.getByRole("menu", { name: "Cuenta de ana" })).getByRole("menuitem", { name: "Cerrar sesión" }));
     expect(logout).toHaveBeenCalledOnce();
-    back.mockRestore();
+  });
+
+  it("renders the back action only when supplied and calls it", async () => {
+    const user = userEvent.setup();
+    const onBack = vi.fn();
+    render(<PanelShell user={admin} currentView="clients" onBack={onBack}><p>Contenido</p></PanelShell>);
+    await user.click(screen.getByRole("button", { name: "Volver" }));
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it("labels the dashboard breadcrumb and keeps its Panel segment unlinked", () => {
+    render(<PanelShell user={admin} currentView="dashboard"><p>Contenido</p></PanelShell>);
+    const breadcrumb = screen.getByRole("navigation", { name: "Ruta de navegación" });
+    expect(breadcrumb).toHaveTextContent("PanelDashboard");
+    expect(within(breadcrumb).queryByRole("button", { name: "Panel" })).not.toBeInTheDocument();
+    expect(within(breadcrumb).getByText("Dashboard")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("links Panel to Dashboard and uses the section label in the breadcrumb", () => {
+    const onNavigate = vi.fn();
+    render(<PanelShell user={admin} currentView="notifications" onNavigate={onNavigate}><p>Contenido</p></PanelShell>);
+    const breadcrumb = within(screen.getByRole("navigation", { name: "Ruta de navegación" }));
+    expect(breadcrumb.getByRole("button", { name: "Panel" })).toBeInTheDocument();
+    expect(breadcrumb.getByText("Notificaciones")).toHaveAttribute("aria-current", "page");
   });
 
   it("shows chat to an operador while keeping privileged sections hidden", () => {

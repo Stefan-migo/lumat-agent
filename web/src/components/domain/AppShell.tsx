@@ -5,7 +5,7 @@ import type { NotificationsResponse, PanelNotification } from '../../types';
 import type { User } from '../../types';
 import type { NotificationState, PanelView } from './PanelShell';
 import { PanelShell } from './PanelShell';
-import { parsePanelPath, pathForRoute, pathForView, type PanelRoute } from './panelRoutes';
+import { isDetailRoute, parsePanelPath, pathForRoute, pathForView, type PanelRoute } from './panelRoutes';
 import { Dashboard } from '../pages/Dashboard';
 import { ClientesList } from '../pages/ClientesList';
 import { ClientFicha } from '../pages/ClientFicha';
@@ -105,6 +105,9 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   };
 
   const view = route.view;
+  const onBack = isDetailRoute(route)
+    ? () => navigateToRoute({ view, ...(view === 'conversations' && route.conversationTab ? { conversationTab: route.conversationTab } : {}) })
+    : undefined;
   const shellView = view === 'cases' ? 'conversations' : view === 'projects' || view === 'planning-sessions' ? 'chat' : view;
   const assistantView: AssistantView = view === 'projects' || view === 'planning-sessions' ? view : 'chat';
   const sectionTabs = <AssistantTabs active={assistantView} onSelect={(target) => navigateToRoute({ view: target })} />;
@@ -129,7 +132,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
       : <Settings />;
 
   return (
-    <PanelShell user={user} currentView={shellView} onNavigate={navigate} onLogout={onLogout} notificationState={notificationState} notifications={notifications} onMarkAllNotificationsRead={markAllRead} inspector={inspector}>
+    <PanelShell user={user} currentView={shellView} breadcrumbView={view} onBack={onBack} onNavigate={navigate} onLogout={onLogout} notificationState={notificationState} notifications={notifications} onMarkAllNotificationsRead={markAllRead} inspector={inspector}>
       {page}
     </PanelShell>
   );

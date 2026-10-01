@@ -51,13 +51,24 @@ const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" |
   users: { label: "Usuarios", icon: UserRound, adminOnly: true },
 };
 
+const BREADCRUMB_OVERRIDES: Partial<Record<PanelView, string>> = {
+  dashboard: "Dashboard",
+  notifications: "Notificaciones",
+  push: "Notificaciones push",
+  "advanced-dashboard": "Panel avanzado",
+  projects: "Proyectos",
+  "planning-sessions": "Sesiones de planificación",
+};
+
 const BRAND_ASSET_BASE = `${import.meta.env.BASE_URL}brand`;
 
 export interface PanelShellProps {
   children: ReactNode;
   currentView?: PanelView;
+  breadcrumbView?: PanelView;
   drawerInitiallyOpen?: boolean;
   onNavigate?: (view: PanelView) => void;
+  onBack?: () => void;
   onLogout?: () => void | Promise<void>;
   user: User;
   /** Optional badge/chip rendered to the right of the panel header (e.g. a
@@ -249,8 +260,10 @@ function Navigation({
 export function PanelShell({
   children,
   currentView = "dashboard",
+  breadcrumbView,
   drawerInitiallyOpen = false,
   onNavigate,
+  onBack,
   user,
   statusBadge,
   onLogout,
@@ -259,6 +272,7 @@ export function PanelShell({
   notifications = [],
   onMarkAllNotificationsRead,
 }: PanelShellProps) {
+  const currentBreadcrumbView = breadcrumbView ?? currentView;
   const [drawerOpen, setDrawerOpen] = useState(drawerInitiallyOpen);
   const [collapsed, setCollapsed] = useState(false);
   const [navigationSearch, setNavigationSearch] = useState("");
@@ -478,20 +492,20 @@ export function PanelShell({
       <div ref={contentAreaRef} className="panel-shell__content-area">
         <div className="panel-shell__header-row">
           <header className="panel-shell__header" aria-label="Encabezado de la vista">
-            <button type="button" className="panel-shell__back" aria-label="Volver" title="Volver" onClick={() => window.history.back()}>
+            {onBack ? <button type="button" className="panel-shell__back" aria-label="Volver" title="Volver" onClick={onBack}>
               <Icon icon={ArrowLeft} />
-            </button>
+            </button> : null}
              <nav className="panel-shell__breadcrumbs" aria-label="Ruta de navegación">
                <ol>
-                 {currentView === "dashboard" ? <li aria-current="page">Panel unificado</li> : <>
-                   <li><button type="button" onClick={() => handleNavigation("dashboard")}>Panel</button></li>
-                   <li aria-current="page">{NAVIGATION[currentView as keyof typeof NAVIGATION]?.label ?? (currentView === "notifications" ? "Notificaciones" : "Panel")}</li>
+                  {currentBreadcrumbView === "dashboard" ? <><li>Panel</li><li aria-current="page">Dashboard</li></> : <>
+                    <li><button type="button" onClick={() => handleNavigation("dashboard")}>Panel</button></li>
+                    <li aria-current="page">{BREADCRUMB_OVERRIDES[currentBreadcrumbView] ?? NAVIGATION[currentBreadcrumbView as keyof typeof NAVIGATION]?.label ?? "Panel"}</li>
                  </>}
                </ol>
              </nav>
               <div className="panel-shell__header-actions">
                 <div ref={notificationsRef} className="panel-shell__notifications">
-               <button ref={bellRef} type="button" className="panel-shell__header-action" aria-expanded={notificationsOpen} aria-haspopup="dialog" aria-label={bellLabel} title="Notificaciones" onClick={() => setNotificationsOpen((open) => !open)}>
+                <button ref={bellRef} type="button" className="panel-shell__header-action" aria-expanded={notificationsOpen} aria-haspopup="dialog" aria-label={bellLabel} title="Notificaciones" onClick={() => { setAccountOpen(false); setNotificationsOpen((open) => !open); }}>
                  <Icon icon={Bell} />
                  {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
                </button>
@@ -504,10 +518,8 @@ export function PanelShell({
                  <div className="panel-shell__notifications-footer"><button type="button" onClick={() => void onMarkAllNotificationsRead?.()}>Marcar todas como leídas</button><button type="button" onClick={() => { closeNotifications(); handleNavigation("notifications"); }}>Ver todas las notificaciones</button></div>
                </section> : null}
                 </div>
-                {!notificationsOpen ? <>
-                  <span className="panel-shell__header-divider" aria-hidden="true" />
-                  <AccountControl user={user} onLogout={onLogout} open={accountOpen} onToggle={() => setAccountOpen((open) => !open)} />
-                </> : null}
+                 <span className="panel-shell__header-divider" aria-hidden="true" />
+                 <AccountControl user={user} onLogout={onLogout} open={accountOpen} onToggle={() => { setNotificationsOpen(false); setAccountOpen((open) => !open); }} />
              </div>
           </header>
           {statusBadge ? (
