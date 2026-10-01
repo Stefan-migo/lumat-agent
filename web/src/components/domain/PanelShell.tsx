@@ -173,7 +173,7 @@ function Brand({ mobile = false, compact = false, line = false }: { mobile?: boo
   );
 }
 
-function UserContext({ user, compact = false, onLogout }: { user: User; compact?: boolean; onLogout?: () => void | Promise<void> }) {
+function UserContext({ user, compact = false, onLogout, onNavigate }: { user: User; compact?: boolean; onLogout?: () => void | Promise<void>; onNavigate?: (view: PanelView) => void }) {
   const role = roleLabels[user.role];
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [optionsPosition, setOptionsPosition] = useState<{ left: number; bottom: number } | null>(null);
@@ -256,20 +256,21 @@ function UserContext({ user, compact = false, onLogout }: { user: User; compact?
           <Icon icon={MoreVertical} />
         </button>
       ) : null}
-      {optionsOpen && onLogout ? (
+      {optionsOpen && (onLogout || onNavigate) ? (
         <div ref={optionsRef} className="panel-shell__user-options" role="menu" aria-label={`Cuenta de ${user.username}`} style={optionsPosition ? { left: optionsPosition.left, bottom: optionsPosition.bottom } : undefined}>
           <div className="panel-shell__account-identity">
             <Avatar name={user.username} className="panel-shell__account-menu-avatar" />
             <span className="panel-shell__account-copy"><strong>{user.username}</strong><span>{role}</span></span>
           </div>
           <div className="panel-shell__account-divider" />
+          {onNavigate ? <button type="button" className="panel-shell__account-item" role="menuitem" onClick={() => { setOptionsOpen(false); onNavigate?.("profile"); }}><Icon icon={UserRound} />Mi perfil</button> : null}
           <button
             type="button"
             className="panel-shell__account-logout"
             role="menuitem"
             onClick={() => {
               setOptionsOpen(false);
-              void onLogout();
+              void onLogout?.();
             }}
           >
             <Icon icon={LogOut} />
@@ -501,7 +502,7 @@ export function PanelShell({
             <Icon icon={Search} />
           </button>
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} collapsed={collapsed} search={navigationSearch} />
-          <UserContext user={user} compact={collapsed} onLogout={onLogout} />
+          <UserContext user={user} compact={collapsed} onLogout={onLogout} onNavigate={handleNavigation} />
         </div>
       </aside>
 
@@ -555,7 +556,7 @@ export function PanelShell({
             <input type="search" aria-label="Buscar en el menú" placeholder="Buscar" value={navigationSearch} onChange={(event) => setNavigationSearch(event.target.value)} />
           </label>
           <Navigation currentView={currentView} onNavigate={handleNavigation} user={user} search={navigationSearch} />
-          <UserContext user={user} onLogout={onLogout} />
+          <UserContext user={user} onLogout={onLogout} onNavigate={handleNavigation} />
         </section>
       </dialog>
 

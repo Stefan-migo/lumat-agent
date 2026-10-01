@@ -368,6 +368,15 @@ describe("PanelShell rail contract (2C-1)", () => {
     expect(Number.parseFloat(menu.style.bottom)).toBeGreaterThan(0);
   });
 
+  it("offers Mi perfil from the sidebar account menu and navigates to it", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    render(<PanelShell user={admin} onLogout={vi.fn()} onNavigate={onNavigate}><p>Contenido</p></PanelShell>);
+    await user.click(screen.getByRole("button", { name: "Más opciones de la cuenta" }));
+    await user.click(screen.getByRole("menuitem", { name: "Mi perfil" }));
+    expect(onNavigate).toHaveBeenCalledWith("profile");
+  });
+
   it("renders the back action only when supplied and calls it", async () => {
     const user = userEvent.setup();
     const onBack = vi.fn();
