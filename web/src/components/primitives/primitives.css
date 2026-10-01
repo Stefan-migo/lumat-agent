@@ -1425,6 +1425,14 @@
   gap: var(--space-2);
   min-width: 0;
 }
+/* The reference separates the bell from the account control with a hairline (measured ~22% --text over
+   --header-bg); the house divider strength is 25%, the same treatment the sidebar groups use. */
+.panel-shell__header-divider {
+  align-self: stretch;
+  width: 1px;
+  margin-block: var(--space-2);
+  background: color-mix(in srgb, var(--text) 25%, transparent);
+}
 .panel-shell__header-action {
   display: inline-flex;
   min-width: 44px;
@@ -1460,6 +1468,11 @@
 }
 .panel-shell__back:hover,
 .panel-shell__account-trigger:hover { background: var(--surface-subtle); }
+/* DS-TKN-13: an interactive control's visible boundary resolves through --border-strong, never the
+   decorative --border. The reference draws the back control as a --surface-filled chip, which is also what
+   makes the boundary measurable: --border-strong is 3.09:1 on --surface but only 2.88:1 on --header-bg. */
+.panel-shell__back { background: var(--surface); border-color: var(--border-strong); }
+.panel-shell__back:hover { background: var(--bg); }
 .panel-shell__back:focus-visible,
 .panel-shell__account-trigger:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .panel-shell__account { position: relative; }
@@ -1476,7 +1489,7 @@
 .panel-shell__notifications-panel { position: absolute; top: calc(100% + var(--space-2)); right: 0; z-index: var(--z-modal); display: grid; width: min(22rem, calc(100vw - var(--space-6))); max-height: min(32rem, calc(100vh - var(--space-8))); grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; border: 1px solid var(--corp-border); border-radius: var(--radius-md); background: var(--brand-bg-elevated); box-shadow: var(--shadow-3); color: var(--corp-text); }
 .panel-shell__notifications-heading, .panel-shell__notifications-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--corp-border); }
 .panel-shell__notifications-heading h2 { margin: 0; font-size: var(--text-md); }
-.panel-shell__notifications-close { display: inline-flex; padding: var(--space-1); border: 0; background: transparent; color: inherit; cursor: pointer; }
+.panel-shell__notifications-close { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; padding: var(--space-1); border: 0; background: transparent; color: inherit; cursor: pointer; }
 .panel-shell__notifications-list { overflow-y: auto; margin: 0; padding: 0; list-style: none; }
 .panel-shell__notification { position: relative; display: grid; gap: var(--space-1); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--corp-border); }
 .panel-shell__notification strong { font-size: var(--text-sm); }
@@ -1486,8 +1499,15 @@
 .panel-shell__notification--unread .panel-shell__notification-dot { background: var(--corp-accent); }
 .panel-shell__notification-empty { padding: var(--space-4); color: var(--corp-fg-muted); font-size: var(--text-sm); }
 .panel-shell__notifications-footer { flex-wrap: wrap; border-top: 0; border-bottom: 0; }
-.panel-shell__notifications-footer button { padding: 0; border: 0; background: transparent; color: var(--corp-primary); font: inherit; font-size: var(--text-xs); font-weight: var(--weight-semibold); cursor: pointer; }
+.panel-shell__notifications-footer button { min-height: 44px; padding: 0 var(--space-2); border: 0; background: transparent; color: var(--corp-primary); font: inherit; font-size: var(--text-xs); font-weight: var(--weight-semibold); cursor: pointer; }
 .panel-shell__notifications-footer button:hover { text-decoration: underline; }
+/* DS-RESP-1 / PNL-APP-10: every popover control keeps a 44px target and a visible focus indicator. */
+.panel-shell__notifications-close:focus-visible,
+.panel-shell__notifications-footer button:focus-visible,
+.panel-shell__account-menu button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
 .panel-shell__user {
   position: relative;
   display: grid;

@@ -504,7 +504,10 @@ export function PanelShell({
                  <div className="panel-shell__notifications-footer"><button type="button" onClick={() => void onMarkAllNotificationsRead?.()}>Marcar todas como leídas</button><button type="button" onClick={() => { closeNotifications(); handleNavigation("notifications"); }}>Ver todas las notificaciones</button></div>
                </section> : null}
                 </div>
-                {!notificationsOpen ? <AccountControl user={user} onLogout={onLogout} open={accountOpen} onToggle={() => setAccountOpen((open) => !open)} /> : null}
+                {!notificationsOpen ? <>
+                  <span className="panel-shell__header-divider" aria-hidden="true" />
+                  <AccountControl user={user} onLogout={onLogout} open={accountOpen} onToggle={() => setAccountOpen((open) => !open)} />
+                </> : null}
              </div>
           </header>
           {statusBadge ? (

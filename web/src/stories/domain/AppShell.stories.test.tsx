@@ -105,6 +105,20 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
     );
   });
 
+  it('gives every header popover control a 44px target and a visible focus ring (DS-RESP-1 / PNL-APP-10)', () => {
+    expect(primitivesRaw).toMatch(/\.panel-shell__notifications-close\s*\{[^}]*min-width:\s*44px/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__notifications-close\s*\{[^}]*min-height:\s*44px/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__notifications-footer\s+button\s*\{[^}]*min-height:\s*44px/);
+    expect(primitivesRaw).toMatch(
+      /\.panel-shell__notifications-close:focus-visible[\s\S]{0,200}var\(--focus-ring\)/,
+    );
+  });
+
+  it('draws the back control as a bordered --surface chip (DS-TKN-13)', () => {
+    expect(primitivesRaw).toMatch(/\.panel-shell__back\s*\{[^}]*border-color:\s*var\(--border-strong\)/);
+    expect(primitivesRaw).toMatch(/\.panel-shell__back\s*\{[^}]*background:\s*var\(--surface\)/);
+  });
+
   it('also renders the brand image for the operador shell', () => {
     render(<AppShell user={operador} />);
     expect(screen.getAllByAltText('Lumat').length).toBeGreaterThan(0);

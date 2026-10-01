@@ -144,8 +144,10 @@ sidebar/drawer surfaces already adjudicated in `odd/tasks/panel-sidebar-refine.m
   breadcrumbs are hidden, and the row carries only the bell and account affordances at the top-right of the content.
 - [ ] **M3 — mobile one-line logo (mark + wordmark).** BLOCKED: the asset is an owner deliverable. The bar layout
   will be revisited with it.
-- [ ] **Reference-only details** (bell|account divider, bordered back square, popover 44px/focus-visible) — pending
-  the owner's call.
+- [x] **M4 — reference-only details. DONE.** Added the bell|account hairline divider, turned the back control into
+  the reference's `--surface`-filled chip with a `--border-strong` boundary (the only combination that measures
+  ≥3:1), and gave the notification close/footer and account menu controls 44px targets and a `--focus-ring`
+  focus-visible rule.
 
 ## Acceptance criteria
 
@@ -172,6 +174,19 @@ sidebar/drawer surfaces already adjudicated in `odd/tasks/panel-sidebar-refine.m
 | H1+ | pending | decided with the owner's visual analysis |
 
 ## Progress and evidence
+
+**M4 — reference-only details. DONE.**
+Solution: a `.panel-shell__header-divider` span sits between the bell and the account control (1px,
+`color-mix(in srgb, var(--text) 25%, transparent)`, `align-self: stretch` with `--space-2` block margins) — the
+reference measures ~22%, the house divider strength is 25%. `.panel-shell__back` becomes the reference's
+`--surface`-filled chip with `border-color: var(--border-strong)`; that is also the only combination clearing WCAG
+1.4.11, because `--border-strong` is 3.09:1 on `--surface` but only 2.88:1 on `--header-bg`. The notification close
+button and footer buttons gained 44px targets and, with the account menu items, a `--focus-ring` focus-visible rule.
+Checks: `npm run build` OK. Affected test files → 5 files / 90 tests passed; two CSS-contract guards added (44px +
+focus ring for the popover controls; the back chip's boundary token). Full suite → 92 files / 908 tests, exit 0.
+Rendered (Chrome, 1440): back `rgb(232,235,228)` = `--surface`, border `rgb(126,133,143)` = `--border-strong`,
+44×44; divider 1px at x1278-1279 (bell ends 1279, account starts 1287), height 34px; popover close 44×44 and both
+footer buttons 44px tall.
 
 **M1 — mobile header bell + avatar. DONE.**
 Solution: extracted a controlled `AccountControl` (avatar trigger + menu) and reused it in the desktop header and the
