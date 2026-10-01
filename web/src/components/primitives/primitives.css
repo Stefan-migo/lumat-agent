@@ -1597,10 +1597,12 @@
   outline: var(--focus-ring-width) solid var(--brand-lime);
   outline-offset: var(--focus-ring-offset);
 }
-/* Opens upward: the trigger sits at the bottom of the sidebar. */
+/* Opens upward: the trigger sits at the bottom of the sidebar. Anchored to the LEFT edge: both surfaces
+   that host this menu (the sidebar and the drawer) sit against the left edge of the viewport, so
+   right-anchoring pushed the 20rem card off-screen to the left. Left-anchoring opens it rightward. */
 .panel-shell__user-options {
   position: absolute;
-  right: 0;
+  left: 0;
   bottom: calc(100% + var(--space-2));
   z-index: var(--z-modal);
   display: grid;
