@@ -223,8 +223,9 @@ describe('admin user ficha API contracts', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('uses the typed profile and unlock endpoints', async () => {
-    vi.mocked(globalThis.fetch).mockImplementation(async () => new Response(JSON.stringify({}), { status: 200 }));
-    await getAdminUser(8);
+    const response = { user: { id: 8, username: 'carlos', role: 'tecnico', active: true, email: null, name: 'Carlos', phone: null, position: null, locked_until: null, failed_logins: 0 } };
+    vi.mocked(globalThis.fetch).mockImplementation(async () => new Response(JSON.stringify(response), { status: 200 }));
+    await expect(getAdminUser(8)).resolves.toEqual(response);
     expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/users/8', expect.anything());
     await updateAdminUser(8, { name: null, phone: '123', email: null, position: 'Técnico' });
     expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/users/8', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ name: null, phone: '123', email: null, position: 'Técnico' }) }));

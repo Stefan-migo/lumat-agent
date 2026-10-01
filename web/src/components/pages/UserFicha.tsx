@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ApiError, getAdminUser, unlockUser, updateAdminUser } from "../../api";
 import { useAsyncData } from "../../hooks/useAsyncData";
-import type { AdminUserProfileUpdate } from "../../types";
+import type { AdminUser, AdminUserProfileUpdate } from "../../types";
 import { roleLabels } from "../../roleLabels";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
@@ -16,11 +16,11 @@ type FormFields = Record<(typeof fields)[number], string>;
 export function UserFicha({ userId }: { userId: number }) {
   const loadUser = useCallback(() => getAdminUser(userId), [userId]);
   const data = useAsyncData(loadUser, true);
-  const [accountOverride, setAccountOverride] = useState<Awaited<ReturnType<typeof getAdminUser>> | null>(null);
+  const [accountOverride, setAccountOverride] = useState<AdminUser | null>(null);
   const [form, setForm] = useState<FormFields>({ name: "", phone: "", email: "", position: "" });
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; title: string } | null>(null);
-  const account = accountOverride ?? data.data;
+  const account = accountOverride ?? data.data?.user ?? null;
   useEffect(() => {
     if (account) setForm(Object.fromEntries(fields.map((field) => [field, account[field] ?? ""])) as FormFields);
   }, [account]);

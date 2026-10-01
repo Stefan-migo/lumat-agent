@@ -13,7 +13,7 @@ const lockedUser = { id: 8, username: "carlos", role: "tecnico" as const, active
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getAdminUser).mockResolvedValue(lockedUser);
+  vi.mocked(getAdminUser).mockResolvedValue({ user: lockedUser });
   vi.mocked(updateAdminUser).mockResolvedValue({ user: { ...lockedUser, locked_until: null, failed_logins: 0 } });
   vi.mocked(unlockUser).mockResolvedValue({ user: { ...lockedUser, locked_until: null, failed_logins: 0 } });
 });

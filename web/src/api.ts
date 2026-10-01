@@ -208,7 +208,7 @@ export const getDashboardTrend = (timezone: string) => {
 export const fetchTechnicianAgenda = () => apiFetch<TechnicianAgendaResponse>('/panel/api/technician/agenda');
 export const getAssistantCapabilities = () => apiFetch<AssistantCapabilities>('/panel/api/assistant/capabilities');
 export const fetchUsers = () => apiFetch<AdminUsersResponse>('/panel/api/users');
-export const getAdminUser = (id: number) => apiFetch<AdminUser>(`/panel/api/users/${id}`);
+export const getAdminUser = (id: number) => apiFetch<{ user: AdminUser }>(`/panel/api/users/${id}`);
 export const updateAdminUser = (id: number, body: AdminUserProfileUpdate) => patchJson<{ user: AdminUser }>(`/panel/api/users/${id}`, body);
 export const unlockUser = (id: number) => postJson<{ user: AdminUser }>(`/panel/api/users/${id}/unlock`);
 export const fetchTechnicians = () => apiFetch<TechniciansResponse>('/panel/api/technicians');
