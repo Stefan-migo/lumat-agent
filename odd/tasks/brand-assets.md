@@ -133,19 +133,23 @@ concern), other primitives, other pages, the sidebar/drawer surfaces already adj
 
 ### Slice 2 — Unit B (favicon + PWA)
 
-- [ ] **B1 — icon set.** Bring the owner's generated set into `web/public/brand/` under a normalized
-  lowercase name, drop the generated `site.webmanifest`, and **produce a real maskable 512** with the
-  mark at ~80% and ≥10% margin all around.
-- [ ] **B2 — manifest.** Merge the icons into `web/public/manifest.webmanifest`: correct `src` paths
-  (`/panel/app/brand/…`), correct `sizes`, honest `purpose` (`any` for the mark, `maskable` for the
-  real maskable), and palette-correct `theme_color` / `background_color`.
-- [ ] **B3 — `index.html` icon links.** Add `<link rel="icon">` (`/panel/app/brand/…favicon.ico` and
-  the PNG favicons) and `<link rel="apple-touch-icon">`.
-- [ ] **B4 — shrink the committed assets.** Replace `lumat-mark.png` and `lumat-logo.png` with the
-  optimized derivatives (spec-visible, see Constraints) and amend the DS-SHELL-8 clause.
-- [ ] **B5 — tests + rendered verification.** Extend `pwa.test.ts` so an icon-link claim in
-  `index.html` is asserted, and refresh the icon assertions to the merged manifest. Rendered pass
-  over the mobile bar, the drawer, and the installer icon.
+- [x] **B1 — icon set. DONE.** The owner's set is shipped under normalized lowercase names
+  (`favicon.ico`, `favicon-16.png`, `favicon-32.png`, `apple-touch-icon.png`, `icon-192.png`,
+  `icon-512.png`); the generated `site.webmanifest` is not shipped; a real maskable
+  `icon-maskable-512.png` was produced (mark at ~62% centred on forest `#143c2c`, inside the 80%
+  safe zone).
+- [x] **B2 — manifest. DONE.** Icons merged into `web/public/manifest.webmanifest` with correct
+  `/panel/app/brand/…` paths, honest `sizes`/`purpose`, and `theme_color: #143c2c` /
+  `background_color: #dbe1d6` (owner-approved from the desktop forest chrome).
+- [x] **B3 — `index.html` icon links. DONE.** `favicon.ico`, the two PNG favicons, and the
+  apple-touch link added; `theme-color` moved to `#143c2c`.
+- [x] **B4 — shrink the committed assets. DONE.** `lumat-mark.png` 4.43 MB → 9.1 KB and
+  `lumat-logo.png` 930 KB → 4.9 KB; DS-SHELL-8's asset clause amended to name the one-line lockup
+  and correct the "horizontal lockup" description (recorded, not silent).
+- [x] **B5 — tests + rendered verification. DONE.** `pwa.test.ts` refreshed to the merged manifest,
+  the palette colours and the `index.html` icon links (the service-worker sample URL moved from the
+  retired `lumat-mark.png` manifest entry to `icon-192.png`). Rendered pass over the mobile bar and
+  the drawer at 390×844, plus the built `dist/` PWA surface.
 
 ## Acceptance criteria
 
@@ -161,9 +165,9 @@ concern), other primitives, other pages, the sidebar/drawer surfaces already adj
 
 ## Open owner decision
 
-- **PWA `theme_color` / `background_color`** (B2). Recommendation: forest chrome `#143c2c`
-  (`--primary-800`) for `theme_color`; confirm before applying, it is a palette decision. Carried
-  from the handoff as an explicit owner call.
+- **PWA `theme_color` / `background_color`** (B2) — **RESOLVED by the owner 2026-10-01:** follow the
+  desktop version's chrome logic → `theme_color: #143c2c` (`--corp-primary`, the forest chrome the
+  desktop sidebar and the mobile bar share) and `background_color: #dbe1d6` (`--bg`).
 
 ## Route decisions
 
@@ -199,3 +203,28 @@ concern), other primitives, other pages, the sidebar/drawer surfaces already adj
 **Engram mirror: PENDING.** `mem_save` for `odd/brand-assets/tasks` is failing with "multiple active
 runtime sessions match the current project and directory". The charter file on this branch is the
 source of truth; the mirror must be re-pushed when the session ambiguity clears.
+
+**Slice 2 (Unit B) — code complete.**
+
+- Commits: `65b2062d` icon set + manifest + index links + refreshed assertions, `226e7366` brand
+  asset shrink + DS-SHELL-8 amendment, `7f771fc1` re-encode pass.
+- Owner decision applied: `theme_color: #143c2c` (`--corp-primary`) and `background_color: #dbe1d6`
+  (`--bg`), derived from the desktop chrome surfaces rather than the retired navy `#17324d`.
+- **Encoder finding.** The `PNG32:` output prefix forces a truecolor container; for the transparent
+  assets the default palette container is byte-equivalent in quality (same alpha levels, same RMSE)
+  at roughly half the size. Corrected in `7f771fc1`. The **opaque maskable is the exception**: there
+  `PNG32:` compresses better (29.8 KB vs 42.8 KB), so it keeps it. Measured before/after:
+  `icon-512` 97.3 → 45.9 KB, `apple-touch` 30.5 → 6.6 KB, `icon-192` 33.7 → 7.1 KB,
+  `lumat-mark` 17.5 → 9.1 KB, `lumat-logo` 10.2 → 4.9 KB, `lumat-logo-line` 18.7 → 8.7 KB.
+- **`web/public/brand/` now totals 125 KB** (was 5.79 MB of source art + a 355 KB icon set).
+- Checks: `npm run build` OK; affected vitests 4 files / 68 tests; full suite **92 files / 909
+  tests, exit 0**. Rendered pass at 390×844: bar order `menu-button → brand(--line) → actions`; bar
+  brand box **176×48** rendering `lumat-logo-line.png`; drawer brand `lumat-logo.png` (stacked).
+  Built `dist/brand/` carries all ten assets and no `site.webmanifest`; `dist/index.html` and
+  `dist/manifest.webmanifest` carry the icons, links and palette colours.
+- Native RDD (boundary `7aee1b2e`): risk **medium** (`executable_change`), `review_due: false`,
+  `review_due_reason: under_budget` (296 changed lines < 400, 18 paths). No review due; boundary
+  stays pending.
+
+**Slice boundaries for delivery:** Slice 1 = commits `8c941866`→`efc2056c` (Unit A). Slice 2 =
+`65b2062d`→`7f771fc1` (Unit B). Not yet pushed; PRs are the owner's call.
