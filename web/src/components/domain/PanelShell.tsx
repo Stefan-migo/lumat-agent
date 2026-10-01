@@ -53,7 +53,7 @@ const NOTIFICATION_SOURCE_ICONS: Record<string, { icon: LucideIcon; tone: string
   customer: { icon: Users, tone: "customer" },
 };
 
-export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "users" | "projects" | "planning-sessions";
+export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "users" | "projects" | "planning-sessions" | "profile";
 
 interface NavigationItem {
   label: string;
@@ -65,7 +65,7 @@ function PanelToggleIcon({ collapsed }: { collapsed: boolean }) {
   return <Icon icon={collapsed ? ChevronRight : ChevronLeft} />;
 }
 
-const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" | "advanced-dashboard" | "projects" | "planning-sessions">, NavigationItem> = {
+const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" | "advanced-dashboard" | "projects" | "planning-sessions" | "profile">, NavigationItem> = {
   dashboard: { label: "Panel unificado", icon: PanelLeft },
   chat: { label: "Asistente Lumat", icon: Bot },
   conversations: { label: "Conversaciones", icon: MessageSquare },
@@ -82,6 +82,7 @@ const BREADCRUMB_OVERRIDES: Partial<Record<PanelView, string>> = {
   notifications: "Notificaciones",
   push: "Notificaciones push",
   "advanced-dashboard": "Panel avanzado",
+  profile: "Mi perfil",
   projects: "Proyectos",
   "planning-sessions": "Sesiones de planificación",
 };
@@ -111,7 +112,7 @@ export type NotificationState = { status: "loading" } | { status: "ready"; unrea
 
 /** The account affordance (avatar trigger + menu). Controlled so the desktop header and the mobile bar each own
  *  their open state without duplicating the popover markup. */
-function AccountControl({ user, onLogout, open, onToggle }: { user: User; onLogout?: () => void | Promise<void>; open: boolean; onToggle: () => void }) {
+function AccountControl({ user, onLogout, onNavigate, open, onToggle }: { user: User; onLogout?: () => void | Promise<void>; onNavigate?: (view: PanelView) => void; open: boolean; onToggle: () => void }) {
   const accountRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -133,7 +134,6 @@ function AccountControl({ user, onLogout, open, onToggle }: { user: User; onLogo
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [onToggle, open]);
-
   return (
     <div ref={accountRef} className="panel-shell__account">
       <button ref={triggerRef} type="button" className="panel-shell__account-trigger" aria-label="Abrir menú de usuario" aria-expanded={open} aria-haspopup="menu" onClick={onToggle}>
@@ -147,6 +147,7 @@ function AccountControl({ user, onLogout, open, onToggle }: { user: User; onLogo
           <span className="panel-shell__account-copy"><strong>{user.username}</strong><span>{roleLabels[user.role]}</span></span>
         </div>
         <div className="panel-shell__account-divider" />
+        <button type="button" className="panel-shell__account-item" role="menuitem" onClick={() => { onNavigate?.("profile"); onToggle(); }}><Icon icon={UserRound} />Mi perfil</button>
         {onLogout ? <button type="button" className="panel-shell__account-logout" role="menuitem" onClick={() => void onLogout()}><Icon icon={LogOut} />Cerrar sesión</button> : null}
       </div> : null}
     </div>
@@ -525,7 +526,7 @@ export function PanelShell({
             <Icon icon={Bell} />
             {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
           </button>
-          <AccountControl user={user} onLogout={onLogout} open={mobileAccountOpen} onToggle={() => setMobileAccountOpen((open) => !open)} />
+          <AccountControl user={user} onLogout={onLogout} onNavigate={handleNavigation} open={mobileAccountOpen} onToggle={() => setMobileAccountOpen((open) => !open)} />
         </div>
       </header>
 
@@ -609,7 +610,7 @@ export function PanelShell({
                 </section> : null}
                 </div>
                  <span className="panel-shell__header-divider" aria-hidden="true" />
-                 <AccountControl user={user} onLogout={onLogout} open={accountOpen} onToggle={() => { setNotificationsOpen(false); setAccountOpen((open) => !open); }} />
+                 <AccountControl user={user} onLogout={onLogout} onNavigate={handleNavigation} open={accountOpen} onToggle={() => { setNotificationsOpen(false); setAccountOpen((open) => !open); }} />
              </div>
           </header>
           {statusBadge ? (

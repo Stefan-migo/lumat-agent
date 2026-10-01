@@ -10,6 +10,7 @@ import { DataTable, type Column } from "../shared/DataTable";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { Dialog } from "../primitives/Dialog";
+import { pathForRoute } from "../domain/panelRoutes";
 
 const passwordAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -22,9 +23,9 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.detail : fallback;
 }
 
-export interface UserManagementProps { currentUser: User; }
+export interface UserManagementProps { currentUser: User; onOpenUser?: (id: number) => void; }
 
-export function UserManagement({ currentUser }: UserManagementProps) {
+export function UserManagement({ currentUser, onOpenUser }: UserManagementProps) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -91,7 +92,7 @@ export function UserManagement({ currentUser }: UserManagementProps) {
   };
 
   const columns: Column<AdminUser>[] = [
-    { key: "username", header: "Usuario", render: (user) => user.username },
+    { key: "username", header: "Usuario", render: (user) => <a className="table__link" href={pathForRoute({ view: "users", userId: user.id })} onClick={onOpenUser ? (event) => { event.preventDefault(); onOpenUser(user.id); } : undefined}>{user.username}</a> },
     { key: "role", header: "Rol", render: (user) => roleLabels[user.role] },
     { key: "active", header: "Estado", render: (user) => user.active ? "Activo" : "Inactivo" },
   ];

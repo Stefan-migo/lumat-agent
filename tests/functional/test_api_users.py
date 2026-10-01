@@ -208,6 +208,52 @@ def test_user_profile_ficha_mutations_and_audit(client, make_user):
         assert len(actions) >= 5
 
 
+def test_self_profile_patch_only_changes_name_and_phone_and_audits(client, make_user):
+    user_id = make_user("self-profile", "initial-pass", role="tecnico")
+    with SessionLocal() as session:
+        user = session.get(User, user_id)
+        user.email = "kept@example.com"
+        user.position = "Admin-only label"
+        session.commit()
+
+    unauthenticated = client.patch("/panel/api/me", json={"name": "Changed"})
+    assert unauthenticated.status_code == 401
+    login = client.post(
+        "/panel/api/login",
+        json={"username": "self-profile", "password": "initial-pass"},
+    )
+    assert login.status_code == 200
+
+    response = client.patch(
+        "/panel/api/me",
+        json={"name": " Self Name ", "phone": "+56912345678"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["user"]["name"] == "Self Name"
+    assert response.json()["user"]["phone"] == "+56912345678"
+    forbidden_fields = client.patch(
+        "/panel/api/me", json={"email": "attacker@example.com", "position": "Owner"}
+    )
+    assert forbidden_fields.status_code == 422
+    me = client.get("/panel/api/me").json()
+    assert me["name"] == "Self Name"
+    assert me["phone"] == "+56912345678"
+    assert "locked_until" not in me and "failed_logins" not in me
+    with SessionLocal() as session:
+        user = session.get(User, user_id)
+        assert user.email == "kept@example.com"
+        assert user.position == "Admin-only label"
+        audit = session.scalar(select(AuditLog).where(AuditLog.action == "user.self_profile_update"))
+        assert audit is not None
+        assert audit.actor == "self-profile"
+        assert audit.after == {"name": "Self Name", "phone": "+56912345678"}
+
+    for field in ("name", "phone"):
+        assert client.patch("/panel/api/me", json={field: ""}).status_code == 400
+    assert client.patch("/panel/api/me", json={"name": None}).status_code == 200
+    assert client.get("/panel/api/me").json()["name"] is None
+
+
 def test_self_password_change_and_admin_unlock(client, make_user):
     user_id = make_user("password-self", "current-pass", role="tecnico")
     client.post("/panel/api/login", json={"username": "password-self", "password": "current-pass"})

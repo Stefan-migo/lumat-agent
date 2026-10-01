@@ -40,6 +40,12 @@ class SelfPasswordBody(BaseModel):
     new_password: str
 
 
+class SelfProfileBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=30)
+
+
 def _validate_username(username: str) -> str:
     value = username.strip()
     if not value:
@@ -100,6 +106,38 @@ def update_user_profile(
         record_audit(session, actor=current.username, action="user.profile_update", entity="user", entity_id=str(user.id), before=before, after=after)
     session.commit()
     return {"user": safe_user}
+
+
+@router.patch("/me")
+def update_own_profile(
+    body: SelfProfileBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_user_json),
+) -> dict:
+    user = _get_user(session, current.id)
+    changes = {field: getattr(body, field) for field in body.model_fields_set}
+    for field, value in changes.items():
+        if value is not None:
+            value = value.strip()
+            if not value:
+                raise HTTPException(status_code=400, detail="profile fields cannot be empty")
+        changes[field] = value
+    before = {field: getattr(user, field) for field, value in changes.items() if getattr(user, field) != value}
+    after = {field: changes[field] for field in before}
+    for field, value in changes.items():
+        setattr(user, field, value)
+    if before:
+        record_audit(
+            session,
+            actor=current.username,
+            action="user.self_profile_update",
+            entity="user",
+            entity_id=str(user.id),
+            before=before,
+            after=after,
+        )
+    session.commit()
+    return {"user": {"name": user.name, "phone": user.phone}}
 
 
 @router.post("/me/password")

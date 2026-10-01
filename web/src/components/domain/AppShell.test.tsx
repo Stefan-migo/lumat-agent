@@ -173,6 +173,20 @@ describe('AppShell (T6.4)', () => {
     vi.restoreAllMocks();
   });
 
+  it('renders the self-profile route for an operador', async () => {
+    window.history.replaceState({}, '', '/panel/app/profile');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      return path === '/panel/api/me'
+        ? new Response(JSON.stringify({ id: 2, username: 'vero', role: 'operador', email: null, name: 'Verónica', phone: null, position: null }), { status: 200 })
+        : new Response(JSON.stringify({ notifications: [] }), { status: 200 });
+    });
+    render(<AppShell user={operador} />);
+    expect(await screen.findByLabelText('Nombre')).toHaveValue('Verónica');
+    expect(window.location.pathname).toBe('/panel/app/profile');
+    vi.restoreAllMocks();
+  });
+
   it('renders appointment details from the appointment route', async () => {
     window.history.replaceState({}, '', '/panel/app/agenda/7');
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
@@ -217,6 +231,15 @@ describe('AppShell (T6.4)', () => {
     expect(sidebar(container).queryByText('Dashboard avanzado')).not.toBeInTheDocument();
     await userEvent.setup().click(mobileDrawerTrigger(container));
     expect(within(screen.getByRole('dialog', { name: 'Navegación' })).queryByRole('button', { name: 'Dashboard avanzado' })).not.toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
+  it('blocks a non-admin from a direct user ficha URL without requesting user data', async () => {
+    window.history.replaceState({}, '', '/panel/app/users/8');
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ notifications: [] }), { status: 200 }));
+    render(<AppShell user={operador} />);
+    expect(await screen.findByText('No tienes permiso para ver este panel')).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith('/panel/api/users/8', expect.anything());
     vi.restoreAllMocks();
   });
 

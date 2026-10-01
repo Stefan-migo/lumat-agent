@@ -4,6 +4,7 @@ export type PanelRoute = {
   view: PanelView;
   conversationTab?: 'all' | 'human' | 'emergency' | 'case' | 'closed';
   clientId?: number;
+  userId?: number;
   conversationId?: number;
   automationRuleId?: number;
   kbDocId?: number;
@@ -35,6 +36,7 @@ export const PANEL_ROUTES = {
   'automation-rules': '/panel/app/automation-rules',
   settings: '/panel/app/settings',
   users: '/panel/app/users',
+  profile: '/panel/app/profile',
   projects: '/panel/app/projects',
   'planning-sessions': '/panel/app/planning-sessions',
 } as const satisfies Readonly<Partial<Record<PanelView, string>>>;
@@ -64,6 +66,9 @@ export function pathForRoute(route: PanelRoute): string {
   }
   if (route.view === 'clients' && route.clientId !== undefined && Number.isSafeInteger(route.clientId) && route.clientId > 0) {
     return `${base}/${route.clientId}`;
+  }
+  if (route.view === 'users' && route.userId !== undefined && Number.isSafeInteger(route.userId) && route.userId > 0) {
+    return `${base}/${route.userId}`;
   }
   if (route.view === 'conversations' && route.conversationId !== undefined && Number.isSafeInteger(route.conversationId) && route.conversationId > 0) {
     return `${base}/${route.conversationId}`;
@@ -133,9 +138,11 @@ export function parsePanelPath(pathname: string): PanelRoute {
   const id = positiveId(segments[3]);
   if (view === 'projects') return { view, projectSlug: segments[3] };
   if (view === 'planning-sessions') return { view, planningSessionSlug: segments[3] };
-  if (id === null || !['clients', 'conversations', 'automation-rules', 'kb', 'agenda'].includes(view)) return fallback();
+  if (id === null || !['clients', 'users', 'conversations', 'automation-rules', 'kb', 'agenda'].includes(view)) return fallback();
   if (view === 'automation-rules') return { view, automationRuleId: id };
   if (view === 'kb') return { view, kbDocId: id };
   if (view === 'agenda') return { view, appointmentId: id };
-  return view === 'clients' ? { view, clientId: id } : { view, conversationId: id };
+  if (view === 'clients') return { view, clientId: id };
+  if (view === 'users') return { view, userId: id };
+  return { view, conversationId: id };
 }

@@ -25,6 +25,8 @@ import { AdvancedDashboard } from '../pages/AdvancedDashboard';
 import { UserManagement } from '../pages/UserManagement';
 import { ProjectsPage } from '../pages/ProjectsPage';
 import { PlanningSessions } from '../pages/PlanningSessions';
+import { SelfProfile } from '../pages/SelfProfile';
+import { UserFicha } from '../pages/UserFicha';
 import { AssistantTabs, type AssistantView } from '../pages/AssistantTabs';
 
 /** Top-level SPA views. Client ficha and conversation thread are drill-downs
@@ -112,6 +114,7 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
   const assistantView: AssistantView = view === 'projects' || view === 'planning-sessions' ? view : 'chat';
   const sectionTabs = <AssistantTabs active={assistantView} onSelect={(target) => navigateToRoute({ view: target })} />;
   const clientId = route.clientId ?? null;
+  const userId = route.userId ?? null;
   const conversationId = route.conversationId ?? null;
   const kbDocId = route.kbDocId ?? null;
   const appointmentId = route.appointmentId ?? null;
@@ -126,7 +129,8 @@ export function AppShell({ user, onLogout, inspector }: AppShellProps) {
      : view === 'push' ? <PushSettings />
            : view === 'chat' ? <AgentChat role={user.role} sectionTabs={sectionTabs} onThreadOpened={(id) => navigateToRoute({ view: 'chat', threadId: id })} />
        : view === 'kb' ? kbDocId !== null ? <KbDocumentDetail documentId={kbDocId} /> : <KbList onOpenDocument={(id) => navigateToRoute({ view: 'kb', kbDocId: id })} />
-      : view === 'users' ? <UserManagement currentUser={user} />
+        : view === 'users' ? user.role !== 'admin' ? <div role="alert">No tienes permiso para ver este panel</div> : userId !== null ? <UserFicha userId={userId} /> : <UserManagement currentUser={user} onOpenUser={(id) => navigateToRoute({ view: 'users', userId: id })} />
+       : view === 'profile' ? <SelfProfile />
          : view === 'projects' ? <ProjectsPage sectionTabs={sectionTabs} projectSlug={route.projectSlug} onOpenProject={(slug) => navigateToRoute({ view: 'projects', projectSlug: slug })} onOpenChat={(slug) => navigateToRoute({ view: 'chat', projectSlug: slug })} />
         : view === 'planning-sessions' ? <PlanningSessions sectionTabs={sectionTabs} sessionSlug={route.planningSessionSlug} onOpenSession={(slug) => navigateToRoute({ view: 'planning-sessions', planningSessionSlug: slug })} onOpenThread={(id) => { window.history.pushState({}, '', `${pathForView('chat')}?thread_id=${id}`); setRoute({ view: 'chat' }); }} />
       : <Settings />;

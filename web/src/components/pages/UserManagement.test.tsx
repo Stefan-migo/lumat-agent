@@ -11,15 +11,15 @@ vi.mock("../../api", async (importActual) => ({
 
 const admin = { id: 1, username: "ana", role: "admin" as const };
 const users = [
-  { id: 1, username: "ana", role: "admin" as const, active: true },
-  { id: 2, username: "op", role: "operador" as const, active: false },
-  { id: 3, username: "tec", role: "tecnico" as const, active: true },
+  { id: 1, username: "ana", role: "admin" as const, active: true, email: null, name: null, phone: null, position: null, locked_until: null, failed_logins: 0 },
+  { id: 2, username: "op", role: "operador" as const, active: false, email: null, name: null, phone: null, position: null, locked_until: null, failed_logins: 0 },
+  { id: 3, username: "tec", role: "tecnico" as const, active: true, email: null, name: null, phone: null, position: null, locked_until: null, failed_logins: 0 },
 ];
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchUsers).mockResolvedValue({ users });
-  vi.mocked(createUser).mockResolvedValue({ user: { id: 4, username: "new", role: "operador", active: true } });
+  vi.mocked(createUser).mockResolvedValue({ user: { id: 4, username: "new", role: "operador", active: true, email: null, name: null, phone: null, position: null, locked_until: null, failed_logins: 0 } });
   vi.mocked(toggleUserActive).mockResolvedValue({ user: { ...users[1], active: true } });
   vi.mocked(resetUserPassword).mockResolvedValue({ user: users[1] });
 });
@@ -35,6 +35,14 @@ describe("UserManagement", () => {
     expect(screen.getByText("Inactivo")).toBeInTheDocument();
     expect(screen.queryByText("tecnico")).not.toBeInTheDocument();
     expect(screen.queryByText(/password|failed_logins|locked_until/i)).not.toBeInTheDocument();
+  });
+
+  it("opens a user's ficha from the list", async () => {
+    const user = userEvent.setup();
+    const onOpenUser = vi.fn();
+    render(<UserManagement currentUser={admin} onOpenUser={onOpenUser} />);
+    await user.click(await screen.findByRole("link", { name: "op" }));
+    expect(onOpenUser).toHaveBeenCalledWith(2);
   });
 
   it.each([
@@ -64,7 +72,7 @@ describe("UserManagement", () => {
 
   it("creates a user and refreshes the safe list", async () => {
     const user = userEvent.setup();
-    vi.mocked(fetchUsers).mockResolvedValueOnce({ users }).mockResolvedValueOnce({ users: [...users, { id: 4, username: "new", role: "operador", active: true }] });
+    vi.mocked(fetchUsers).mockResolvedValueOnce({ users }).mockResolvedValueOnce({ users: [...users, { id: 4, username: "new", role: "operador", active: true, email: null, name: null, phone: null, position: null, locked_until: null, failed_logins: 0 }] });
     render(<UserManagement currentUser={admin} />);
     await screen.findByText("ana");
     await user.type(screen.getByLabelText("Usuario"), "new");

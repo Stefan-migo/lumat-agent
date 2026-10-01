@@ -1,13 +1,15 @@
 # ODD Task: user-profiles
 
-Status: **in progress** — slice 1 (backend) authorized 2026-09-29
-Worktree: `../lumat-agent-odd-user-profiles`
-Branch: `odd/user-profiles`
-Base: `dfb9eca2` (`main`, merge of PR #436)
+Status: **in progress** — slices 1, 2a and 3 (A: self profile) merged 2026-10-01; **slice 4 (B: admin user view) authorized 2026-10-01**
+Worktree: `../lumat-agent-odd-user-profiles-admin-view`
+Branch: `odd/user-profiles-admin-view`
+Base: `171f59e0` (`main`, merge of PR #456)
 Thread: **hilo multi usuarios** (Engram `odd/multi-usuarios/thread-status`)
 Source: investigation of the panel users surface, 2026-09-29
 Delivery strategy: `ask-on-risk`
 Chain strategy: **stacked-to-main** (owner-confirmed 2026-09-29)
+
+**Delivered earlier in this unit:** slice 1 backend — PR **#437** (merged); slice 2a admin reset dialog — PR **#438**, merge `e6884bf8`; slice 3 page (A) self profile — PR **#456**, merge `171f59e0`. The original single-page "slice 2b" was **never built**; it is replaced by the two pages below.
 
 ## Objective
 
@@ -38,7 +40,9 @@ Two defects motivate the unit:
 | P1 (owner, 2026-09-29) | Scope **B**: an editable profile ficha with personal data, not just a read-only identity card. | Owner chose B over the smaller read-only option. | Scope A (identity + owner-scoped data, no migration). |
 | P2 (owner, 2026-09-29) | The profile fields are `email`, `name`, `phone`, `position` (cargo/etiqueta libre). All nullable. | Owner selected all four. | Fewer fields, or an enum catalog for the cargo. |
 | P3 (owner, 2026-09-29) | Slice 1 is the backend, delivered first and reviewed before the frontend slice. | Estimate exceeds the ~400-line review budget, so the chain is forced by size. | One PR with `size:exception`. |
-| P4 (architect) | A non-admin edits **no** profile field; only their own password. Field editing is admin-only. | Matches the owner's framing of B; keeps the privilege boundary the two previous units established. | Let any user edit their own `name`/`phone`/`position`. |
+| P4 (architect) — **SUPERSEDED by P8** | A non-admin edits **no** profile field; only their own password. Field editing is admin-only. | Matches the owner's framing of B; keeps the privilege boundary the two previous units established. | Let any user edit their own `name`/`phone`/`position`. |
+| **P8 (owner, 2026-10-01) — reverts P4, narrowed** | A non-admin **may** edit their own `name` and `phone` only. `email` and `position` stay **admin-only**. | The owner confirmed 2026-10-01 that page (A) includes personal-data editing, so P4 is reverted — but only for the two fields with no uniqueness or privilege consequence. `email` is unique case-insensitively when present (P5), has no verification, and P7 keeps account recovery out of scope, so a free self-edit would let one user take or release another's address with no control. `position` is an internal role label the owner called admin-only. | `name`/`phone`/`email` self-editable (email self-edit rejected on the uniqueness-without-verification risk). |
+| **P9 (owner, 2026-10-01)** | Usuarios needs **two separate pages**, not the single two-mode page the unit originally designed: **(A) self profile** (each user manages their own data + password) and **(B) admin individual user view**. | Owner's explicit choice on 2026-10-01. (A) cannot live under `users/:id` because a `tecnico`/`operador` never sees the `Usuarios` section (`PanelShell.tsx:51`). | One page with two modes (`users/:id`, password card only when viewing self). |
 | P5 (architect) | `email` is optional and unique case-insensitively **when present** (partial unique index on `lower(email) WHERE email IS NOT NULL`). | Mirrors `Customer.email` (`001_init.sql:54`, nullable `VARCHAR(200)`); a NOT NULL requirement would force a backfill of existing users. | Required + backfilled email. |
 | P6 (architect) | The admin reset endpoint is **not** changed. The UI fix is to let the admin type the password (with a generate button that shows it in the field). | Avoids ever transporting a secret back through the API; the current backend contract is already correct. | Have the API generate and return the plaintext password once. |
 | P7 (architect) | Email-based self-service recovery stays **out of scope**. | `send_email` exists (`app/services/notify.py:98`) but there is no token store, expiry, single-use consumption, or public route, and the panel is cookie-based same-origin with **no CSRF tokens** (`auth.py` module docstring) — a public recovery route changes the threat model and is its own unit. | Add a token table + public route in this slice. |
@@ -165,44 +169,88 @@ Edges consulted: `UserManagement.tsx -> api.ts -> types.ts`;
 
 Estimated authored size: 250–380 changed lines.
 
-### Slice 2 — frontend, split into 2a and 2b
-
-The original slice 2 was split on 2026-09-29 after being evaluated against the active
-`openspec/changes/panel-design-system-final` change (at the time: proposal stage, uncommitted,
-four open questions for the owner). That change rebuilds `AppShell.tsx` and `PanelShell.tsx` in
-its third slice, restyles every primitive in its second, and replaces `--bg`, `--surface`,
-`--text` and `--border`. S2.1 and S2.4 edit exactly the two shells that change rebuilds, and a
-new page built now would be built against the outgoing palette. `panel-grammar-global` is also
-active with 5 tasks and 0 applied, racing the same `DS-GRAMMAR-1`.
-
-#### Slice 2a — admin reset flow (delivered)
+### Slice 2a — admin reset flow (delivered)
 
 - **S2.3** Fix the admin reset flow: a dialog where the admin types the password,
-  with a generate button that shows it in the field (P6).
+  with a generate button that shows it in the field (P6). Delivered as PR **#438**,
+  merge `e6884bf8`.
 
-Touches only `UserManagement.tsx`, which the design-system change does not touch, so it carries
-zero collision. Estimated 80–120 changed lines.
+### Slice 2b — RETIRED (superseded by P9)
 
-#### Slice 2b — frontend ficha (deferred)
+The original slice 2b assumed **one** two-mode page (`users/:id`). The owner
+superseded that model on 2026-10-01 (P9): Usuarios is **two separate pages**.
+Slice 2b was never built; it is replaced by slices 3 (A) and 4 (B) below. Its
+line anchors are stale by design — do not resurrect it.
 
-Blocked on `panel-design-system-final` **slice 3 (responsive shell) landing in `main`** — not on
-the whole change. The ficha does not need new tokens or restyled primitives to *function*; it
-needs a stable shell so the shell edits happen once instead of twice.
+### Slice 3 — page (A): self profile (this slice, authorized 2026-10-01)
 
-- **S2.1** `users/:id` on `PanelRoute` + parse + `AppShell` drill-down + clickable
-  rows in `UserManagement`.
-- **S2.2** `UserProfile.tsx`: identity header, the four editable fields, lockout
-  state with unlock, and a password card when viewing self.
-- **S2.4** Reach the profile / password change from the panel user menu and from
-  `TechnicianShell`, so every role has a path.
-- **S2.5** Tests for all of the above, including the technician path.
+Each authenticated user (all roles) manages **their own** profile: `name` +
+`phone` (P8) plus a password change. (A) is **backend + frontend** — the
+self-edit endpoint does not exist.
+
+- **S3.1** `PATCH /panel/api/me` (any authenticated role), accepting **only**
+  `name` and `phone`, following `CustomerProfileBody`'s shape and validation
+  style. `null` clears a field; `""` returns 400. Audit entry.
+- **S3.2** Self-read shape: `GET /me` already returns `name`/`phone`; confirm it
+  stays sufficient for (A). Do **not** expose `active`/`locked_until`/
+  `failed_logins` to self — the self-view structurally cannot show lockout state;
+  do not fake it.
+- **S3.3** A self-profile route reachable by **every** role, including
+  `tecnico`/`operador` who never see the `Usuarios` nav section
+  (`PanelShell.tsx:51`). Wire the entry point from **`AccountControl`**
+  (`PanelShell.tsx:77`; desktop `:509`, mobile `:433`) and from `TechnicianShell`,
+  so every role has a path.
+- **S3.4** A self-profile component: identity header (`username`, role via
+  `roleLabels.ts`), the two editable fields (`name`, `phone`), and a password card
+  calling `POST /me/password`. Reuse the `ClientFicha` grammar and existing
+  primitives; UI copy in Spanish (neutral Chilean).
+- **S3.5** Tests: backend route (happy path; non-self field denial — `email`/
+  `position` must NOT be settable through `/me`; `""` → 400; `null` → cleared;
+  audit row); frontend page and entry-point tests, including the technician path.
+
+Estimated authored size: 250–400 changed lines.
+
+### Slice 4 — page (B): admin individual user view (this slice, authorized 2026-10-01)
+
+Frontend-only. The admin's view of one user, reached from the `Usuarios` list.
+
+**P10 (owner, 2026-10-01):** (B) is **ficha + unlock only**. It does **not**
+duplicate the actions that already live on the users list — password reset and
+activate/deactivate stay there and are not repeated in the ficha.
+
+- **S4.1** `users/:id` on `PanelRoute` + parse + `AppShell` drill-down + clickable
+  rows in `UserManagement` (mirrors the `clients/:id` precedent).
+- **S4.2** A user-ficha component: identity header (`username`, `role` via
+  `roleLabels.ts`), the **four** editable fields (`name`, `phone`, `email`,
+  `position`), and the lockout state with `POST /users/{id}/unlock`. No reset and
+  no toggle-active (P10).
+- **S4.3** Tests, including the per-role denial boundary.
+
+Backend is already in place and unchanged: `GET /users/{id}` (admin),
+`PATCH /users/{id}` (admin), `POST /users/{id}/unlock` (admin), and the admin
+serializer already exposes `locked_until`/`failed_logins`.
+
+Open debts this slice must handle:
+- `AdminUser` in `web/src/types.ts` declares only `{id, username, role, active}` —
+  extend it to the admin shape (`email`, `name`, `phone`, `position`,
+  `locked_until`, `failed_logins`).
+- `PATCH /users/{id}` answers **409** on a duplicate email; the save path must
+  surface it (no 409 branch exists in the `ClientFicha` pattern).
+- `PATCH` semantics: `null` clears, `""` → 400 (same as (A)).
+- `PATCH` validates length but not email shape (advisory R3-002).
 
 Estimated authored size: 300–450 changed lines.
 
-Carried consequence: once the shell is rebuilt, the verified line-number anchors for
-`AppShell.tsx` and `PanelShell.tsx` in `handoff/user-profiles-slice2` (Engram) and in
-`.rapsodia-code/handoffs/2026-09-29-user-profiles-slice2.md` go stale. Refresh the handoff
-before 2b starts.
+**Debts that touch both pages (from the handoff, still open):**
+- No primitive exposes hint/help text: `Input` wires `aria-describedby` only
+  through its own `error`, so a constraint hint disappears exactly when an error
+  appears.
+- No 409 branch exists in the `ClientFicha` save pattern; a duplicate-email
+  message (slice 4 only) must be added.
+- The `AccountControl` menu has no outside-click and no Escape close.
+- `AdminUser` in `web/src/types.ts` declares only `{id, username, role, active}`
+  — stale against the 10-key backend shape.
+- `PATCH` validates field length but not email shape (slice-4 advisory R3-002).
 
 ## Acceptance criteria
 
@@ -308,6 +356,41 @@ suite green. Backend runner `uv run pytest tests/`; web runner `cd web && npm te
   is intentionally not optional-chained — unlike `randomUUID`, it does not require a secure
   context.
 
+### Progress — slice 3 (page A: self profile)
+
+- [x] Owner field-scope decision (P8): `name` + `phone` self-editable; `email` and
+  `position` admin-only.
+- [x] Two-pages model confirmed (P9); slice 2b retired; slice plan rewritten.
+- [x] Graph check from the **primary** worktree: graph fresh at `7aee1b2e`
+  (`graphify-out/` is gitignored, so it does not exist in this worktree). Nodes
+  consulted: `User` (`models.py:255`), `routes/users.py`, `serializers.py`,
+  `services/users.py`, `api.ts`, `types.ts`, `UserManagement.tsx`, `AppShell.tsx`,
+  `ClientFicha.tsx`, `PageFrame()`.
+- [x] S3.1 — `PATCH /panel/api/me` (name + phone only) + audit. (`80b51438`)
+- [x] S3.2 — `GET /me` unchanged; still returns `name`/`phone` and no lockout fields.
+- [x] S3.3 — self-profile route for every role + `AccountControl` (desktop/mobile) and `TechnicianShell` entry. (`ad2b74ab`, `230274fb`, `7ad46a6a`)
+- [x] S3.4 — self-profile component (identity, two fields, password card). (`ecac06ab`)
+- [x] S3.5 — backend + frontend tests. (`80b51438`, `c1c4be0a`)
+- Slice 3 delivered as PR **#456**, merge `171f59e0` (16 files, +445/−63), base `main` `a0a53310`.
+- Verification on the merged tree: backend **1734 passed**; web **93 files / 917 tests**; `npm run build` green.
+- Native review: `review-1aab957def976d29` (pre-integration) and `review-98b2bbfe5b0192d5` (integrated) — both **approved**, authority burned.
+- Defect caught by the orchestrator during its own diff review and fixed before freeze: with `name === null` the form sent `name: ""`, the backend answered 400, and an empty-profile user could not save even their phone. (`c1c4be0a`)
+- Advisory **R3-001** (reliability, WARNING, non-blocking) claims an emptied field could implicitly clear a stored value. The empty-field guard rejects that submit today and points the user to the explicit **Borrar** action, so it reads as a false positive; recorded as later work.
+
+### Progress — slice 4 (page B: admin user view)
+
+- [x] Decision P10: ficha + unlock only; reset/toggle stay on the list.
+- [x] Graph check from the **primary** worktree. Nodes consulted: `routes/users.py`,
+  `list_users()`, `unlock_user()`, `User`, `serializers.py`, `UserManagement.tsx`,
+  `ClientFicha.tsx`, `PageFrame()`, `StateMessage()`, `panel/deps.py`,
+  `record_audit()`. (Graph built at `7aee1b2e`; refresh runs once at session close.)
+- [x] S4.1 — `users/:id` route + parse + `AppShell` drill-down + clickable rows. (`be77f3a2`, `131b3c13`)
+- [x] S4.2 — admin ficha: identity, four fields, lockout state + unlock. (`a6df2ee6`)
+- [x] S4.3 — tests. (`a6df2ee6`, `be77f3a2`, `131b3c13`, `c5df72ea`)
+- Verification: web **94 files / 925 tests**; `npm run build` green. Risk `medium`, 288 changed lines, `review_due: false` (`under_budget`) — no native review due in this slice.
+- Defect caught by the orchestrator during its own diff review and fixed before freeze: `GET /users/{id}` returns the user **wrapped** (`{"user": ...}`), but `getAdminUser` was typed as a bare `AdminUser` and the ficha read the wrong shape — the tests hid it by mocking the unwrapped object. Fixed by typing the wrapped response and reading `data.data.user`. (`c5df72ea`)
+- Non-blocking observations, recorded not fixed: "Volver a usuarios" uses `window.history.back()` (leaves the panel on direct entry); the ficha clears a field by emptying it, with no explicit **Borrar** action as in page (A).
+
 ## Native review (slice 1)
 
 Lineage `review-30fe2991c79635b9`, four lenses (risk, resilience, readability, reliability),
@@ -333,18 +416,13 @@ later work; none reopens this review and none is a reason to re-run it against t
 
 ## Next step
 
-Slice 1 is implemented, verified, reviewed and **delivered as PR #437** (`odd/user-profiles` → `main`,
-label `type:feature`). `origin/main` (`dfb9eca2`) was still an ancestor of the branch at push time, so
-nothing needed re-integrating.
+Snapshot: `user-profiles` is complete — page (A) merged as PR **#456** (`171f59e0`),
+page (B) implemented and verified on `odd/user-profiles-admin-view` (base
+`171f59e0`), awaiting the owner's separate authorization to push and open a PR.
+Per P10, (B) is ficha + unlock only; reset/toggle stay on the users list. No
+native review is due for (B) yet (`under_budget`).
 
-**Slice 2a is implemented and verified** on `odd/user-profiles-slice2a` (base `96a6f69b`),
-awaiting the owner's separate authorization to push and open a PR. Its native review is not yet
-due (`under_budget`, 117 changed lines).
-
-**Slice 2b (the frontend ficha) is deferred** until `panel-design-system-final` slice 3 (responsive
-shell) lands in `main`, because S2.1 and S2.4 edit the same `AppShell.tsx` and `PanelShell.tsx` that
-slice rebuilds. Refresh the slice-2 handoff's line anchors at that point.
-
-The four advisories above remain open as later work — in particular the `me/password` brute-force
-ceiling (R1-001) and the over-broad 409 mapping (R3-001). They are backend-only, collide with
-nothing in flight, and can proceed in parallel with the design-system work whenever the owner wants.
+The four advisories above remain open as later work — in particular the
+`me/password` brute-force ceiling (R1-001) and the over-broad 409 mapping
+(R3-001). They are backend-only, collide with nothing in flight, and can proceed
+in parallel whenever the owner wants.

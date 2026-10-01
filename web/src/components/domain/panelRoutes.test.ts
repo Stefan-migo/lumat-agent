@@ -35,7 +35,7 @@ describe('panel routes', () => {
         projects: '/panel/app/projects',
     });
     expect(Object.keys(PANEL_ROUTES)).toEqual([
-       'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings', 'users', 'projects', 'planning-sessions',
+        'dashboard', 'chat', 'conversations', 'clients', 'agenda', 'kb', 'automation-rules', 'settings', 'users', 'profile', 'projects', 'planning-sessions',
     ]);
 
     expect(pathForView('clients')).toBe('/panel/app/clients');
@@ -43,6 +43,8 @@ describe('panel routes', () => {
     expect(parsePanelPath('/panel/app/agenda')).toEqual({ view: 'agenda' });
     expect(pathForView('users')).toBe('/panel/app/users');
     expect(parsePanelPath('/panel/app/users')).toEqual({ view: 'users' });
+    expect(pathForView('profile')).toBe('/panel/app/profile');
+    expect(parsePanelPath('/panel/app/profile')).toEqual({ view: 'profile' });
     expect(parsePanelPath('/panel/app/projects')).toEqual({ view: 'projects' });
     expect(pathForRoute({ view: 'cases' })).toBe('/panel/app/cases');
     expect(pathForRoute({ view: 'advanced-dashboard' })).toBe('/panel/app/advanced-dashboard');
@@ -55,6 +57,11 @@ describe('panel routes', () => {
     expect(pathForRoute({ view: 'conversations', conversationId: 7 })).toBe('/panel/app/conversations/7');
     expect(parsePanelPath('/panel/app/clients/42')).toEqual({ view: 'clients', clientId: 42 });
     expect(parsePanelPath('/panel/app/conversations/7')).toEqual({ view: 'conversations', conversationId: 7 });
+  });
+
+  it('builds and parses user ficha routes', () => {
+    expect(pathForRoute({ view: 'users', userId: 42 })).toBe('/panel/app/users/42');
+    expect(parsePanelPath('/panel/app/users/42')).toEqual({ view: 'users', userId: 42 });
   });
 
   it('normalizes valid paths and safely falls back for invalid paths or IDs', () => {

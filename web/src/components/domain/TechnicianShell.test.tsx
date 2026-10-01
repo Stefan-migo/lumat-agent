@@ -8,6 +8,7 @@ vi.mock("../pages/AgentChat", () => ({ AgentChat: ({ sectionTabs, onThreadOpened
 vi.mock("../pages/ProjectsPage", () => ({ ProjectsPage: ({ sectionTabs }: { sectionTabs: React.ReactNode }) => <section><h1>ProjectsPage</h1>{sectionTabs}</section> }));
 vi.mock("../pages/PlanningSessions", () => ({ PlanningSessions: ({ sectionTabs }: { sectionTabs: React.ReactNode }) => <section><h1>PlanningSessions</h1>{sectionTabs}</section> }));
 vi.mock("../pages/TechnicianAgenda", () => ({ TechnicianAgenda: () => <h1>TechnicianAgenda</h1> }));
+vi.mock("../pages/SelfProfile", () => ({ SelfProfile: () => <h1>Mi perfil</h1> }));
 
 const tecnico: User = { username: "teo", role: "tecnico" };
 
@@ -57,5 +58,13 @@ describe("TechnicianShell routing", () => {
     fireEvent.click(within(nav).getByRole("button", { name: "Asistente" }));
     expect(await screen.findByRole("heading", { name: "AgentChat role=tecnico" })).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "Asistente" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("lets a technician open their profile from the shell entry", async () => {
+    window.history.replaceState({}, "", "/panel/app/agenda");
+    render(<TechnicianShell user={tecnico} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Mi perfil" }));
+    expect(await screen.findByRole("heading", { name: "Mi perfil" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/panel/app/profile");
   });
 });
