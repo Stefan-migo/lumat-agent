@@ -42,23 +42,35 @@ describe("Dashboard operational surface", () => {
     expect(onNavigate).toHaveBeenNthCalledWith(3, "cases");
   });
 
-  it("splits bento navigation by role and renders the complete period block", () => {
+  it("renders the responsive navigation shortcuts and assistant", () => {
+    const onNavigate = vi.fn();
+    render(<Dashboard data={data} state="ready" role="admin" onNavigate={onNavigate} />);
+    expect(screen.getByText("Asistente Lumat")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir asistente" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Accesos rápidos" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir Configuración" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Abrir Casos" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Abrir Configuración" }));
+    expect(onNavigate).toHaveBeenCalledWith("settings");
+  });
+
+  it("keeps role-specific shortcuts and renders the complete period block", () => {
     const { rerender } = render(<Dashboard data={data} state="ready" role="admin" />);
-    expect(screen.getByText("Agente Lumat")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Abrir Casos" })).not.toBeInTheDocument();
     expect(screen.getByText("Automatizaciones")).toBeInTheDocument();
     expect(screen.getByText("Contactos")).toBeInTheDocument();
     expect(screen.getByText("Nuevos clientes")).toBeInTheDocument();
-    expect(screen.getByText("calefont · 3")).toBeInTheDocument();
+    expect(screen.getByText("calefont")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByLabelText("Tendencia de contactos de 7 días")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lucía" })).toHaveTextContent("Urgente");
 
     rerender(<Dashboard data={data} state="ready" role="operador" />);
-    expect(screen.getByText("Agente Lumat")).toBeInTheDocument();
+    expect(screen.getByText("Asistente Lumat")).toBeInTheDocument();
     expect(screen.queryByText("Automatizaciones")).not.toBeInTheDocument();
 
     rerender(<Dashboard data={data} state="ready" role="tecnico" />);
-    expect(screen.getByText("Agente Lumat")).toBeInTheDocument();
+    expect(screen.getByText("Asistente Lumat")).toBeInTheDocument();
     expect(screen.queryByText("Automatizaciones")).not.toBeInTheDocument();
   });
 
@@ -67,7 +79,20 @@ describe("Dashboard operational surface", () => {
     const motivos = [["calefont", 3], [null, 1]] as unknown as [string, number][];
     render(<Dashboard data={{ ...data, motivos }} state="ready" role="admin" />);
 
-    expect(screen.getByText("sin clasificar · 1")).toBeInTheDocument();
+    expect(screen.getByText("sin clasificar")).toBeInTheDocument();
+    expect(screen.getByText("sin clasificar").closest(".dashboard__motivo")?.textContent).toBe("sin clasificar1");
+  });
+
+  it("adds footer links to the Hoy operations cards", () => {
+    const onNavigate = vi.fn();
+    render(<Dashboard data={data} state="ready" onNavigate={onNavigate} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ver agenda" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ver conversaciones" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ver casos" }));
+    expect(onNavigate).toHaveBeenNthCalledWith(1, "agenda");
+    expect(onNavigate).toHaveBeenNthCalledWith(2, "conversations");
+    expect(onNavigate).toHaveBeenNthCalledWith(3, "cases");
+    expect(screen.getByRole("button", { name: "Lucía" })).toHaveTextContent("Urgente");
   });
 
   it.each([
@@ -110,6 +135,8 @@ describe("Dashboard operational surface", () => {
     const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
     expect(css).toMatch(/\.dashboard__card-ops\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
     expect(css).toMatch(/\.dashboard__card\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
+    expect(css).toMatch(/\.dashboard__card--agent\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s);
+    expect(css).toMatch(/\.dashboard__motivo\s*\{[^}]*background:\s*var\(--surface\)/s);
     expect(css).not.toMatch(/\.dashboard__section-head h2\s*\{[^}]*text-transform:\s*uppercase/s);
     expect(css).toMatch(/@media \(max-width:\s*63\.99rem\)[\s\S]*?\.dashboard__hoy\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
     expect(css).toMatch(/@media \(max-width:\s*63\.99rem\)[\s\S]*?\.dashboard__grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
