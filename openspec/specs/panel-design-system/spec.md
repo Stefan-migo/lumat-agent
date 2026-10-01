@@ -846,22 +846,6 @@ The assistant surface MUST use the existing light Lumat grammar: one centered re
 - WHEN the user switches between history and context disclosures
 - THEN the conversation remains primary and send, approval, retry, and attachment actions remain reachable without horizontal overflow
 
-### Requirement: DS-CC-2 — Focus Visibility and Restoration
-
-`PanelShell` MUST provide a reusable focus-mode and region-visibility contract with an accessible name, visible keyboard focus, Escape exit, and restoration of the prior route, selected thread, focus target, and shell visibility state.
-
-#### Scenario: Focus mode keyboard contract
-
-- GIVEN a user activates focus mode from a keyboard-operable control
-- WHEN focus mode opens and Escape is pressed
-- THEN secondary regions are minimized, an escape path remains available, and focus returns to the initiating control
-
-#### Scenario: Responsive restoration
-
-- GIVEN focus mode is active during a resize across a responsive tier
-- WHEN it closes
-- THEN the previous shell and zone visibility state is restored without losing selection
-
 ### Requirement: DS-CC-3 — Accessible, Production-Owned States
 
 Assistant states MUST use existing primitives and semantic tokens for loading, empty, error, streaming, disabled, permission, approval, connection, and recovery. Product copy MUST be neutral Chilean Spanish and MUST NOT expose English labels or raw backend state values.
