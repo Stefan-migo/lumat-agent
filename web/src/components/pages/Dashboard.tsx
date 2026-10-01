@@ -163,14 +163,14 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
               </button></li>
             )) : <li className="dashboard__empty"><Icon icon={ICONS.calendar} size="sm" /><span>No hay visitas para hoy</span></li>}</ul>)}
           {opsCard("Sin respuesta", "inbox", "info", today.unanswered_conversations.length, "Ver conversaciones", "conversations",
-            <div className="dashboard__metric-content">{today.unanswered_conversations.length ? null : <strong className="dashboard__metric-value">{today.unanswered_conversations.length}</strong>}<ul className="dashboard__list">{today.unanswered_conversations.length ? today.unanswered_conversations.map((row) => (
+            <div className="dashboard__metric-content"><strong className="dashboard__metric-value">{today.unanswered_conversations.length}</strong><ul className="dashboard__list">{today.unanswered_conversations.length ? today.unanswered_conversations.map((row) => (
               <li key={row.id}><button className="dashboard__row" type="button" onClick={() => navigate("conversations")} aria-label={row.customer_name ?? "Conversación"}>
                 <strong>{row.customer_name ?? "Sin nombre"}</strong>
                 <small>{row.state}</small>
               </button></li>
             )) : <li className="dashboard__empty"><Icon icon={ICONS.inbox} size="sm" /><span>No hay conversaciones pendientes</span></li>}</ul></div>, false)}
           {opsCard("Urgentes", "alert", "danger", today.urgent_cases.length, "Ver casos", "cases",
-            <div className="dashboard__metric-content">{today.urgent_cases.length ? null : <strong className="dashboard__metric-value">{today.urgent_cases.length}</strong>}<ul className="dashboard__list">{today.urgent_cases.length ? today.urgent_cases.map((row) => (
+            <div className="dashboard__metric-content"><strong className="dashboard__metric-value">{today.urgent_cases.length}</strong><ul className="dashboard__list">{today.urgent_cases.length ? today.urgent_cases.map((row) => (
               <li key={row.id}><button className="dashboard__row dashboard__row--urgent" type="button" onClick={() => navigate("cases")} aria-label={row.customer_name ?? "Caso urgente"}>
                 <strong>{row.customer_name ?? "Sin nombre"}</strong>
                 <small>{row.summary ?? row.service ?? "Caso urgente"}</small>

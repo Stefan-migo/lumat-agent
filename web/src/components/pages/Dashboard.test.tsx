@@ -88,6 +88,19 @@ describe("Dashboard operational surface", () => {
     expect(agenda?.querySelector(".dashboard__card-ops__count")).toHaveTextContent("1");
   });
 
+  it("shows non-empty HOY metric counts above their rows without count chips", () => {
+    render(<Dashboard data={data} state="ready" />);
+    for (const [title, count] of [["Sin respuesta", "1"], ["Urgentes", "1"]]) {
+      const card = screen.getByRole("heading", { level: 3, name: title }).closest(".dashboard__card-ops");
+      const metricContent = card?.querySelector(".dashboard__metric-content");
+      expect(card?.querySelector(".dashboard__card-ops__count")).not.toBeInTheDocument();
+      expect(metricContent?.firstElementChild).toHaveClass("dashboard__metric-value");
+      expect(metricContent?.firstElementChild).toHaveTextContent(count);
+      expect(metricContent?.lastElementChild).toHaveClass("dashboard__list");
+      expect(metricContent?.querySelectorAll(".dashboard__list > li")).toHaveLength(1);
+    }
+  });
+
   it("renders Hoy rows and navigates each row to its operational view", () => {
     const onNavigate = vi.fn();
     render(<Dashboard data={data} state="ready" role="admin" onNavigate={onNavigate} />);
