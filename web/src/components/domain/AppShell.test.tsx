@@ -95,7 +95,7 @@ describe('AppShell (T6.4)', () => {
   it('switches views on nav click and marks the active view', async () => {
     const user = userEvent.setup();
     const { container } = render(<AppShell user={operador} />);
-    expect(await screen.findByRole('heading', { name: 'Panel', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeInTheDocument();
 
     await user.click(mobileDrawerTrigger(container));
     const drawer = screen.getByRole('dialog', { name: 'Navegación' });
@@ -485,7 +485,7 @@ describe('AppShell — native History API routing', () => {
     window.history.pushState({}, '', '/panel/app/not-a-view');
     window.dispatchEvent(new PopStateEvent('popstate'));
     expect(window.location.pathname).toBe('/panel/app/');
-    expect(await screen.findByRole('heading', { name: 'Panel', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeInTheDocument();
 
     unmount();
     expect(addSpy.mock.calls.some(([type]) => type === 'popstate')).toBe(true);

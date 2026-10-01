@@ -5,7 +5,7 @@ import { DashboardOverview, Desktop, Mobile, Tablet } from "./Dashboard.stories"
 describe("Dashboard page story (R-PRD-PG-6)", () => {
   it("renders real KPI cards, motivos, and the window caption", () => {
     render(<DashboardOverview data={{ contacts: 12, motivos: [["consulta", 3]], derived: 2, visit_requests: 1, window_days: 7, window_start: "2026-08-18" }} />);
-    expect(screen.getByRole("heading", { name: "Panel" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
     expect(screen.getByText("Contactos")).toBeInTheDocument();
     expect(screen.getByText("12")).toBeInTheDocument();
     expect(screen.getByText("Derivados")).toBeInTheDocument();
