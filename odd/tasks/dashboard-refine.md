@@ -1,6 +1,6 @@
 # ODD Task: dashboard-refine
 
-Status: in progress
+Status: complete — both slices merged (PRs #459, #461); findings ledger landed in PR #460
 Worktree: `/home/stefan/repos/lumat-agent-odd-dashboard-refine`
 Branch: `odd/dashboard-refine`
 Base: `1c6e9595` (= `origin/main`)
@@ -81,36 +81,36 @@ values; any new dependency; any other section.
 
 ### WU1 — upstream (shared-primitive)
 
-- [ ] **T1 (dashboard-004)** — the three "Hoy" ops cards get the reference footer links:
+- [x] **T1 (dashboard-004)** — the three "Hoy" ops cards get the reference footer links:
   "Ver agenda" → `navigate("agenda")`, "Ver conversaciones" → `navigate("conversations")`,
   "Ver casos" → `navigate("cases")`. Today each card body renders only its list/empty state.
-- [ ] **T2 (dashboard-005)** — the assistant stops being a 2×2 grid tile
+- [x] **T2 (dashboard-005)** — the assistant stops being a 2×2 grid tile
   (`.dashboard__card--agent` `grid-column:span 2; grid-row:span 2`) and becomes a full-width
   banner with an "Abrir asistente →" action on desktop/tablet; a card with a chevron on mobile.
-- [ ] **T3 (dashboard-007)** — remove the "Atajos" heading on desktop; show "Accesos rápidos"
+- [x] **T3 (dashboard-007)** — remove the "Atajos" heading on desktop; show "Accesos rápidos"
   on mobile/tablet. The heading treatment is breakpoint-specific.
-- [ ] **T4 (dashboard-008)** — the shortcut set carries a settings entry in place of the
+- [x] **T4 (dashboard-008)** — the shortcut set carries a settings entry in place of the
   reference's "Casos": "Configuración" (desktop/tablet) / "Config" (mobile), navigating to the
   existing `settings` view. Must NOT touch the "Hoy" urgent-case rows (AD-HOY-1).
-- [ ] **T5 (dashboard-012)** — Motivos render as one row per reason with a trailing count badge,
+- [x] **T5 (dashboard-012)** — Motivos render as one row per reason with a trailing count badge,
   not inline chips (`label · count`).
 
 ### WU2 — local copy (`Dashboard.tsx`)
 
-- [ ] **T6 (dashboard-001)** — page title becomes "Dashboard" (currently "Panel"; the reference's
+- [x] **T6 (dashboard-001)** — page title becomes "Dashboard" (currently "Panel"; the reference's
   "Panel unificado" is also ruled out).
-- [ ] **T7 (dashboard-002)** — the "Hoy" date chip capitalises the weekday ("Martes, 29 de
+- [x] **T7 (dashboard-002)** — the "Hoy" date chip capitalises the weekday ("Martes, 29 de
   septiembre"), currently lowercase from `Intl.DateTimeFormat("es-CL", { weekday: "long" })`.
-- [ ] **T8 (dashboard-003)** — the agenda ops card title becomes "Agenda de hoy".
-- [ ] **T9 (dashboard-006)** — the agent surface is labelled "Asistente Lumat", not "Agente Lumat".
-- [ ] **T10 (dashboard-009)** — the activity heading becomes "Actividad del período", not "Período".
-- [ ] **T11 (dashboard-011)** — the chart empty state adopts the reference copy: "Sin contactos
+- [x] **T8 (dashboard-003)** — the agenda ops card title becomes "Agenda de hoy".
+- [x] **T9 (dashboard-006)** — the agent surface is labelled "Asistente Lumat", not "Agente Lumat".
+- [x] **T10 (dashboard-009)** — the activity heading becomes "Actividad del período", not "Período".
+- [x] **T11 (dashboard-011)** — the chart empty state adopts the reference copy: "Sin contactos
   en este período" + "La actividad aparecerá aquí cuando se registren contactos." (currently
   "Sin actividad registrada en el período", no supporting sentence).
 
 ### WU3 — functional period selector (dashboard-010)
 
-- [ ] **T12** — the activity section gains the reference's period selector + "Desde el …"
+- [x] **T12** — the activity section gains the reference's period selector + "Desde el …"
   caption, and it is **functional**. `getDashboardTrend(timezone)` already takes explicit
   `start`/`end`, so the trend can follow the window from the client; `/panel/api/kpis` reads
   `kpi.window_days` from a setting (`app/panel/api/routes/dashboard.py:34`) and must accept the
@@ -249,6 +249,39 @@ Branch `odd/dashboard-refine-wu3`, based on `origin/main` = `3d92ed88` (PR #459 
 - **Selector options 7 / 14 / 30 days are an assumption**, derived from the backend's `1..31` range.
   Trivially changeable if the owner wants a different set.
 - The "Hoy" urgent-case rows still call `navigate("cases")` (AD-HOY-1 intact).
+
+## Closure
+
+**Unit closed 2026-10-01.** Both slices are on `main` through the `stacked-to-main` chain the owner
+chose: PR #459 (`odd/dashboard-refine`, merge `3d92ed88`) carried WU1 + WU2, and PR #461
+(`odd/dashboard-refine-wu3`, merge `f7f7d2c5`) carried WU3. The findings ledger landed separately in
+PR #460 (merge `db8f4af0`).
+
+All twelve tasks T1–T12 are delivered and pinned by tests. Final state on `main`:
+
+- `cd web && npm run test` → 94 files / 946 tests passed; `cd web && npx tsc -b --noEmit` → exit 0;
+  `cd web && npm run build` → exit 0; `git diff --check` → clean.
+- `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` → 1737 passed.
+- AD-HOY-1 holds: the "Hoy" urgent-case rows still call `navigate("cases")`.
+- No `tokens.css` change and no new dependency.
+
+### Carried gaps (recorded, not silently dropped)
+
+- The responsive behaviour of dashboard-005, dashboard-007 and dashboard-008 is CSS-only and is not
+  pinned by viewport-sensitive tests.
+- Visual fidelity was verified by the owner against the three reference images, not by a machine check.
+- The activity caption duplicates the page-header `meta`'s window text; `es-CL` renders September as
+  "sept" against the reference's "sep"; the selector's 7/14/30 options are an assumption over the
+  backend's `1..31` range.
+
+### What this unit proved about the analysis machine
+
+The dashboard analysis was **11 of 12 accurate** — the only wrong row was the subtitle, and it was an
+interpretation error, not an invented finding. The machine's weak points surfaced during execution, not
+during validation: the validator gate is mechanical (it caught inflated fix scope but passed a
+semantically inverted row and a bundled row), and the analyst's first pass was materially incomplete
+until the orchestrator sent it back with concrete gaps. Both are candidates for hardening the skill
+before the remaining six sections run.
 
 ## Recovery
 
