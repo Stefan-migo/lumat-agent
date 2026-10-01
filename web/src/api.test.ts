@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject } from './api';
+import { apiFetch, ApiError, postJson, listConversations, sendMessage, acknowledgeCase, takeConversation, listPlanningSessions, getPlanningSession, openPlanningSession, closePlanningSession, reopenPlanningSession, listChatThreads, fetchClients, createCustomer, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createChatThread, createProject, fetchMe, updateMe, changePassword } from './api';
 import type { User } from './types';
 
 describe('apiFetch', () => {
@@ -97,6 +97,20 @@ describe('client API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ customer: {} }), { status: 200 }));
     await updateCustomerConsent(4, true);
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/clients/4/consent', expect.objectContaining({ method: 'POST', body: JSON.stringify({ consent: true }) }));
+  });
+});
+
+describe('self-profile API contracts', () => {
+  beforeEach(() => { globalThis.fetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ id: 1, username: 'ana', role: 'admin', email: null, name: null, phone: null, position: null, user: { name: null, phone: null }, ok: true }), { status: 200 })); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('gets self profile, patches only name and phone, and posts the exact password fields', async () => {
+    await fetchMe();
+    await updateMe({ name: null, phone: '123' });
+    await changePassword({ current_password: 'current', new_password: 'new-password' });
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/panel/api/me', expect.objectContaining({ credentials: 'include' }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/panel/api/me', expect.objectContaining({ method: 'PATCH', body: '{"name":null,"phone":"123"}' }));
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(3, '/panel/api/me/password', expect.objectContaining({ method: 'POST', body: '{"current_password":"current","new_password":"new-password"}' }));
   });
 });
 
