@@ -11,17 +11,26 @@ describe("PWA shell", () => {
       display: string;
       scope: string;
       start_url: string;
-      icons: Array<{ purpose?: string; src: string }>;
+      theme_color: string;
+      background_color: string;
+      icons: Array<{ purpose?: string; sizes: string; src: string }>;
     };
 
     expect(metadata.display).toBe("standalone");
     expect(metadata.start_url).toBe("/panel/app/");
     expect(metadata.scope).toBe("/panel/app/");
     expect(metadata.icons).toEqual(expect.arrayContaining([
-      expect.objectContaining({ src: "/panel/app/brand/lumat-mark.png" }),
-      expect.objectContaining({ purpose: expect.stringContaining("maskable") }),
+      expect.objectContaining({ src: "/panel/app/brand/icon-192.png", sizes: "192x192", purpose: "any" }),
+      expect.objectContaining({ src: "/panel/app/brand/icon-512.png", sizes: "512x512" }),
+      expect.objectContaining({ src: "/panel/app/brand/icon-maskable-512.png", sizes: "512x512", purpose: expect.stringContaining("maskable") }),
     ]));
-    expect(readFileSync("index.html", "utf8")).toContain('href="/panel/app/manifest.webmanifest"');
+    expect(metadata.theme_color).toBe("#143c2c");
+    expect(metadata.background_color).toBe("#dbe1d6");
+    const index = readFileSync("index.html", "utf8");
+    expect(index).toContain('href="/panel/app/manifest.webmanifest"');
+    expect(index).toContain('href="/panel/app/brand/favicon.ico"');
+    expect(index).toContain('href="/panel/app/brand/apple-touch-icon.png"');
+    expect(index).toContain('content="#143c2c"');
     expect(readFileSync("vite.config.ts", "utf8")).toContain("base: '/panel/app/'");
   });
 
@@ -102,7 +111,7 @@ describe("PWA shell", () => {
     expect(await dispatch("/panel/app/assets/index-abc123.js")).toBe("cached asset");
     expect(fetchCalls).toBe(callsBeforeAsset);
 
-    for (const url of ["/panel/app/brand/lumat-mark.png", "/panel/app/manifest.webmanifest"]) {
+    for (const url of ["/panel/app/brand/icon-192.png", "/panel/app/manifest.webmanifest"]) {
       await cache.put(`https://panel.test${url}`, new Response("stale resource"));
       setNetworkBody("live resource");
       expect(await dispatch(url)).toBe("live resource");
