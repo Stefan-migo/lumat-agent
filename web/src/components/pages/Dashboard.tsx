@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -11,6 +11,7 @@ import {
   Tag,
   Users,
   Bot,
+  Settings,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -23,7 +24,7 @@ import { StateMessage } from "../shared/StateMessage";
 import { StatCard } from "../shared/StatCard";
 import { Icon } from "../primitives/Icon";
 
-type IconName = "calendar" | "clock" | "message" | "users" | "agent" | "zap" | "alert" | "inbox" | "arrow" | "chart" | "tag";
+type IconName = "calendar" | "clock" | "message" | "users" | "agent" | "zap" | "alert" | "inbox" | "arrow" | "chart" | "tag" | "settings";
 
 const ICONS: Record<IconName, LucideIcon> = {
   calendar: Calendar,
@@ -37,17 +38,8 @@ const ICONS: Record<IconName, LucideIcon> = {
   arrow: ArrowRight,
   chart: ChartColumn,
   tag: Tag,
+  settings: Settings,
 };
-
-/* ---- Motivo -> palette accent (stable per motivo, token-only) ---- */
-const MOTIVO_ACCENTS = [
-  "var(--primary-700)",
-  "var(--brand-forest)",
-  "var(--info)",
-  "var(--brand-graphite)",
-  "var(--warning)",
-  "color-mix(in srgb, var(--brand-cyan) 55%, var(--primary-900))",
-] as const;
 
 const MOTIVO_FALLBACK = "sin clasificar";
 
@@ -55,19 +47,12 @@ function motivoLabel(motivo: string | null): string {
   return motivo ?? MOTIVO_FALLBACK;
 }
 
-function motivoAccent(motivo: string | null): string {
-  const label = motivoLabel(motivo);
-  let hash = 0;
-  for (let i = 0; i < label.length; i += 1) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
-  return MOTIVO_ACCENTS[hash % MOTIVO_ACCENTS.length];
-}
-
 /* ---- Locale-safe day labels (fallback to the raw date string) ---- */
 function dayLabel(localDate: string): string {
   try {
     const date = new Date(`${localDate}T12:00:00`);
     if (Number.isNaN(date.getTime())) return localDate;
-    return new Intl.DateTimeFormat("es-CL", { weekday: "long", day: "numeric", month: "long" }).format(date);
+    return new Intl.DateTimeFormat("es-CL", { weekday: "long", day: "numeric", month: "long" }).format(date).replace(/^./, (letter) => letter.toLocaleUpperCase("es-CL"));
   } catch {
     return localDate;
   }
@@ -126,15 +111,15 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
   const today = data?.today && Array.isArray(data.today.appointments_today) ? data.today : emptyToday;
   const hasPartialError = data?.todayError || data?.trendError;
   const navigate = (view: PanelView) => onNavigate?.(view);
-  const cards = ["Conversaciones", "Clientes", "Agenda"] as const;
-  const viewFor = { Conversaciones: "conversations", Clientes: "clients", Agenda: "agenda" } as const;
-  const iconFor: Record<(typeof cards)[number], IconName> = { Conversaciones: "message", Clientes: "users", Agenda: "calendar" };
+  const cards = ["Conversaciones", "Clientes", "Agenda", "Configuración"] as const;
+  const viewFor = { Conversaciones: "conversations", Clientes: "clients", Agenda: "agenda", Configuración: "settings" } as const;
+  const iconFor: Record<(typeof cards)[number], IconName> = { Conversaciones: "message", Clientes: "users", Agenda: "calendar", Configuración: "settings" };
   const bars = data?.trend ?? [];
   const max = Math.max(...bars.map((bar) => bar.count), 1);
   const chartTotal = bars.reduce((sum, bar) => sum + bar.count, 0);
   const motivos = data?.motivos ?? [];
 
-  const opsCard = (title: string, icon: IconName, tone: "primary" | "info" | "danger", count: number, body: ReactNode) => (
+  const opsCard = (title: string, icon: IconName, tone: "primary" | "info" | "danger", count: number, action: string, view: PanelView, body: ReactNode) => (
     <div className={`dashboard__card-ops dashboard__card-ops--${tone}`}>
       <div className="dashboard__card-ops__head">
         <span className="dashboard__card-ops__icon"><Icon icon={ICONS[icon]} size="sm" /></span>
@@ -142,10 +127,11 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
         <span className={`dashboard__card-ops__count${count > 0 ? " dashboard__card-ops__count--active" : ""}`}>{count}</span>
       </div>
       {body}
+      <button className="dashboard__card-ops__link" type="button" onClick={() => navigate(view)}>{action}<Icon icon={ICONS.arrow} size="sm" /></button>
     </div>
   );
 
-  return <PageFrame title="Panel" meta={data ? `Actividad de los últimos ${data.window_days} días · Desde ${data.window_start}` : "Actividad reciente del negocio"} state={stateMessage(state, retry)}>
+  return <PageFrame title="Dashboard" meta={data ? `Actividad de los últimos ${data.window_days} días · Desde ${data.window_start}` : "Actividad reciente del negocio"} state={stateMessage(state, retry)}>
     {state === "ready" && data ? <div className="dashboard">
       {hasPartialError ? stateMessage("partial-error", retry) : null}
       <section className="dashboard__section" aria-labelledby="today-title">
@@ -154,7 +140,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
           {today.local_date ? <span className="dashboard__day"><Icon icon={ICONS.calendar} size="sm" />{dayLabel(today.local_date)}</span> : null}
         </div>
         <div className="dashboard__hoy">
-          {opsCard("Agenda", "calendar", "primary", today.appointments_today.length,
+          {opsCard("Agenda de hoy", "calendar", "primary", today.appointments_today.length, "Ver agenda", "agenda",
             <ul className="dashboard__list">{today.appointments_today.length ? today.appointments_today.map((row) => (
               <li key={row.id}><button className="dashboard__row" type="button" onClick={() => navigate("agenda")} aria-label={row.customer_name ?? row.service}>
                 <span className="dashboard__row__time"><Icon icon={ICONS.clock} size="sm" />{row.local_start}</span>
@@ -162,14 +148,14 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
                 <small>{row.customer_name ?? "Sin nombre"}</small>
               </button></li>
             )) : <li className="dashboard__empty"><Icon icon={ICONS.calendar} size="sm" /><span>No hay visitas para hoy</span></li>}</ul>)}
-          {opsCard("Sin respuesta", "inbox", "info", today.unanswered_conversations.length,
+          {opsCard("Sin respuesta", "inbox", "info", today.unanswered_conversations.length, "Ver conversaciones", "conversations",
             <ul className="dashboard__list">{today.unanswered_conversations.length ? today.unanswered_conversations.map((row) => (
               <li key={row.id}><button className="dashboard__row" type="button" onClick={() => navigate("conversations")} aria-label={row.customer_name ?? "Conversación"}>
                 <strong>{row.customer_name ?? "Sin nombre"}</strong>
                 <small>{row.state}</small>
               </button></li>
             )) : <li className="dashboard__empty"><Icon icon={ICONS.inbox} size="sm" /><span>No hay conversaciones pendientes</span></li>}</ul>)}
-          {opsCard("Urgentes", "alert", "danger", today.urgent_cases.length,
+          {opsCard("Urgentes", "alert", "danger", today.urgent_cases.length, "Ver casos", "cases",
             <ul className="dashboard__list">{today.urgent_cases.length ? today.urgent_cases.map((row) => (
               <li key={row.id}><button className="dashboard__row dashboard__row--urgent" type="button" onClick={() => navigate("cases")} aria-label={row.customer_name ?? "Caso urgente"}>
                 <strong>{row.customer_name ?? "Sin nombre"}</strong>
@@ -180,18 +166,19 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
         </div>
       </section>
       <section className="dashboard__section" aria-label="Navegación operativa">
-        <div className="dashboard__section-head"><h2>Atajos</h2></div>
+        <div className="dashboard__section-head dashboard__shortcuts-head"><h2>Accesos rápidos</h2></div>
         <div className="dashboard__grid">
-          <button className="dashboard__card dashboard__card--agent" type="button" onClick={() => navigate("chat")} aria-label="Abrir Agente Lumat">
+          <button className="dashboard__card dashboard__card--agent" type="button" onClick={() => navigate("chat")} aria-label="Abrir asistente">
             <span className="dashboard__card__icon"><Icon icon={ICONS.agent} size="md" /></span>
-            <span className="dashboard__card__label">Agente Lumat</span>
-            <span className="dashboard__card__sub">Consulta, deriva o delega tareas</span>
-            <span className="dashboard__card__hint">Abrir <Icon icon={ICONS.arrow} size="sm" /></span>
+            <span className="dashboard__card__copy"><span className="dashboard__card__label">Asistente Lumat</span>
+              <span className="dashboard__card__sub">Consulta, deriva o delega tareas.</span></span>
+            <span className="dashboard__card__hint dashboard__card__hint--desktop">Abrir asistente <Icon icon={ICONS.arrow} size="sm" /></span>
+            <span className="dashboard__card__hint dashboard__card__hint--mobile" aria-hidden="true"><Icon icon={ICONS.arrow} size="sm" /></span>
           </button>
           {cards.map((label) => (
             <button className="dashboard__card" type="button" key={label} onClick={() => navigate(viewFor[label])} aria-label={`Abrir ${label}`}>
               <span className="dashboard__card__icon"><Icon icon={ICONS[iconFor[label]]} size="md" /></span>
-              <span className="dashboard__card__label">{label}</span>
+              <span className="dashboard__card__label">{label === "Configuración" ? <><span className="dashboard__label-desktop">Configuración</span><span className="dashboard__label-mobile">Config</span></> : label}</span>
               <span className="dashboard__card__hint">Abrir <Icon icon={ICONS.arrow} size="sm" /></span>
             </button>
           ))}
@@ -203,7 +190,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
         </div>
       </section>
       <section className="dashboard__section" aria-labelledby="period-title">
-        <div className="dashboard__section-head"><h2 id="period-title">Período</h2></div>
+        <div className="dashboard__section-head"><h2 id="period-title">Actividad del período</h2></div>
         <div className="kpi-grid">
           <StatCard label="Contactos" value={data.contacts} accent="var(--primary-700)" />
           <StatCard label="Derivados" value={data.derived} accent="var(--warning)" />
@@ -225,13 +212,13 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
                   <span className="dashboard__bar-col__day">{dayShort(bar.start)}</span>
                 </div>
               );
-            })}</div> : <div className="dashboard__chart__empty"><Icon icon={ICONS.chart} size="sm" /><span>Sin actividad registrada en el período</span></div>}
+            })}</div> : <div className="dashboard__chart__empty"><Icon icon={ICONS.chart} size="sm" /><span><strong>Sin contactos en este período</strong><br />La actividad aparecerá aquí cuando se registren contactos.</span></div>}
           </div>
           <div className="dashboard__motivos">
             <div className="dashboard__chart__head"><Icon icon={ICONS.tag} size="sm" /><h3>Motivos</h3></div>
-            <div className="dashboard__chips">{motivos.length ? motivos.map(([motivo, count]) => {
+            <div className="dashboard__motivos-list">{motivos.length ? motivos.map(([motivo, count]) => {
               const label = motivoLabel(motivo);
-              return <span className="dashboard__chip" key={label} style={{ "--mot-accent": motivoAccent(motivo) } as CSSProperties}>{label} · {count}</span>;
+              return <div className="dashboard__motivo" key={label}><span>{label}</span><span className="dashboard__motivo-count">{count}</span></div>;
             }) : <span className="dashboard__empty"><Icon icon={ICONS.tag} size="sm" /><span>No hay registros</span></span>}</div>
           </div>
         </div>
