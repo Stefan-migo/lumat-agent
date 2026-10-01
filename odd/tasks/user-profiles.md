@@ -384,9 +384,12 @@ suite green. Backend runner `uv run pytest tests/`; web runner `cd web && npm te
   `list_users()`, `unlock_user()`, `User`, `serializers.py`, `UserManagement.tsx`,
   `ClientFicha.tsx`, `PageFrame()`, `StateMessage()`, `panel/deps.py`,
   `record_audit()`. (Graph built at `7aee1b2e`; refresh runs once at session close.)
-- [ ] S4.1 — `users/:id` route + parse + `AppShell` drill-down + clickable rows.
-- [ ] S4.2 — admin ficha: identity, four fields, lockout state + unlock.
-- [ ] S4.3 — tests.
+- [x] S4.1 — `users/:id` route + parse + `AppShell` drill-down + clickable rows. (`be77f3a2`, `131b3c13`)
+- [x] S4.2 — admin ficha: identity, four fields, lockout state + unlock. (`a6df2ee6`)
+- [x] S4.3 — tests. (`a6df2ee6`, `be77f3a2`, `131b3c13`, `c5df72ea`)
+- Verification: web **94 files / 925 tests**; `npm run build` green. Risk `medium`, 288 changed lines, `review_due: false` (`under_budget`) — no native review due in this slice.
+- Defect caught by the orchestrator during its own diff review and fixed before freeze: `GET /users/{id}` returns the user **wrapped** (`{"user": ...}`), but `getAdminUser` was typed as a bare `AdminUser` and the ficha read the wrong shape — the tests hid it by mocking the unwrapped object. Fixed by typing the wrapped response and reading `data.data.user`. (`c5df72ea`)
+- Non-blocking observations, recorded not fixed: "Volver a usuarios" uses `window.history.back()` (leaves the panel on direct entry); the ficha clears a field by emptying it, with no explicit **Borrar** action as in page (A).
 
 ## Native review (slice 1)
 
@@ -413,13 +416,11 @@ later work; none reopens this review and none is a reason to re-run it against t
 
 ## Next step
 
-Slices 1 (`#437`), 2a (`#438`) and 3 / page (A) (`#456`, merge `171f59e0`) are all
-merged; `main` is at `171f59e0`.
-
-**Slice 4 — page (B), admin individual user view — is authorized and in progress**
-on `odd/user-profiles-admin-view` (base `171f59e0`). Frontend-only: the `users/:id`
-route, the admin ficha (four fields + unlock), and clickable rows in the users
-list. Per P10 it does **not** duplicate reset/toggle.
+Snapshot: `user-profiles` is complete — page (A) merged as PR **#456** (`171f59e0`),
+page (B) implemented and verified on `odd/user-profiles-admin-view` (base
+`171f59e0`), awaiting the owner's separate authorization to push and open a PR.
+Per P10, (B) is ficha + unlock only; reset/toggle stay on the users list. No
+native review is due for (B) yet (`under_budget`).
 
 The four advisories above remain open as later work — in particular the
 `me/password` brute-force ceiling (R1-001) and the over-broad 409 mapping
