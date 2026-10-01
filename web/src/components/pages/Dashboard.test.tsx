@@ -82,6 +82,8 @@ describe("Dashboard operational surface", () => {
     expect(screen.getByRole("button", { name: "Abrir asistente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Accesos rápidos" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Abrir Configuración" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir Automatizaciones" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Abrir (Conversaciones|Clientes|Agenda|Configuración|Automatizaciones)$/ })).toHaveLength(5);
     expect(screen.queryByRole("button", { name: "Abrir Casos" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Abrir Configuración" }));
     expect(onNavigate).toHaveBeenCalledWith("settings");
@@ -178,6 +180,14 @@ describe("Dashboard operational surface", () => {
       expect(vi.mocked(apiFetch)).toHaveBeenLastCalledWith("/panel/api/kpis?window_days=14");
       expect(vi.mocked(getDashboardTrend)).toHaveBeenLastCalledWith(Intl.DateTimeFormat().resolvedOptions().timeZone, 14);
     });
+    expect(screen.getByText("Desde el 3 sept 2026")).toBeInTheDocument();
+    const period = screen.getByRole("combobox", { name: "Período de actividad" });
+    expect(period).toHaveValue("14");
+    expect(Array.from((period as HTMLSelectElement).options, (option) => option.textContent)).toEqual([
+      "Últimos 7 días",
+      "Últimos 14 días",
+      "Últimos 30 días",
+    ]);
     expect(screen.getByText("Desde el 3 sept 2026")).toBeInTheDocument();
   });
 

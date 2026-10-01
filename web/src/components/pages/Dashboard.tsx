@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Calendar,
+  ChevronDown,
   ChartColumn,
   Clock,
   Inbox,
@@ -25,10 +26,11 @@ import { StatCard } from "../shared/StatCard";
 import { Icon } from "../primitives/Icon";
 import { Select } from "../primitives/Select";
 
-type IconName = "calendar" | "clock" | "message" | "users" | "agent" | "zap" | "alert" | "inbox" | "arrow" | "chart" | "tag" | "settings";
+type IconName = "calendar" | "chevronDown" | "clock" | "message" | "users" | "agent" | "zap" | "alert" | "inbox" | "arrow" | "chart" | "tag" | "settings";
 
 const ICONS: Record<IconName, LucideIcon> = {
   calendar: Calendar,
+  chevronDown: ChevronDown,
   clock: Clock,
   message: MessageSquare,
   users: Users,
@@ -218,6 +220,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
                 { value: "30", label: "Últimos 30 días" },
               ]}
             />
+            <Icon icon={ICONS.chevronDown} size="sm" />
             {data.window_start ? <span className="dashboard__period-caption">Desde el {periodStartLabel(data.window_start)}</span> : null}
           </div>
         </div>
