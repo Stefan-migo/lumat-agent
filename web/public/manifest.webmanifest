@@ -4,20 +4,11 @@
   "start_url": "/panel/app/",
   "scope": "/panel/app/",
   "display": "standalone",
-  "theme_color": "#17324d",
-  "background_color": "#f7f8fa",
+  "theme_color": "#143c2c",
+  "background_color": "#dbe1d6",
   "icons": [
-    {
-      "src": "/panel/app/brand/lumat-mark.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/panel/app/brand/lumat-mark.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
+    { "src": "/panel/app/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/panel/app/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/panel/app/brand/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

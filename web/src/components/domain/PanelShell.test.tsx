@@ -206,6 +206,16 @@ describe("PanelShell rail contract (2C-1)", () => {
     expect(onNavigate).toHaveBeenCalledExactlyOnceWith("notifications");
   });
 
+  it("uses the one-line lockup in the mobile bar and the stacked lockup in the drawer", () => {
+    const { container } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    const bar = container.querySelector(".panel-shell__mobile-bar") as HTMLElement;
+    const drawer = container.querySelector(".panel-shell__drawer") as HTMLElement;
+
+    expect(bar.querySelector(".panel-shell__brand-image")).toHaveAttribute("src", "/panel/app/brand/lumat-logo-line.png");
+    expect(drawer.querySelector(".panel-shell__brand-image")).toHaveAttribute("src", "/panel/app/brand/lumat-logo.png");
+    expect(bar.querySelector(".panel-shell__menu-button")).toBe(bar.firstElementChild);
+  });
+
   it("filters role-authorized navigation in named groups from the sidebar search", async () => {
     const user = userEvent.setup();
     const { container } = render(<PanelShell user={operador}><p>Contenido</p></PanelShell>);
