@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ChevronDown,
   Menu,
+  LogOut,
   MessageSquare,
   MoreVertical,
   PanelLeft,
@@ -86,16 +87,42 @@ export type NotificationState = { status: "loading" } | { status: "ready"; unrea
 /** The account affordance (avatar trigger + menu). Controlled so the desktop header and the mobile bar each own
  *  their open state without duplicating the popover markup. */
 function AccountControl({ user, onLogout, open, onToggle }: { user: User; onLogout?: () => void | Promise<void>; open: boolean; onToggle: () => void }) {
+  const accountRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!accountRef.current?.contains(event.target as Node)) onToggle();
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onToggle();
+      queueMicrotask(() => triggerRef.current?.focus());
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onToggle, open]);
+
   return (
-    <div className="panel-shell__account">
-      <button type="button" className="panel-shell__account-trigger" aria-label="Abrir menú de usuario" aria-expanded={open} aria-haspopup="menu" onClick={onToggle}>
+    <div ref={accountRef} className="panel-shell__account">
+      <button ref={triggerRef} type="button" className="panel-shell__account-trigger" aria-label="Abrir menú de usuario" aria-expanded={open} aria-haspopup="menu" onClick={onToggle}>
         <Avatar name={user.username} className="panel-shell__account-avatar" />
         <span className="panel-shell__account-name">{user.username}</span>
         <Icon icon={ChevronDown} />
       </button>
       {open ? <div className="panel-shell__account-menu" role="menu" aria-label={`Cuenta de ${user.username}`}>
-        <span>{user.username} · {roleLabels[user.role]}</span>
-        {onLogout ? <button type="button" role="menuitem" onClick={() => void onLogout()}>Cerrar sesión</button> : null}
+        <div className="panel-shell__account-identity">
+          <Avatar name={user.username} className="panel-shell__account-menu-avatar" />
+          <span className="panel-shell__account-copy"><strong>{user.username}</strong><span>{roleLabels[user.role]}</span></span>
+        </div>
+        <div className="panel-shell__account-divider" />
+        {onLogout ? <button type="button" className="panel-shell__account-logout" role="menuitem" onClick={() => void onLogout()}><Icon icon={LogOut} />Cerrar sesión</button> : null}
       </div> : null}
     </div>
   );
@@ -195,15 +222,21 @@ function UserContext({ user, compact = false, onLogout }: { user: User; compact?
       ) : null}
       {optionsOpen && onLogout ? (
         <div ref={optionsRef} className="panel-shell__user-options" role="menu" aria-label={`Cuenta de ${user.username}`}>
-          <span>{user.username} · {role}</span>
+          <div className="panel-shell__account-identity">
+            <Avatar name={user.username} className="panel-shell__account-menu-avatar" />
+            <span className="panel-shell__account-copy"><strong>{user.username}</strong><span>{role}</span></span>
+          </div>
+          <div className="panel-shell__account-divider" />
           <button
             type="button"
+            className="panel-shell__account-logout"
             role="menuitem"
             onClick={() => {
               setOptionsOpen(false);
               void onLogout();
             }}
           >
+            <Icon icon={LogOut} />
             Cerrar sesión
           </button>
         </div>

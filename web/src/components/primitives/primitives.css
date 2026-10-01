@@ -1485,9 +1485,18 @@
 .panel-shell__account { position: relative; }
 .panel-shell__account-avatar { width: var(--space-8); height: var(--space-8); }
 .panel-shell__account-name { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.panel-shell__account-menu { position: absolute; top: calc(100% + var(--space-2)); right: 0; z-index: var(--z-modal); display: grid; min-width: 12rem; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--text); box-shadow: var(--shadow-3); }
-.panel-shell__account-menu button { min-height: 44px; border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
-.panel-shell__account-menu button:hover { background: var(--surface-subtle); }
+.panel-shell__account-menu { position: absolute; top: calc(100% + var(--space-2)); right: 0; z-index: var(--z-modal); display: grid; width: min(20rem, calc(100vw - var(--space-6))); gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); box-shadow: var(--shadow-3); }
+.panel-shell__account-identity { display: grid; grid-template-columns: var(--space-8) minmax(0, 1fr); gap: var(--space-3); align-items: center; min-width: 0; }
+.panel-shell__account-menu-avatar { width: var(--space-8); height: var(--space-8); background: var(--success-bg); color: var(--primary-800); }
+.panel-shell__account-copy { display: grid; min-width: 0; gap: var(--space-1); }
+.panel-shell__account-copy strong { overflow: hidden; color: var(--text); font-weight: var(--weight-bold); text-overflow: ellipsis; white-space: nowrap; }
+.panel-shell__account-copy > span { color: var(--teal-500); }
+.panel-shell__account-divider { height: 1px; background: var(--border); }
+.panel-shell__account-menu .panel-shell__account-logout,
+.panel-shell__user-options .panel-shell__account-logout { display: flex; width: 100%; min-height: 44px; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-md); background: var(--danger-bg); color: var(--danger); text-align: left; font: inherit; font-weight: var(--weight-semibold); cursor: pointer; }
+.panel-shell__account-menu .panel-shell__account-logout:hover,
+.panel-shell__user-options .panel-shell__account-logout:hover { background: var(--danger-tint); }
+.panel-shell__account-logout svg { width: var(--space-5); height: var(--space-5); flex: none; }
 .panel-shell__header-action:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
@@ -1515,6 +1524,7 @@
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
 }
+.panel-shell__user-options button:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .panel-shell__user {
   position: relative;
   display: grid;
@@ -1573,26 +1583,15 @@
   bottom: calc(100% + var(--space-2));
   z-index: var(--z-modal);
   display: grid;
-  min-width: 12rem;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  width: min(20rem, calc(100vw - var(--space-6)));
+  gap: var(--space-3);
+  padding: var(--space-4);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--surface);
   color: var(--text);
   box-shadow: var(--shadow-3);
 }
-.panel-shell__user-options button {
-  min-height: 44px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.panel-shell__user-options button:hover { background: var(--surface-subtle); }
 .panel-shell__user-copy {
   display: grid;
   min-width: 0;

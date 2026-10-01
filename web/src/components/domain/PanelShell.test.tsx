@@ -285,6 +285,32 @@ describe("PanelShell rail contract (2C-1)", () => {
     expect(logout).toHaveBeenCalledOnce();
   });
 
+  it("closes the header account menu on outside click", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    const headerActions = container.querySelector(".panel-shell__header-actions") as HTMLElement;
+    const trigger = within(headerActions).getByRole("button", { name: /abrir menú de usuario/i });
+
+    await user.click(trigger);
+    expect(screen.getByRole("menu", { name: "Cuenta de ana" })).toBeInTheDocument();
+    await user.click(screen.getByText("Contenido"));
+
+    expect(screen.queryByRole("menu", { name: "Cuenta de ana" })).not.toBeInTheDocument();
+  });
+
+  it("closes the header account menu on Escape and restores trigger focus", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<PanelShell user={admin}><p>Contenido</p></PanelShell>);
+    const headerActions = container.querySelector(".panel-shell__header-actions") as HTMLElement;
+    const trigger = within(headerActions).getByRole("button", { name: /abrir menú de usuario/i });
+
+    await user.click(trigger);
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("menu", { name: "Cuenta de ana" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
   it("renders the back action only when supplied and calls it", async () => {
     const user = userEvent.setup();
     const onBack = vi.fn();
