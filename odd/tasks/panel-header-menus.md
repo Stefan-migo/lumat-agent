@@ -63,16 +63,16 @@ popover redesign; their tests and stories.
 
 ### Slice 1 — navigation chrome + the popover bug (behaviour)
 
-- [ ] **H1 — conditional back button.** `AppShell` passes the shell a back affordance only for detail routes:
+- [x] **H1 — conditional back button.** `AppShell` passes the shell a back affordance only for detail routes:
   a route with `clientId` / `conversationId` / `automationRuleId` / `kbDocId` / `appointmentId` / `projectSlug` /
   `planningSessionSlug` (and `threadId` for chat). The click navigates to the parent list route (`pathForView`),
   not `window.history.back()`.
-- [ ] **H2 — breadcrumb.** Render `Panel / <Section>`; add a breadcrumb-label map with `dashboard: "Dashboard"`
+- [x] **H2 — breadcrumb.** Render `Panel / <Section>`; add a breadcrumb-label map with `dashboard: "Dashboard"`
   and labels for the compatibility views; keep `NAVIGATION` untouched for the sidebar. "Panel" links to the
   dashboard except on the dashboard itself.
-- [ ] **H3 — popover bug.** Stop unmounting `AccountControl` when the notifications popover is open. Opening one
+- [x] **H3 — popover bug.** Stop unmounting `AccountControl` when the notifications popover is open. Opening one
   popover closes the other; both triggers remain visible. Update `AppShell.test.tsx:476` (it asserts the bug).
-- [ ] **H4 — tests for H1–H3:** back hidden on dashboard and list views, present on a detail route, and it
+- [x] **H4 — tests for H1–H3:** back hidden on dashboard and list views, present on a detail route, and it
   navigates to the parent; breadcrumb text; both controls visible with notifications open.
 
 ### Slice 2 — the two redesigns (visual)
@@ -111,7 +111,30 @@ popover redesign; their tests and stories.
 
 ## Progress and evidence
 
-_(pending)_
+**Slice 1 (navigation chrome + the popover bug) — code complete and verified.**
+
+- Commits: `87e3c15b` (`isDetailRoute`), `7270acec` (back, breadcrumb, popover fix).
+- **H1**: `isDetailRoute()` added to `panelRoutes.ts` (gates each drill-down param by its view, mirroring
+  `pathForRoute`); `PanelShell` gains an `onBack` prop and renders the back button only when supplied;
+  `AppShell` passes a parent-route navigation (`navigateToRoute({ view, … })`), not `window.history.back()`.
+- **H2**: `PanelShell` gains a `breadcrumbView` prop (needed because `shellView` remaps projects/planning to
+  chat) plus `BREADCRUMB_OVERRIDES`; the breadcrumb reads `Panel / Dashboard` on the dashboard (`Panel`
+  unlinked there) and `Panel / <Section>` elsewhere. `NAVIGATION` is untouched, so the sidebar keeps
+  "Panel unificado".
+- **H3**: the account control is always rendered (the `!notificationsOpen` wrapper is gone); opening one
+  popover closes the other; both triggers stay visible. The `AppShell.test.tsx` assertion that the account
+  trigger DISAPPEARS was replaced by one asserting it stays visible.
+- **H4**: `panelRoutes.test.ts` covers `isDetailRoute` (list false; each detail param true; chat query params
+  false; projects/planning slugs true); `PanelShell.test.tsx` covers back visibility/callback and the
+  breadcrumb labels; `AppShell.test.tsx` covers the parent navigation, both triggers visible, and closing the
+  account menu.
+- Checks (re-run by the orchestrator, independent of the writer): `npm run build` → `tsc -b` + Vite OK
+  (pre-existing chunk warning only); affected vitests → **3 files / 73 tests passed**. The writer reported RED
+  (6 failures) before GREEN.
+- Native RDD: `review assess --base-ref a0a53310 --committed-only` → risk **medium**
+  (`executable_change`), `review_due: false`, `review_due_reason: under_budget` (242 changed lines, 7 paths).
+
+**Slice 2 (the two redesigns) — pending.**
 
 ## Verification
 
