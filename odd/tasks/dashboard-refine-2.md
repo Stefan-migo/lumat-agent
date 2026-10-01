@@ -1,6 +1,6 @@
 # ODD Task: dashboard-refine-2
 
-Status: in progress
+Status: complete — PR #463, owner-approved except two items moved to the next unit
 Worktree: `/home/stefan/repos/lumat-agent-odd-dashboard-refine-2`
 Branch: `odd/dashboard-refine-2`
 Base: `405f6af5` (= `origin/main`, after PRs #459–#462)
@@ -109,9 +109,55 @@ block; the shell; every other page; the findings ledger.
       close of the previous unit, 8676 nodes).
 - [x] Worktree created and provisioned (`rapso worktree create dashboard-refine-2 --yes`, then
       `cd web && npm ci`). No venv needed — frontend only.
-- [ ] F1–F7 implemented
-- [ ] verification recorded
-- [ ] review measurement
+- [x] F1–F7 implemented (`e928b73a`, corrected by `75ba8c7b`)
+- [x] A/B/D/E implemented (`4aed835b`, completed by `3a691492`)
+- [x] verification recorded
+- [x] review measurement
+
+## Close
+
+**Unit closed 2026-10-01.** Six commits on `odd/dashboard-refine-2`, one PR (#463), `stacked-to-main`.
+The owner reviewed the rendered result against the three references and approved everything except the
+two items moved to the next unit (below).
+
+### Evidence
+
+- `cd web && npm run test` → **94 files / 950 tests passed**; `npx tsc -b --noEmit` → exit 0;
+  `npm run build` → exit 0; `git diff --check` → clean. Re-run by the orchestrator, not only by the writer.
+- Native assessment over `405f6af5..HEAD` → risk `medium`, 267 changed lines, `review_due: false`.
+- One defect the writer shipped and the orchestrator caught in diff review: `.dashboard__card--wide`
+  kept `flex-direction: row` after losing its span, so Automatizaciones still rendered as a horizontal
+  banner on desktop. Fixed in `75ba8c7b`.
+- One scope boundary reproduced a known pattern twice: a changed string leaves stale assertions behind.
+  The page-title change broke four assertions in `AppShell.test.tsx` / `Dashboard.stories.test.tsx` /
+  `PanelEntry.stories.test.tsx`; the subtitle date change broke `Dashboard.stories.test.tsx:14`. Both
+  times the writer stopped instead of widening scope silently, and the orchestrator widened it.
+
+### Carried gaps (owner decisions on the record)
+
+- **KPI row presentation deferred by the owner.** The app renders four separate KPI cards with coloured
+  top borders; the reference shows one card with four columns and vertical dividers. Not fixed here.
+- **Shortcut icon colours deferred by the owner.** The reference colours each shortcut glyph
+  individually; the app uses a single ink colour.
+- **The font root cause is app-wide.** There is no `button { font: inherit }` in the reset, which is why
+  every button in the repository is patched by hand. Fixing it globally touches components outside this
+  unit; it remains a separate candidate.
+
+### Moved to the next unit (found by the owner while reviewing this one)
+
+- **The chart breaks in the 30-day view.** `.dashboard__bars` is a flex row with `flex: 1` columns and a
+  `--space-2` gap, so thirty columns leave no room for the three-letter day labels or the value above each
+  bar; they collide. The 7-day reference is the only designed state.
+- **The chart and the Motivos card do not share a height.** `.dashboard__period { align-items: start }`
+  overrides the grid default; a longer Motivos list grows past the chart.
+
+### What this unit proved
+
+The owner's eye keeps finding what both the analysis and the machine checks miss: the analysis classified
+symptoms (a wrong grid, a border) while the causes were a `<button>` font-inheritance gap, a token
+(`--surface-subtle`) that resolves to the surface it is drawn on, and an `align-items` override. Two of
+the seven fixes could not have been found without rendering the page — which is exactly why the CSS half
+of this unit is verified by the owner and not by jsdom.
 
 ## Recovery
 
