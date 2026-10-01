@@ -300,6 +300,26 @@ def test_kpis_respects_configured_window(client, make_user):
     assert body["motivos"] == []
 
 
+def test_kpis_accepts_requested_window_days(client, make_user):
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.get("/panel/api/kpis?window_days=14", follow_redirects=False)
+
+    assert response.status_code == 200
+    assert response.json()["window_days"] == 14
+
+
+@pytest.mark.parametrize("window_days", [0, 32])
+def test_kpis_rejects_out_of_range_requested_window_days(client, make_user, window_days):
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.get(f"/panel/api/kpis?window_days={window_days}", follow_redirects=False)
+
+    assert response.status_code == 422
+
+
 def test_today_requires_json_auth_and_valid_timezone(client, make_user):
     response = client.get("/panel/api/dashboard/today?timezone=America/Santiago", follow_redirects=False)
     assert response.status_code == 401
