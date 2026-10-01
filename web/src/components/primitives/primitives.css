@@ -1152,9 +1152,9 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding-right: var(--space-4);
-  background: var(--corp-primary);
-  color: var(--surface);
-  border-bottom: 1px solid color-mix(in srgb, var(--surface) 30%, transparent);
+  background: var(--header-bg);
+  color: var(--corp-text);
+  border-bottom: 1px solid var(--border);
 }
 .panel-shell__header {
   display: flex;
@@ -1163,8 +1163,7 @@
   align-items: center;
   padding: var(--space-4) var(--space-6);
   gap: var(--space-3);
-  color: var(--surface);
-  max-width: 78rem;
+  color: var(--corp-text);
 }
 .panel-shell__header-badge {
   display: flex;
@@ -1181,10 +1180,10 @@
 }
 .panel-shell__breadcrumbs { flex: 1; min-width: 0; }
 .panel-shell__breadcrumbs ol { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding: 0; list-style: none; font-size: var(--text-lg); font-weight: var(--weight-semibold); }
-.panel-shell__breadcrumbs li + li::before { content: "/"; margin-right: var(--space-2); color: color-mix(in srgb, var(--surface) 55%, transparent); }
-.panel-shell__breadcrumbs li[aria-current="page"] { color: color-mix(in srgb, var(--surface) 70%, transparent); }
-.panel-shell__breadcrumbs button { padding: 0; border: 0; background: transparent; color: color-mix(in srgb, var(--surface) 85%, transparent); font: inherit; cursor: pointer; }
-.panel-shell__breadcrumbs button:hover { color: var(--surface); text-decoration: underline; }
+.panel-shell__breadcrumbs li + li::before { content: "/"; margin-right: var(--space-2); color: var(--corp-fg-muted); }
+.panel-shell__breadcrumbs li[aria-current="page"] { color: var(--corp-text); }
+.panel-shell__breadcrumbs button { padding: 0; border: 0; background: transparent; color: var(--corp-fg-muted); font: inherit; cursor: pointer; }
+.panel-shell__breadcrumbs button:hover { color: var(--corp-text); text-decoration: underline; }
 .panel-shell__content {
   min-width: 0;
   padding: var(--space-4);
@@ -1416,11 +1415,12 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--surface);
+  color: var(--corp-text);
+  font: inherit;
   cursor: pointer;
 }
 .panel-shell__header-action:hover {
-  background: color-mix(in srgb, var(--surface) 18%, transparent);
+  background: var(--surface-subtle);
 }
 .panel-shell__back,
 .panel-shell__account-trigger {
@@ -1434,12 +1434,12 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text-on-dark);
+  color: var(--corp-text);
   font: inherit;
   cursor: pointer;
 }
 .panel-shell__back:hover,
-.panel-shell__account-trigger:hover { background: color-mix(in srgb, var(--text-on-dark) 18%, transparent); }
+.panel-shell__account-trigger:hover { background: var(--surface-subtle); }
 .panel-shell__back:focus-visible,
 .panel-shell__account-trigger:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .panel-shell__account { position: relative; }

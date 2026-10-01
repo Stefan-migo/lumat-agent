@@ -88,6 +88,11 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
     expect(primitivesRaw).not.toMatch(
       /\.panel-shell__header\s*\{[^}]*border-bottom:\s*[^}]*var\(--brand-lime\)/,
     );
+    // The desktop header row uses the dedicated light chrome token, not the
+    // dark forest fill the mobile bar keeps.
+    expect(primitivesRaw).toMatch(
+      /\.panel-shell__header-row\s*\{[^}]*background:\s*var\(--header-bg\)/,
+    );
   });
 
   it('styles the panel header breadcrumb with the corporate foreground contract', () => {
@@ -96,7 +101,7 @@ describe('AppShell stories — v1 sidebar brand + text-only panel header (DS-V1-
       /\.panel-shell__breadcrumbs\s+ol\s*\{[^}]*font-size:\s*var\(--text-lg\)/,
     );
     expect(primitivesRaw).toMatch(
-      /\.panel-shell__breadcrumbs\s+li\[aria-current="page"\]\s*\{[^}]*color:\s*color-mix\(in srgb, var\(--surface\) 70%, transparent\)/,
+      /\.panel-shell__breadcrumbs\s+li\[aria-current="page"\]\s*\{[^}]*color:\s*var\(--corp-text\)/,
     );
   });
 
