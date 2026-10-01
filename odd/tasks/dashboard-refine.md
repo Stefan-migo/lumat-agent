@@ -186,6 +186,33 @@ the chain-strategy decision before the slice that crosses it. Measure with
       against the three reference images was NOT machine-verified — the independent verifier could not
       read them. The owner's own comparison is the instrument for this one.
 
+### WU2 record
+
+- [x] **WU2 implemented** — commit `ecd9e1a6` (`feat(dashboard): update local dashboard copy`),
+      `Dashboard.tsx` + `Dashboard.test.tsx`. T6 title "Dashboard"; T7 date chip capitalised;
+      T8 "Agenda de hoy"; T10 "Actividad del período"; T11 chart empty-state copy. T9
+      ("Asistente Lumat") reported `already satisfied` from WU1. RED observed **per task** in
+      isolation this time, with the failure output recorded in the writer's report.
+- [x] **WU2 scope widened (orchestrator)** — the first WU2 commit left the suite red: four stale
+      assertions still expected the old page heading "Panel" (`AppShell.test.tsx:98,488`;
+      `Dashboard.stories.test.tsx:8`; `PanelEntry.stories.test.tsx:127`). The instruction's file
+      boundary was too narrow; the title change is owner-mandated and correct (the shell breadcrumb
+      already read "Panel › Dashboard", `PanelShell.tsx:571`). The three test files were added to
+      the authorized scope and updated in commit `d9e7483f`
+      (`test(dashboard): follow the renamed dashboard page title`). The shell's bottom-nav label
+      "Panel" and the breadcrumb root were deliberately left alone.
+- [x] **WU2 verification of record** — `cd web && npm run test` → **94 files / 945 tests passed**;
+      `npx tsc -b --noEmit` → exit 0; `npm run build` → exit 0; `git diff --check` → clean.
+- [x] **WU2 parent spot check** — the orchestrator re-ran `npm run test` → **94 files / 945 tests passed**.
+- [x] **WU2 native review measurement** — `risk: medium`, 366 changed lines, `review_due: false`
+      (`under_budget`). Boundary still `1c6e9595`.
+- [ ] **WU1/WU2 visual verdict pending** — the owner must compare the rendered dashboard against the
+      three reference images; this is the acceptance test of the analysis and the gate before WU3.
+
+### WU2 record — recorded gaps
+
+- The responsive behaviour of T2/T3/T4 remains unpinned by viewport-sensitive tests (carried from WU1).
+
 ## Recovery
 
 - Test DB (if used): `bash infra/test-db.sh up|down|env`, project
