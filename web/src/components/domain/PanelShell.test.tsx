@@ -181,6 +181,16 @@ describe("PanelShell rail contract (2C-1)", () => {
     expect(screen.getByRole("menu", { name: "Cuenta de ana" })).toBeInTheDocument();
   });
 
+  it("navigates to the self-profile from the account menu", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn();
+    const { container } = render(<PanelShell user={operador} onNavigate={onNavigate}><p>Contenido</p></PanelShell>);
+    const header = within(container.querySelector(".panel-shell__header-actions") as HTMLElement);
+    await user.click(header.getByRole("button", { name: "Abrir menú de usuario" }));
+    await user.click(within(screen.getByRole("menu", { name: "Cuenta de vero" })).getByRole("menuitem", { name: "Mi perfil" }));
+    expect(onNavigate).toHaveBeenCalledExactlyOnceWith("profile");
+  });
+
   it("exposes the bell and the account affordance in the mobile header (PNL-APP-10)", async () => {
     const user = userEvent.setup();
     const onNavigate = vi.fn();
