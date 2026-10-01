@@ -25,6 +25,7 @@ export const PANEL_ROUTES = {
   'automation-rules': '/panel/app/automation-rules',
   settings: '/panel/app/settings',
   users: '/panel/app/users',
+  profile: '/panel/app/profile',
   projects: '/panel/app/projects',
   'planning-sessions': '/panel/app/planning-sessions',
 } as const satisfies Readonly<Partial<Record<PanelView, string>>>;

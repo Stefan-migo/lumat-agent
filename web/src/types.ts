@@ -13,6 +13,17 @@ export interface User {
   role: Role;
 }
 
+export interface SelfProfile extends User {
+  id: number;
+  email: string | null;
+  name: string | null;
+  phone: string | null;
+  position: string | null;
+}
+export interface SelfProfileUpdate { name: string | null; phone: string | null; }
+export interface SelfProfileUpdateResponse { user: Pick<SelfProfile, 'name' | 'phone'>; }
+export interface SelfPasswordChange { current_password: string; new_password: string; }
+
 export interface AdminUser { id: number; username: string; role: Role; active: boolean; }
 export interface AdminUsersResponse { users: AdminUser[]; }
 export interface Project { id: number; slug: string; name: string; purpose: string; status: 'active' | 'archived'; created_at: string | null; updated_at: string | null; }

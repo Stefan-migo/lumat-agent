@@ -27,7 +27,7 @@ import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 import { Icon } from "../primitives/Icon";
 
-export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "users" | "projects" | "planning-sessions";
+export type PanelView = "dashboard" | "clients" | "conversations" | "cases" | "notifications" | "push" | "chat" | "kb" | "settings" | "agenda" | "automation-rules" | "advanced-dashboard" | "users" | "projects" | "planning-sessions" | "profile";
 
 interface NavigationItem {
   label: string;
@@ -39,7 +39,7 @@ function PanelToggleIcon({ collapsed }: { collapsed: boolean }) {
   return <Icon icon={collapsed ? ChevronRight : ChevronLeft} />;
 }
 
-const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" | "advanced-dashboard" | "projects" | "planning-sessions">, NavigationItem> = {
+const NAVIGATION: Record<Exclude<PanelView, "cases" | "notifications" | "push" | "advanced-dashboard" | "projects" | "planning-sessions" | "profile">, NavigationItem> = {
   dashboard: { label: "Panel unificado", icon: PanelLeft },
   chat: { label: "Asistente Lumat", icon: Bot },
   conversations: { label: "Conversaciones", icon: MessageSquare },
@@ -74,7 +74,7 @@ export type NotificationState = { status: "loading" } | { status: "ready"; unrea
 
 /** The account affordance (avatar trigger + menu). Controlled so the desktop header and the mobile bar each own
  *  their open state without duplicating the popover markup. */
-function AccountControl({ user, onLogout, open, onToggle }: { user: User; onLogout?: () => void | Promise<void>; open: boolean; onToggle: () => void }) {
+function AccountControl({ user, onLogout, onNavigate, open, onToggle }: { user: User; onLogout?: () => void | Promise<void>; onNavigate?: (view: PanelView) => void; open: boolean; onToggle: () => void }) {
   return (
     <div className="panel-shell__account">
       <button type="button" className="panel-shell__account-trigger" aria-label="Abrir menú de usuario" aria-expanded={open} aria-haspopup="menu" onClick={onToggle}>
@@ -84,6 +84,7 @@ function AccountControl({ user, onLogout, open, onToggle }: { user: User; onLogo
       </button>
       {open ? <div className="panel-shell__account-menu" role="menu" aria-label={`Cuenta de ${user.username}`}>
         <span>{user.username} · {roleLabels[user.role]}</span>
+        <button type="button" role="menuitem" onClick={() => { onNavigate?.("profile"); onToggle(); }}>Mi perfil</button>
         {onLogout ? <button type="button" role="menuitem" onClick={() => void onLogout()}>Cerrar sesión</button> : null}
       </div> : null}
     </div>
@@ -442,7 +443,7 @@ export function PanelShell({
             <Icon icon={Bell} />
             {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
           </button>
-          <AccountControl user={user} onLogout={onLogout} open={mobileAccountOpen} onToggle={() => setMobileAccountOpen((open) => !open)} />
+          <AccountControl user={user} onLogout={onLogout} onNavigate={handleNavigation} open={mobileAccountOpen} onToggle={() => setMobileAccountOpen((open) => !open)} />
         </div>
       </header>
 
@@ -485,7 +486,7 @@ export function PanelShell({
                <ol>
                  {currentView === "dashboard" ? <li aria-current="page">Panel unificado</li> : <>
                    <li><button type="button" onClick={() => handleNavigation("dashboard")}>Panel</button></li>
-                   <li aria-current="page">{NAVIGATION[currentView as keyof typeof NAVIGATION]?.label ?? (currentView === "notifications" ? "Notificaciones" : "Panel")}</li>
+                    <li aria-current="page">{NAVIGATION[currentView as keyof typeof NAVIGATION]?.label ?? (currentView === "notifications" ? "Notificaciones" : currentView === "profile" ? "Mi perfil" : "Panel")}</li>
                  </>}
                </ol>
              </nav>
@@ -506,7 +507,7 @@ export function PanelShell({
                 </div>
                 {!notificationsOpen ? <>
                   <span className="panel-shell__header-divider" aria-hidden="true" />
-                  <AccountControl user={user} onLogout={onLogout} open={accountOpen} onToggle={() => setAccountOpen((open) => !open)} />
+                  <AccountControl user={user} onLogout={onLogout} onNavigate={handleNavigation} open={accountOpen} onToggle={() => setAccountOpen((open) => !open)} />
                 </> : null}
              </div>
           </header>

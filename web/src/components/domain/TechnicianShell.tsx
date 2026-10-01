@@ -9,6 +9,7 @@ import { AssistantTabs, type AssistantView } from '../pages/AssistantTabs';
 import { PlanningSessions } from '../pages/PlanningSessions';
 import { ProjectsPage } from '../pages/ProjectsPage';
 import { TechnicianAgenda } from '../pages/TechnicianAgenda';
+import { SelfProfile } from '../pages/SelfProfile';
 
 export interface TechnicianShellProps {
   user: User;
@@ -17,7 +18,7 @@ export interface TechnicianShellProps {
   children?: ReactNode;
 }
 
-const technicianViews = new Set(['agenda', 'chat', 'projects', 'planning-sessions']);
+const technicianViews = new Set(['agenda', 'chat', 'projects', 'planning-sessions', 'profile']);
 
 function technicianRoute(path: string): PanelRoute {
   const parsed = parsePanelPath(path);
@@ -55,7 +56,9 @@ export function TechnicianShell({ user, onLogout, children }: TechnicianShellPro
       ? <ProjectsPage sectionTabs={sectionTabs} projectSlug={route.projectSlug} onOpenProject={(slug) => navigate({ view: 'projects', projectSlug: slug })} onOpenChat={(slug) => navigate({ view: 'chat', projectSlug: slug })} />
       : view === 'planning-sessions'
         ? <PlanningSessions sectionTabs={sectionTabs} sessionSlug={route.planningSessionSlug} onOpenSession={(slug) => navigate({ view: 'planning-sessions', planningSessionSlug: slug })} onOpenThread={(id) => navigate({ view: 'chat', threadId: id })} />
-        : children ?? <TechnicianAgenda />;
+         : view === 'profile'
+           ? <SelfProfile />
+           : children ?? <TechnicianAgenda />;
 
   return (
     <div className="technician-shell">
@@ -65,7 +68,10 @@ export function TechnicianShell({ user, onLogout, children }: TechnicianShellPro
             <img src="/panel/app/brand/lumat-logo.png" alt="Lumat" />
             <span>{user.username}</span>
           </div>
-          {onLogout ? <Button variant="secondary" onClick={() => void onLogout()}>Cerrar sesión</Button> : null}
+          <div>
+            <Button variant="secondary" onClick={() => navigate({ view: 'profile' })}>Mi perfil</Button>
+            {onLogout ? <Button variant="secondary" onClick={() => void onLogout()}>Cerrar sesión</Button> : null}
+          </div>
         </div>
       </header>
       <div className="technician-shell__content panel-shell__content">{page}</div>
