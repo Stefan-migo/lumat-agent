@@ -121,13 +121,15 @@ concern), other primitives, other pages, the sidebar/drawer surfaces already adj
 
 ### Slice 1 — Unit A (closes the header unit)
 
-- [ ] **A1 — derive and commit the one-line lockup.** Generate `lumat-logo-line.png` (528×158) from
-  the owner's `LumatLinea.png` with the recipe above and commit it under `web/public/brand/`.
-- [ ] **A2 — bar-scoped one-line lockup.** Give `Brand()` a bar-only variant so the **mobile bar**
-  renders `lumat-logo-line.png` while the **drawer keeps the stacked** `lumat-logo.png`. Any width
-  override must be mobile-scoped — do not touch the shared `--brand-logo-max-width`.
-- [ ] **A3 — settle the mobile bar order.** Reorder the bar to `[menu] | lockup | bell | avatar` per
-  `mobilePanelShell.png`. Recorded decision (reference governs layout).
+- [x] **A1 — derive and commit the one-line lockup. DONE.** Generated `lumat-logo-line.png` (528×158,
+  18.7 KB) from the owner's `LumatLinea.png` with the documented recipe and committed it under
+  `web/public/brand/`.
+- [x] **A2 — bar-scoped one-line lockup. DONE.** `Brand()` gained a `line` prop; the mobile bar passes
+  it, the drawer does not. Styling is scoped to `.panel-shell__mobile-brand--line`; the shared
+  `--brand-logo-max-width` is untouched.
+- [x] **A3 — settle the mobile bar order. DONE.** The bar now renders `[menu] | lockup | [bell, avatar]`
+  per `mobilePanelShell.png`. Recorded decision (reference governs layout); the menu button's props
+  and behaviour were preserved exactly.
 
 ### Slice 2 — Unit B (favicon + PWA)
 
@@ -175,4 +177,25 @@ concern), other primitives, other pages, the sidebar/drawer surfaces already adj
 
 ## Progress and evidence
 
-_(none yet)_
+**Slice 1 (Unit A) — code complete.**
+
+- Commits: `8c941866` charter, `78b47b0d` A1 asset, `66945ccc` A2+A3 code.
+- A2/A3 solution: `Brand()` gained a boolean `line` prop; the bar renders `<Brand mobile line />` while
+  the drawer keeps `<Brand mobile />`. Bar scoping lives in `.panel-shell__mobile-brand--line`
+  (`flex: 0 1 11rem; margin-right: auto`) plus a bar-only `max-height: 3rem` on
+  `.panel-shell__brand-image`. The menu button was hoisted out of `.panel-shell__mobile-actions` to
+  become the bar's first child, with its `ref`, `aria-*` and `onClick` unchanged. One DOM-level test
+  added asserting the bar renders `lumat-logo-line.png`, the drawer renders `lumat-logo.png`, and the
+  menu button is first.
+- Checks: `npm run build` → `tsc -b` + Vite OK (only the pre-existing large-chunk warning).
+  Affected test files (`PanelShell`, `AppShell`, `AppShell.stories`, `PanelEntry.stories`) → 4 files /
+  83 tests passed. Full suite → **92 files / 909 tests, exit 0** (123s). Parent spot check: `npm run
+  build` re-run independently → OK.
+- Native RDD: `review assess --base-ref 7aee1b2e --committed-only` → risk **medium**
+  (`executable_change`), `review_due: false`, `review_due_reason: under_budget` (227 changed lines).
+  Under the delivery budget → boundary stays pending, no review yet.
+- Rendered verification: **pending**, to run once in B5 (mobile bar + drawer + installer icon).
+
+**Engram mirror: PENDING.** `mem_save` for `odd/brand-assets/tasks` is failing with "multiple active
+runtime sessions match the current project and directory". The charter file on this branch is the
+source of truth; the mirror must be re-pushed when the session ambiguity clears.
