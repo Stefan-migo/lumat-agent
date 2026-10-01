@@ -213,6 +213,43 @@ the chain-strategy decision before the slice that crosses it. Measure with
 
 - The responsive behaviour of T2/T3/T4 remains unpinned by viewport-sensitive tests (carried from WU1).
 
+### WU3 record
+
+Branch `odd/dashboard-refine-wu3`, based on `origin/main` = `3d92ed88` (PR #459 merged).
+
+- [x] **WU3 implemented** — commits `2bfc3bfc` (`feat(dashboard): accept requested KPI window`) and
+      `78ec0d0e` (`feat(dashboard): add functional activity period selector`). 6 files,
+      101 insertions / 16 deletions.
+- [x] **Backend contract** — `GET /panel/api/kpis` accepts an optional `window_days` query parameter
+      validated `ge=1, le=31` (the range the assistant tool declares,
+      `app/chat/assistant/tools/registry.py:91`) and falls back to the `kpi.window_days` setting when
+      absent. `compute_kpis` is reused unchanged. **The API shape changed — the PR body must say so.**
+- [x] **Frontend** — the window lives in `Dashboard` state (default 7) and is passed to both the KPI and
+      trend fetches; `api.ts` takes the window instead of hardcoding 7 days. **`useAsyncData` keys on
+      `[attempt, enabled, refreshKey]`, not the fetch-callback identity** — the selected window is passed
+      as `refreshKey`, which is what makes the change refetch.
+- [x] **WU3 verification of record** — backend `uv run pytest tests/` → **1737 passed** (225.40s);
+      frontend `npm run test` → **94 files / 946 tests passed**; `npx tsc -b --noEmit` → exit 0;
+      `npm run build` → exit 0; `git diff --check` → clean; test DB torn down at the end.
+- [x] **WU3 parent spot check** — frontend suite re-run → 94 files / 946 tests; `npm run build` → exit 0;
+      focused backend `tests/functional/test_api_dashboard.py` over a fresh test DB → **25 passed**.
+- [x] **WU3 native review measurement** — `risk: medium`, 117 changed lines, `review_due: false`
+      (`under_budget`), base `3d92ed88`.
+- [x] **Unblock** — the writer could not start the test DB: `infra/.env` is gitignored and absent from a
+      fresh worktree. The orchestrator copied it from the primary checkout (setup, not a code edit);
+      `rapso worktree create` does not do this.
+
+### WU3 record — observations and assumptions to surface
+
+- **Redundancy (deliberate, not resolved):** the page-header `meta` already states the window and its
+  start date, so the new "Desde el …" caption repeats it. Both were kept because both were explicitly
+  decided by the owner; the PR should surface it for a ruling.
+- **`es-CL` renders September as "sept"**, while the reference shows "sep" ("Desde el 22 sep 2026").
+  Cosmetic divergence from the reference; flagged, not silently "fixed".
+- **Selector options 7 / 14 / 30 days are an assumption**, derived from the backend's `1..31` range.
+  Trivially changeable if the owner wants a different set.
+- The "Hoy" urgent-case rows still call `navigate("cases")` (AD-HOY-1 intact).
+
 ## Recovery
 
 - Test DB (if used): `bash infra/test-db.sh up|down|env`, project

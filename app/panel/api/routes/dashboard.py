@@ -13,7 +13,7 @@ Auth is the JSON-401 dependency (D4): unauthenticated calls get 401
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.models import User
@@ -27,12 +27,13 @@ router = APIRouter(tags=["panel-api-dashboard"])
 
 @router.get("/kpis")
 def kpis(
+    window_days: int | None = Query(default=None, ge=1, le=31),
     session: Session = Depends(get_db),
     current: User = Depends(require_dashboard_user),
 ) -> dict:
-    """Dashboard KPI counts over the configured window (AP-8)."""
-    window_days = int(get_setting(session, "kpi.window_days", default=7))
-    return compute_kpis(session, window_days)
+    """Dashboard KPI counts over the requested or configured window (AP-8)."""
+    configured_window_days = int(get_setting(session, "kpi.window_days", default=7))
+    return compute_kpis(session, window_days if window_days is not None else configured_window_days)
 
 
 @router.get("/dashboard/today")

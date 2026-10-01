@@ -7,7 +7,14 @@ import { Dashboard } from "./Dashboard";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, apiFetch: vi.fn(), getDashboardToday: vi.fn(), getDashboardTrend: vi.fn() };
+  const mockedApiFetch = vi.fn();
+  return {
+    ...actual,
+    apiFetch: mockedApiFetch,
+    getDashboardKpis: vi.fn((windowDays: number) => mockedApiFetch(`/panel/api/kpis?window_days=${windowDays}`)),
+    getDashboardToday: vi.fn(),
+    getDashboardTrend: vi.fn(),
+  };
 });
 
 const data = {
@@ -155,6 +162,23 @@ describe("Dashboard operational surface", () => {
     await waitFor(() => expect(screen.getByText("No pudimos cargar toda la actividad")).toBeInTheDocument());
     expect(screen.getByText("Contactos")).toBeInTheDocument();
     expect(screen.queryByText("Aún no hay actividad en esta ventana")).not.toBeInTheDocument();
+  });
+
+  it("refetches KPI and trend data when the activity period changes", async () => {
+    vi.mocked(apiFetch).mockResolvedValue(data);
+    vi.mocked(getDashboardToday).mockResolvedValue(data.today);
+    vi.mocked(getDashboardTrend).mockResolvedValue({ buckets: data.trend });
+
+    render(<Dashboard />);
+
+    const selector = await screen.findByLabelText("Período de actividad");
+    fireEvent.change(selector, { target: { value: "14" } });
+
+    await waitFor(() => {
+      expect(vi.mocked(apiFetch)).toHaveBeenLastCalledWith("/panel/api/kpis?window_days=14");
+      expect(vi.mocked(getDashboardTrend)).toHaveBeenLastCalledWith(Intl.DateTimeFormat().resolvedOptions().timeZone, 14);
+    });
+    expect(screen.getByText("Desde el 3 sept 2026")).toBeInTheDocument();
   });
 
   it("keeps the dashboard CSS contract aligned with the design system", () => {

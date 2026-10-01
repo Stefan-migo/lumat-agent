@@ -83,7 +83,7 @@ export function searchKb({ q, topK, minSim }: { q: string; topK: number; minSim:
   return apiFetch<KbSearchResponse>(`/panel/api/kb/search?${params.toString()}`);
 }
 
-import type { ActiveConversationsResponse, AdminUser, AdminUserProfileUpdate, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentDetail, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, TechnicianAgendaResponse, ProjectsResponse, ProjectDetailResponse, ProjectCreateRequest, ProjectCreateResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest, TechniciansResponse, SelfPasswordChange, SelfProfile, SelfProfileUpdate, SelfProfileUpdateResponse } from './types';
+import type { ActiveConversationsResponse, AdminUser, AdminUserProfileUpdate, AdminUsersResponse, AdvancedDashboardData, AgendaResponse, AppointmentCreateRequest, AppointmentDetail, AppointmentMutationResponse, AssistantAttachment, AssistantCapabilities, AutomationRuleResponse, AutomationRulesResponse, CasesResponse, Conversation, ConversationsResponse, ConversationState, ConversationThread, Customer, Message, NotificationsResponse, PanelNotification, InternalChatResponse, InternalChatMessage, InternalChatThread, InternalChatThreadsResponse, AssistantEvent, Rule, ClientNoteMutationResponse, ClientStateMutationResponse, CustomerState, DashboardDrilldownRow, DashboardTrendBucket, DashboardToday, Kpis, TechnicianAgendaResponse, ProjectsResponse, ProjectDetailResponse, ProjectCreateRequest, ProjectCreateResponse, PlanningSessionsResponse, PlanningSessionOpenResponse, PlanningSessionCloseResponse, PlanningSessionDetailResponse, MemoryRelation, MemoryRelationKind, Case, ManualCaseRequest, TechniciansResponse, SelfPasswordChange, SelfProfile, SelfProfileUpdate, SelfProfileUpdateResponse } from './types';
 export interface ConversationFilters { state?: ConversationState; responsible_id?: number; q?: string; limit?: number; offset?: number; }
 const requestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 const command = <T>(path: string, body: unknown) => postJson<T>(path, body);
@@ -198,9 +198,12 @@ export function getAdvancedDashboard(): Promise<AdvancedDashboardData> {
 }
 
 export const getDashboardToday = (timezone: string) => apiFetch<DashboardToday>(`/panel/api/dashboard/today?timezone=${encodeURIComponent(timezone)}`);
-export const getDashboardTrend = (timezone: string) => {
+export const getDashboardKpis = (windowDays: number) =>
+  apiFetch<Kpis>(`/panel/api/kpis?window_days=${windowDays}`);
+
+export const getDashboardTrend = (timezone: string, windowDays: number) => {
   const end = new Date();
-  const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const start = new Date(end.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const params = new URLSearchParams({ start: start.toISOString(), end: end.toISOString(), timezone, metric: 'contacts' });
   return apiFetch<{ buckets: DashboardTrendBucket[] }>(`/panel/api/dashboard/trend?${params}`);
 };
