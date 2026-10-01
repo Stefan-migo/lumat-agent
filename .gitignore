@@ -37,6 +37,8 @@ temp/
 web/graphify-out/
 web/src/graphify-out/
 .opencode/skills/web-design-engineer/
+# Local design references — gitignored, present only in the primary worktree
+refs/Diseño Lumat/
 
 # rapso:start
 # Rapsodia managed entries
