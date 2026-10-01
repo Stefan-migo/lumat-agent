@@ -2412,7 +2412,7 @@
 
 .dashboard__list { display:grid; align-content:start; gap:var(--space-2); margin:0; padding:0; list-style:none; }
 .dashboard__row { display:grid; gap:var(--space-1); width:100%; padding:var(--space-3); border:1px solid var(--corp-border); border-radius:var(--radius-md); background:var(--surface); color:var(--corp-text); font-family:var(--font-ui); text-align:left; cursor:pointer; transition:border-color var(--duration-base) var(--ease-out), background-color var(--duration-base) var(--ease-out); }
-.dashboard__row:hover { border-color:var(--chrome-950); background:var(--surface-subtle); }
+.dashboard__row:hover { border-color:var(--primary-700); background:var(--surface-subtle); }
 .dashboard__row:active { background:var(--surface); }
 .dashboard__row:focus-visible { outline:var(--focus-ring-width) solid var(--focus-ring); outline-offset:var(--focus-ring-offset); }
 .dashboard__row strong { font-size:var(--text-sm); font-weight:var(--weight-semibold); }
@@ -2437,6 +2437,7 @@
 .dashboard__card__hint { display:flex; align-items:center; gap:var(--space-1); margin-top:auto; color:var(--corp-fg-muted); font-size:var(--text-xs); font-weight:var(--weight-medium); }
 .dashboard__card__hint svg { transition:transform var(--duration-base) var(--ease-out); }
 .dashboard__card:hover .dashboard__card__hint svg { transform:translateX(var(--space-1)); }
+.dashboard__retry-button { font-family:var(--font-ui); }
 .dashboard__shortcuts-head { display:none; }
 .dashboard__card--agent { grid-column:1 / -1; flex-direction:row; align-items:center; min-height:auto; background:var(--surface); }
 .dashboard__card--agent .dashboard__card__icon { flex:none; width:calc(var(--space-8) * 2); height:calc(var(--space-8) * 2); border-radius:var(--radius-lg); background:var(--chrome-900); color:var(--text-on-dark); }
@@ -2447,8 +2448,6 @@
 .dashboard__card--agent .dashboard__card__hint--desktop { margin:0 0 0 auto; padding:var(--space-3) var(--space-4); border-radius:var(--radius-md); background:var(--primary-800); color:var(--text-on-dark); font-size:var(--text-sm); }
 .dashboard__card__hint--mobile, .dashboard__label-mobile { display:none; }
 .dashboard__card--agent:hover { border-color:var(--primary-700); background:var(--surface-subtle); }
-.dashboard__card--wide { flex-direction:row; align-items:center; min-height:auto; }
-.dashboard__card--wide .dashboard__card__hint { margin-top:0; margin-left:auto; }
 
 /* ---- Período: KPIs, chart, motivos ---- */
 .dashboard .kpi-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--space-3); }
@@ -2482,7 +2481,8 @@
 }
 @media (max-width: 48rem) {
   .dashboard__grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .dashboard__card--wide { grid-column:span 2; }
+  .dashboard__card--wide { grid-column:span 2; flex-direction:row; align-items:center; min-height:auto; }
+  .dashboard__card--wide .dashboard__card__hint { margin-top:0; margin-left:auto; }
 }
 @media (max-width: 40rem) {
   .dashboard__card--agent { grid-column:1 / -1; gap:var(--space-3); }

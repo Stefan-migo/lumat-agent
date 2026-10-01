@@ -99,7 +99,7 @@ function stateMessage(state: DashboardState, retry: () => void) {
   if (state === "denied") return <StateMessage tone="danger" role="alert" title="No tienes permiso para ver este panel" />;
   if (state === "stale") return <StateMessage tone="warning" role="status" title="Los datos pueden estar desactualizados" detail="Mostramos la última información disponible." />;
   if (state === "partial-error") return <StateMessage tone="warning" role="alert" title="No pudimos cargar toda la actividad" detail="Algunos indicadores pueden estar incompletos." />;
-  if (state === "error" || state === "fatal-error") return <div><StateMessage tone="danger" role="alert" title="No pudimos cargar el panel" detail="Reintenta para recuperar los indicadores." /><button type="button" onClick={retry}>Reintentar</button></div>;
+  if (state === "error" || state === "fatal-error") return <div><StateMessage tone="danger" role="alert" title="No pudimos cargar el panel" detail="Reintenta para recuperar los indicadores." /><button className="dashboard__retry-button" type="button" onClick={retry}>Reintentar</button></div>;
   return null;
 }
 
