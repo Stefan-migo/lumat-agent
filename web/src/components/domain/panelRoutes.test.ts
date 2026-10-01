@@ -5,9 +5,22 @@ import {
   parsePanelPath,
   pathForRoute,
   pathForView,
+  isDetailRoute,
 } from './panelRoutes';
 
 describe('panel routes', () => {
+  it('identifies only routes with path-segment drill-downs as detail routes', () => {
+    expect(isDetailRoute({ view: 'clients' })).toBe(false);
+    expect(isDetailRoute({ view: 'clients', clientId: 42 })).toBe(true);
+    expect(isDetailRoute({ view: 'conversations', conversationId: 7 })).toBe(true);
+    expect(isDetailRoute({ view: 'automation-rules', automationRuleId: 12 })).toBe(true);
+    expect(isDetailRoute({ view: 'kb', kbDocId: 3 })).toBe(true);
+    expect(isDetailRoute({ view: 'agenda', appointmentId: 9 })).toBe(true);
+    expect(isDetailRoute({ view: 'projects', projectSlug: 'ops' })).toBe(true);
+    expect(isDetailRoute({ view: 'planning-sessions', planningSessionSlug: 'review' })).toBe(true);
+    expect(isDetailRoute({ view: 'chat', projectSlug: 'ops', threadId: 4 })).toBe(false);
+  });
+
   it('maps every top-level view to a clean panel path', () => {
     expect(PANEL_ROUTES).toMatchObject({
       dashboard: '/panel/app/',

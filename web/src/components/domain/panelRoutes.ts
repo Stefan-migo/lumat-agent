@@ -15,6 +15,16 @@ export type PanelRoute = {
 
 export const PANEL_BASE_PATH = '/panel/app/';
 
+export function isDetailRoute(route: PanelRoute): boolean {
+  return (route.view === 'clients' && route.clientId !== undefined && Number.isSafeInteger(route.clientId) && route.clientId > 0)
+    || (route.view === 'conversations' && route.conversationId !== undefined && Number.isSafeInteger(route.conversationId) && route.conversationId > 0)
+    || (route.view === 'automation-rules' && route.automationRuleId !== undefined && Number.isSafeInteger(route.automationRuleId) && route.automationRuleId > 0)
+    || (route.view === 'kb' && route.kbDocId !== undefined && Number.isSafeInteger(route.kbDocId) && route.kbDocId > 0)
+    || (route.view === 'agenda' && route.appointmentId !== undefined && Number.isSafeInteger(route.appointmentId) && route.appointmentId > 0)
+    || (route.view === 'projects' && Boolean(route.projectSlug))
+    || (route.view === 'planning-sessions' && Boolean(route.planningSessionSlug));
+}
+
 export const PANEL_ROUTES = {
   dashboard: PANEL_BASE_PATH,
   chat: '/panel/app/chat',
