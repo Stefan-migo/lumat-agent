@@ -46,6 +46,11 @@ describe('panel routes', () => {
     expect(parsePanelPath('/panel/app/conversations/7')).toEqual({ view: 'conversations', conversationId: 7 });
   });
 
+  it('builds and parses user ficha routes', () => {
+    expect(pathForRoute({ view: 'users', userId: 42 })).toBe('/panel/app/users/42');
+    expect(parsePanelPath('/panel/app/users/42')).toEqual({ view: 'users', userId: 42 });
+  });
+
   it('normalizes valid paths and safely falls back for invalid paths or IDs', () => {
     expect(parsePanelPath('/panel/app/clients/42/')).toEqual({ view: 'clients', clientId: 42 });
     expect(parsePanelPath('/panel/app//conversations')).toEqual({ view: 'conversations', conversationTab: 'all' });
