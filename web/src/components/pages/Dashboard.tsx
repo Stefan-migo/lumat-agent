@@ -52,7 +52,7 @@ function dayLabel(localDate: string): string {
   try {
     const date = new Date(`${localDate}T12:00:00`);
     if (Number.isNaN(date.getTime())) return localDate;
-    return new Intl.DateTimeFormat("es-CL", { weekday: "long", day: "numeric", month: "long" }).format(date);
+    return new Intl.DateTimeFormat("es-CL", { weekday: "long", day: "numeric", month: "long" }).format(date).replace(/^./, (letter) => letter.toLocaleUpperCase("es-CL"));
   } catch {
     return localDate;
   }
@@ -131,7 +131,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
     </div>
   );
 
-  return <PageFrame title="Panel" meta={data ? `Actividad de los últimos ${data.window_days} días · Desde ${data.window_start}` : "Actividad reciente del negocio"} state={stateMessage(state, retry)}>
+  return <PageFrame title="Dashboard" meta={data ? `Actividad de los últimos ${data.window_days} días · Desde ${data.window_start}` : "Actividad reciente del negocio"} state={stateMessage(state, retry)}>
     {state === "ready" && data ? <div className="dashboard">
       {hasPartialError ? stateMessage("partial-error", retry) : null}
       <section className="dashboard__section" aria-labelledby="today-title">
@@ -140,7 +140,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
           {today.local_date ? <span className="dashboard__day"><Icon icon={ICONS.calendar} size="sm" />{dayLabel(today.local_date)}</span> : null}
         </div>
         <div className="dashboard__hoy">
-          {opsCard("Agenda", "calendar", "primary", today.appointments_today.length, "Ver agenda", "agenda",
+          {opsCard("Agenda de hoy", "calendar", "primary", today.appointments_today.length, "Ver agenda", "agenda",
             <ul className="dashboard__list">{today.appointments_today.length ? today.appointments_today.map((row) => (
               <li key={row.id}><button className="dashboard__row" type="button" onClick={() => navigate("agenda")} aria-label={row.customer_name ?? row.service}>
                 <span className="dashboard__row__time"><Icon icon={ICONS.clock} size="sm" />{row.local_start}</span>
@@ -190,7 +190,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
         </div>
       </section>
       <section className="dashboard__section" aria-labelledby="period-title">
-        <div className="dashboard__section-head"><h2 id="period-title">Período</h2></div>
+        <div className="dashboard__section-head"><h2 id="period-title">Actividad del período</h2></div>
         <div className="kpi-grid">
           <StatCard label="Contactos" value={data.contacts} accent="var(--primary-700)" />
           <StatCard label="Derivados" value={data.derived} accent="var(--warning)" />
@@ -212,7 +212,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
                   <span className="dashboard__bar-col__day">{dayShort(bar.start)}</span>
                 </div>
               );
-            })}</div> : <div className="dashboard__chart__empty"><Icon icon={ICONS.chart} size="sm" /><span>Sin actividad registrada en el período</span></div>}
+            })}</div> : <div className="dashboard__chart__empty"><Icon icon={ICONS.chart} size="sm" /><span><strong>Sin contactos en este período</strong><br />La actividad aparecerá aquí cuando se registren contactos.</span></div>}
           </div>
           <div className="dashboard__motivos">
             <div className="dashboard__chart__head"><Icon icon={ICONS.tag} size="sm" /><h3>Motivos</h3></div>

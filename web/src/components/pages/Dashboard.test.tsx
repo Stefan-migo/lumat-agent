@@ -29,6 +29,32 @@ const data = {
 };
 
 describe("Dashboard operational surface", () => {
+  it("uses Dashboard as the page title", () => {
+    render(<Dashboard data={data} state="ready" />);
+    expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
+  });
+
+  it("capitalises the weekday in the Hoy date chip", () => {
+    render(<Dashboard data={data} state="ready" />);
+    expect(screen.getByText("Miércoles, 9 de septiembre")).toBeInTheDocument();
+  });
+
+  it("labels the agenda operations card as Agenda de hoy", () => {
+    render(<Dashboard data={data} state="ready" />);
+    expect(screen.getByRole("heading", { level: 3, name: "Agenda de hoy" })).toBeInTheDocument();
+  });
+
+  it("labels the activity section as Actividad del período", () => {
+    render(<Dashboard data={data} state="ready" />);
+    expect(screen.getByRole("heading", { level: 2, name: "Actividad del período" })).toBeInTheDocument();
+  });
+
+  it("renders both reference empty-state messages when the chart has no data", () => {
+    render(<Dashboard data={{ ...data, trend: [] }} state="ready" />);
+    expect(screen.getByText("Sin contactos en este período")).toBeInTheDocument();
+    expect(screen.getByText("La actividad aparecerá aquí cuando se registren contactos.")).toBeInTheDocument();
+  });
+
   it("renders Hoy rows and navigates each row to its operational view", () => {
     const onNavigate = vi.fn();
     render(<Dashboard data={data} state="ready" role="admin" onNavigate={onNavigate} />);
