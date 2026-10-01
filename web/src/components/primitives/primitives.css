@@ -2387,9 +2387,10 @@
 .dashboard__section-head h2 { display:flex; align-items:center; gap:var(--space-2); margin:0; font-size:var(--text-md); font-weight:var(--weight-semibold); letter-spacing:0; color:var(--corp-text); }
 .dashboard__section-head h2::before { content:""; width:var(--space-2); height:var(--space-2); border-radius:var(--radius-sm); background:var(--brand-lime); }
 .dashboard__period-head { justify-content:space-between; align-items:center; }
-.dashboard__period-control { position:relative; display:grid; justify-items:end; gap:var(--space-1); }
-.dashboard__period-control > svg { position:absolute; top:50%; left:var(--space-3); z-index:1; color:var(--primary-700); pointer-events:none; transform:translateY(-50%); }
-.dashboard__period-control > svg:last-of-type { right:var(--space-3); left:auto; }
+.dashboard__period-control { display:grid; justify-items:end; gap:var(--space-1); }
+.dashboard__period-pill { position:relative; }
+.dashboard__period-pill > svg { position:absolute; top:50%; left:var(--space-3); z-index:1; color:var(--primary-700); pointer-events:none; transform:translateY(-50%); }
+.dashboard__period-pill > svg:last-of-type { right:var(--space-3); left:auto; color:var(--corp-text); }
 .dashboard__period-control .field__label { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; }
 .dashboard__period-control .field { width:12rem; }
 .dashboard__period-control .dashboard__period-select { min-height:var(--space-8); padding:var(--space-1) var(--space-8) var(--space-1) var(--space-8); appearance:none; border:1px solid var(--corp-border); border-radius:var(--radius-pill); background:var(--surface); }
@@ -2441,7 +2442,7 @@
 .dashboard__shortcuts-head { display:none; }
 .dashboard__card--agent { grid-column:1 / -1; flex-direction:row; align-items:center; min-height:auto; background:var(--surface); }
 .dashboard__card--agent .dashboard__card__icon { flex:none; width:calc(var(--space-8) * 2); height:calc(var(--space-8) * 2); border-radius:var(--radius-lg); background:var(--chrome-900); color:var(--text-on-dark); }
-.dashboard__card--agent .dashboard__card__icon svg { width:1.75rem; height:1.75rem; }
+.dashboard__card--agent .dashboard__card__icon svg { width:2.25rem; height:2.25rem; }
 .dashboard__card__copy { display:grid; gap:var(--space-1); }
 .dashboard__card--agent .dashboard__card__label { font-size:var(--text-lg); font-weight:var(--weight-bold); }
 .dashboard__card--agent .dashboard__card__sub { color:var(--corp-fg-muted); }

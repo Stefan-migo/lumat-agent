@@ -207,20 +207,22 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
         <div className="dashboard__section-head dashboard__period-head">
           <h2 id="period-title">Actividad del período</h2>
           <div className="dashboard__period-control">
-            <Icon icon={ICONS.calendar} size="sm" />
-            <Select
-              className="dashboard__period-select"
-              label="Período de actividad"
-              aria-label="Período de actividad"
-              value={windowDays}
-              onChange={(event) => setWindowDays(Number(event.target.value))}
-              options={[
-                { value: "7", label: "Últimos 7 días" },
-                { value: "14", label: "Últimos 14 días" },
-                { value: "30", label: "Últimos 30 días" },
-              ]}
-            />
-            <Icon icon={ICONS.chevronDown} size="sm" />
+            <div className="dashboard__period-pill">
+              <Icon icon={ICONS.calendar} size="sm" />
+              <Select
+                className="dashboard__period-select"
+                label="Período de actividad"
+                aria-label="Período de actividad"
+                value={windowDays}
+                onChange={(event) => setWindowDays(Number(event.target.value))}
+                options={[
+                  { value: "7", label: "Últimos 7 días" },
+                  { value: "14", label: "Últimos 14 días" },
+                  { value: "30", label: "Últimos 30 días" },
+                ]}
+              />
+              <Icon icon={ICONS.chevronDown} size="sm" />
+            </div>
             {data.window_start ? <span className="dashboard__period-caption">Desde el {periodStartLabel(data.window_start)}</span> : null}
           </div>
         </div>
