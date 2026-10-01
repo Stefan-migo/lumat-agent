@@ -11,7 +11,7 @@ describe("Dashboard page story (R-PRD-PG-6)", () => {
     expect(screen.getByText("Derivados")).toBeInTheDocument();
     expect(screen.getByText("Solicitudes de visita")).toBeInTheDocument();
     expect(screen.getByText(/consulta/)).toBeInTheDocument();
-    expect(screen.getByText(/últimos 7 días.*2026-08-18/i)).toBeInTheDocument();
+    expect(screen.getByText("Actividad de los últimos 7 días · Desde 18 ago 2026")).toBeInTheDocument();
   });
 
   it("does not render fabricated deltas or the old activity feed", () => {

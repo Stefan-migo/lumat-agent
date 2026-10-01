@@ -133,19 +133,19 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
   const chartTotal = bars.reduce((sum, bar) => sum + bar.count, 0);
   const motivos = data?.motivos ?? [];
 
-  const opsCard = (title: string, icon: IconName, tone: "primary" | "info" | "danger", count: number, action: string, view: PanelView, body: ReactNode) => (
+  const opsCard = (title: string, icon: IconName, tone: "primary" | "info" | "danger", count: number, action: string, view: PanelView, body: ReactNode, showCount = true) => (
     <div className={`dashboard__card-ops dashboard__card-ops--${tone}`}>
       <div className="dashboard__card-ops__head">
         <span className="dashboard__card-ops__icon"><Icon icon={ICONS[icon]} size="sm" /></span>
         <h3>{title}</h3>
-        <span className={`dashboard__card-ops__count${count > 0 ? " dashboard__card-ops__count--active" : ""}`}>{count}</span>
+        {showCount && count > 0 ? <span className={`dashboard__card-ops__count${count > 0 ? " dashboard__card-ops__count--active" : ""}`}>{count}</span> : null}
       </div>
       {body}
       <button className="dashboard__card-ops__link" type="button" onClick={() => navigate(view)}>{action}<Icon icon={ICONS.arrow} size="sm" /></button>
     </div>
   );
 
-  return <PageFrame title="Dashboard" meta={data ? `Actividad de los últimos ${data.window_days} días · Desde ${data.window_start}` : "Actividad reciente del negocio"} state={stateMessage(state, retry)}>
+  return <PageFrame title="Dashboard" meta={data ? `Actividad de los últimos ${data.window_days} días · Desde ${periodStartLabel(data.window_start)}` : "Actividad reciente del negocio"} state={stateMessage(state, retry)}>
     {state === "ready" && data ? <div className="dashboard">
       {hasPartialError ? stateMessage("partial-error", retry) : null}
       <section className="dashboard__section" aria-labelledby="today-title">
@@ -163,20 +163,20 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
               </button></li>
             )) : <li className="dashboard__empty"><Icon icon={ICONS.calendar} size="sm" /><span>No hay visitas para hoy</span></li>}</ul>)}
           {opsCard("Sin respuesta", "inbox", "info", today.unanswered_conversations.length, "Ver conversaciones", "conversations",
-            <ul className="dashboard__list">{today.unanswered_conversations.length ? today.unanswered_conversations.map((row) => (
+            <div className="dashboard__metric-content">{today.unanswered_conversations.length ? null : <strong className="dashboard__metric-value">{today.unanswered_conversations.length}</strong>}<ul className="dashboard__list">{today.unanswered_conversations.length ? today.unanswered_conversations.map((row) => (
               <li key={row.id}><button className="dashboard__row" type="button" onClick={() => navigate("conversations")} aria-label={row.customer_name ?? "Conversación"}>
                 <strong>{row.customer_name ?? "Sin nombre"}</strong>
                 <small>{row.state}</small>
               </button></li>
-            )) : <li className="dashboard__empty"><Icon icon={ICONS.inbox} size="sm" /><span>No hay conversaciones pendientes</span></li>}</ul>)}
+            )) : <li className="dashboard__empty"><Icon icon={ICONS.inbox} size="sm" /><span>No hay conversaciones pendientes</span></li>}</ul></div>, false)}
           {opsCard("Urgentes", "alert", "danger", today.urgent_cases.length, "Ver casos", "cases",
-            <ul className="dashboard__list">{today.urgent_cases.length ? today.urgent_cases.map((row) => (
+            <div className="dashboard__metric-content">{today.urgent_cases.length ? null : <strong className="dashboard__metric-value">{today.urgent_cases.length}</strong>}<ul className="dashboard__list">{today.urgent_cases.length ? today.urgent_cases.map((row) => (
               <li key={row.id}><button className="dashboard__row dashboard__row--urgent" type="button" onClick={() => navigate("cases")} aria-label={row.customer_name ?? "Caso urgente"}>
                 <strong>{row.customer_name ?? "Sin nombre"}</strong>
                 <small>{row.summary ?? row.service ?? "Caso urgente"}</small>
                 <span className="dashboard__tag dashboard__tag--danger"><Icon icon={ICONS.alert} size="sm" />Urgente</span>
               </button></li>
-            )) : <li className="dashboard__empty"><Icon icon={ICONS.alert} size="sm" /><span>No hay casos urgentes</span></li>}</ul>)}
+            )) : <li className="dashboard__empty"><Icon icon={ICONS.alert} size="sm" /><span>No hay casos urgentes</span></li>}</ul></div>, false)}
         </div>
       </section>
       <section className="dashboard__section" aria-label="Navegación operativa">
@@ -235,7 +235,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
         <div className="dashboard__period">
           <div className="dashboard__chart" aria-label={`Tendencia de contactos de ${windowDays} días`}>
             <div className="dashboard__chart__head"><Icon icon={ICONS.chart} size="sm" /><h3>Contactos por día</h3>{bars.length ? <span className="dashboard__chart__total">{chartTotal} contactos · {bars.length} días</span> : null}</div>
-            {bars.length ? <div className="dashboard__bars">{bars.map((bar) => {
+            {bars.some((bar) => bar.count > 0) ? <div className="dashboard__bars">{bars.map((bar) => {
               const pct = max > 0 && bar.count > 0 ? Math.max((bar.count / max) * 100, 6) : 0;
               const cls = ["dashboard__bar"];
               if (bar.count > 0 && bar.count === max) cls.push("dashboard__bar--peak");

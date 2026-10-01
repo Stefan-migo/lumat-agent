@@ -56,10 +56,36 @@ describe("Dashboard operational surface", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Actividad del período" })).toBeInTheDocument();
   });
 
+  it("formats the page subtitle date like the period caption", () => {
+    render(<Dashboard data={data} state="ready" />);
+    expect(screen.getByText("Actividad de los últimos 7 días · Desde 3 sept 2026")).toBeInTheDocument();
+  });
+
   it("renders both reference empty-state messages when the chart has no data", () => {
     render(<Dashboard data={{ ...data, trend: [] }} state="ready" />);
     expect(screen.getByText("Sin contactos en este período")).toBeInTheDocument();
     expect(screen.getByText("La actividad aparecerá aquí cuando se registren contactos.")).toBeInTheDocument();
+  });
+
+  it("renders the chart empty state for zero-count buckets and keeps the total line", () => {
+    const trend = Array.from({ length: 7 }, (_, index) => ({ start: `2026-09-${String(index + 3).padStart(2, "0")}`, count: 0 }));
+    render(<Dashboard data={{ ...data, trend }} state="ready" />);
+    expect(screen.getByText("0 contactos · 7 días")).toBeInTheDocument();
+    expect(screen.getByText("Sin contactos en este período")).toBeInTheDocument();
+    expect(screen.queryByText("lun")).not.toBeInTheDocument();
+  });
+
+  it("shows empty HOY metric counts in the card body without count chips", () => {
+    const today = { ...data.today, unanswered_conversations: [], urgent_cases: [] };
+    render(<Dashboard data={{ ...data, today }} state="ready" />);
+    for (const [title, message] of [["Sin respuesta", "No hay conversaciones pendientes"], ["Urgentes", "No hay casos urgentes"]]) {
+      const card = screen.getByRole("heading", { level: 3, name: title }).closest(".dashboard__card-ops");
+      expect(card?.querySelector(".dashboard__card-ops__count")).not.toBeInTheDocument();
+      expect(card?.querySelector(".dashboard__metric-value")).toHaveTextContent("0");
+      expect(card).toHaveTextContent(message);
+    }
+    const agenda = screen.getByRole("heading", { level: 3, name: "Agenda de hoy" }).closest(".dashboard__card-ops");
+    expect(agenda?.querySelector(".dashboard__card-ops__count")).toHaveTextContent("1");
   });
 
   it("renders Hoy rows and navigates each row to its operational view", () => {
