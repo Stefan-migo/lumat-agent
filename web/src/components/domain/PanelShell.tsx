@@ -90,10 +90,10 @@ function AccountControl({ user, onLogout, open, onToggle }: { user: User; onLogo
   );
 }
 
-function Brand({ mobile = false, compact = false }: { mobile?: boolean; compact?: boolean }) {
+function Brand({ mobile = false, compact = false, line = false }: { mobile?: boolean; compact?: boolean; line?: boolean }) {
   return (
     <div
-      className={mobile ? "panel-shell__mobile-brand" : "panel-shell__brand"}
+      className={mobile ? `panel-shell__mobile-brand${line ? " panel-shell__mobile-brand--line" : ""}` : "panel-shell__brand"}
       role="img"
       aria-label="Lumat, panel operativo"
     >
@@ -101,7 +101,7 @@ function Brand({ mobile = false, compact = false }: { mobile?: boolean; compact?
         <img className="panel-shell__brand-mark" src={`${BRAND_ASSET_BASE}/lumat-mark.png`} alt="" aria-hidden="true" />
       ) : (
         <>
-          <img className="panel-shell__brand-image" src={`${BRAND_ASSET_BASE}/lumat-logo.png`} alt="Lumat" />
+          <img className="panel-shell__brand-image" src={`${BRAND_ASSET_BASE}/${line ? "lumat-logo-line.png" : "lumat-logo.png"}`} alt="Lumat" />
           <img className="panel-shell__brand-mark" src={`${BRAND_ASSET_BASE}/lumat-mark.png`} alt="" aria-hidden="true" />
         </>
       )}
@@ -422,7 +422,19 @@ export function PanelShell({
       </aside>
 
       <header className="panel-shell__mobile-bar">
-        <Brand mobile />
+        <button
+          ref={menuButtonRef}
+          type="button"
+          className="panel-shell__menu-button"
+          aria-expanded={drawerOpen}
+          aria-controls="panel-navigation-drawer"
+          aria-label="Abrir menú de navegación"
+          title="Abrir menú de navegación"
+          onClick={(event) => openDrawer(event.currentTarget)}
+        >
+          <Icon icon={Menu} />
+        </button>
+        <Brand mobile line />
         <div className="panel-shell__mobile-actions">
           {/* PNL-APP-10: the header exposes the bell and the avatar at every tier. The mobile popover lives inside
               the desktop header (hidden below 64rem), so the mobile bell navigates to the notification center. */}
@@ -431,18 +443,6 @@ export function PanelShell({
             {notificationState.status === "ready" && notificationState.unread > 0 ? <span aria-hidden="true">{notificationState.unread}</span> : null}
           </button>
           <AccountControl user={user} onLogout={onLogout} open={mobileAccountOpen} onToggle={() => setMobileAccountOpen((open) => !open)} />
-          <button
-            ref={menuButtonRef}
-            type="button"
-            className="panel-shell__menu-button"
-            aria-expanded={drawerOpen}
-            aria-controls="panel-navigation-drawer"
-            aria-label="Abrir menú de navegación"
-            title="Abrir menú de navegación"
-            onClick={(event) => openDrawer(event.currentTarget)}
-          >
-            <Icon icon={Menu} />
-          </button>
         </div>
       </header>
 

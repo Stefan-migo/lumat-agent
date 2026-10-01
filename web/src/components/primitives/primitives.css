@@ -1060,6 +1060,13 @@
   align-items: center;
   min-width: 0;
 }
+.panel-shell__mobile-brand--line {
+  flex: 0 1 11rem;
+  margin-right: auto;
+}
+.panel-shell__mobile-brand--line .panel-shell__brand-image {
+  max-height: 3rem;
+}
 .panel-shell__mobile-brand .panel-shell__brand-mark { display: none; }
 .panel-shell__brand-image,
 .panel-shell__brand-mark {
