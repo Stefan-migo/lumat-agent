@@ -1397,6 +1397,26 @@
   border-color: var(--surface);
   background: color-mix(in srgb, var(--surface) 28%, transparent);
 }
+/* PNL-APP-10: the mobile header exposes the bell and the account affordance. Both keep the dark-chrome
+   treatment the mobile bar owns, so the shared header-action/account rules stay light for the desktop header. */
+.panel-shell__mobile-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.panel-shell__mobile-bar .panel-shell__header-action,
+.panel-shell__mobile-bar .panel-shell__account-trigger {
+  color: var(--surface);
+}
+.panel-shell__mobile-bar .panel-shell__header-action:hover,
+.panel-shell__mobile-bar .panel-shell__account-trigger:hover {
+  background: color-mix(in srgb, var(--surface) 16%, transparent);
+}
+/* The compact account is avatar-only; the identity and the chevron belong to the desktop header. */
+.panel-shell__mobile-bar .panel-shell__account-name,
+.panel-shell__mobile-bar .panel-shell__account-trigger > svg {
+  display: none;
+}
 .panel-shell__header-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1752,6 +1772,11 @@
   .panel-shell__sidebar .panel-shell__user-identity { grid-template-columns: 1fr; justify-items: center; }
   .panel-shell__tablet-menu { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-on-dark); cursor: pointer; }
   .panel-shell__tablet-menu:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+  /* Tablet has no chrome band: the header row carries only the bell and the account affordances (PNL-APP-10). */
+  .panel-shell__header-row { display: flex; background: transparent; border-bottom: 0; }
+  .panel-shell__header .panel-shell__back,
+  .panel-shell__header .panel-shell__breadcrumbs { display: none; }
+  .panel-shell__header { justify-content: flex-end; padding-inline: var(--space-5); }
   .panel-shell__footer-nav { display: none; }
 }
 @media (max-width: 39.99rem) {

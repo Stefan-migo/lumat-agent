@@ -28,6 +28,12 @@ function mobileDrawerTrigger(container: HTMLElement) {
     .getByRole('button', { name: 'Abrir menú de navegación' });
 }
 
+/** Desktop header action group; jsdom does not apply the styles that hide it below the desktop tier, so the
+ *  bell and account affordances also exist in the mobile bar and every query must be scoped. */
+function headerActions(container: HTMLElement) {
+  return within(container.querySelector('.panel-shell__header-actions') as HTMLElement);
+}
+
 describe('AppShell (T6.4)', () => {
   it('shows the authenticated user (username + role) and the app name', () => {
     const { container } = render(<AppShell user={admin} />);
@@ -460,14 +466,14 @@ describe('AppShell — agent shell grammar', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => String(input).includes('/notifications')
       ? new Response(JSON.stringify({ notifications: [{ id: 1, title: 'Aviso', content: 'Caso', source: 'case', channel: 'email', status: 'sent', read_at: null, created_at: null }] }), { status: 200 })
       : new Response(JSON.stringify({ contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' }), { status: 200 }));
-    render(<AppShell user={admin} onLogout={logout} />);
+    const { container } = render(<AppShell user={admin} onLogout={logout} />);
 
-    const bell = await screen.findByRole('button', { name: 'Notificaciones (1 sin leer)' });
+    const bell = await headerActions(container).findByRole('button', { name: 'Notificaciones (1 sin leer)' });
 
     await user.click(bell);
     const popover = screen.getByRole('dialog', { name: 'Notificaciones' });
     expect(popover).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /abrir menú de usuario/i })).not.toBeInTheDocument();
+    expect(headerActions(container).queryByRole('button', { name: /abrir menú de usuario/i })).not.toBeInTheDocument();
     await user.click(within(popover).getByRole('button', { name: 'Ver todas las notificaciones' }));
     expect(window.location.pathname).toBe('/panel/app/notifications');
     expect(await screen.findByRole('heading', { name: 'Notificaciones' })).toBeInTheDocument();
@@ -481,10 +487,10 @@ describe('AppShell — agent shell grammar', () => {
       if (String(input).includes('/notifications')) return new Response('failure', { status: 500 });
       return new Response(JSON.stringify({ contacts: 0, motivos: [], derived: 0, visit_requests: 0, window_days: 7, window_start: '2026-08-25' }), { status: 200 });
     });
-    render(<AppShell user={admin} />);
+    const { container } = render(<AppShell user={admin} />);
 
-    expect(screen.getByRole('button', { name: /cargando notificaciones/i })).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /notificaciones no disponibles/i })).toBeInTheDocument();
+    expect(headerActions(container).getByRole('button', { name: /cargando notificaciones/i })).toBeInTheDocument();
+    expect(await headerActions(container).findByRole('button', { name: /notificaciones no disponibles/i })).toBeInTheDocument();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(requests.filter((path) => path.includes('/notifications'))).toHaveLength(1);
   });
@@ -498,7 +504,7 @@ describe('AppShell — agent shell grammar', () => {
     ]);
     expect(footer.getByRole('button', { name: 'Panel' })).toHaveAttribute('aria-current', 'page');
     expect(footer.getByRole('button', { name: 'Asistente' })).toHaveClass('panel-shell__footer-nav--primary');
-    const notificationButton = screen.getByRole('button', { name: /notificaciones/i });
+    const notificationButton = headerActions(container).getByRole('button', { name: /notificaciones/i });
     expect(notificationButton).toBeInTheDocument();
     await user.click(notificationButton);
     expect(screen.getByRole('dialog', { name: 'Notificaciones' })).toBeInTheDocument();
