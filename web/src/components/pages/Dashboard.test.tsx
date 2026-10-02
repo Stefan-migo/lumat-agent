@@ -75,6 +75,14 @@ describe("Dashboard operational surface", () => {
     expect(screen.queryByText("lun")).not.toBeInTheDocument();
   });
 
+  it("thins day labels for a 30-day trend while rendering every bar", () => {
+    const trend = Array.from({ length: 30 }, (_, index) => ({ start: `2026-09-${String(index + 1).padStart(2, "0")}`, count: index + 1 }));
+    const { container } = render(<Dashboard data={{ ...data, trend }} state="ready" />);
+
+    expect(container.querySelectorAll(".dashboard__bar-col__day")).toHaveLength(6);
+    expect(container.querySelectorAll(".dashboard__bar")).toHaveLength(30);
+  });
+
   it("shows empty HOY metric counts in the card body without count chips", () => {
     const today = { ...data.today, unanswered_conversations: [], urgent_cases: [] };
     render(<Dashboard data={{ ...data, today }} state="ready" />);
