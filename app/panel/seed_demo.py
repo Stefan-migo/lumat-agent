@@ -1,17 +1,24 @@
 """Seed development-only dashboard data (never part of the deploy seed).
 
-Usage:
-    python app/panel/seed_demo.py
-    python app/panel/seed_demo.py --allow-nonlocal  # explicit dangerous override
+Usage inside the API container, where the environment variables and ``db``
+Compose hostname are available::
 
-The resolved DATABASE_URL host must be localhost or 127.0.0.1 unless the
-override flag is supplied. Rows are replaced on each run. The reserved
-``+5690000000`` phone prefix identifies every seeded customer.
+    docker compose exec api python app/panel/seed_demo.py --yes
+
+Alternatively, run from the repository root with the required environment
+variables exported and a ``.venv`` installed::
+
+    .venv/bin/python app/panel/seed_demo.py --yes
+
+The target URL is printed with its password redacted, and writing requires
+``--yes`` or ``LUMAT_DEMO_SEED=1``. Demo rows are replaced on each run. The
+reserved ``+5690000000`` phone prefix identifies every seeded customer.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -141,14 +148,18 @@ def seed_demo() -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--allow-nonlocal", action="store_true", help="allow a non-local database host"
+        "--yes", action="store_true", help="confirm replacing demo rows in the target database"
     )
     args = parser.parse_args(argv)
-    host = make_url(get_settings().database_url).host
-    if host not in {"localhost", "127.0.0.1"} and not args.allow_nonlocal:
+    database_url = make_url(get_settings().database_url)
+    print(
+        f"Target database: {database_url.render_as_string(hide_password=True)}\n"
+        "Demo rows will be replaced.",
+        flush=True,
+    )
+    if not (args.yes or os.environ.get("LUMAT_DEMO_SEED") == "1"):
         print(
-            f"refusing demo seed: database host {host!r} is not local; "
-            "pass --allow-nonlocal to override",
+            "Refusing to write without explicit opt-in: pass --yes or set LUMAT_DEMO_SEED=1.",
             file=sys.stderr,
         )
         return 1
