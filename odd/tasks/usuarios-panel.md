@@ -98,6 +98,66 @@ authored changed lines, split it before opening the PR.
   Checks: `npm run test` → 956/956, `npm run build` → OK.
   Route: inline (4 files: two components + their tests; mechanical, no design work).
 
+## Owner review — slice 2 (round 1)
+
+Reference (desktop) governs. Fixes required:
+
+- The search + role filter must live **inside the table card** (same card as the table). Remove the
+  "Filtrar por rol" label — it is not in the reference and it breaks the filter.
+- Buttons: the reference buttons are more square, less pill/oval.
+- Tabs: the active indicator is greener (the reference lime).
+- Usuario cell: avatar + name. Remove the raw `username` secondary line. The name must not render as a
+  plain green HTML link. The avatar must look like the reference's initials circle, not a bare letter.
+- Rol cell: the icon and the label have no spacing and look off/smaller than the reference.
+- Estado: OK — add the dot to the badge.
+- Acciones: the "…" kebab must be right-aligned; "Acciones no disponibles" must be centered.
+- The actions popover (the "…" menu) is not designed — it needs the per-item icons and the
+  design-system font.
+- Footer: the "Mostrando X de X usuarios" legend is broken and the pagination is not styled like the
+  reference and must be right-aligned (it sits next to the legend).
+- The table treatment (card, toolbar, footer, status dot, tabs indicator, button shape) must be
+  **shared**, so the other table sections inherit it.
+
+Outcome:
+- Applied (shared table vocabulary in `primitives.css` + `StatusBadge` dot + `.table__resource-name`
+  plain, `DataTable` `.table__actions-cell`): toolbar inside the card with the label visually hidden,
+  Usuario cell = avatar + name + "Tú" (no `username` line, no green link), Rol spacing, Estado dot,
+  Acciones right-aligned and "Acciones no disponibles" centered, footer legend left + pagination
+  right (`‹ 1 ›`), menu item icons. `Button` now forwards `aria-label` (was dropped though its type
+  allowed it).
+- **Escalated, not applied** (locked design-system contracts — the skill says do not reopen
+  palette/tokens per section):
+  - `.btn` border-radius is `var(--radius-pill)` and is asserted by `tokens.test.ts`. Making buttons
+    "more square" is a global shape change affecting every button in the panel.
+  - `.tabs__tab[aria-selected="true"]` uses `var(--chrome-950)` for a high-contrast active indicator,
+    asserted by `Tabs.test.tsx`. The reference lime may not meet the contrast bar.
+  Both were reverted after the refinement writer changed them and broke the contract tests. Pending
+  the owner's decision on reopening the design system.
+
+## Owner review — slice 2 (round 2)
+
+Applied: filter icon moved INSIDE the select control and glyph changed to a sliders icon (closer to
+the reference); "Acciones no disponibles" left-aligned (the reference keeps it left); `.menu__content`
+now uses `var(--font-ui)` (the popover is portaled, so it was inheriting the body font); the avatar
+now renders a visible circle.
+
+Escalated further:
+- Avatar fill. `.avatar` background is locked to `var(--surface-subtle)` by `Avatar.test.tsx`, but
+  `--surface-subtle` resolves to the same value as `--surface`, so a filled circle was invisible.
+
+Design-system reopen (owner decision, slice 2 round 2): the owner authorized reopening the three
+locked contracts. Applied globally and the contract tests updated:
+- `.btn` border-radius: `var(--radius-pill)` → `var(--radius-lg)` (10px, rounded-rect like the
+  reference). Test: `tokens.test.ts`.
+- `.tabs__tab[aria-selected="true"]` border-bottom-color: `var(--chrome-950)` → `var(--brand-lime)`
+  (verified computed `rgb(171,195,51)`). Test: `Tabs.test.tsx`. Contrast note: lime on the light
+  surface is below the WCAG 1.4.11 non-text 3:1 bar; the selected tab also switches text to
+  `var(--text)`, but if AA is required use `--primary-700` instead.
+- `.avatar` background: `var(--surface-subtle)` → `var(--border)` (visible filled circle). Test:
+  `Avatar.test.tsx`.
+
+This is a panel-wide design-system change, not usuarios-only: every button, tab and avatar changes.
+
 ## Slice log
 
 | Slice | Findings | Commit | PR | Status |
