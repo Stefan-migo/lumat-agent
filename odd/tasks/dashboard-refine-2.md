@@ -163,4 +163,4 @@ of this unit is verified by the owner and not by jsdom.
 
 - Base `405f6af5`. PR #462 closed the previous unit; the previous worktree and branches are gone.
 - `graphify-out/` is gitignored: query from `/home/stefan/repos/lumat-agent`.
-- The findings ledger is on `main` (`odd/analysis/findings-ledger.md`).
+- Dashboard findings are recorded in `odd/analysis/dashboard/findings.md`.

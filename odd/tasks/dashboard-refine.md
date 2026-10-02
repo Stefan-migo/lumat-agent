@@ -4,7 +4,7 @@ Status: complete — both slices merged (PRs #459, #461); findings ledger landed
 Worktree: `/home/stefan/repos/lumat-agent-odd-dashboard-refine`
 Branch: `odd/dashboard-refine`
 Base: `1c6e9595` (= `origin/main`)
-Source: `odd/analysis/findings-ledger.md` on `main` (commits `c0d24805`, `74768739`) — the
+Source: the dashboard findings record on `main` (commits `c0d24805`, `74768739`) — the
 dashboard section run of the `panel-section-analysis` machine.
 Depends on: nothing.
 Delivery strategy: `ask-on-risk`
@@ -288,7 +288,7 @@ before the remaining six sections run.
 - Test DB (if used): `bash infra/test-db.sh up|down|env`, project
   `lumat-test-lumat-agent-odd-dashboard-refine`.
 - `graphify-out/` is gitignored: query from `/home/stefan/repos/lumat-agent`.
-- The findings ledger lives on `main` (`odd/analysis/findings-ledger.md`); this worktree is
+- Dashboard findings live on `main` (`odd/analysis/dashboard/findings.md`); this worktree is
   based on `1c6e9595` and carries the pre-analysis copy — read the ledger from the main
   worktree, never from here.
 - Nothing to resume until the first work unit lands.

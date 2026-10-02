@@ -1,18 +1,6 @@
-# Panel section analysis — findings ledger
+# Dashboard findings
 
-One ledger for every section. Read-only analysis feeds it; implementation consumes it.
-Contract: `.opencode/skills/panel-section-analysis/SKILL.md`.
-
-## Legend
-
-- **Class** — `local` (only this section's files) · `shared-primitive` (a primitive or shell file
-  other sections render through → one upstream unit) · `token-palette` (`tokens.css` → escalate to
-  the owner, do not reopen).
-- **Severity** — `blocker` · `major` · `minor` · `nit`.
-- **Evidence** — every row carries reference evidence, a code anchor, and the owner note (or the
-  literal `owner did not flag`).
-
-## Findings
+Predates v2: this analysis has no image-first capture and no `visual.md`.
 
 `dashboard` analyzed against `main` = `1c6e9595`, refs `refs/Diseño Lumat/Dashboard.png`,
 `mobileTablet/dashboardMobile.png`, `mobileTablet/dashboardTablet.png`. Validated rows only.
@@ -40,25 +28,3 @@ Contract: `.opencode/skills/panel-section-analysis/SKILL.md`.
 - **"Sin respuesta" and "Urgentes"** card titles match the references; no change.
 - **White background:** no dashboard element uses a white background; all card/surface rules use `var(--surface)` (`#e8ebe4`). Owner rule recorded as a forward constraint for implementation, not a finding.
 - **Mobile 2-column shortcut grid** already exists in the responsive CSS; no change.
-
-## Shared-primitive roll-up
-
-Findings that belong to one upstream unit. Populated as sections are analyzed; **implemented
-before** per-section work.
-
-| ID | Section | Finding | Shared file |
-| --- | --- | --- | --- |
-| dashboard-004 | dashboard | "Hoy" ops cards lack the reference footer links | `web/src/components/primitives/primitives.css` |
-| dashboard-005 | dashboard | Assistant is a 2×2 tile, not a full-width banner | `web/src/components/primitives/primitives.css` |
-| dashboard-007 | dashboard | Desktop renders an "Atajos" heading the reference omits | `web/src/components/primitives/primitives.css` |
-| dashboard-008 | dashboard | Shortcut set needs "Configuración" in place of "Casos" | `web/src/components/primitives/primitives.css` |
-| dashboard-010 | dashboard | No period selector nor "Desde el …" caption | `web/src/components/primitives/primitives.css` |
-| dashboard-012 | dashboard | Motivos render as chips, not rows with a count badge | `web/src/components/primitives/primitives.css` |
-
-## Token/palette escalations
-
-Findings that touch `tokens.css`. Owner decision required; not reopened per section.
-
-| ID | Section | Finding | Owner decision |
-| --- | --- | --- | --- |
-| _(none yet)_ | | | |
