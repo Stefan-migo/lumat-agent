@@ -1,6 +1,6 @@
 # ODD Task: dashboard-chart-seed
 
-Status: in progress
+Status: complete — PR pending, owner judges the chart with seeded data
 Worktree: `/home/stefan/repos/lumat-agent-odd-dashboard-chart-seed`
 Branch: `odd/dashboard-chart-seed`
 Base: `53fef85f` (= `origin/main`, after PR #463)
@@ -136,6 +136,49 @@ down. Add that as a test (e.g. `tests/functional/test_seed_demo.py`) so the seed
 - [ ] WU2 — chart fixes
 - [ ] verification recorded
 - [ ] review measurement
+
+### WU1 record — the demo seeder
+
+- [x] `app/panel/seed_demo.py` + `tests/functional/test_seed_demo.py` — commit `d8de4e78`. Spreads 30
+      days of customers, conversations, inbound messages and cases so `contacts`, the trend buckets,
+      `motivos`, `derived` and `visit_requests` are non-zero, plus the three HOY projections.
+- [x] **Correction `9c041222` — the orchestrator's spot check caught a blocking defect the writer's own
+      test could not.** The functional test passed because it builds the environment dict itself, but the
+      script was **not runnable at all**: `app/config.py:31` sets `env_file=None`, so nothing loads
+      `infra/.env` and a host run died with five missing settings (`app_secret`, `verify_token`,
+      `meta_access_token`, `meta_phone_number_id`, `panel_session_secret`); and the "host must be local"
+      guard **refused the intended target**, because the dev database lives on the compose service `db`.
+      Replaced with an explicit opt-in (`--yes` / `LUMAT_DEMO_SEED=1`) plus a redacted target-url print,
+      and the docstring now documents the real invocation.
+- [x] **WU1 verification of record** — backend suite **1738 passed**; two opt-in runs against the test DB
+      produced the same summary line (idempotent); the inert run exits 1 with the refusal message.
+- [x] **How the user actually runs it.** The `infra-api-1` container bind-mounts the repository
+      (`- ..:/app`, `working_dir: /app`), so once this lands on `main` the seeder is visible inside it with
+      no rebuild: `docker compose exec api python app/panel/seed_demo.py --yes`. The dev database
+      (`infra-db-1`) publishes **no host port**, so the container is the only route.
+
+### WU2 record — the chart fixes
+
+- [x] `3e8eb089` — commit `fix(dashboard): keep long-range chart labels readable and level the period
+      cards`. Day labels and the value above each bar are thinned to every `ceil(N / 7)`-th bucket, so a
+      30-day view carries six readable labels instead of thirty colliding ones; **every bar still
+      renders**, and the 7-day view is unchanged because its interval is 1.
+- [x] **Height parity** — `.dashboard__period` no longer overrides the grid default, so both cards
+      stretch; `.dashboard__motivos-list` is capped at `calc(var(--space-8) * 3)` (96px, the chart plot's
+      own height) with `overflow-y: auto`, so a long list cannot stretch the row.
+- [x] **WU2 verification of record** — `cd web && npm run test` → **94 files / 951 tests passed**;
+      `npx tsc -b --noEmit` → exit 0; `npm run build` → exit 0; `git diff --check` → clean. RED observed
+      for the thinning test (`expected length 6, got 30`). The CSS height rules remain owner-verified.
+
+### Carried gaps
+
+- **This is a legibility fix, not a redesign.** The owner judges the 30-day view with real data and may
+  ask for a redesign as its own unit.
+- The documented `docker compose exec api …` invocation was **not exercised** — the file has to be on
+  `main` for the bind mount to see it, so that step happens after merge. The equivalent repo-root form
+  was verified against the isolated test database.
+- Deferred by the owner from the previous unit and still open: the KPI row presentation, the shortcut
+  icon colours, and the app-wide `button { font: inherit }` root cause.
 
 ## Recovery
 
