@@ -139,7 +139,14 @@ so the contract keeps its meaning.
       (244 changed lines, reason `under_budget`), `review_due: false`. The native transport remains
       unavailable in this runtime, so the writer's foreground verification is the verification of
       record. Owner visual review pending.
-- [ ] Owner visual review on the seeded dashboard
+- [x] **Owner visual round 1 → correction `03ad500d`** — the Urgentes card still broke the row: each
+      case rendered its full multi-line `summary`, so 3 rows grew to ~700px and dragged the whole HOY
+      row. Fixed: the "Urgente" tag moved inline with the case name (`.dashboard__row__head`), the
+      summary is clamped to one line (`-webkit-line-clamp:1` on `.dashboard__row small`), names
+      ellipsize, and the tag is compacted (`padding-block:0; flex:none`). An urgent row now matches an
+      unanswered row, so Urgentes ≤ the "Sin respuesta" 3-row height — the owner's stated ceiling.
+      `npm run test` → 94 files / 954 tests.
+- [ ] Owner visual review round 2 on the seeded dashboard
 
 ## Carried gaps
 
