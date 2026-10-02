@@ -3,7 +3,10 @@
 Usage inside the API container, where the environment variables and ``db``
 Compose hostname are available::
 
-    docker compose exec api python app/panel/seed_demo.py --yes
+    docker compose exec api .venv/bin/python app/panel/seed_demo.py --yes
+
+``python`` on the container PATH is the system interpreter and does not carry the
+application's dependencies, so the virtualenv interpreter is required.
 
 Alternatively, run from the repository root with the required environment
 variables exported and a ``.venv`` installed::
