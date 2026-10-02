@@ -45,6 +45,13 @@ describe("UserManagement", () => {
     expect(onOpenUser).toHaveBeenCalledWith(2);
   });
 
+  it("shows the profile name instead of the login username when present", async () => {
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 9, username: "admin", role: "admin" as const, active: true, email: null, name: "Stefan", phone: null, position: null, locked_until: null, failed_logins: 0 }] });
+    render(<UserManagement currentUser={admin} />);
+    expect(await screen.findByRole("link", { name: "Stefan" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "admin" })).not.toBeInTheDocument();
+  });
+
   it.each([
     ["loading", () => new Promise<never>(() => undefined), "Cargando usuarios"],
     ["empty", () => Promise.resolve({ users: [] }), "No hay usuarios"],

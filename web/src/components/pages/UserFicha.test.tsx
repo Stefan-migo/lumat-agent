@@ -28,6 +28,13 @@ describe("UserFicha", () => {
     expect(screen.getByRole("button", { name: "Desbloquear cuenta" })).toBeInTheDocument();
   });
 
+  it("shows the profile name over the login username", async () => {
+    vi.mocked(getAdminUser).mockResolvedValue({ user: { ...lockedUser, username: "carlos", name: "Stefan" } });
+    render(<UserFicha userId={8} />);
+    expect(await screen.findByRole("heading", { name: "Stefan" })).toBeInTheDocument();
+    expect(screen.queryByText("carlos")).not.toBeInTheDocument();
+  });
+
   it("saves only the four profile fields and maps empty fields to null", async () => {
     const user = userEvent.setup();
     render(<UserFicha userId={8} />);
