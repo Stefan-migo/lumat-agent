@@ -24,6 +24,7 @@ export function Button({
   children,
   className = "",
   onClick,
+  "aria-label": ariaLabel,
 }: ButtonProps) {
   const classes = ["btn", `btn--${variant}`, className]
     .filter(Boolean)
@@ -37,6 +38,7 @@ export function Button({
         className={classes}
         href={href}
         aria-disabled={disabled || undefined}
+        aria-label={ariaLabel}
         onClick={onClick}
       >
         {children}
@@ -49,6 +51,7 @@ export function Button({
       type={type}
       className={classes}
       disabled={disabled}
+      aria-label={ariaLabel}
       onClick={onClick}
     >
       {children}

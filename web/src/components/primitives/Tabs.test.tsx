@@ -66,10 +66,10 @@ describe("Tabs (CORP-TABS-1)", () => {
     expect(notas).toHaveAttribute("aria-selected", "true");
   });
 
-  it("uses semantic text and a high-contrast active indicator with visible focus", () => {
+  it("uses semantic text and the reference-green active indicator with visible focus", () => {
     const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
     expect(css).toMatch(/\.tabs__tab\s*\{[^}]*color:\s*var\(--text-muted\)/s);
-    expect(css).toMatch(/\.tabs__tab\[aria-selected="true"\]\s*\{[^}]*color:\s*var\(--text\)[^}]*border-bottom-color:\s*var\(--chrome-950\)/s);
+    expect(css).toMatch(/\.tabs__tab\[aria-selected="true"\]\s*\{[^}]*color:\s*var\(--text\)[^}]*border-bottom-color:\s*var\(--brand-lime\)/s);
     expect(css).toMatch(/\.tabs__tab:focus-visible\s*\{[^}]*outline:\s*var\(--focus-ring-width\) solid var\(--focus-ring\)/s);
   });
 });

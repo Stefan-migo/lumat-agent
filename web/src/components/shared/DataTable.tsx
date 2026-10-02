@@ -79,7 +79,7 @@ export function DataTable<T>({
               {columns.map((c) => (
                 <td key={c.key} style={{ textAlign: c.align ?? "left" }}>{c.render(row)}</td>
               ))}
-              {actions ? <td>{actions(row)}</td> : null}
+              {actions ? <td className="table__actions-cell">{actions(row)}</td> : null}
             </tr>
           ))}
         </tbody>
