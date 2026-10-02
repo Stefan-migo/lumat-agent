@@ -56,7 +56,7 @@ authored changed lines, split it before opening the PR.
 
 ## Checklist
 
-- [ ] `usuarios-001` — list and ficha display `name ?? username` (keep the "Usuario" header; keep
+- [x] `usuarios-001` — list and ficha display `name ?? username` (keep the "Usuario" header; keep
       identity comparisons on `username`). Route: inline (mechanical, 2 files, no design work).
       Checks: `web/src/components/pages/UserManagement.test.tsx`,
       `web/src/components/pages/UserFicha.test.tsx`, `npm run build`.
@@ -92,8 +92,18 @@ authored changed lines, split it before opening the PR.
 
 ## Progress / verification
 
-- (empty)
+- `usuarios-001` — done at `6d328b99`. List (`UserManagement.tsx`), reset dialog, and ficha
+  (`UserFicha.tsx` title + identity line) render `name ?? username`; identity comparisons still use
+  `username`. Added two regression tests (name over username in both surfaces).
+  Checks: `npm run test` → 956/956, `npm run build` → OK.
+  Route: inline (4 files: two components + their tests; mechanical, no design work).
+
+## Slice log
+
+| Slice | Findings | Commit | PR | Status |
+| --- | --- | --- | --- | --- |
+| 1 | usuarios-001 | `6d328b99` | — | implemented, not pushed |
 
 ## Next step
 
-Implement Slice 1 (`usuarios-001`).
+Open the Slice 1 PR (pending the owner's go), then implement Slice 2.
