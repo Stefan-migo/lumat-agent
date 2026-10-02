@@ -121,9 +121,33 @@ so the contract keeps its meaning.
       `Chart / Motivos height parity` (129 nodes, communities `Dashboard.tsx` / `seed_demo.py`).
 - [x] Worktree created and provisioned (`rapso worktree create dashboard-hoy-chart-redesign --yes`,
       `uv sync`, `cd web && npm ci`, `infra/.env` copied).
-- [ ] WU1 — HOY summary cap
-- [ ] WU2 — period row redesign
-- [ ] verification recorded
+- [x] WU1 — HOY summary cap — commit `304a1acb` (`fix(dashboard): cap the HOY lists to a three-row
+      summary`). Each list slices to 3; the metric value and head chip keep the true total.
+- [x] WU2 — period row redesign — commit `b638406e` (`feat(dashboard): redesign the period chart and
+      motivos cards`). Chart y-axis (`axisMax = max(max+1, 4)`) with dashed gridlines, bars scaled to
+      `axisMax`, 192px plot, range + hint footer; Motivos retitled/subtitled/ranked with a footer;
+      `grid-template-rows: auto minmax(0,1fr) auto` for equal, taller cards.
+- [x] **Orchestrator correction `4d4ed9e0`** — the structural readback caught a real gap the writer's
+      tests could not: removing the Motivos list `max-height` re-opened the unbounded-growth defect on
+      that side (a long list would drive the row height). Re-capped it to
+      `calc(var(--space-8) * 6 + var(--space-6))` (the chart body height) plus `align-content:start` on
+      the chart body, so the row stays chart-driven and the list scrolls.
+- [x] **Verification of record** — `npm run test` → **94 files / 953 tests passed**;
+      `npx tsc -b --noEmit` → exit 0; `npm run build` → exit 0; `git diff --check` → clean. Re-run on
+      the final candidate after the correction.
+- [x] **Review measurement** — RDD `on (global)`; `review assess --base-ref f8a4bf20` → **medium**
+      (244 changed lines, reason `under_budget`), `review_due: false`. The native transport remains
+      unavailable in this runtime, so the writer's foreground verification is the verification of
+      record. Owner visual review pending.
+- [ ] Owner visual review on the seeded dashboard
+
+## Carried gaps
+
+- The owner judges the rendered chart/motivos against the reference; a visual correction round is the
+  norm for this section (see the previous unit's lesson).
+- Dropped the per-bar value label in favour of the y-axis (the reference omits it in the 7- and
+  30-day views). Reversible if the owner disagrees.
+- The `--surface-subtle`/`button { font: inherit }` root causes remain unowned and out of scope.
 
 ## Recovery
 
