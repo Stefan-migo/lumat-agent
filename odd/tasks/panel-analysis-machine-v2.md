@@ -120,6 +120,35 @@ height (the page scrolls), and the shell is absent from the image (read the PNG 
 - Docs: read the rewritten files back; assert the gate language is present.
 - Frontend suite is untouched, but the PR still runs CI (`panel` job).
 
+## Progress
+
+- [x] Graph Check (Step 1) from `/home/stefan/repos/lumat-agent`: nodes consulted —
+      `Panel Section Analysis — Findings Ledger`, `panel-section-analysis Skill`, `PanelShell.tsx`,
+      `playwright.config.ts`, `AppShell.tsx` (341 nodes).
+- [x] Worktree created and provisioned (`rapso worktree create panel-analysis-machine-v2 --yes`,
+      `uv sync`, `cd web && npm ci`, `infra/.env` copied).
+- [x] **WU1 — capture tool** — commits `af745428` (`feat(analysis): add the section capture tool`) and
+      `e34bf117` (`fix(analysis): record the served app commit in the capture manifest`). The first
+      pass recorded the invoking worktree's HEAD; the orchestrator corrected it to the **primary
+      worktree HEAD** (what `:5173` actually serves) with `CAPTURE_APP_COMMIT` as override.
+- [x] **WU1 verification of record** — `npm run capture:section -- configuracion` against the live app
+      (seeded DB): `desktop.png` 1280×4282, `tablet.png` 768×5430, `mobile.png` 390×5361 (all taller
+      than their viewports → the section scrolls), `manifest.json` written, `app_commit` =
+      `5660cf5d`. Read the desktop PNG back: **no sidebar, no top bar, no bottom nav** — clean
+      section content.
+- [x] **WU2 — skill v2 + layout + migration** — commit `95aa7b1e`. `SKILL.md` rewritten (image-first
+      phases + hard owner gate + per-section output + whole-section instruction), `validator-gate.md`
+      adds the owner-gate, one-finding-per-row and semantic-consistency checks, `visual-template.md`
+      added, `odd/analysis/README.md` created (index + roll-up), the 12 dashboard rows + adjudications
+      migrated to `odd/analysis/dashboard/findings.md`, `findings-ledger.md` deleted, stale pointers
+      in the historical task docs updated.
+- [x] **WU2 verification** — read the rewritten skill/validator/README/template back; `git grep
+      "findings-ledger"` leaves only the migration note; `git diff --check` clean.
+- [x] **Local ignore** — `refs/current/` added to `.git/info/exclude` so the primary checkout ignores
+      the captures before the branch merges (the tracked `.gitignore` line lands with the PR).
+- [ ] PR + merge
+- [ ] Planning session closed (moved out of `open/`)
+
 ## Recovery
 
 - Base `5660cf5d`. `graphify-out/` is gitignored: query from `/home/stefan/repos/lumat-agent`.
