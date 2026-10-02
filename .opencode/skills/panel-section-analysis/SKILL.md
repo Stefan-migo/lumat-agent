@@ -25,9 +25,10 @@ surfaces. Load only for analysis, never to implement or execute.
 
 ## Image-First Phases
 
-0. **Capture** — If `refs/current/<section>/` is missing or stale, run
-   `npm run capture:section -- <section>` from `web/`. Read
-   `refs/current/<section>/manifest.json` for the app commit.
+0. **Capture** — Current shots are **stale** when `refs/current/<section>/manifest.json` is missing,
+   when its `section`/`route` do not match, or when its `app_commit` differs from the app commit
+   being reviewed (the primary worktree `git rev-parse HEAD`). Re-capture when stale:
+   `npm run capture:section -- <section>` from `web/`.
 1. **Compare** — Load the three current images and three reference images from `## Sources`, then
    present them side by side. **Do not read code in this phase.**
 2. **Owner analysis** — The owner writes `expected`, `actual`, and `severity` per breakpoint in

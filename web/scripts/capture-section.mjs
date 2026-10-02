@@ -37,6 +37,23 @@ const git = (...args) => execFileSync("git", args, { cwd: repoRoot, encoding: "u
 const commonDir = path.resolve(repoRoot, git("rev-parse", "--path-format=absolute", "--git-common-dir"));
 const primaryRoot = path.dirname(commonDir);
 
+// Render readiness: wait for fonts and for a layout that is stable across two animation frames,
+// instead of a fixed delay that can capture a half-updated layout (review R3-001).
+async function waitForStableLayout(page) {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    let previous = -1;
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      await nextFrame();
+      await nextFrame();
+      const current = document.body.scrollHeight;
+      if (current === previous) return;
+      previous = current;
+    }
+  });
+}
+
 async function credentials() {
   let username = process.env.PANEL_ADMIN_USERNAME;
   let password = process.env.PANEL_ADMIN_PASSWORD;
@@ -92,7 +109,7 @@ try {
     await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
     await page.locator("#panel-shell-sidebar").waitFor({ state: "visible", timeout: 15000 });
     await page.waitForLoadState("networkidle", { timeout: 30000 });
-    await page.waitForTimeout(500);
+    await waitForStableLayout(page);
   } catch (error) {
     throw new Error(`Navigation to ${route} failed: ${error.message}`);
   }
@@ -101,7 +118,7 @@ try {
   for (const [name, viewport] of Object.entries(viewports)) {
     await page.setViewportSize(viewport);
     await page.waitForLoadState("networkidle", { timeout: 30000 });
-    await page.waitForTimeout(300);
+    await waitForStableLayout(page);
     const filePath = path.join(outputDir, `${name}.png`);
     await page.screenshot({ path: filePath, fullPage: true });
     files[name] = { sha256: createHash("sha256").update(await readFile(filePath)).digest("hex") };
