@@ -81,6 +81,16 @@ function periodStartLabel(start: string): string {
   }
 }
 
+function shortDate(start: string): string {
+  try {
+    const date = new Date(`${start}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return start;
+    return new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short" }).format(date);
+  } catch {
+    return start;
+  }
+}
+
 export interface DashboardProps {
   data?: Kpis | null;
   state?: DashboardState;
@@ -131,7 +141,12 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
   const bars = data?.trend ?? [];
   const labelInterval = Math.ceil(bars.length / 7);
   const max = Math.max(...bars.map((bar) => bar.count), 1);
+  const axisMax = Math.max(max + 1, 4);
+  const ticks = Array.from({ length: axisMax + 1 }, (_, index) => axisMax - index);
   const chartTotal = bars.reduce((sum, bar) => sum + bar.count, 0);
+  const rangeEnd = bars.at(-1)?.start ?? today.local_date;
+  const rangeEndYear = rangeEnd ? new Date(`${rangeEnd}T12:00:00`).getFullYear() : new Date().getFullYear();
+  const rangeLabel = data?.window_start && rangeEnd ? `${shortDate(data.window_start)} – ${shortDate(rangeEnd)} ${rangeEndYear}` : "";
   const motivos = data?.motivos ?? [];
 
   const opsCard = (title: string, icon: IconName, tone: "primary" | "info" | "danger", count: number, action: string, view: PanelView, body: ReactNode, showCount = true) => (
@@ -156,7 +171,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
         </div>
         <div className="dashboard__hoy">
           {opsCard("Agenda de hoy", "calendar", "primary", today.appointments_today.length, "Ver agenda", "agenda",
-            <ul className="dashboard__list">{today.appointments_today.length ? today.appointments_today.map((row) => (
+            <ul className="dashboard__list">{today.appointments_today.length ? today.appointments_today.slice(0, 3).map((row) => (
               <li key={row.id}><button className="dashboard__row" type="button" onClick={() => navigate("agenda")} aria-label={row.customer_name ?? row.service}>
                 <span className="dashboard__row__time"><Icon icon={ICONS.clock} size="sm" />{row.local_start}</span>
                 <strong>{row.service}</strong>
@@ -164,18 +179,20 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
               </button></li>
             )) : <li className="dashboard__empty"><Icon icon={ICONS.calendar} size="sm" /><span>No hay visitas para hoy</span></li>}</ul>)}
           {opsCard("Sin respuesta", "inbox", "info", today.unanswered_conversations.length, "Ver conversaciones", "conversations",
-            <div className="dashboard__metric-content"><strong className="dashboard__metric-value">{today.unanswered_conversations.length}</strong><ul className="dashboard__list">{today.unanswered_conversations.length ? today.unanswered_conversations.map((row) => (
+            <div className="dashboard__metric-content"><strong className="dashboard__metric-value">{today.unanswered_conversations.length}</strong><ul className="dashboard__list">{today.unanswered_conversations.length ? today.unanswered_conversations.slice(0, 3).map((row) => (
               <li key={row.id}><button className="dashboard__row" type="button" onClick={() => navigate("conversations")} aria-label={row.customer_name ?? "Conversación"}>
                 <strong>{row.customer_name ?? "Sin nombre"}</strong>
                 <small>{row.state}</small>
               </button></li>
             )) : <li className="dashboard__empty"><Icon icon={ICONS.inbox} size="sm" /><span>No hay conversaciones pendientes</span></li>}</ul></div>, false)}
           {opsCard("Urgentes", "alert", "danger", today.urgent_cases.length, "Ver casos", "cases",
-            <div className="dashboard__metric-content"><strong className="dashboard__metric-value">{today.urgent_cases.length}</strong><ul className="dashboard__list">{today.urgent_cases.length ? today.urgent_cases.map((row) => (
+            <div className="dashboard__metric-content"><strong className="dashboard__metric-value">{today.urgent_cases.length}</strong><ul className="dashboard__list">{today.urgent_cases.length ? today.urgent_cases.slice(0, 3).map((row) => (
               <li key={row.id}><button className="dashboard__row dashboard__row--urgent" type="button" onClick={() => navigate("cases")} aria-label={row.customer_name ?? "Caso urgente"}>
-                <strong>{row.customer_name ?? "Sin nombre"}</strong>
-                <small>{row.summary ?? row.service ?? "Caso urgente"}</small>
-                <span className="dashboard__tag dashboard__tag--danger"><Icon icon={ICONS.alert} size="sm" />Urgente</span>
+                <span className="dashboard__row__head">
+                  <strong>{row.customer_name ?? "Sin nombre"}</strong>
+                  <span className="dashboard__tag dashboard__tag--danger"><Icon icon={ICONS.alert} size="sm" />Urgente</span>
+                </span>
+                <small className="dashboard__row__summary">{row.summary ?? row.service ?? "Caso urgente"}</small>
               </button></li>
             )) : <li className="dashboard__empty"><Icon icon={ICONS.alert} size="sm" /><span>No hay casos urgentes</span></li>}</ul></div>, false)}
         </div>
@@ -235,28 +252,38 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
         </div>
         <div className="dashboard__period">
           <div className="dashboard__chart" aria-label={`Tendencia de contactos de ${windowDays} días`}>
-            <div className="dashboard__chart__head"><Icon icon={ICONS.chart} size="sm" /><h3>Contactos por día</h3>{bars.length ? <span className="dashboard__chart__total">{chartTotal} contactos · {bars.length} días</span> : null}</div>
-            {bars.some((bar) => bar.count > 0) ? <div className="dashboard__bars">{bars.map((bar, index) => {
-              const pct = max > 0 && bar.count > 0 ? Math.max((bar.count / max) * 100, 6) : 0;
+            <div className="dashboard__chart__head"><Icon icon={ICONS.chart} size="sm" /><h3>Contactos por día</h3><span className="dashboard__chart__total">{chartTotal} contactos · {bars.length} días</span></div>
+            {bars.some((bar) => bar.count > 0) ? <div className="dashboard__chart__body">
+              <div className="dashboard__plot">
+                <div className="dashboard__plot__axis" aria-hidden="true">{ticks.map((tick) => <span key={tick}>{tick}</span>)}</div>
+                <div className="dashboard__plot__area">
+                  <div className="dashboard__plot__grid" aria-hidden="true">{ticks.map((tick) => <span key={tick} />)}</div>
+                  <div className="dashboard__bars">{bars.map((bar) => {
+                    const pct = bar.count > 0 ? Math.max((bar.count / axisMax) * 100, 1) : 0;
               const cls = ["dashboard__bar"];
-              const showLabel = index % labelInterval === 0;
               if (bar.count > 0 && bar.count === max) cls.push("dashboard__bar--peak");
               if (bar.start === today.local_date) cls.push("dashboard__bar--today");
               return (
                 <div className="dashboard__bar-col" key={bar.start}>
-                  {showLabel ? <span className="dashboard__bar-col__value">{bar.count > 0 ? bar.count : ""}</span> : null}
                   <span className={cls.join(" ")} style={{ height: `${pct}%` }} />
-                  {showLabel ? <span className="dashboard__bar-col__day">{dayShort(bar.start)}</span> : null}
                 </div>
               );
-            })}</div> : <div className="dashboard__chart__empty"><Icon icon={ICONS.chart} size="sm" /><span><strong>Sin contactos en este período</strong><br />La actividad aparecerá aquí cuando se registren contactos.</span></div>}
+                  })}</div>
+                </div>
+              </div>
+              <div className="dashboard__bar-labels" aria-hidden="true">{bars.map((bar, index) => index % labelInterval === 0
+                ? <span className="dashboard__bar-col__day" key={bar.start}>{dayShort(bar.start)}</span>
+                : <span className="dashboard__bar-label-spacer" key={bar.start} />)}</div>
+            </div> : <div className="dashboard__chart__empty"><Icon icon={ICONS.chart} size="sm" /><span><strong>Sin contactos en este período</strong><br />La actividad aparecerá aquí cuando se registren contactos.</span></div>}
+            {bars.some((bar) => bar.count > 0) ? <div className="dashboard__chart__foot"><span className="dashboard__chart__range"><Icon icon={ICONS.calendar} size="sm" />{rangeLabel}</span><span className="dashboard__chart__hint">Cada barra representa un día.</span></div> : null}
           </div>
           <div className="dashboard__motivos">
-            <div className="dashboard__chart__head"><Icon icon={ICONS.tag} size="sm" /><h3>Motivos</h3></div>
+            <div className="dashboard__chart__head dashboard__motivos__head"><Icon icon={ICONS.tag} size="sm" /><div className="dashboard__motivos__titles"><h3>Motivos de contacto</h3><span className="dashboard__motivos__sub">Ordenados por frecuencia</span></div></div>
             <div className="dashboard__motivos-list">{motivos.length ? motivos.map(([motivo, count]) => {
               const label = motivoLabel(motivo);
               return <div className="dashboard__motivo" key={label}><span>{label}</span><span className="dashboard__motivo-count">{count}</span></div>;
             }) : <span className="dashboard__empty"><Icon icon={ICONS.tag} size="sm" /><span>No hay registros</span></span>}</div>
+            <div className="dashboard__motivos__foot"><span>{chartTotal} contactos en el período</span></div>
           </div>
         </div>
       </section>
