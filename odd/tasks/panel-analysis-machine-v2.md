@@ -1,6 +1,6 @@
 # ODD Task: panel-analysis-machine-v2
 
-Status: in progress
+Status: complete — merged (PR #467, merge `ffedd99a`)
 Worktree: `/home/stefan/repos/lumat-agent-odd-panel-analysis-machine-v2`
 Branch: `odd/panel-analysis-machine-v2`
 Base: `5660cf5d` (= `origin/main`, after PR #466)
@@ -146,8 +146,12 @@ height (the page scrolls), and the shell is absent from the image (read the PNG 
       "findings-ledger"` leaves only the migration note; `git diff --check` clean.
 - [x] **Local ignore** — `refs/current/` added to `.git/info/exclude` so the primary checkout ignores
       the captures before the branch merges (the tracked `.gitignore` line lands with the PR).
-- [ ] PR + merge
-- [ ] Planning session closed (moved out of `open/`)
+- [x] PR + merge — PR #467, merge commit `ffedd99a`, CI green (`panel` + `test`); native review
+      approved (`review-reliability`, authority burned, lineage `review-2b046d7aafb92ad3`).
+- [x] Planning session closed (moved to `.rapsodia-code/sessions/archived/`).
+- [x] Follow-up (direct on `main`) — closed the two non-blocking review findings: `R3-001` (capture
+      now waits for fonts plus a layout stable across two animation frames, not a fixed delay) and
+      `R3-002` (the skill now defines capture staleness from `manifest.json`).
 
 ## Recovery
 
