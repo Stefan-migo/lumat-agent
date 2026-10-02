@@ -99,7 +99,7 @@ height (the page scrolls), and the shell is absent from the image (read the PNG 
   (current + reference paths, app commit, date), and the `## Owner analysis` block per breakpoint.
 - **Create `odd/analysis/README.md`**: the section index (slug, status, links to `visual.md` /
   `findings.md`) + the **shared-primitive roll-up** (one upstream unit before per-section implementation).
-- **Migrate** `odd/analysis/findings-ledger.md` → `odd/analysis/dashboard/findings.md` (the 12 rows +
+- **Migrate** the v1 shared ledger → `odd/analysis/dashboard/findings.md` (the 12 rows +
   the owner adjudications), preserving the content verbatim. Replace the old ledger with
   `odd/analysis/README.md`; note in the README that the dashboard run predates v2. Delete the old
   ledger file (git history keeps it).
@@ -123,4 +123,4 @@ height (the page scrolls), and the shell is absent from the image (read the PNG 
 ## Recovery
 
 - Base `5660cf5d`. `graphify-out/` is gitignored: query from `/home/stefan/repos/lumat-agent`.
-- The v1 ledger is on `main` at `odd/analysis/findings-ledger.md`.
+- The v1 ledger is on `main`; its dashboard record is `odd/analysis/dashboard/findings.md`.

@@ -237,4 +237,4 @@ session does not chase the same ghosts.
 
 - Base `53fef85f`. The previous unit's worktree and branches are gone.
 - `graphify-out/` is gitignored: query from `/home/stefan/repos/lumat-agent`.
-- The findings ledger is on `main` (`odd/analysis/findings-ledger.md`).
+- Dashboard findings are recorded in `odd/analysis/dashboard/findings.md`.

@@ -163,4 +163,4 @@ so the contract keeps its meaning.
 ## Recovery
 
 - Base `f8a4bf20`. `graphify-out/` is gitignored: query from `/home/stefan/repos/lumat-agent`.
-- The findings ledger is on `main` (`odd/analysis/findings-ledger.md`).
+- Dashboard findings are recorded in `odd/analysis/dashboard/findings.md`.
