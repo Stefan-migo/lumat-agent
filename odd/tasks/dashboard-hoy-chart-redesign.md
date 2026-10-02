@@ -146,7 +146,11 @@ so the contract keeps its meaning.
       ellipsize, and the tag is compacted (`padding-block:0; flex:none`). An urgent row now matches an
       unanswered row, so Urgentes ≤ the "Sin respuesta" 3-row height — the owner's stated ceiling.
       `npm run test` → 94 files / 954 tests.
-- [ ] Owner visual review round 2 on the seeded dashboard
+- [x] **Owner visual round 2 polish `3e729279`** — the Motivos card's native scrollbar looked white
+      and off-brand. Scoped a branded scrollbar on `.dashboard__motivos-list`: `scrollbar-color`
+      (Firefox) plus `::-webkit-scrollbar*` with a transparent track and a `--primary-700` rounded
+      thumb (`--brand-forest` on hover). No global scrollbar change.
+- [ ] Owner visual review round 3 on the seeded dashboard
 
 ## Carried gaps
 
