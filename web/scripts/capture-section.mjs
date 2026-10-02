@@ -110,7 +110,7 @@ try {
     section,
     route,
     captured_at: new Date().toISOString(),
-    app_commit: process.env.CAPTURE_APP_COMMIT || git("rev-parse", "HEAD"),
+    app_commit: process.env.CAPTURE_APP_COMMIT || execFileSync("git", ["rev-parse", "HEAD"], { cwd: primaryRoot, encoding: "utf8" }).trim(),
     origin: new URL(baseUrl).origin,
     viewport: viewports,
     files,
