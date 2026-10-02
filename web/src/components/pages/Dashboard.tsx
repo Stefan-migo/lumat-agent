@@ -129,6 +129,7 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
   const viewFor = { Conversaciones: "conversations", Clientes: "clients", Agenda: "agenda", Configuración: "settings" } as const;
   const iconFor: Record<(typeof cards)[number], IconName> = { Conversaciones: "message", Clientes: "users", Agenda: "calendar", Configuración: "settings" };
   const bars = data?.trend ?? [];
+  const labelInterval = Math.ceil(bars.length / 7);
   const max = Math.max(...bars.map((bar) => bar.count), 1);
   const chartTotal = bars.reduce((sum, bar) => sum + bar.count, 0);
   const motivos = data?.motivos ?? [];
@@ -235,16 +236,17 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
         <div className="dashboard__period">
           <div className="dashboard__chart" aria-label={`Tendencia de contactos de ${windowDays} días`}>
             <div className="dashboard__chart__head"><Icon icon={ICONS.chart} size="sm" /><h3>Contactos por día</h3>{bars.length ? <span className="dashboard__chart__total">{chartTotal} contactos · {bars.length} días</span> : null}</div>
-            {bars.some((bar) => bar.count > 0) ? <div className="dashboard__bars">{bars.map((bar) => {
+            {bars.some((bar) => bar.count > 0) ? <div className="dashboard__bars">{bars.map((bar, index) => {
               const pct = max > 0 && bar.count > 0 ? Math.max((bar.count / max) * 100, 6) : 0;
               const cls = ["dashboard__bar"];
+              const showLabel = index % labelInterval === 0;
               if (bar.count > 0 && bar.count === max) cls.push("dashboard__bar--peak");
               if (bar.start === today.local_date) cls.push("dashboard__bar--today");
               return (
                 <div className="dashboard__bar-col" key={bar.start}>
-                  <span className="dashboard__bar-col__value">{bar.count > 0 ? bar.count : ""}</span>
+                  {showLabel ? <span className="dashboard__bar-col__value">{bar.count > 0 ? bar.count : ""}</span> : null}
                   <span className={cls.join(" ")} style={{ height: `${pct}%` }} />
-                  <span className="dashboard__bar-col__day">{dayShort(bar.start)}</span>
+                  {showLabel ? <span className="dashboard__bar-col__day">{dayShort(bar.start)}</span> : null}
                 </div>
               );
             })}</div> : <div className="dashboard__chart__empty"><Icon icon={ICONS.chart} size="sm" /><span><strong>Sin contactos en este período</strong><br />La actividad aparecerá aquí cuando se registren contactos.</span></div>}
