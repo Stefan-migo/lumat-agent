@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { BriefcaseBusiness, KeyRound, LockKeyhole, ShieldCheck, SlidersHorizontal, UserRoundMinus, Wrench } from "lucide-react";
+import { BriefcaseBusiness, ChevronRight, EllipsisVertical, KeyRound, LockKeyhole, ShieldCheck, SlidersHorizontal, UserPlus, UserRoundMinus, Wrench, X } from "lucide-react";
 import { ApiError, createUser, fetchUsers, resetUserPassword, toggleUserActive } from "../../api";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import type { AdminUser, Role, User } from "../../types";
@@ -44,6 +44,7 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
   const [mutationState, setMutationState] = useState<{ tone: "success" | "danger" | "info"; title: string; detail?: string } | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
+  const [actionTarget, setActionTarget] = useState<AdminUser | null>(null);
   const [resetDraft, setResetDraft] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
   const [resetDone, setResetDone] = useState(false);
@@ -127,19 +128,41 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
     { key: "active", header: "Estado", render: (user) => <StatusBadge status={user.active ? "closed" : "pending"} label={user.active ? "Activo" : "Inactivo"} /> },
   ];
 
-  return <PageFrame title="Usuarios" meta="Administra el acceso al panel" actions={<Button onClick={() => { setMutationState(null); setCreateOpen(true); }}>Nuevo usuario</Button>} state={state}>
+  return <PageFrame title="Usuarios" meta="Administra el acceso al panel" actions={<Button onClick={() => { setMutationState(null); setCreateOpen(true); }}><Icon icon={UserPlus} /> Nuevo usuario</Button>} state={state}>
     {data.state === "empty" || (data.state === "ready" && users.length === 0) ? <p>No hay usuarios</p> : <>
       <Tabs ariaLabel="Filtrar por estado" activeTab={statusFilter} onTabChange={(value) => { setStatusFilter(value); setPage(1); }} tabs={[{ id: "all", label: `Todos ${matchingUsers.length}` }, { id: "active", label: `Activos ${matchingUsers.filter((user) => user.active).length}` }, { id: "inactive", label: `Inactivos ${matchingUsers.filter((user) => !user.active).length}` }]}>
         {() => <div className="table-card">
           <section className="table-toolbar" aria-label="Filtros de usuarios">
             <SearchInput aria-label="Buscar usuarios" placeholder="Buscar por nombre de usuario…" onSearch={(value) => { setQuery(value); setPage(1); }} />
-            <div className="table-toolbar__select"><Icon icon={SlidersHorizontal} /><Select label="Filtrar por rol" size="sm" value={roleFilter} options={[{ value: "all", label: "Todos los roles" }, { value: "admin", label: roleLabels.admin }, { value: "operador", label: roleLabels.operador }, { value: "tecnico", label: roleLabels.tecnico }]} onChange={(event) => { setRoleFilter(event.target.value as Role | "all"); setPage(1); }} /></div>
+            <div className="table-toolbar__select"><Icon icon={SlidersHorizontal} /><Select label="Filtrar por rol" value={roleFilter} options={[{ value: "all", label: "Todos los roles" }, { value: "admin", label: roleLabels.admin }, { value: "operador", label: roleLabels.operador }, { value: "tecnico", label: roleLabels.tecnico }]} onChange={(event) => { setRoleFilter(event.target.value as Role | "all"); setPage(1); }} /></div>
           </section>
-          <DataTable columns={columns} rows={pageUsers} rowKey={(user) => String(user.id)} actions={(user) => user.username === currentUser.username ? <span className="table__actions-unavailable"><Icon icon={LockKeyhole} size="sm" /> Acciones no disponibles</span> : <Menu label={`Acciones para ${user.name ?? user.username}`} trigger="icon" items={[{ value: "toggle", label: user.active ? "Desactivar usuario" : "Activar usuario", icon: UserRoundMinus, disabled: busyId === user.id }, { value: "reset", label: "Restablecer contraseña", icon: KeyRound, disabled: busyId === user.id }]} onSelect={(value) => { if (value === "toggle") void toggle(user); else { setResetTarget(user); setResetDraft(""); setResetDone(false); setMutationState(null); } }} />} />
-          <footer className="table-footer"><span>Mostrando {pageUsers.length} de {visibleUsers.length} usuarios</span><div className="table-footer__pagination"><Button variant="secondary" aria-label="Anterior" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>‹</Button><span className="table-footer__page" aria-current="page">{page}</span><Button variant="secondary" aria-label="Siguiente" disabled={page >= pageCount} onClick={() => setPage((current) => current + 1)}>›</Button></div></footer>
+          <div className="table-card__desktop"><DataTable columns={columns} rows={pageUsers} rowKey={(user) => String(user.id)} actions={(user) => user.username === currentUser.username ? <span className="table__actions-unavailable"><Icon icon={LockKeyhole} size="sm" /> Acciones no disponibles</span> : <Menu label={`Acciones para ${user.name ?? user.username}`} trigger="icon" items={[{ value: "toggle", label: user.active ? "Desactivar usuario" : "Activar usuario", icon: UserRoundMinus, disabled: busyId === user.id }, { value: "reset", label: "Restablecer contraseña", icon: KeyRound, disabled: busyId === user.id }]} onSelect={(value) => { if (value === "toggle") void toggle(user); else { setResetTarget(user); setResetDraft(""); setResetDone(false); setMutationState(null); } }} />} /></div>
+          <ul className="table-cards table-cards--mobile" aria-label="Lista de usuarios">
+            {pageUsers.map((user) => <li className="table-card__item" key={user.id}>
+              <Avatar name={user.name ?? user.username} />
+              <div className="table-card__identity">
+                <div className="table-card__name"><a className="table__resource-name" href={pathForRoute({ view: "users", userId: user.id })} onClick={onOpenUser ? (event) => { event.preventDefault(); onOpenUser(user.id); } : undefined}>{user.name ?? user.username}</a>{user.username === currentUser.username ? <Badge tone="neutral">Tú</Badge> : null}</div>
+                <span className="table__role"><Icon icon={roleIcons[user.role]} />{roleLabels[user.role]}</span>
+              </div>
+              <div className="table-card__trailing">
+                <StatusBadge status={user.active ? "closed" : "pending"} label={user.active ? "Activo" : "Inactivo"} />
+                {user.username === currentUser.username ? <span className="table__actions-unavailable" aria-label="Acciones no disponibles"><Icon icon={LockKeyhole} size="sm" /></span> : <button type="button" className="table-card__action" aria-label={`Acciones para ${user.name ?? user.username}`} onClick={() => setActionTarget(user)}><Icon icon={EllipsisVertical} /></button>}
+              </div>
+            </li>)}
+          </ul>
+          <footer className="table-footer"><span className="table-footer__count">Mostrando {pageUsers.length} de {visibleUsers.length} usuarios</span><span className="table-footer__mobile-count">{visibleUsers.length} de {visibleUsers.length} usuarios</span><div className="table-footer__pagination"><Button variant="secondary" aria-label="Anterior" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>‹</Button><span className="table-footer__page" aria-current="page">{page}</span><Button variant="secondary" aria-label="Siguiente" disabled={page >= pageCount} onClick={() => setPage((current) => current + 1)}>›</Button></div></footer>
         </div>}
       </Tabs>
     </>}
+    <Dialog open={actionTarget !== null} onClose={() => setActionTarget(null)} title="Acciones de usuario">
+      {actionTarget ? <div className="user-mobile-actions">
+        <span className="user-mobile-actions__handle" aria-hidden="true" />
+        <div className="user-mobile-actions__header"><Avatar name={actionTarget.name ?? actionTarget.username} /><div className="user-mobile-actions__identity"><strong>{actionTarget.name ?? actionTarget.username}</strong><span>{roleLabels[actionTarget.role]} · <span className={actionTarget.active ? "user-mobile-actions__dot" : "user-mobile-actions__dot user-mobile-actions__dot--off"} aria-hidden="true" /> {actionTarget.active ? "Activo" : "Inactivo"}</span></div><button type="button" className="user-mobile-actions__close" aria-label="Cerrar" onClick={() => setActionTarget(null)}><Icon icon={X} /></button></div>
+        <button type="button" className="user-mobile-actions__item" onClick={() => { setResetTarget(actionTarget); setResetDraft(""); setResetDone(false); setMutationState(null); setActionTarget(null); }}><Icon icon={KeyRound} /><span>Restablecer contraseña<small>Actualizar el acceso a la cuenta</small></span><Icon icon={ChevronRight} size="sm" /></button>
+        <button type="button" className="user-mobile-actions__item user-mobile-actions__item--danger" disabled={busyId === actionTarget.id} onClick={() => { void toggle(actionTarget); setActionTarget(null); }}><Icon icon={UserRoundMinus} /><span>{actionTarget.active ? "Desactivar usuario" : "Activar usuario"}<small>Impedir el acceso sin eliminar la cuenta</small></span><Icon icon={ChevronRight} size="sm" /></button>
+        <Button variant="secondary" onClick={() => setActionTarget(null)}>Cancelar</Button>
+      </div> : null}
+    </Dialog>
     <Dialog open={createOpen} onClose={() => { setCreateOpen(false); setMutationState(null); }} title="Nuevo usuario">
       <form onSubmit={submit}>
         <Input label="Usuario" value={username} onChange={(event) => setUsername(event.target.value)} />
