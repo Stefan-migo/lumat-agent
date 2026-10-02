@@ -188,9 +188,11 @@ export function Dashboard({ data: controlledData, state: controlledState, onRetr
           {opsCard("Urgentes", "alert", "danger", today.urgent_cases.length, "Ver casos", "cases",
             <div className="dashboard__metric-content"><strong className="dashboard__metric-value">{today.urgent_cases.length}</strong><ul className="dashboard__list">{today.urgent_cases.length ? today.urgent_cases.slice(0, 3).map((row) => (
               <li key={row.id}><button className="dashboard__row dashboard__row--urgent" type="button" onClick={() => navigate("cases")} aria-label={row.customer_name ?? "Caso urgente"}>
-                <strong>{row.customer_name ?? "Sin nombre"}</strong>
-                <small>{row.summary ?? row.service ?? "Caso urgente"}</small>
-                <span className="dashboard__tag dashboard__tag--danger"><Icon icon={ICONS.alert} size="sm" />Urgente</span>
+                <span className="dashboard__row__head">
+                  <strong>{row.customer_name ?? "Sin nombre"}</strong>
+                  <span className="dashboard__tag dashboard__tag--danger"><Icon icon={ICONS.alert} size="sm" />Urgente</span>
+                </span>
+                <small className="dashboard__row__summary">{row.summary ?? row.service ?? "Caso urgente"}</small>
               </button></li>
             )) : <li className="dashboard__empty"><Icon icon={ICONS.alert} size="sm" /><span>No hay casos urgentes</span></li>}</ul></div>, false)}
         </div>

@@ -152,6 +152,15 @@ describe("Dashboard operational surface", () => {
     expect(onNavigate).toHaveBeenNthCalledWith(3, "cases");
   });
 
+  it("renders urgent name and tag in the head with summary in its own line", () => {
+    const { container } = render(<Dashboard data={data} state="ready" />);
+    const urgentRow = container.querySelector(".dashboard__row--urgent");
+
+    expect(urgentRow?.querySelector(".dashboard__row__head > strong")).toHaveTextContent("Lucía");
+    expect(urgentRow?.querySelector(".dashboard__row__head .dashboard__tag")).toHaveTextContent("Urgente");
+    expect(urgentRow?.querySelector("small.dashboard__row__summary")).toHaveTextContent("No enciende");
+  });
+
   it("renders the responsive navigation shortcuts and assistant", () => {
     const onNavigate = vi.fn();
     render(<Dashboard data={data} state="ready" role="admin" onNavigate={onNavigate} />);
