@@ -83,6 +83,20 @@ describe("Dashboard operational surface", () => {
     expect(container.querySelectorAll(".dashboard__bar")).toHaveLength(30);
   });
 
+  it("renders the period chart axis and footer alongside the motivos summary", () => {
+    const { container } = render(<Dashboard data={data} state="ready" />);
+    const chart = screen.getByLabelText("Tendencia de contactos de 7 días");
+
+    expect(chart.querySelectorAll(".dashboard__plot__axis > span")).toHaveLength(5);
+    expect(screen.getByText("Cada barra representa un día.")).toBeInTheDocument();
+    expect(screen.getByText("3 sept – 4 sept 2026")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Motivos de contacto" })).toBeInTheDocument();
+    expect(screen.getByText("Ordenados por frecuencia")).toBeInTheDocument();
+    expect(screen.getByText("2 contactos en el período")).toBeInTheDocument();
+    expect(screen.getByText("calefont").closest(".dashboard__motivo")?.querySelector(".dashboard__motivo-count")).toHaveTextContent("3");
+    expect(container.querySelectorAll(".dashboard__bar-col__value")).toHaveLength(0);
+  });
+
   it("shows empty HOY metric counts in the card body without count chips", () => {
     const today = { ...data.today, unanswered_conversations: [], urgent_cases: [] };
     render(<Dashboard data={{ ...data, today }} state="ready" />);
@@ -159,7 +173,7 @@ describe("Dashboard operational surface", () => {
     expect(screen.getByText("Contactos")).toBeInTheDocument();
     expect(screen.getByText("Nuevos clientes")).toBeInTheDocument();
     expect(screen.getByText("calefont")).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("calefont").closest(".dashboard__motivo")?.querySelector(".dashboard__motivo-count")).toHaveTextContent("3");
     expect(screen.getByLabelText("Tendencia de contactos de 7 días")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lucía" })).toHaveTextContent("Urgente");
 
@@ -259,7 +273,7 @@ describe("Dashboard operational surface", () => {
     expect(css).toMatch(/\.dashboard__card-ops\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
     expect(css).toMatch(/\.dashboard__card\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
     expect(css).toMatch(/\.dashboard__card--agent\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s);
-    expect(css).toMatch(/\.dashboard__motivo\s*\{[^}]*background:\s*var\(--surface\)/s);
+    expect(css).toMatch(/\.dashboard__motivo\s*\{[^}]*background:\s*var\(--brand-bg-elevated\)/s);
     expect(css).not.toMatch(/\.dashboard__section-head h2\s*\{[^}]*text-transform:\s*uppercase/s);
     expect(css).toMatch(/@media \(max-width:\s*63\.99rem\)[\s\S]*?\.dashboard__hoy\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
     expect(css).toMatch(/@media \(max-width:\s*63\.99rem\)[\s\S]*?\.dashboard__grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
