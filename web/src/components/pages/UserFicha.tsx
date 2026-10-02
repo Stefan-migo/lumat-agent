@@ -50,9 +50,9 @@ export function UserFicha({ userId }: { userId: number }) {
     finally { setBusy(false); }
   };
   if (!account) return <PageFrame title="Ficha de usuario" state={<StateMessage tone="danger" role="alert" title={data.state === "denied" ? "No tienes permiso para ver esta ficha" : data.state === "error" ? "No pudimos cargar la ficha" : "Cargando ficha"} />}>{null}</PageFrame>;
-  return <PageFrame title={account.username} meta={roleLabels[account.role]} actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a usuarios</Button>}>
+  return <PageFrame title={account.name ?? account.username} meta={roleLabels[account.role]} actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a usuarios</Button>}>
     <Card title="Datos del usuario">
-      <p><strong>{account.username}</strong> <Badge>{roleLabels[account.role]}</Badge></p>
+      <p><strong>{account.name ?? account.username}</strong> <Badge>{roleLabels[account.role]}</Badge></p>
       <form onSubmit={(event) => void save(event)}>
         <Input label="Nombre" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
         <Input label="Teléfono" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />

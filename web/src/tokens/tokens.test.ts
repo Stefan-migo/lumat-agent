@@ -206,7 +206,7 @@ describe('design tokens — B9 foundation additions (DS-TKN-3..7)', () => {
       'utf8',
     );
     expect(primitivesRaw).toMatch(/\.card\s*\{[^}]*border-radius:\s*var\(--radius-lg\);/s);
-    expect(primitivesRaw).toMatch(/\.btn\s*\{[^}]*border-radius:\s*var\(--radius-pill\);/s);
+    expect(primitivesRaw).toMatch(/\.btn\s*\{[^}]*border-radius:\s*var\(--radius-lg\);/s);
     expect(primitivesRaw).toMatch(/\.badge--neutral\s*\{[^}]*background:\s*var\(--surface-subtle\);/s);
     expect(primitivesRaw).not.toMatch(/\.card\s*\{[^}]*box-shadow:/s);
     expect(primitivesRaw).toMatch(/\.dialog\s*\{[^}]*border-radius:\s*var\(--radius-xl\);/s);

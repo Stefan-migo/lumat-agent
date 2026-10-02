@@ -45,6 +45,13 @@ describe("UserManagement", () => {
     expect(onOpenUser).toHaveBeenCalledWith(2);
   });
 
+  it("shows the profile name instead of the login username when present", async () => {
+    vi.mocked(fetchUsers).mockResolvedValue({ users: [{ id: 9, username: "admin", role: "admin" as const, active: true, email: null, name: "Stefan", phone: null, position: null, locked_until: null, failed_logins: 0 }] });
+    render(<UserManagement currentUser={admin} />);
+    expect(await screen.findByRole("link", { name: "Stefan" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "admin" })).not.toBeInTheDocument();
+  });
+
   it.each([
     ["loading", () => new Promise<never>(() => undefined), "Cargando usuarios"],
     ["empty", () => Promise.resolve({ users: [] }), "No hay usuarios"],
@@ -61,8 +68,9 @@ describe("UserManagement", () => {
     const user = userEvent.setup();
     render(<UserManagement currentUser={admin} />);
     await screen.findByText("ana");
+    await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     await user.click(screen.getByRole("button", { name: "Crear usuario" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("usuario");
+    expect(within(screen.getByRole("dialog")).getByRole("alert")).toHaveTextContent("usuario");
     expect(createUser).not.toHaveBeenCalled();
     await user.type(screen.getByLabelText("Usuario"), "nuevo");
     await user.type(screen.getByLabelText("Contraseña"), "short");
@@ -75,11 +83,12 @@ describe("UserManagement", () => {
     vi.mocked(fetchUsers).mockResolvedValueOnce({ users }).mockResolvedValueOnce({ users: [...users, { id: 4, username: "new", role: "operador", active: true, email: null, name: null, phone: null, position: null, locked_until: null, failed_logins: 0 }] });
     render(<UserManagement currentUser={admin} />);
     await screen.findByText("ana");
+    await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     await user.type(screen.getByLabelText("Usuario"), "new");
     await user.type(screen.getByLabelText("Contraseña"), "long enough");
     await user.click(screen.getByRole("button", { name: "Crear usuario" }));
     await waitFor(() => expect(createUser).toHaveBeenCalledWith({ username: "new", password: "long enough", role: "operador" }));
-    expect(await screen.findByText("Usuario creado")).toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent("Usuario creado");
     expect(await screen.findAllByText("new")).not.toHaveLength(0);
   });
 
@@ -88,6 +97,7 @@ describe("UserManagement", () => {
     vi.mocked(createUser).mockRejectedValue(new ApiError(409, "El usuario ya existe"));
     render(<UserManagement currentUser={admin} />);
     await screen.findByText("ana");
+    await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     await user.type(screen.getByLabelText("Usuario"), "duplicate");
     await user.selectOptions(screen.getByLabelText("Rol"), "tecnico");
     await user.type(screen.getByLabelText("Contraseña"), "long enough");
@@ -101,14 +111,17 @@ describe("UserManagement", () => {
     const user = userEvent.setup();
     render(<UserManagement currentUser={admin} />);
     await screen.findByText("ana");
-    const ownRow = screen.getByRole("row", { name: /ana Administrador/i });
-    expect(within(ownRow).getByRole("button", { name: /activar|desactivar/i })).toBeDisabled();
-    expect(within(ownRow).getByRole("button", { name: /restablecer/i })).toBeDisabled();
+    const ownRow = screen.getByRole("row", { name: /ana.*Administrador/i });
+    expect(within(ownRow).queryByRole("button", { name: /acciones para/i })).not.toBeInTheDocument();
+    expect(within(ownRow).getByText(/Acciones no disponibles/)).toBeInTheDocument();
+    expect(within(ownRow).getByText("Tú")).toBeInTheDocument();
     const otherRow = screen.getByRole("row", { name: /op Operador/i });
-    await user.click(within(otherRow).getByRole("button", { name: /activar/i }));
+    await user.click(within(otherRow).getByRole("button", { name: /acciones para op/i }));
+    await user.click(await screen.findByRole("menuitem", { name: "Activar usuario" }));
     expect(toggleUserActive).toHaveBeenCalledWith(2);
-    expect(await screen.findByText("Estado actualizado")).toBeInTheDocument();
-    await user.click(within(otherRow).getByRole("button", { name: /restablecer/i }));
+    expect(await screen.findAllByText("Estado actualizado")).not.toHaveLength(0);
+    await user.click(within(otherRow).getByRole("button", { name: /acciones para op/i }));
+    await user.click(await screen.findByRole("menuitem", { name: "Restablecer contraseña" }));
     expect(await screen.findByRole("dialog", { name: "Restablecer contraseña" })).toBeInTheDocument();
     expect(resetUserPassword).not.toHaveBeenCalled();
   });
@@ -117,7 +130,8 @@ describe("UserManagement", () => {
     const user = userEvent.setup();
     render(<UserManagement currentUser={admin} />);
     await screen.findByText("ana");
-    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /restablecer/i }));
+    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /acciones para op/i }));
+    await user.click(await screen.findByRole("menuitem", { name: "Restablecer contraseña" }));
     const field = screen.getByLabelText("Nueva contraseña");
     const dialog = screen.getByRole("dialog");
     const submit = within(dialog).getByRole("button", { name: "Restablecer contraseña" });
@@ -132,7 +146,8 @@ describe("UserManagement", () => {
     const user = userEvent.setup();
     render(<UserManagement currentUser={admin} />);
     await screen.findByText("ana");
-    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /restablecer/i }));
+    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /acciones para op/i }));
+    await user.click(await screen.findByRole("menuitem", { name: "Restablecer contraseña" }));
     await user.click(screen.getByRole("button", { name: "Generar" }));
     const field = screen.getByLabelText("Nueva contraseña");
     const generated = (field as HTMLInputElement).value;
@@ -146,7 +161,8 @@ describe("UserManagement", () => {
     const user = userEvent.setup();
     render(<UserManagement currentUser={admin} />);
     await screen.findByText("ana");
-    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /restablecer/i }));
+    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /acciones para op/i }));
+    await user.click(await screen.findByRole("menuitem", { name: "Restablecer contraseña" }));
     await user.type(screen.getByLabelText("Nueva contraseña"), "typed-secret");
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Restablecer contraseña" }));
     expect(await within(screen.getByRole("dialog")).findByRole("status")).toHaveTextContent("Contraseña restablecida");
@@ -161,10 +177,54 @@ describe("UserManagement", () => {
     vi.mocked(resetUserPassword).mockRejectedValue(new ApiError(422, "Unprocessable Entity"));
     render(<UserManagement currentUser={admin} />);
     await screen.findByText("ana");
-    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /restablecer/i }));
+    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /acciones para op/i }));
+    await user.click(await screen.findByRole("menuitem", { name: "Restablecer contraseña" }));
     await user.type(screen.getByLabelText("Nueva contraseña"), "long enough");
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Restablecer contraseña" }));
     expect(await within(screen.getByRole("dialog")).findByRole("alert")).toHaveTextContent("al menos 8 caracteres");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("filters by role and status and reports the current result count", async () => {
+    const user = userEvent.setup();
+    render(<UserManagement currentUser={admin} />);
+    await screen.findByText("ana");
+    expect(screen.getByText("Mostrando 3 de 3 usuarios")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Todos 3" })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Filtrar por rol"), "tecnico");
+    expect(screen.getByText("Mostrando 1 de 1 usuarios")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Filtrar por rol"), "all");
+    await user.click(screen.getByRole("tab", { name: "Inactivos 1" }));
+    expect(screen.getByRole("row", { name: /op Operador/i })).toBeInTheDocument();
+    expect(screen.getByText("Mostrando 1 de 1 usuarios")).toBeInTheDocument();
+  });
+
+  it("paginates the filtered user list", async () => {
+    const user = userEvent.setup();
+    const manyUsers = Array.from({ length: 12 }, (_, index) => ({ ...users[index % users.length], id: index + 10, username: `user${index}` }));
+    vi.mocked(fetchUsers).mockResolvedValue({ users: manyUsers });
+    render(<UserManagement currentUser={admin} />);
+    await screen.findByRole("link", { name: "user0" });
+    expect(screen.getByText("Mostrando 10 de 12 usuarios")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Siguiente" }));
+    expect(screen.getByText("Mostrando 2 de 12 usuarios")).toBeInTheDocument();
+    expect(screen.getByText("2", { selector: "span" })).toBeInTheDocument();
+  });
+
+  it("shows search and opens user creation in a dialog", async () => {
+    const user = userEvent.setup();
+    render(<UserManagement currentUser={admin} />);
+    await screen.findByText("ana");
+    const search = screen.getByRole("searchbox", { name: "Buscar usuarios" });
+    expect(search).toBeInTheDocument();
+    await user.type(search, "op");
+    await waitFor(() => expect(screen.queryByRole("link", { name: "ana" })).not.toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "op" })).toBeInTheDocument();
+    expect(screen.getByText("Mostrando 1 de 1 usuarios")).toBeInTheDocument();
+    await user.clear(search);
+    await waitFor(() => expect(screen.getByRole("link", { name: "ana" })).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
+    expect(screen.getByRole("dialog", { name: "Nuevo usuario" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Usuario")).toBeInTheDocument();
   });
 });

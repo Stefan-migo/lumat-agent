@@ -19,5 +19,5 @@ export interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status, label }: StatusBadgeProps) {
-  return <Badge tone={statusTone[status]}>{label ?? conversationLabel(status)}</Badge>;
+  return <Badge tone={statusTone[status]} className="status-badge"><span className="status-badge__dot" aria-hidden="true" />{label ?? conversationLabel(status)}</Badge>;
 }

@@ -22,7 +22,7 @@ describe("Avatar (T8.5)", () => {
 
   it("uses semantic non-white avatar roles", () => {
     const avatar = primitives.match(/\.avatar\s*\{([^}]*)\}/)?.[1] ?? "";
-    expect(avatar).toMatch(/background:\s*var\(--surface-subtle\)/);
+    expect(avatar).toMatch(/background:\s*var\(--border\)/);
     expect(avatar).toMatch(/color:\s*var\(--text\)/);
   });
 });
