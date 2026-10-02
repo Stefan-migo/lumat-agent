@@ -12,7 +12,7 @@ implementing any section. The v1 dashboard record predates this flow and has no 
 | `clientes` | pending | — | — |
 | `conversaciones` | pending | — | — |
 | `agenda` | pending | — | — |
-| `usuarios` | pending | — | — |
+| `usuarios` | validated | [visual.md](usuarios/visual.md) | [findings.md](usuarios/findings.md) |
 | `conocimiento` | pending | — | — |
 | `configuracion` | pending | — | — |
 
@@ -37,6 +37,8 @@ Findings that belong to one upstream unit. Implement these **before** per-sectio
 | dashboard-008 | dashboard | Shortcut set needs "Configuración" in place of "Casos" | `web/src/components/primitives/primitives.css` |
 | dashboard-010 | dashboard | No period selector nor "Desde el …" caption | `web/src/components/primitives/primitives.css` |
 | dashboard-012 | dashboard | Motivos render as chips, not rows with a count badge | `web/src/components/primitives/primitives.css` |
+| usuarios-016 | usuarios | Tablet header hides the breadcrumb (and back control) | `web/src/components/primitives/primitives.css` |
+| usuarios-017 | usuarios | Mobile header logo too large and not centered | `web/src/components/primitives/primitives.css` |
 
 ## Token/palette escalations
 
