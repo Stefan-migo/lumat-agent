@@ -1,4 +1,4 @@
-"""Seed development-only dashboard data (never part of the deploy seed).
+"""Seed dashboard demo data after explicit operator confirmation.
 
 Usage inside the API container, where the environment variables and ``db``
 Compose hostname are available::
@@ -10,9 +10,13 @@ variables exported and a ``.venv`` installed::
 
     .venv/bin/python app/panel/seed_demo.py --yes
 
-The target URL is printed with its password redacted, and writing requires
-``--yes`` or ``LUMAT_DEMO_SEED=1``. Demo rows are replaced on each run. The
-reserved ``+5690000000`` phone prefix identifies every seeded customer.
+The target URL is printed with its password redacted. Writing requires
+``--yes`` or ``LUMAT_DEMO_SEED=1``; the resolved host must be ``db``,
+``localhost``, or ``127.0.0.1`` unless ``--allow-nonlocal`` is also passed.
+These checks defend against an accidental run, not a determined operator who
+passes both flags. They do not prove that a local or named host is a development
+database. Demo rows are replaced on each run. The reserved ``+5690000000``
+phone prefix identifies every seeded customer.
 """
 
 from __future__ import annotations
@@ -150,13 +154,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--yes", action="store_true", help="confirm replacing demo rows in the target database"
     )
+    parser.add_argument(
+        "--allow-nonlocal", action="store_true", help="allow a database host outside db/localhost"
+    )
     args = parser.parse_args(argv)
     database_url = make_url(get_settings().database_url)
-    print(
-        f"Target database: {database_url.render_as_string(hide_password=True)}\n"
-        "Demo rows will be replaced.",
-        flush=True,
-    )
+    print(f"Target database: {database_url.render_as_string(hide_password=True)}", flush=True)
+    print("Demo rows will be replaced.", flush=True)
+    if database_url.host not in {"db", "localhost", "127.0.0.1"} and not args.allow_nonlocal:
+        print(
+            "Refusing to write to a non-development host: pass --allow-nonlocal to override this host check.",
+            file=sys.stderr,
+        )
+        return 1
     if not (args.yes or os.environ.get("LUMAT_DEMO_SEED") == "1"):
         print(
             "Refusing to write without explicit opt-in: pass --yes or set LUMAT_DEMO_SEED=1.",
