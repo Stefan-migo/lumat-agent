@@ -11,7 +11,7 @@ implementing any section. The v1 dashboard record predates this flow and has no 
 | `dashboard` | analyzed (predates v2) | — | [findings.md](dashboard/findings.md) |
 | `clientes` | pending | — | — |
 | `conversaciones` | pending | — | — |
-| `agenda` | pending | — | — |
+| `agenda` | validated | [agenda/visual.md](agenda/visual.md) | [agenda/findings.md](agenda/findings.md) |
 | `usuarios` | validated | [visual.md](usuarios/visual.md) | [findings.md](usuarios/findings.md) |
 | `conocimiento` | pending | — | — |
 | `configuracion` | pending | — | — |
@@ -39,6 +39,10 @@ Findings that belong to one upstream unit. Implement these **before** per-sectio
 | dashboard-012 | dashboard | Motivos render as chips, not rows with a count badge | `web/src/components/primitives/primitives.css` |
 | usuarios-016 | usuarios | Tablet header hides the breadcrumb (and back control) | `web/src/components/primitives/primitives.css` |
 | usuarios-017 | usuarios | Mobile header logo too large and not centered | `web/src/components/primitives/primitives.css` |
+| agenda-004 | agenda | Calendar toolbar: loose buttons instead of a segmented Mes/Semana control | `web/src/components/primitives/primitives.css` |
+| agenda-005 | agenda | Calendar lacks the reference legend + period-count footer | `web/src/components/primitives/primitives.css` |
+| agenda-018 | agenda | Dialog header lacks the reference icon + supporting sentence | `web/src/components/primitives/primitives.css` |
+| agenda-019 | agenda | Create-form layout: flat single column vs the reference's sectioned, multi-column form | `web/src/components/primitives/primitives.css` |
 
 ## Token/palette escalations
 
