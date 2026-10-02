@@ -109,6 +109,22 @@ describe("Dashboard operational surface", () => {
     }
   });
 
+  it("caps unanswered and urgent HOY rows at three while keeping the true totals", () => {
+    const today = {
+      ...data.today,
+      unanswered_conversations: Array.from({ length: 5 }, (_, index) => ({ id: index, customer_name: `Customer ${index}`, last_message_at: "2026-09-09T12:00:00Z", state: "BOT" })),
+      urgent_cases: Array.from({ length: 4 }, (_, index) => ({ id: index, customer_name: `Case ${index}`, service: "calefont", summary: "Urgent", emergency: true, escalated_at: "2026-09-09T11:00:00Z" })),
+    };
+    const { container } = render(<Dashboard data={{ ...data, today }} state="ready" />);
+
+    for (const [title, total] of [["Sin respuesta", "5"], ["Urgentes", "4"]]) {
+      const card = screen.getByRole("heading", { level: 3, name: title }).closest(".dashboard__card-ops");
+      expect(card?.querySelector(".dashboard__metric-value")).toHaveTextContent(total);
+      expect(card?.querySelectorAll(".dashboard__list > li")).toHaveLength(3);
+    }
+    expect(container.querySelectorAll(".dashboard__card-ops--danger .dashboard__row--urgent")).toHaveLength(3);
+  });
+
   it("renders Hoy rows and navigates each row to its operational view", () => {
     const onNavigate = vi.fn();
     render(<Dashboard data={data} state="ready" role="admin" onNavigate={onNavigate} />);
