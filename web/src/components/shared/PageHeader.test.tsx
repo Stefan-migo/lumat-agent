@@ -42,8 +42,8 @@ describe("PageHeader (DS-SHELL-6)", () => {
     const header = primitives.match(/\.page-header\s*\{([^}]*)\}/)?.[1] ?? "";
     const subtitle = primitives.match(/\.page-header p\s*\{([^}]*)\}/)?.[1] ?? "";
     expect(header).toMatch(/position:\s*relative/);
-    expect(header).toMatch(/padding-left:/);
-    expect(primitives).toMatch(/\.page-header::before\s*\{[^}]*background:\s*var\(--lime-700\)/s);
+    expect(primitives).toMatch(/\.page-header__copy\s*\{[^}]*padding-left:/s);
+    expect(primitives).toMatch(/\.page-header__copy::before\s*\{[^}]*background:\s*var\(--lime-700\)/s);
     expect(subtitle).not.toMatch(/border-radius:\s*999px|background:/);
     expect(primitives).not.toMatch(/\.dashboard-(?:meta|header)/);
   });

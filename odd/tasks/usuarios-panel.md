@@ -158,6 +158,36 @@ locked contracts. Applied globally and the contract tests updated:
 
 This is a panel-wide design-system change, not usuarios-only: every button, tab and avatar changes.
 
+## Slice 3 (mobile) + toolbar follow-up
+
+Applied:
+- Toolbar toolbar height: the role filter used `Select size="sm"` while the search control was md, so
+  the filter was shorter. Changed the filter to the md control; both now match (owner review of the
+  merged slice 2).
+- `usuarios-014` / `usuarios-018`: below 40rem the list renders as cards (`.table-cards--mobile`) and
+  the desktop table is hidden (`.table-card__desktop { display:none }`); each card carries the avatar,
+  name (+ "Tú"), role, status pill and a kebab that opens a per-user action sheet (a `Dialog` styled as
+  a bottom sheet on mobile) with "Restablecer contraseña", "Desactivar/Activar usuario" and "Cancelar".
+
+Mobile refinements (owner rounds 3-5):
+- Cards aligned: the `<ul>` kept the browser's default `padding-left`; reset `margin/padding/list-style`
+  and restructured the card to two lines (name + "Tú" / role) with a larger avatar and the status pill
+  + kebab in a trailing group.
+- `PageHeader` shared rail moved from `.page-header::before` to `.page-header__copy::before`, so the
+  lime rule covers only title/subtitle and the mobile action button sits outside it (matches the
+  reference); mobile title bar stacks copy + full-width action.
+- "Nuevo usuario" gained the `user-plus` icon (desktop + mobile).
+- Action sheet matches the reference: drag handle, hidden dialog header (kept accessible via
+  `aria-labelledby` with a clip-hidden header), the close X moved inside the user header row (same row
+  as avatar + name), the status dot next to "Técnico · Activo/Inactivo" (green/amber), per-item
+  chevrons, the deactivate icon in the warning tone, full-width "Cancelar".
+- Toolbar: the role filter used the `sm` control; switched to md so both controls match height.
+
+Border decision (owner): asked for an intermediate grey that keeps 3:1. There is no real room:
+`--border-strong` (#7e858f) is ~3.1:1 on `--surface` and the WCAG test pins it (≥3 on `--surface`,
+<3 on `--bg`). The control fill provides only ~1.09:1, so the border is the boundary. Kept the current
+value; a visibly lighter border requires dropping below 3:1.
+
 ## Slice log
 
 | Slice | Findings | Commit | PR | Status |
