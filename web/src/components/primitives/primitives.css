@@ -1060,12 +1060,19 @@
   align-items: center;
   min-width: 0;
 }
+/* The mobile bar centers the wordmark independently of the menu and the account affordances on
+   either side; the previous `margin-right: auto` pinned it left. Owner ruling (usuarios-017):
+   smaller and centered. Absolute centering keeps the bar's `space-between` for the side groups. */
 .panel-shell__mobile-brand--line {
-  flex: 0 1 11rem;
-  margin-right: auto;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  flex: none;
+  max-width: 8rem;
 }
 .panel-shell__mobile-brand--line .panel-shell__brand-image {
-  max-height: 3rem;
+  max-height: 2rem;
 }
 .panel-shell__mobile-brand .panel-shell__brand-mark { display: none; }
 .panel-shell__brand-image,
@@ -1830,11 +1837,12 @@
   .panel-shell__sidebar .panel-shell__user-identity { grid-template-columns: 1fr; justify-items: center; }
   .panel-shell__tablet-menu { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-on-dark); cursor: pointer; }
   .panel-shell__tablet-menu:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
-  /* Tablet has no chrome band: the header row carries only the bell and the account affordances (PNL-APP-10). */
+  /* Tablet is a chrome band with breadcrumbs: the owner ruled the reference right (usuarios-016),
+     so the breadcrumb leads the header and the account affordances sit at the end. The back control
+     stays hidden on tablet; the detail views expose their own "Volver" affordance. */
   .panel-shell__header-row { display: flex; background: transparent; border-bottom: 0; }
-  .panel-shell__header .panel-shell__back,
-  .panel-shell__header .panel-shell__breadcrumbs { display: none; }
-  .panel-shell__header { justify-content: flex-end; padding-inline: var(--space-5); }
+  .panel-shell__header .panel-shell__back { display: none; }
+  .panel-shell__header { justify-content: space-between; padding-inline: var(--space-5); }
   .panel-shell__footer-nav { display: none; }
 }
 @media (max-width: 39.99rem) {
