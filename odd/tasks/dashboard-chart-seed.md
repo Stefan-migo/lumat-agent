@@ -180,6 +180,59 @@ down. Add that as a test (e.g. `tests/functional/test_seed_demo.py`) so the seed
 - Deferred by the owner from the previous unit and still open: the KPI row presentation, the shortcut
   icon colours, and the app-wide `button { font: inherit }` root cause.
 
+### The native review could not run — and what replaced it
+
+RDD was enabled and the assessment classified this candidate **high risk** (455 lines, reason
+`process_boundary` / `shell_process` on `app/panel/seed_demo.py`), so the native four-lens review was
+due. The lifecycle was entered correctly (STATUS → consent relayed losslessly → the owner granted →
+START created lineage `review-899c2019a166c47c`), and the very next STATUS returned a provider failure:
+
+```
+gentle-ai.review-integration.failure/v2
+code: immutable_review_transport_unsupported
+message: The active runtime cannot provide immutable receipt-review transport.
+mutation_outcome: not_started   authority_applicability: not_evaluated
+retry_safe: false               next_action: stop
+```
+
+`mutation_outcome: not_started` — nothing was frozen and no authority was consumed. This is the
+contract's own capability gate: it is authoritative, and a runtime that cannot provide the transport
+stays unavailable before any authority mutation. The producer is the **client runtime**, which is what
+supplies (or does not supply) the transport; Gentle AI detected and reported it, so it is not a Gentle AI
+defect and no defect report was raised. `retry_safe: false`, so no blind retry.
+
+Per the contract's RDD-off fallback, an independent verifier replaced the native review.
+
+### Verifier-driven correction `bbfcaac9`
+
+The verifier produced **one valid finding and two false negatives**. Recorded honestly, because a
+verifier that is wrong half the time is itself information:
+
+- **False negative — predicates.** It reported the functional test as only asserting a customer count.
+  The test actually drives `compute_kpis` at 7/14/30 days, sums the trend buckets per window, and asserts
+  all three HOY projections, plus `seeded_customers == 30` which is a genuine idempotency proof (an
+  append would yield 60). Read directly to confirm.
+- **False negative — idempotency "unverifiable".** It could not reach the test database (its own setup
+  problem) and generalised that into an unverified claim.
+- **Valid — the guard overclaimed.** `--yes` bypassed every target check, so the script would write to
+  any configured URL, while the docstring implied production was impossible. Fixed: a second gate
+  accepts only the hosts this repository's development environments use (`db`, `localhost`, `127.0.0.1`)
+  and refuses anything else unless `--allow-nonlocal` is also passed, and the docstring now states plainly
+  that the checks defend against an accident, not against a determined operator.
+- **Valid — idempotency was under-pinned.** Only the customer count was asserted. Now the seeded
+  conversation, message, case and appointment counts are captured after the first run and required to be
+  unchanged after the second, derived from the seeder's own marker so they cannot drift.
+
+### A parent spot-check note
+
+The orchestrator's first manual run of the seeder failed twice for reasons that were **not** code
+defects — once because `env_file=None` means nothing loads `infra/.env` (the documented container path is
+the intended route, and `test-db.sh env` does not export the five required settings), and once because
+`infra/test-db.sh up` returns at "Started" while Postgres needs several more seconds: the database must
+be waited on until `healthy`. A third apparent failure was a bug in the orchestrator's own counting
+script, which swallowed per-table exceptions and reported "all tables empty". Recorded so the next
+session does not chase the same ghosts.
+
 ## Recovery
 
 - Base `53fef85f`. The previous unit's worktree and branches are gone.
