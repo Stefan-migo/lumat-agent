@@ -192,6 +192,7 @@ describe("UserManagement", () => {
     await user.type(screen.getByLabelText("Nueva contraseña"), "typed-secret");
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Restablecer contraseña" }));
     expect(await within(screen.getByRole("dialog")).findByRole("status")).toHaveTextContent("Contraseña restablecida");
+    await waitFor(() => expect(fetchUsers).toHaveBeenCalledTimes(2));
     expect(screen.getByLabelText("Nueva contraseña")).toHaveValue("typed-secret");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Listo" }));
