@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { BriefcaseBusiness, ChevronRight, EllipsisVertical, KeyRound, LockKeyhole, ShieldCheck, SlidersHorizontal, UserPlus, UserRoundMinus, Wrench, X } from "lucide-react";
-import { ApiError, createUser, fetchUsers, resetUserPassword, toggleUserActive } from "../../api";
+import { BriefcaseBusiness, ChevronRight, EllipsisVertical, KeyRound, LockKeyhole, Shield, ShieldCheck, SlidersHorizontal, UserPlus, UserRound, UserRoundMinus, Wrench, X } from "lucide-react";
+import { ApiError, createUser, fetchUsers, toggleUserActive } from "../../api";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import type { AdminUser, Role, User } from "../../types";
 import { roleLabels } from "../../roleLabels";
@@ -19,16 +19,10 @@ import { StatusBadge } from "../primitives/StatusBadge";
 import { Icon } from "../primitives/Icon";
 import { Badge } from "../primitives/Badge";
 import { Menu } from "../primitives/Menu";
+import { ResetPasswordDialog } from "../shared/ResetPasswordDialog";
 
 const roleIcons = { admin: ShieldCheck, operador: BriefcaseBusiness, tecnico: Wrench } as const;
 const pageSize = 10;
-
-const passwordAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
-function generatePassword() {
-  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
-  return Array.from(bytes, (byte) => passwordAlphabet[byte % passwordAlphabet.length]).join("");
-}
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.detail : fallback;
@@ -40,14 +34,12 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
   const [refreshKey, setRefreshKey] = useState(0);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<Role>("operador");
   const [mutationState, setMutationState] = useState<{ tone: "success" | "danger" | "info"; title: string; detail?: string } | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [actionTarget, setActionTarget] = useState<AdminUser | null>(null);
-  const [resetDraft, setResetDraft] = useState("");
-  const [resetBusy, setResetBusy] = useState(false);
-  const [resetDone, setResetDone] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<Role | "all">("all");
@@ -63,10 +55,11 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
     event.preventDefault();
     if (!username.trim()) { setMutationState({ tone: "danger", title: "El usuario es obligatorio" }); return; }
     if (password.length < 8) { setMutationState({ tone: "danger", title: "La contraseña debe tener al menos 8 caracteres" }); return; }
+    if (password !== confirmPassword) { setMutationState({ tone: "danger", title: "Las contraseñas no coinciden" }); return; }
     setMutationState({ tone: "info", title: "Creando usuario" });
     try {
       await createUser({ username: username.trim(), password, role });
-      setUsername(""); setPassword("");
+      setUsername(""); setPassword(""); setConfirmPassword("");
       setMutationState({ tone: "success", title: "Usuario creado" });
       setRefreshKey((value) => value + 1);
       setCreateOpen(false);
@@ -84,35 +77,14 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
   };
 
   const closeReset = () => {
-    if (resetBusy) return;
     setResetTarget(null);
-    setResetDraft("");
-    setResetDone(false);
     setMutationState(null);
-  };
-
-  const reset = async () => {
-    if (!resetTarget || resetDraft.length < 8 || resetBusy) return;
-    setResetBusy(true);
-    setMutationState(null);
-    try {
-      await resetUserPassword(resetTarget.id, resetDraft);
-      setMutationState({ tone: "success", title: "Contraseña restablecida", detail: "La nueva contraseña fue aplicada de forma segura." });
-      setResetDone(true);
-      setRefreshKey((value) => value + 1);
-    } catch (error) {
-      const title = error instanceof ApiError && error.status === 422 ? "La contraseña debe tener al menos 8 caracteres"
-        : error instanceof ApiError && error.status === 403 ? "No puedes restablecer tu propia contraseña"
-        : error instanceof ApiError && error.status === 404 ? "El usuario ya no existe"
-        : errorMessage(error, "No pudimos restablecer la contraseña");
-      setMutationState({ tone: "danger", title });
-    } finally { setResetBusy(false); }
   };
 
   const state = data.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando usuarios" />
     : data.state === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para ver este panel" />
     : data.state === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar los usuarios" detail="Intenta nuevamente en unos minutos." />
-    : mutationState && !resetTarget && !createOpen ? <StateMessage {...mutationState} role={mutationState.tone === "danger" ? "alert" : "status"} /> : null;
+    : mutationState && !createOpen ? <StateMessage {...mutationState} role={mutationState.tone === "danger" ? "alert" : "status"} /> : null;
   const users = data.data?.users ?? [];
   const roleUsers = useMemo(() => users.filter((user) => roleFilter === "all" || user.role === roleFilter), [users, roleFilter]);
   const matchingUsers = useMemo(() => {
@@ -136,7 +108,7 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
             <SearchInput aria-label="Buscar usuarios" placeholder="Buscar por nombre de usuario…" onSearch={(value) => { setQuery(value); setPage(1); }} />
             <div className="table-toolbar__select"><Icon icon={SlidersHorizontal} /><Select label="Filtrar por rol" value={roleFilter} options={[{ value: "all", label: "Todos los roles" }, { value: "admin", label: roleLabels.admin }, { value: "operador", label: roleLabels.operador }, { value: "tecnico", label: roleLabels.tecnico }]} onChange={(event) => { setRoleFilter(event.target.value as Role | "all"); setPage(1); }} /></div>
           </section>
-          <div className="table-card__desktop"><DataTable columns={columns} rows={pageUsers} rowKey={(user) => String(user.id)} actions={(user) => user.username === currentUser.username ? <span className="table__actions-unavailable"><Icon icon={LockKeyhole} size="sm" /> Acciones no disponibles</span> : <Menu label={`Acciones para ${user.name ?? user.username}`} trigger="icon" items={[{ value: "toggle", label: user.active ? "Desactivar usuario" : "Activar usuario", icon: UserRoundMinus, disabled: busyId === user.id }, { value: "reset", label: "Restablecer contraseña", icon: KeyRound, disabled: busyId === user.id }]} onSelect={(value) => { if (value === "toggle") void toggle(user); else { setResetTarget(user); setResetDraft(""); setResetDone(false); setMutationState(null); } }} />} /></div>
+          <div className="table-card__desktop"><DataTable columns={columns} rows={pageUsers} rowKey={(user) => String(user.id)} actions={(user) => user.username === currentUser.username ? <span className="table__actions-unavailable"><Icon icon={LockKeyhole} size="sm" /> Acciones no disponibles</span> : <Menu label={`Acciones para ${user.name ?? user.username}`} trigger="icon" items={[{ value: "toggle", label: user.active ? "Desactivar usuario" : "Activar usuario", icon: UserRoundMinus, disabled: busyId === user.id }, { value: "reset", label: "Restablecer contraseña", icon: KeyRound, disabled: busyId === user.id }]} onSelect={(value) => { if (value === "toggle") void toggle(user); else { setResetTarget(user); setMutationState(null); } }} />} /></div>
           <ul className="table-cards table-cards--mobile" aria-label="Lista de usuarios">
             {pageUsers.map((user) => <li className="table-card__item" key={user.id}>
               <Avatar name={user.name ?? user.username} />
@@ -158,31 +130,34 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
       {actionTarget ? <div className="user-mobile-actions">
         <span className="user-mobile-actions__handle" aria-hidden="true" />
         <div className="user-mobile-actions__header"><Avatar name={actionTarget.name ?? actionTarget.username} /><div className="user-mobile-actions__identity"><strong>{actionTarget.name ?? actionTarget.username}</strong><span>{roleLabels[actionTarget.role]} · <span className={actionTarget.active ? "user-mobile-actions__dot" : "user-mobile-actions__dot user-mobile-actions__dot--off"} aria-hidden="true" /> {actionTarget.active ? "Activo" : "Inactivo"}</span></div><button type="button" className="user-mobile-actions__close" aria-label="Cerrar" onClick={() => setActionTarget(null)}><Icon icon={X} /></button></div>
-        <button type="button" className="user-mobile-actions__item" onClick={() => { setResetTarget(actionTarget); setResetDraft(""); setResetDone(false); setMutationState(null); setActionTarget(null); }}><Icon icon={KeyRound} /><span>Restablecer contraseña<small>Actualizar el acceso a la cuenta</small></span><Icon icon={ChevronRight} size="sm" /></button>
+        <button type="button" className="user-mobile-actions__item" onClick={() => { setResetTarget(actionTarget); setMutationState(null); setActionTarget(null); }}><Icon icon={KeyRound} /><span>Restablecer contraseña<small>Actualizar el acceso a la cuenta</small></span><Icon icon={ChevronRight} size="sm" /></button>
         <button type="button" className="user-mobile-actions__item user-mobile-actions__item--danger" disabled={busyId === actionTarget.id} onClick={() => { void toggle(actionTarget); setActionTarget(null); }}><Icon icon={UserRoundMinus} /><span>{actionTarget.active ? "Desactivar usuario" : "Activar usuario"}<small>Impedir el acceso sin eliminar la cuenta</small></span><Icon icon={ChevronRight} size="sm" /></button>
         <Button variant="secondary" onClick={() => setActionTarget(null)}>Cancelar</Button>
       </div> : null}
     </Dialog>
-    <Dialog open={createOpen} onClose={() => { setCreateOpen(false); setMutationState(null); }} title="Nuevo usuario">
-      <form onSubmit={submit}>
-        <Input label="Usuario" value={username} onChange={(event) => setUsername(event.target.value)} />
-        <Input label="Contraseña" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-        <label>Rol<select aria-label="Rol" value={role} onChange={(event) => setRole(event.target.value as Role)}><option value="operador">Operador</option><option value="tecnico">Técnico</option><option value="admin">Administrador</option></select></label>
+    <Dialog open={createOpen} onClose={() => { setCreateOpen(false); setMutationState(null); }} title="Nuevo usuario" icon={UserPlus} description="Crea una cuenta y asigna su rol de acceso.">
+      <form className="user-dialog-form" onSubmit={submit}>
+        <section className="dialog-section" aria-labelledby="access-heading">
+          <h3 id="access-heading" className="dialog-section__title">Datos de acceso</h3>
+          <Input label="Nombre de usuario" placeholder="Ej. mperez" icon={UserRound} helper="Se utilizará para iniciar sesión en Lumat." value={username} onChange={(event) => setUsername(event.target.value)} />
+          <div className="dialog-field-pair">
+            <Input label="Contraseña" type="password" revealable icon={LockKeyhole} value={password} onChange={(event) => setPassword(event.target.value)} />
+            <Input label="Confirmar contraseña" type="password" revealable icon={LockKeyhole} placeholder="Repite la contraseña" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
+          </div>
+          <span className="field__helper">Usa una contraseña única y difícil de adivinar.</span>
+        </section>
+        <section className="dialog-section" aria-labelledby="permissions-heading">
+          <h3 id="permissions-heading" className="dialog-section__title">Permisos</h3>
+          <div className="user-role-field">
+            <Icon icon={Shield} />
+            <Select label="Rol de acceso" className="user-role-field__select" value={role} options={[{ value: "operador", label: "Operador" }, { value: "tecnico", label: "Técnico" }, { value: "admin", label: "Administrador" }]} onChange={(event) => setRole(event.target.value as Role)} />
+            <span className="field__helper">El rol determina las funciones que podrá utilizar.</span>
+          </div>
+        </section>
         {mutationState && !resetTarget ? <StateMessage {...mutationState} role={mutationState.tone === "danger" ? "alert" : "status"} /> : null}
-        <Button type="submit">Crear usuario</Button>
+        <footer className="dialog-footer"><Button variant="secondary" onClick={() => { setCreateOpen(false); setMutationState(null); }}>Cancelar</Button><Button type="submit"><Icon icon={UserPlus} />Crear usuario</Button></footer>
       </form>
     </Dialog>
-    <Dialog open={resetTarget !== null} onClose={closeReset} title="Restablecer contraseña">
-      {resetTarget ? <>
-        <p>Define una nueva contraseña para {resetTarget.name ?? resetTarget.username}.</p>
-        <Input label="Nueva contraseña" type="text" value={resetDraft} onChange={(event) => setResetDraft(event.target.value)} disabled={resetBusy || resetDone} />
-        <p>La contraseña debe tener al menos 8 caracteres.</p>
-        {mutationState ? <StateMessage {...mutationState} role={mutationState.tone === "danger" ? "alert" : "status"} /> : null}
-        {resetDone ? <Button onClick={closeReset}>Listo</Button> : <>
-          <Button variant="secondary" disabled={resetBusy} onClick={() => setResetDraft(generatePassword())}>Generar</Button>
-          <Button disabled={resetDraft.length < 8 || resetBusy} onClick={() => void reset()}>{resetBusy ? "Restableciendo…" : "Restablecer contraseña"}</Button>
-        </>}
-      </> : null}
-    </Dialog>
+    <ResetPasswordDialog target={resetTarget} onClose={closeReset} onDone={() => setRefreshKey((value) => value + 1)} />
   </PageFrame>;
 }

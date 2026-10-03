@@ -73,8 +73,9 @@ describe("UserManagement", () => {
     await user.click(screen.getByRole("button", { name: "Crear usuario" }));
     expect(within(screen.getByRole("dialog")).getByRole("alert")).toHaveTextContent("usuario");
     expect(createUser).not.toHaveBeenCalled();
-    await user.type(screen.getByLabelText("Usuario"), "nuevo");
+    await user.type(screen.getByLabelText("Nombre de usuario"), "nuevo");
     await user.type(screen.getByLabelText("Contraseña"), "short");
+    await user.type(screen.getByLabelText("Confirmar contraseña"), "short");
     await user.click(screen.getByRole("button", { name: "Crear usuario" }));
     expect(screen.getByRole("alert")).toHaveTextContent("8 caracteres");
   });
@@ -85,8 +86,12 @@ describe("UserManagement", () => {
     render(<UserManagement currentUser={admin} />);
     await screen.findByRole("table");
     await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
-    await user.type(screen.getByLabelText("Usuario"), "new");
+    expect(screen.getByText("Datos de acceso")).toBeInTheDocument();
+    expect(screen.getByText("Permisos")).toBeInTheDocument();
+    expect(screen.getByText("Crea una cuenta y asigna su rol de acceso.")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Nombre de usuario"), "new");
     await user.type(screen.getByLabelText("Contraseña"), "long enough");
+    await user.type(screen.getByLabelText("Confirmar contraseña"), "long enough");
     await user.click(screen.getByRole("button", { name: "Crear usuario" }));
     await waitFor(() => expect(createUser).toHaveBeenCalledWith({ username: "new", password: "long enough", role: "operador" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Usuario creado");
@@ -99,13 +104,14 @@ describe("UserManagement", () => {
     render(<UserManagement currentUser={admin} />);
     await screen.findByRole("table");
     await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
-    await user.type(screen.getByLabelText("Usuario"), "duplicate");
-    await user.selectOptions(screen.getByLabelText("Rol"), "tecnico");
+    await user.type(screen.getByLabelText("Nombre de usuario"), "duplicate");
+    await user.selectOptions(screen.getByLabelText("Rol de acceso"), "tecnico");
     await user.type(screen.getByLabelText("Contraseña"), "long enough");
+    await user.type(screen.getByLabelText("Confirmar contraseña"), "long enough");
     await user.click(screen.getByRole("button", { name: "Crear usuario" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("El usuario ya existe");
-    expect(screen.getByLabelText("Usuario")).toHaveValue("duplicate");
-    expect(screen.getByLabelText("Rol")).toHaveValue("tecnico");
+    expect(screen.getByLabelText("Nombre de usuario")).toHaveValue("duplicate");
+    expect(screen.getByLabelText("Rol de acceso")).toHaveValue("tecnico");
   });
 
   it("disables self-protection controls and manages another user", async () => {
@@ -167,8 +173,9 @@ describe("UserManagement", () => {
     await screen.findByRole("table");
     await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /acciones para op/i }));
     await user.click(await screen.findByRole("menuitem", { name: "Restablecer contraseña" }));
-    await user.click(screen.getByRole("button", { name: "Generar" }));
+    await user.click(screen.getByRole("button", { name: "Generar contraseña" }));
     const field = screen.getByLabelText("Nueva contraseña");
+    await user.click(screen.getByRole("button", { name: "Mostrar contraseña" }));
     const generated = (field as HTMLInputElement).value;
     expect(generated).toHaveLength(16);
     expect(field).toHaveAttribute("type", "text");
@@ -185,6 +192,7 @@ describe("UserManagement", () => {
     await user.type(screen.getByLabelText("Nueva contraseña"), "typed-secret");
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Restablecer contraseña" }));
     expect(await within(screen.getByRole("dialog")).findByRole("status")).toHaveTextContent("Contraseña restablecida");
+    await waitFor(() => expect(fetchUsers).toHaveBeenCalledTimes(2));
     expect(screen.getByLabelText("Nueva contraseña")).toHaveValue("typed-secret");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Listo" }));
@@ -244,6 +252,34 @@ describe("UserManagement", () => {
     await waitFor(() => expect(within(screen.getByRole("table")).getByRole("link", { name: "ana" })).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
     expect(screen.getByRole("dialog", { name: "Nuevo usuario" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Usuario")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nombre de usuario")).toBeInTheDocument();
+    expect(screen.getByLabelText("Confirmar contraseña")).toBeInTheDocument();
+  });
+
+  it("rejects a create password confirmation that does not match", async () => {
+    const user = userEvent.setup();
+    render(<UserManagement currentUser={admin} />);
+    await screen.findByRole("table");
+    await user.click(screen.getByRole("button", { name: "Nuevo usuario" }));
+    await user.type(screen.getByLabelText("Nombre de usuario"), "new");
+    await user.type(screen.getByLabelText("Contraseña"), "long enough");
+    await user.type(screen.getByLabelText("Confirmar contraseña"), "different");
+    await user.click(screen.getByRole("button", { name: "Crear usuario" }));
+    expect(await within(screen.getByRole("dialog")).findByRole("alert")).toHaveTextContent("no coinciden");
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it("shows the target account on password reset and lets the admin cancel", async () => {
+    const user = userEvent.setup();
+    render(<UserManagement currentUser={admin} />);
+    await screen.findByRole("table");
+    await user.click(within(screen.getByRole("row", { name: /op Operador/i })).getByRole("button", { name: /acciones para op/i }));
+    await user.click(await screen.findByRole("menuitem", { name: "Restablecer contraseña" }));
+    const dialog = screen.getByRole("dialog", { name: "Restablecer contraseña" });
+    expect(within(dialog).getByRole("region", { name: "Usuario de acceso" })).toBeInTheDocument();
+    expect(within(dialog).getAllByText("op")).toHaveLength(2);
+    expect(within(dialog).getByText("Define una nueva contraseña para esta cuenta.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByRole("dialog", { name: "Restablecer contraseña" })).not.toBeInTheDocument();
   });
 });

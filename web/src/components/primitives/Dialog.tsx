@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { X, type LucideIcon } from "lucide-react";
 import "./primitives.css";
 import { Icon } from "./Icon";
 
@@ -10,10 +10,12 @@ export interface DialogProps {
   children: ReactNode;
   /** Accessible label for the close control (DS-UI-COPY default). */
   closeLabel?: string;
+  icon?: LucideIcon;
+  description?: string;
 }
 
 /** Corporate Dialog primitive (CST-PRIM-7): native modal ownership. */
-export function Dialog({ open, onClose, title, children, closeLabel = "Cerrar" }: DialogProps) {
+export function Dialog({ open, onClose, title, children, closeLabel = "Cerrar", icon, description }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const ignoreCloseRef = useRef(false);
   const titleId = useId();
@@ -53,9 +55,13 @@ export function Dialog({ open, onClose, title, children, closeLabel = "Cerrar" }
         }}
       >
         <div className="dialog__header">
-          <h2 id={titleId} className="dialog__title">
-            {title}
-          </h2>
+          <div className="dialog__copy">
+            {icon ? <span className="dialog__icon"><Icon icon={icon} /></span> : null}
+            <div>
+              <h2 id={titleId} className="dialog__title">{title}</h2>
+              {description ? <p className="dialog__description">{description}</p> : null}
+            </div>
+          </div>
           <button
             type="button"
             className="dialog__close"

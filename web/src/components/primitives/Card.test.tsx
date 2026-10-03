@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { render, screen } from "@testing-library/react";
 import { Card } from "./Card";
+import { UserRound } from "lucide-react";
 
 const primitives = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
 
@@ -11,6 +12,12 @@ describe("Card (T8.2)", () => {
     render(<Card title="Client">Camila Soto</Card>);
     expect(screen.getByRole("heading", { name: "Client" })).toBeInTheDocument();
     expect(screen.getByText("Camila Soto")).toBeInTheDocument();
+  });
+
+  it("renders an optional icon and description in the header", () => {
+    render(<Card title="Profile" icon={UserRound} description="Account details">Content</Card>);
+    expect(screen.getByText("Account details")).toHaveClass("card__description");
+    expect(document.querySelector(".card__icon svg")).toBeInTheDocument();
   });
 
   it("uses a flat non-white surface and hairline separation", () => {

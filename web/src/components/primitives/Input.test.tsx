@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Input } from "./Input";
+import { UserRound } from "lucide-react";
 
 // T7.2 — Input (PDW-CMP-1). Label association (htmlFor+id), size via the
 // observable data-bx-size contract, error/aria wiring, and disabled guard.
@@ -40,6 +41,32 @@ describe("Input (T7.2)", () => {
     const message = screen.getByText("Formato de correo inválido");
     expect(message).toBeInTheDocument();
     expect(message.id).toBe(describedBy);
+  });
+
+  it("renders a leading icon, reveals passwords accessibly, and does not submit", async () => {
+    const user = userEvent.setup();
+    render(<form><Input label="Password" type="password" icon={UserRound} revealable /></form>);
+    const input = screen.getByLabelText("Password");
+    const toggle = screen.getByRole("button", { name: "Mostrar contraseña" });
+    expect(document.querySelector(".field__adornment--leading svg")).toBeInTheDocument();
+    expect(toggle).toHaveAttribute("type", "button");
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await user.click(toggle);
+    expect(input).toHaveAttribute("type", "text");
+    expect(screen.getByRole("button", { name: "Ocultar contraseña" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("disables the reveal toggle when the input is disabled", () => {
+    render(<Input label="Password" type="password" revealable disabled />);
+    expect(screen.getByRole("button", { name: "Mostrar contraseña" })).toBeDisabled();
+  });
+
+  it("renders helper text unless an error replaces it", () => {
+    const { rerender } = render(<Input label="Email" helper="Used for account notices" />);
+    expect(screen.getByText("Used for account notices")).toHaveClass("field__helper");
+    rerender(<Input label="Email" helper="Used for account notices" error="Invalid email" />);
+    expect(screen.getByRole("alert")).toHaveTextContent("Invalid email");
+    expect(screen.queryByText("Used for account notices")).not.toBeInTheDocument();
   });
 
   it("disables the input when disabled is set", () => {

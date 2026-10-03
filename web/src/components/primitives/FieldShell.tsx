@@ -16,6 +16,7 @@ export interface FieldShellProps {
   /** id used on the error span; the control's aria-describedby points here. */
   errorId?: string;
   error?: string;
+  helper?: string;
   disabled?: boolean;
   children: ReactNode;
 }
@@ -25,6 +26,7 @@ export function FieldShell({
   id,
   errorId,
   error,
+  helper,
   disabled,
   children,
 }: FieldShellProps) {
@@ -44,7 +46,7 @@ export function FieldShell({
         >
           {error}
         </span>
-      ) : null}
+      ) : helper ? <span className="field__helper">{helper}</span> : null}
     </div>
   );
 }
