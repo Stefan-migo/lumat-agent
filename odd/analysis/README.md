@@ -12,7 +12,7 @@ implementing any section. The v1 dashboard record predates this flow and has no 
 | `clientes` | pending | — | — |
 | `conversaciones` | pending | — | — |
 | `agenda` | validated | [agenda/visual.md](agenda/visual.md) | [agenda/findings.md](agenda/findings.md) |
-| `usuarios` | validated | [visual.md](usuarios/visual.md) | [findings.md](usuarios/findings.md) |
+| `usuarios` | validated (list implemented; detail page + dialogs validated, pending implementation) | [visual.md](usuarios/visual.md) | [findings.md](usuarios/findings.md) |
 | `conocimiento` | pending | — | — |
 | `configuracion` | pending | — | — |
 
@@ -39,6 +39,13 @@ Findings that belong to one upstream unit. Implement these **before** per-sectio
 | dashboard-012 | dashboard | Motivos render as chips, not rows with a count badge | `web/src/components/primitives/primitives.css` |
 | usuarios-016 | usuarios | Tablet header hides the breadcrumb (and back control) | `web/src/components/primitives/primitives.css` |
 | usuarios-017 | usuarios | Mobile header logo too large and not centered | `web/src/components/primitives/primitives.css` |
+| usuarios-019 | usuarios | Card header lacks the reference icon tile | `web/src/components/primitives/Card.tsx` |
+| usuarios-020 | usuarios | Dialog header lacks the reference icon tile (same upstream unit as agenda-018) | `web/src/components/primitives/Dialog.tsx` |
+| usuarios-021 | usuarios | Input lacks a leading-icon slot | `web/src/components/primitives/Input.tsx` |
+| usuarios-022 | usuarios | Input lacks a trailing toggle (password show/hide) | `web/src/components/primitives/Input.tsx` |
+| usuarios-023 | usuarios | Input lacks a helper line | `web/src/components/primitives/Input.tsx` |
+| usuarios-040 | usuarios | Card header lacks the reference supporting subtitle | `web/src/components/primitives/Card.tsx` |
+| usuarios-041 | usuarios | Dialog header lacks the reference supporting subtitle | `web/src/components/primitives/Dialog.tsx` |
 | agenda-004 | agenda | Calendar toolbar: loose buttons instead of a segmented Mes/Semana control | `web/src/components/primitives/primitives.css` |
 | agenda-005 | agenda | Calendar lacks the reference legend + period-count footer | `web/src/components/primitives/primitives.css` |
 | agenda-018 | agenda | Dialog header lacks the reference icon + supporting sentence | `web/src/components/primitives/primitives.css` |
