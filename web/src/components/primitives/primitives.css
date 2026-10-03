@@ -145,7 +145,7 @@
 .field__adornment { position: absolute; top: 50%; display: inline-flex; align-items: center; color: var(--corp-fg-muted); transform: translateY(-50%); pointer-events: none; }
 .field__adornment--leading { left: var(--space-2); }
 .field__adornment--trailing { right: var(--space-2); }
-.field__toggle { position: absolute; top: 50%; right: var(--space-2); display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; color: var(--corp-fg-muted); background: transparent; transform: translateY(-50%); cursor: pointer; }
+.field__toggle { position: absolute; top: 50%; right: var(--space-2); display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; color: var(--corp-fg-muted); background: transparent; pointer-events: auto; transform: translateY(-50%); cursor: pointer; }
 .field__toggle:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .field__control:focus {
   outline: var(--focus-ring-width) solid var(--focus-ring);

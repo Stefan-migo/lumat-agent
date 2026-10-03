@@ -56,6 +56,11 @@ describe("Input (T7.2)", () => {
     expect(screen.getByRole("button", { name: "Ocultar contraseña" })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("disables the reveal toggle when the input is disabled", () => {
+    render(<Input label="Password" type="password" revealable disabled />);
+    expect(screen.getByRole("button", { name: "Mostrar contraseña" })).toBeDisabled();
+  });
+
   it("renders helper text unless an error replaces it", () => {
     const { rerender } = render(<Input label="Email" helper="Used for account notices" />);
     expect(screen.getByText("Used for account notices")).toHaveClass("field__helper");

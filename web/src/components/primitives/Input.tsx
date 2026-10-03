@@ -63,7 +63,7 @@ export function Input({
             aria-describedby={error ? errorId : rest["aria-describedby"]} />
           {revealable && rest.type === "password" ? (
             <button type="button" className="field__adornment field__adornment--trailing field__toggle" aria-label={revealed ? "Ocultar contraseña" : "Mostrar contraseña"}
-              aria-pressed={revealed} onClick={() => setRevealed((current) => !current)}>
+              aria-pressed={revealed} disabled={disabled || rest.readOnly === true} onClick={() => setRevealed((current) => !current)}>
               <Icon icon={revealed ? EyeOff : Eye} />
             </button>
           ) : null}
