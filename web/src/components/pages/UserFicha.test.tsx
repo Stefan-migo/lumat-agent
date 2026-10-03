@@ -19,20 +19,30 @@ beforeEach(() => {
 });
 
 describe("UserFicha", () => {
-  it("renders identity, editable profile and lockout state", async () => {
+  it("loads profile data and renders the details and locked security state", async () => {
     render(<UserFicha userId={8} />);
-    expect(await screen.findByRole("heading", { name: /carlos/i })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Detalle del usuario" })).toBeInTheDocument();
+    expect(screen.getByText("Consulta y actualiza los datos de esta cuenta.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Carlos" })).toBeInTheDocument();
+    expect(screen.getByText("Usuario de acceso")).toBeInTheDocument();
+    expect(screen.getByText("carlos")).toBeInTheDocument();
     expect(screen.getAllByText("Técnico").length).toBeGreaterThan(0);
-    for (const field of ["Nombre", "Teléfono", "Correo", "Cargo"]) expect(screen.getByLabelText(field)).toBeInTheDocument();
+    for (const field of ["Nombre", "Teléfono", "Correo electrónico", "Cargo"]) expect(screen.getByLabelText(field)).toBeInTheDocument();
     expect(screen.getByText(/5 intentos fallidos/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Desbloquear cuenta" })).toBeInTheDocument();
   });
 
-  it("shows the profile name over the login username", async () => {
+  it("shows the profile name and keeps the login username visible", async () => {
     vi.mocked(getAdminUser).mockResolvedValue({ user: { ...lockedUser, username: "carlos", name: "Stefan" } });
     render(<UserFicha userId={8} />);
     expect(await screen.findByRole("heading", { name: "Stefan" })).toBeInTheDocument();
-    expect(screen.queryByText("carlos")).not.toBeInTheDocument();
+    expect(screen.getByText("carlos")).toBeInTheDocument();
+  });
+
+  it("falls back to the username when the profile name is null", async () => {
+    vi.mocked(getAdminUser).mockResolvedValue({ user: { ...lockedUser, name: null } });
+    render(<UserFicha userId={8} />);
+    expect(await screen.findByRole("heading", { name: "carlos" })).toBeInTheDocument();
   });
 
   it("saves only the four profile fields and maps empty fields to null", async () => {
@@ -49,10 +59,10 @@ describe("UserFicha", () => {
     vi.mocked(updateAdminUser).mockRejectedValue(new ApiError(409, "Email already exists"));
     const user = userEvent.setup();
     render(<UserFicha userId={8} />);
-    await screen.findByLabelText("Correo");
-    await waitFor(() => expect(screen.getByLabelText("Correo")).toHaveValue("carlos@example.cl"));
-    await user.clear(screen.getByLabelText("Correo"));
-    await user.type(screen.getByLabelText("Correo"), "other@example.cl");
+    await screen.findByLabelText("Correo electrónico");
+    await waitFor(() => expect(screen.getByLabelText("Correo electrónico")).toHaveValue("carlos@example.cl"));
+    await user.clear(screen.getByLabelText("Correo electrónico"));
+    await user.type(screen.getByLabelText("Correo electrónico"), "other@example.cl");
     await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/correo.*registrado|correo.*otro usuario/i);
   });
@@ -62,7 +72,24 @@ describe("UserFicha", () => {
     render(<UserFicha userId={8} />);
     await user.click(await screen.findByRole("button", { name: "Desbloquear cuenta" }));
     expect(unlockUser).toHaveBeenCalledWith(8);
-    expect((await screen.findAllByText("La cuenta está desbloqueada")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("No hay un bloqueo de seguridad activo.")).toBeInTheDocument();
+    expect(screen.getByText("Desbloqueada")).toBeInTheDocument();
     expect(screen.queryByText(/5 intentos fallidos/)).not.toBeInTheDocument();
+  });
+
+  it("discards unsaved changes back to loaded values", async () => {
+    const user = userEvent.setup();
+    render(<UserFicha userId={8} />);
+    await screen.findByDisplayValue("Carlos");
+    await user.clear(screen.getByLabelText("Nombre"));
+    await user.type(screen.getByLabelText("Nombre"), "Changed");
+    await user.click(screen.getByRole("button", { name: "Descartar cambios" }));
+    expect(screen.getByLabelText("Nombre")).toHaveValue("Carlos");
+  });
+
+  it("shows the permission-denied state", async () => {
+    vi.mocked(getAdminUser).mockRejectedValue(new ApiError(403, "Forbidden"));
+    render(<UserFicha userId={8} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("No tienes permiso para ver esta ficha");
   });
 });
