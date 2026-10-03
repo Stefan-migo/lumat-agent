@@ -12,7 +12,7 @@ implementing any section. The v1 dashboard record predates this flow and has no 
 | `clientes` | pending | — | — |
 | `conversaciones` | pending | — | — |
 | `agenda` | validated | [agenda/visual.md](agenda/visual.md) | [agenda/findings.md](agenda/findings.md) |
-| `usuarios` | validated (list implemented; detail page + dialogs validated, pending implementation) | [visual.md](usuarios/visual.md) | [findings.md](usuarios/findings.md) |
+| `usuarios` | done | [visual.md](usuarios/visual.md) | [findings.md](usuarios/findings.md) |
 | `conocimiento` | pending | — | — |
 | `configuracion` | pending | — | — |
 
