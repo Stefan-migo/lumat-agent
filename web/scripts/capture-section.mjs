@@ -57,6 +57,51 @@ const extraScreens = {
       },
     },
   ],
+  conocimiento: [
+    {
+      name: "document-detail",
+      fullPage: true,
+      async open(page, origin) {
+        const link = page.locator("a.table__link").first();
+        const href = await link.getAttribute("href");
+        if (!href) throw new Error("No document link found to open the KB document detail");
+        await page.goto(new URL(href, origin).href, { waitUntil: "domcontentloaded" });
+        await page.locator(".panel-shell").waitFor({ state: "visible", timeout: 15000 });
+      },
+    },
+  ],
+  usuarios: [
+    {
+      name: "detail",
+      fullPage: true,
+      async open(page, origin) {
+        const link = page.locator("a.table__resource-name").first();
+        const href = await link.getAttribute("href");
+        if (!href) throw new Error("No user link found to open the user detail");
+        await page.goto(new URL(href, origin).href, { waitUntil: "domcontentloaded" });
+        await page.locator(".panel-shell").waitFor({ state: "visible", timeout: 15000 });
+      },
+    },
+    {
+      name: "new-user-dialog",
+      fullPage: false,
+      async open(page) {
+        await page.getByRole("button", { name: "Nuevo usuario" }).click();
+        await page.locator("dialog.dialog[open]").waitFor({ state: "visible", timeout: 15000 });
+      },
+    },
+    {
+      name: "reset-password-dialog",
+      fullPage: false,
+      async open(page) {
+        const trigger = page.locator(".table-card__desktop").getByRole("button", { name: /^Acciones para / }).first();
+        if (!(await trigger.count())) throw new Error("No row action menu found to open the reset-password dialog");
+        await trigger.click();
+        await page.getByRole("menuitem", { name: "Restablecer contraseña" }).click();
+        await page.locator("dialog.dialog[open]").waitFor({ state: "visible", timeout: 15000 });
+      },
+    },
+  ],
 };
 
 const section = process.argv[2];
