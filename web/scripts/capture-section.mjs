@@ -57,19 +57,6 @@ const extraScreens = {
       },
     },
   ],
-  conocimiento: [
-    {
-      name: "document-detail",
-      fullPage: true,
-      async open(page, origin) {
-        const link = page.locator("a.table__link").first();
-        const href = await link.getAttribute("href");
-        if (!href) throw new Error("No document link found to open the KB document detail");
-        await page.goto(new URL(href, origin).href, { waitUntil: "domcontentloaded" });
-        await page.locator(".panel-shell").waitFor({ state: "visible", timeout: 15000 });
-      },
-    },
-  ],
   usuarios: [
     {
       name: "detail",
