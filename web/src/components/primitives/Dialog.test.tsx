@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { Dialog } from "./Dialog";
+import { KeyRound } from "lucide-react";
 
 const dialogPrototype = HTMLDialogElement.prototype;
 const nativeShowModal = dialogPrototype.showModal;
@@ -64,6 +65,14 @@ describe("Dialog (CST-PRIM-7, CORP-DIALOG-1)", () => {
     expect(dialog).toMatch(/background:\s*var\(--surface\)/);
     expect(dialog).toMatch(/border-radius:\s*var\(--radius-xl\)/);
     expect(dialog).toMatch(/box-shadow:\s*var\(--shadow-3\)/);
+  });
+  it("renders optional header icon and description without changing the title label", () => {
+    render(<Dialog open onClose={vi.fn()} title="Reset password" icon={KeyRound} description="Choose a new password">Body</Dialog>);
+    const dialog = screen.getByRole("dialog");
+    const title = screen.getByRole("heading", { name: "Reset password" });
+    expect(dialog).toHaveAttribute("aria-labelledby", title.id);
+    expect(screen.getByText("Choose a new password")).toHaveClass("dialog__description");
+    expect(document.querySelector(".dialog__icon svg")).toBeInTheDocument();
   });
   it("calls onClose for the native close event", () => {
     const onClose = vi.fn();
