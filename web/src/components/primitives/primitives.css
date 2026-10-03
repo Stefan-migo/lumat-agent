@@ -139,6 +139,14 @@
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-sm);
 }
+.field__control-wrap { position: relative; width: 100%; }
+.field__control--with-adornment { padding-left: calc(var(--space-2) + var(--icon-md) + var(--space-2)); }
+.field__control--with-toggle { padding-right: calc(var(--space-2) + var(--icon-md) + var(--space-2)); }
+.field__adornment { position: absolute; top: 50%; display: inline-flex; align-items: center; color: var(--corp-fg-muted); transform: translateY(-50%); pointer-events: none; }
+.field__adornment--leading { left: var(--space-2); }
+.field__adornment--trailing { right: var(--space-2); }
+.field__toggle { position: absolute; top: 50%; right: var(--space-2); display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; color: var(--corp-fg-muted); background: transparent; transform: translateY(-50%); cursor: pointer; }
+.field__toggle:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .field__control:focus {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
@@ -162,6 +170,7 @@
   font-size: var(--text-sm);
   color: var(--danger);
 }
+.field__helper { font-family: var(--font-ui); font-size: var(--text-sm); color: var(--corp-fg-muted); }
 .field__textarea {
   min-height: var(--space-8);
   resize: vertical;
@@ -245,6 +254,12 @@
   font-family: var(--font-ui);
   font-size: var(--text-lg);
 }
+.card__header { display: flex; align-items: center; gap: var(--space-3); }
+.card__icon,
+.dialog__icon { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: var(--space-8); height: var(--space-8); border-radius: var(--radius-md); background: var(--border); color: var(--text); }
+.card__copy { min-width: 0; }
+.card__description,
+.dialog__description { margin: var(--space-1) 0 0; color: var(--corp-fg-muted); font-family: var(--font-ui); font-size: var(--text-sm); }
 .badge {
   display: inline-flex;
   width: fit-content;
@@ -603,6 +618,7 @@
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--corp-border);
 }
+.dialog__copy { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .dialog__title {
   margin: 0;
   font-size: var(--text-md);
