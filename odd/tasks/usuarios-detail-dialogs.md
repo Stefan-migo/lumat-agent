@@ -85,13 +85,19 @@ input changes are `shared-primitive` and high-impact.
 - Local work-unit commits are allowed on the branch without a chain decision.
 
 ## Acceptance criteria
-- [ ] WU1 primitives support icon/subtitle/toggle/helper with tests green.
-- [ ] WU2 detail matches the reference structure at desktop/tablet/mobile.
-- [ ] WU3 dialogs match the reference structure.
-- [ ] `npm run test`, `npx tsc -b --noEmit`, `npm run build` all green.
-- [ ] Findings `usuarios-019..041` implemented.
+- [x] WU1 primitives support icon/subtitle/toggle/helper with tests green.
+- [x] WU2 detail matches the reference structure at desktop/tablet/mobile.
+- [x] WU3 dialogs match the reference structure.
+- [x] `npm run test` (94 files / 970 tests), `npx tsc -b --noEmit`, `npm run build` all green.
+- [x] Findings `usuarios-019..041` implemented.
 
 ## Progress
-- [ ] WU1 — shared-primitive roll-up
-- [ ] WU2 — detail page
-- [ ] WU3 — dialogs
+- [x] WU1 — shared-primitive roll-up (`cbc5c903` + `2e61e99a` + `f5a58c62`; RDD-approved, lineage `review-439a60f1f40e397c`). Advisory findings `R3-001`/`R3-002` fixed in `61b0f365`.
+- [x] WU2 — detail page (`4f00b83c`).
+- [x] WU3 — dialogs (`b95c9206`).
+
+## Verification evidence (2026-10-03)
+- `npm run test` → 94 files, 970 tests passed.
+- `npx tsc -b --noEmit` → exit 0.
+- `npm run build` → built (pre-existing >500 kB chunk advisory only).
+- Applied fixes beyond the findings: ficha avatar text color (`--text-on-dark` → `--text`, was near-invisible) and the input reveal toggle (`pointer-events` + disabled guard).
