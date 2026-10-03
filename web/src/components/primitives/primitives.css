@@ -278,6 +278,23 @@
 .user-ficha__security-copy { display: grid; gap: var(--space-1); min-width: 0; margin-right: auto; }
 .user-ficha__security-copy p { margin: 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
 .user-ficha__back { border-radius: var(--radius-pill); }
+.user-dialog-form,
+.user-reset-form { display: grid; gap: var(--space-3); }
+.dialog-section { display: grid; gap: var(--space-3); }
+.dialog-section + .dialog-section { padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.dialog-section__title { margin: 0; color: var(--corp-text); font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.dialog-field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.dialog-footer .btn { min-width: calc(var(--space-8) * 2); }
+.user-role-field { position: relative; }
+.user-role-field > .icon { position: absolute; z-index: 1; top: calc(var(--text-sm) + var(--space-1) + var(--space-2)); left: var(--space-2); color: var(--corp-text); pointer-events: none; }
+.user-role-field__select { padding-left: calc(var(--space-2) + var(--icon-md) + var(--space-2)); }
+.user-access-card { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.user-access-card > div { display: grid; gap: var(--space-1); min-width: 0; }
+.user-access-card span,
+.user-access-card small { color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.user-access-card strong { color: var(--corp-text); font-size: var(--text-md); overflow-wrap: anywhere; }
+.user-reset-form__generate { width: 100%; }
 @media (max-width: 40rem) {
   .user-ficha__layout { grid-template-columns: minmax(0, 1fr); }
   .user-ficha__fields { grid-template-columns: minmax(0, 1fr); }
@@ -285,6 +302,9 @@
   .user-ficha__footer .btn { width: 100%; }
   .user-ficha__security-row { flex-wrap: wrap; }
   .user-ficha__security-row > .status-badge { margin-left: calc(var(--space-8) + var(--space-3)); }
+  .dialog-field-pair { grid-template-columns: minmax(0, 1fr); }
+  .dialog-footer { flex-direction: column-reverse; }
+  .dialog-footer .btn { width: 100%; }
 }
 .badge {
   display: inline-flex;

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { BriefcaseBusiness, ChevronRight, EllipsisVertical, KeyRound, LockKeyhole, ShieldCheck, SlidersHorizontal, UserPlus, UserRoundMinus, Wrench, X } from "lucide-react";
+import { BriefcaseBusiness, ChevronRight, EllipsisVertical, KeyRound, LockKeyhole, RefreshCw, Shield, ShieldCheck, SlidersHorizontal, UserPlus, UserRound, UserRoundMinus, Wrench, X } from "lucide-react";
 import { ApiError, createUser, fetchUsers, resetUserPassword, toggleUserActive } from "../../api";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import type { AdminUser, Role, User } from "../../types";
@@ -40,6 +40,7 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
   const [refreshKey, setRefreshKey] = useState(0);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<Role>("operador");
   const [mutationState, setMutationState] = useState<{ tone: "success" | "danger" | "info"; title: string; detail?: string } | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -63,10 +64,11 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
     event.preventDefault();
     if (!username.trim()) { setMutationState({ tone: "danger", title: "El usuario es obligatorio" }); return; }
     if (password.length < 8) { setMutationState({ tone: "danger", title: "La contraseña debe tener al menos 8 caracteres" }); return; }
+    if (password !== confirmPassword) { setMutationState({ tone: "danger", title: "Las contraseñas no coinciden" }); return; }
     setMutationState({ tone: "info", title: "Creando usuario" });
     try {
       await createUser({ username: username.trim(), password, role });
-      setUsername(""); setPassword("");
+      setUsername(""); setPassword(""); setConfirmPassword("");
       setMutationState({ tone: "success", title: "Usuario creado" });
       setRefreshKey((value) => value + 1);
       setCreateOpen(false);
@@ -163,26 +165,37 @@ export function UserManagement({ currentUser, onOpenUser }: UserManagementProps)
         <Button variant="secondary" onClick={() => setActionTarget(null)}>Cancelar</Button>
       </div> : null}
     </Dialog>
-    <Dialog open={createOpen} onClose={() => { setCreateOpen(false); setMutationState(null); }} title="Nuevo usuario">
-      <form onSubmit={submit}>
-        <Input label="Usuario" value={username} onChange={(event) => setUsername(event.target.value)} />
-        <Input label="Contraseña" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-        <label>Rol<select aria-label="Rol" value={role} onChange={(event) => setRole(event.target.value as Role)}><option value="operador">Operador</option><option value="tecnico">Técnico</option><option value="admin">Administrador</option></select></label>
+    <Dialog open={createOpen} onClose={() => { setCreateOpen(false); setMutationState(null); }} title="Nuevo usuario" icon={UserPlus} description="Crea una cuenta y asigna su rol de acceso.">
+      <form className="user-dialog-form" onSubmit={submit}>
+        <section className="dialog-section" aria-labelledby="access-heading">
+          <h3 id="access-heading" className="dialog-section__title">Datos de acceso</h3>
+          <Input label="Nombre de usuario" placeholder="Ej. mperez" icon={UserRound} helper="Se utilizará para iniciar sesión en Lumat." value={username} onChange={(event) => setUsername(event.target.value)} />
+          <div className="dialog-field-pair">
+            <Input label="Contraseña" type="password" revealable icon={LockKeyhole} value={password} onChange={(event) => setPassword(event.target.value)} />
+            <Input label="Confirmar contraseña" type="password" revealable icon={LockKeyhole} placeholder="Repite la contraseña" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
+          </div>
+          <span className="field__helper">Usa una contraseña única y difícil de adivinar.</span>
+        </section>
+        <section className="dialog-section" aria-labelledby="permissions-heading">
+          <h3 id="permissions-heading" className="dialog-section__title">Permisos</h3>
+          <div className="user-role-field">
+            <Icon icon={Shield} />
+            <Select label="Rol de acceso" className="user-role-field__select" value={role} options={[{ value: "operador", label: "Operador" }, { value: "tecnico", label: "Técnico" }, { value: "admin", label: "Administrador" }]} onChange={(event) => setRole(event.target.value as Role)} />
+            <span className="field__helper">El rol determina las funciones que podrá utilizar.</span>
+          </div>
+        </section>
         {mutationState && !resetTarget ? <StateMessage {...mutationState} role={mutationState.tone === "danger" ? "alert" : "status"} /> : null}
-        <Button type="submit">Crear usuario</Button>
+        <footer className="dialog-footer"><Button variant="secondary" onClick={() => { setCreateOpen(false); setMutationState(null); }}>Cancelar</Button><Button type="submit"><Icon icon={UserPlus} />Crear usuario</Button></footer>
       </form>
     </Dialog>
-    <Dialog open={resetTarget !== null} onClose={closeReset} title="Restablecer contraseña">
-      {resetTarget ? <>
-        <p>Define una nueva contraseña para {resetTarget.name ?? resetTarget.username}.</p>
-        <Input label="Nueva contraseña" type="text" value={resetDraft} onChange={(event) => setResetDraft(event.target.value)} disabled={resetBusy || resetDone} />
-        <p>La contraseña debe tener al menos 8 caracteres.</p>
+    <Dialog open={resetTarget !== null} onClose={closeReset} title="Restablecer contraseña" icon={KeyRound} description="Define una nueva contraseña para esta cuenta.">
+      {resetTarget ? <div className="user-reset-form">
+        <section className="user-access-card" aria-label="Usuario de acceso"><Avatar name={resetTarget.name ?? resetTarget.username} /><div><span>Usuario de acceso</span><strong>{resetTarget.name ?? resetTarget.username}</strong><small>{resetTarget.username}</small></div></section>
+        <Input label="Nueva contraseña" type="password" icon={LockKeyhole} revealable helper="La contraseña debe tener al menos 8 caracteres." value={resetDraft} onChange={(event) => setResetDraft(event.target.value)} disabled={resetBusy || resetDone} />
         {mutationState ? <StateMessage {...mutationState} role={mutationState.tone === "danger" ? "alert" : "status"} /> : null}
-        {resetDone ? <Button onClick={closeReset}>Listo</Button> : <>
-          <Button variant="secondary" disabled={resetBusy} onClick={() => setResetDraft(generatePassword())}>Generar</Button>
-          <Button disabled={resetDraft.length < 8 || resetBusy} onClick={() => void reset()}>{resetBusy ? "Restableciendo…" : "Restablecer contraseña"}</Button>
-        </>}
-      </> : null}
+        {!resetDone ? <Button variant="secondary" className="user-reset-form__generate" disabled={resetBusy} onClick={() => setResetDraft(generatePassword())}><Icon icon={RefreshCw} />Generar contraseña</Button> : null}
+        <footer className="dialog-footer"><Button variant="secondary" disabled={resetBusy} onClick={closeReset}>Cancelar</Button>{resetDone ? <Button onClick={closeReset}>Listo</Button> : <Button disabled={resetDraft.length < 8 || resetBusy} onClick={() => void reset()}>{resetBusy ? "Restableciendo…" : "Restablecer contraseña"}</Button>}</footer>
+      </div> : null}
     </Dialog>
   </PageFrame>;
 }
