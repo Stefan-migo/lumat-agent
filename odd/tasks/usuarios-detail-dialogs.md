@@ -91,6 +91,15 @@ input changes are `shared-primitive` and high-impact.
 - [x] `npm run test` (94 files / 970 tests), `npx tsc -b --noEmit`, `npm run build` all green.
 - [x] Findings `usuarios-019..041` implemented.
 
+## Follow-up round 1 — owner visual review (2026-10-03)
+Owner inspected the built pages in the worktree and requested:
+1. Ficha avatar renders small and round: `.avatar` (primitives.css:343, `border-radius:50%`, `width/height: var(--space-8)`) overrides `.user-ficha__avatar` (:267) by source order. Make the ficha avatar a large rounded square (reference); the list avatar stays round.
+2. "Volver a usuarios" uses `--radius-pill`; normalize to the settled button radius `--radius-lg` (PR #469 decision).
+3. Mobile: back button must sit ABOVE the title, smaller, not full-width (tablet already ok). Scope via `.user-ficha-page` (PageFrame `className`), not globally.
+4. "Seguridad de la cuenta" badge only reflects lockout; make it reflect the real account state (active/inactive) plus lockout.
+5. New "Acciones de la cuenta" card (owner chose two separate cards): "Restablecer contraseña" + "Activar/Desactivar cuenta". Reuse the list reset-password flow (extract a shared dialog) and `toggleUserActive`.
+6. Mobile create/reset dialogs: bottom-sheet — full width, flush to the bottom edge, rounded top only (reuse the `.dialog:has(.user-mobile-actions)` pattern at primitives.css:1112), scoped to the usuarios dialogs so other sections keep the floating dialog.
+
 ## Progress
 - [x] WU1 — shared-primitive roll-up (`cbc5c903` + `2e61e99a` + `f5a58c62`; RDD-approved, lineage `review-439a60f1f40e397c`). Advisory findings `R3-001`/`R3-002` fixed in `61b0f365`.
 - [x] WU2 — detail page (`4f00b83c`).

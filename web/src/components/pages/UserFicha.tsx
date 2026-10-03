@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { BriefcaseBusiness, ChevronLeft, LockKeyhole, Mail, Phone, Save, ShieldCheck, UnlockKeyhole, UserRound } from "lucide-react";
-import { ApiError, getAdminUser, unlockUser, updateAdminUser } from "../../api";
+import { BriefcaseBusiness, ChevronLeft, KeyRound, LockKeyhole, Mail, Phone, Save, ShieldCheck, UnlockKeyhole, UserRound, UserRoundMinus } from "lucide-react";
+import { ApiError, getAdminUser, toggleUserActive, unlockUser, updateAdminUser } from "../../api";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import type { AdminUser, AdminUserProfileUpdate } from "../../types";
 import { roleLabels } from "../../roleLabels";
@@ -13,6 +13,7 @@ import { Input } from "../primitives/Input";
 import { StatusBadge } from "../primitives/StatusBadge";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
+import { ResetPasswordDialog } from "../shared/ResetPasswordDialog";
 
 const fields = ["name", "phone", "email", "position"] as const;
 type FormFields = Record<(typeof fields)[number], string>;
@@ -20,11 +21,14 @@ const emptyForm: FormFields = { name: "", phone: "", email: "", position: "" };
 
 export function UserFicha({ userId }: { userId: number }) {
   const loadUser = useCallback(() => getAdminUser(userId), [userId]);
-  const data = useAsyncData(loadUser, true);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const data = useAsyncData(loadUser, true, refreshKey);
   const [accountOverride, setAccountOverride] = useState<AdminUser | null>(null);
   const [form, setForm] = useState<FormFields>(emptyForm);
   const [busy, setBusy] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "success" | "danger"; title: string } | null>(null);
+  const [accountFeedback, setAccountFeedback] = useState<{ tone: "success" | "danger"; title: string } | null>(null);
   const account = accountOverride ?? data.data?.user ?? null;
   useEffect(() => {
     if (account) setForm(Object.fromEntries(fields.map((field) => [field, account[field] ?? ""])) as FormFields);
@@ -46,12 +50,22 @@ export function UserFicha({ userId }: { userId: number }) {
     } finally { setBusy(false); }
   };
   const unlock = async () => {
-    setBusy(true); setFeedback(null);
+    setBusy(true); setAccountFeedback(null);
     try {
       const result = await unlockUser(userId);
       setAccountOverride(result.user);
-      setFeedback({ tone: "success", title: "La cuenta está desbloqueada" });
-    } catch (error) { setFeedback({ tone: "danger", title: error instanceof ApiError ? error.detail : "No pudimos desbloquear la cuenta" }); }
+      setAccountFeedback({ tone: "success", title: "La cuenta está desbloqueada" });
+    } catch (error) { setAccountFeedback({ tone: "danger", title: error instanceof ApiError ? error.detail : "No pudimos desbloquear la cuenta" }); }
+    finally { setBusy(false); }
+  };
+  const toggleActive = async () => {
+    if (!account || busy) return;
+    setBusy(true); setAccountFeedback(null);
+    try {
+      const result = await toggleUserActive(userId);
+      setAccountOverride(result.user);
+      setAccountFeedback({ tone: "success", title: result.user.active ? "La cuenta está activa" : "La cuenta está desactivada" });
+    } catch (error) { setAccountFeedback({ tone: "danger", title: error instanceof ApiError ? error.detail : "No pudimos actualizar el estado de la cuenta" }); }
     finally { setBusy(false); }
   };
   if (!account) return <PageFrame title="Detalle del usuario" meta="Consulta y actualiza los datos de esta cuenta." state={<StateMessage tone="danger" role="alert" title={data.state === "denied" ? "No tienes permiso para ver esta ficha" : data.state === "error" ? "No pudimos cargar la ficha" : "Cargando ficha"} />}>{null}</PageFrame>;
@@ -84,6 +98,10 @@ export function UserFicha({ userId }: { userId: number }) {
           </form>
         </Card>
         <Card title="Seguridad de la cuenta" icon={ShieldCheck} description="Estado de acceso del usuario." className="user-ficha__security">
+          <div className="user-ficha__security-row"><span className="user-ficha__security-icon"><Icon icon={UserRound} /></span>
+            <div className="user-ficha__security-copy"><strong>Estado de la cuenta</strong><p>{account.active ? "La cuenta puede acceder al panel." : "La cuenta no puede acceder al panel."}</p></div>
+            <StatusBadge status={account.active ? "closed" : "pending"} label={account.active ? "Activa" : "Inactiva"} />
+          </div>
           <div className="user-ficha__security-row"><span className="user-ficha__security-icon"><Icon icon={locked ? LockKeyhole : UnlockKeyhole} /></span>
             <div className="user-ficha__security-copy"><strong>{locked ? "Cuenta bloqueada" : "Cuenta desbloqueada"}</strong>
               <p>{locked ? `Bloqueada hasta ${new Date(account.locked_until!).toLocaleString("es-CL")} · ${account.failed_logins} intentos fallidos` : "No hay un bloqueo de seguridad activo."}</p>
@@ -92,7 +110,15 @@ export function UserFicha({ userId }: { userId: number }) {
               : <StatusBadge status="closed" label="Desbloqueada" />}
           </div>
         </Card>
+        <Card title="Acciones de la cuenta" className="user-ficha__actions-card">
+          <div className="user-ficha__account-actions">
+            <Button variant="secondary" disabled={busy} onClick={() => setResetOpen(true)}><Icon icon={KeyRound} />Restablecer contraseña</Button>
+            <Button variant={account.active ? "danger" : "secondary"} disabled={busy} onClick={() => void toggleActive()}><Icon icon={UserRoundMinus} />{account.active ? "Desactivar cuenta" : "Activar cuenta"}</Button>
+          </div>
+          {accountFeedback ? <StateMessage tone={accountFeedback.tone} role={accountFeedback.tone === "danger" ? "alert" : "status"} title={accountFeedback.title} /> : null}
+        </Card>
       </div>
     </div>
+    <ResetPasswordDialog target={resetOpen ? account : null} onClose={() => setResetOpen(false)} onDone={() => setRefreshKey((value) => value + 1)} />
   </PageFrame>;
 }
