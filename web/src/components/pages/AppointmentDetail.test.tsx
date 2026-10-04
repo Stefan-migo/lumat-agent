@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { AppointmentDetail } from './AppointmentDetail';
@@ -44,18 +44,23 @@ describe('AppointmentDetail', () => {
     expect(screen.queryByRole('button', { name: 'Cerrar visita' })).not.toBeInTheDocument();
   });
 
-  it('renders appointment facts, customer link, and its audit trail without a conversation summary', () => {
+  it('renders the redesigned visit header, information cards, and event timeline', () => {
     render(<AppointmentDetail data={detail} />);
 
-    expect(screen.getByRole('link', { name: 'Ana' })).toHaveAttribute('href', '/panel/app/clients/2');
-    expect(screen.getByText('Reparación de calefón')).toBeInTheDocument();
-    expect(screen.getByText('Reservada')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Reparación de calefón' })).toBeInTheDocument();
+    expect(screen.getByText('DETALLE DE VISITA')).toBeInTheDocument();
+    expect(screen.getByText('Información y seguimiento de la visita.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Volver a agenda' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Ver ficha del cliente/ })).toHaveAttribute('href', '/panel/app/clients/2');
+    expect(screen.getByRole('heading', { name: 'Programación' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Técnico asignado' })).toBeInTheDocument();
+    expect(screen.getByText('Técnico #4')).toBeInTheDocument();
+    expect(screen.getAllByText('Reservada')).toHaveLength(2);
     expect(screen.queryByText('Resumen de la conversación')).not.toBeInTheDocument();
     const history = screen.getByRole('list', { name: 'Historial de la visita' });
-    expect(history).toHaveTextContent('created');
-    expect(history).toHaveTextContent('ana');
-    expect(history).toHaveTextContent('booked');
-    expect(history).toHaveTextContent('panel');
+    expect(history).toHaveTextContent('Visita reservada');
+    expect(history).toHaveTextContent('Registro inicial');
+    expect(within(history).getByText('Ver detalles')).toBeInTheDocument();
     expect(history.querySelector('time')).toHaveAttribute('dateTime', '2026-09-25T12:00:00Z');
   });
 
