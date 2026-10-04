@@ -2851,6 +2851,25 @@
   .agenda-calendar__toolbar { align-items: flex-start; flex-direction: column; }
   .agenda-calendar__actions { width: 100%; justify-content: space-between; }
   .agenda-calendar__stepper > .btn { min-width: 2.5rem; }
+  .agenda-calendar__table { min-width: 0; border-spacing: var(--space-1); }
+  .agenda-calendar__weekday { padding: var(--space-1); }
+  .agenda-calendar__cell,
+  .agenda-calendar__empty { height: calc(var(--space-8) * 2.5); }
+  .agenda-calendar__day--compact {
+    width: min(100%, calc(var(--space-8) * 2.5));
+    height: auto;
+    aspect-ratio: 1;
+    justify-self: center;
+    align-content: center;
+    justify-items: center;
+    gap: 0;
+    padding: var(--space-1);
+    border-radius: 50%;
+    text-align: center;
+  }
+  .agenda-calendar__day--compact .agenda-calendar__count,
+  .agenda-calendar__day--compact .agenda-calendar__today,
+  .agenda-calendar__day--compact .agenda-calendar__selected { display: none; }
   .agenda-calendar__footer { align-items: flex-start; flex-direction: column; }
   .agenda-create-form__row { grid-template-columns: minmax(0, 1fr); }
 }

@@ -98,7 +98,8 @@ commits per work unit.
 - [x] Extension pass complete: `agenda-021..035` validated (validator gate `PASS`).
 - [x] Re-captured `refs/current/agenda/` at `83ed3e91` (base + visit-detail + new-visit-dialog).
 - [ ] T0 capture tooling fix.
-- [ ] T1–T6.
+- [x] T1 calendar (`agenda-021`, `agenda-025`): tests observed RED (3 focused failures), then GREEN (11/11 focused); full Vitest suite 94 files / 978 tests passed; `npm run build` passed with the existing chunk-size advisory. Calendar visit-count labels are omitted for zero-count cells, and mobile day controls use round, compact cells while retaining accessible visit counts and button state. Graph check: `AgendaCalendar()`, `AgendaCalendar.tsx`, `agendaTime.ts`, `primitives.css`, and `Mobile`; graph path from `AgendaCalendar()` to `primitives.css` reported no directed path (ambiguous stylesheet match).
+- [ ] T0 capture tooling fix; T2–T6.
 
 ## Next step
 
