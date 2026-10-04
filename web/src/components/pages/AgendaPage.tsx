@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { CalendarPlus, Plus } from "lucide-react";
+import { CalendarDays, CalendarPlus, Check, Clock3, Plus, RefreshCw, X } from "lucide-react";
 import { ApiError, cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AgendaAppointment, Case, Customer, UserRef } from "../../types";
@@ -10,6 +10,7 @@ import { Combobox } from "../primitives/Combobox";
 import { Dialog } from "../primitives/Dialog";
 import { Input } from "../primitives/Input";
 import { Menu } from "../primitives/Menu";
+import { Icon } from "../primitives/Icon";
 import { Select } from "../primitives/Select";
 import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
@@ -234,11 +235,11 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const section = (title: string, rows: AgendaAppointment[], isToday = selectedDay === today) => rows.length > 0 ? (
     <section className="agenda-page__section" aria-labelledby={`agenda-${title.toLowerCase()}`}>
       <h2 id={`agenda-${title.toLowerCase()}`}>{title}{isToday ? <Badge tone="success">Hoy</Badge> : null}</h2>
-      <div className="agenda-page__cards">{rows.map((row) => <Card key={row.id} className="agenda-page__visit-card">
-        <div className="agenda-page__visit-heading"><time dateTime={row.local_start}>{formatAgendaSlot(row.starts_at, row.timezone)}</time><div className="agenda-page__visit-title"><a href={pathForRoute({ view: "agenda", appointmentId: row.id })}>{row.service}</a><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge></div>
-          <Menu label={`Acciones para ${row.service}`} trigger="icon" disabled={mutatingId !== null} items={[
-            ...(row.status === "booked" ? [{ value: "reschedule", label: "Reprogramar" }, { value: "cancel", label: "Cancelar visita", tone: "danger" as const }, { value: "close", label: "Cerrar visita" }] : []),
-            ...(row.sync.status === "pending" || row.sync.status === "failed" ? [{ value: "retry", label: "Reintentar calendario" }] : []),
+       <div className="agenda-page__cards">{rows.map((row) => <Card key={row.id} className="agenda-page__visit-card">
+         <div className="agenda-page__visit-heading"><time dateTime={row.local_start}><Icon icon={Clock3} size="sm" /><span>{formatAgendaSlot(row.starts_at, row.timezone)}</span></time><div className="agenda-page__visit-title"><a href={pathForRoute({ view: "agenda", appointmentId: row.id })}>{row.service}</a><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge></div>
+           <Menu label={`Acciones para ${row.service}`} trigger="icon" disabled={mutatingId !== null} items={[
+             ...(row.status === "booked" ? [{ value: "reschedule", label: "Reprogramar", icon: CalendarDays }, { value: "cancel", label: "Cancelar visita", icon: X, tone: "danger" as const }, { value: "close", label: "Cerrar visita", icon: Check }] : []),
+             ...(row.sync.status === "pending" || row.sync.status === "failed" ? [{ value: "retry", label: "Reintentar calendario", icon: RefreshCw }] : []),
           ]} onSelect={(action) => { if (action === "reschedule") openReschedule(row); if (action === "cancel") { setCancelTarget(row); setCancelFeedback(null); } if (action === "close") { setCloseTarget(row); setCloseFeedback(null); } if (action === "retry") void retrySync(row.id); }} />
         </div>
         <dl className="agenda-page__visit-details"><div><dt>Cliente</dt><dd>{row.customer_name ?? "—"}</dd></div><div><dt>Técnico</dt><dd>{row.technician_name ?? "—"}</dd></div></dl>

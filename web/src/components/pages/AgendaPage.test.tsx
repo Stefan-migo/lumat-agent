@@ -71,7 +71,7 @@ describe('AgendaPage', () => {
   });
 
   it('renders chronological visits as stacked detail cards', () => {
-    render(<AgendaPage data={[appointment(), appointment({ id: 2, service: 'Instalación', local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
+    const { container } = render(<AgendaPage data={[appointment(), appointment({ id: 2, service: 'Instalación', local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
     const dayHeading = screen.getByRole('heading', { name: /sábado 5 de septiembre Hoy/i, level: 2 });
     expect(dayHeading.querySelector('.badge')).toHaveTextContent('Hoy');
     expect(document.querySelectorAll('.agenda-page__visit-card')).toHaveLength(2);
@@ -79,6 +79,7 @@ describe('AgendaPage', () => {
     expect(screen.getAllByText('Camila Soto')).toHaveLength(2);
     expect(screen.getByText('Instalación')).toBeInTheDocument();
     expect(screen.getByText('Mantención')).toBeInTheDocument();
+    expect(container.querySelector('.agenda-page__visit-heading time svg')).toHaveClass('icon');
   });
 
   it('links the register service to its appointment detail route', () => {
@@ -87,6 +88,25 @@ describe('AgendaPage', () => {
     expect(link).toHaveAttribute('href', '/panel/app/agenda/42');
     link.focus();
     expect(link).toHaveFocus();
+  });
+
+  it('shows icons alongside every scheduled visit quick action', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<AgendaPage data={[appointment()]} state="ready" />);
+
+    await openVisitActions(user);
+    expect(screen.getByRole('menuitem', { name: 'Reprogramar' }).querySelector('svg')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Cancelar visita' }).querySelector('svg')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Cerrar visita' }).querySelector('svg')).toBeInTheDocument();
+    expect(container.querySelector('.agenda-page__visit-card')).not.toHaveTextContent('Reprogramar');
+    expect(container.querySelector('.agenda-page__visit-card')).not.toHaveTextContent('Cerrar visita');
+  });
+
+  it('does not underline the scheduled visit title link', () => {
+    const stylesheet = readFileSync(join(__dirname, '../primitives/primitives.css'), 'utf8');
+    const title = stylesheet.match(/\.agenda-page__visit-title a\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(title).toMatch(/text-decoration:\s*none/);
   });
 
   it('uses singular and plural visit counts', () => {
