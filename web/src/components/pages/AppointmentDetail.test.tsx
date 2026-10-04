@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { AppointmentDetail } from './AppointmentDetail';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
 import { closeAppointment, fetchUsers, rescheduleAppointment } from '../../api';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 vi.mock('../../api', () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn(), fetchUsers: vi.fn(), rescheduleAppointment: vi.fn() }));
 
@@ -48,9 +50,12 @@ describe('AppointmentDetail', () => {
     render(<AppointmentDetail data={detail} />);
 
     expect(screen.getByRole('heading', { name: 'Reparación de calefón' })).toBeInTheDocument();
-    expect(screen.getByText('DETALLE DE VISITA')).toBeInTheDocument();
+    expect(screen.queryByText('DETALLE DE VISITA')).not.toBeInTheDocument();
     expect(screen.getByText('Información y seguimiento de la visita.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Volver a agenda' })).toBeInTheDocument();
+    const backButton = screen.getByRole('button', { name: 'Volver a agenda' });
+    expect(backButton).toHaveClass('btn', 'btn--secondary');
+    expect(backButton.closest('.page-header__actions')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reprogramar' }).closest('.page-header__actions')).toBe(backButton.closest('.page-header__actions'));
     expect(screen.getByRole('link', { name: /Ver ficha del cliente/ })).toHaveAttribute('href', '/panel/app/clients/2');
     expect(screen.getByRole('heading', { name: 'Programación' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Técnico asignado' })).toBeInTheDocument();
@@ -62,6 +67,17 @@ describe('AppointmentDetail', () => {
     expect(history).toHaveTextContent('Registro inicial');
     expect(within(history).getByText('Ver detalles')).toBeInTheDocument();
     expect(history.querySelector('time')).toHaveAttribute('dateTime', '2026-09-25T12:00:00Z');
+  });
+
+  it('keeps detail header copy and actions responsive on mobile', () => {
+    const stylesheet = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+    const mobileRules = stylesheet.split('@media (max-width: 767px)')[1]?.split('@media')[0] ?? '';
+    const copy = mobileRules.match(/\.appointment-detail-page \.page-header__copy\s*\{([^}]*)\}/)?.[1] ?? '';
+    const actions = mobileRules.match(/\.appointment-detail-page \.page-header__actions\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(copy).toMatch(/min-width:\s*0/);
+    expect(actions).toMatch(/flex-wrap:\s*wrap/);
+    expect(actions).toMatch(/width:\s*100%/);
   });
 
   it('shows a conversation summary only when present', () => {

@@ -1045,8 +1045,6 @@
 .appointment-detail-page .page-header { align-items: end; }
 .appointment-detail-page .page-header__copy { flex: 1 1 30rem; }
 .appointment-detail-page .page-header__actions { align-items: center; }
-.appointment-detail__back { display: inline-flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); padding: 0; border: 0; background: transparent; color: var(--primary-700); font: inherit; font-size: var(--text-sm); cursor: pointer; }
-.appointment-detail-page .page-header__eyebrow { display: flex; flex-direction: column; align-items: flex-start; }
 .appointment-detail__schedule-main { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(9rem, auto); align-items: center; gap: var(--space-4); padding: var(--space-2) 0 var(--space-4); }
 .appointment-detail__date-block { display: grid; justify-items: center; gap: var(--space-1); min-width: 4.5rem; padding: var(--space-3); border-radius: var(--radius-md); background: var(--brand-bg-elevated); color: var(--text); }
 .appointment-detail__date-block strong { font-size: var(--text-2xl); line-height: 1; }
@@ -1085,7 +1083,8 @@
 }
 @media (max-width: 767px) {
   .appointment-detail-page .page-header { align-items: stretch; }
-  .appointment-detail-page .page-header__actions { width: 100%; }
+  .appointment-detail-page .page-header__copy { min-width: 0; }
+  .appointment-detail-page .page-header__actions { width: 100%; flex-wrap: wrap; }
   .appointment-detail__schedule-main { grid-template-columns: auto minmax(0, 1fr); }
   .appointment-detail__time { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--border); padding: var(--space-3) 0 0; }
   .appointment-detail__time .icon { grid-row: span 2; }

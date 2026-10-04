@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarDays, CalendarCheck, Check, ChevronDown, Clock3, FileText, UserRound } from 'lucide-react';
+import { ArrowRight, CalendarDays, CalendarCheck, Check, ChevronDown, Clock3, FileText, UserRound } from 'lucide-react';
 import { closeAppointment, fetchUsers, getAppointment, rescheduleAppointment } from '../../api';
 import { useAsyncData, type AsyncDataState } from '../../hooks/useAsyncData';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
@@ -96,12 +96,15 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
   const { appointment, customer, conversation_summary: summary } = detail;
   const localStart = new Date(`${appointment.local_start.slice(0, 16)}:00Z`);
   const technicianLabel = appointment.technician_id ? `Técnico #${appointment.technician_id}` : 'Técnico no asignado';
-  return <PageFrame className="appointment-detail-page" eyebrow={<><button type="button" className="appointment-detail__back" onClick={() => window.history.back()}><Icon icon={ArrowLeft} />Volver a agenda</button><span>DETALLE DE VISITA</span></>} title={appointment.service} subtitle="Información y seguimiento de la visita."
+  return <PageFrame className="appointment-detail-page" title={appointment.service} subtitle="Información y seguimiento de la visita."
     titleAdornment={<Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge>}
-    actions={appointment.status === 'booked' ? <>
-        <Button variant="secondary" aria-label="Reprogramar" title="Reprogramar" onClick={() => { const start = appointment.local_start; setRescheduleForm({ local_date: start.slice(0, 10), local_time: start.slice(11, 16), duration_minutes: String(appointment.duration_minutes ?? 60), technician_id: String(appointment.technician_id ?? '') }); setFeedback(null); setRescheduleOpen(true); void fetchUsers().then((response) => setTechnicians(response.users.filter((user) => user.role === 'tecnico'))); }}><Icon icon={CalendarDays} /><span>Reprogramar</span></Button>
-        <Button variant="primary" aria-label="Cerrar visita" title="Cerrar visita" onClick={() => { setFeedback(null); setCloseOpen(true); }}><Icon icon={Check} /><span>Cerrar visita</span></Button>
-      </> : null} state={stateMessage(state)}>
+    actions={<>
+        <Button variant="secondary" onClick={() => window.history.back()}>Volver a agenda</Button>
+        {appointment.status === 'booked' ? <>
+          <Button variant="secondary" aria-label="Reprogramar" title="Reprogramar" onClick={() => { const start = appointment.local_start; setRescheduleForm({ local_date: start.slice(0, 10), local_time: start.slice(11, 16), duration_minutes: String(appointment.duration_minutes ?? 60), technician_id: String(appointment.technician_id ?? '') }); setFeedback(null); setRescheduleOpen(true); void fetchUsers().then((response) => setTechnicians(response.users.filter((user) => user.role === 'tecnico'))); }}><Icon icon={CalendarDays} /><span>Reprogramar</span></Button>
+          <Button variant="primary" aria-label="Cerrar visita" title="Cerrar visita" onClick={() => { setFeedback(null); setCloseOpen(true); }}><Icon icon={Check} /><span>Cerrar visita</span></Button>
+        </> : null}
+      </>} state={stateMessage(state)}>
     {feedback?.tone === 'success' ? <StateMessage tone="success" role="status" title={feedback.title} /> : null}
     <div className="detail-region">
       <section className="detail-region__rail" aria-label="Información de la visita">
