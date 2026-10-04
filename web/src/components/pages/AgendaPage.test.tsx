@@ -42,6 +42,10 @@ const appointment = (overrides: Partial<AgendaAppointment> = {}): AgendaAppointm
 beforeEach(() => vi.setSystemTime(new Date('2026-09-05T12:00:00-04:00')));
 afterEach(() => vi.useRealTimers());
 
+async function openVisitActions(user: ReturnType<typeof userEvent.setup>, service = 'Mantención') {
+  await user.click(screen.getAllByRole('button', { name: `Acciones para ${service}` })[0]);
+}
+
 describe('AgendaPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -66,11 +70,12 @@ describe('AgendaPage', () => {
     expect(screen.getByRole('button', { name: 'Reintentar' })).toHaveClass('btn');
   });
 
-  it('groups chronological visits into Hoy and Próximas in a semantic table', () => {
+  it('renders chronological visits as stacked detail cards', () => {
     render(<AgendaPage data={[appointment(), appointment({ id: 2, service: 'Instalación', local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
-    expect(screen.getByRole('heading', { name: 'Hoy', level: 2 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Próximas', level: 2 })).toBeInTheDocument();
-    expect(screen.getAllByRole('table')).toHaveLength(3);
+    const dayHeading = screen.getByRole('heading', { name: /sábado 5 de septiembre Hoy/i, level: 2 });
+    expect(dayHeading.querySelector('.badge')).toHaveTextContent('Hoy');
+    expect(document.querySelectorAll('.agenda-page__visit-card')).toHaveLength(2);
+    expect(screen.queryByRole('table', { name: /Registro/i })).not.toBeInTheDocument();
     expect(screen.getAllByText('Camila Soto')).toHaveLength(2);
     expect(screen.getByText('Instalación')).toBeInTheDocument();
     expect(screen.getByText('Mantención')).toBeInTheDocument();
@@ -86,10 +91,10 @@ describe('AgendaPage', () => {
 
   it('uses singular and plural visit counts', () => {
     const { rerender } = render(<AgendaPage data={[appointment()]} state="ready" />);
-    expect(screen.getByText('1 visita', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getAllByText('1 visita').find((element) => element.classList.contains('badge'))).toBeInTheDocument();
 
     rerender(<AgendaPage data={[appointment(), appointment({ id: 2 })]} state="ready" />);
-    expect(screen.getByText('2 visitas', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getAllByText('2 visitas').find((element) => element.classList.contains('badge'))).toBeInTheDocument();
   });
 
   it('renders appointment slots in 24-hour time', () => {
@@ -98,19 +103,18 @@ describe('AgendaPage', () => {
     expect(screen.queryByText(/a\. m\.|p\. m\./i)).not.toBeInTheDocument();
   });
 
-  it('does not render an empty surface for a section without rows', () => {
-    render(<AgendaPage data={[appointment({ local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
-    expect(screen.queryByRole('heading', { name: 'Hoy', level: 2 })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Próximas', level: 2 })).toBeInTheDocument();
+  it('renders future visits in the card surface when today has no rows', () => {
+    render(<AgendaPage data={[appointment({ service: 'Instalación', local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
+    expect(screen.getByText('Instalación')).toBeInTheDocument();
   });
 
-  it('names the register region and surfaces only non-empty tables', () => {
+  it('names the register region and surfaces cards without a table wrapper', () => {
     const { rerender } = render(<AgendaPage data={[appointment(), appointment({ id: 2, local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
     expect(screen.getByRole('region', { name: 'Registro de agenda' })).toBeInTheDocument();
-    expect(document.querySelectorAll('.data-region')).toHaveLength(2);
+    expect(document.querySelectorAll('.agenda-page__visit-card')).toHaveLength(2);
 
     rerender(<AgendaPage data={[appointment({ local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
-    expect(document.querySelectorAll('.data-region')).toHaveLength(1);
+    expect(document.querySelectorAll('.agenda-page__visit-card')).toHaveLength(1);
   });
 
   it('places the primary create action in the page header', () => {
@@ -146,16 +150,16 @@ describe('AgendaPage', () => {
     expect(register).toMatch(/border-radius:\s*var\(--radius-lg\)/);
     expect(register).toMatch(/background:\s*var\(--brand-bg-elevated\)/);
     expect(register).not.toMatch(/box-shadow:/);
-    expect(stylesheet).toMatch(/\.agenda-page__section \.data-region\s*\{[^}]*background:\s*transparent/s);
+    expect(stylesheet).toMatch(/\.agenda-page__visit-card\s*\{[^}]*background:\s*var\(--surface\)/s);
   });
 
   it('shows a labelled empty state and keeps the table wrapper mobile-safe', () => {
     const { container } = render(<AgendaPage data={[]} state="empty" />);
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
-    expect(container.querySelector('.agenda-page__table-wrap')).toBeInTheDocument();
+    expect(container.querySelector('.agenda-page__table-wrap')).not.toBeInTheDocument();
     // Creation is an approved control since the agenda-booking unit. Edit, reschedule and
     // availability remain deliberately absent, so the guard keeps forbidding those.
-    expect(screen.queryByText(/disponibilidad|editar|reagendar/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/editar|reagendar/i)).not.toBeInTheDocument();
   });
 
   it('offers cancellation only for booked rows and refreshes after confirming a reason', async () => {
@@ -165,7 +169,8 @@ describe('AgendaPage', () => {
     vi.mocked(listAppointments).mockResolvedValue({ appointments: [cancelled] });
 
     render(<AgendaPage data={[appointment()]} state="ready" />);
-    await user.click(screen.getByRole('button', { name: 'Cancelar visita' }));
+    await openVisitActions(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Cancelar visita' }));
     expect(screen.getByRole('dialog', { name: 'Cancelar visita de Camila Soto — Mantención' })).toBeInTheDocument();
     expect(screen.getByRole('dialog')).toHaveTextContent('La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.');
     expect(screen.getByLabelText('Motivo de cancelación')).toHaveClass('field__control');
@@ -182,7 +187,7 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[appointment({ status: 'completed' }), appointment({ id: 2, status: 'no_show' }), appointment({ id: 3, status: 'cancelled' })]} state="ready" />);
     await userEvent.setup().click(screen.getByRole('tab', { name: 'No activas' }));
     expect(screen.getAllByText('Mantención')).toHaveLength(3);
-    expect(screen.queryByRole('button', { name: 'Cancelar visita' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Cancelar visita' })).not.toBeInTheDocument();
     expect(cancelAppointment).not.toHaveBeenCalled();
   });
 
@@ -193,8 +198,8 @@ describe('AgendaPage', () => {
     vi.mocked(listAppointments).mockResolvedValue({ appointments: [completed] });
     render(<AgendaPage data={[appointment()]} state="ready" />);
 
-    expect(screen.getByRole('button', { name: 'Cerrar visita' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Cerrar visita' }));
+    await openVisitActions(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Cerrar visita' }));
     await user.click(screen.getByRole('button', { name: 'Completar' }));
     await waitFor(() => expect(closeAppointment).toHaveBeenCalledWith(1, 'completed'));
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
@@ -207,7 +212,8 @@ describe('AgendaPage', () => {
     const user = userEvent.setup();
     vi.mocked(closeAppointment).mockRejectedValue(new Error('Intenta nuevamente'));
     render(<AgendaPage data={[appointment()]} state="ready" />);
-    await user.click(screen.getByRole('button', { name: 'Cerrar visita' }));
+    await openVisitActions(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Cerrar visita' }));
     await user.click(screen.getByRole('button', { name: 'No asistió' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Intenta nuevamente');
     expect(closeAppointment).toHaveBeenCalledWith(1, 'no_show');
@@ -217,7 +223,7 @@ describe('AgendaPage', () => {
     const user = userEvent.setup();
     render(<AgendaPage data={[appointment({ status: 'completed' })]} state="ready" />);
     await user.click(screen.getByRole('tab', { name: 'No activas' }));
-    expect(screen.queryByRole('button', { name: 'Cerrar visita' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Cerrar visita' })).not.toBeInTheDocument();
     expect(closeAppointment).not.toHaveBeenCalled();
   });
 
@@ -226,7 +232,8 @@ describe('AgendaPage', () => {
     vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: 'Luis' }] });
     vi.mocked(rescheduleAppointment).mockResolvedValue({ ok: true, appointment: {} });
     render(<AgendaPage data={[appointment()]} state="ready" />);
-    await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+    await openVisitActions(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Reprogramar' }));
     await waitFor(() => expect(fetchTechnicians).toHaveBeenCalledOnce());
     const dialog = screen.getByRole('dialog', { name: 'Reprogramar visita' });
     expect(within(dialog).getByLabelText('Fecha local')).toHaveValue('2026-09-05');
@@ -240,7 +247,8 @@ describe('AgendaPage', () => {
     const user = userEvent.setup();
     vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [] });
     render(<AgendaPage data={[appointment({ technician_id: null })]} state="ready" />);
-    await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+    await openVisitActions(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Reprogramar' }));
     await user.click(screen.getByRole('button', { name: 'Confirmar reprogramación' }));
     expect(rescheduleAppointment).not.toHaveBeenCalled();
     expect(within(screen.getByRole('dialog', { name: 'Reprogramar visita' })).getByRole('alert')).toHaveTextContent('Completa todos los campos');
@@ -250,7 +258,8 @@ describe('AgendaPage', () => {
     const user = userEvent.setup();
     vi.mocked(fetchTechnicians).mockRejectedValue(new Error('Sin conexión'));
     render(<AgendaPage data={[appointment()]} state="ready" />);
-    await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
+    await openVisitActions(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Reprogramar' }));
     const dialog = screen.getByRole('dialog', { name: 'Reprogramar visita' });
     const alert = await within(dialog).findByRole('alert');
     expect(alert).toHaveTextContent('No pudimos cargar las opciones de la visita');
@@ -297,9 +306,9 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[appointment({ status: 'completed' }), appointment({ id: 2, status: 'no_show' }), appointment({ id: 3, status: 'cancelled' })]} state="ready" />);
     await user.click(screen.getByRole('tab', { name: 'No activas' }));
     expect(screen.getAllByText('Mantención')).toHaveLength(3);
-    expect(screen.queryByRole('button', { name: 'Cancelar visita' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Cancelar visita' })).not.toBeInTheDocument();
     expect(cancelAppointment).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Reprogramar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Reprogramar' })).not.toBeInTheDocument();
     expect(rescheduleAppointment).not.toHaveBeenCalled();
   });
 
@@ -310,10 +319,8 @@ describe('AgendaPage', () => {
 
     expect(screen.getAllByText(appointmentStatusLabel('booked'))).toHaveLength(3);
     expect(screen.getByText(appointmentSyncLabel('failed'))).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Reintentar calendario' })).toHaveLength(2);
-    const retry = screen.getAllByRole('button', { name: 'Reintentar calendario' })[0];
-    retry.focus();
-    await user.keyboard('{Enter}');
+    await openVisitActions(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Reintentar calendario' }));
     await waitFor(() => expect(retryCalendarSync).toHaveBeenCalledWith(1));
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
   });
@@ -322,7 +329,8 @@ describe('AgendaPage', () => {
     const user = userEvent.setup();
     vi.mocked(cancelAppointment).mockRejectedValue(new Error('No se pudo cancelar'));
     render(<AgendaPage data={[appointment()]} state="ready" />);
-    await user.click(screen.getByRole('button', { name: 'Cancelar visita' }));
+    await openVisitActions(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Cancelar visita' }));
     await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }));
 
     expect(await screen.findByRole('dialog')).toHaveTextContent('No se pudo cancelar');
@@ -334,9 +342,10 @@ describe('AgendaPage', () => {
     vi.mocked(retryCalendarSync).mockRejectedValue(new Error('Calendario no disponible'));
     render(<AgendaPage data={[appointment({ sync: { status: 'failed', error: null, retry: true } })]} state="ready" />);
 
-    await user.click(screen.getByRole('button', { name: 'Reintentar calendario' }));
+    await openVisitActions(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Reintentar calendario' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Calendario no disponible');
-    expect(screen.getByRole('row', { name: /Mantención/ })).toHaveTextContent('Calendario no disponible');
+    expect(document.querySelector('.agenda-page__visit-card')).toHaveTextContent('Calendario no disponible');
     expect(screen.getByRole('alert').querySelector('h2')).not.toBeInTheDocument();
   });
 
@@ -356,12 +365,13 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[appointment(), tomorrow]} state="ready" timezone="America/Santiago" />);
 
     await user.click(screen.getByRole('button', { name: /^sábado 5 de septiembre,/ }));
-    expect(screen.getByRole('heading', { name: 'sábado 5 de septiembre', level: 2 })).toBeInTheDocument();
+    const selectedHeading = screen.getByRole('heading', { name: 'sábado 5 de septiembre Hoy', level: 2 });
+    expect(selectedHeading.querySelector('.badge')).toHaveTextContent('Hoy');
     expect(screen.getByText('Mantención')).toBeInTheDocument();
     expect(screen.queryByText('Instalación')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^sábado 5 de septiembre,/ }));
-    expect(screen.getByRole('heading', { name: 'Hoy', level: 2 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Próximas', level: 2 })).toBeInTheDocument();
+    const restoredHeading = screen.getByRole('heading', { name: /sábado 5 de septiembre Hoy/i, level: 2 });
+    expect(restoredHeading.querySelector('.badge')).toHaveTextContent('Hoy');
   });
 
   it('shows the explicit empty state when the selected day has no visits', async () => {

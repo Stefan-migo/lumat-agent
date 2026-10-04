@@ -1,4 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { AgendaPage, type AgendaPageProps } from "../../components/pages/AgendaPage";
 import type { AgendaAppointment } from "../../types";
 
@@ -85,22 +87,25 @@ export const Stale: Story = { args: { data: DATA, state: "stale", width: 1280 } 
 export const CancelConfirmation: Story = {
   args: { data: DATA, state: "ready", width: 1280 },
   play: async ({ canvasElement }) => {
-    const button = Array.from(canvasElement.querySelectorAll("button")).find((item) => item.textContent === "Cancelar visita");
-    button?.click();
+    const user = userEvent.setup();
+    await user.click(within(canvasElement).getByRole("button", { name: "Acciones para Mantención de calefón" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Cancelar visita" }));
   },
 };
 export const CloseConfirmation: Story = {
   args: { data: DATA, state: "ready", width: 1280 },
   play: async ({ canvasElement }) => {
-    const button = Array.from(canvasElement.querySelectorAll("button")).find((item) => item.textContent === "Cerrar visita");
-    button?.click();
+    const user = userEvent.setup();
+    await user.click(within(canvasElement).getByRole("button", { name: "Acciones para Mantención de calefón" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Cerrar visita" }));
   },
 };
 export const RescheduleDialog: Story = {
   args: { data: DATA, state: "ready", width: 1280 },
   play: async ({ canvasElement }) => {
-    const button = Array.from(canvasElement.querySelectorAll("button")).find((item) => item.textContent === "Reprogramar");
-    button?.click();
+    const user = userEvent.setup();
+    await user.click(within(canvasElement).getByRole("button", { name: "Acciones para Mantención de calefón" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Reprogramar" }));
   },
 };
 export const SyncFailure: Story = {

@@ -972,6 +972,8 @@
   min-width: 0;
   padding-left: var(--space-4);
 }
+.page-header__title-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.page-header__meta { display: inline-flex; }
 .page-header h1 {
   margin: 0;
   color: var(--corp-text);
@@ -2680,7 +2682,7 @@
   .dashboard__card, .dashboard__row, .dashboard__card__hint svg { transition:none; }
 }
 
-/* Agenda page: page-specific table layout remains inside the shared stylesheet boundary. */
+/* Agenda page: responsive day-detail card register. */
 .agenda-page__section {
   display: grid;
   gap: var(--space-3);
@@ -2690,14 +2692,28 @@
   border-radius: var(--radius-lg);
   background: var(--brand-bg-elevated);
 }
-.agenda-page__section .data-region {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.agenda-page__table-wrap { min-width: 0; overflow-x: auto; }
+.agenda-page__section h2 { margin: 0; font-size: var(--text-lg); }
+.agenda-page__cards { display: grid; gap: var(--space-4); min-width: 0; }
+.agenda-page__visit-card { gap: var(--space-3); min-width: 0; padding: var(--space-4); background: var(--surface); }
+.agenda-page__visit-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); }
+.agenda-page__visit-heading > time { align-self: center; color: var(--corp-text); font-size: var(--text-xl); font-weight: var(--weight-semibold); font-variant-numeric: var(--corp-value); }
+.agenda-page__visit-title { display: grid; justify-items: start; gap: var(--space-2); min-width: 0; }
+.agenda-page__visit-title a { color: var(--corp-text); font-size: var(--text-lg); font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
+.agenda-page__visit-details { display: grid; gap: var(--space-2); margin: 0; padding-block: var(--space-3); border-block: 1px solid var(--corp-border); }
+.agenda-page__visit-details > div { display: grid; grid-template-columns: minmax(5rem, .45fr) minmax(0, 1fr); gap: var(--space-3); }
+.agenda-page__visit-details dt { color: var(--corp-fg-muted); }
+.agenda-page__visit-details dd { margin: 0; overflow-wrap: anywhere; }
+.agenda-page__sync { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.agenda-page__sync small { flex-basis: 100%; color: var(--corp-fg-muted); overflow-wrap: anywhere; }
 .agenda-page__layout { display: grid; gap: var(--space-5); min-width: 0; }
+@media (max-width: 40rem) {
+  .agenda-page__section { padding: var(--space-4); }
+  .agenda-page__visit-heading { grid-template-columns: minmax(0, 1fr) auto; }
+  .agenda-page__visit-heading > time { grid-column: 1; grid-row: 1; }
+  .agenda-page__visit-title { grid-column: 1; grid-row: 2; }
+  .agenda-page__visit-heading > .menu__trigger { grid-column: 2; grid-row: 1; }
+  .agenda-page__visit-details > div { grid-template-columns: minmax(4.5rem, .5fr) minmax(0, 1fr); }
+}
 @media (min-width: 64rem) {
   .agenda-page__layout { grid-template-columns: minmax(320px, 1fr) minmax(0, 1.35fr); align-items: start; }
 }
