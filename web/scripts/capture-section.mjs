@@ -41,7 +41,7 @@ const extraScreens = {
       name: "visit-detail",
       fullPage: true,
       async open(page, origin) {
-        const link = page.locator("a.table__link").first();
+        const link = page.locator(".agenda-page__visit-title a").first();
         const href = await link.getAttribute("href");
         if (!href) throw new Error("No visit link found to open the visit detail");
         await page.goto(new URL(href, origin).href, { waitUntil: "domcontentloaded" });
