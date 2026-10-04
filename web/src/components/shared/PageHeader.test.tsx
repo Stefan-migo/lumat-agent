@@ -28,6 +28,22 @@ describe("PageHeader (DS-SHELL-6)", () => {
     expect(screen.getByRole("button", { name: "Actualizar" })).toBeInTheDocument();
   });
 
+  it("keeps metadata separate while rendering an optional subtitle and title adornment", () => {
+    render(
+      <PageHeader
+        title="Agenda"
+        meta="Metadata remains available"
+        titleAdornment={<span>4 visitas</span>}
+        subtitle="Organiza las visitas y consulta la disponibilidad."
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Agenda" })).toBeInTheDocument();
+    expect(screen.getByText("Metadata remains available")).toBeInTheDocument();
+    expect(screen.getByText("4 visitas")).toBeInTheDocument();
+    expect(screen.getByText("Organiza las visitas y consulta la disponibilidad.")).toBeInTheDocument();
+  });
+
   it("uses tokenized shared classes and wraps actions at responsive widths", () => {
     const { container } = render(<PageHeader title="Clientes" actions={<button type="button">Nuevo cliente</button>} />);
 
