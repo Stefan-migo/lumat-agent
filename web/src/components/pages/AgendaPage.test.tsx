@@ -424,7 +424,7 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(fetchTechnicians).toHaveBeenCalledOnce());
-    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
     expect(screen.getByRole('dialog')).toHaveTextContent('Completa los datos para agendar una visita.');
     expect(screen.getByRole('dialog')).toHaveTextContent('Datos de la visita');
     expect(screen.getByRole('dialog')).toHaveTextContent('Fecha y horario');
@@ -447,6 +447,17 @@ describe('AgendaPage', () => {
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
   }, 15000);
 
+  it('closes the new-visit dialog when cancelling', async () => {
+    const user = userEvent.setup();
+    render(<AgendaPage data={[]} state="empty" />);
+
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    expect(await screen.findByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Nueva visita' })).not.toBeInTheDocument();
+  });
+
   it('shows validation instead of throwing when the selected case has no service', async () => {
     const user = userEvent.setup();
     vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
@@ -456,7 +467,7 @@ describe('AgendaPage', () => {
 
     render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
-    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Cliente'), '10');
     await user.type(screen.getByLabelText('Caso'), 'Caso sin servicio');
     await user.click(screen.getByRole('option', { name: 'Caso sin servicio (#20)' }));
@@ -490,7 +501,7 @@ describe('AgendaPage', () => {
 
     render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
-    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Cliente'), '10');
     const caseInput = screen.getByRole('combobox', { name: 'Caso' });
     await user.type(caseInput, 'Instalación');
@@ -517,7 +528,7 @@ describe('AgendaPage', () => {
 
     render(<AgendaPage data={[]} state="empty" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
-    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Cliente'), '10');
     const caseInput = screen.getByRole('combobox', { name: 'Caso' });
     await user.type(caseInput, 'Instalación');
@@ -540,7 +551,7 @@ describe('AgendaPage', () => {
     vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [] });
     render(<AgendaPage data={[]} state="empty" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
-    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
     await user.type(screen.getByRole('combobox', { name: 'Caso' }), 'Instalación');
     await user.click(screen.getByRole('option', { name: 'Crear «Instalación»' }));
     expect(createCase).not.toHaveBeenCalled();

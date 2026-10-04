@@ -299,7 +299,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
         <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void reschedule()}>{mutatingId === rescheduleTarget?.id ? "Reprogramando…" : "Confirmar reprogramación"}</Button>
       </div> : null}
     </Dialog>
-    <Dialog open={createOpen} onClose={() => { if (!createBusy) setCreateOpen(false); }} title="Crear visita" icon={CalendarPlus} description="Completa los datos para agendar una visita.">
+    <Dialog open={createOpen} onClose={() => { if (!createBusy) setCreateOpen(false); }} title="Nueva visita" icon={CalendarPlus} description="Completa los datos para agendar una visita.">
       <div className="agenda-create-form">
         <section className="agenda-create-form__section" aria-labelledby="agenda-create-visit-heading">
           <h3 id="agenda-create-visit-heading">Datos de la visita</h3>
@@ -320,7 +320,10 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
           <Input label="Zona horaria" value={timezone} readOnly />
         </section>
         {createFeedback?.tone === "danger" ? <StateMessage tone="danger" role="alert" title={createFeedback.title} detail={createFeedback.detail} /> : null}
-        <Button variant="secondary" disabled={createBusy} onClick={() => void create()}>{createBusy ? "Creando…" : "Crear visita"}</Button>
+        <div className="dialog__actions">
+          <Button variant="secondary" disabled={createBusy} onClick={() => { if (!createBusy) setCreateOpen(false); }}>Cancelar</Button>
+          <Button variant="secondary" disabled={createBusy} onClick={() => void create()}>{createBusy ? "Creando…" : "Crear visita"}</Button>
+        </div>
       </div>
     </Dialog>
   </PageFrame>;
