@@ -127,7 +127,7 @@ layout/CSS findings assert structure.
 ## Progress
 - [x] WU1 — shared-primitive roll-up (`26e94b16`; findings 004, 005, 018, 019)
 - [x] WU2 — agenda list (`284e29ec` + `5ffa5b2c`; findings 001, 002, 003, 006, 007, 008)
-- [ ] WU3 — visit detail
+- [x] WU3 — visit detail (`afe33b3c` + `0c69a203` + `f9daaef5`; findings 009–016)
 - [ ] WU4 — new-visit dialog
 
 ## Verification evidence
@@ -150,3 +150,11 @@ layout/CSS findings assert structure.
 - Native review lineage `review-b86591228db65a95`, lens `review-reliability`, tier `medium`, correction budget 200.
 - Outcome: **approved**, authority `burned` (`gentle-ai.review-acknowledged/v1`). No blocking findings.
 - Advisory `R3-001` (WARNING, informational): suspected blank register when switching to "No activas" with a selected day. The reviewer's own evidence refuted it (empty `selectedRows` makes `showEmpty` true and shows the empty state). No code change. Reviewed boundary advances to `5ffa5b2c`.
+
+### WU3 (`afe33b3c` + `0c69a203` + `f9daaef5`, 2026-10-04)
+- `npm run test` → 94 files, 975 tests passed.
+- `npx tsc -b --noEmit` → exit 0 (parent spot check re-confirmed).
+- `npm run build` → passed (existing >500 kB chunk advisory only).
+- RDD assess (base `5ffa5b2c`, committed-only): risk `medium`, 10 files, 193 changed lines, `review_due: false` (`under_budget`).
+- Applied change: optional `eyebrow` on PageHeader/PageFrame; visit detail header (eyebrow/subject/subtitle/header badge/icon actions/back link), Programación / Cliente / Técnico asignado / Resumen cards, and the history timeline.
+- Data gap (honest): the detail serializer/types do not return `technician_name` or calendar sync status; the page shows the technician ID as a fallback and labels calendar status unavailable. No backend change and no invented API call. Follow-up candidate if the reference-mandated name is required.
