@@ -126,7 +126,7 @@ layout/CSS findings assert structure.
 
 ## Progress
 - [x] WU1 — shared-primitive roll-up (`26e94b16`; findings 004, 005, 018, 019)
-- [ ] WU2 — agenda list
+- [x] WU2 — agenda list (`284e29ec` + `5ffa5b2c`; findings 001, 002, 003, 006, 007, 008)
 - [ ] WU3 — visit detail
 - [ ] WU4 — new-visit dialog
 
@@ -137,3 +137,16 @@ layout/CSS findings assert structure.
 - `npm run build` → passed (existing >500 kB chunk advisory only).
 - RDD assess (base `42c8c5ae`, committed-only): risk `medium`, 229 changed lines, `review_due: false` (`under_budget`) — no review due yet; boundary stays pending in the slice.
 - Applied change: the calendar toolbar/segmented control, calendar footer, create-form sections, and the new-visit Dialog icon+description.
+
+### WU2 (`284e29ec` + `5ffa5b2c`, 2026-10-04)
+- `npm run test` → 94 files, 974 tests passed.
+- `npx tsc -b --noEmit` → exit 0.
+- `npm run build` → passed (existing >500 kB chunk advisory only).
+- Applied change: page header subtitle + title adornment (PageHeader/PageFrame), agenda register rebuilt as a stacked day-detail card surface with a kebab `Menu`, responsive card layout, and the create dialog icon+description.
+
+### Review record — WU1+WU2 slice (2026-10-04)
+- RDD assess (base `42c8c5ae`, committed-only): risk `medium`, 11 files, 470 changed lines, `review_due: true` (`slice_budget_reached`).
+- Consent: owner granted ("Review this change").
+- Native review lineage `review-b86591228db65a95`, lens `review-reliability`, tier `medium`, correction budget 200.
+- Outcome: **approved**, authority `burned` (`gentle-ai.review-acknowledged/v1`). No blocking findings.
+- Advisory `R3-001` (WARNING, informational): suspected blank register when switching to "No activas" with a selected day. The reviewer's own evidence refuted it (empty `selectedRows` makes `showEmpty` true and shows the empty state). No code change. Reviewed boundary advances to `5ffa5b2c`.
