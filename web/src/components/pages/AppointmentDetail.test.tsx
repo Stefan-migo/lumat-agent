@@ -14,7 +14,7 @@ const detail: AppointmentDetailData = {
     id: 7, service: 'Reparación de calefón', customer_id: 2, case_id: 3, technician_id: 4,
     local_start: '2026-09-26T10:00:00', timezone: 'America/Santiago', starts_at: '2026-09-26T13:00:00Z',
     ends_at: '2026-09-26T14:00:00Z', duration_minutes: 60, status: 'booked',
-    history: [{ id: 9, actor: 'ana', action: 'created', from_status: null, to_status: 'booked', details: { source: 'panel' }, created_at: '2026-09-25T12:00:00Z' }],
+    history: [{ id: 9, actor: 'ana', action: 'created', from_status: null, to_status: 'booked', details: { source: 'panel', reason: 'Cliente solicitó revisión' }, created_at: '2026-09-25T12:00:00Z' }],
   },
   customer: { id: 2, name: 'Ana' },
   case: { id: 3, conversation_id: null },
@@ -72,8 +72,27 @@ describe('AppointmentDetail', () => {
     const history = screen.getByRole('list', { name: 'Historial de la visita' });
     expect(history).toHaveTextContent('Visita reservada');
     expect(history).toHaveTextContent('Registro inicial');
-    expect(within(history).getByText('Ver detalles')).toBeInTheDocument();
+    const disclosure = within(history).getByText('Ver detalles');
+    expect(disclosure).toBeInTheDocument();
+    expect(history.querySelector('pre')).not.toBeInTheDocument();
+    expect(history).toHaveTextContent('Origen');
+    expect(history).toHaveTextContent('panel');
+    expect(history).toHaveTextContent('Motivo');
+    expect(history).toHaveTextContent('Cliente solicitó revisión');
+    expect(history).toHaveTextContent('Responsable');
+    expect(history).toHaveTextContent('Estado');
     expect(history.querySelector('time')).toHaveAttribute('dateTime', '2026-09-25T12:00:00Z');
+  });
+
+  it('separates the history title and connects event icons with a timeline rule', () => {
+    const stylesheet = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+    const header = stylesheet.match(/\.appointment-detail__history \.card__header\s*\{([^}]*)\}/)?.[1] ?? '';
+    const connector = stylesheet.match(/\.appointment-detail__history li:not\(:last-child\)::before\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(header).toMatch(/border-bottom:\s*1px solid var\(--border\)/);
+    expect(header).toMatch(/padding-bottom:\s*var\(--space-3\)/);
+    expect(connector).toMatch(/content:\s*""/);
+    expect(connector).toMatch(/background:\s*var\(--border\)/);
   });
 
   it('places the schedule and history on the left with one sidebar card on the right', () => {

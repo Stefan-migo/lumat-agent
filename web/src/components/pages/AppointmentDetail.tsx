@@ -30,6 +30,29 @@ const DATE_DAY_FORMAT = new Intl.DateTimeFormat('es-CL', { day: '2-digit', timeZ
 const DATE_MONTH_FORMAT = new Intl.DateTimeFormat('es-CL', { month: 'short', timeZone: 'UTC' });
 const TIME_FORMAT = new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' });
 
+const HISTORY_DETAIL_LABELS: Record<string, string> = {
+  from_start: 'Hora anterior',
+  from_technician_id: 'Técnico anterior',
+  reason: 'Motivo',
+  source: 'Origen',
+  to_start: 'Nueva hora',
+  to_technician_id: 'Nuevo técnico',
+};
+
+function historyDetailLabel(key: string) {
+  return HISTORY_DETAIL_LABELS[key] ?? key.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function historyDetailValue(value: unknown): string {
+  if (value == null) return '—';
+  if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+  if (Array.isArray(value)) return value.map(historyDetailValue).join(' · ');
+  if (typeof value === 'object') {
+    return Object.entries(value).map(([key, nested]) => `${historyDetailLabel(key)}: ${historyDetailValue(nested)}`).join(' · ');
+  }
+  return String(value);
+}
+
 function stateMessage(state: AsyncDataState) {
   if (state === 'loading') return <StateMessage tone="info" role="status" spinner title="Cargando visita" />;
   if (state === 'denied') return <StateMessage tone="danger" role="alert" title="No tienes permiso para ver esta visita" />;
@@ -136,7 +159,11 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
                 <time dateTime={entry.created_at}>{DATE_TIME_FORMAT.format(new Date(entry.created_at))}</time>
                 <p>{entry.action === 'booked' || entry.action === 'created' ? `Se creó la reserva con estado «${appointmentStatusLabel(entry.to_status)}».` : `${entry.actor} registró el cambio de ${entry.from_status ?? '—'} a ${entry.to_status}.`}</p>
                 {!entry.from_status ? <Badge tone="success">Registro inicial</Badge> : null}
-                <details><summary><Icon icon={ChevronDown} />Ver detalles</summary><div><span>Responsable: {entry.actor}</span><span>Estado: {entry.from_status ?? '—'} → {entry.to_status}</span>{entry.details ? <pre>{JSON.stringify(entry.details, null, 2)}</pre> : null}</div></details>
+                <details><summary><Icon icon={ChevronDown} />Ver detalles</summary><dl className="appointment-detail__history-details">
+                  <div><dt>Responsable</dt><dd>{entry.actor}</dd></div>
+                  <div><dt>Estado</dt><dd>{entry.from_status ?? '—'} → {entry.to_status}</dd></div>
+                  {entry.details ? Object.entries(entry.details).map(([key, value]) => <div key={key}><dt>{historyDetailLabel(key)}</dt><dd>{historyDetailValue(value)}</dd></div>) : null}
+                </dl></details>
               </div>
             </li>)}
           </ol> : <p>No hay cambios registrados.</p>}

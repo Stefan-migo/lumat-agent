@@ -1069,8 +1069,10 @@
 .appointment-detail__summary-row strong { text-align: right; }
 .appointment-detail__history ol { display: grid; gap: 0; padding: 0; margin: 0; list-style: none; }
 .appointment-detail__history li { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-3); padding: var(--space-4) 0; }
+.appointment-detail__history li:not(:last-child)::before { position: absolute; left: calc(var(--space-8) / 2); top: calc(var(--space-4) + var(--space-8)); bottom: calc(var(--space-4) * -1); width: 1px; content: ""; background: var(--border); }
 .appointment-detail__history li + li { border-top: 1px solid var(--border); }
 .appointment-detail__history-icon { display: grid; place-items: center; width: var(--space-8); height: var(--space-8); border-radius: 50%; background: var(--brand-bg-elevated); color: var(--primary-700); }
+.appointment-detail__history .card__header { padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); }
 .appointment-detail__history-copy { display: grid; align-content: start; justify-items: start; gap: var(--space-2); min-width: 0; }
 .appointment-detail__history-copy time, .appointment-detail__history-copy p { color: var(--text-muted); font-size: var(--text-sm); }
 .appointment-detail__history-copy p { margin: 0; }
@@ -1078,8 +1080,10 @@
 .appointment-detail__history-copy summary { display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer; color: var(--text-muted); font-size: var(--text-sm); list-style: none; }
 .appointment-detail__history-copy summary::-webkit-details-marker { display: none; }
 .appointment-detail__history-copy details[open] summary .icon { transform: rotate(180deg); }
-.appointment-detail__history-copy details > div { display: grid; gap: var(--space-2); padding-top: var(--space-2); overflow-wrap: anywhere; }
-.appointment-detail__history-copy pre { white-space: pre-wrap; margin: 0; }
+.appointment-detail__history-details { display: grid; gap: var(--space-2); margin: 0; padding: var(--space-2) 0 0; }
+.appointment-detail__history-details > div { display: grid; grid-template-columns: minmax(6rem, auto) minmax(0, 1fr); gap: var(--space-3); overflow-wrap: anywhere; }
+.appointment-detail__history-details dt { color: var(--text-muted); font-size: var(--text-sm); }
+.appointment-detail__history-details dd { margin: 0; }
 @media (max-width: 63.99rem) {
   .appointment-detail-page .detail-region { grid-template-columns: minmax(0, 1fr); grid-template-areas: "schedule" "people" "history"; }
 }
