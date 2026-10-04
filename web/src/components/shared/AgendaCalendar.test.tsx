@@ -90,9 +90,18 @@ describe("AgendaCalendar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Período anterior" }));
     fireEvent.click(screen.getByRole("button", { name: "Hoy" }));
     fireEvent.click(screen.getByRole("button", { name: "Período siguiente" }));
-    fireEvent.click(screen.getByRole("button", { name: "Ver semana" }));
+    fireEvent.click(screen.getByRole("button", { name: "Semana" }));
     expect(onNavigate.mock.calls).toEqual([[-1], [0], [1]]);
     expect(onViewChange).toHaveBeenCalledWith("week");
+    expect(screen.getByRole("button", { name: "Mes" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("shows the visit legend and the total for the displayed month", () => {
+    render(<AgendaCalendar {...baseProps} />);
+
+    expect(screen.getByText("Visitas")).toBeInTheDocument();
+    expect(screen.getByText("6 visitas en septiembre de 2026")).toBeInTheDocument();
+    expect(document.querySelector(".agenda-calendar__legend-dot")).toBeInTheDocument();
   });
 
   it("supports keyboard day selection", async () => {

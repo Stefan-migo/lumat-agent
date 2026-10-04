@@ -1,16 +1,18 @@
 import { useCallback, useState } from "react";
+import { CalendarPlus, Plus } from "lucide-react";
 import { ApiError, cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AgendaAppointment, Case, Customer, UserRef } from "../../types";
 import { Badge } from "../primitives/Badge";
+import { Card } from "../primitives/Card";
 import { Button } from "../primitives/Button";
 import { Combobox } from "../primitives/Combobox";
 import { Dialog } from "../primitives/Dialog";
 import { Input } from "../primitives/Input";
+import { Menu } from "../primitives/Menu";
 import { Select } from "../primitives/Select";
 import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
-import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
@@ -39,14 +41,6 @@ function stateMessage(state: AgendaPageState, retry: () => void) {
   if (state === "error") return <div className="agenda-recovery"><StateMessage tone="danger" role="alert" title="No pudimos cargar la agenda" detail="Reintenta para recuperar las visitas." /><Button variant="secondary" onClick={retry}>Reintentar</Button></div>;
   return null;
 }
-
-const columns: Column<AgendaAppointment>[] = [
-  { key: "time", header: "Hora", render: (row) => formatAgendaSlot(row.starts_at, row.timezone) },
-  { key: "service", header: "Servicio", render: (row) => <a className="table__link" href={pathForRoute({ view: "agenda", appointmentId: row.id })}>{row.service}</a> },
-  { key: "customer", header: "Cliente", render: (row) => row.customer_name ?? "—" },
-  { key: "technician", header: "Técnico", render: (row) => row.technician_name ?? "—" },
-  { key: "status", header: "Estado", render: (row) => <div><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge><br /><Badge tone={appointmentSyncTone(row.sync.status)}>{appointmentSyncLabel(row.sync.status)}</Badge>{row.sync.error ? <small>{row.sync.error}</small> : null}</div> },
-];
 
 export function AgendaPage({ data: controlledData, state: controlledState, onRetry, timezone = Intl.DateTimeFormat().resolvedOptions().timeZone }: AgendaPageProps) {
   const [updatedData, setUpdatedData] = useState<AgendaAppointment[] | null>(null);
@@ -234,20 +228,24 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const todayRows = activeRows.filter((row) => localDate(row.local_start) === today);
   const upcomingRows = activeRows.filter((row) => localDate(row.local_start) > today);
   const periodRows = activeRows;
-  const selectedRows = registerView === "active" && selectedDay ? activeRows.filter((row) => localDate(row.local_start) === selectedDay) : null;
+  const selectedRows = selectedDay ? (registerView === "active" ? activeRows : nonActiveRows).filter((row) => localDate(row.local_start) === selectedDay) : null;
   const containsToday = periodDays.includes(today);
-  const actions = (row: AgendaAppointment) => <>
-    {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setRescheduleTarget(row); setRescheduleForm({ local_date: row.local_start.slice(0, 10), local_time: row.local_start.slice(11, 16), duration_minutes: String(row.duration_minutes ?? 60), technician_id: String(row.technician_id ?? "") }); setRescheduleFeedback(null); void fetchTechnicians().then((response) => setTechnicians(response.technicians)).catch((error) => setRescheduleFeedback({ tone: "danger", title: "No pudimos cargar las opciones de la visita", detail: error instanceof Error ? error.message : undefined })); }}>Reprogramar</Button> : null}
-    {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setCancelTarget(row); setCancelFeedback(null); }}>Cancelar visita</Button> : null}
-    {row.status === "booked" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => { setCloseTarget(row); setCloseFeedback(null); }}>Cerrar visita</Button> : null}
-    {row.sync.status === "pending" || row.sync.status === "failed" ? <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void retrySync(row.id)} aria-label="Reintentar calendario">Reintentar calendario</Button> : null}
-    {cancelFeedback?.id === row.id && cancelFeedback.tone === "success" ? <span role="status"><Badge tone="success">{cancelFeedback.title}</Badge></span> : null}
-    {syncFeedback?.id === row.id ? <span role={syncFeedback.tone === "danger" ? "alert" : "status"}><Badge tone={syncFeedback.tone}>{syncFeedback.title}{syncFeedback.detail ? `: ${syncFeedback.detail}` : null}</Badge></span> : null}
-  </>;
-  const section = (title: string, rows: AgendaAppointment[]) => rows.length > 0 ? (
+  const openReschedule = (row: AgendaAppointment) => { setRescheduleTarget(row); setRescheduleForm({ local_date: row.local_start.slice(0, 10), local_time: row.local_start.slice(11, 16), duration_minutes: String(row.duration_minutes ?? 60), technician_id: String(row.technician_id ?? "") }); setRescheduleFeedback(null); void fetchTechnicians().then((response) => setTechnicians(response.technicians)).catch((error) => setRescheduleFeedback({ tone: "danger", title: "No pudimos cargar las opciones de la visita", detail: error instanceof Error ? error.message : undefined })); };
+  const section = (title: string, rows: AgendaAppointment[], isToday = selectedDay === today) => rows.length > 0 ? (
     <section className="agenda-page__section" aria-labelledby={`agenda-${title.toLowerCase()}`}>
-      <h2 id={`agenda-${title.toLowerCase()}`}>{title}</h2>
-      <div className="agenda-page__table-wrap"><div className="data-region"><DataTable columns={columns} rows={rows} emptyMessage="No hay visitas" rowKey={(row) => String(row.id)} actions={actions} actionsHeader="Acciones" /></div></div>
+      <h2 id={`agenda-${title.toLowerCase()}`}>{title}{isToday ? <Badge tone="success">Hoy</Badge> : null}</h2>
+      <div className="agenda-page__cards">{rows.map((row) => <Card key={row.id} className="agenda-page__visit-card">
+        <div className="agenda-page__visit-heading"><time dateTime={row.local_start}>{formatAgendaSlot(row.starts_at, row.timezone)}</time><div className="agenda-page__visit-title"><a href={pathForRoute({ view: "agenda", appointmentId: row.id })}>{row.service}</a><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge></div>
+          <Menu label={`Acciones para ${row.service}`} trigger="icon" disabled={mutatingId !== null} items={[
+            ...(row.status === "booked" ? [{ value: "reschedule", label: "Reprogramar" }, { value: "cancel", label: "Cancelar visita", tone: "danger" as const }, { value: "close", label: "Cerrar visita" }] : []),
+            ...(row.sync.status === "pending" || row.sync.status === "failed" ? [{ value: "retry", label: "Reintentar calendario" }] : []),
+          ]} onSelect={(action) => { if (action === "reschedule") openReschedule(row); if (action === "cancel") { setCancelTarget(row); setCancelFeedback(null); } if (action === "close") { setCloseTarget(row); setCloseFeedback(null); } if (action === "retry") void retrySync(row.id); }} />
+        </div>
+        <dl className="agenda-page__visit-details"><div><dt>Cliente</dt><dd>{row.customer_name ?? "—"}</dd></div><div><dt>Técnico</dt><dd>{row.technician_name ?? "—"}</dd></div></dl>
+        <div className="agenda-page__sync"><Badge tone={appointmentSyncTone(row.sync.status)}>{appointmentSyncLabel(row.sync.status)}</Badge>{row.sync.error ? <small>{row.sync.error}</small> : null}</div>
+        {cancelFeedback?.id === row.id && cancelFeedback.tone === "success" ? <span role="status"><Badge tone="success">{cancelFeedback.title}</Badge></span> : null}
+        {syncFeedback?.id === row.id ? <span role={syncFeedback.tone === "danger" ? "alert" : "status"}><Badge tone={syncFeedback.tone}>{syncFeedback.title}{syncFeedback.detail ? `: ${syncFeedback.detail}` : null}</Badge></span> : null}
+      </Card>)}</div>
     </section>
   ) : null;
 
@@ -264,19 +262,20 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     : selectedRows
       ? section(agendaPeriodLabel(selectedDay ?? "", timezone), selectedRows)
       : containsToday
-        ? <>{section("Hoy", todayRows)}{section("Próximas", upcomingRows)}</>
+        ? section(agendaPeriodLabel(today, timezone), [...todayRows, ...upcomingRows], true)
         : section("Visitas del período", periodRows);
   const renderedRows = registerView === "non-active" ? nonActiveRows : selectedRows ?? (containsToday ? [...todayRows, ...upcomingRows] : periodRows);
   const showEmpty = data?.length === 0 || state === "empty" || renderedRows.length === 0;
 
   const field = (key: keyof typeof createForm, value: string) => setCreateForm((form) => ({ ...form, [key]: value }));
-  return <PageFrame title="Agenda" meta={data ? `${appointments.length} ${appointments.length === 1 ? "visita" : "visitas"}` : "Visitas de la agenda"} actions={<Button onClick={() => void openCreate()}>Nueva visita</Button>} state={stateMessage(state, retry)}>
+  const headerCount = data ? <Badge tone="success">{appointments.length} {appointments.length === 1 ? "visita" : "visitas"}</Badge> : null;
+  return <PageFrame title="Agenda" titleAdornment={headerCount} meta={data ? undefined : "Visitas de la agenda"} subtitle="Organiza las visitas y consulta la disponibilidad." actions={<Button onClick={() => void openCreate()}><Plus />Nueva visita</Button>} state={stateMessage(state, retry)}>
     {createFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={createFeedback.title} /> : null}
     {closeFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={closeFeedback.title} /> : null}
     {rescheduleFeedback?.tone === "success" ? <StateMessage tone="success" role="status" title={rescheduleFeedback.title} /> : null}
     {state === "loading" || state === "error" || state === "denied" ? null : <div className="agenda-page__layout">
       <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
-      <section aria-label="Registro de agenda"><Tabs tabs={[{ id: "active", label: "Activas" }, { id: "non-active", label: "No activas" }]} activeTab={registerView} onTabChange={setRegisterView} ariaLabel="Filtro del registro de visitas">{() => showEmpty ? <div className="agenda-page__table-wrap"><EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /></div> : register}</Tabs></section>
+      <section aria-label="Registro de agenda"><Tabs tabs={[{ id: "active", label: "Activas" }, { id: "non-active", label: "No activas" }]} activeTab={registerView} onTabChange={setRegisterView} ariaLabel="Filtro del registro de visitas">{() => showEmpty ? <EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /> : register}</Tabs></section>
     </div>}
     <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title={cancelTarget ? `Cancelar visita de ${cancelTarget.customer_name ?? "cliente"} — ${cancelTarget.service}` : "Cancelar visita"}>
       <p>La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.</p>
@@ -300,16 +299,26 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
         <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void reschedule()}>{mutatingId === rescheduleTarget?.id ? "Reprogramando…" : "Confirmar reprogramación"}</Button>
       </div> : null}
     </Dialog>
-    <Dialog open={createOpen} onClose={() => { if (!createBusy) setCreateOpen(false); }} title="Crear visita">
+    <Dialog open={createOpen} onClose={() => { if (!createBusy) setCreateOpen(false); }} title="Crear visita" icon={CalendarPlus} description="Completa los datos para agendar una visita.">
       <div className="agenda-create-form">
-        <Select label="Cliente" value={createForm.customer_id} onChange={(event) => { field("customer_id", event.target.value); field("case_id", ""); }} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} />
-        <Combobox label="Caso" value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={createBusy ? undefined : (query) => void createManualCase(query)} options={cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} />
-        <Select label="Técnico" value={createForm.technician_id} onChange={(event) => field("technician_id", event.target.value)} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
-        <Input label="Servicio" value={createForm.service} onChange={(event) => field("service", event.target.value)} />
-        <Input label="Fecha local" type="date" value={createForm.local_date} onChange={(event) => field("local_date", event.target.value)} />
-        <Input label="Hora local" type="time" value={createForm.local_time} onChange={(event) => field("local_time", event.target.value)} />
-        <Input label="Duración (minutos)" type="number" min="1" value={createForm.duration_minutes} onChange={(event) => field("duration_minutes", event.target.value)} />
-        <Input label="Zona horaria" value={timezone} readOnly />
+        <section className="agenda-create-form__section" aria-labelledby="agenda-create-visit-heading">
+          <h3 id="agenda-create-visit-heading">Datos de la visita</h3>
+          <Select label="Cliente" value={createForm.customer_id} onChange={(event) => { field("customer_id", event.target.value); field("case_id", ""); }} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} />
+          <Combobox label="Caso" value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={createBusy ? undefined : (query) => void createManualCase(query)} options={cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} />
+          <div className="agenda-create-form__row agenda-create-form__row--visit">
+            <Input label="Servicio" value={createForm.service} onChange={(event) => field("service", event.target.value)} />
+            <Select label="Técnico" value={createForm.technician_id} onChange={(event) => field("technician_id", event.target.value)} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
+          </div>
+        </section>
+        <section className="agenda-create-form__section" aria-labelledby="agenda-create-schedule-heading">
+          <h3 id="agenda-create-schedule-heading">Fecha y horario</h3>
+          <div className="agenda-create-form__row agenda-create-form__row--schedule">
+            <Input label="Fecha local" type="date" value={createForm.local_date} onChange={(event) => field("local_date", event.target.value)} />
+            <Input label="Hora local" type="time" value={createForm.local_time} onChange={(event) => field("local_time", event.target.value)} />
+            <Input label="Duración (minutos)" type="number" min="1" value={createForm.duration_minutes} onChange={(event) => field("duration_minutes", event.target.value)} />
+          </div>
+          <Input label="Zona horaria" value={timezone} readOnly />
+        </section>
         {createFeedback?.tone === "danger" ? <StateMessage tone="danger" role="alert" title={createFeedback.title} detail={createFeedback.detail} /> : null}
         <Button variant="secondary" disabled={createBusy} onClick={() => void create()}>{createBusy ? "Creando…" : "Crear visita"}</Button>
       </div>
