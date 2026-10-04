@@ -32,6 +32,7 @@ describe("PageHeader (DS-SHELL-6)", () => {
     render(
       <PageHeader
         title="Agenda"
+        eyebrow="AGENDA"
         meta="Metadata remains available"
         titleAdornment={<span>4 visitas</span>}
         subtitle="Organiza las visitas y consulta la disponibilidad."
@@ -39,6 +40,7 @@ describe("PageHeader (DS-SHELL-6)", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Agenda" })).toBeInTheDocument();
+    expect(screen.getByText("AGENDA")).toBeInTheDocument();
     expect(screen.getByText("Metadata remains available")).toBeInTheDocument();
     expect(screen.getByText("4 visitas")).toBeInTheDocument();
     expect(screen.getByText("Organiza las visitas y consulta la disponibilidad.")).toBeInTheDocument();
