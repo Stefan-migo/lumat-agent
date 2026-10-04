@@ -125,10 +125,15 @@ layout/CSS findings assert structure.
 - [ ] Existing agenda behaviors preserved.
 
 ## Progress
-- [ ] WU1 — shared-primitive roll-up
+- [x] WU1 — shared-primitive roll-up (`26e94b16`; findings 004, 005, 018, 019)
 - [ ] WU2 — agenda list
 - [ ] WU3 — visit detail
 - [ ] WU4 — new-visit dialog
 
 ## Verification evidence
-(pending)
+### WU1 (`26e94b16`, 2026-10-04)
+- `npm run test` → 94 files, 973 tests passed.
+- `npx tsc -b --noEmit` → exit 0 (parent spot check re-confirmed).
+- `npm run build` → passed (existing >500 kB chunk advisory only).
+- RDD assess (base `42c8c5ae`, committed-only): risk `medium`, 229 changed lines, `review_due: false` (`under_budget`) — no review due yet; boundary stays pending in the slice.
+- Applied change: the calendar toolbar/segmented control, calendar footer, create-form sections, and the new-visit Dialog icon+description.
