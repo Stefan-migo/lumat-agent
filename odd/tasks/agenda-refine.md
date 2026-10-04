@@ -106,6 +106,8 @@ commits per work unit.
 - [x] T6 reschedule and closure dialogs (`agenda-026`, `agenda-027`): tests observed RED (3 focused failures), then GREEN (19 tests across `AppointmentDetail.test.tsx` and `AppointmentDetail.stories.test.tsx`); full Vitest suite 94 files / 984 tests passed; `npm run build` passed with the existing chunk-size advisory. Both dialogs now reuse the shared icon/description header; reschedule shows current scheduling, editable replacement fields, local-time helper, and Cancelar/Confirm actions; closure shows selected appointment, accessible selectable outcomes, irreversible-action warning, and Cancelar/Confirm actions. Existing mutation semantics and error StateMessage are retained; closure confirm and outcome inputs disable while mutating. Updated the Storybook test to the approved “Fecha” field label. Graph check: `AppointmentDetail()`, `Dialog()`, `AppointmentDetail.tsx`, `AppointmentDetail.test.tsx`, `AppointmentDetail.stories.test.tsx`, and `primitives.css`; path confirms AppointmentDetail imports Dialog. Runtime harness: N/A; dialog flows and mutation outcomes are exercised by component tests. Rollback boundary: revert T6 changes in `AppointmentDetail.tsx`, both AppointmentDetail test files, `primitives.css`, and this progress entry. **Implementation units T1–T6 are complete.**
 ## Next step
 
-All work units T0–T6 are implemented and committed. Remaining: visual verification of the built
-section against the references (desktop/tablet/mobile), the RDD work-unit review, and — when the owner
-requests delivery — chained PRs (forecast ≈453 authored lines, above the 400 advisory).
+All work units T0–T6 are implemented and committed. RDD review (medium, lineage
+`review-751415fdd96e5a0c`, lens `review-reliability`): **approved, no findings; authority burned**
+(`gentle-ai.review-acknowledged/v1`). Remaining: owner visual validation of the built section against
+the references (desktop/tablet/mobile) — dev server `http://localhost:5177/panel/app/agenda` — and,
+when the owner requests delivery, chained PRs (forecast ≈453 authored lines, above the 400 advisory).
