@@ -60,6 +60,13 @@ describe('AppointmentDetail', () => {
     expect(screen.getByRole('heading', { name: 'Programación' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Técnico asignado' })).toBeInTheDocument();
     expect(screen.getByText('Técnico #4')).toBeInTheDocument();
+    const peopleCard = screen.getByRole('heading', { name: 'Cliente' }).closest('.appointment-detail__people');
+    expect(peopleCard).toBeInTheDocument();
+    expect(peopleCard?.querySelectorAll('.appointment-detail__identity')).toHaveLength(2);
+    expect(peopleCard?.querySelectorAll('.appointment-detail__summary-row')).toHaveLength(2);
+    expect(document.querySelectorAll('.appointment-detail__summary.card')).toHaveLength(0);
+    expect(peopleCard?.querySelector('.appointment-detail__summary h3')).toHaveTextContent('Resumen');
+    expect(peopleCard?.querySelectorAll('.avatar')).toHaveLength(2);
     expect(screen.getAllByText('Reservada')).toHaveLength(2);
     expect(screen.queryByText('Resumen de la conversación')).not.toBeInTheDocument();
     const history = screen.getByRole('list', { name: 'Historial de la visita' });
@@ -67,6 +74,30 @@ describe('AppointmentDetail', () => {
     expect(history).toHaveTextContent('Registro inicial');
     expect(within(history).getByText('Ver detalles')).toBeInTheDocument();
     expect(history.querySelector('time')).toHaveAttribute('dateTime', '2026-09-25T12:00:00Z');
+  });
+
+  it('places the schedule and history on the left with one sidebar card on the right', () => {
+    const stylesheet = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+    const desktopGrid = stylesheet.match(/\.appointment-detail-page \.detail-region\s*\{([^}]*)\}/)?.[1] ?? '';
+    const schedule = stylesheet.match(/\.appointment-detail__schedule\s*\{([^}]*)\}/)?.[1] ?? '';
+    const history = stylesheet.match(/\.appointment-detail__history\s*\{([^}]*)\}/)?.[1] ?? '';
+    const people = stylesheet.match(/\.appointment-detail__people\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(desktopGrid).toMatch(/grid-template-columns:\s*minmax\(0,\s*2fr\)\s+minmax\(16rem,\s*1fr\)/);
+    expect(desktopGrid).toMatch(/grid-template-areas:\s*"schedule people"\s+"history people"/);
+    expect(schedule).toMatch(/grid-area:\s*schedule/);
+    expect(history).toMatch(/grid-area:\s*history/);
+    expect(people).toMatch(/grid-area:\s*people/);
+    expect(stylesheet).toMatch(/@media \(max-width:\s*63\.99rem\)[\s\S]*?grid-template-areas:\s*"schedule"\s+"people"\s+"history"/);
+  });
+
+  it('uses larger token-sized avatars in the visit identity card', () => {
+    const stylesheet = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+    const identityAvatar = stylesheet.match(/\.appointment-detail__identity \.avatar\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(identityAvatar).toMatch(/width:\s*calc\(var\(--space-8\) \* 2\)/);
+    expect(identityAvatar).toMatch(/height:\s*calc\(var\(--space-8\) \* 2\)/);
+    expect(identityAvatar).toMatch(/font-size:\s*var\(--text-lg\)/);
   });
 
   it('keeps detail header copy and actions responsive on mobile', () => {

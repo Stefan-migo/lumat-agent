@@ -119,10 +119,11 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
         <Card title="Cliente" icon={UserRound} className="appointment-detail__people">
           <div className="appointment-detail__identity"><Avatar name={customer.name ?? 'Cliente sin nombre'} /><div><strong>{customer.name ?? 'Cliente sin nombre'}</strong><a href={pathForRoute({ view: 'clients', clientId: customer.id })}>Ver ficha del cliente <Icon icon={ArrowRight} /></a></div></div>
           <div className="appointment-detail__identity appointment-detail__technician"><Avatar name={technicianLabel} /><div><h3>Técnico asignado</h3><strong>{technicianLabel}</strong><span>Responsable de la visita</span></div></div>
-        </Card>
-        <Card title="Resumen" icon={FileText} className="appointment-detail__summary">
-          <div className="appointment-detail__summary-row"><span>Motivo</span><strong>{appointment.service}</strong></div>
-          <div className="appointment-detail__summary-row"><span>Estado</span><Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge></div>
+          <div className="appointment-detail__summary">
+            <h3>Resumen</h3>
+            <div className="appointment-detail__summary-row"><span>Motivo</span><strong>{appointment.service}</strong></div>
+            <div className="appointment-detail__summary-row"><span>Estado</span><Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge></div>
+          </div>
         </Card>
       </section>
       <div className="detail-region__main">
