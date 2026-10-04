@@ -136,7 +136,7 @@ describe("AgendaPage Storybook state matrix", () => {
     render(<AgendaPageStory {...(CreateVisit.args ?? {})} />);
     await user.click(screen.getByRole("button", { name: "Nueva visita" }));
 
-    const dialog = await screen.findByRole("dialog", { name: "Crear visita" });
+    const dialog = await screen.findByRole("dialog", { name: "Nueva visita" });
     const form = dialog.querySelector(".agenda-create-form");
     expect(form).toBeInTheDocument();
     expect(form).not.toHaveAttribute("hidden");

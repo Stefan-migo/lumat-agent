@@ -199,8 +199,8 @@ describe('AppShell (T6.4)', () => {
     });
 
     render(<AppShell user={operador} />);
-    expect(await screen.findByText('Reparación de calefón')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Ana' })).toHaveAttribute('href', '/panel/app/clients/2');
+    expect(await screen.findByRole('heading', { name: 'Reparación de calefón' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Ver ficha del cliente/ })).toHaveAttribute('href', '/panel/app/clients/2');
     expect(fetchMock).toHaveBeenCalledWith('/panel/api/appointments/7', expect.anything());
     fetchMock.mockRestore();
   });

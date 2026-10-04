@@ -58,6 +58,9 @@ export const ConversationWithoutSummary: Story = {
 export const ManualCase: Story = {
   args: { appointmentId: 41, data: detail(null, null), state: "ready", width: 960 },
 };
+export const Mobile: Story = {
+  args: { appointmentId: 41, data: detail(null, null), state: "ready", width: 390 },
+};
 export const CloseActions: Story = {
   args: { appointmentId: 41, data: detail(null, null), state: "ready", width: 960 },
 };

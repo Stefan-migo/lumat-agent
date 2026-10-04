@@ -119,16 +119,16 @@ layout/CSS findings assert structure.
 - Local work-unit commits are allowed on the branch without a chain decision.
 
 ## Acceptance criteria
-- [ ] Findings `agenda-001..020` implemented.
-- [ ] `npm run test`, `npx tsc -b --noEmit`, `npm run build` all green.
-- [ ] Mobile/tablet register fits the viewport with no horizontal clipping.
-- [ ] Existing agenda behaviors preserved.
+- [x] Findings `agenda-001..020` implemented (agenda-012/014 carry a documented frontend data gap — see Follow-ups).
+- [x] `npm run test`, `npx tsc -b --noEmit`, `npm run build` all green.
+- [x] Mobile/tablet register uses a card layout with no horizontal table wrapper.
+- [x] Existing agenda behaviors preserved (behavior tests green).
 
 ## Progress
 - [x] WU1 — shared-primitive roll-up (`26e94b16`; findings 004, 005, 018, 019)
 - [x] WU2 — agenda list (`284e29ec` + `5ffa5b2c`; findings 001, 002, 003, 006, 007, 008)
-- [ ] WU3 — visit detail
-- [ ] WU4 — new-visit dialog
+- [x] WU3 — visit detail (`afe33b3c` + `0c69a203` + `f9daaef5`; findings 009–016)
+- [x] WU4 — new-visit dialog (`47a19322`; findings 017, 020)
 
 ## Verification evidence
 ### WU1 (`26e94b16`, 2026-10-04)
@@ -150,3 +150,28 @@ layout/CSS findings assert structure.
 - Native review lineage `review-b86591228db65a95`, lens `review-reliability`, tier `medium`, correction budget 200.
 - Outcome: **approved**, authority `burned` (`gentle-ai.review-acknowledged/v1`). No blocking findings.
 - Advisory `R3-001` (WARNING, informational): suspected blank register when switching to "No activas" with a selected day. The reviewer's own evidence refuted it (empty `selectedRows` makes `showEmpty` true and shows the empty state). No code change. Reviewed boundary advances to `5ffa5b2c`.
+
+### WU3 (`afe33b3c` + `0c69a203` + `f9daaef5`, 2026-10-04)
+- `npm run test` → 94 files, 975 tests passed.
+- `npx tsc -b --noEmit` → exit 0 (parent spot check re-confirmed).
+- `npm run build` → passed (existing >500 kB chunk advisory only).
+- RDD assess (base `5ffa5b2c`, committed-only): risk `medium`, 10 files, 193 changed lines, `review_due: false` (`under_budget`).
+- Applied change: optional `eyebrow` on PageHeader/PageFrame; visit detail header (eyebrow/subject/subtitle/header badge/icon actions/back link), Programación / Cliente / Técnico asignado / Resumen cards, and the history timeline.
+- Data gap (honest): the detail serializer/types do not return `technician_name` or calendar sync status; the page shows the technician ID as a fallback and labels calendar status unavailable. No backend change and no invented API call. Follow-up candidate if the reference-mandated name is required.
+
+### WU4 (`47a19322`, 2026-10-04)
+- `npm run test` → 94 files, 976 tests passed.
+- `npx tsc -b --noEmit` → exit 0.
+- `npm run build` → passed (existing >500 kB chunk advisory only).
+- Applied change: create dialog title "Nueva visita"; "Cancelar" action beside "Crear visita" (closes while not busy).
+- RDD assess (base `5ffa5b2c`, committed-only): risk `medium`, 13 files, 233 changed lines, `review_due: false` (`under_budget`).
+
+### Final verification (whole feature, 2026-10-04)
+- `npm run test` → 94 files, 976 tests passed (parent spot check, full suite).
+- `npx tsc -b --noEmit` → exit 0.
+- `npm run build` → passed.
+- Reviewed boundary: WU1+WU2 approved and burned (`review-b86591228db65a95`). WU3+WU4 remained `under_budget` per the native assess, so no further review was due.
+
+## Follow-ups (not blocking)
+- **agenda-012 / agenda-014 backend fields.** The visit detail payload does not return the technician name nor calendar sync status, so the "Técnico asignado" card falls back to the technician ID and the "Programación" card labels sync unavailable. A backend serializer change (out of the authorized frontend scope) is required for the reference-accurate values.
+- **R3-001 advisory** (WARNING, informational, refuted by the reviewer): no action.
