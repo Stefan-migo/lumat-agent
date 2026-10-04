@@ -27,7 +27,15 @@ describe('AppointmentDetail', () => {
     vi.mocked(closeAppointment).mockResolvedValue({ ok: true, appointment: {} });
     render(<AppointmentDetail data={detail} />);
     await user.click(screen.getByRole('button', { name: 'Cerrar visita' }));
-    await user.click(screen.getByRole('button', { name: 'Completar' }));
+    const dialog = screen.getByRole('dialog', { name: 'Cerrar visita' });
+    expect(dialog.querySelector('.dialog__icon svg')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Selecciona el resultado de la visita.');
+    expect(dialog).toHaveTextContent('Ana');
+    expect(dialog).toHaveTextContent('Visita seleccionada');
+    expect(screen.getByRole('radio', { name: /Completada.*La visita se realizó/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /No asistió.*El cliente no asistió/ })).not.toBeChecked();
+    expect(dialog).toHaveTextContent('Este cierre no se puede revertir desde la agenda.');
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
     await waitFor(() => expect(closeAppointment).toHaveBeenCalledWith(7, 'completed'));
     expect(await screen.findByRole('status')).toHaveTextContent('Visita completada');
   });
@@ -37,7 +45,8 @@ describe('AppointmentDetail', () => {
     vi.mocked(closeAppointment).mockRejectedValue(new Error('Intenta nuevamente'));
     render(<AppointmentDetail data={detail} />);
     await user.click(screen.getByRole('button', { name: 'Cerrar visita' }));
-    await user.click(screen.getByRole('button', { name: 'No asistió' }));
+    await user.click(screen.getByRole('radio', { name: /No asistió.*El cliente no asistió/ }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Intenta nuevamente');
     expect(closeAppointment).toHaveBeenCalledWith(7, 'no_show');
 
@@ -149,6 +158,15 @@ describe('AppointmentDetail', () => {
     render(<AppointmentDetail data={detail} />);
     await user.click(screen.getByRole('button', { name: 'Reprogramar' }));
     const dialog = screen.getByRole('dialog', { name: 'Reprogramar visita' });
+    expect(dialog.querySelector('.dialog__icon svg')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Actualiza la fecha, el horario y el técnico asignado.');
+    expect(within(dialog).getByRole('heading', { name: 'Programación actual' })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('10:00');
+    expect(dialog).toHaveTextContent('60 min');
+    expect(dialog).toHaveTextContent('Técnico #4');
+    expect(within(dialog).getByRole('heading', { name: 'Nueva programación' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('La fecha y la hora corresponden al horario local de la agenda.');
     expect(dialog.querySelector('input[type="date"]')).toHaveValue('2026-09-26');
     await user.click(screen.getByRole('button', { name: 'Confirmar reprogramación' }));
     await waitFor(() => expect(rescheduleAppointment).toHaveBeenCalledWith(7, {

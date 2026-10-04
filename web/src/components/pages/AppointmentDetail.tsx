@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ArrowRight, CalendarDays, CalendarCheck, Check, ChevronDown, Clock3, FileText, UserRound } from 'lucide-react';
+import { ArrowRight, CalendarDays, CalendarCheck, CalendarClock, Check, ChevronDown, CircleCheck, Clock3, FileText, UserRound, UserRoundX } from 'lucide-react';
 import { closeAppointment, fetchUsers, getAppointment, rescheduleAppointment } from '../../api';
 import { useAsyncData, type AsyncDataState } from '../../hooks/useAsyncData';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
@@ -62,6 +62,7 @@ function stateMessage(state: AsyncDataState) {
 
 export function AppointmentDetail({ appointmentId, data: controlledData, state: controlledState, onRetry }: AppointmentDetailProps) {
   const [closeOpen, setCloseOpen] = useState(false);
+  const [closeOutcome, setCloseOutcome] = useState<'completed' | 'no_show'>('completed');
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [technicians, setTechnicians] = useState<{ id: number; username: string }[]>([]);
   const [rescheduleForm, setRescheduleForm] = useState({ local_date: '', local_time: '', duration_minutes: '60', technician_id: '' });
@@ -170,19 +171,49 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
         </Card>
       </div>
     </div>
-    <Dialog open={closeOpen} onClose={() => { if (!mutating) setCloseOpen(false); }} title="Cerrar visita">
-      <p>Registra el resultado de la visita. Esta acción no se puede revertir desde la agenda.</p>
+    <Dialog open={closeOpen} onClose={() => { if (!mutating) setCloseOpen(false); }} title="Cerrar visita" icon={CircleCheck} description="Selecciona el resultado de la visita.">
+      <div className="appointment-detail__selected-visit"><Icon icon={CalendarDays} /><div><strong>{customer.name ?? 'Cliente sin nombre'}</strong><time dateTime={appointment.local_start}>{DATE_TIME_FORMAT.format(localStart)}</time><span>Visita seleccionada</span></div></div>
+      <fieldset className="appointment-detail__outcomes" disabled={mutating}>
+        <legend>Resultado</legend>
+        <label className={closeOutcome === 'completed' ? 'appointment-detail__outcome appointment-detail__outcome--selected' : 'appointment-detail__outcome'}>
+          <Icon icon={Check} />
+          <span><strong>Completada</strong><small>La visita se realizó.</small></span>
+          <input type="radio" name="appointment-outcome" value="completed" checked={closeOutcome === 'completed'} onChange={() => setCloseOutcome('completed')} />
+        </label>
+        <label className={closeOutcome === 'no_show' ? 'appointment-detail__outcome appointment-detail__outcome--selected' : 'appointment-detail__outcome'}>
+          <Icon icon={UserRoundX} />
+          <span><strong>No asistió</strong><small>El cliente no asistió.</small></span>
+          <input type="radio" name="appointment-outcome" value="no_show" checked={closeOutcome === 'no_show'} onChange={() => setCloseOutcome('no_show')} />
+        </label>
+      </fieldset>
+      <p className="appointment-detail__closure-warning">Este cierre no se puede revertir desde la agenda.</p>
       {feedback?.tone === 'danger' ? <StateMessage tone="danger" role="alert" title={feedback.title} detail={feedback.detail} /> : null}
-      <Button variant="secondary" disabled={mutating} onClick={() => void close('completed')}>Completar</Button>
-      <Button variant="secondary" disabled={mutating} onClick={() => void close('no_show')}>No asistió</Button>
+      <div className="appointment-detail__dialog-footer">
+        <Button variant="secondary" disabled={mutating} onClick={() => setCloseOpen(false)}>Cancelar</Button>
+        <Button disabled={mutating} onClick={() => void close(closeOutcome)}>{mutating ? 'Guardando…' : 'Confirmar cierre'}</Button>
+      </div>
     </Dialog>
-    <Dialog open={rescheduleOpen} onClose={() => { if (!mutating) setRescheduleOpen(false); }} title="Reprogramar visita">
-      <Input label="Fecha local" type="date" value={rescheduleForm.local_date} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_date: event.target.value }))} />
-      <Input label="Hora local" type="time" value={rescheduleForm.local_time} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_time: event.target.value }))} />
-      <Input label="Duración (minutos)" type="number" min="1" value={rescheduleForm.duration_minutes} onChange={(event) => setRescheduleForm((form) => ({ ...form, duration_minutes: event.target.value }))} />
-      <Select label="Técnico" value={rescheduleForm.technician_id} onChange={(event) => setRescheduleForm((form) => ({ ...form, technician_id: event.target.value }))} options={[{ value: '', label: 'Selecciona un técnico' }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
+    <Dialog open={rescheduleOpen} onClose={() => { if (!mutating) setRescheduleOpen(false); }} title="Reprogramar visita" icon={CalendarClock} description="Actualiza la fecha, el horario y el técnico asignado.">
+      <section className="appointment-detail__current-schedule" aria-labelledby="appointment-current-schedule">
+        <h3 id="appointment-current-schedule">Programación actual</h3>
+        <strong>{DATE_LONG_FORMAT.format(localStart)} · {localStart.getFullYear()} · {TIME_FORMAT.format(localStart)}</strong>
+        <span>{appointment.duration_minutes ?? 60} min · {technicianLabel}</span>
+      </section>
+      <section className="appointment-detail__new-schedule" aria-labelledby="appointment-new-schedule">
+        <h3 id="appointment-new-schedule">Nueva programación</h3>
+        <div className="appointment-detail__reschedule-fields">
+          <Input label="Fecha" type="date" value={rescheduleForm.local_date} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_date: event.target.value }))} />
+          <Input label="Hora local" type="time" value={rescheduleForm.local_time} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_time: event.target.value }))} />
+          <Input label="Duración" type="number" min="1" value={rescheduleForm.duration_minutes} onChange={(event) => setRescheduleForm((form) => ({ ...form, duration_minutes: event.target.value }))} />
+          <Select label="Técnico" value={rescheduleForm.technician_id} onChange={(event) => setRescheduleForm((form) => ({ ...form, technician_id: event.target.value }))} options={[{ value: '', label: 'Selecciona un técnico' }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
+        </div>
+        <p>La fecha y la hora corresponden al horario local de la agenda.</p>
+      </section>
       {feedback?.tone === 'danger' ? <StateMessage tone="danger" role="alert" title={feedback.title} detail={feedback.detail} /> : null}
-      <Button variant="secondary" disabled={mutating} onClick={() => void reschedule()}>{mutating ? 'Reprogramando…' : 'Confirmar reprogramación'}</Button>
+      <div className="appointment-detail__dialog-footer">
+        <Button variant="secondary" disabled={mutating} onClick={() => setRescheduleOpen(false)}>Cancelar</Button>
+        <Button disabled={mutating} onClick={() => void reschedule()}>{mutating ? 'Reprogramando…' : 'Confirmar reprogramación'}</Button>
+      </div>
     </Dialog>
   </PageFrame>;
 }

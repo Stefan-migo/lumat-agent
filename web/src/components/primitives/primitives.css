@@ -1084,6 +1084,33 @@
 .appointment-detail__history-details > div { display: grid; grid-template-columns: minmax(6rem, auto) minmax(0, 1fr); gap: var(--space-3); overflow-wrap: anywhere; }
 .appointment-detail__history-details dt { color: var(--text-muted); font-size: var(--text-sm); }
 .appointment-detail__history-details dd { margin: 0; }
+.appointment-detail__current-schedule,
+.appointment-detail__selected-visit { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); background: var(--brand-bg-elevated); }
+.appointment-detail__current-schedule { grid-template-columns: minmax(0, 1fr); margin-bottom: var(--space-4); }
+.appointment-detail__current-schedule h3,
+.appointment-detail__new-schedule h3 { margin: 0; font-size: var(--text-md); }
+.appointment-detail__current-schedule span,
+.appointment-detail__new-schedule > p,
+.appointment-detail__selected-visit span { color: var(--text-muted); font-size: var(--text-sm); }
+.appointment-detail__new-schedule { display: grid; gap: var(--space-3); }
+.appointment-detail__reschedule-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.appointment-detail__new-schedule > p { margin: 0; }
+.appointment-detail__selected-visit > .icon { grid-row: span 3; }
+.appointment-detail__selected-visit > div { display: grid; gap: var(--space-1); }
+.appointment-detail__selected-visit time { color: var(--corp-text); }
+.appointment-detail__outcomes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: 0; padding: 0; border: 0; }
+.appointment-detail__outcomes legend { margin-bottom: var(--space-3); font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.appointment-detail__outcome { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; }
+.appointment-detail__outcome--selected { border-color: var(--primary-700); }
+.appointment-detail__outcome > span { display: grid; gap: var(--space-1); }
+.appointment-detail__outcome small { color: var(--text-muted); font: inherit; font-size: var(--text-sm); }
+.appointment-detail__closure-warning { margin: var(--space-4) 0 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--warning-bg); color: var(--warning); }
+.appointment-detail__dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border); }
+@media (max-width: 40rem) {
+  .appointment-detail__reschedule-fields,
+  .appointment-detail__outcomes { grid-template-columns: minmax(0, 1fr); }
+  .appointment-detail__dialog-footer { flex-direction: column-reverse; }
+}
 @media (max-width: 63.99rem) {
   .appointment-detail-page .detail-region { grid-template-columns: minmax(0, 1fr); grid-template-areas: "schedule" "people" "history"; }
 }
