@@ -117,6 +117,17 @@
   display: grid;
   gap: var(--space-3);
 }
+.agenda-create-form__section { display: grid; gap: var(--space-3); }
+.agenda-create-form__section + .agenda-create-form__section {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--corp-border);
+}
+.agenda-create-form__section h3 { margin: 0; font-size: var(--text-lg); }
+.agenda-create-form__row { display: grid; gap: var(--space-3); min-width: 0; }
+@media (min-width: 40.0625rem) {
+  .agenda-create-form__row--visit { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agenda-create-form__row--schedule { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 .field__label {
   font-family: var(--font-ui);
   font-size: var(--text-sm);
@@ -2703,7 +2714,8 @@
 }
 .agenda-calendar__toolbar,
 .agenda-calendar__actions,
-.agenda-calendar__view-toggle {
+.agenda-calendar__view-toggle,
+.agenda-calendar__stepper {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -2711,8 +2723,12 @@
 }
 .agenda-calendar__toolbar { justify-content: space-between; }
 .agenda-calendar__toolbar h2 { margin: 0; font-size: var(--text-lg); }
-.agenda-calendar__view-toggle { margin-left: var(--space-2); }
-.agenda-calendar__view-toggle [aria-pressed="true"] { border-color: var(--primary-700); background: var(--primary-100); color: var(--primary-800); }
+.agenda-calendar__view-toggle { border: 1px solid var(--corp-border); border-radius: var(--radius-sm); gap: 0; }
+.agenda-calendar__view-toggle .btn { border: 0; }
+.agenda-calendar__view-toggle [aria-pressed="true"] { background: var(--primary-800); color: var(--text-on-dark); }
+.agenda-calendar__footer { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--corp-border); color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.agenda-calendar__legend { display: inline-flex; align-items: center; gap: var(--space-2); }
+.agenda-calendar__legend-dot { width: var(--space-2); height: var(--space-2); border-radius: 50%; background: var(--brand-lime); }
 .agenda-calendar__table {
   width: 100%;
   border-collapse: separate;
@@ -2760,7 +2776,8 @@
 @media (max-width: 40rem) {
   .agenda-calendar { padding: var(--space-3); overflow-x: auto; }
   .agenda-calendar__toolbar { align-items: flex-start; flex-direction: column; }
-  .agenda-calendar__actions { width: 100%; }
-  .agenda-calendar__actions > .btn { flex: 1 1 auto; }
-  .agenda-calendar__view-toggle { margin-left: 0; }
+  .agenda-calendar__actions { width: 100%; justify-content: space-between; }
+  .agenda-calendar__stepper > .btn { min-width: 2.5rem; }
+  .agenda-calendar__footer { align-items: flex-start; flex-direction: column; }
+  .agenda-create-form__row { grid-template-columns: minmax(0, 1fr); }
 }

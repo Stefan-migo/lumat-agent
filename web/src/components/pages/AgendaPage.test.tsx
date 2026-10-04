@@ -415,6 +415,11 @@ describe('AgendaPage', () => {
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(fetchTechnicians).toHaveBeenCalledOnce());
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Crear visita' })).toBeInTheDocument());
+    expect(screen.getByRole('dialog')).toHaveTextContent('Completa los datos para agendar una visita.');
+    expect(screen.getByRole('dialog')).toHaveTextContent('Datos de la visita');
+    expect(screen.getByRole('dialog')).toHaveTextContent('Fecha y horario');
+    expect(screen.getByRole('heading', { name: 'Datos de la visita', level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Fecha y horario', level: 3 })).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Cliente'), '10');
     await user.type(screen.getByLabelText('Caso'), 'Mantención');
     await user.click(screen.getByRole('option', { name: 'Mantención (#20)' }));
