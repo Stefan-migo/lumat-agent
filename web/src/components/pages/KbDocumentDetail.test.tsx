@@ -52,23 +52,44 @@ describe("KB document detail route", () => {
     expect(screen.getByRole("button", { name: "Base de Conocimientos" })).toBeInTheDocument();
   });
 
-  it("renders document and technical facts in the summary and operations in the main region", () => {
+  it("renders document and technical facts in the reference summary columns", () => {
     render(<KbDocumentDetail data={document} state="ready" />);
 
     const surface = screen.getByRole("heading", { name: document.title }).closest("main") as HTMLElement;
-    const rail = surface.querySelector(".detail-region__rail") as HTMLElement;
-    expect(surface.querySelector(".detail-region")).toBeInTheDocument();
-    expect(surface.querySelector(".detail-region__rail")).toBeInTheDocument();
-    expect(surface.querySelector(".detail-region__main")).toBeInTheDocument();
-    expect(within(rail).getByRole("heading", { name: "Información del documento" })).toBeInTheDocument();
-    expect(within(rail).getByRole("heading", { name: "Detalles técnicos" })).toBeInTheDocument();
-    expect(within(rail).getByText("Título")).toBeInTheDocument();
-    expect(within(rail).getByText(document.title)).toBeInTheDocument();
+    const layout = surface.querySelector(".kb-document__layout") as HTMLElement;
+    const left = within(layout).getByRole("region", { name: "Información y detalles técnicos" });
+    expect(within(left).getByRole("heading", { name: "Información del documento" })).toBeInTheDocument();
+    expect(within(left).getByText("Título")).toBeInTheDocument();
+    expect(within(left).getByText(document.title)).toBeInTheDocument();
     for (const label of ["Formato", "Versión activa", "Cantidad de versiones", "Proveedor", "Modelo", "Costo", "Creado"]) {
-      expect(within(rail).getByText(label)).toBeInTheDocument();
+      expect(within(left).getByText(label)).toBeInTheDocument();
     }
-    expect(within(rail).getByText(document.provider)).toBeInTheDocument();
-    expect(within(rail).getByText(document.model)).toBeInTheDocument();
+    expect(within(left).getByLabelText("Proveedor")).toHaveValue(document.provider);
+    expect(within(left).getByLabelText("Modelo")).toHaveValue(document.model);
+  });
+
+  it("renders the reference two-column summary with audience, availability, and technical fields", () => {
+    render(<KbDocumentDetail data={document} state="ready" />);
+
+    const layout = screen.getByRole("region", { name: "Resumen del documento" });
+    const left = within(layout).getByRole("region", { name: "Información y detalles técnicos" });
+    const right = within(layout).getByRole("region", { name: "Audiencia y disponibilidad" });
+    const info = within(left).getByRole("heading", { name: "Información del documento" }).closest("section") as HTMLElement;
+    expect(within(info).getByText("Versión activa")).toBeInTheDocument();
+    expect(within(info).getByText("v2")).toBeInTheDocument();
+    expect(within(left).getByRole("group", { name: "Detalles técnicos" })).toBeInTheDocument();
+    expect(within(left).getByLabelText("Proveedor")).toBeDisabled();
+    expect(within(left).getByLabelText("Modelo")).toBeDisabled();
+    expect(within(left).getByLabelText("Costo")).toBeDisabled();
+
+    expect(within(right).getByRole("heading", { name: "Audiencia" })).toBeInTheDocument();
+    expect(within(right).getByText("Define quién puede utilizar este documento.")).toBeInTheDocument();
+    expect(within(right).getByLabelText("Audiencia del documento")).toHaveValue("customer");
+    expect(within(right).getByText("Los documentos internos no se usan para responder a clientes.")).toBeInTheDocument();
+    expect(within(right).getByRole("button", { name: "Guardar audiencia" })).toBeDisabled();
+    expect(within(right).getByRole("heading", { name: "Disponibilidad" })).toBeInTheDocument();
+    expect(within(right).getByText("Activo")).toBeInTheDocument();
+    expect(within(right).getByRole("button", { name: "Deshabilitar" })).toBeInTheDocument();
   });
 
   it("renders the redesigned header, summary cards, and working content and version tabs", async () => {
@@ -76,14 +97,14 @@ describe("KB document detail route", () => {
     render(<KbDocumentDetail data={document} state="ready" />);
 
     expect(screen.getByText(`#${document.id} · PDF · Creado el 10 jul 2026`)).toBeInTheDocument();
-    expect(screen.getByText("Activo")).toBeInTheDocument();
+    expect(screen.getAllByText("Activo")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Editar contenido" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Resumen" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Contenido" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Versiones" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Información del documento" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Detalles técnicos" })).toBeInTheDocument();
-    expect(screen.getAllByText("v2")).toHaveLength(2);
+    expect(screen.getByText("v2")).toBeInTheDocument();
     expect(screen.getByText("En uso")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Editar contenido" }));
@@ -112,8 +133,10 @@ describe("KB document detail route", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ ...document, active: false }), { status: 200 }));
     render(<KbDocumentDetail data={document} state="ready" />);
 
+    await user.click(screen.getByRole("tab", { name: "Versiones" }));
     await user.selectOptions(screen.getByLabelText("Restaurar"), "1");
     await user.click(screen.getByRole("button", { name: "Restaurar" }));
+    await user.click(screen.getByRole("tab", { name: "Resumen" }));
     await user.click(screen.getByRole("button", { name: "Deshabilitar" }));
 
     expect(screen.getAllByRole("alert")).toHaveLength(1);
@@ -153,14 +176,16 @@ describe("KB document detail route", () => {
     const user = userEvent.setup();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ ...document, content: "Contenido" }), { status: 200 }));
     render(<KbDocumentDetail data={document} state="ready" />);
+    await user.click(screen.getByRole("tab", { name: "Versiones" }));
     await user.selectOptions(screen.getByLabelText("Restaurar"), "1");
     await user.click(screen.getByRole("button", { name: "Restaurar" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/reabrirá como Interno \(solo Lumat\)/i);
     expect(screen.getByRole("alert")).toHaveTextContent(/dejará de usarlo para responder a clientes/i);
     expect(screen.getByRole("alert")).toHaveTextContent(/marques como Cliente y Lumat/i);
     await user.click(screen.getByRole("button", { name: "Confirmar" }));
-    await user.selectOptions(screen.getByLabelText("Audiencia"), "internal");
-    await user.click(screen.getByRole("button", { name: "Cambiar audiencia" }));
+    await user.click(screen.getByRole("tab", { name: "Resumen" }));
+    await user.selectOptions(screen.getByLabelText("Audiencia del documento"), "internal");
+    await user.click(screen.getByRole("button", { name: "Guardar audiencia" }));
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes(`/kb/${document.id}/restore`))).toBe(true);
     const visibilityCall = fetchMock.mock.calls.find(([input]) => String(input).includes(`/kb/${document.id}/visibility`));
     expect(visibilityCall).toBeDefined();
