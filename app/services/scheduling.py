@@ -408,7 +408,7 @@ def list_for_technician(session: Session, technician_id: int) -> list[tuple[Appo
     return list(session.execute(statement).all())
 
 
-def list_for_range(session: Session, from_date: date, to_date: date, timezone_name: str) -> list[tuple[Appointment, str | None, str | None, str | None, AppointmentCalendarSync | None]]:
+def list_for_range(session: Session, from_date: date, to_date: date, timezone_name: str) -> list[tuple[Appointment, str | None, str | None, str | None, str | None, str | None, AppointmentCalendarSync | None]]:
     """Return the read-only agenda projection for an inclusive local date range."""
     zone = _zone(timezone_name)
     if from_date > to_date or (to_date - from_date).days >= 31:
@@ -416,7 +416,7 @@ def list_for_range(session: Session, from_date: date, to_date: date, timezone_na
     starts_at = datetime.combine(from_date, time.min, tzinfo=zone).astimezone(timezone.utc)
     ends_at = datetime.combine(to_date + timedelta(days=1), time.min, tzinfo=zone).astimezone(timezone.utc)
     statement = (
-        select(Appointment, Customer.name, Case.service, User.username, AppointmentCalendarSync)
+        select(Appointment, Customer.name, Customer.address, Customer.comuna, Case.service, User.username, AppointmentCalendarSync)
         .join(Customer, Customer.id == Appointment.customer_id)
         .join(Case, Case.id == Appointment.case_id)
         .join(User, User.id == Appointment.technician_id)

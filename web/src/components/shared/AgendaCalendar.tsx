@@ -42,6 +42,8 @@ export function AgendaCalendar({
   const days = view === "month" ? monthDays : agendaWeekDays(anchor, timezone);
   const leadingEmptyCells = view === "month" ? (new Date(`${monthDays[0]}T12:00:00Z`).getUTCDay() + 6) % 7 : 0;
   const monthLabel = agendaMonthLabel(anchor, timezone);
+  const visitCount = days.reduce((total, day) => total + (visitCounts[day] ?? 0), 0);
+  const periodLabel = `${visitLabel(visitCount)} en ${monthLabel.toLocaleLowerCase()}`;
   const monthCells = [...Array.from({ length: leadingEmptyCells }), ...days];
   const trailingEmptyCells = view === "month" ? (7 - (monthCells.length % 7)) % 7 : 0;
   const tableCells = view === "month" ? [...monthCells, ...Array.from({ length: trailingEmptyCells })] : days;
@@ -52,13 +54,14 @@ export function AgendaCalendar({
       <div className="agenda-calendar__toolbar">
         <h2 id="agenda-calendar-title">{view === "month" ? monthLabel : `Semana del ${agendaPeriodLabel(days[0], timezone)}`}</h2>
         <div className="agenda-calendar__actions">
-          <Button variant="secondary" onClick={() => onNavigate(-1)}>Período anterior</Button>
-          <Button variant="secondary" onClick={() => onNavigate(0)}>Hoy</Button>
-          <Button variant="secondary" onClick={() => onNavigate(1)}>Período siguiente</Button>
-          <div className="agenda-calendar__view-toggle" aria-label="Vista del calendario">
-            <Button variant="secondary" onClick={() => onViewChange(view === "month" ? "week" : "month")}>
-              {view === "month" ? "Ver semana" : "Ver mes"}
-            </Button>
+          <div className="agenda-calendar__stepper" aria-label="Navegación del calendario">
+            <Button variant="secondary" aria-label="Período anterior" onClick={() => onNavigate(-1)}>‹</Button>
+            <Button variant="secondary" onClick={() => onNavigate(0)}>Hoy</Button>
+            <Button variant="secondary" aria-label="Período siguiente" onClick={() => onNavigate(1)}>›</Button>
+          </div>
+          <div className="agenda-calendar__view-toggle" role="group" aria-label="Vista del calendario">
+            <button type="button" className="btn btn--secondary" aria-pressed={view === "month"} onClick={() => onViewChange("month")}>Mes</button>
+            <button type="button" className="btn btn--secondary" aria-pressed={view === "week"} onClick={() => onViewChange("week")}>Semana</button>
           </div>
         </div>
       </div>
@@ -70,14 +73,18 @@ export function AgendaCalendar({
           const selected = selectedDay === day;
           const current = today === day;
           return <td key={day} className="agenda-calendar__cell">
-             <button type="button" className="agenda-calendar__day" aria-label={`${agendaPeriodLabel(day, timezone)}, ${visitLabel(count)}`} aria-pressed={selected} aria-current={current ? "date" : undefined} onClick={() => onSelectDay(selected ? null : day)}>
-              <span className="agenda-calendar__number">{agendaDayNumber(day)}</span>
-              <span className="agenda-calendar__count">{visitLabel(count)}</span>
+             <button type="button" className="agenda-calendar__day agenda-calendar__day--compact" aria-label={`${agendaPeriodLabel(day, timezone)}, ${visitLabel(count)}`} aria-pressed={selected} aria-current={current ? "date" : undefined} onClick={() => onSelectDay(selected ? null : day)}>
+               <span className="agenda-calendar__number">{agendaDayNumber(day)}</span>
+               {count > 0 ? <span className="agenda-calendar__count">{visitLabel(count)}</span> : null}
               {current || selected ? <span className={current ? "agenda-calendar__today" : "agenda-calendar__selected"}>{current && selected ? "Hoy · Seleccionado" : current ? "Hoy" : "Seleccionado"}</span> : null}
             </button>
           </td>;
         })}</tr>)}</tbody>
       </table>
+      <footer className="agenda-calendar__footer">
+        <span className="agenda-calendar__legend"><span className="agenda-calendar__legend-dot" aria-hidden="true" />Visitas</span>
+        <span>{periodLabel}</span>
+      </footer>
     </section>
   );
 }

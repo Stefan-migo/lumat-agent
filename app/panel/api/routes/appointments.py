@@ -56,7 +56,7 @@ def list_appointments(from_date: date = Query(alias="from"), to_date: date = Que
         raise HTTPException(status_code=400, detail={"code": "invalid_timezone", "message": str(exc)}) from exc
     except scheduling.InvalidRange as exc:
         raise HTTPException(status_code=400, detail={"code": "invalid_range", "message": str(exc)}) from exc
-    return {"appointments": [to_agenda_dict(appointment, customer_name=customer_name, case_name=case_name, technician_name=technician_name, timezone_name=timezone_name, sync=sync) for appointment, customer_name, case_name, technician_name, sync in rows]}
+    return {"appointments": [to_agenda_dict(appointment, customer_name=customer_name, customer_address=customer_address, customer_comuna=customer_comuna, case_name=case_name, technician_name=technician_name, timezone_name=timezone_name, sync=sync) for appointment, customer_name, customer_address, customer_comuna, case_name, technician_name, sync in rows]}
 
 
 @router.get("/availability/{technician_id}")

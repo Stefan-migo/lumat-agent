@@ -27,7 +27,7 @@ const appointment: AppointmentDetailData["appointment"] = {
 
 const detail = (conversationId: number | null, summary: string | null): AppointmentDetailData => ({
   appointment,
-  customer: { id: 12, name: "Marcela Fuentes" },
+  customer: { id: 12, name: "Marcela Fuentes", address: "Av. Los Robles 123", comuna: "Providencia" },
   case: { id: 27, conversation_id: conversationId },
   conversation_summary: summary,
 });
@@ -57,6 +57,9 @@ export const ConversationWithoutSummary: Story = {
 };
 export const ManualCase: Story = {
   args: { appointmentId: 41, data: detail(null, null), state: "ready", width: 960 },
+};
+export const Mobile: Story = {
+  args: { appointmentId: 41, data: detail(null, null), state: "ready", width: 390 },
 };
 export const CloseActions: Story = {
   args: { appointmentId: 41, data: detail(null, null), state: "ready", width: 960 },

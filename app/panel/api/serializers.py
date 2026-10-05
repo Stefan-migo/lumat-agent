@@ -237,7 +237,7 @@ def to_appointment_detail_dict(
 ) -> dict:
     return {
         "appointment": to_appointment_dict(appointment),
-        "customer": {"id": customer.id, "name": customer.name},
+        "customer": {"id": customer.id, "name": customer.name, "address": customer.address, "comuna": customer.comuna},
         "case": {"id": case.id, "conversation_id": case.conversation_id},
         "conversation_summary": conversation_summary,
     }
@@ -313,13 +313,15 @@ def to_automation_rule_dict(rule: AutomationRule) -> dict:
     }
 
 
-def to_agenda_dict(appointment: Appointment, *, customer_name: str | None, case_name: str | None, technician_name: str | None, timezone_name: str, sync: AppointmentCalendarSync | None) -> dict:
+def to_agenda_dict(appointment: Appointment, *, customer_name: str | None, customer_address: str | None, customer_comuna: str | None, case_name: str | None, technician_name: str | None, timezone_name: str, sync: AppointmentCalendarSync | None) -> dict:
     local_start = appointment.starts_at.astimezone(ZoneInfo(timezone_name))
     return {
         "id": appointment.id,
         "service": appointment.service,
         "customer_id": appointment.customer_id,
         "customer_name": customer_name,
+        "customer_address": customer_address,
+        "customer_comuna": customer_comuna,
         "case_id": appointment.case_id,
         "case_name": case_name,
         "technician_id": appointment.technician_id,

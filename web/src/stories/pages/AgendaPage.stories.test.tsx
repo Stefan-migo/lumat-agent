@@ -50,10 +50,10 @@ describe("AgendaPage Storybook state matrix", () => {
     expect(screen.getByText("Completada")).toBeInTheDocument();
     expect(screen.getAllByText("No asistió").length).toBeGreaterThan(0);
     expect(screen.getByText("Visita de diagnóstico")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Reintentar calendario" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /Acciones para/ })).toHaveLength(3);
     await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(screen.getByRole("tab", { name: "Activas" }));
     expect(screen.getByText("Calendario con error")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Reintentar calendario" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /Acciones para/ })).toHaveLength(1);
   });
 
   it.each([
@@ -74,22 +74,28 @@ describe("AgendaPage Storybook state matrix", () => {
     vi.mocked(listAppointments).mockResolvedValue({ appointments: Data.args!.data! });
     render(<AgendaPageStory data={Data.args?.data} state="ready" />);
 
-    await user.click(screen.getByRole("button", { name: "Cancelar visita" }));
-    expect(screen.getByRole("dialog", { name: "Cancelar visita de Camila Soto — Mantención de calefón" })).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toHaveTextContent("La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.");
+    await user.click(screen.getByRole("button", { name: "Acciones para Mantención de calefón" }));
+    await user.click(screen.getByRole("menuitem", { name: "Cancelar visita" }));
+    const dialog = screen.getByRole("dialog", { name: "Cancelar visita" });
+    expect(dialog.querySelector(".dialog__icon svg")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Indica el motivo de la cancelación de esta visita.");
+    expect(dialog).toHaveTextContent("Camila Soto");
+    expect(dialog).toHaveTextContent("Visita seleccionada");
+    expect(dialog).toHaveTextContent("Esta acción no se puede revertir desde la agenda.");
+    expect(within(dialog).getByLabelText("Motivo de cancelación")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Confirmar cancelación" }));
     await waitFor(() => expect(cancelAppointment).toHaveBeenCalled());
 
-    const retry = screen.getAllByRole("button", { name: "Reintentar calendario" })[0];
-    retry.focus();
-    await user.keyboard("{Enter}");
+    await user.click(screen.getByRole("tab", { name: "No activas" }));
+    await user.click(screen.getByRole("button", { name: "Acciones para Visita de diagnóstico" }));
+    await user.click(screen.getByRole("menuitem", { name: "Reintentar calendario" }));
     await waitFor(() => expect(retryCalendarSync).toHaveBeenCalled());
 
     const { container: confirmationContainer } = render(<AgendaPageStory data={Data.args?.data} state="ready" />);
     await act(async () => {
       await CancelConfirmation.play?.({ canvasElement: confirmationContainer } as Parameters<NonNullable<typeof CancelConfirmation.play>>[0]);
     });
-    expect(screen.getAllByRole("dialog", { name: "Cancelar visita de Camila Soto — Mantención de calefón" })).toHaveLength(1);
+    expect(screen.getAllByRole("dialog", { name: "Cancelar visita" })).toHaveLength(1);
   });
 
   it("covers the outcome confirmation while preserving the appointment facts", async () => {
@@ -99,15 +105,20 @@ describe("AgendaPage Storybook state matrix", () => {
     render(<AgendaPageStory data={Data.args?.data} state="ready" />);
     expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
     expect(screen.getByText("Camila Soto")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Cerrar visita" }));
-    expect(screen.getByRole("dialog")).toHaveTextContent("Esta acción no se puede revertir");
-    await user.click(screen.getByRole("button", { name: "Completar" }));
+    await user.click(screen.getByRole("button", { name: "Acciones para Mantención de calefón" }));
+    await user.click(screen.getByRole("menuitem", { name: "Cerrar visita" }));
+    const dialog = screen.getByRole("dialog", { name: "Cerrar visita" });
+    expect(dialog.querySelector(".dialog__icon svg")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Camila Soto");
+    expect(dialog).toHaveTextContent("Visita seleccionada");
+    expect(dialog).toHaveTextContent("Este cierre no se puede revertir desde la agenda.");
+    await user.click(screen.getByRole("button", { name: "Confirmar cierre" }));
     await waitFor(() => expect(closeAppointment).toHaveBeenCalledWith(1, "completed"));
     const { container: storyContainer } = render(<AgendaPageStory data={Data.args?.data} state="ready" />);
     await act(async () => {
       await CloseConfirmation.play?.({ canvasElement: storyContainer } as Parameters<NonNullable<typeof CloseConfirmation.play>>[0]);
     });
-    expect(within(storyContainer).getByRole("dialog", { name: "Cerrar visita de Camila Soto — Mantención de calefón" })).toBeInTheDocument();
+    expect(within(storyContainer).getByRole("dialog", { name: "Cerrar visita" })).toBeInTheDocument();
   });
 
   it("covers rescheduling while preserving appointment facts", async () => {
@@ -116,9 +127,14 @@ describe("AgendaPage Storybook state matrix", () => {
     vi.mocked(rescheduleAppointment).mockResolvedValue({ ok: true, appointment: {} });
     render(<AgendaPageStory data={Data.args?.data} state="ready" />);
     expect(screen.getByText("Camila Soto")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Reprogramar" }));
+    await user.click(screen.getByRole("button", { name: "Acciones para Mantención de calefón" }));
+    await user.click(screen.getByRole("menuitem", { name: "Reprogramar" }));
     const dialog = screen.getByRole("dialog", { name: "Reprogramar visita" });
-    expect(within(dialog).getByLabelText("Fecha local")).toHaveValue("2026-09-05");
+    expect(dialog.querySelector(".dialog__icon svg")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Actualiza la fecha, el horario y el técnico asignado.");
+    expect(within(dialog).getByRole("heading", { name: "Programación actual" })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Fecha")).toHaveValue("2026-09-05");
+    expect(within(dialog).getByRole("button", { name: "Cancelar" })).toBeInTheDocument();
     expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Confirmar reprogramación" }));
     await waitFor(() => expect(rescheduleAppointment).toHaveBeenCalled());
@@ -133,13 +149,15 @@ describe("AgendaPage Storybook state matrix", () => {
     render(<AgendaPageStory {...(CreateVisit.args ?? {})} />);
     await user.click(screen.getByRole("button", { name: "Nueva visita" }));
 
-    const dialog = await screen.findByRole("dialog", { name: "Crear visita" });
+    const dialog = await screen.findByRole("dialog", { name: "Nueva visita" });
     const form = dialog.querySelector(".agenda-create-form");
     expect(form).toBeInTheDocument();
     expect(form).not.toHaveAttribute("hidden");
     expect(form?.children.length).toBeGreaterThan(1);
-    expect(screen.getByRole("combobox", { name: "Caso" })).toBeInTheDocument();
-    await user.type(screen.getByRole("combobox", { name: "Caso" }), "Walk-in case");
+    expect(screen.getByRole("combobox", { name: "Caso vinculado" })).toBeInTheDocument();
+    await user.type(screen.getByRole("combobox", { name: "Cliente" }), "Camila");
+    await user.click(screen.getByRole("option", { name: "Camila Soto" }));
+    await user.type(screen.getByRole("combobox", { name: "Caso vinculado" }), "Walk-in case");
     expect(screen.getByRole("option", { name: "Crear «Walk-in case»" })).toBeInTheDocument();
     expect(screen.getByLabelText("Servicio")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Crear visita" })).toBeInTheDocument();
@@ -163,7 +181,7 @@ describe("AgendaPage Storybook state matrix", () => {
     // Creation is the only control this page gained (agenda-booking); the guard keeps
     // asserting that edit, reschedule and availability are still not invented.
     expect(screen.getByRole("button", { name: "Nueva visita" })).toBeInTheDocument();
-    expect(screen.queryByText(/editar|reagendar|disponibilidad/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/editar|reagendar/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /editar|reagendar/i })).not.toBeInTheDocument();
   });
 });

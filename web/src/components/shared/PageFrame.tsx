@@ -4,6 +4,9 @@ import { PageHeader } from "./PageHeader";
 export interface PageFrameProps {
   title: string;
   meta?: ReactNode;
+  titleAdornment?: ReactNode;
+  subtitle?: ReactNode;
+  eyebrow?: ReactNode;
   actions?: ReactNode;
   state?: ReactNode;
   headerClassName?: string;
@@ -11,11 +14,19 @@ export interface PageFrameProps {
   children: ReactNode;
 }
 
-export function PageFrame({ title, meta, actions, state, headerClassName, className, children }: PageFrameProps) {
+export function PageFrame({ title, meta, titleAdornment, subtitle, eyebrow, actions, state, headerClassName, className, children }: PageFrameProps) {
   return (
     <main className={`page-frame${className ? ` ${className}` : ""}`}>
       <div className="page-frame__titlebar">
-        <PageHeader title={title} meta={meta} actions={actions} headerClassName={headerClassName} />
+        <PageHeader
+          title={title}
+          meta={meta}
+          titleAdornment={titleAdornment}
+          subtitle={subtitle}
+          eyebrow={eyebrow}
+          actions={actions}
+          headerClassName={headerClassName}
+        />
       </div>
       {state ? <div className="page-frame__banner">{state}</div> : null}
       <div className="page-frame__content">{children}</div>

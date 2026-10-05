@@ -106,4 +106,48 @@ describe("Dialog (CST-PRIM-7, CORP-DIALOG-1)", () => {
     rerender(dialogMarkup(false, onClose));
     expect(dialog).not.toHaveAttribute("open");
   });
+
+  it("anchors mobile dialogs as animated, scrollable bottom sheets", () => {
+    const mobileRules = primitives.split('@media (max-width: 40rem)').find((rules) => rules.includes('dialog-sheet-enter')) ?? '';
+    const sheet = mobileRules.match(/\.dialog\s*\{([^}]*)\}/)?.[1] ?? "";
+    const header = mobileRules.match(/\.dialog__header\s*\{([^}]*)\}/)?.[1] ?? "";
+    const body = mobileRules.match(/\.dialog__body\s*\{([^}]*)\}/)?.[1] ?? "";
+
+    expect(sheet).toMatch(/position:\s*fixed/);
+    expect(sheet).toMatch(/inset:\s*auto 0 0/);
+    expect(sheet).toMatch(/width:\s*100vw/);
+    expect(sheet).toMatch(/border-radius:\s*var\(--radius-xl\) var\(--radius-xl\) 0 0/);
+    expect(sheet).toMatch(/animation:/);
+    expect(header).toMatch(/flex:\s*0 0 auto/);
+    expect(body).toMatch(/min-height:\s*0/);
+    expect(body).toMatch(/overflow-y:\s*auto/);
+  });
+
+  it("renders the new-visit dialog fullscreen with sticky actions on mobile", () => {
+    const mobileRules = primitives.split('@media (max-width: 40rem)').find((rules) => rules.includes('dialog-sheet-enter')) ?? '';
+    const createDialog = mobileRules.match(/\.dialog:has\(\.agenda-create-form\)\s*\{([^}]*)\}/)?.[1] ?? "";
+    const actions = mobileRules.match(/\.agenda-create-form__actions\s*\{([^}]*)\}/)?.[1] ?? "";
+
+    expect(createDialog).toMatch(/inset:\s*0/);
+    expect(createDialog).toMatch(/height:\s*100dvh/);
+    expect(createDialog).toMatch(/max-height:\s*100dvh/);
+    expect(createDialog).toMatch(/border-radius:\s*0/);
+    expect(actions).toMatch(/position:\s*sticky/);
+    expect(actions).toMatch(/bottom:\s*0/);
+  });
+
+  it("widens the desktop create dialog and lets schedule fields shrink", () => {
+    const createDialog = primitives.match(/@media \(min-width: 40\.0625rem\)\s*\{\s*\.dialog:has\(\.agenda-create-form\)\s*\{([^}]*)\}/)?.[1] ?? "";
+
+    expect(createDialog).toMatch(/width:\s*min\(44rem,\s*calc\(100vw\s*-\s*var\(--space-5\)\)\)/);
+    expect(primitives).toMatch(/\.agenda-create-form__row\s*>\s*\*\s*\{[^}]*min-width:\s*0/);
+    expect(primitives).toMatch(/\.agenda-create-form__row\s+\.field__control-wrap\s*\{[^}]*min-width:\s*0/);
+  });
+
+  it("keeps closed dialogs hidden on mobile despite the sheet layout", () => {
+    const mobileRules = primitives.split('@media (max-width: 40rem)').find((rules) => rules.includes('dialog-sheet-enter')) ?? '';
+    const closed = mobileRules.match(/\.dialog:not\(\[open\]\)\s*\{([^}]*)\}/)?.[1] ?? "";
+
+    expect(closed).toMatch(/display:\s*none/);
+  });
 });

@@ -87,7 +87,7 @@ def test_operator_cannot_book_with_an_invalid_timezone(client, make_user):
 
 def _agenda_rows(session):
     technician = User(username="tech", password_hash="unused")
-    customer = Customer(phone_e164="+56911111111", name="Ana Customer")
+    customer = Customer(phone_e164="+56911111111", name="Ana Customer", address="Calle Uno 123", comuna="Providencia")
     session.add_all([technician, customer])
     session.flush()
     conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
@@ -153,6 +153,8 @@ def test_appointments_range_joins_orders_and_keeps_lifecycle_and_sync_independen
     assert rows[0]["status"] == "cancelled"
     assert rows[0]["sync"] == {"status": "pending", "error": None, "retry": True}
     assert rows[1]["customer_name"] == "Ana Customer"
+    assert rows[1]["customer_address"] == "Calle Uno 123"
+    assert rows[1]["customer_comuna"] == "Providencia"
     assert rows[1]["technician_name"] == "tech"
     assert rows[1]["starts_at"] == "2026-07-15T14:00:00+00:00"
     assert rows[1]["local_start"] == "2026-07-15T10:00:00-04:00"
@@ -210,7 +212,7 @@ def test_appointments_range_uses_dst_aware_local_bounds(client, make_user):
 
 def _appointment_detail_rows(session, *, with_conversation=True, summary="Conversation summary"):
     technician = User(username="detail-tech", password_hash="unused")
-    customer = Customer(phone_e164="+56933333333", name="Detail Customer")
+    customer = Customer(phone_e164="+56933333333", name="Detail Customer", address="Pasaje Dos 45", comuna="Ñuñoa")
     session.add_all([technician, customer])
     session.flush()
     conversation = None
@@ -258,7 +260,7 @@ def test_appointment_detail_embeds_conversation_summary_and_related_records(clie
     payload = response.json()
     customer_id, customer_name, case_id, conversation_id = expected
     assert payload["conversation_summary"] == "Conversation summary"
-    assert payload["customer"] == {"id": customer_id, "name": customer_name}
+    assert payload["customer"] == {"id": customer_id, "name": customer_name, "address": "Pasaje Dos 45", "comuna": "Ñuñoa"}
     assert payload["case"] == {"id": case_id, "conversation_id": conversation_id}
     assert conversation_id is not None
     assert set(payload["appointment"]) == {

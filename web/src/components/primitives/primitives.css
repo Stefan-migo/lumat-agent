@@ -117,6 +117,28 @@
   display: grid;
   gap: var(--space-3);
 }
+.agenda-create-form__section { display: grid; gap: var(--space-3); }
+.agenda-create-form__section + .agenda-create-form__section {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--corp-border);
+}
+.agenda-create-form__section h3 { margin: 0; font-size: var(--text-lg); }
+.agenda-create-form__row { display: grid; gap: var(--space-3); min-width: 0; }
+.agenda-create-form__row--identity { grid-template-columns: minmax(0, 1fr); }
+.agenda-create-form__icon-field { position: relative; min-width: 0; }
+.agenda-create-form__leading-icon { position: absolute; z-index: 1; top: calc(var(--text-sm) + var(--space-1) + var(--space-4)); left: var(--space-2); width: var(--icon-md); height: var(--icon-md); color: var(--corp-fg-muted); pointer-events: none; }
+.agenda-create-form__icon-field select.field__control { padding-left: calc(var(--space-2) + var(--icon-md) + var(--space-2)); }
+.agenda-create-form__icon-field .combobox__input { padding-left: calc(var(--space-2) + var(--icon-md) + var(--space-2)); }
+.agenda-create-form__timezone { display: grid; gap: var(--space-1); }
+.agenda-create-form__timezone small { color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.agenda-create-form__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--corp-border); }
+@media (min-width: 40.0625rem) {
+  .dialog:has(.agenda-create-form) { width: min(44rem, calc(100vw - var(--space-5))); }
+  .agenda-create-form__row > * { min-width: 0; }
+  .agenda-create-form__row .field__control-wrap { min-width: 0; }
+  .agenda-create-form__row--visit { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agenda-create-form__row--schedule { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 .field__label {
   font-family: var(--font-ui);
   font-size: var(--text-sm);
@@ -961,6 +983,9 @@
   min-width: 0;
   padding-left: var(--space-4);
 }
+.page-header__title-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.page-header p.page-header__eyebrow { margin-bottom: var(--space-1); font-size: var(--text-xs); font-weight: var(--weight-semibold); letter-spacing: 0.06em; text-transform: uppercase; }
+.page-header__meta { display: inline-flex; }
 .page-header h1 {
   margin: 0;
   color: var(--corp-text);
@@ -1019,6 +1044,106 @@
 }
 .page-frame__titlebar .page-header__actions {
   flex-wrap: wrap;
+}
+
+/* Appointment detail uses a two-column information rail and an event timeline. */
+.appointment-detail-page .detail-region { grid-template-columns: minmax(0, 2fr) minmax(16rem, 1fr); grid-template-areas: "schedule people" "history people"; gap: var(--space-4); }
+.appointment-detail-page .detail-region__rail, .appointment-detail-page .detail-region__main { display: contents; }
+.appointment-detail__schedule { grid-area: schedule; }
+.appointment-detail__people { grid-area: people; }
+.appointment-detail__history { grid-area: history; }
+.appointment-detail-page .page-header { align-items: end; }
+.appointment-detail-page .page-header__copy { flex: 1 1 30rem; }
+.appointment-detail-page .page-header__actions { align-items: center; }
+.appointment-detail__schedule-main { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(9rem, auto); align-items: center; gap: var(--space-4); padding: var(--space-2) 0 var(--space-4); }
+.appointment-detail__date-block { display: grid; justify-items: center; gap: var(--space-1); min-width: 4.5rem; padding: var(--space-3); border-radius: var(--radius-md); background: var(--brand-bg-elevated); color: var(--text); }
+.appointment-detail__date-block strong { font-size: var(--text-2xl); line-height: 1; }
+.appointment-detail__date-block span { font-size: var(--text-xs); font-weight: var(--weight-semibold); }
+.appointment-detail__date-copy, .appointment-detail__time { display: grid; gap: var(--space-1); }
+.appointment-detail__date-copy strong { text-transform: capitalize; }
+.appointment-detail__date-copy span, .appointment-detail__time span, .appointment-detail__identity span { color: var(--text-muted); font-size: var(--text-sm); }
+.appointment-detail__time { grid-template-columns: auto 1fr; align-items: center; border-left: 1px solid var(--border); padding-left: var(--space-4); }
+.appointment-detail__time .icon { grid-row: span 2; }
+.appointment-detail__time strong { font-size: var(--text-xl); }
+.appointment-detail__time span { grid-column: 2; }
+.appointment-detail__sync { display: flex; align-items: center; gap: var(--space-2); border-top: 1px solid var(--border); padding-top: var(--space-3); color: var(--text-muted); font-size: var(--text-sm); }
+.appointment-detail__address { display: grid; grid-template-columns: minmax(5rem, .45fr) minmax(0, 1fr); gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); font-size: var(--text-sm); }
+.appointment-detail__address a, .agenda-page__visit-details a { overflow-wrap: anywhere; }
+/* Address → Google Maps uses the design-system inline link treatment (same accent
+   and no default underline as .appointment-detail__identity a): a plain browser
+   link reads as unstyled text and is not part of the set. */
+.address-link { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--primary-700); text-decoration: none; overflow-wrap: anywhere; }
+.address-link:hover { text-decoration: underline; }
+.address-link svg { flex: 0 0 auto; }
+.agenda-create-form__customer-address { margin: 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.appointment-detail__identity { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0 var(--space-4); }
+.appointment-detail__identity .avatar { width: calc(var(--space-8) * 2); height: calc(var(--space-8) * 2); font-size: var(--text-lg); }
+.appointment-detail__identity + .appointment-detail__identity { border-top: 1px solid var(--border); padding-top: var(--space-4); }
+.appointment-detail__identity > div { display: grid; gap: var(--space-1); min-width: 0; }
+.appointment-detail__identity h3 { margin: 0 0 var(--space-1); font-size: var(--text-md); }
+.appointment-detail__identity a { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--primary-700); text-decoration: none; font-size: var(--text-sm); }
+.appointment-detail__summary { margin-top: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--border); }
+.appointment-detail__summary h3 { margin: 0; padding-bottom: var(--space-3); font-size: var(--text-md); }
+.appointment-detail__summary-row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-top: 1px solid var(--border); }
+.appointment-detail__summary-row > span { color: var(--text-muted); }
+.appointment-detail__summary-row strong { text-align: right; }
+.appointment-detail__history ol { display: grid; gap: 0; padding: 0; margin: 0; list-style: none; }
+.appointment-detail__history li { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-3); padding: var(--space-4) 0; }
+.appointment-detail__history li:not(:last-child)::before { position: absolute; left: calc(var(--space-8) / 2); top: calc(var(--space-4) + var(--space-8)); bottom: calc(var(--space-4) * -1); width: 1px; content: ""; background: var(--border); }
+.appointment-detail__history li + li { border-top: 1px solid var(--border); }
+.appointment-detail__history-icon { display: grid; place-items: center; width: var(--space-8); height: var(--space-8); border-radius: 50%; background: var(--brand-bg-elevated); color: var(--primary-700); }
+.appointment-detail__history .card__header { padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); }
+.appointment-detail__history-copy { display: grid; align-content: start; justify-items: start; gap: var(--space-2); min-width: 0; }
+.appointment-detail__history-copy time, .appointment-detail__history-copy p { color: var(--text-muted); font-size: var(--text-sm); }
+.appointment-detail__history-copy p { margin: 0; }
+.appointment-detail__history-copy details { width: 100%; }
+.appointment-detail__history-copy summary { display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer; color: var(--text-muted); font-size: var(--text-sm); list-style: none; }
+.appointment-detail__history-copy summary::-webkit-details-marker { display: none; }
+.appointment-detail__history-copy details[open] summary .icon { transform: rotate(180deg); }
+.appointment-detail__history-details { display: grid; gap: var(--space-2); margin: 0; padding: var(--space-2) 0 0; }
+.appointment-detail__history-details > div { display: grid; grid-template-columns: minmax(6rem, auto) minmax(0, 1fr); gap: var(--space-3); overflow-wrap: anywhere; }
+.appointment-detail__history-details dt { color: var(--text-muted); font-size: var(--text-sm); }
+.appointment-detail__history-details dd { margin: 0; }
+.appointment-detail__current-schedule,
+.appointment-detail__selected-visit { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); background: var(--brand-bg-elevated); }
+.appointment-detail__current-schedule { grid-template-columns: minmax(0, 1fr); margin-bottom: var(--space-4); }
+.appointment-detail__current-schedule h3,
+.appointment-detail__new-schedule h3 { margin: 0; font-size: var(--text-md); }
+.appointment-detail__current-schedule span,
+.appointment-detail__new-schedule > p,
+.appointment-detail__selected-visit span { color: var(--text-muted); font-size: var(--text-sm); }
+.appointment-detail__new-schedule { display: grid; gap: var(--space-3); }
+.appointment-detail__reschedule-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.appointment-detail__reschedule-technician { position: relative; }
+.appointment-detail__reschedule-technician > .icon { position: absolute; z-index: 1; top: calc(var(--text-sm) + var(--space-1) + var(--space-4)); left: var(--space-2); color: var(--corp-fg-muted); pointer-events: none; }
+.appointment-detail__reschedule-technician .field__control { padding-left: calc(var(--space-2) + var(--icon-sm) + var(--space-2)); }
+.appointment-detail__new-schedule > p { margin: 0; }
+.appointment-detail__selected-visit > .icon { grid-row: span 3; }
+.appointment-detail__selected-visit > div { display: grid; gap: var(--space-1); }
+.appointment-detail__selected-visit time { color: var(--corp-text); }
+.appointment-detail__outcomes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: 0; padding: 0; border: 0; }
+.appointment-detail__outcomes legend { margin-bottom: var(--space-3); font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.appointment-detail__outcome { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; }
+.appointment-detail__outcome--selected { border-color: var(--primary-700); }
+.appointment-detail__outcome > span { display: grid; gap: var(--space-1); }
+.appointment-detail__outcome small { color: var(--text-muted); font: inherit; font-size: var(--text-sm); }
+.appointment-detail__closure-warning { margin: var(--space-4) 0 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--warning-bg); color: var(--warning); }
+.appointment-detail__dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border); }
+@media (max-width: 40rem) {
+  .appointment-detail__reschedule-fields,
+  .appointment-detail__outcomes { grid-template-columns: minmax(0, 1fr); }
+  .appointment-detail__dialog-footer { flex-direction: column-reverse; }
+}
+@media (max-width: 63.99rem) {
+  .appointment-detail-page .detail-region { grid-template-columns: minmax(0, 1fr); grid-template-areas: "schedule" "people" "history"; }
+}
+@media (max-width: 767px) {
+  .appointment-detail-page .page-header { align-items: flex-start; align-content: flex-start; row-gap: var(--space-3); }
+  .appointment-detail-page .page-header__copy { flex: 0 1 auto; width: 100%; min-width: 0; }
+  .appointment-detail-page .page-header__actions { flex: 0 0 auto; width: 100%; flex-wrap: wrap; }
+  .appointment-detail__schedule-main { grid-template-columns: auto minmax(0, 1fr); }
+  .appointment-detail__time { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--border); padding: var(--space-3) 0 0; }
+  .appointment-detail__time .icon { grid-row: span 2; }
 }
 
 /* Login screen: full-viewport centered auth card (DS-UI-LOGIN, direct UI pass).
@@ -2060,9 +2185,55 @@
 }
 .technician-shell .panel-shell__footer-nav { display: grid; }
 @media (max-width: 40rem) {
-  .technician-shell__header-inner {
-    align-items: flex-start;
+.technician-shell__header-inner {
+  align-items: flex-start;
+}
+}
+
+@media (max-width: 40rem) {
+  .dialog {
+    position: fixed;
+    inset: auto 0 0;
+    display: flex;
+    width: 100vw;
+    max-width: none;
+    max-height: 90vh;
+    max-height: 90dvh;
+    flex-direction: column;
+    margin: 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    animation: dialog-sheet-enter var(--duration-base) var(--ease-out);
   }
+  .dialog:has(.agenda-create-form) {
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+  .agenda-create-form__actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--surface);
+  }
+  .dialog__header { flex: 0 0 auto; }
+  .dialog__body {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* The sheet layout above sets `display: flex`, which would otherwise override
+     the UA `dialog:not([open]) { display: none }` and leave always-mounted
+     dialogs (e.g. the new-visit form) visible on load. Keep closed dialogs hidden. */
+  .dialog:not([open]) { display: none; }
+}
+@keyframes dialog-sheet-enter {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open] { animation: none; }
 }
 
 /* ---- Technician agenda (TECH-AGENDA-1) ---- */
@@ -2669,7 +2840,7 @@
   .dashboard__card, .dashboard__row, .dashboard__card__hint svg { transition:none; }
 }
 
-/* Agenda page: page-specific table layout remains inside the shared stylesheet boundary. */
+/* Agenda page: responsive day-detail card register. */
 .agenda-page__section {
   display: grid;
   gap: var(--space-3);
@@ -2679,14 +2850,30 @@
   border-radius: var(--radius-lg);
   background: var(--brand-bg-elevated);
 }
-.agenda-page__section .data-region {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.agenda-page__table-wrap { min-width: 0; overflow-x: auto; }
+.agenda-page__section h2 { margin: 0; font-size: var(--text-lg); }
+.agenda-page__section-heading { display: flex; align-items: center; gap: var(--space-3); }
+.agenda-page__cards { display: grid; gap: var(--space-4); min-width: 0; }
+.agenda-page__visit-card { gap: var(--space-3); min-width: 0; padding: var(--space-4); background: var(--surface); }
+.agenda-page__visit-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); }
+.agenda-page__visit-heading > time { display: inline-flex; align-self: center; align-items: center; gap: var(--space-2); color: var(--corp-text); font-size: var(--text-xl); font-weight: var(--weight-semibold); font-variant-numeric: var(--corp-value); }
+.agenda-page__visit-title { display: grid; justify-items: start; gap: var(--space-2); min-width: 0; }
+.agenda-page__visit-title a { color: var(--corp-text); font-size: var(--text-lg); font-weight: var(--weight-semibold); overflow-wrap: anywhere; text-decoration: none; }
+.agenda-page__visit-title a:hover { text-decoration: underline; }
+.agenda-page__visit-details { display: grid; gap: var(--space-2); margin: 0; padding-block: var(--space-3); border-block: 1px solid var(--corp-border); }
+.agenda-page__visit-details > div { display: grid; grid-template-columns: minmax(5rem, .45fr) minmax(0, 1fr); gap: var(--space-3); }
+.agenda-page__visit-details dt { color: var(--corp-fg-muted); }
+.agenda-page__visit-details dd { margin: 0; overflow-wrap: anywhere; }
+.agenda-page__sync { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.agenda-page__sync small { flex-basis: 100%; color: var(--corp-fg-muted); overflow-wrap: anywhere; }
 .agenda-page__layout { display: grid; gap: var(--space-5); min-width: 0; }
+@media (max-width: 40rem) {
+  .agenda-page__section { padding: var(--space-4); }
+  .agenda-page__visit-heading { grid-template-columns: minmax(0, 1fr) auto; }
+  .agenda-page__visit-heading > time { grid-column: 1; grid-row: 1; }
+  .agenda-page__visit-title { grid-column: 1; grid-row: 2; }
+  .agenda-page__visit-heading > .menu__trigger { grid-column: 2; grid-row: 1; }
+  .agenda-page__visit-details > div { grid-template-columns: minmax(4.5rem, .5fr) minmax(0, 1fr); }
+}
 @media (min-width: 64rem) {
   .agenda-page__layout { grid-template-columns: minmax(320px, 1fr) minmax(0, 1.35fr); align-items: start; }
 }
@@ -2703,7 +2890,8 @@
 }
 .agenda-calendar__toolbar,
 .agenda-calendar__actions,
-.agenda-calendar__view-toggle {
+.agenda-calendar__view-toggle,
+.agenda-calendar__stepper {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -2711,8 +2899,12 @@
 }
 .agenda-calendar__toolbar { justify-content: space-between; }
 .agenda-calendar__toolbar h2 { margin: 0; font-size: var(--text-lg); }
-.agenda-calendar__view-toggle { margin-left: var(--space-2); }
-.agenda-calendar__view-toggle [aria-pressed="true"] { border-color: var(--primary-700); background: var(--primary-100); color: var(--primary-800); }
+.agenda-calendar__view-toggle { border: 1px solid var(--corp-border); border-radius: var(--radius-sm); gap: 0; }
+.agenda-calendar__view-toggle .btn { border: 0; }
+.agenda-calendar__view-toggle [aria-pressed="true"] { background: var(--primary-800); color: var(--text-on-dark); }
+.agenda-calendar__footer { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--corp-border); color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.agenda-calendar__legend { display: inline-flex; align-items: center; gap: var(--space-2); }
+.agenda-calendar__legend-dot { width: var(--space-2); height: var(--space-2); border-radius: 50%; background: var(--brand-lime); }
 .agenda-calendar__table {
   width: 100%;
   border-collapse: separate;
@@ -2760,7 +2952,29 @@
 @media (max-width: 40rem) {
   .agenda-calendar { padding: var(--space-3); overflow-x: auto; }
   .agenda-calendar__toolbar { align-items: flex-start; flex-direction: column; }
-  .agenda-calendar__actions { width: 100%; }
-  .agenda-calendar__actions > .btn { flex: 1 1 auto; }
-  .agenda-calendar__view-toggle { margin-left: 0; }
+  .agenda-calendar__actions { width: 100%; justify-content: space-between; }
+  .agenda-calendar__stepper > .btn { min-width: 2.5rem; }
+  .agenda-calendar__table { min-width: 0; border-spacing: var(--space-1); }
+  .agenda-calendar__weekday { padding: var(--space-1); }
+  .agenda-calendar__cell,
+  .agenda-calendar__empty { height: calc(var(--space-8) * 2.5); }
+  .agenda-calendar__day--compact {
+    width: min(100%, calc(var(--space-8) * 2.5));
+    height: auto;
+    aspect-ratio: 1;
+    justify-self: center;
+    align-content: center;
+    justify-items: center;
+    gap: 0;
+    padding: var(--space-1);
+    border-radius: 50%;
+    text-align: center;
+  }
+  .agenda-calendar__day--compact .agenda-calendar__count,
+  .agenda-calendar__day--compact .agenda-calendar__today,
+  .agenda-calendar__day--compact .agenda-calendar__selected { display: none; }
+  .agenda-calendar__footer { align-items: flex-start; flex-direction: column; }
+  .agenda-create-form__row { grid-template-columns: minmax(0, 1fr); }
+  .agenda-create-form__row--schedule { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agenda-create-form__row--schedule > :first-child { grid-column: 1 / -1; }
 }
