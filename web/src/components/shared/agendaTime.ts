@@ -153,6 +153,14 @@ export function agendaPeriodLabel(dayKey: string, timeZone: string) {
   return label.charAt(0).toLocaleUpperCase('es-CL') + label.slice(1);
 }
 
+/** Returns a compact, capitalized local date for an appointment card. */
+export function agendaDayLabel(dayKey: string, timeZone: string) {
+  const label = calendarFormat(timeZone, { weekday: 'short', day: 'numeric', month: 'short' })
+    .format(localNoonForDay(dayKey, timeZone))
+    .replace(/[,.]/g, '');
+  return label.charAt(0).toLocaleUpperCase('es-CL') + label.slice(1);
+}
+
 /** Moves an agenda anchor by month or Monday-first week. */
 export function agendaShiftPeriod(
   anchorDay: string,

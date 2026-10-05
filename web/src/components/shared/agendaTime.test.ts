@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agendaDayKey,
   agendaDayNumber,
+  agendaDayLabel,
   agendaMonthDays,
   agendaMonthLabel,
   agendaPeriodLabel,
@@ -38,6 +39,10 @@ describe('agenda time contract', () => {
     expect(agendaPeriodLabel('2026-09-24', 'America/Santiago')).toBe('Jueves 24 de septiembre');
     expect(agendaPeriodLabel('2026-10-04', 'America/Santiago')).toBe('Domingo 4 de octubre');
     expect(agendaDayNumber('2026-09-04')).toBe('4');
+  });
+
+  it('formats a compact capitalized date for each agenda visit', () => {
+    expect(agendaDayLabel('2026-10-06', 'America/Santiago')).toBe('Mar 6 oct');
   });
 
   it.each([

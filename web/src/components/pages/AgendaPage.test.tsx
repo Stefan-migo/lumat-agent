@@ -80,11 +80,13 @@ describe('AgendaPage', () => {
     const { container } = render(<AgendaPage data={[appointment(), appointment({ id: 2, service: 'Instalación', local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
     const dayHeading = screen.getByRole('heading', { name: /Sábado 5 de septiembre Hoy/i, level: 2 });
     expect(dayHeading.querySelector('.badge')).toHaveTextContent('Hoy');
+    expect(screen.getByRole('heading', { name: 'Próximas visitas', level: 2 })).toBeInTheDocument();
     expect(dayHeading).toHaveClass('agenda-page__section-heading');
     expect(document.querySelectorAll('.agenda-page__visit-card')).toHaveLength(2);
     expect(screen.queryByRole('table', { name: /Registro/i })).not.toBeInTheDocument();
     expect(screen.getAllByText('Camila Soto')).toHaveLength(2);
     expect(screen.getByText('Instalación')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Próximas visitas', level: 2 }).parentElement).toHaveTextContent('Dom 6 sept');
     expect(screen.getByText('Mantención')).toBeInTheDocument();
     expect(container.querySelector('.agenda-page__visit-heading time svg')).toHaveClass('icon');
   });
@@ -125,8 +127,8 @@ describe('AgendaPage', () => {
   });
 
   it('renders appointment slots in 24-hour time', () => {
-    render(<AgendaPage data={[appointment({ starts_at: '2026-09-05T18:00:00+00:00' })]} state="ready" />);
-    expect(screen.getByText('14:00')).toBeInTheDocument();
+    const { container } = render(<AgendaPage data={[appointment({ starts_at: '2026-09-05T18:00:00+00:00' })]} state="ready" />);
+    expect(container.querySelector('.agenda-page__visit-heading time')).toHaveTextContent('Sáb 5 sept · 14:00');
     expect(screen.queryByText(/a\. m\.|p\. m\./i)).not.toBeInTheDocument();
   });
 

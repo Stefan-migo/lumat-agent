@@ -19,7 +19,7 @@ import { AppointmentClosureDialog, type AppointmentClosureOutcome } from "../sha
 import { AppointmentRescheduleDialog, type AppointmentRescheduleForm } from "../shared/AppointmentRescheduleDialog";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
-import { AgendaTimeError, agendaMonthDays, agendaPeriodLabel, agendaShiftPeriod, agendaTodayKey, agendaWeekDays, composeAgendaTime, formatAgendaSlot } from "../shared/agendaTime";
+import { AgendaTimeError, agendaDayLabel, agendaMonthDays, agendaPeriodLabel, agendaShiftPeriod, agendaTodayKey, agendaWeekDays, composeAgendaTime, formatAgendaSlot } from "../shared/agendaTime";
 import { AgendaCalendar, type AgendaCalendarView } from "../shared/AgendaCalendar";
 import { appointmentStatusLabel, appointmentStatusTone, appointmentSyncLabel, appointmentSyncTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
@@ -242,7 +242,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
     <section className="agenda-page__section" aria-labelledby={`agenda-${title.toLowerCase()}`}>
       <h2 id={`agenda-${title.toLowerCase()}`} className="agenda-page__section-heading"><span>{title}</span>{isToday ? <Badge tone="success">Hoy</Badge> : null}</h2>
        <div className="agenda-page__cards">{rows.map((row) => <Card key={row.id} className="agenda-page__visit-card">
-         <div className="agenda-page__visit-heading"><time dateTime={row.local_start}><Icon icon={Clock3} size="sm" /><span>{formatAgendaSlot(row.starts_at, row.timezone)}</span></time><div className="agenda-page__visit-title"><a href={pathForRoute({ view: "agenda", appointmentId: row.id })}>{row.service}</a><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge></div>
+          <div className="agenda-page__visit-heading"><time dateTime={row.local_start}><Icon icon={Clock3} size="sm" /><span>{agendaDayLabel(localDate(row.local_start), row.timezone)} · {formatAgendaSlot(row.starts_at, row.timezone)}</span></time><div className="agenda-page__visit-title"><a href={pathForRoute({ view: "agenda", appointmentId: row.id })}>{row.service}</a><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge></div>
            <Menu label={`Acciones para ${row.service}`} trigger="icon" disabled={mutatingId !== null} items={[
              ...(row.status === "booked" ? [{ value: "reschedule", label: "Reprogramar", icon: CalendarDays }, { value: "cancel", label: "Cancelar visita", icon: X, tone: "danger" as const }, { value: "close", label: "Cerrar visita", icon: Check }] : []),
              ...(row.sync.status === "pending" || row.sync.status === "failed" ? [{ value: "retry", label: "Reintentar calendario", icon: RefreshCw }] : []),
@@ -266,10 +266,10 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   };
   const register = registerView === "non-active"
     ? section("Visitas no activas", nonActiveRows)
-    : selectedRows
-      ? section(agendaPeriodLabel(selectedDay ?? "", timezone), selectedRows)
-      : containsToday
-        ? section(agendaPeriodLabel(today, timezone), [...todayRows, ...upcomingRows], true)
+      : selectedRows
+        ? section(agendaPeriodLabel(selectedDay ?? "", timezone), selectedRows)
+        : containsToday
+        ? <>{section(agendaPeriodLabel(today, timezone), todayRows, true)}{section("Próximas visitas", upcomingRows, false)}</>
         : section("Visitas del período", periodRows);
   const renderedRows = registerView === "non-active" ? nonActiveRows : selectedRows ?? (containsToday ? [...todayRows, ...upcomingRows] : periodRows);
   const showEmpty = data?.length === 0 || state === "empty" || renderedRows.length === 0;
