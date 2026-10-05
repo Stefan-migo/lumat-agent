@@ -2,7 +2,7 @@
 
 Lifecycle: `captured → owner-review → owner-done → code-analysis → validated → implementing → done`
 
-Status: `validated` (2026-10-02)
+Status: `implementing` (2026-10-05)
 
 ## Sources
 
