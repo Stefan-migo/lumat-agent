@@ -113,7 +113,21 @@ restore) carries a test; pure layout/CSS findings assert structure.
   sheet over the list (019), composing the existing `Dialog` + mobile-sheet CSS.
 - Update `KbList.test.tsx`, `KbList.stories.tsx`.
 
-### WU3 — detail: header + tabs + information cards (findings 020-027)
+### WU3a — landing: retrieval placement + results redesign (owner additions A1/A2)
+Owner feedback delivered 2026-10-05 (during implementation); the reference layout governs and
+this supersedes the WU2 secondary placement (where retrieval sat in the narrow right column).
+- A1: move the "Probar recuperación" card into the **left column, directly below "Documentos"**.
+  The right column holds only "Agregar documento". Reference: left = Documentos + Probar
+  recuperación; right = Agregar documento.
+- A2: redesign the search-results surface to be **content-first and never overflow**. The chunk
+  `Contenido` becomes the prominent element (readable full-width block); document / version /
+  fragment / similarity render as compact meta above it instead of dense table columns. Remove
+  the 5-column `DataTable` and the forced-width cause of the horizontal break
+  (`.kb-search__result-content { max-width: 32rem }` inside a squeezed table). No horizontal
+  scroll at any breakpoint; keep the "N resultados ordenados por similitud." summary.
+- Update `KbList.tsx`, `primitives.css`, `KbList.test.tsx`, `KbList.stories.test.tsx`.
+
+### WU3b — detail: header + tabs + information cards (findings 020-027)
 - Header: metadata line `#<id> · <format> · Creado el <date>` instead of the generic subtitle
   (020); `Activo` status badge beside the title (021); file icon tile (022); replace "Volver a
   documentos" with an "Editar contenido" action (023).
@@ -134,13 +148,15 @@ restore) carries a test; pure layout/CSS findings assert structure.
 ## Delivery
 - Forecast: ~650–950 authored changed lines across 2 pages + CSS + tests → over the 400-line
   review budget.
-- Planned slices: PR1 = WU1, PR2 = WU2, PR3 = WU3, PR4 = WU4 (or PR1 = WU1+WU2 landing,
-  PR2 = WU3+WU4 detail).
+- Planned slices: PR1 = WU1+WU2 (landing foundation, reviewed), PR2 = WU3a (retrieval
+  placement + results redesign), PR3 = WU3b (detail), PR4 = WU4 (detail follow-up).
 - Chain strategy: pending owner decision (default `ask-on-risk`); decide before the first PR.
 - Local work-unit commits are allowed on the branch without a chain decision.
 
 ## Acceptance criteria
 - [ ] Findings `conocimiento-001..030` implemented.
+- [ ] Owner additions A1/A2: "Probar recuperación" sits in the left column below "Documentos"
+      per the reference; the results surface is content-first and never overflows.
 - [ ] `npm run test`, `npx tsc -b --noEmit`, `npm run build` all green.
 - [ ] Mobile landing uses a card list with no horizontal overflow; the add form opens as a
       bottom sheet.
@@ -154,7 +170,8 @@ restore) carries a test; pure layout/CSS findings assert structure.
 ## Progress
 - [x] WU1 — landing: header + "Documentos" card (findings 001-010)
 - [x] WU2 — landing: retrieval + upload cards + mobile (findings 011-019)
-- [ ] WU3 — detail: header + tabs + information cards (findings 020-027)
+- [ ] WU3a — landing: retrieval placement + results redesign (owner additions A1/A2)
+- [ ] WU3b — detail: header + tabs + information cards (findings 020-027)
 - [ ] WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
 
 ## Verification evidence
