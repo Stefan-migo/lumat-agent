@@ -72,8 +72,9 @@ describe('AgendaPage', () => {
 
   it('renders chronological visits as stacked detail cards', () => {
     const { container } = render(<AgendaPage data={[appointment(), appointment({ id: 2, service: 'Instalación', local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
-    const dayHeading = screen.getByRole('heading', { name: /sábado 5 de septiembre Hoy/i, level: 2 });
+    const dayHeading = screen.getByRole('heading', { name: /Sábado 5 de septiembre Hoy/i, level: 2 });
     expect(dayHeading.querySelector('.badge')).toHaveTextContent('Hoy');
+    expect(dayHeading).toHaveClass('agenda-page__section-heading');
     expect(document.querySelectorAll('.agenda-page__visit-card')).toHaveLength(2);
     expect(screen.queryByRole('table', { name: /Registro/i })).not.toBeInTheDocument();
     expect(screen.getAllByText('Camila Soto')).toHaveLength(2);
@@ -171,6 +172,14 @@ describe('AgendaPage', () => {
     expect(register).toMatch(/background:\s*var\(--brand-bg-elevated\)/);
     expect(register).not.toMatch(/box-shadow:/);
     expect(stylesheet).toMatch(/\.agenda-page__visit-card\s*\{[^}]*background:\s*var\(--surface\)/s);
+  });
+
+  it('spaces the selected-day heading and today badge with a tokenized gap', () => {
+    const stylesheet = readFileSync(join(__dirname, '../primitives/primitives.css'), 'utf8');
+    const heading = stylesheet.match(/\.agenda-page__section-heading\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(heading).toMatch(/display:\s*flex/);
+    expect(heading).toMatch(/gap:\s*var\(--space-3\)/);
   });
 
   it('shows a labelled empty state and keeps the table wrapper mobile-safe', () => {
@@ -384,13 +393,13 @@ describe('AgendaPage', () => {
     const tomorrow = appointment({ id: 2, service: 'Instalación', local_start: '2026-09-06T09:00:00-04:00' });
     render(<AgendaPage data={[appointment(), tomorrow]} state="ready" timezone="America/Santiago" />);
 
-    await user.click(screen.getByRole('button', { name: /^sábado 5 de septiembre,/ }));
-    const selectedHeading = screen.getByRole('heading', { name: 'sábado 5 de septiembre Hoy', level: 2 });
+    await user.click(screen.getByRole('button', { name: /^Sábado 5 de septiembre,/ }));
+    const selectedHeading = screen.getByRole('heading', { name: 'Sábado 5 de septiembre Hoy', level: 2 });
     expect(selectedHeading.querySelector('.badge')).toHaveTextContent('Hoy');
     expect(screen.getByText('Mantención')).toBeInTheDocument();
     expect(screen.queryByText('Instalación')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^sábado 5 de septiembre,/ }));
-    const restoredHeading = screen.getByRole('heading', { name: /sábado 5 de septiembre Hoy/i, level: 2 });
+    await user.click(screen.getByRole('button', { name: /^Sábado 5 de septiembre,/ }));
+    const restoredHeading = screen.getByRole('heading', { name: /Sábado 5 de septiembre Hoy/i, level: 2 });
     expect(restoredHeading.querySelector('.badge')).toHaveTextContent('Hoy');
   });
 
@@ -398,7 +407,7 @@ describe('AgendaPage', () => {
     const user = userEvent.setup();
     render(<AgendaPage data={[appointment()]} state="ready" timezone="America/Santiago" />);
 
-    await user.click(screen.getByRole('button', { name: /^domingo 6 de septiembre,/ }));
+    await user.click(screen.getByRole('button', { name: /^Domingo 6 de septiembre,/ }));
 
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
     expect(screen.getByRole('table', { name: 'Calendario de Septiembre de 2026' })).toBeInTheDocument();

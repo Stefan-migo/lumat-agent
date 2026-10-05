@@ -62,7 +62,7 @@ describe("AgendaCalendar", () => {
     expect(screen.getAllByRole("button", { name: /0 visitas/ })).toHaveLength(30);
     expect(container.querySelectorAll(".agenda-calendar__count")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /agosto/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /^martes 1 de septiembre,/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Martes 1 de septiembre,/ }));
     expect(onSelectDay).toHaveBeenCalledWith("2026-09-01");
   });
 
@@ -129,7 +129,7 @@ describe("AgendaCalendar", () => {
     const user = userEvent.setup();
     const onSelectDay = vi.fn();
     render(<AgendaCalendar {...baseProps} view="month" selectedDay={null} onSelectDay={onSelectDay} />);
-    const day = screen.getByRole("button", { name: /^viernes 4 de septiembre,/ });
+    const day = screen.getByRole("button", { name: /^Viernes 4 de septiembre,/ });
 
     day.focus();
     await user.keyboard("{Enter}");

@@ -2782,6 +2782,7 @@
   background: var(--brand-bg-elevated);
 }
 .agenda-page__section h2 { margin: 0; font-size: var(--text-lg); }
+.agenda-page__section-heading { display: flex; align-items: center; gap: var(--space-3); }
 .agenda-page__cards { display: grid; gap: var(--space-4); min-width: 0; }
 .agenda-page__visit-card { gap: var(--space-3); min-width: 0; padding: var(--space-4); background: var(--surface); }
 .agenda-page__visit-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); }

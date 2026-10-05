@@ -35,7 +35,8 @@ describe('agenda time contract', () => {
 
   it('formats month and period labels in Chilean Spanish', () => {
     expect(agendaMonthLabel('2026-09-24', 'America/Santiago')).toBe('Septiembre de 2026');
-    expect(agendaPeriodLabel('2026-09-24', 'America/Santiago')).toBe('jueves 24 de septiembre');
+    expect(agendaPeriodLabel('2026-09-24', 'America/Santiago')).toBe('Jueves 24 de septiembre');
+    expect(agendaPeriodLabel('2026-10-04', 'America/Santiago')).toBe('Domingo 4 de octubre');
     expect(agendaDayNumber('2026-09-04')).toBe('4');
   });
 

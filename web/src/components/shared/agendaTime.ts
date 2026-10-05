@@ -147,9 +147,10 @@ export function agendaDayNumber(dayKey: string) {
 
 /** Returns a long localized date heading for a register section. */
 export function agendaPeriodLabel(dayKey: string, timeZone: string) {
-  return calendarFormat(timeZone, { weekday: 'long', day: 'numeric', month: 'long' })
+  const label = calendarFormat(timeZone, { weekday: 'long', day: 'numeric', month: 'long' })
     .format(localNoonForDay(dayKey, timeZone))
     .replace(', ', ' ');
+  return label.charAt(0).toLocaleUpperCase('es-CL') + label.slice(1);
 }
 
 /** Moves an agenda anchor by month or Monday-first week. */
