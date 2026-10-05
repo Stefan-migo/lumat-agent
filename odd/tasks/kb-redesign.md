@@ -139,11 +139,27 @@ this supersedes the WU2 secondary placement (where retrieval sat in the narrow r
   "Ver versiones →") (027).
 - Update `KbDocumentDetail.test.tsx`, `KbDocumentDetail.stories.tsx`.
 
-### WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
-- Extract "Audiencia" into a dedicated card (028) and "Disponibilidad" into a dedicated card
-  (029), out of "Operaciones".
-- Tablet: two-column card composition matching the reference (030).
-- Update `KbDocumentDetail.test.tsx`, `KbDocumentDetail.stories.tsx`.
+### WU4 — detail: two-column reference layout + Audiencia/Disponibilidad cards (findings 028-030)
+- 028 Audiencia card (right column): lock icon + title "Audiencia", subtitle "Define quién puede
+  utilizar este documento.", label "Audiencia del documento", the audience `Select`, the info note
+  ("Los documentos internos no se usan para responder a clientes.") and the "Guardar audiencia"
+  button (disabled when unchanged — existing behavior).
+- 029 Disponibilidad card (right column): title "Disponibilidad" with the status badge (`Activo`),
+  subtitle "El documento está habilitado." and the full-width "Deshabilitar" button (pause icon).
+- Audiencia (028) and Disponibilidad (029) move out of the old "Operaciones" card; the remaining
+  mutation feedback and confirmation dialogs stay reachable (feedback at the page level).
+- 030 two-column body: LEFT = "Información del documento" (facts: Título / Formato with a PDF icon
+  chip / Creado / Cantidad de versiones), then the "Versión activa" row (layers icon, `v{n}`,
+  `En uso` chip, "Ver versiones →"), then "Detalles técnicos" (collapsible, `</>` icon) with
+  Proveedor | Costo on one row and Modelo full-width, rendered as disabled inputs per the
+  reference. RIGHT = Audiencia + Disponibilidad. Tablet keeps the two-column composition; mobile
+  stacks to a single column.
+- Reference correction to WU3b: move "Versión activa" INSIDE the "Información del documento" card
+  as a divider row (the reference does not show it as a separate card).
+- Restore (`restoreKbDocument`) moves into the Versiones tab (or remains reachable there); keep the
+  behavior, confirmation and payload intact. `editKbDocument` stays on the Contenido tab.
+- Update `KbDocumentDetail.tsx`, `primitives.css`, `KbDocumentDetail.test.tsx`,
+  `KbDocumentDetail.stories.test.tsx`.
 
 ## Delivery
 - Forecast: ~650–950 authored changed lines across 2 pages + CSS + tests → over the 400-line
