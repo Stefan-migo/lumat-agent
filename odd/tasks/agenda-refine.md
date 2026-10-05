@@ -87,6 +87,32 @@ AppointmentDetail` found no direct edge (both reach through `api.ts` / `PageFram
 | T5 | Detail history: title separator; format the "Ver detalles" content. | agenda-032, agenda-033 | delegated writer |
 | T6 | Reschedule and closure dialogs to the reference. | agenda-026, agenda-027 | delegated writer |
 
+## Iteration 4 (owner, 2026-10-05)
+
+Owner's third visual pass on the built section queued 4 fixes (`agenda-045..048`). Authorized scope
+extension: the create dialog's shared primitive styles, the register grouping, and one small backend
+change — `app/panel/api/serializers.py` must expose the customer address the detail route already
+loads. No token-palette or route changes.
+
+Owner decisions carried into this batch:
+
+- **D6 — Mobile new-visit dialog is fullscreen.** The capped bottom sheet hides the form actions and
+  cannot be dismissed on a phone; the owner authorized making the create dialog fullscreen on mobile.
+- **D7 — The desktop create dialog may grow.** Overlapping Fecha/Hora/Duración is the priority bug;
+  widening the dialog on desktop is explicitly acceptable.
+- **D8 — Honest register headings.** Today and upcoming visits must not share a heading that claims
+  "Hoy"; each card also shows its date.
+- **D9 — Address is client-owned.** The address lives on the customer (`ClientFicha`), is surfaced in
+  the visit detail (Programación, with a Google Maps link) and in the new-visit dialog when a client
+  is selected. Backend exposes it read-only; no new storage.
+
+| ID | Work unit | Findings | Route |
+|----|-----------|----------|-------|
+| WU19 | Mobile: render the new-visit dialog fullscreen and keep its actions reachable. | agenda-045 | delegated writer |
+| WU20 | Desktop: widen the create dialog and harden the Fecha/Hora/Duración row. | agenda-046 | delegated writer |
+| WU21 | Register: split "Hoy" from "Próximas visitas" with honest headings; show the visit date on each card. | agenda-047 | delegated writer |
+| WU22 | Address end to end: expose it in the detail payload, render it in Programación with a Maps link, and show the selected client's address in the new-visit dialog. | agenda-048 | delegated writer |
+
 ## Delivery
 
 Forecast ≈ 450–650 authored lines (tests included) → above the ~400 advisory; plan **chained PRs**
