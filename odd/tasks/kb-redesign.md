@@ -294,6 +294,14 @@ Owner ruled the reference may be overridden here.
 - Native review lineage `review-04d267427e08e26a`, lens `review-reliability`, tier `medium`, correction budget 200.
 - Outcome: **approved**, no findings; authority `burned` (`gentle-ai.review-acknowledged/v1`). Reviewed boundary advances to the WU2 head; WU3/WU4 start from that base.
 
+### Review record — WU3a..WU5 slice (2026-10-05)
+- RDD assess (base `5f96f193`, committed-only): risk `medium`, 12 paths / 562 changed lines, `review_due: true` (`slice_budget_reached`).
+- Consent: owner granted ("Review this change").
+- Native review lineage `review-380e022998683d90`, lens `review-reliability`, tier `medium`, correction budget 200.
+- Outcome: **approved**, no findings; authority `burned` (`gentle-ai.review-acknowledged/v1`). Reviewed boundary = `1334ddff`.
+
 ## Follow-ups (not blocking)
 - None identified yet. The KB API already returns every field the references need, so no
   backend follow-up is expected (unlike the agenda technician-name gap).
+- Minor test gaps noted by independent verification: KB detail file icon (022), edit payload/refreshed
+  version, and the "Ver versiones" affordance are not directly asserted.
