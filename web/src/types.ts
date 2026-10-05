@@ -500,7 +500,7 @@ export interface AppointmentHistoryEntry {
 
 export interface AppointmentDetail {
   appointment: Appointment & { history: AppointmentHistoryEntry[] };
-  customer: { id: number; name: string | null };
+  customer: { id: number; name: string | null; address: string | null; comuna: string | null };
   case: { id: number; conversation_id: number | null };
   conversation_summary: string | null;
 }
@@ -512,6 +512,8 @@ export interface AgendaAppointment {
   service: string;
   customer_id: number;
   customer_name: string | null;
+  customer_address?: string | null;
+  customer_comuna?: string | null;
   case_id: number | null;
   case_name: string | null;
   technician_id: number | null;

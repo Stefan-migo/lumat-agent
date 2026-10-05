@@ -1,7 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { AgendaCalendar } from "./AgendaCalendar";
+
+const calendarStyles = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
 
 const baseProps = {
   view: "month" as const,
@@ -51,14 +55,31 @@ describe("AgendaCalendar", () => {
     expect(screen.getByRole("button", { name: /4 de septiembre.*4 visitas/ })).toBeInTheDocument();
   });
 
-  it("keeps empty month cells non-interactive and selectable zero-count days", () => {
+  it("hides zero-count legends while keeping zero-count days accessible and selectable", () => {
     const onSelectDay = vi.fn();
-    render(<AgendaCalendar {...baseProps} view="month" selectedDay={null} visitCounts={{}} onSelectDay={onSelectDay} />);
+    const { container } = render(<AgendaCalendar {...baseProps} view="month" selectedDay={null} visitCounts={{}} onSelectDay={onSelectDay} />);
 
     expect(screen.getAllByRole("button", { name: /0 visitas/ })).toHaveLength(30);
+    expect(container.querySelectorAll(".agenda-calendar__count")).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /agosto/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /^martes 1 de septiembre,/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Martes 1 de septiembre,/ }));
     expect(onSelectDay).toHaveBeenCalledWith("2026-09-01");
+  });
+
+  it("shows textual visit counts only for days with visits", () => {
+    const { container } = render(<AgendaCalendar {...baseProps} view="month" />);
+
+    expect(container.querySelectorAll(".agenda-calendar__count")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /4 de septiembre.*4 visitas/ }).querySelector(".agenda-calendar__count")).toHaveTextContent("4 visitas");
+    expect(screen.getByRole("button", { name: /24 de septiembre.*2 visitas/ }).querySelector(".agenda-calendar__count")).toHaveTextContent("2 visitas");
+  });
+
+  it("marks mobile day buttons as compact round calendar cells", () => {
+    const { container } = render(<AgendaCalendar {...baseProps} view="month" />);
+
+    expect(container.querySelector(".agenda-calendar__day")).toHaveClass("agenda-calendar__day--compact");
+    expect(calendarStyles).toMatch(/\.agenda-calendar__day--compact\s*\{[^}]*border-radius:\s*50%/s);
+    expect(calendarStyles).toMatch(/@media\s*\(max-width:\s*40rem\)[\s\S]*?\.agenda-calendar__day--compact/);
   });
 
   it("toggles the selected day and exposes selection and today without colour", () => {
@@ -108,7 +129,7 @@ describe("AgendaCalendar", () => {
     const user = userEvent.setup();
     const onSelectDay = vi.fn();
     render(<AgendaCalendar {...baseProps} view="month" selectedDay={null} onSelectDay={onSelectDay} />);
-    const day = screen.getByRole("button", { name: /^viernes 4 de septiembre,/ });
+    const day = screen.getByRole("button", { name: /^Viernes 4 de septiembre,/ });
 
     day.focus();
     await user.keyboard("{Enter}");

@@ -26,6 +26,8 @@ const appointment = (overrides: Partial<AgendaAppointment> = {}): AgendaAppointm
   service: 'Mantención',
   customer_id: 10,
   customer_name: 'Camila Soto',
+  customer_address: null,
+  customer_comuna: null,
   case_id: 20,
   case_name: 'Caso #20',
   technician_id: 30,
@@ -44,6 +46,12 @@ afterEach(() => vi.useRealTimers());
 
 async function openVisitActions(user: ReturnType<typeof userEvent.setup>, service = 'Mantención') {
   await user.click(screen.getAllByRole('button', { name: `Acciones para ${service}` })[0]);
+}
+
+async function selectCustomer(user: ReturnType<typeof userEvent.setup>, query = 'Camila') {
+  const input = screen.getByRole('combobox', { name: 'Cliente' });
+  await user.type(input, query);
+  await user.click(await screen.findByRole('option', { name: /Camila Soto/ }));
 }
 
 describe('AgendaPage', () => {
@@ -71,14 +79,18 @@ describe('AgendaPage', () => {
   });
 
   it('renders chronological visits as stacked detail cards', () => {
-    render(<AgendaPage data={[appointment(), appointment({ id: 2, service: 'Instalación', local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
-    const dayHeading = screen.getByRole('heading', { name: /sábado 5 de septiembre Hoy/i, level: 2 });
+    const { container } = render(<AgendaPage data={[appointment(), appointment({ id: 2, service: 'Instalación', local_start: '2026-09-06T09:00:00-04:00' })]} state="ready" />);
+    const dayHeading = screen.getByRole('heading', { name: /Sábado 5 de septiembre Hoy/i, level: 2 });
     expect(dayHeading.querySelector('.badge')).toHaveTextContent('Hoy');
+    expect(screen.getByRole('heading', { name: 'Próximas visitas', level: 2 })).toBeInTheDocument();
+    expect(dayHeading).toHaveClass('agenda-page__section-heading');
     expect(document.querySelectorAll('.agenda-page__visit-card')).toHaveLength(2);
     expect(screen.queryByRole('table', { name: /Registro/i })).not.toBeInTheDocument();
     expect(screen.getAllByText('Camila Soto')).toHaveLength(2);
     expect(screen.getByText('Instalación')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Próximas visitas', level: 2 }).parentElement).toHaveTextContent('Dom 6 sept');
     expect(screen.getByText('Mantención')).toBeInTheDocument();
+    expect(container.querySelector('.agenda-page__visit-heading time svg')).toHaveClass('icon');
   });
 
   it('links the register service to its appointment detail route', () => {
@@ -87,6 +99,38 @@ describe('AgendaPage', () => {
     expect(link).toHaveAttribute('href', '/panel/app/agenda/42');
     link.focus();
     expect(link).toHaveFocus();
+  });
+
+  it('renders the customer address as a Google Maps link in the visit card', () => {
+    render(<AgendaPage data={[appointment({ customer_address: 'Los Robles 10', customer_comuna: 'Ñuñoa' })]} state="ready" />);
+    const link = screen.getByRole('link', { name: 'Los Robles 10, Ñuñoa' });
+    expect(link).toHaveAttribute('href', 'https://www.google.com/maps/search/?api=1&query=Los%20Robles%2010%2C%20%C3%91u%C3%B1oa');
+    expect(link).toHaveClass('address-link');
+  });
+
+  it('shows a dash when the visit card has no customer address', () => {
+    render(<AgendaPage data={[appointment()]} state="ready" />);
+    expect(document.querySelector('.agenda-page__visit-details')).toHaveTextContent('Dirección');
+    expect(document.querySelector('.agenda-page__visit-details')).toHaveTextContent('—');
+  });
+
+  it('shows icons alongside every scheduled visit quick action', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<AgendaPage data={[appointment()]} state="ready" />);
+
+    await openVisitActions(user);
+    expect(screen.getByRole('menuitem', { name: 'Reprogramar' }).querySelector('svg')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Cancelar visita' }).querySelector('svg')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Cerrar visita' }).querySelector('svg')).toBeInTheDocument();
+    expect(container.querySelector('.agenda-page__visit-card')).not.toHaveTextContent('Reprogramar');
+    expect(container.querySelector('.agenda-page__visit-card')).not.toHaveTextContent('Cerrar visita');
+  });
+
+  it('does not underline the scheduled visit title link', () => {
+    const stylesheet = readFileSync(join(__dirname, '../primitives/primitives.css'), 'utf8');
+    const title = stylesheet.match(/\.agenda-page__visit-title a\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(title).toMatch(/text-decoration:\s*none/);
   });
 
   it('uses singular and plural visit counts', () => {
@@ -98,8 +142,8 @@ describe('AgendaPage', () => {
   });
 
   it('renders appointment slots in 24-hour time', () => {
-    render(<AgendaPage data={[appointment({ starts_at: '2026-09-05T18:00:00+00:00' })]} state="ready" />);
-    expect(screen.getByText('14:00')).toBeInTheDocument();
+    const { container } = render(<AgendaPage data={[appointment({ starts_at: '2026-09-05T18:00:00+00:00' })]} state="ready" />);
+    expect(container.querySelector('.agenda-page__visit-heading time')).toHaveTextContent('Sáb 5 sept · 14:00');
     expect(screen.queryByText(/a\. m\.|p\. m\./i)).not.toBeInTheDocument();
   });
 
@@ -122,6 +166,35 @@ describe('AgendaPage', () => {
     expect(screen.getByRole('banner').querySelector('.page-header__actions')).toContainElement(
       screen.getByRole('button', { name: 'Nueva visita' }),
     );
+  });
+
+  it('uses the reference sections, leading field icons, and primary create action', async () => {
+    const user = userEvent.setup();
+    render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
+
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nueva visita' });
+    const form = dialog.querySelector('.agenda-create-form');
+    const stylesheet = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+    const identityRow = stylesheet.match(/\.agenda-create-form__row--identity\s*\{([^}]*)\}/)?.[1] ?? '';
+    const leadingIcon = stylesheet.match(/\.agenda-create-form__leading-icon\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(dialog.querySelector('.dialog__icon svg')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Completa los datos para agendar una visita.');
+    expect(within(dialog).getByRole('heading', { name: 'Datos de la visita' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'Fecha y horario' })).toBeInTheDocument();
+    for (const label of ['Cliente', 'Caso vinculado', 'Servicio', 'Técnico', 'Fecha', 'Hora', 'Duración', 'Zona horaria']) {
+      expect(within(dialog).getByLabelText(label)).toBeInTheDocument();
+    }
+    expect(form?.querySelectorAll('.agenda-create-form__leading-icon').length).toBeGreaterThanOrEqual(4);
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toHaveClass('btn--secondary');
+    expect(within(dialog).getByRole('button', { name: 'Crear visita' })).toHaveClass('btn--primary');
+    expect(identityRow).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/);
+    expect(leadingIcon).toMatch(/position:\s*absolute/);
+    expect(within(dialog).getByLabelText('Caso vinculado')).toBeDisabled();
+    expect(dialog.querySelector('.agenda-create-form__timezone small')).toHaveTextContent('America/Santiago');
+    expect(stylesheet).toMatch(/\.agenda-create-form__icon-field\s+select\.field__control\s*\{[^}]*padding-left:\s*calc\(var\(--space-2\) \+ var\(--icon-md\) \+ var\(--space-2\)\)/s);
+    expect(stylesheet).toMatch(/\.agenda-create-form__row--schedule\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
   });
 
   it('keeps calendar day and register surfaces aligned by CSS contract', () => {
@@ -153,6 +226,14 @@ describe('AgendaPage', () => {
     expect(stylesheet).toMatch(/\.agenda-page__visit-card\s*\{[^}]*background:\s*var\(--surface\)/s);
   });
 
+  it('spaces the selected-day heading and today badge with a tokenized gap', () => {
+    const stylesheet = readFileSync(join(__dirname, '../primitives/primitives.css'), 'utf8');
+    const heading = stylesheet.match(/\.agenda-page__section-heading\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(heading).toMatch(/display:\s*flex/);
+    expect(heading).toMatch(/gap:\s*var\(--space-3\)/);
+  });
+
   it('shows a labelled empty state and keeps the table wrapper mobile-safe', () => {
     const { container } = render(<AgendaPage data={[]} state="empty" />);
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
@@ -171,10 +252,18 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[appointment()]} state="ready" />);
     await openVisitActions(user);
     await user.click(screen.getByRole('menuitem', { name: 'Cancelar visita' }));
-    expect(screen.getByRole('dialog', { name: 'Cancelar visita de Camila Soto — Mantención' })).toBeInTheDocument();
-    expect(screen.getByRole('dialog')).toHaveTextContent('La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.');
-    expect(screen.getByLabelText('Motivo de cancelación')).toHaveClass('field__control');
+    const dialog = screen.getByRole('dialog', { name: 'Cancelar visita' });
+    expect(dialog.querySelector('.dialog__icon svg')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Indica el motivo de la cancelación de esta visita.');
+    expect(dialog).toHaveTextContent('Camila Soto');
+    expect(dialog).toHaveTextContent('Visita seleccionada');
+    expect(dialog.querySelector('time')).toHaveAttribute('dateTime', '2026-09-05T10:00:00-04:00');
+    expect(dialog.querySelector('time')).toHaveTextContent(/Sábado 5 de septiembre.*10:00/);
+    expect(dialog).toHaveTextContent('Esta acción no se puede revertir desde la agenda.');
+    expect(within(dialog).getByLabelText('Motivo de cancelación')).toHaveClass('field__control');
     await user.type(screen.getByLabelText('Motivo de cancelación'), 'Cliente avisó');
+    expect(dialog.querySelector('.appointment-detail__dialog-footer')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }));
 
     await waitFor(() => expect(cancelAppointment).toHaveBeenCalledWith(1, 'Cliente avisó'));
@@ -200,7 +289,15 @@ describe('AgendaPage', () => {
 
     await openVisitActions(user);
     await user.click(screen.getByRole('menuitem', { name: 'Cerrar visita' }));
-    await user.click(screen.getByRole('button', { name: 'Completar' }));
+    const dialog = screen.getByRole('dialog', { name: 'Cerrar visita' });
+    expect(dialog.querySelector('.dialog__icon svg')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Selecciona el resultado de la visita.');
+    expect(dialog).toHaveTextContent('Camila Soto');
+    expect(dialog).toHaveTextContent('Visita seleccionada');
+    expect(within(dialog).getByRole('radio', { name: /Completada.*La visita se realizó/ })).toBeChecked();
+    expect(within(dialog).getByRole('radio', { name: /No completada.*La visita no se completó/ })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Este cierre no se puede revertir desde la agenda.');
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
     await waitFor(() => expect(closeAppointment).toHaveBeenCalledWith(1, 'completed'));
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
     expect(await screen.findByText('Visita completada')).toBeInTheDocument();
@@ -214,7 +311,8 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[appointment()]} state="ready" />);
     await openVisitActions(user);
     await user.click(screen.getByRole('menuitem', { name: 'Cerrar visita' }));
-    await user.click(screen.getByRole('button', { name: 'No asistió' }));
+    await user.click(screen.getByRole('radio', { name: /No completada.*La visita no se completó/ }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Intenta nuevamente');
     expect(closeAppointment).toHaveBeenCalledWith(1, 'no_show');
   });
@@ -236,9 +334,18 @@ describe('AgendaPage', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Reprogramar' }));
     await waitFor(() => expect(fetchTechnicians).toHaveBeenCalledOnce());
     const dialog = screen.getByRole('dialog', { name: 'Reprogramar visita' });
-    expect(within(dialog).getByLabelText('Fecha local')).toHaveValue('2026-09-05');
+    expect(dialog.querySelector('.dialog__icon svg')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Actualiza la fecha, el horario y el técnico asignado.');
+    expect(within(dialog).getByRole('heading', { name: 'Programación actual' })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('10:00');
+    expect(dialog).toHaveTextContent('60 min');
+    expect(dialog).toHaveTextContent('Luis Pérez');
+    expect(within(dialog).getByRole('heading', { name: 'Nueva programación' })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Fecha')).toHaveValue('2026-09-05');
     expect(within(dialog).getByLabelText('Hora local')).toHaveValue('10:00');
-    expect(within(dialog).getByLabelText('Duración (minutos)')).toHaveValue(60);
+    expect(within(dialog).getByLabelText('Duración')).toHaveValue(60);
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('La fecha y la hora corresponden al horario local de la agenda.');
     await user.click(screen.getByRole('button', { name: 'Confirmar reprogramación' }));
     await waitFor(() => expect(rescheduleAppointment).toHaveBeenCalledWith(1, { local_date: '2026-09-05', local_time: '10:00:00', timezone: 'America/Santiago', duration_minutes: 60, technician_id: 30 }));
   });
@@ -364,13 +471,13 @@ describe('AgendaPage', () => {
     const tomorrow = appointment({ id: 2, service: 'Instalación', local_start: '2026-09-06T09:00:00-04:00' });
     render(<AgendaPage data={[appointment(), tomorrow]} state="ready" timezone="America/Santiago" />);
 
-    await user.click(screen.getByRole('button', { name: /^sábado 5 de septiembre,/ }));
-    const selectedHeading = screen.getByRole('heading', { name: 'sábado 5 de septiembre Hoy', level: 2 });
+    await user.click(screen.getByRole('button', { name: /^Sábado 5 de septiembre,/ }));
+    const selectedHeading = screen.getByRole('heading', { name: 'Sábado 5 de septiembre Hoy', level: 2 });
     expect(selectedHeading.querySelector('.badge')).toHaveTextContent('Hoy');
     expect(screen.getByText('Mantención')).toBeInTheDocument();
     expect(screen.queryByText('Instalación')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^sábado 5 de septiembre,/ }));
-    const restoredHeading = screen.getByRole('heading', { name: /sábado 5 de septiembre Hoy/i, level: 2 });
+    await user.click(screen.getByRole('button', { name: /^Sábado 5 de septiembre,/ }));
+    const restoredHeading = screen.getByRole('heading', { name: /Sábado 5 de septiembre Hoy/i, level: 2 });
     expect(restoredHeading.querySelector('.badge')).toHaveTextContent('Hoy');
   });
 
@@ -378,7 +485,7 @@ describe('AgendaPage', () => {
     const user = userEvent.setup();
     render(<AgendaPage data={[appointment()]} state="ready" timezone="America/Santiago" />);
 
-    await user.click(screen.getByRole('button', { name: /^domingo 6 de septiembre,/ }));
+    await user.click(screen.getByRole('button', { name: /^Domingo 6 de septiembre,/ }));
 
     expect(screen.getByText('No hay visitas')).toBeInTheDocument();
     expect(screen.getByRole('table', { name: 'Calendario de Septiembre de 2026' })).toBeInTheDocument();
@@ -415,7 +522,7 @@ describe('AgendaPage', () => {
 
   it('creates an appointment from the agenda and refreshes the visible period', async () => {
     const user = userEvent.setup({ delay: null });
-    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto', address: 'Calle Uno 2', comuna: 'Macul' }] as never });
     vi.mocked(fetchCases).mockResolvedValue({ cases: [{ id: 20, service: 'Mantención', customer: { id: 10, name: 'Camila Soto' } }] as never, users: [] });
     vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: 'Luis' }] });
     vi.mocked(createAppointment).mockResolvedValue({ ok: true, appointment: {} as never });
@@ -430,22 +537,67 @@ describe('AgendaPage', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent('Fecha y horario');
     expect(screen.getByRole('heading', { name: 'Datos de la visita', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Fecha y horario', level: 3 })).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
-    await user.type(screen.getByLabelText('Caso'), 'Mantención');
+    await selectCustomer(user);
+    expect(screen.getByTestId('agenda-create-customer-address')).toHaveTextContent('Calle Uno 2, Macul');
+    await user.type(screen.getByLabelText('Caso vinculado'), 'Mantención');
     await user.click(screen.getByRole('option', { name: 'Mantención (#20)' }));
     await user.selectOptions(screen.getByLabelText('Técnico'), '30');
     await user.type(screen.getByLabelText('Servicio'), 'Maintenance');
-    await user.clear(screen.getByLabelText('Fecha local'));
-    await user.type(screen.getByLabelText('Fecha local'), '2026-09-05');
-    await user.clear(screen.getByLabelText('Hora local'));
-    await user.type(screen.getByLabelText('Hora local'), '10:00');
-    await user.clear(screen.getByLabelText('Duración (minutos)'));
-    await user.type(screen.getByLabelText('Duración (minutos)'), '60');
+    await user.clear(screen.getByLabelText('Fecha'));
+    await user.type(screen.getByLabelText('Fecha'), '2026-09-05');
+    await user.clear(screen.getByLabelText('Hora'));
+    await user.type(screen.getByLabelText('Hora'), '10:00');
+    await user.clear(screen.getByLabelText('Duración'));
+    await user.type(screen.getByLabelText('Duración'), '60');
     await user.click(screen.getByRole('button', { name: 'Crear visita' }));
 
     await waitFor(() => expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({ customer_id: 10, case_id: 20, technician_id: 30, timezone: 'America/Santiago', local_time: '10:00:00' })));
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
   }, 15000);
+
+  it('searches clients by email and phone and filters cases to the selected client', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [
+      { id: 10, name: 'Camila Soto', email: 'camila@example.test', phone_e164: '+56911111111' },
+      { id: 11, name: 'Carlos Díaz', email: 'carlos@example.test', phone_e164: '+56922222222' },
+    ] as never });
+    vi.mocked(fetchCases).mockResolvedValue({ cases: [
+      { id: 20, service: 'Mantención', customer: { id: 10, name: 'Camila Soto' } },
+      { id: 21, service: 'Mantención', customer: { id: 11, name: 'Carlos Díaz' } },
+    ] as never, users: [] });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [] });
+    render(<AgendaPage data={[]} state="empty" />);
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
+
+    const clientInput = screen.getByRole('combobox', { name: 'Cliente' });
+    await user.type(clientInput, 'camila@example.test');
+    const emailMatch = screen.getByRole('option', { name: /Camila Soto.*camila@example\.test/ });
+    expect(emailMatch).toBeInTheDocument();
+    await user.click(emailMatch);
+    expect(clientInput).toHaveValue('Camila Soto · camila@example.test · +56911111111');
+
+    await user.clear(clientInput);
+    await user.type(clientInput, '+56911111111');
+    expect(screen.getByRole('option', { name: /Camila Soto.*camila@example\.test/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: /Camila Soto.*camila@example\.test/ }));
+
+    const caseInput = screen.getByRole('combobox', { name: 'Caso vinculado' });
+    await user.type(caseInput, 'Mantención');
+    expect(screen.getByRole('option', { name: 'Mantención (#20)' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Mantención (#21)' })).not.toBeInTheDocument();
+  });
+
+  it('shows a clear address fallback for a selected client without an address', async () => {
+    const user = userEvent.setup({ delay: null });
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto', address: null, comuna: null }] as never });
+    vi.mocked(fetchCases).mockResolvedValue({ cases: [] as never, users: [] });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [] });
+    render(<AgendaPage data={[]} state="empty" />);
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    await selectCustomer(user);
+    expect(screen.getByTestId('agenda-create-customer-address')).toHaveTextContent('Sin dirección registrada');
+  });
 
   it('closes the new-visit dialog when cancelling', async () => {
     const user = userEvent.setup();
@@ -468,22 +620,22 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
-    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
-    await user.type(screen.getByLabelText('Caso'), 'Caso sin servicio');
+    await selectCustomer(user);
+    await user.type(screen.getByLabelText('Caso vinculado'), 'Caso sin servicio');
     await user.click(screen.getByRole('option', { name: 'Caso sin servicio (#20)' }));
     expect(screen.getByLabelText('Servicio')).toHaveValue('');
-    expect(screen.getByRole('combobox', { name: 'Caso' })).toHaveValue('Caso sin servicio (#20)');
-    expect(screen.getByRole('combobox', { name: 'Caso' })).not.toHaveValue(expect.stringContaining('null'));
+    expect(screen.getByRole('combobox', { name: 'Caso vinculado' })).toHaveValue('Caso sin servicio (#20)');
+    expect(screen.getByRole('combobox', { name: 'Caso vinculado' })).not.toHaveValue(expect.stringContaining('null'));
     const form = screen.getByLabelText('Cliente').closest('.agenda-create-form');
     expect(form).toBeInTheDocument();
     expect(form?.children.length).toBeGreaterThan(1);
     const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
     expect(css).toMatch(/\.agenda-create-form\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--space-3\)/s);
     await user.selectOptions(screen.getByLabelText('Técnico'), '30');
-    await user.clear(screen.getByLabelText('Fecha local'));
-    await user.type(screen.getByLabelText('Fecha local'), '2026-09-05');
-    await user.clear(screen.getByLabelText('Hora local'));
-    await user.type(screen.getByLabelText('Hora local'), '10:00');
+    await user.clear(screen.getByLabelText('Fecha'));
+    await user.type(screen.getByLabelText('Fecha'), '2026-09-05');
+    await user.clear(screen.getByLabelText('Hora'));
+    await user.type(screen.getByLabelText('Hora'), '10:00');
     await user.click(screen.getByRole('button', { name: 'Crear visita' }));
 
     expect(screen.getByRole('alert')).toHaveTextContent('Completa todos los campos de la visita');
@@ -502,8 +654,8 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
-    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
-    const caseInput = screen.getByRole('combobox', { name: 'Caso' });
+    await selectCustomer(user);
+    const caseInput = screen.getByRole('combobox', { name: 'Caso vinculado' });
     await user.type(caseInput, 'Instalación');
     expect(screen.getByRole('option', { name: 'Crear «Instalación»' })).toBeInTheDocument();
     await user.click(screen.getByRole('option', { name: 'Crear «Instalación»' }));
@@ -512,8 +664,8 @@ describe('AgendaPage', () => {
     await waitFor(() => expect(caseInput).toHaveValue('Instalación (#21)'));
     expect(screen.getByLabelText('Servicio')).toHaveValue('Instalación');
     await user.selectOptions(screen.getByLabelText('Técnico'), '30');
-    await user.clear(screen.getByLabelText('Fecha local'));
-    await user.type(screen.getByLabelText('Fecha local'), '2026-09-05');
+    await user.clear(screen.getByLabelText('Fecha'));
+    await user.type(screen.getByLabelText('Fecha'), '2026-09-05');
     await user.click(screen.getByRole('button', { name: 'Crear visita' }));
     await waitFor(() => expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({ customer_id: 10, case_id: 21, service: 'Instalación' })));
   });
@@ -529,8 +681,8 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[]} state="empty" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
-    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
-    const caseInput = screen.getByRole('combobox', { name: 'Caso' });
+    await selectCustomer(user);
+    const caseInput = screen.getByRole('combobox', { name: 'Caso vinculado' });
     await user.type(caseInput, 'Instalación');
     const createOption = screen.getByRole('option', { name: 'Crear «Instalación»' });
     await user.click(createOption);
@@ -544,7 +696,7 @@ describe('AgendaPage', () => {
     await waitFor(() => expect(caseInput).toHaveValue('Instalación (#21)'));
   });
 
-  it('requires a customer before creating a manual case', async () => {
+  it('keeps case selection disabled until a customer is chosen', async () => {
     const user = userEvent.setup();
     vi.mocked(fetchClients).mockResolvedValue({ clients: [] as never });
     vi.mocked(fetchCases).mockResolvedValue({ cases: [] as never, users: [] });
@@ -552,10 +704,8 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[]} state="empty" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
-    await user.type(screen.getByRole('combobox', { name: 'Caso' }), 'Instalación');
-    await user.click(screen.getByRole('option', { name: 'Crear «Instalación»' }));
+    expect(screen.getByRole('combobox', { name: 'Caso vinculado' })).toBeDisabled();
     expect(createCase).not.toHaveBeenCalled();
-    expect(await screen.findByRole('alert')).toHaveTextContent(/cliente/i);
   });
 
   it('keeps the agenda calendar CSS contract aligned with the design system', () => {

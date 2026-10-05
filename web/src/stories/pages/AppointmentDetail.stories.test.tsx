@@ -14,7 +14,7 @@ import {
 } from "./AppointmentDetail.stories";
 import { fetchUsers } from "../../api";
 
-vi.mock("../../api", () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn(), fetchUsers: vi.fn(), rescheduleAppointment: vi.fn() }));
+vi.mock("../../api", () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn(), fetchTechnicians: vi.fn().mockResolvedValue({ technicians: [] }), fetchUsers: vi.fn(), rescheduleAppointment: vi.fn() }));
 
 describe("AppointmentDetail stories", () => {
   it("keeps a narrow mobile story variant for responsive review", () => {
@@ -69,7 +69,7 @@ describe("AppointmentDetail stories", () => {
       await RescheduleDialog.play?.({ canvasElement: container } as Parameters<NonNullable<typeof RescheduleDialog.play>>[0]);
     });
     const dialog = await screen.findByRole("dialog", { name: "Reprogramar visita" });
-    expect(within(dialog).getByLabelText("Fecha local")).toHaveValue("2026-09-28");
+    expect(within(dialog).getByLabelText("Fecha")).toHaveValue("2026-09-28");
     await waitFor(() => expect(screen.getByRole("heading", { name: "Mantención de calefón" })).toBeInTheDocument());
   });
 

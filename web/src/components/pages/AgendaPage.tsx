@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { CalendarPlus, Plus } from "lucide-react";
+import { CalendarDays, CalendarPlus, CalendarX, Check, Clock3, ExternalLink, FileText, Globe, Plus, RefreshCw, Timer, UserRound, Wrench, X } from "lucide-react";
 import { ApiError, cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AgendaAppointment, Case, Customer, UserRef } from "../../types";
@@ -10,13 +10,16 @@ import { Combobox } from "../primitives/Combobox";
 import { Dialog } from "../primitives/Dialog";
 import { Input } from "../primitives/Input";
 import { Menu } from "../primitives/Menu";
+import { Icon } from "../primitives/Icon";
 import { Select } from "../primitives/Select";
 import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
 import { EmptyState } from "../shared/EmptyState";
+import { AppointmentClosureDialog, type AppointmentClosureOutcome } from "../shared/AppointmentClosureDialog";
+import { AppointmentRescheduleDialog, type AppointmentRescheduleForm } from "../shared/AppointmentRescheduleDialog";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
-import { AgendaTimeError, agendaMonthDays, agendaPeriodLabel, agendaShiftPeriod, agendaTodayKey, agendaWeekDays, composeAgendaTime, formatAgendaSlot } from "../shared/agendaTime";
+import { AgendaTimeError, agendaDayLabel, agendaMonthDays, agendaPeriodLabel, agendaShiftPeriod, agendaTodayKey, agendaWeekDays, composeAgendaTime, formatAgendaSlot } from "../shared/agendaTime";
 import { AgendaCalendar, type AgendaCalendarView } from "../shared/AgendaCalendar";
 import { appointmentStatusLabel, appointmentStatusTone, appointmentSyncLabel, appointmentSyncTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
@@ -33,6 +36,9 @@ export interface AgendaPageProps {
 type ActionFeedback = { id: number; tone: "success" | "danger"; title: string; detail?: string };
 
 function localDate(value: string) { return value.slice(0, 10); }
+function clientOptionLabel(client: Customer) {
+  return [client.name ?? `Cliente ${client.id}`, client.email, client.phone_e164].filter(Boolean).join(" · ");
+}
 
 function stateMessage(state: AgendaPageState, retry: () => void) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando agenda" />;
@@ -46,8 +52,9 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const [updatedData, setUpdatedData] = useState<AgendaAppointment[] | null>(null);
   const [cancelTarget, setCancelTarget] = useState<AgendaAppointment | null>(null);
   const [closeTarget, setCloseTarget] = useState<AgendaAppointment | null>(null);
+  const [closeOutcome, setCloseOutcome] = useState<AppointmentClosureOutcome>("completed");
   const [rescheduleTarget, setRescheduleTarget] = useState<AgendaAppointment | null>(null);
-  const [rescheduleForm, setRescheduleForm] = useState({ local_date: "", local_time: "", duration_minutes: "60", technician_id: "" });
+  const [rescheduleForm, setRescheduleForm] = useState<AppointmentRescheduleForm>({ local_date: "", local_time: "", duration_minutes: "60", technician_id: "" });
   const [rescheduleFeedback, setRescheduleFeedback] = useState<{ tone: "success" | "danger"; title: string; detail?: string } | null>(null);
   const [reason, setReason] = useState("");
   const [mutatingId, setMutatingId] = useState<number | null>(null);
@@ -230,18 +237,19 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const periodRows = activeRows;
   const selectedRows = selectedDay ? (registerView === "active" ? activeRows : nonActiveRows).filter((row) => localDate(row.local_start) === selectedDay) : null;
   const containsToday = periodDays.includes(today);
+  const selectedCustomer = clients.find((client) => client.id === Number(createForm.customer_id));
   const openReschedule = (row: AgendaAppointment) => { setRescheduleTarget(row); setRescheduleForm({ local_date: row.local_start.slice(0, 10), local_time: row.local_start.slice(11, 16), duration_minutes: String(row.duration_minutes ?? 60), technician_id: String(row.technician_id ?? "") }); setRescheduleFeedback(null); void fetchTechnicians().then((response) => setTechnicians(response.technicians)).catch((error) => setRescheduleFeedback({ tone: "danger", title: "No pudimos cargar las opciones de la visita", detail: error instanceof Error ? error.message : undefined })); };
   const section = (title: string, rows: AgendaAppointment[], isToday = selectedDay === today) => rows.length > 0 ? (
     <section className="agenda-page__section" aria-labelledby={`agenda-${title.toLowerCase()}`}>
-      <h2 id={`agenda-${title.toLowerCase()}`}>{title}{isToday ? <Badge tone="success">Hoy</Badge> : null}</h2>
-      <div className="agenda-page__cards">{rows.map((row) => <Card key={row.id} className="agenda-page__visit-card">
-        <div className="agenda-page__visit-heading"><time dateTime={row.local_start}>{formatAgendaSlot(row.starts_at, row.timezone)}</time><div className="agenda-page__visit-title"><a href={pathForRoute({ view: "agenda", appointmentId: row.id })}>{row.service}</a><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge></div>
-          <Menu label={`Acciones para ${row.service}`} trigger="icon" disabled={mutatingId !== null} items={[
-            ...(row.status === "booked" ? [{ value: "reschedule", label: "Reprogramar" }, { value: "cancel", label: "Cancelar visita", tone: "danger" as const }, { value: "close", label: "Cerrar visita" }] : []),
-            ...(row.sync.status === "pending" || row.sync.status === "failed" ? [{ value: "retry", label: "Reintentar calendario" }] : []),
-          ]} onSelect={(action) => { if (action === "reschedule") openReschedule(row); if (action === "cancel") { setCancelTarget(row); setCancelFeedback(null); } if (action === "close") { setCloseTarget(row); setCloseFeedback(null); } if (action === "retry") void retrySync(row.id); }} />
+      <h2 id={`agenda-${title.toLowerCase()}`} className="agenda-page__section-heading"><span>{title}</span>{isToday ? <Badge tone="success">Hoy</Badge> : null}</h2>
+       <div className="agenda-page__cards">{rows.map((row) => <Card key={row.id} className="agenda-page__visit-card">
+          <div className="agenda-page__visit-heading"><time dateTime={row.local_start}><Icon icon={Clock3} size="sm" /><span>{agendaDayLabel(localDate(row.local_start), row.timezone)} · {formatAgendaSlot(row.starts_at, row.timezone)}</span></time><div className="agenda-page__visit-title"><a href={pathForRoute({ view: "agenda", appointmentId: row.id })}>{row.service}</a><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge></div>
+           <Menu label={`Acciones para ${row.service}`} trigger="icon" disabled={mutatingId !== null} items={[
+             ...(row.status === "booked" ? [{ value: "reschedule", label: "Reprogramar", icon: CalendarDays }, { value: "cancel", label: "Cancelar visita", icon: X, tone: "danger" as const }, { value: "close", label: "Cerrar visita", icon: Check }] : []),
+             ...(row.sync.status === "pending" || row.sync.status === "failed" ? [{ value: "retry", label: "Reintentar calendario", icon: RefreshCw }] : []),
+             ]} onSelect={(action) => { if (action === "reschedule") openReschedule(row); if (action === "cancel") { setCancelTarget(row); setCancelFeedback(null); } if (action === "close") { setCloseTarget(row); setCloseOutcome("completed"); setCloseFeedback(null); } if (action === "retry") void retrySync(row.id); }} />
         </div>
-        <dl className="agenda-page__visit-details"><div><dt>Cliente</dt><dd>{row.customer_name ?? "—"}</dd></div><div><dt>Técnico</dt><dd>{row.technician_name ?? "—"}</dd></div></dl>
+         <dl className="agenda-page__visit-details"><div><dt>Cliente</dt><dd>{row.customer_name ?? "—"}</dd></div><div><dt>Técnico</dt><dd>{row.technician_name ?? "—"}</dd></div><div><dt>Dirección</dt><dd>{row.customer_address ? <a className="address-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([row.customer_address, row.customer_comuna].filter(Boolean).join(", "))}`}><Icon icon={ExternalLink} size="sm" />{[row.customer_address, row.customer_comuna].filter(Boolean).join(", ")}</a> : "—"}</dd></div></dl>
         <div className="agenda-page__sync"><Badge tone={appointmentSyncTone(row.sync.status)}>{appointmentSyncLabel(row.sync.status)}</Badge>{row.sync.error ? <small>{row.sync.error}</small> : null}</div>
         {cancelFeedback?.id === row.id && cancelFeedback.tone === "success" ? <span role="status"><Badge tone="success">{cancelFeedback.title}</Badge></span> : null}
         {syncFeedback?.id === row.id ? <span role={syncFeedback.tone === "danger" ? "alert" : "status"}><Badge tone={syncFeedback.tone}>{syncFeedback.title}{syncFeedback.detail ? `: ${syncFeedback.detail}` : null}</Badge></span> : null}
@@ -259,10 +267,10 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   };
   const register = registerView === "non-active"
     ? section("Visitas no activas", nonActiveRows)
-    : selectedRows
-      ? section(agendaPeriodLabel(selectedDay ?? "", timezone), selectedRows)
-      : containsToday
-        ? section(agendaPeriodLabel(today, timezone), [...todayRows, ...upcomingRows], true)
+      : selectedRows
+        ? section(agendaPeriodLabel(selectedDay ?? "", timezone), selectedRows)
+        : containsToday
+        ? <>{section(agendaPeriodLabel(today, timezone), todayRows, true)}{section("Próximas visitas", upcomingRows, false)}</>
         : section("Visitas del período", periodRows);
   const renderedRows = registerView === "non-active" ? nonActiveRows : selectedRows ?? (containsToday ? [...todayRows, ...upcomingRows] : periodRows);
   const showEmpty = data?.length === 0 || state === "empty" || renderedRows.length === 0;
@@ -277,52 +285,67 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
       <section aria-label="Registro de agenda"><Tabs tabs={[{ id: "active", label: "Activas" }, { id: "non-active", label: "No activas" }]} activeTab={registerView} onTabChange={setRegisterView} ariaLabel="Filtro del registro de visitas">{() => showEmpty ? <EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /> : register}</Tabs></section>
     </div>}
-    <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title={cancelTarget ? `Cancelar visita de ${cancelTarget.customer_name ?? "cliente"} — ${cancelTarget.service}` : "Cancelar visita"}>
-      <p>La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.</p>
+    <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title="Cancelar visita" icon={CalendarX} description="Indica el motivo de la cancelación de esta visita.">
+      {cancelTarget ? <div className="appointment-detail__selected-visit"><Icon icon={CalendarDays} /><div><strong>{cancelTarget.customer_name ?? "Cliente sin nombre"}</strong><time dateTime={cancelTarget.local_start}>{agendaPeriodLabel(localDate(cancelTarget.local_start), cancelTarget.timezone)} · {formatAgendaSlot(cancelTarget.starts_at, cancelTarget.timezone)}</time><span>Visita seleccionada</span></div></div> : null}
       <Textarea id="cancel-reason" label="Motivo de cancelación" value={reason} onChange={(event) => setReason(event.target.value)} />
+      <p className="appointment-detail__closure-warning">Esta acción no se puede revertir desde la agenda.</p>
       {cancelTarget && cancelFeedback?.id === cancelTarget.id && cancelFeedback.tone === "danger" ? <StateMessage tone="danger" role="alert" title={cancelFeedback.title} detail={cancelFeedback.detail} /> : null}
-      <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void cancel()}>Confirmar cancelación</Button>
+      <div className="appointment-detail__dialog-footer">
+        <Button variant="secondary" disabled={mutatingId !== null} onClick={() => setCancelTarget(null)}>Cancelar</Button>
+        <Button disabled={mutatingId !== null} onClick={() => void cancel()}>Confirmar cancelación</Button>
+      </div>
     </Dialog>
-    <Dialog open={closeTarget !== null} onClose={() => { if (mutatingId === null) setCloseTarget(null); }} title={closeTarget ? `Cerrar visita de ${closeTarget.customer_name ?? "cliente"} — ${closeTarget.service}` : "Cerrar visita"}>
-      <p>Registra el resultado de la visita. Esta acción no se puede revertir desde la agenda.</p>
-      {closeTarget && closeFeedback?.id === closeTarget.id && closeFeedback.tone === "danger" ? <StateMessage tone="danger" role="alert" title={closeFeedback.title} detail={closeFeedback.detail} /> : null}
-      <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void close("completed")}>Completar</Button>
-      <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void close("no_show")}>No asistió</Button>
-    </Dialog>
-    <Dialog open={rescheduleTarget !== null} onClose={() => { if (mutatingId === null) setRescheduleTarget(null); }} title="Reprogramar visita">
-      {rescheduleTarget ? <div>
-        <Input label="Fecha local" type="date" value={rescheduleForm.local_date} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_date: event.target.value }))} />
-        <Input label="Hora local" type="time" value={rescheduleForm.local_time} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_time: event.target.value }))} />
-        <Input label="Duración (minutos)" type="number" min="1" value={rescheduleForm.duration_minutes} onChange={(event) => setRescheduleForm((form) => ({ ...form, duration_minutes: event.target.value }))} />
-        <Select label="Técnico" value={rescheduleForm.technician_id} onChange={(event) => setRescheduleForm((form) => ({ ...form, technician_id: event.target.value }))} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
-        {rescheduleFeedback?.tone === "danger" ? <StateMessage tone="danger" role="alert" title={rescheduleFeedback.title} detail={rescheduleFeedback.detail} /> : null}
-        <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void reschedule()}>{mutatingId === rescheduleTarget?.id ? "Reprogramando…" : "Confirmar reprogramación"}</Button>
-      </div> : null}
-    </Dialog>
+    {closeTarget ? <AppointmentClosureDialog
+      open={closeTarget !== null}
+      onClose={() => setCloseTarget(null)}
+      customerName={closeTarget.customer_name ?? "Cliente sin nombre"}
+      appointmentDateTime={closeTarget.local_start}
+      dateTimeLabel={`${agendaPeriodLabel(localDate(closeTarget.local_start), closeTarget.timezone)} · ${formatAgendaSlot(closeTarget.starts_at, closeTarget.timezone)}`}
+      outcome={closeOutcome}
+      onOutcomeChange={setCloseOutcome}
+      onSubmit={() => void close(closeOutcome)}
+      mutating={mutatingId !== null}
+      feedback={closeFeedback?.id === closeTarget.id && closeFeedback.tone === "danger" ? closeFeedback : null}
+    /> : null}
+    {rescheduleTarget ? <AppointmentRescheduleDialog
+      open={rescheduleTarget !== null}
+      onClose={() => setRescheduleTarget(null)}
+      appointment={rescheduleTarget}
+      technicianLabel={rescheduleTarget.technician_name ?? (rescheduleTarget.technician_id ? `Técnico #${rescheduleTarget.technician_id}` : "Técnico no asignado")}
+      technicians={technicians}
+      form={rescheduleForm}
+      onChange={(key, value) => setRescheduleForm((form) => ({ ...form, [key]: value }))}
+      onSubmit={() => void reschedule()}
+      mutating={mutatingId !== null}
+      feedback={rescheduleFeedback?.tone === "danger" ? rescheduleFeedback : null}
+    /> : null}
     <Dialog open={createOpen} onClose={() => { if (!createBusy) setCreateOpen(false); }} title="Nueva visita" icon={CalendarPlus} description="Completa los datos para agendar una visita.">
       <div className="agenda-create-form">
         <section className="agenda-create-form__section" aria-labelledby="agenda-create-visit-heading">
           <h3 id="agenda-create-visit-heading">Datos de la visita</h3>
-          <Select label="Cliente" value={createForm.customer_id} onChange={(event) => { field("customer_id", event.target.value); field("case_id", ""); }} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} />
-          <Combobox label="Caso" value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={createBusy ? undefined : (query) => void createManualCase(query)} options={cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} />
+          <div className="agenda-create-form__row agenda-create-form__row--identity">
+            <div className="agenda-create-form__icon-field"><Icon icon={UserRound} className="agenda-create-form__leading-icon" /><Combobox label="Cliente" placeholder="Busca por nombre, correo o teléfono" options={clients.map((client) => ({ value: String(client.id), label: clientOptionLabel(client) }))} value={createForm.customer_id || null} onChange={(value) => { field("customer_id", value); field("case_id", ""); }} /></div>
+            {createForm.customer_id ? <p className="agenda-create-form__customer-address" data-testid="agenda-create-customer-address">{selectedCustomer?.address ? [selectedCustomer.address, selectedCustomer.comuna].filter(Boolean).join(", ") : "Sin dirección registrada"}</p> : null}
+            <div className="agenda-create-form__icon-field"><Icon icon={FileText} className="agenda-create-form__leading-icon" /><Combobox label="Caso vinculado" disabled={!createForm.customer_id} value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={createBusy ? undefined : (query) => void createManualCase(query)} options={cases.filter((item) => item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} /></div>
+          </div>
           <div className="agenda-create-form__row agenda-create-form__row--visit">
-            <Input label="Servicio" value={createForm.service} onChange={(event) => field("service", event.target.value)} />
-            <Select label="Técnico" value={createForm.technician_id} onChange={(event) => field("technician_id", event.target.value)} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
+            <Input label="Servicio" icon={FileText} value={createForm.service} onChange={(event) => field("service", event.target.value)} />
+            <div className="agenda-create-form__icon-field"><Icon icon={Wrench} className="agenda-create-form__leading-icon" /><Select label="Técnico" className="agenda-create-form__select--icon" value={createForm.technician_id} onChange={(event) => field("technician_id", event.target.value)} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} /></div>
           </div>
         </section>
         <section className="agenda-create-form__section" aria-labelledby="agenda-create-schedule-heading">
           <h3 id="agenda-create-schedule-heading">Fecha y horario</h3>
           <div className="agenda-create-form__row agenda-create-form__row--schedule">
-            <Input label="Fecha local" type="date" value={createForm.local_date} onChange={(event) => field("local_date", event.target.value)} />
-            <Input label="Hora local" type="time" value={createForm.local_time} onChange={(event) => field("local_time", event.target.value)} />
-            <Input label="Duración (minutos)" type="number" min="1" value={createForm.duration_minutes} onChange={(event) => field("duration_minutes", event.target.value)} />
+            <Input label="Fecha" icon={CalendarDays} type="date" value={createForm.local_date} onChange={(event) => field("local_date", event.target.value)} />
+            <Input label="Hora" icon={Clock3} type="time" value={createForm.local_time} onChange={(event) => field("local_time", event.target.value)} />
+            <Input label="Duración" icon={Timer} type="number" min="1" value={createForm.duration_minutes} onChange={(event) => field("duration_minutes", event.target.value)} />
           </div>
-          <Input label="Zona horaria" value={timezone} readOnly />
+          <div className="agenda-create-form__icon-field agenda-create-form__timezone"><Icon icon={Globe} className="agenda-create-form__leading-icon" /><Select label="Zona horaria" className="agenda-create-form__select--icon" value={timezone} disabled options={[{ value: timezone, label: timezone }]} /><small>{timezone}</small></div>
         </section>
         {createFeedback?.tone === "danger" ? <StateMessage tone="danger" role="alert" title={createFeedback.title} detail={createFeedback.detail} /> : null}
-        <div className="dialog__actions">
+        <div className="agenda-create-form__actions">
           <Button variant="secondary" disabled={createBusy} onClick={() => { if (!createBusy) setCreateOpen(false); }}>Cancelar</Button>
-          <Button variant="secondary" disabled={createBusy} onClick={() => void create()}>{createBusy ? "Creando…" : "Crear visita"}</Button>
+          <Button disabled={createBusy} onClick={() => void create()}><Icon icon={CalendarPlus} size="sm" />{createBusy ? "Creando…" : "Crear visita"}</Button>
         </div>
       </div>
     </Dialog>
