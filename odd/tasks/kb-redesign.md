@@ -113,7 +113,21 @@ restore) carries a test; pure layout/CSS findings assert structure.
   sheet over the list (019), composing the existing `Dialog` + mobile-sheet CSS.
 - Update `KbList.test.tsx`, `KbList.stories.tsx`.
 
-### WU3 — detail: header + tabs + information cards (findings 020-027)
+### WU3a — landing: retrieval placement + results redesign (owner additions A1/A2)
+Owner feedback delivered 2026-10-05 (during implementation); the reference layout governs and
+this supersedes the WU2 secondary placement (where retrieval sat in the narrow right column).
+- A1: move the "Probar recuperación" card into the **left column, directly below "Documentos"**.
+  The right column holds only "Agregar documento". Reference: left = Documentos + Probar
+  recuperación; right = Agregar documento.
+- A2: redesign the search-results surface to be **content-first and never overflow**. The chunk
+  `Contenido` becomes the prominent element (readable full-width block); document / version /
+  fragment / similarity render as compact meta above it instead of dense table columns. Remove
+  the 5-column `DataTable` and the forced-width cause of the horizontal break
+  (`.kb-search__result-content { max-width: 32rem }` inside a squeezed table). No horizontal
+  scroll at any breakpoint; keep the "N resultados ordenados por similitud." summary.
+- Update `KbList.tsx`, `primitives.css`, `KbList.test.tsx`, `KbList.stories.test.tsx`.
+
+### WU3b — detail: header + tabs + information cards (findings 020-027)
 - Header: metadata line `#<id> · <format> · Creado el <date>` instead of the generic subtitle
   (020); `Activo` status badge beside the title (021); file icon tile (022); replace "Volver a
   documentos" with an "Editar contenido" action (023).
@@ -134,13 +148,15 @@ restore) carries a test; pure layout/CSS findings assert structure.
 ## Delivery
 - Forecast: ~650–950 authored changed lines across 2 pages + CSS + tests → over the 400-line
   review budget.
-- Planned slices: PR1 = WU1, PR2 = WU2, PR3 = WU3, PR4 = WU4 (or PR1 = WU1+WU2 landing,
-  PR2 = WU3+WU4 detail).
+- Planned slices: PR1 = WU1+WU2 (landing foundation, reviewed), PR2 = WU3a (retrieval
+  placement + results redesign), PR3 = WU3b (detail), PR4 = WU4 (detail follow-up).
 - Chain strategy: pending owner decision (default `ask-on-risk`); decide before the first PR.
 - Local work-unit commits are allowed on the branch without a chain decision.
 
 ## Acceptance criteria
 - [ ] Findings `conocimiento-001..030` implemented.
+- [ ] Owner additions A1/A2: "Probar recuperación" sits in the left column below "Documentos"
+      per the reference; the results surface is content-first and never overflows.
 - [ ] `npm run test`, `npx tsc -b --noEmit`, `npm run build` all green.
 - [ ] Mobile landing uses a card list with no horizontal overflow; the add form opens as a
       bottom sheet.
@@ -154,10 +170,22 @@ restore) carries a test; pure layout/CSS findings assert structure.
 ## Progress
 - [x] WU1 — landing: header + "Documentos" card (findings 001-010)
 - [x] WU2 — landing: retrieval + upload cards + mobile (findings 011-019)
-- [ ] WU3 — detail: header + tabs + information cards (findings 020-027)
+- [x] WU3a — landing: retrieval placement + results redesign (owner additions A1/A2)
+- [ ] WU3b — detail: header + tabs + information cards (findings 020-027)
 - [ ] WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
 
 ## Verification evidence
+### WU3a — landing retrieval placement + results redesign
+- Baseline before edits: `cd web && npm run test` — PASS, 95 files / 1007 tests.
+- RED: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx -t "stacks retrieval|makes documents and retrieval|renders loading, ready"` — FAIL as expected, 3 failed / 27 skipped; retrieval was still secondary and results lacked the fragment meta/content-first list.
+- GREEN: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx` — PASS, 2 files / 30 tests.
+- Final `cd web && npm run test` — PASS, 95 files / 1008 tests.
+- Final `cd web && npx tsc -b --noEmit` — PASS (exit 0).
+- Final `cd web && npm run build` — PASS; Vite built successfully with the existing >500 kB chunk-size warning.
+- Commit: `a85baa5b` — `feat(kb): move retrieval and redesign results`.
+- Graphify: queries consulted `KbList.tsx`/`KbList()`, `KbSearchResult` (`types.ts`), `shared/DataTable.tsx`, and `primitives.css`; the report identifies `KbList.tsx` as a community hub. `graphify path "KbList.tsx" "DataTable.tsx"` found no directed path. The requested image path was not present in this worktree.
+- Changed files: `web/src/components/pages/KbList.tsx`, its component/story tests, and `web/src/components/primitives/primitives.css`; no shared primitives or tokens changed. Upload remains the only secondary card and is hidden on mobile behind the existing entry action/dialog.
+
 ### WU2 — landing retrieval + upload cards + mobile
 - Baseline before edits: `cd web && npm run test` — PASS, 95 files / 1001 tests.
 - RED — retrieval layout/disclosure/initial state: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx -t "presents retrieval|shows the initial retrieval"` — FAIL as expected, 2 failed / 27 skipped; missing retrieval description and initial empty-state assertions.
@@ -184,6 +212,12 @@ restore) carries a test; pure layout/CSS findings assert structure.
 - Independent read-only verification (parent): findings 001-010 each mapped to a code/CSS anchor — all `implemented`; no upload/search/retry/permission regression; no literal white background; `tokens.css` untouched; scope confined to the landing page and KB-scoped CSS. Remaining test gaps are presentation-only (icon rendering for 006/008 and responsive-breakpoint CSS for 001/010).
 - RDD assess (base `ba413425`, committed-only): risk `medium`, 7 paths / 341 changed lines, `review_due: false` (`under_budget`) — boundary stays pending in the slice.
 - Note: the writer self-reported `partial` because the RED run stopped at the first failing assertion and did not demonstrate RED per finding; the functional checks (full suite 1001 tests, `tsc -b`, build) are green and verified.
+
+### Review record — WU1+WU2 slice (2026-10-05)
+- RDD assess (base `ba413425`, committed-only): risk `medium`, 7 paths / 494 changed lines, `review_due: true` (`slice_budget_reached`).
+- Consent: owner granted ("Review this change").
+- Native review lineage `review-04d267427e08e26a`, lens `review-reliability`, tier `medium`, correction budget 200.
+- Outcome: **approved**, no findings; authority `burned` (`gentle-ai.review-acknowledged/v1`). Reviewed boundary advances to the WU2 head; WU3/WU4 start from that base.
 
 ## Follow-ups (not blocking)
 - None identified yet. The KB API already returns every field the references need, so no

@@ -64,14 +64,18 @@ describe("KbList page", () => {
     expect(source).not.toMatch(/state\?: KbListState/);
   });
 
-  it("makes documents primary and keeps upload and retrieval as secondary regions", () => {
+  it("makes documents and retrieval primary and keeps only upload in the secondary column", () => {
     render(<KbListView />);
     const table = screen.getByRole("table");
     const uploadHeading = screen.getByRole("heading", { name: "Agregar documento" });
     expect(table.compareDocumentPosition(uploadHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(table.closest(".kb-list__layout")).toHaveClass("kb-list__layout");
     expect(uploadHeading.closest(".kb-list__secondary")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Herramienta de recuperación" })).toBeInTheDocument();
+    const primary = table.closest(".kb-list__primary") as HTMLElement;
+    const retrieval = screen.getByRole("heading", { name: "Probar recuperación" });
+    expect(retrieval.closest(".kb-list__primary")).toBe(primary);
+    expect(table.compareDocumentPosition(retrieval) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Herramienta de recuperación" }).closest(".kb-list__secondary")).toBeNull();
   });
 
   it("renders an approved Spanish status label per document (triangulation across activo/deshabilitado)", () => {
@@ -185,6 +189,12 @@ describe("KbList search panel", () => {
     await runSearch(new Response(JSON.stringify({ results }), { status: 200 }), async (searchCard) => {
       expect(await within(searchCard).findByText("1 resultados ordenados por similitud.")).toBeInTheDocument();
       expect(within(searchCard).getByText("Respuesta")).toBeInTheDocument();
+      expect(within(searchCard).getByText(docs[0].title)).toBeInTheDocument();
+      expect(within(searchCard).getByText("v3")).toBeInTheDocument();
+      expect(within(searchCard).getByText("Fragmento 1")).toBeInTheDocument();
+      expect(within(searchCard).getByText("Similitud 0.900")).toBeInTheDocument();
+      expect(within(searchCard).queryByRole("table")).toBeNull();
+      expect(within(searchCard).getByText("Respuesta").closest(".kb-search__result-content")).not.toHaveStyle({ maxWidth: "32rem" });
     });
     await runSearch(new Response(JSON.stringify({ results: [] }), { status: 200 }), async (searchCard) => {
       expect(await within(searchCard).findByText("No encontramos resultados")).toBeInTheDocument();
