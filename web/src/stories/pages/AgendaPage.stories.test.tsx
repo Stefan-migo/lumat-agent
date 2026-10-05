@@ -141,8 +141,8 @@ describe("AgendaPage Storybook state matrix", () => {
     expect(form).toBeInTheDocument();
     expect(form).not.toHaveAttribute("hidden");
     expect(form?.children.length).toBeGreaterThan(1);
-    expect(screen.getByRole("combobox", { name: "Caso" })).toBeInTheDocument();
-    await user.type(screen.getByRole("combobox", { name: "Caso" }), "Walk-in case");
+    expect(screen.getByRole("combobox", { name: "Caso vinculado" })).toBeInTheDocument();
+    await user.type(screen.getByRole("combobox", { name: "Caso vinculado" }), "Walk-in case");
     expect(screen.getByRole("option", { name: "Crear «Walk-in case»" })).toBeInTheDocument();
     expect(screen.getByLabelText("Servicio")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Crear visita" })).toBeInTheDocument();

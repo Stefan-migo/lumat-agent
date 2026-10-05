@@ -124,7 +124,14 @@
 }
 .agenda-create-form__section h3 { margin: 0; font-size: var(--text-lg); }
 .agenda-create-form__row { display: grid; gap: var(--space-3); min-width: 0; }
+.agenda-create-form__icon-field { position: relative; min-width: 0; }
+.agenda-create-form__leading-icon { position: absolute; z-index: 1; top: calc(var(--text-sm) + var(--space-1) + var(--space-4)); left: var(--space-2); width: var(--icon-md); height: var(--icon-md); color: var(--corp-fg-muted); pointer-events: none; }
+.agenda-create-form__select--icon,
+.agenda-create-form__text-control--icon,
+.agenda-create-form__icon-field .combobox__input { padding-left: calc(var(--space-2) + var(--icon-md) + var(--space-2)); }
+.agenda-create-form__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--corp-border); }
 @media (min-width: 40.0625rem) {
+  .agenda-create-form__row--identity { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .agenda-create-form__row--visit { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .agenda-create-form__row--schedule { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

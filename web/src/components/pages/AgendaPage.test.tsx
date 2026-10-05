@@ -145,6 +145,31 @@ describe('AgendaPage', () => {
     );
   });
 
+  it('uses the reference sections, leading field icons, and primary create action', async () => {
+    const user = userEvent.setup();
+    render(<AgendaPage data={[]} state="empty" />);
+
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nueva visita' });
+    const form = dialog.querySelector('.agenda-create-form');
+    const stylesheet = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+    const identityRow = stylesheet.match(/\.agenda-create-form__row--identity\s*\{([^}]*)\}/)?.[1] ?? '';
+    const leadingIcon = stylesheet.match(/\.agenda-create-form__leading-icon\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(dialog.querySelector('.dialog__icon svg')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Completa los datos para agendar una visita.');
+    expect(within(dialog).getByRole('heading', { name: 'Datos de la visita' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'Fecha y horario' })).toBeInTheDocument();
+    for (const label of ['Cliente', 'Caso vinculado', 'Servicio', 'Técnico', 'Fecha', 'Hora local', 'Duración', 'Zona horaria']) {
+      expect(within(dialog).getByLabelText(label)).toBeInTheDocument();
+    }
+    expect(form?.querySelectorAll('.agenda-create-form__leading-icon').length).toBeGreaterThanOrEqual(4);
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toHaveClass('btn--secondary');
+    expect(within(dialog).getByRole('button', { name: 'Crear visita' })).toHaveClass('btn--primary');
+    expect(identityRow).toMatch(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+    expect(leadingIcon).toMatch(/position:\s*absolute/);
+  });
+
   it('keeps calendar day and register surfaces aligned by CSS contract', () => {
     const stylesheet = readFileSync(join(__dirname, '../primitives/primitives.css'), 'utf8');
     const day = stylesheet.match(/\.agenda-calendar__day\s*\{([^}]*)\}/)?.[1] ?? '';
@@ -460,16 +485,16 @@ describe('AgendaPage', () => {
     expect(screen.getByRole('heading', { name: 'Datos de la visita', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Fecha y horario', level: 3 })).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Cliente'), '10');
-    await user.type(screen.getByLabelText('Caso'), 'Mantención');
+    await user.type(screen.getByLabelText('Caso vinculado'), 'Mantención');
     await user.click(screen.getByRole('option', { name: 'Mantención (#20)' }));
     await user.selectOptions(screen.getByLabelText('Técnico'), '30');
     await user.type(screen.getByLabelText('Servicio'), 'Maintenance');
-    await user.clear(screen.getByLabelText('Fecha local'));
-    await user.type(screen.getByLabelText('Fecha local'), '2026-09-05');
+    await user.clear(screen.getByLabelText('Fecha'));
+    await user.type(screen.getByLabelText('Fecha'), '2026-09-05');
     await user.clear(screen.getByLabelText('Hora local'));
     await user.type(screen.getByLabelText('Hora local'), '10:00');
-    await user.clear(screen.getByLabelText('Duración (minutos)'));
-    await user.type(screen.getByLabelText('Duración (minutos)'), '60');
+    await user.clear(screen.getByLabelText('Duración'));
+    await user.type(screen.getByLabelText('Duración'), '60');
     await user.click(screen.getByRole('button', { name: 'Crear visita' }));
 
     await waitFor(() => expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({ customer_id: 10, case_id: 20, technician_id: 30, timezone: 'America/Santiago', local_time: '10:00:00' })));
@@ -498,19 +523,19 @@ describe('AgendaPage', () => {
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Cliente'), '10');
-    await user.type(screen.getByLabelText('Caso'), 'Caso sin servicio');
+    await user.type(screen.getByLabelText('Caso vinculado'), 'Caso sin servicio');
     await user.click(screen.getByRole('option', { name: 'Caso sin servicio (#20)' }));
     expect(screen.getByLabelText('Servicio')).toHaveValue('');
-    expect(screen.getByRole('combobox', { name: 'Caso' })).toHaveValue('Caso sin servicio (#20)');
-    expect(screen.getByRole('combobox', { name: 'Caso' })).not.toHaveValue(expect.stringContaining('null'));
+    expect(screen.getByRole('combobox', { name: 'Caso vinculado' })).toHaveValue('Caso sin servicio (#20)');
+    expect(screen.getByRole('combobox', { name: 'Caso vinculado' })).not.toHaveValue(expect.stringContaining('null'));
     const form = screen.getByLabelText('Cliente').closest('.agenda-create-form');
     expect(form).toBeInTheDocument();
     expect(form?.children.length).toBeGreaterThan(1);
     const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
     expect(css).toMatch(/\.agenda-create-form\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--space-3\)/s);
     await user.selectOptions(screen.getByLabelText('Técnico'), '30');
-    await user.clear(screen.getByLabelText('Fecha local'));
-    await user.type(screen.getByLabelText('Fecha local'), '2026-09-05');
+    await user.clear(screen.getByLabelText('Fecha'));
+    await user.type(screen.getByLabelText('Fecha'), '2026-09-05');
     await user.clear(screen.getByLabelText('Hora local'));
     await user.type(screen.getByLabelText('Hora local'), '10:00');
     await user.click(screen.getByRole('button', { name: 'Crear visita' }));
@@ -532,7 +557,7 @@ describe('AgendaPage', () => {
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Cliente'), '10');
-    const caseInput = screen.getByRole('combobox', { name: 'Caso' });
+    const caseInput = screen.getByRole('combobox', { name: 'Caso vinculado' });
     await user.type(caseInput, 'Instalación');
     expect(screen.getByRole('option', { name: 'Crear «Instalación»' })).toBeInTheDocument();
     await user.click(screen.getByRole('option', { name: 'Crear «Instalación»' }));
@@ -541,8 +566,8 @@ describe('AgendaPage', () => {
     await waitFor(() => expect(caseInput).toHaveValue('Instalación (#21)'));
     expect(screen.getByLabelText('Servicio')).toHaveValue('Instalación');
     await user.selectOptions(screen.getByLabelText('Técnico'), '30');
-    await user.clear(screen.getByLabelText('Fecha local'));
-    await user.type(screen.getByLabelText('Fecha local'), '2026-09-05');
+    await user.clear(screen.getByLabelText('Fecha'));
+    await user.type(screen.getByLabelText('Fecha'), '2026-09-05');
     await user.click(screen.getByRole('button', { name: 'Crear visita' }));
     await waitFor(() => expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({ customer_id: 10, case_id: 21, service: 'Instalación' })));
   });
@@ -559,7 +584,7 @@ describe('AgendaPage', () => {
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Cliente'), '10');
-    const caseInput = screen.getByRole('combobox', { name: 'Caso' });
+    const caseInput = screen.getByRole('combobox', { name: 'Caso vinculado' });
     await user.type(caseInput, 'Instalación');
     const createOption = screen.getByRole('option', { name: 'Crear «Instalación»' });
     await user.click(createOption);
@@ -581,7 +606,7 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[]} state="empty" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
-    await user.type(screen.getByRole('combobox', { name: 'Caso' }), 'Instalación');
+    await user.type(screen.getByRole('combobox', { name: 'Caso vinculado' }), 'Instalación');
     await user.click(screen.getByRole('option', { name: 'Crear «Instalación»' }));
     expect(createCase).not.toHaveBeenCalled();
     expect(await screen.findByRole('alert')).toHaveTextContent(/cliente/i);
