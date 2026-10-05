@@ -209,9 +209,22 @@ Owner ruled the reference may be overridden here.
 - [x] WU3a — landing: retrieval placement + results redesign (owner additions A1/A2)
 - [x] WU3b — detail: header + tabs + information cards (findings 020-027)
 - [x] WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
-- [ ] WU5 — owner additions: unify Contenido+Versiones tab, markdown preview, enable path
+- [x] WU5 — owner additions: unify Contenido+Versiones tab, markdown preview, enable path
 
 ## Verification evidence
+### WU5 — unified content/version tab, markdown preview and enable path
+- WU5a backend commit: `a5834fbf` — `POST /panel/api/kb/{id}/enable` sets only `active=True`.
+- WU5a functional: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_kb_settings.py -k kb_enable` — PASS, 2 passed.
+- WU5a integration: `eval "$(infra/test-db.sh env)" && uv run pytest tests/integration/test_kb.py` — PASS, 19 passed.
+- RED: `cd web && npx vitest run src/components/pages/KbDocumentDetail.test.tsx src/stories/pages/KbDocumentDetail.stories.test.tsx` — FAIL as expected, 6 failed / 10 passed; old tabs, missing preview, and disabled-document enable action did not meet the new assertions.
+- GREEN focused: same Vitest command — PASS, 2 files / 16 tests.
+- Final `cd web && npm run test` — PASS, 96 files / 1013 tests. An earlier run had failures only in the known-flaky `AgendaPage.stories.test.tsx`; isolated rerun passed 12/12, and the final full run passed.
+- Final `cd web && npx tsc -b --noEmit` — PASS (exit 0; no diagnostics).
+- Final `cd web && npm run build` — PASS; Vite built successfully with the existing >500 kB chunk-size warning.
+- Frontend commit: `a1e25ee5` — `feat(kb): unify versions, markdown preview, and enable`.
+- Graphify consulted: nodes `KbDocumentDetail.tsx` / `KbDocumentDetail()`, `KbDocumentDetail.test.tsx`, `Tabs.tsx` / `Tabs()`, `Markdown.tsx` / `Markdown()`, `api.ts`, `postJson()`, `disableKbDocument()`, `editKbDocument()`, `restoreKbDocument()`, and backend `enable_document()`. `graphify path "KbDocumentDetail.tsx" "Markdown.tsx"` found no directed path; the earlier undirected traversal linked the detail through `api.ts` and `AgentChat.tsx` to `Markdown.tsx`.
+- Scope: API function, detail page and its component/story tests, and additive tokenized KB CSS only. Shared primitive components and token definitions were not changed; the pre-existing disable confirmation and restore endpoint/payload remain intact.
+
 ### WU4 — detail columns, audience and availability
 - Baseline before edits: `cd web && npm run test` — PASS, 96 files / 1010 tests.
 - RED: `cd web && npx vitest run src/components/pages/KbDocumentDetail.test.tsx src/stories/pages/KbDocumentDetail.stories.test.tsx` — FAIL as expected against the old surface, 3 failed / 11 passed; required two-column groups, Audience/Availability cards and restore-on-Versiones assertions were absent.
