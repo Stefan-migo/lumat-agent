@@ -1,7 +1,7 @@
 # Findings — conocimiento
 
 Lifecycle: `captured → owner-review → owner-done → code-analysis → validated → implementing → done`
-Status: **VALIDATED** — fresh-context read-only validator returned `PASS` over 30 rows on 2026-10-02.
+Status: **IMPLEMENTING** — WU1 (conocimiento-001..010) is in progress as of 2026-10-05.
 Owner visual analysis: [`visual.md`](visual.md).
 App commit: `42c8c5aee5d295d487ba270d3a08792f4a00b603`.
 Graph nodes consulted (Step 1): `KbList.tsx`, `KbDocumentDetail.tsx`, `KbList()`, `KbDocumentDetail()`,

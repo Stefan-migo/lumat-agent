@@ -25,7 +25,7 @@ describe("KbList page", () => {
     expect(screen.getByRole("heading", { name: "Base de conocimientos" })).toBeInTheDocument();
     const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
     expect(within(addRegion).getByLabelText(/título/i)).toBeInTheDocument();
-    expect(within(addRegion).getByLabelText(/archivo/i)).toBeInTheDocument();
+    expect(within(addRegion).getByLabelText("Archivo (PDF / MD / TXT / CSV)")).toBeInTheDocument();
     expect(within(addRegion).getByRole("button", { name: "Agregar" })).toBeInTheDocument();
   });
 
@@ -33,22 +33,21 @@ describe("KbList page", () => {
     render(<KbListView />);
     const table = screen.getByRole("table");
     const first = docs[0];
-    const row = within(table).getByText(`#${first.id}`).closest("tr") as HTMLElement;
-    for (const header of ["#", "Título", "Formato", "Versión", "Estado", "Audiencia", "Costo"]) {
+    const row = within(table).getByRole("link", { name: new RegExp(first.title) }).closest("tr") as HTMLElement;
+    for (const header of ["Documento", "Versión", "Estado", "Audiencia", "Costo"]) {
       expect(within(table).getByRole("columnheader", { name: header })).toBeInTheDocument();
     }
-    expect(within(row).getByText(first.title)).toBeInTheDocument();
-    expect(within(row).getByText(first.format)).toBeInTheDocument();
-    expect(within(row).getByText(`${first.version} (activa: ${first.active_version})`)).toBeInTheDocument();
+    expect(within(row).getByText(`#${first.id} · ${first.format.toUpperCase()}`)).toBeInTheDocument();
+    expect(within(row).getByText(`v${first.active_version} · Activa`)).toBeInTheDocument();
     expect(within(row).getByText(kbStatusLabel(first.active ? "activo" : "deshabilitado"))).toBeInTheDocument();
     expect(within(row).getByText("$0.000412")).toBeInTheDocument();
-    expect(within(row).getByText("Cliente y Lumat")).toBeInTheDocument();
+    expect(within(row).getByText("Cliente · Cliente y Lumat")).toBeInTheDocument();
   });
 
   it("places the populated document table on the shared data surface", () => {
     render(<KbListView />);
     const table = screen.getByRole("table");
-    expect(table.closest(".data-region")).toBeInTheDocument();
+    expect(table.closest(".card")).toHaveClass("kb-list__documents");
   });
 
   it("keeps every KB stylesheet class referenced by a component or story", () => {
@@ -70,7 +69,8 @@ describe("KbList page", () => {
     const table = screen.getByRole("table");
     const uploadHeading = screen.getByRole("heading", { name: "Agregar documento" });
     expect(table.compareDocumentPosition(uploadHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(uploadHeading.closest(".card")).toBeNull();
+    expect(table.closest(".kb-list__layout")).toHaveClass("kb-list__layout");
+    expect(uploadHeading.closest(".kb-list__secondary")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Herramienta de recuperación" })).toBeInTheDocument();
   });
 
@@ -78,15 +78,15 @@ describe("KbList page", () => {
     render(<KbListView />);
     const table = screen.getByRole("table");
     const inactive = docs.find((doc) => !doc.active)!;
-    const inactiveRow = within(table).getByText(`#${inactive.id}`).closest("tr") as HTMLElement;
+    const inactiveRow = within(table).getByRole("link", { name: new RegExp(inactive.title) }).closest("tr") as HTMLElement;
     const inactiveBadge = within(inactiveRow)
       .getAllByText(kbStatusLabel("deshabilitado"))
       .find((element) => element.getAttribute("data-tone") === "neutral");
     expect(inactiveBadge, "the inactive badge should render the approved label").toBeDefined();
-    expect(within(inactiveRow).getByText("Interno (solo Lumat)")).toBeInTheDocument();
+    expect(within(inactiveRow).getByText("Interno · Solo Lumat")).toBeInTheDocument();
 
     const active = docs.find((doc) => doc.active)!;
-    const activeRow = within(table).getByText(`#${active.id}`).closest("tr") as HTMLElement;
+    const activeRow = within(table).getByRole("link", { name: new RegExp(active.title) }).closest("tr") as HTMLElement;
     const activeBadge = within(activeRow)
       .getAllByText(kbStatusLabel("activo"))
       .find((element) => element.getAttribute("data-tone") === "success");
@@ -97,9 +97,9 @@ describe("KbList page", () => {
     const onOpenDocument = vi.fn();
     const user = userEvent.setup();
     render(<KbList data={{ docs }} onOpenDocument={onOpenDocument} />);
-    const row = within(screen.getByRole("table")).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
-    const link = within(row).getByRole("link", { name: docs[0].title });
-    expect(link).toHaveClass("table__link");
+    const row = within(screen.getByRole("table")).getByRole("link", { name: new RegExp(docs[0].title) }).closest("tr") as HTMLElement;
+    const link = within(row).getByRole("link", { name: new RegExp(docs[0].title) });
+    expect(link).toHaveClass("kb-list__identity");
     expect(within(row).queryByRole("button", { name: "Deshabilitar" })).toBeNull();
     expect(within(row).queryByRole("button", { name: "Restaurar" })).toBeNull();
     await user.click(link);
@@ -115,7 +115,7 @@ describe("KbList page", () => {
 
   it("keeps provider/model advanced keys out of ordinary table rows", () => {
     render(<KbListView />);
-    const row = within(screen.getByRole("table")).getByText(`#${docs[0].id}`).closest("tr") as HTMLElement;
+    const row = within(screen.getByRole("table")).getByRole("link", { name: new RegExp(docs[0].title) }).closest("tr") as HTMLElement;
     expect(within(row).queryByText(`${docs[0].provider} / ${docs[0].model}`)).toBeNull();
   });
 
@@ -142,7 +142,7 @@ describe("KbList empty story", () => {
 
 describe("KbList search panel", () => {
   async function openSearch() {
-    await screen.findByText(docs[0].title);
+    await screen.findByRole("table");
     return screen.getByRole("heading", { name: "Probar recuperación" }).closest(".card") as HTMLElement;
   }
 
@@ -207,13 +207,41 @@ describe("KbList search panel", () => {
     loadingView.unmount();
     fetchMock.mockRestore();
   });
+
+  it("shows the initial retrieval empty state and hides advanced values until disclosed", async () => {
+    render(<KbList data={{ docs }} />);
+    const card = screen.getByRole("heading", { name: "Probar recuperación" }).closest(".card") as HTMLElement;
+    expect(within(card).getByText("Los resultados aparecerán aquí después de buscar.")).toBeInTheDocument();
+    expect(within(card).getByText("Opciones avanzadas").closest("details")).not.toHaveAttribute("open");
+    await userEvent.setup().click(within(card).getByText("Opciones avanzadas"));
+    expect(within(card).getByLabelText("Máximo de resultados")).toBeInTheDocument();
+  });
+});
+
+describe("KbList mobile upload story", () => {
+  it("opens the add-document dialog from the full-width entry action", async () => {
+    render(<KbList data={{ docs }} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Agregar documento" }));
+    expect(screen.getByRole("dialog", { name: "Agregar documento" })).toBeInTheDocument();
+  });
+
+  it("accepts a dropped file through the accessible dropzone", async () => {
+    render(<KbList data={{ docs }} />);
+    const card = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
+    const zone = within(card).getByText("Arrastra un archivo aquí o selecciónalo desde tu equipo").closest("[role='button']") as HTMLElement;
+    const file = new File(["content"], "guide.md", { type: "text/markdown" });
+    fireEvent.drop(zone, { dataTransfer: { files: [file] } });
+    expect(within(card).getByText("guide.md")).toBeInTheDocument();
+    expect(within(card).getByLabelText("Archivo (PDF / MD / TXT / CSV)")).toHaveAttribute("type", "file");
+  });
 });
 
 describe("KbList API page", () => {
   it("renders the admin document list from GET /panel/api/kb", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ docs }), { status: 200 }));
     render(<KbList />);
-    expect(await screen.findByText(docs[0].title)).toBeInTheDocument();
+    const table = await screen.findByRole("table");
+    expect(within(table).getByRole("link", { name: new RegExp(docs[0].title) })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/panel/api/kb", expect.objectContaining({ credentials: "include" }));
     fetchMock.mockRestore();
   });
@@ -232,12 +260,12 @@ describe("KbList API page", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, doc: docs[0] }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ docs }), { status: 200 }));
     render(<KbList />);
-    await screen.findByText(docs[0].title);
+    await screen.findByRole("table");
     const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
     expect(within(addRegion).getByLabelText("Audiencia")).toHaveValue("internal");
     await user.selectOptions(within(addRegion).getByLabelText("Audiencia"), "customer");
     await user.type(within(addRegion).getByLabelText("Título"), "Guide");
-    await user.upload(within(addRegion).getByLabelText(/archivo/i), new File(["# Content"], "guide.md", { type: "text/markdown" }));
+    await user.upload(within(addRegion).getByLabelText("Archivo (PDF / MD / TXT / CSV)"), new File(["# Content"], "guide.md", { type: "text/markdown" }));
     await user.click(within(addRegion).getByRole("button", { name: "Agregar" }));
     const request = fetchMock.mock.calls[1][1] as RequestInit;
     expect(request.method).toBe("POST");
@@ -261,7 +289,7 @@ describe("KbList API page", () => {
     const user = userEvent.setup();
     render(<KbList data={{ docs }} />);
     const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
-    const fileInput = within(addRegion).getByLabelText(/archivo/i);
+    const fileInput = within(addRegion).getByLabelText("Archivo (PDF / MD / TXT / CSV)");
     expect(fileInput).toHaveAttribute("accept", ".pdf,.md,.txt,.csv");
     expect(within(addRegion).getByText(/máximo 5 mb/i)).toBeInTheDocument();
     await user.type(within(addRegion).getByLabelText("Título"), "Guide");
@@ -278,7 +306,7 @@ describe("KbList API page", () => {
     render(<KbList data={{ docs }} />);
     const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
     await user.type(within(addRegion).getByLabelText("Título"), "Guide");
-    await user.upload(within(addRegion).getByLabelText(/archivo/i), new File(["content"], "guide.md", { type: "text/markdown" }));
+    await user.upload(within(addRegion).getByLabelText("Archivo (PDF / MD / TXT / CSV)"), new File(["content"], "guide.md", { type: "text/markdown" }));
     await user.click(within(addRegion).getByRole("button", { name: "Agregar" }));
     expect(await within(addRegion).findByRole("alert")).toHaveTextContent("No pudimos procesar el documento");
     expect(within(addRegion).getByRole("button", { name: "Reintentar carga" })).toBeInTheDocument();

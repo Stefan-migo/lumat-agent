@@ -1,0 +1,190 @@
+# ODD task — KB (conocimiento) panel redesign
+
+## Objective
+Match the KB section to the owner-approved references, implementing the validated findings
+`conocimiento-001..030` across its two surfaces:
+- landing (`/panel/app/kb`, `web/src/components/pages/KbList.tsx`),
+- document detail (`/panel/app/kb/:id`, `web/src/components/pages/KbDocumentDetail.tsx`).
+
+## Problem
+The landing renders a single flat column (bare documents table, inline upload form, retrieval
+form) and the detail consolidates everything into "Identidad" + "Operaciones" cards. Neither
+follows the references. The owner ran the image-first analysis (machine v2): capture, owner
+visual analysis (the gate), read-only code analysis, and a fresh-context validator that
+returned `PASS` over 30 rows on 2026-10-02 (`odd/analysis/conocimiento/findings.md`). The
+reference governs geometry/layout; the design system governs palette; the references are
+AI-generated and compressed, so mobile/tablet must follow the design system's air and spacing
+instead of the reference density.
+
+## Why now
+The KB analysis landed on `main` (PR #473, merge `ba413425`, 2026-10-05). The agenda and
+usuarios sections are closed, so KB is the next section in the serial implementation order
+(`panel-section-analysis` phase 5). All 30 findings are `local`: the shared primitives the
+reference needs already exist (`Card` gained `icon`/`description`, `Dialog` gained
+`icon`/`description` and mobile-sheet behaviour, `PageFrame`/`PageHeader` gained
+`subtitle`/`titleAdornment`), so KB is pure local composition with no upstream unit.
+
+## Scope
+In:
+- `web/src/components/pages/KbList.tsx`: two-column body, page header (subtitle + count chip),
+  "Documentos" card (toolbar with search + "Filtros", identity/version/audience cells, footer
+  count, mobile card rows), "Probar recuperación" card (icon, subtitle, inline search,
+  advanced-options disclosure, initial empty state), "Agregar documento" card (icon, subtitle,
+  dropzone, mobile primary action + bottom sheet).
+- `web/src/components/pages/KbDocumentDetail.tsx`: header (metadata line, status badge, file
+  icon, "Editar contenido" action), Resumen/Contenido/Versiones tabs, "Información del
+  documento" / "Detalles técnicos" / "Versión activa" / "Audiencia" / "Disponibilidad" cards,
+  tablet two-column composition.
+- `.kb-*` / `.kb-list*` / `.kb-search*` / `.kb-actions*` rules in
+  `web/src/components/primitives/primitives.css` (additive, section-scoped; the KB mobile add
+  sheet follows the existing `.dialog:has(...)` mobile-sheet pattern).
+- Tests for every touched file, plus `KbList.stories.tsx` / `KbDocumentDetail.stories.tsx`.
+
+Out:
+- `web/src/tokens/tokens.css`: palette is settled; no `token-palette` finding on KB.
+- Backend (`app/…`): the KB API already returns the needed fields; no finding requires a
+  payload change.
+- Shared primitives: `Card`, `Dialog`, `PageFrame`, `PageHeader`, `Tabs`, `Badge`, `Input`,
+  `Select`, `Textarea` are used as-is; if a change becomes necessary it is a finding for the
+  owner, not a silent edit.
+- Other panel sections and `TechnicianAgenda.tsx`.
+
+## Constraints
+- Tokens only. Do NOT touch `tokens.css`. No white element backgrounds; use `var(--surface)` /
+  `var(--brand-bg-elevated)`.
+- Follow the design system's air/spacing on mobile/tablet; do not copy the reference's
+  compressed density.
+- UI copy neutral Chilean Spanish; code, comments, commits and artifacts English.
+- Preserve every existing behavior: document list load/retry, upload (extension/size
+  validation, feedback, retry), retrieval search (topK/minSim, empty/denied/error), document
+  edit (new version), visibility change, disable, restore, permissions and API calls.
+- Tests and docs stay with the behavior in the same commit.
+
+## Authorized scope
+- Worktree: `/home/stefan/repos/lumat-agent-odd-kb-redesign`
+- Branch: `odd/kb-redesign`
+- Base: `ba413425` (`origin/main` after PR #473).
+- No push, PR, or merge without explicit owner approval.
+
+## Checks (run in the worktree, from `web/`)
+- `npm run test`
+- `npx tsc -b --noEmit`
+- `npm run build`
+
+## TDD mode
+`openspec/config.yaml` declares `testing.strict_tdd: true` for the backend (`uv run pytest
+tests/`). This pass is web-only with runner `cd web && npm run test` (vitest), consistent with
+the usuarios and agenda passes: tests required alongside each behavior, full suite green before
+each work-unit commit. Every behavioral change (upload, search, edit, visibility, disable,
+restore) carries a test; pure layout/CSS findings assert structure.
+
+## Graph nodes consulted (graphify)
+`KbList()` (`KbList.tsx:98`), `KbDocumentDetail()` (`KbDocumentDetail.tsx:53`),
+`KbList.tsx`, `KbDocumentDetail.tsx`, `PageFrame()` (`PageFrame.tsx:17`), `PageHeader`
+(`PageHeader.tsx:14`), `Card()` (`Card.tsx:11`), `Dialog()` (`Dialog.tsx:18`), `Badge()`,
+`Icon()`, `shared/toneMaps.ts` (`kbStatusLabel`, `kbStatusTone`), `panelRoutes.ts`
+(`pathForRoute`), `api.ts` (`refreshKbDocuments`, `uploadKbDocument`, `searchKb`,
+`getKbDocument`, `editKbDocument`, `setKbVisibility`, `disableKbDocument`,
+`restoreKbDocument`), `primitives.css`. Community `KbList.tsx` groups `KbDocumentDetail.tsx`,
+`KbList.stories.tsx` and `KbDocumentDetail.stories.tsx`.
+
+## Work units
+### WU1 — landing: header + "Documentos" card (findings 001-010)
+- Body: replace the flat single column with the reference two-column composition (001).
+- Header: subtitle sentence "Gestiona los documentos y prueba la recuperación de información."
+  via `PageFrame.subtitle` (002); document count as a chip beside the title via
+  `titleAdornment` + `Badge` (003).
+- "Documentos" card: frame the bare table in a bordered `Card` titled "Documentos" (004);
+  add the reference toolbar with a search input and "Filtros" control (005); rebuild the cells
+  — identity (PDF icon + title + `#<id> · <format>` + chevron) (006), version (`v{n} · Activa`)
+  (007), audience (lock icon + `Interno · Solo Lumat`) (008); add the "1 documento" footer
+  count (009); render mobile as a card row instead of the overflowing table (010).
+- Update `KbList.test.tsx`, `KbList.stories.tsx`.
+
+### WU2 — landing: retrieval + upload cards + mobile (findings 011-019)
+- "Probar recuperación" card: leading magnifier icon (011) and supporting subtitle (012) via
+  `Card` `icon`/`description`; place "Buscar" inline inside the query field (013); collapse
+  topK/minSim under an "Opciones avanzadas" disclosure (014); show the initial empty state
+  "Los resultados aparecerán aquí después de buscar." before a search (015).
+- "Agregar documento": present as a `Card` with icon, title and supporting subtitle instead of
+  the inline heading + fields (016); replace the native file input with a dashed drag-and-drop
+  zone plus a "Seleccionar archivo" button (017); add the full-width primary "Agregar
+  documento" entry action under the header on mobile (018) and open the add form as a bottom
+  sheet over the list (019), composing the existing `Dialog` + mobile-sheet CSS.
+- Update `KbList.test.tsx`, `KbList.stories.tsx`.
+
+### WU3 — detail: header + tabs + information cards (findings 020-027)
+- Header: metadata line `#<id> · <format> · Creado el <date>` instead of the generic subtitle
+  (020); `Activo` status badge beside the title (021); file icon tile (022); replace "Volver a
+  documentos" with an "Editar contenido" action (023).
+- Tabs: render the reference Resumen / Contenido / Versiones tabs, composing the existing
+  `Tabs` primitive (024).
+- Cards: split the consolidated "Identidad" into "Información del documento"
+  (Título/Formato/Creado/Cantidad de versiones) (025) and "Detalles técnicos"
+  (Proveedor/Modelo/Costo) (026); add the "Versión activa" surface (`v{n}`, `En uso` chip,
+  "Ver versiones →") (027).
+- Update `KbDocumentDetail.test.tsx`, `KbDocumentDetail.stories.tsx`.
+
+### WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
+- Extract "Audiencia" into a dedicated card (028) and "Disponibilidad" into a dedicated card
+  (029), out of "Operaciones".
+- Tablet: two-column card composition matching the reference (030).
+- Update `KbDocumentDetail.test.tsx`, `KbDocumentDetail.stories.tsx`.
+
+## Delivery
+- Forecast: ~650–950 authored changed lines across 2 pages + CSS + tests → over the 400-line
+  review budget.
+- Planned slices: PR1 = WU1, PR2 = WU2, PR3 = WU3, PR4 = WU4 (or PR1 = WU1+WU2 landing,
+  PR2 = WU3+WU4 detail).
+- Chain strategy: pending owner decision (default `ask-on-risk`); decide before the first PR.
+- Local work-unit commits are allowed on the branch without a chain decision.
+
+## Acceptance criteria
+- [ ] Findings `conocimiento-001..030` implemented.
+- [ ] `npm run test`, `npx tsc -b --noEmit`, `npm run build` all green.
+- [ ] Mobile landing uses a card list with no horizontal overflow; the add form opens as a
+      bottom sheet.
+- [ ] Tablet landing and detail use the reference two-column composition.
+- [ ] Existing KB behaviors preserved (upload, search, edit, visibility, disable, restore;
+      behavior tests green).
+- [ ] `tokens.css` untouched; no white element backgrounds.
+- [ ] `odd/analysis/conocimiento/` lifecycle moved to `implementing` on the first commit and
+      `done` at close.
+
+## Progress
+- [x] WU1 — landing: header + "Documentos" card (findings 001-010)
+- [x] WU2 — landing: retrieval + upload cards + mobile (findings 011-019)
+- [ ] WU3 — detail: header + tabs + information cards (findings 020-027)
+- [ ] WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
+
+## Verification evidence
+### WU2 — landing retrieval + upload cards + mobile
+- Baseline before edits: `cd web && npm run test` — PASS, 95 files / 1001 tests.
+- RED — retrieval layout/disclosure/initial state: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx -t "presents retrieval|shows the initial retrieval"` — FAIL as expected, 2 failed / 27 skipped; missing retrieval description and initial empty-state assertions.
+- RED — upload card/dropzone: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx -t "keyboard-operable upload dropzone|accepts a dropped file"` — FAIL as expected, 2 failed / 27 skipped; missing upload card description/dropzone assertions.
+- RED — mobile add entry/sheet: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx -t "mobile entry dialog|full-width entry action"` — FAIL as expected, 2 failed / 27 skipped; entry action and dialog were absent.
+- GREEN — retrieval: same targeted command — PASS, 2 tests / 27 skipped.
+- GREEN — upload: same targeted command — PASS, 2 tests / 27 skipped; the dropped file appears in the upload form and the picker input remains wired.
+- GREEN — mobile: same targeted command — PASS, 2 tests / 27 skipped.
+- Final `cd web && npm run test` — PASS, 95 files / 1007 tests.
+- Final `cd web && npx tsc -b --noEmit` — PASS (exit 0).
+- Final `cd web && npm run build` — PASS; Vite built successfully with the existing >500 kB chunk-size warning.
+- Commit: `3b799ff4aff5eccbfdd1ab2ecadef4081dca57e0` — WU2 implementation and tests.
+- Graph nodes/edges consulted: `KbList.tsx`, `KbList()`, `Card()` / `Card.tsx`, `Dialog()` / `Dialog.tsx`, `Icon.tsx`, and landing reference `BaseDeConocimiento.png`; undirected path `KbList.tsx --imports_from--> Icon.tsx <--imports_from-- Dialog.tsx`.
+
+### WU1 — landing header + "Documentos" card
+- Baseline before edits: `cd web && npm run test` — PASS, 94 files / 999 tests.
+- RED: `cd web && npx vitest run src/components/pages/KbList.test.tsx` — FAIL as expected against the original page; the subtitle assertion reported that the required text was absent. This structural test also asserts the count badge, documents card/toolbar, identity/version/audience cells, footer and mobile list.
+- GREEN: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx` — PASS, 2 files / 23 tests.
+- Final `cd web && npm run test` — PASS, 95 files / 1001 tests.
+- Final `cd web && npx tsc -b --noEmit` — PASS (exit 0).
+- Final `cd web && npm run build` — PASS; Vite built successfully (existing >500 kB chunk-size warning).
+- Commits: lifecycle `d32564cc35fe2d791709c24bb926c9d3ca65a2aa`; WU1 code `c7a5befc4441e05dd7b74a4f2f845b891f9a8626`.
+- Graph nodes/edges consulted: `KbList()` / `KbList.tsx`, `Card()` / `Card.tsx`, `DataTable()` / `DataTable.tsx`, `PageFrame()` / `PageFrame.tsx`, `Badge()` / `Badge.tsx`; edge `KbList.tsx --imports_from--> Card.tsx`. The directed path to `DataTable.tsx` was not found.
+- Independent read-only verification (parent): findings 001-010 each mapped to a code/CSS anchor — all `implemented`; no upload/search/retry/permission regression; no literal white background; `tokens.css` untouched; scope confined to the landing page and KB-scoped CSS. Remaining test gaps are presentation-only (icon rendering for 006/008 and responsive-breakpoint CSS for 001/010).
+- RDD assess (base `ba413425`, committed-only): risk `medium`, 7 paths / 341 changed lines, `review_due: false` (`under_budget`) — boundary stays pending in the slice.
+- Note: the writer self-reported `partial` because the RED run stopped at the first failing assertion and did not demonstrate RED per finding; the functional checks (full suite 1001 tests, `tsc -b`, build) are green and verified.
+
+## Follow-ups (not blocking)
+- None identified yet. The KB API already returns every field the references need, so no
+  backend follow-up is expected (unlike the agenda technician-name gap).
