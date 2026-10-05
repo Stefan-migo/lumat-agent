@@ -170,11 +170,22 @@ this supersedes the WU2 secondary placement (where retrieval sat in the narrow r
 ## Progress
 - [x] WU1 — landing: header + "Documentos" card (findings 001-010)
 - [x] WU2 — landing: retrieval + upload cards + mobile (findings 011-019)
-- [ ] WU3a — landing: retrieval placement + results redesign (owner additions A1/A2)
+- [x] WU3a — landing: retrieval placement + results redesign (owner additions A1/A2)
 - [ ] WU3b — detail: header + tabs + information cards (findings 020-027)
 - [ ] WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
 
 ## Verification evidence
+### WU3a — landing retrieval placement + results redesign
+- Baseline before edits: `cd web && npm run test` — PASS, 95 files / 1007 tests.
+- RED: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx -t "stacks retrieval|makes documents and retrieval|renders loading, ready"` — FAIL as expected, 3 failed / 27 skipped; retrieval was still secondary and results lacked the fragment meta/content-first list.
+- GREEN: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx` — PASS, 2 files / 30 tests.
+- Final `cd web && npm run test` — PASS, 95 files / 1008 tests.
+- Final `cd web && npx tsc -b --noEmit` — PASS (exit 0).
+- Final `cd web && npm run build` — PASS; Vite built successfully with the existing >500 kB chunk-size warning.
+- Commit: `a85baa5b` — `feat(kb): move retrieval and redesign results`.
+- Graphify: queries consulted `KbList.tsx`/`KbList()`, `KbSearchResult` (`types.ts`), `shared/DataTable.tsx`, and `primitives.css`; the report identifies `KbList.tsx` as a community hub. `graphify path "KbList.tsx" "DataTable.tsx"` found no directed path. The requested image path was not present in this worktree.
+- Changed files: `web/src/components/pages/KbList.tsx`, its component/story tests, and `web/src/components/primitives/primitives.css`; no shared primitives or tokens changed. Upload remains the only secondary card and is hidden on mobile behind the existing entry action/dialog.
+
 ### WU2 — landing retrieval + upload cards + mobile
 - Baseline before edits: `cd web && npm run test` — PASS, 95 files / 1001 tests.
 - RED — retrieval layout/disclosure/initial state: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx -t "presents retrieval|shows the initial retrieval"` — FAIL as expected, 2 failed / 27 skipped; missing retrieval description and initial empty-state assertions.
