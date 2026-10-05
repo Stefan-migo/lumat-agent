@@ -33,7 +33,7 @@ describe('AppointmentDetail', () => {
     expect(dialog).toHaveTextContent('Ana');
     expect(dialog).toHaveTextContent('Visita seleccionada');
     expect(screen.getByRole('radio', { name: /Completada.*La visita se realizó/ })).toBeChecked();
-    expect(screen.getByRole('radio', { name: /No asistió.*El cliente no asistió/ })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: /No completada.*La visita no se completó/ })).not.toBeChecked();
     expect(dialog).toHaveTextContent('Este cierre no se puede revertir desde la agenda.');
     await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
     await waitFor(() => expect(closeAppointment).toHaveBeenCalledWith(7, 'completed'));
@@ -45,7 +45,7 @@ describe('AppointmentDetail', () => {
     vi.mocked(closeAppointment).mockRejectedValue(new Error('Intenta nuevamente'));
     render(<AppointmentDetail data={detail} />);
     await user.click(screen.getByRole('button', { name: 'Cerrar visita' }));
-    await user.click(screen.getByRole('radio', { name: /No asistió.*El cliente no asistió/ }));
+    await user.click(screen.getByRole('radio', { name: /No completada.*La visita no se completó/ }));
     await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Intenta nuevamente');
     expect(closeAppointment).toHaveBeenCalledWith(7, 'no_show');

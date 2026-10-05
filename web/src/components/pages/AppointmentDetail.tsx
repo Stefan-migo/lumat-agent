@@ -182,7 +182,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
         </label>
         <label className={closeOutcome === 'no_show' ? 'appointment-detail__outcome appointment-detail__outcome--selected' : 'appointment-detail__outcome'}>
           <Icon icon={UserRoundX} />
-          <span><strong>No asistió</strong><small>El cliente no asistió.</small></span>
+          <span><strong>No completada</strong><small>La visita no se completó.</small></span>
           <input type="radio" name="appointment-outcome" value="no_show" checked={closeOutcome === 'no_show'} onChange={() => setCloseOutcome('no_show')} />
         </label>
       </fieldset>
