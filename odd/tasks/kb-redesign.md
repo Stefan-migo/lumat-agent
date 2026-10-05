@@ -152,13 +152,21 @@ restore) carries a test; pure layout/CSS findings assert structure.
       `done` at close.
 
 ## Progress
-- [ ] WU1 — landing: header + "Documentos" card (findings 001-010)
+- [x] WU1 — landing: header + "Documentos" card (findings 001-010)
 - [ ] WU2 — landing: retrieval + upload cards + mobile (findings 011-019)
 - [ ] WU3 — detail: header + tabs + information cards (findings 020-027)
 - [ ] WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
 
 ## Verification evidence
-(pending — filled per work unit as each commits.)
+### WU1 — landing header + "Documentos" card
+- Baseline before edits: `cd web && npm run test` — PASS, 94 files / 999 tests.
+- RED: `cd web && npx vitest run src/components/pages/KbList.test.tsx` — FAIL as expected against the original page; the subtitle assertion reported that the required text was absent. This structural test also asserts the count badge, documents card/toolbar, identity/version/audience cells, footer and mobile list.
+- GREEN: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx` — PASS, 2 files / 23 tests.
+- Final `cd web && npm run test` — PASS, 95 files / 1001 tests.
+- Final `cd web && npx tsc -b --noEmit` — PASS (exit 0).
+- Final `cd web && npm run build` — PASS; Vite built successfully (existing >500 kB chunk-size warning).
+- Commits: lifecycle `d32564cc35fe2d791709c24bb926c9d3ca65a2aa`; WU1 code `c7a5befc4441e05dd7b74a4f2f845b891f9a8626`.
+- Graph nodes/edges consulted: `KbList()` / `KbList.tsx`, `Card()` / `Card.tsx`, `DataTable()` / `DataTable.tsx`, `PageFrame()` / `PageFrame.tsx`, `Badge()` / `Badge.tsx`; edge `KbList.tsx --imports_from--> Card.tsx`. The directed path to `DataTable.tsx` was not found.
 
 ## Follow-ups (not blocking)
 - None identified yet. The KB API already returns every field the references need, so no
