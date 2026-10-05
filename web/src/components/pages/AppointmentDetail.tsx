@@ -28,6 +28,7 @@ const DATE_LONG_FORMAT = new Intl.DateTimeFormat('es-CL', { weekday: 'long', day
 const DATE_DAY_FORMAT = new Intl.DateTimeFormat('es-CL', { day: '2-digit', timeZone: 'UTC' });
 const DATE_MONTH_FORMAT = new Intl.DateTimeFormat('es-CL', { month: 'short', timeZone: 'UTC' });
 const TIME_FORMAT = new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' });
+type TechnicianSummary = { id: number; username: string };
 
 const HISTORY_DETAIL_LABELS: Record<string, string> = {
   from_start: 'Hora anterior',
@@ -51,11 +52,11 @@ function historyDetailLabel(key: string) {
   return HISTORY_DETAIL_LABELS[key] ?? key.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
 }
 
-function historyDetailValue(value: unknown, key?: string): string {
+function historyDetailValue(value: unknown, key: string | undefined, technicians: TechnicianSummary[]): string {
   if (value == null) return '—';
   if (typeof value === 'boolean') return value ? 'Sí' : 'No';
   if ((key === 'from_technician_id' || key === 'to_technician_id') && (typeof value === 'number' || /^\d+$/.test(String(value)))) {
-    return `Técnico #${value} (ID no resuelto)`;
+    return technicians.find((technician) => technician.id === Number(value))?.username ?? `Técnico #${value} (ID no resuelto)`;
   }
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.test(value)) {
     const date = new Date(value);
@@ -64,9 +65,9 @@ function historyDetailValue(value: unknown, key?: string): string {
       return formatted.charAt(0).toLocaleUpperCase('es-CL') + formatted.slice(1);
     }
   }
-  if (Array.isArray(value)) return value.map((item) => historyDetailValue(item)).join(' · ');
+  if (Array.isArray(value)) return value.map((item) => historyDetailValue(item, undefined, technicians)).join(' · ');
   if (typeof value === 'object') {
-    return Object.entries(value).map(([nestedKey, nested]) => `${historyDetailLabel(nestedKey)}: ${historyDetailValue(nested, nestedKey)}`).join(' · ');
+    return Object.entries(value).map(([nestedKey, nested]) => `${historyDetailLabel(nestedKey)}: ${historyDetailValue(nested, nestedKey, technicians)}`).join(' · ');
   }
   return String(value);
 }
@@ -91,7 +92,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
   const [closeOutcome, setCloseOutcome] = useState<AppointmentClosureOutcome>('completed');
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [technicians, setTechnicians] = useState<{ id: number; username: string }[]>([]);
-  const [technicianUsername, setTechnicianUsername] = useState<string | null>(null);
+  const [technicianDirectory, setTechnicianDirectory] = useState<TechnicianSummary[]>([]);
   const [rescheduleForm, setRescheduleForm] = useState<AppointmentRescheduleForm>({ local_date: '', local_time: '', duration_minutes: '60', technician_id: '' });
   const [mutating, setMutating] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; title: string; detail?: string } | null>(null);
@@ -105,20 +106,20 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
   const retry = onRetry ?? fetched.retry;
   const technicianId = detail?.appointment.technician_id;
   useEffect(() => {
-    if (technicianId == null) {
-      setTechnicianUsername(null);
+    if (!detail) {
+      setTechnicianDirectory([]);
       return;
     }
     let current = true;
     void fetchTechnicians()
       .then(({ technicians: available }) => {
-        if (current) setTechnicianUsername(available.find((technician) => technician.id === technicianId)?.username ?? null);
+        if (current) setTechnicianDirectory(available);
       })
       .catch(() => {
-        if (current) setTechnicianUsername(null);
+        if (current) setTechnicianDirectory([]);
       });
     return () => { current = false; };
-  }, [technicianId]);
+  }, [detail?.appointment.id, technicianId]);
   const close = async (outcome: 'completed' | 'no_show') => {
     if (!detail || mutating) return;
     setMutating(true);
@@ -162,7 +163,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
 
   const { appointment, customer, conversation_summary: summary } = detail;
   const localStart = new Date(`${appointment.local_start.slice(0, 16)}:00Z`);
-  const technicianLabel = appointment.technician_id ? technicianUsername ?? `Técnico #${appointment.technician_id}` : 'Técnico no asignado';
+  const technicianLabel = appointment.technician_id ? technicianDirectory.find((technician) => technician.id === appointment.technician_id)?.username ?? `Técnico #${appointment.technician_id}` : 'Técnico no asignado';
   return <PageFrame className="appointment-detail-page" title={appointment.service} subtitle="Información y seguimiento de la visita."
     titleAdornment={<Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge>}
     actions={<>
@@ -206,7 +207,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
                 <details><summary><Icon icon={ChevronDown} />Ver detalles</summary><dl className="appointment-detail__history-details">
                   <div><dt>Responsable</dt><dd>{entry.actor}</dd></div>
                   <div><dt>Estado</dt><dd>{historyStatusLabel(entry.from_status)} → {historyStatusLabel(entry.to_status)}</dd></div>
-                  {entry.details ? Object.entries(entry.details).map(([key, value]) => <div key={key}><dt>{historyDetailLabel(key)}</dt><dd>{historyDetailValue(value, key)}</dd></div>) : null}
+                   {entry.details ? Object.entries(entry.details).map(([key, value]) => <div key={key}><dt>{historyDetailLabel(key)}</dt><dd>{historyDetailValue(value, key, technicianDirectory)}</dd></div>) : null}
                 </dl></details>
               </div>
             </li>)}

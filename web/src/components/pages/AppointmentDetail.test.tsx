@@ -115,7 +115,7 @@ describe('AppointmentDetail', () => {
     const { unmount } = render(<AppointmentDetail data={detail} />);
 
     expect(screen.getByText('Técnico #4')).toBeInTheDocument();
-    expect(await screen.findByText('jperez')).toBeInTheDocument();
+    expect(await screen.findAllByText('jperez')).toHaveLength(2);
     expect(screen.queryByText('Técnico #4')).not.toBeInTheDocument();
 
     unmount();
@@ -124,6 +124,19 @@ describe('AppointmentDetail', () => {
     expect(screen.getByText('Técnico #4')).toBeInTheDocument();
     await waitFor(() => expect(fetchTechnicians).toHaveBeenCalled());
     expect(screen.getByText('Técnico #4')).toBeInTheDocument();
+  });
+
+  it('resolves technician IDs in reschedule history details', async () => {
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [
+      { id: 3, username: 'luis' },
+      { id: 4, username: 'jperez' },
+    ] });
+    render(<AppointmentDetail data={detail} />);
+
+    const history = screen.getByRole('list', { name: 'Historial de la visita' });
+    expect(await within(history).findByText('luis')).toBeInTheDocument();
+    expect(within(history).getByText('jperez')).toBeInTheDocument();
+    expect(history).not.toHaveTextContent('ID no resuelto');
   });
 
   it('separates the history title and connects event icons with a timeline rule', () => {
