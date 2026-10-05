@@ -161,11 +161,29 @@ this supersedes the WU2 secondary placement (where retrieval sat in the narrow r
 - Update `KbDocumentDetail.tsx`, `primitives.css`, `KbDocumentDetail.test.tsx`,
   `KbDocumentDetail.stories.test.tsx`.
 
+### WU5 — owner additions (2026-10-05, post-WU4; approved)
+Owner ruled the reference may be overridden here.
+- O1 — unify tabs: merge "Contenido" + "Versiones" into a single tab "Contenido y versiones"
+  (the detail then has Resumen | Contenido y versiones). Improve the content editor and place the
+  version list (with restore) in that same tab.
+- O2 — markdown edit/preview: in the content editor add an Editar | Vista previa toggle using the
+  existing `web/src/components/shared/Markdown.tsx` (react-markdown + remark-gfm). Editing still
+  creates a new version (`editKbDocument`). Honest caveat: `.md`/`.txt` preview well; PDF-extracted
+  content is pypdf plain text and previews as paragraphs (no fabricated structure).
+- O3 — enable path (backend scope expansion, approved): add `enable_document` (set `active=True`
+  only — no version or visibility change) in `app/services/kb.py`, `POST /panel/api/kb/{id}/enable`
+  in `app/panel/api/routes/kb.py`, `enableKbDocument` in `web/src/api.ts`, and a "Habilitar" action
+  in the Disponibilidad card shown when the document is disabled. Restore is NOT a substitute: it
+  also flips `active_version` and resets `visibility` to internal.
+- Update backend (`app/services/kb.py`, `app/panel/api/routes/kb.py`, backend tests) and frontend
+  (`api.ts`, `KbDocumentDetail.tsx/.test.tsx/.stories.test.tsx`, `primitives.css`).
+
 ## Delivery
 - Forecast: ~650–950 authored changed lines across 2 pages + CSS + tests → over the 400-line
   review budget.
 - Planned slices: PR1 = WU1+WU2 (landing foundation, reviewed), PR2 = WU3a (retrieval
-  placement + results redesign), PR3 = WU3b (detail), PR4 = WU4 (detail follow-up).
+  placement + results redesign), PR3 = WU3b (detail), PR4 = WU4 (detail follow-up), PR5 = WU5
+  (owner additions).
 - Chain strategy: pending owner decision (default `ask-on-risk`); decide before the first PR.
 - Local work-unit commits are allowed on the branch without a chain decision.
 
@@ -173,6 +191,8 @@ this supersedes the WU2 secondary placement (where retrieval sat in the narrow r
 - [ ] Findings `conocimiento-001..030` implemented.
 - [ ] Owner additions A1/A2: "Probar recuperación" sits in the left column below "Documentos"
       per the reference; the results surface is content-first and never overflows.
+- [ ] Owner additions O1/O2/O3: Contenido + Versiones unified in one tab; editable markdown
+      preview; a short "Habilitar" path in the Disponibilidad card backed by `POST /kb/{id}/enable`.
 - [ ] `npm run test`, `npx tsc -b --noEmit`, `npm run build` all green.
 - [ ] Mobile landing uses a card list with no horizontal overflow; the add form opens as a
       bottom sheet.
@@ -189,6 +209,7 @@ this supersedes the WU2 secondary placement (where retrieval sat in the narrow r
 - [x] WU3a — landing: retrieval placement + results redesign (owner additions A1/A2)
 - [x] WU3b — detail: header + tabs + information cards (findings 020-027)
 - [x] WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
+- [ ] WU5 — owner additions: unify Contenido+Versiones tab, markdown preview, enable path
 
 ## Verification evidence
 ### WU4 — detail columns, audience and availability
