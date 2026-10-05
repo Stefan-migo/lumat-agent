@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { ChevronRight, FileText, Lock, Search, Upload } from "lucide-react";
 import { ApiError, refreshKbDocuments, searchKb, uploadKbDocument } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { Doc, DocsResponse, KbSearchResult, KbVisibility } from "../../types";
+import type { Doc, DocsResponse, KbVisibility } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
@@ -58,14 +58,6 @@ function DocumentIdentity({ doc, onOpenDocument }: { doc: Doc; onOpenDocument?: 
   </a>;
 }
 
-const searchColumns: Column<KbSearchResult>[] = [
-  { key: "title", header: "Documento", render: (result) => result.title },
-  { key: "version", header: "Versión", render: (result) => `v${result.version}` },
-  { key: "chunk", header: "Fragmento", render: (result) => result.chunk_index + 1 },
-  { key: "similarity", header: "Similitud", align: "right", render: (result) => tabularNum(result.similarity.toFixed(3)) },
-  { key: "content", header: "Contenido", render: (result) => <span className="kb-search__result-content">{result.content}</span> },
-];
-
 function stateMessage(state: AsyncDataState) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando base de conocimientos" />;
   if (state === "denied") return <StateMessage tone="danger" role="alert" title="No tienes permiso para ver este panel" />;
@@ -107,7 +99,10 @@ function SearchPanel() {
       {searchState === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para buscar en la base de conocimientos" /> : null}
       {searchState === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos realizar la búsqueda" detail="Revisa la consulta y los parámetros e inténtalo nuevamente." /> : null}
       {searchState === "empty" ? <EmptyState title="No encontramos resultados" description="Prueba con otra consulta o baja la similitud mínima." /> : null}
-      {searchState === "ready" ? <><p className="kb-search__summary">{results.length} resultados ordenados por similitud.</p><DataTable columns={searchColumns} rows={results} rowKey={(result) => `${result.document_id}-${result.version}-${result.chunk_index}`} /></> : null}
+      {searchState === "ready" ? <><p className="kb-search__summary">{results.length} resultados ordenados por similitud.</p><div className="kb-search__results" aria-label="Resultados de búsqueda">{results.map((result) => <article className="kb-search__result" key={`${result.document_id}-${result.version}-${result.chunk_index}`}>
+         <div className="kb-search__result-meta"><strong>{result.title}</strong><span>v{result.version}</span><span>Fragmento {result.chunk_index + 1}</span><span>Similitud {result.similarity.toFixed(3)}</span></div>
+         <p className="kb-search__result-content">{result.content}</p>
+       </article>)}</div></> : null}
     </div>
   </Card></section>;
 }
@@ -196,8 +191,9 @@ export function KbList({ data: controlledData, onRetry, onOpenDocument, fetchDoc
        {uploadOpen ? <Dialog open={uploadOpen} onClose={() => setUploadOpen(false)} title="Agregar documento" icon={Upload} description="Sube un documento para que esté disponible en la base de conocimientos.">
          <UploadFields title={title} setTitle={setTitle} file={file} setFile={setFile} visibility={visibility} setVisibility={setVisibility} busy={busy !== null} feedback={feedback} submitUpload={submitUpload} retryUpload={retryUpload} />
        </Dialog> : null}
-          <div className="kb-list__layout">
-           <Card title="Documentos" className="kb-list__documents">
+           <div className="kb-list__layout">
+            <div className="kb-list__primary">
+            <Card title="Documentos" className="kb-list__documents">
              <div className="kb-list__toolbar"><Input type="search" label="Buscar documentos" placeholder="Buscar documentos" value={documentQuery} onChange={(event) => setDocumentQuery(event.target.value)} /><div className="kb-list__filters"><Button variant="secondary" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}>Filtros</Button>{filtersOpen ? <Select label="Estado" value={statusFilter} options={[{ value: "all", label: "Todos" }, { value: "active", label: "Activos" }, { value: "inactive", label: "Deshabilitados" }]} onChange={(event) => setStatusFilter(event.target.value)} /> : null}</div></div>
              {docs.length === 0 ? <EmptyState title="No hay documentos" description="Sube el primer documento para comenzar." /> : <>
                <div className="kb-list__table"><DataTable columns={columns(onOpenDocument)} rows={filteredDocs} rowKey={(doc) => String(doc.id)} /></div>
@@ -207,11 +203,12 @@ export function KbList({ data: controlledData, onRetry, onOpenDocument, fetchDoc
                </li>)}</ul>
                <footer className="kb-list__count">{filteredDocs.length} {filteredDocs.length === 1 ? "documento" : "documentos"}</footer>
              </>}
-           </Card>
-            <div className="kb-list__secondary">
-              <Card title="Agregar documento" icon={Upload} description="Sube un documento para que esté disponible en la base de conocimientos." className="kb-upload-card"><UploadFields title={title} setTitle={setTitle} file={file} setFile={setFile} visibility={visibility} setVisibility={setVisibility} busy={busy !== null} feedback={feedback} submitUpload={submitUpload} retryUpload={retryUpload} /></Card>
-              <SearchPanel />
+            </Card>
+            <SearchPanel />
             </div>
+             <div className="kb-list__secondary">
+               <Card title="Agregar documento" icon={Upload} description="Sube un documento para que esté disponible en la base de conocimientos." className="kb-upload-card"><UploadFields title={title} setTitle={setTitle} file={file} setFile={setFile} visibility={visibility} setVisibility={setVisibility} busy={busy !== null} feedback={feedback} submitUpload={submitUpload} retryUpload={retryUpload} /></Card>
+             </div>
          </div>
       </> : null}
      {state === "error" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}

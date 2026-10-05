@@ -62,6 +62,20 @@ describe("KbList retrieval and upload cards", () => {
     expect(within(card).getByText("Los resultados aparecerán aquí después de buscar.")).toBeInTheDocument();
   });
 
+  it("stacks retrieval below documents in the primary column and keeps upload secondary", () => {
+    render(<KbList data={{ docs }} />);
+    const layout = screen.getByRole("heading", { name: "Documentos" }).closest(".kb-list__layout") as HTMLElement;
+    const primary = layout.querySelector(".kb-list__primary") as HTMLElement;
+    const secondary = layout.querySelector(".kb-list__secondary") as HTMLElement;
+    const documents = within(primary).getByRole("heading", { name: "Documentos" }).closest(".card")!;
+    const retrieval = within(primary).getByRole("heading", { name: "Probar recuperación" }).closest(".card")!;
+    const upload = within(secondary).getByRole("heading", { name: "Agregar documento" }).closest(".card")!;
+
+    expect(documents.compareDocumentPosition(retrieval) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(secondary.querySelector(".kb-search")).toBeNull();
+    expect(upload).toBeInTheDocument();
+  });
+
   it("provides a keyboard-operable upload dropzone and file picker button", () => {
     render(<KbList data={{ docs }} />);
     const card = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
