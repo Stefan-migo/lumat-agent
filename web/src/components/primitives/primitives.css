@@ -1069,6 +1069,12 @@
 .appointment-detail__sync { display: flex; align-items: center; gap: var(--space-2); border-top: 1px solid var(--border); padding-top: var(--space-3); color: var(--text-muted); font-size: var(--text-sm); }
 .appointment-detail__address { display: grid; grid-template-columns: minmax(5rem, .45fr) minmax(0, 1fr); gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); font-size: var(--text-sm); }
 .appointment-detail__address a, .agenda-page__visit-details a { overflow-wrap: anywhere; }
+/* Address → Google Maps uses the design-system inline link treatment (same accent
+   and no default underline as .appointment-detail__identity a): a plain browser
+   link reads as unstyled text and is not part of the set. */
+.address-link { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--primary-700); text-decoration: none; overflow-wrap: anywhere; }
+.address-link:hover { text-decoration: underline; }
+.address-link svg { flex: 0 0 auto; }
 .agenda-create-form__customer-address { margin: 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
 .appointment-detail__identity { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0 var(--space-4); }
 .appointment-detail__identity .avatar { width: calc(var(--space-8) * 2); height: calc(var(--space-8) * 2); font-size: var(--text-lg); }

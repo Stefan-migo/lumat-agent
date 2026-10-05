@@ -105,6 +105,7 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[appointment({ customer_address: 'Los Robles 10', customer_comuna: 'Ñuñoa' })]} state="ready" />);
     const link = screen.getByRole('link', { name: 'Los Robles 10, Ñuñoa' });
     expect(link).toHaveAttribute('href', 'https://www.google.com/maps/search/?api=1&query=Los%20Robles%2010%2C%20%C3%91u%C3%B1oa');
+    expect(link).toHaveClass('address-link');
   });
 
   it('shows a dash when the visit card has no customer address', () => {

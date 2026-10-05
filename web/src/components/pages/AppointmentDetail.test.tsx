@@ -77,7 +77,9 @@ describe('AppointmentDetail', () => {
     expect(screen.getByRole('heading', { name: 'Programación' })).toBeInTheDocument();
     const schedule = screen.getByRole('heading', { name: 'Programación' }).closest('.card');
     expect(within(schedule as HTMLElement).getByText('Dirección')).toBeInTheDocument();
-    expect(within(schedule as HTMLElement).getByRole('link', { name: 'Av. Los Pinos 55, Providencia' })).toHaveAttribute('href', 'https://www.google.com/maps/search/?api=1&query=Av.%20Los%20Pinos%2055%2C%20Providencia');
+    const addressLink = within(schedule as HTMLElement).getByRole('link', { name: 'Av. Los Pinos 55, Providencia' });
+    expect(addressLink).toHaveAttribute('href', 'https://www.google.com/maps/search/?api=1&query=Av.%20Los%20Pinos%2055%2C%20Providencia');
+    expect(addressLink).toHaveClass('address-link');
     expect(screen.getByRole('heading', { name: 'Técnico asignado' })).toBeInTheDocument();
     expect(screen.getByText('Técnico #4')).toBeInTheDocument();
     const peopleCard = screen.getByRole('heading', { name: 'Cliente' }).closest('.appointment-detail__people');

@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { CalendarDays, CalendarPlus, CalendarX, Check, Clock3, FileText, Globe, Plus, RefreshCw, Timer, UserRound, Wrench, X } from "lucide-react";
+import { CalendarDays, CalendarPlus, CalendarX, Check, Clock3, ExternalLink, FileText, Globe, Plus, RefreshCw, Timer, UserRound, Wrench, X } from "lucide-react";
 import { ApiError, cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AgendaAppointment, Case, Customer, UserRef } from "../../types";
@@ -249,7 +249,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
              ...(row.sync.status === "pending" || row.sync.status === "failed" ? [{ value: "retry", label: "Reintentar calendario", icon: RefreshCw }] : []),
              ]} onSelect={(action) => { if (action === "reschedule") openReschedule(row); if (action === "cancel") { setCancelTarget(row); setCancelFeedback(null); } if (action === "close") { setCloseTarget(row); setCloseOutcome("completed"); setCloseFeedback(null); } if (action === "retry") void retrySync(row.id); }} />
         </div>
-         <dl className="agenda-page__visit-details"><div><dt>Cliente</dt><dd>{row.customer_name ?? "—"}</dd></div><div><dt>Técnico</dt><dd>{row.technician_name ?? "—"}</dd></div><div><dt>Dirección</dt><dd>{row.customer_address ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([row.customer_address, row.customer_comuna].filter(Boolean).join(", "))}`}>{[row.customer_address, row.customer_comuna].filter(Boolean).join(", ")}</a> : "—"}</dd></div></dl>
+         <dl className="agenda-page__visit-details"><div><dt>Cliente</dt><dd>{row.customer_name ?? "—"}</dd></div><div><dt>Técnico</dt><dd>{row.technician_name ?? "—"}</dd></div><div><dt>Dirección</dt><dd>{row.customer_address ? <a className="address-link" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([row.customer_address, row.customer_comuna].filter(Boolean).join(", "))}`}><Icon icon={ExternalLink} size="sm" />{[row.customer_address, row.customer_comuna].filter(Boolean).join(", ")}</a> : "—"}</dd></div></dl>
         <div className="agenda-page__sync"><Badge tone={appointmentSyncTone(row.sync.status)}>{appointmentSyncLabel(row.sync.status)}</Badge>{row.sync.error ? <small>{row.sync.error}</small> : null}</div>
         {cancelFeedback?.id === row.id && cancelFeedback.tone === "success" ? <span role="status"><Badge tone="success">{cancelFeedback.title}</Badge></span> : null}
         {syncFeedback?.id === row.id ? <span role={syncFeedback.tone === "danger" ? "alert" : "status"}><Badge tone={syncFeedback.tone}>{syncFeedback.title}{syncFeedback.detail ? `: ${syncFeedback.detail}` : null}</Badge></span> : null}
