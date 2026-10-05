@@ -1115,9 +1115,9 @@
   .appointment-detail-page .detail-region { grid-template-columns: minmax(0, 1fr); grid-template-areas: "schedule" "people" "history"; }
 }
 @media (max-width: 767px) {
-  .appointment-detail-page .page-header { align-items: stretch; }
-  .appointment-detail-page .page-header__copy { min-width: 0; }
-  .appointment-detail-page .page-header__actions { width: 100%; flex-wrap: wrap; }
+  .appointment-detail-page .page-header { align-items: flex-start; align-content: flex-start; row-gap: var(--space-3); }
+  .appointment-detail-page .page-header__copy { flex: 0 1 auto; width: 100%; min-width: 0; }
+  .appointment-detail-page .page-header__actions { flex: 0 0 auto; width: 100%; flex-wrap: wrap; }
   .appointment-detail__schedule-main { grid-template-columns: auto minmax(0, 1fr); }
   .appointment-detail__time { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--border); padding: var(--space-3) 0 0; }
   .appointment-detail__time .icon { grid-row: span 2; }

@@ -151,6 +151,20 @@ describe('AppointmentDetail', () => {
     expect(actions).toMatch(/width:\s*100%/);
   });
 
+  it('stacks the mobile detail header without letting copy or actions stretch the flex rows', () => {
+    const stylesheet = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
+    const mobileRules = stylesheet.split('@media (max-width: 767px)')[1]?.split('@media')[0] ?? '';
+    const header = mobileRules.match(/\.appointment-detail-page \.page-header\s*\{([^}]*)\}/)?.[1] ?? '';
+    const copy = mobileRules.match(/\.appointment-detail-page \.page-header__copy\s*\{([^}]*)\}/)?.[1] ?? '';
+    const actions = mobileRules.match(/\.appointment-detail-page \.page-header__actions\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(header).toMatch(/align-content:\s*flex-start/);
+    expect(header).toMatch(/row-gap:\s*var\(--space-3\)/);
+    expect(copy).toMatch(/flex:\s*0 1 auto/);
+    expect(copy).toMatch(/width:\s*100%/);
+    expect(actions).toMatch(/flex:\s*0 0 auto/);
+  });
+
   it('shows a conversation summary only when present', () => {
     render(<AppointmentDetail data={{ ...detail, case: { id: 3, conversation_id: 44 }, conversation_summary: 'El cliente pide una reparación.' }} />);
     expect(screen.getByText('El cliente pide una reparación.')).toBeInTheDocument();
