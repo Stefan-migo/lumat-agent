@@ -185,6 +185,12 @@ restore) carries a test; pure layout/CSS findings assert structure.
 - RDD assess (base `ba413425`, committed-only): risk `medium`, 7 paths / 341 changed lines, `review_due: false` (`under_budget`) — boundary stays pending in the slice.
 - Note: the writer self-reported `partial` because the RED run stopped at the first failing assertion and did not demonstrate RED per finding; the functional checks (full suite 1001 tests, `tsc -b`, build) are green and verified.
 
+### Review record — WU1+WU2 slice (2026-10-05)
+- RDD assess (base `ba413425`, committed-only): risk `medium`, 7 paths / 494 changed lines, `review_due: true` (`slice_budget_reached`).
+- Consent: owner granted ("Review this change").
+- Native review lineage `review-04d267427e08e26a`, lens `review-reliability`, tier `medium`, correction budget 200.
+- Outcome: **approved**, no findings; authority `burned` (`gentle-ai.review-acknowledged/v1`). Reviewed boundary advances to the WU2 head; WU3/WU4 start from that base.
+
 ## Follow-ups (not blocking)
 - None identified yet. The KB API already returns every field the references need, so no
   backend follow-up is expected (unlike the agenda technician-name gap).
