@@ -9,6 +9,7 @@ logic; the mutation audits are the existing service calls, SH-5):
 - POST /kb              -> multipart title + file (pdf/md/txt/csv); ingest + audit
 - POST /kb/{id}/edit    -> {"title","content"}: new version + re-embed (KB-4)
 - POST /kb/{id}/disable -> KB-3 disable (excluded from retrieval)
+- POST /kb/{id}/enable  -> enable without changing version or visibility
 - POST /kb/{id}/restore -> {"version":n}: active_version pointer flip (D8)
 - POST /kb/{id}/visibility -> {"visibility":...}: explicit audience reclassification
 
@@ -172,6 +173,19 @@ def kb_disable(
     """Disable a doc (KB-3): excluded from retrieval, content kept."""
     _doc_or_404(session, doc_id)
     doc = kb_service.disable_document(session, doc_id, actor=current.username)
+    session.commit()
+    return {"ok": True, "doc": to_doc_dict(doc)}
+
+
+@router.post("/kb/{doc_id}/enable")
+def kb_enable(
+    doc_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_admin_json),
+) -> dict:
+    """Enable a doc without changing its version or visibility."""
+    _doc_or_404(session, doc_id)
+    doc = kb_service.enable_document(session, doc_id, actor=current.username)
     session.commit()
     return {"ok": True, "doc": to_doc_dict(doc)}
 

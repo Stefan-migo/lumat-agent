@@ -296,6 +296,23 @@ def disable_document(session: Session, doc_id: int, actor: str = "system") -> Kb
     return doc
 
 
+def enable_document(session: Session, doc_id: int, actor: str = "system") -> KbDocument:
+    """Enable a document without changing its version or visibility."""
+    doc = session.get(KbDocument, doc_id)
+    if doc is None:
+        raise ValueError(f"kb document {doc_id} not found")
+    doc.active = True
+    record_audit(
+        session,
+        actor=actor,
+        action="kb.document_enable",
+        entity="kb_document",
+        entity_id=str(doc_id),
+        after={"active": True},
+    )
+    return doc
+
+
 def set_visibility(
     session: Session,
     doc_id: int,
