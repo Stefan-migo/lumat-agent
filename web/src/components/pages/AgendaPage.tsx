@@ -237,6 +237,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const periodRows = activeRows;
   const selectedRows = selectedDay ? (registerView === "active" ? activeRows : nonActiveRows).filter((row) => localDate(row.local_start) === selectedDay) : null;
   const containsToday = periodDays.includes(today);
+  const selectedCustomer = clients.find((client) => client.id === Number(createForm.customer_id));
   const openReschedule = (row: AgendaAppointment) => { setRescheduleTarget(row); setRescheduleForm({ local_date: row.local_start.slice(0, 10), local_time: row.local_start.slice(11, 16), duration_minutes: String(row.duration_minutes ?? 60), technician_id: String(row.technician_id ?? "") }); setRescheduleFeedback(null); void fetchTechnicians().then((response) => setTechnicians(response.technicians)).catch((error) => setRescheduleFeedback({ tone: "danger", title: "No pudimos cargar las opciones de la visita", detail: error instanceof Error ? error.message : undefined })); };
   const section = (title: string, rows: AgendaAppointment[], isToday = selectedDay === today) => rows.length > 0 ? (
     <section className="agenda-page__section" aria-labelledby={`agenda-${title.toLowerCase()}`}>
@@ -248,7 +249,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
              ...(row.sync.status === "pending" || row.sync.status === "failed" ? [{ value: "retry", label: "Reintentar calendario", icon: RefreshCw }] : []),
              ]} onSelect={(action) => { if (action === "reschedule") openReschedule(row); if (action === "cancel") { setCancelTarget(row); setCancelFeedback(null); } if (action === "close") { setCloseTarget(row); setCloseOutcome("completed"); setCloseFeedback(null); } if (action === "retry") void retrySync(row.id); }} />
         </div>
-        <dl className="agenda-page__visit-details"><div><dt>Cliente</dt><dd>{row.customer_name ?? "—"}</dd></div><div><dt>Técnico</dt><dd>{row.technician_name ?? "—"}</dd></div></dl>
+         <dl className="agenda-page__visit-details"><div><dt>Cliente</dt><dd>{row.customer_name ?? "—"}</dd></div><div><dt>Técnico</dt><dd>{row.technician_name ?? "—"}</dd></div><div><dt>Dirección</dt><dd>{row.customer_address ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([row.customer_address, row.customer_comuna].filter(Boolean).join(", "))}`}>{[row.customer_address, row.customer_comuna].filter(Boolean).join(", ")}</a> : "—"}</dd></div></dl>
         <div className="agenda-page__sync"><Badge tone={appointmentSyncTone(row.sync.status)}>{appointmentSyncLabel(row.sync.status)}</Badge>{row.sync.error ? <small>{row.sync.error}</small> : null}</div>
         {cancelFeedback?.id === row.id && cancelFeedback.tone === "success" ? <span role="status"><Badge tone="success">{cancelFeedback.title}</Badge></span> : null}
         {syncFeedback?.id === row.id ? <span role={syncFeedback.tone === "danger" ? "alert" : "status"}><Badge tone={syncFeedback.tone}>{syncFeedback.title}{syncFeedback.detail ? `: ${syncFeedback.detail}` : null}</Badge></span> : null}
@@ -324,6 +325,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
           <h3 id="agenda-create-visit-heading">Datos de la visita</h3>
           <div className="agenda-create-form__row agenda-create-form__row--identity">
             <div className="agenda-create-form__icon-field"><Icon icon={UserRound} className="agenda-create-form__leading-icon" /><Combobox label="Cliente" placeholder="Busca por nombre, correo o teléfono" options={clients.map((client) => ({ value: String(client.id), label: clientOptionLabel(client) }))} value={createForm.customer_id || null} onChange={(value) => { field("customer_id", value); field("case_id", ""); }} /></div>
+            {createForm.customer_id ? <p className="agenda-create-form__customer-address" data-testid="agenda-create-customer-address">{selectedCustomer?.address ? [selectedCustomer.address, selectedCustomer.comuna].filter(Boolean).join(", ") : "Sin dirección registrada"}</p> : null}
             <div className="agenda-create-form__icon-field"><Icon icon={FileText} className="agenda-create-form__leading-icon" /><Combobox label="Caso vinculado" disabled={!createForm.customer_id} value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={createBusy ? undefined : (query) => void createManualCase(query)} options={cases.filter((item) => item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} /></div>
           </div>
           <div className="agenda-create-form__row agenda-create-form__row--visit">

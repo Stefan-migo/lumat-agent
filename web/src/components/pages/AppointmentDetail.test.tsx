@@ -19,7 +19,7 @@ const detail: AppointmentDetailData = {
       { id: 10, actor: 'ana', action: 'rescheduled', from_status: 'booked', to_status: 'booked', details: { from_start: '2026-09-26T10:00:00', to_start: '2026-09-27T11:30:00', from_technician_id: 3, to_technician_id: 4 }, created_at: '2026-09-25T13:00:00Z' },
     ],
   },
-  customer: { id: 2, name: 'Ana' },
+  customer: { id: 2, name: 'Ana', address: 'Av. Los Pinos 55', comuna: 'Providencia' },
   case: { id: 3, conversation_id: null },
   conversation_summary: null,
 };
@@ -75,6 +75,9 @@ describe('AppointmentDetail', () => {
     expect(screen.getByRole('button', { name: 'Reprogramar' }).closest('.page-header__actions')).toBe(backButton.closest('.page-header__actions'));
     expect(screen.getByRole('link', { name: /Ver ficha del cliente/ })).toHaveAttribute('href', '/panel/app/clients/2');
     expect(screen.getByRole('heading', { name: 'Programación' })).toBeInTheDocument();
+    const schedule = screen.getByRole('heading', { name: 'Programación' }).closest('.card');
+    expect(within(schedule as HTMLElement).getByText('Dirección')).toBeInTheDocument();
+    expect(within(schedule as HTMLElement).getByRole('link', { name: 'Av. Los Pinos 55, Providencia' })).toHaveAttribute('href', 'https://www.google.com/maps/search/?api=1&query=Av.%20Los%20Pinos%2055%2C%20Providencia');
     expect(screen.getByRole('heading', { name: 'Técnico asignado' })).toBeInTheDocument();
     expect(screen.getByText('Técnico #4')).toBeInTheDocument();
     const peopleCard = screen.getByRole('heading', { name: 'Cliente' }).closest('.appointment-detail__people');
@@ -108,6 +111,11 @@ describe('AppointmentDetail', () => {
     expect(history).not.toHaveTextContent('2026-09-26T10:00:00');
     expect(history).not.toHaveTextContent(/\bbooked\b/);
     expect(history.querySelector('time')).toHaveAttribute('dateTime', '2026-09-25T12:00:00Z');
+  });
+
+  it('shows the missing-address fallback in the schedule card', () => {
+    render(<AppointmentDetail data={{ ...detail, customer: { ...detail.customer, address: null, comuna: null } }} />);
+    expect(screen.getByText('Dirección no registrada')).toBeInTheDocument();
   });
 
   it('resolves the assigned technician username asynchronously and keeps the fallback on lookup failure', async () => {

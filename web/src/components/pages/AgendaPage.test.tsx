@@ -26,6 +26,8 @@ const appointment = (overrides: Partial<AgendaAppointment> = {}): AgendaAppointm
   service: 'Mantención',
   customer_id: 10,
   customer_name: 'Camila Soto',
+  customer_address: null,
+  customer_comuna: null,
   case_id: 20,
   case_name: 'Caso #20',
   technician_id: 30,
@@ -49,7 +51,7 @@ async function openVisitActions(user: ReturnType<typeof userEvent.setup>, servic
 async function selectCustomer(user: ReturnType<typeof userEvent.setup>, query = 'Camila') {
   const input = screen.getByRole('combobox', { name: 'Cliente' });
   await user.type(input, query);
-  await user.click(screen.getByRole('option', { name: /Camila Soto/ }));
+  await user.click(await screen.findByRole('option', { name: /Camila Soto/ }));
 }
 
 describe('AgendaPage', () => {
@@ -97,6 +99,18 @@ describe('AgendaPage', () => {
     expect(link).toHaveAttribute('href', '/panel/app/agenda/42');
     link.focus();
     expect(link).toHaveFocus();
+  });
+
+  it('renders the customer address as a Google Maps link in the visit card', () => {
+    render(<AgendaPage data={[appointment({ customer_address: 'Los Robles 10', customer_comuna: 'Ñuñoa' })]} state="ready" />);
+    const link = screen.getByRole('link', { name: 'Los Robles 10, Ñuñoa' });
+    expect(link).toHaveAttribute('href', 'https://www.google.com/maps/search/?api=1&query=Los%20Robles%2010%2C%20%C3%91u%C3%B1oa');
+  });
+
+  it('shows a dash when the visit card has no customer address', () => {
+    render(<AgendaPage data={[appointment()]} state="ready" />);
+    expect(document.querySelector('.agenda-page__visit-details')).toHaveTextContent('Dirección');
+    expect(document.querySelector('.agenda-page__visit-details')).toHaveTextContent('—');
   });
 
   it('shows icons alongside every scheduled visit quick action', async () => {
@@ -507,7 +521,7 @@ describe('AgendaPage', () => {
 
   it('creates an appointment from the agenda and refreshes the visible period', async () => {
     const user = userEvent.setup({ delay: null });
-    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto' }] as never });
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto', address: 'Calle Uno 2', comuna: 'Macul' }] as never });
     vi.mocked(fetchCases).mockResolvedValue({ cases: [{ id: 20, service: 'Mantención', customer: { id: 10, name: 'Camila Soto' } }] as never, users: [] });
     vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 30, username: 'Luis' }] });
     vi.mocked(createAppointment).mockResolvedValue({ ok: true, appointment: {} as never });
@@ -523,6 +537,7 @@ describe('AgendaPage', () => {
     expect(screen.getByRole('heading', { name: 'Datos de la visita', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Fecha y horario', level: 3 })).toBeInTheDocument();
     await selectCustomer(user);
+    expect(screen.getByTestId('agenda-create-customer-address')).toHaveTextContent('Calle Uno 2, Macul');
     await user.type(screen.getByLabelText('Caso vinculado'), 'Mantención');
     await user.click(screen.getByRole('option', { name: 'Mantención (#20)' }));
     await user.selectOptions(screen.getByLabelText('Técnico'), '30');
@@ -570,6 +585,17 @@ describe('AgendaPage', () => {
     await user.type(caseInput, 'Mantención');
     expect(screen.getByRole('option', { name: 'Mantención (#20)' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Mantención (#21)' })).not.toBeInTheDocument();
+  });
+
+  it('shows a clear address fallback for a selected client without an address', async () => {
+    const user = userEvent.setup({ delay: null });
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [{ id: 10, name: 'Camila Soto', address: null, comuna: null }] as never });
+    vi.mocked(fetchCases).mockResolvedValue({ cases: [] as never, users: [] });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [] });
+    render(<AgendaPage data={[]} state="empty" />);
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    await selectCustomer(user);
+    expect(screen.getByTestId('agenda-create-customer-address')).toHaveTextContent('Sin dirección registrada');
   });
 
   it('closes the new-visit dialog when cancelling', async () => {

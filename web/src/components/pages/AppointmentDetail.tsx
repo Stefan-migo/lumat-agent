@@ -183,6 +183,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
             <div className="appointment-detail__time"><Icon icon={Clock3} /><strong>{TIME_FORMAT.format(localStart)}</strong><span>Hora de inicio</span></div>
           </div>
           <div className="appointment-detail__sync"><Icon icon={CalendarCheck} /><span>Estado del calendario no disponible</span></div>
+          <div className="appointment-detail__address"><strong>Dirección</strong>{customer.address ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([customer.address, customer.comuna].filter(Boolean).join(', '))}`}>{[customer.address, customer.comuna].filter(Boolean).join(', ')}</a> : <span>Dirección no registrada</span>}</div>
         </Card>
         <Card title="Cliente" icon={UserRound} className="appointment-detail__people">
           <div className="appointment-detail__identity"><Avatar name={customer.name ?? 'Cliente sin nombre'} /><div><strong>{customer.name ?? 'Cliente sin nombre'}</strong><a href={pathForRoute({ view: 'clients', clientId: customer.id })}>Ver ficha del cliente <Icon icon={ArrowRight} /></a></div></div>
