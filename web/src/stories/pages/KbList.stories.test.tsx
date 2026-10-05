@@ -25,7 +25,7 @@ describe("KbList page", () => {
     expect(screen.getByRole("heading", { name: "Base de conocimientos" })).toBeInTheDocument();
     const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
     expect(within(addRegion).getByLabelText(/título/i)).toBeInTheDocument();
-    expect(within(addRegion).getByLabelText(/archivo/i)).toBeInTheDocument();
+    expect(within(addRegion).getByLabelText("Archivo (PDF / MD / TXT / CSV)")).toBeInTheDocument();
     expect(within(addRegion).getByRole("button", { name: "Agregar" })).toBeInTheDocument();
   });
 
@@ -207,6 +207,33 @@ describe("KbList search panel", () => {
     loadingView.unmount();
     fetchMock.mockRestore();
   });
+
+  it("shows the initial retrieval empty state and hides advanced values until disclosed", async () => {
+    render(<KbList data={{ docs }} />);
+    const card = screen.getByRole("heading", { name: "Probar recuperación" }).closest(".card") as HTMLElement;
+    expect(within(card).getByText("Los resultados aparecerán aquí después de buscar.")).toBeInTheDocument();
+    expect(within(card).getByText("Opciones avanzadas").closest("details")).not.toHaveAttribute("open");
+    await userEvent.setup().click(within(card).getByText("Opciones avanzadas"));
+    expect(within(card).getByLabelText("Máximo de resultados")).toBeInTheDocument();
+  });
+});
+
+describe("KbList mobile upload story", () => {
+  it("opens the add-document dialog from the full-width entry action", async () => {
+    render(<KbList data={{ docs }} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Agregar documento" }));
+    expect(screen.getByRole("dialog", { name: "Agregar documento" })).toBeInTheDocument();
+  });
+
+  it("accepts a dropped file through the accessible dropzone", async () => {
+    render(<KbList data={{ docs }} />);
+    const card = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
+    const zone = within(card).getByText("Arrastra un archivo aquí o selecciónalo desde tu equipo").closest("[role='button']") as HTMLElement;
+    const file = new File(["content"], "guide.md", { type: "text/markdown" });
+    fireEvent.drop(zone, { dataTransfer: { files: [file] } });
+    expect(within(card).getByText("guide.md")).toBeInTheDocument();
+    expect(within(card).getByLabelText("Archivo (PDF / MD / TXT / CSV)")).toHaveAttribute("type", "file");
+  });
 });
 
 describe("KbList API page", () => {
@@ -238,7 +265,7 @@ describe("KbList API page", () => {
     expect(within(addRegion).getByLabelText("Audiencia")).toHaveValue("internal");
     await user.selectOptions(within(addRegion).getByLabelText("Audiencia"), "customer");
     await user.type(within(addRegion).getByLabelText("Título"), "Guide");
-    await user.upload(within(addRegion).getByLabelText(/archivo/i), new File(["# Content"], "guide.md", { type: "text/markdown" }));
+    await user.upload(within(addRegion).getByLabelText("Archivo (PDF / MD / TXT / CSV)"), new File(["# Content"], "guide.md", { type: "text/markdown" }));
     await user.click(within(addRegion).getByRole("button", { name: "Agregar" }));
     const request = fetchMock.mock.calls[1][1] as RequestInit;
     expect(request.method).toBe("POST");
@@ -262,7 +289,7 @@ describe("KbList API page", () => {
     const user = userEvent.setup();
     render(<KbList data={{ docs }} />);
     const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
-    const fileInput = within(addRegion).getByLabelText(/archivo/i);
+    const fileInput = within(addRegion).getByLabelText("Archivo (PDF / MD / TXT / CSV)");
     expect(fileInput).toHaveAttribute("accept", ".pdf,.md,.txt,.csv");
     expect(within(addRegion).getByText(/máximo 5 mb/i)).toBeInTheDocument();
     await user.type(within(addRegion).getByLabelText("Título"), "Guide");
@@ -279,7 +306,7 @@ describe("KbList API page", () => {
     render(<KbList data={{ docs }} />);
     const addRegion = screen.getByRole("heading", { name: "Agregar documento" }).closest("section") as HTMLElement;
     await user.type(within(addRegion).getByLabelText("Título"), "Guide");
-    await user.upload(within(addRegion).getByLabelText(/archivo/i), new File(["content"], "guide.md", { type: "text/markdown" }));
+    await user.upload(within(addRegion).getByLabelText("Archivo (PDF / MD / TXT / CSV)"), new File(["content"], "guide.md", { type: "text/markdown" }));
     await user.click(within(addRegion).getByRole("button", { name: "Agregar" }));
     expect(await within(addRegion).findByRole("alert")).toHaveTextContent("No pudimos procesar el documento");
     expect(within(addRegion).getByRole("button", { name: "Reintentar carga" })).toBeInTheDocument();

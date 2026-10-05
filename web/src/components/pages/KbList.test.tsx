@@ -47,3 +47,39 @@ describe("KbList landing", () => {
     expect(within(table).queryByRole("link", { name: /Manual de atención/ })).toBeNull();
   });
 });
+
+describe("KbList retrieval and upload cards", () => {
+  it("presents retrieval as a card with an inline search action and advanced options", () => {
+    render(<KbList data={{ docs }} />);
+    const card = screen.getByRole("heading", { name: "Probar recuperación" }).closest(".card") as HTMLElement;
+    expect(card.querySelector(".card__icon .lucide-search")).toBeInTheDocument();
+    expect(within(card).getByText("Consulta qué información recupera la base.")).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Buscar" }).closest(".kb-search__query")).toBeInTheDocument();
+    expect(within(card).getByText("Opciones avanzadas").closest("details")).not.toHaveAttribute("open");
+    fireEvent.click(within(card).getByText("Opciones avanzadas"));
+    expect(within(card).getByLabelText("Máximo de resultados")).toBeInTheDocument();
+    expect(within(card).getByLabelText("Similitud mínima")).toBeInTheDocument();
+    expect(within(card).getByText("Los resultados aparecerán aquí después de buscar.")).toBeInTheDocument();
+  });
+
+  it("provides a keyboard-operable upload dropzone and file picker button", () => {
+    render(<KbList data={{ docs }} />);
+    const card = screen.getByRole("heading", { name: "Agregar documento" }).closest(".card") as HTMLElement;
+    expect(card.querySelector(".card__icon .lucide-upload")).toBeInTheDocument();
+    expect(within(card).getByText("Sube un documento para que esté disponible en la base de conocimientos.")).toBeInTheDocument();
+    expect(within(card).getByText("Arrastra un archivo aquí o selecciónalo desde tu equipo")).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Seleccionar archivo" })).toBeInTheDocument();
+    expect(within(card).getByLabelText("Archivo (PDF / MD / TXT / CSV)")).toHaveAttribute("type", "file");
+  });
+
+  it("opens the upload form in a mobile entry dialog while retaining it in the desktop card", () => {
+    render(<KbList data={{ docs }} />);
+    const open = screen.getByRole("button", { name: "Agregar documento" });
+    expect(open).toHaveClass("kb-list__mobile-add");
+    fireEvent.click(open);
+    const dialog = screen.getByRole("dialog", { name: "Agregar documento" });
+    expect(dialog).toHaveClass("dialog");
+    expect(within(dialog).getByLabelText("Título")).toBeInTheDocument();
+    expect(dialog.querySelector(".kb-upload-form")).toBeInTheDocument();
+  });
+});

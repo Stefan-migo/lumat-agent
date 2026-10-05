@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { ChevronRight, FileText, Lock } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { ChevronRight, FileText, Lock, Search, Upload } from "lucide-react";
 import { ApiError, refreshKbDocuments, searchKb, uploadKbDocument } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Doc, DocsResponse, KbSearchResult, KbVisibility } from "../../types";
@@ -15,6 +15,7 @@ import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { KB_OPERATION_TONES, kbStatusLabel, kbStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
+import { Dialog } from "../primitives/Dialog";
 
 export interface KbListProps { data?: DocsResponse | null; onRetry?: () => void; onOpenDocument?: (id: number) => void; fetchDocuments?: () => Promise<DocsResponse>; }
 
@@ -90,15 +91,18 @@ function SearchPanel() {
     }
   };
 
-  return <section aria-label="Herramienta de recuperación"><Card title="Probar recuperación">
+  return <section aria-label="Herramienta de recuperación"><Card title="Probar recuperación" icon={Search} description="Consulta qué información recupera la base.">
     <div className="kb-search">
-      <div className="kb-search__fields">
+      <div className="kb-search__query">
         <Input label="Consulta" placeholder="Escribe una consulta" value={query} onChange={(event) => setQuery(event.target.value)} />
-        <Input label="Máximo de resultados" type="number" min="1" value={topK} onChange={(event) => setTopK(event.target.value)} />
-        <Input label="Similitud mínima" type="number" min="0" max="1" step="0.01" value={minSim} onChange={(event) => setMinSim(event.target.value)} />
         <Button onClick={() => void runSearch()} disabled={searchState === "loading"}>Buscar</Button>
       </div>
+      <details className="kb-search__advanced"><summary>Opciones avanzadas</summary><div className="kb-search__fields">
+        <Input label="Máximo de resultados" type="number" min="1" value={topK} onChange={(event) => setTopK(event.target.value)} />
+        <Input label="Similitud mínima" type="number" min="0" max="1" step="0.01" value={minSim} onChange={(event) => setMinSim(event.target.value)} />
+      </div></details>
       <p className="kb-search__hint">La similitud mínima filtra los resultados: con 0 ves el ranking completo y sus puntajes. Auméntala para exigir más coincidencia.</p>
+      {searchState === "idle" ? <EmptyState title="Los resultados aparecerán aquí después de buscar." /> : null}
       {searchState === "loading" ? <StateMessage tone="info" role="status" spinner title="Buscando en la base de conocimientos" /> : null}
       {searchState === "denied" ? <StateMessage tone="danger" role="alert" title="No tienes permiso para buscar en la base de conocimientos" /> : null}
       {searchState === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos realizar la búsqueda" detail="Revisa la consulta y los parámetros e inténtalo nuevamente." /> : null}
@@ -106,6 +110,35 @@ function SearchPanel() {
       {searchState === "ready" ? <><p className="kb-search__summary">{results.length} resultados ordenados por similitud.</p><DataTable columns={searchColumns} rows={results} rowKey={(result) => `${result.document_id}-${result.version}-${result.chunk_index}`} /></> : null}
     </div>
   </Card></section>;
+}
+
+function UploadFields({ title, setTitle, file, setFile, visibility, setVisibility, busy, feedback, submitUpload, retryUpload }: {
+  title: string; setTitle: (value: string) => void; file: File | null; setFile: (file: File | null) => void;
+  visibility: KbVisibility; setVisibility: (value: KbVisibility) => void; busy: boolean;
+  feedback: { tone: "success" | "danger"; title: string; retry?: boolean } | null;
+  submitUpload: () => void; retryUpload: () => void;
+}) {
+  const inputRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const chooseFile = () => inputRef.current?.querySelector<HTMLInputElement>('input[type="file"]')?.click();
+  const acceptFile = (selected?: File) => { if (selected) setFile(selected); };
+  return <div className="kb-upload-form">
+    {busy ? <StateMessage tone={KB_OPERATION_TONES.procesando} role="status" spinner title="Procesando documento" detail="Revisando el formato, tamaño y contenido." /> : null}
+    {feedback ? <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.title} /> : null}
+    <Input label="Título" placeholder="Título del documento" value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy} />
+    <div className="kb-upload__picker">
+      <div className={`kb-upload__dropzone${dragging ? " kb-upload__dropzone--active" : ""}`} role="button" tabIndex={busy ? -1 : 0} aria-label="Arrastra un archivo aquí o selecciónalo desde tu equipo" onClick={chooseFile} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); chooseFile(); } }} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); acceptFile(event.dataTransfer.files[0]); }}>
+        <span>{file?.name ?? "Arrastra un archivo aquí o selecciónalo desde tu equipo"}</span>
+        <div ref={inputRef} className="kb-upload__input"><Input label="Archivo (PDF / MD / TXT / CSV)" type="file" tabIndex={-1} accept={ACCEPTED_EXTENSIONS.join(",")} onClick={(event) => event.stopPropagation()} onChange={(event) => acceptFile(event.target.files?.[0])} disabled={busy} /></div>
+      </div>
+      <Button type="button" variant="secondary" disabled={busy} onClick={chooseFile}>Seleccionar archivo</Button>
+    </div>
+    <p className="kb-search__hint">Formatos admitidos: PDF, Markdown, TXT y CSV. Máximo 5 MB.</p>
+    <Select label="Audiencia" value={visibility} options={AUDIENCE_OPTIONS} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy} />
+    <p className="kb-search__hint">Un documento interno nunca se usa para responder a clientes.</p>
+    <Button disabled={busy} onClick={submitUpload}>Agregar</Button>
+    {feedback?.retry ? <Button variant="secondary" disabled={busy} onClick={retryUpload}>Reintentar carga</Button> : null}
+  </div>;
 }
 
 export function KbList({ data: controlledData, onRetry, onOpenDocument, fetchDocuments }: KbListProps = {}) {
@@ -121,6 +154,7 @@ export function KbList({ data: controlledData, onRetry, onOpenDocument, fetchDoc
   const [documentQuery, setDocumentQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const data = refreshed ?? controlledData ?? fetched.data;
   const state: AsyncDataState = controlledData !== undefined ? (controlledData ? "ready" : "empty") : fetched.state;
   const docs = data?.docs ?? [];
@@ -158,7 +192,11 @@ export function KbList({ data: controlledData, onRetry, onOpenDocument, fetchDoc
   };
   return <PageFrame title="Base de conocimientos" subtitle="Gestiona los documentos y prueba la recuperación de información." meta={!data ? "Documentos de la base de conocimientos" : undefined} titleAdornment={data ? <Badge>{docs.length} {docs.length === 1 ? "documento" : "documentos"}</Badge> : null} state={stateMessage(state)} className="kb-list">
      {showWorkspace ? <>
-         <div className="kb-list__layout">
+       <Button className="kb-list__mobile-add" onClick={() => setUploadOpen(true)}>Agregar documento</Button>
+       {uploadOpen ? <Dialog open={uploadOpen} onClose={() => setUploadOpen(false)} title="Agregar documento" icon={Upload} description="Sube un documento para que esté disponible en la base de conocimientos.">
+         <UploadFields title={title} setTitle={setTitle} file={file} setFile={setFile} visibility={visibility} setVisibility={setVisibility} busy={busy !== null} feedback={feedback} submitUpload={submitUpload} retryUpload={retryUpload} />
+       </Dialog> : null}
+          <div className="kb-list__layout">
            <Card title="Documentos" className="kb-list__documents">
              <div className="kb-list__toolbar"><Input type="search" label="Buscar documentos" placeholder="Buscar documentos" value={documentQuery} onChange={(event) => setDocumentQuery(event.target.value)} /><div className="kb-list__filters"><Button variant="secondary" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}>Filtros</Button>{filtersOpen ? <Select label="Estado" value={statusFilter} options={[{ value: "all", label: "Todos" }, { value: "active", label: "Activos" }, { value: "inactive", label: "Deshabilitados" }]} onChange={(event) => setStatusFilter(event.target.value)} /> : null}</div></div>
              {docs.length === 0 ? <EmptyState title="No hay documentos" description="Sube el primer documento para comenzar." /> : <>
@@ -170,12 +208,12 @@ export function KbList({ data: controlledData, onRetry, onOpenDocument, fetchDoc
                <footer className="kb-list__count">{filteredDocs.length} {filteredDocs.length === 1 ? "documento" : "documentos"}</footer>
              </>}
            </Card>
-           <div className="kb-list__secondary">
-             <section aria-labelledby="kb-upload-heading"><h2 id="kb-upload-heading">Agregar documento</h2><div>{busy ? <StateMessage tone={KB_OPERATION_TONES.procesando} role="status" spinner title="Procesando documento" detail="Revisando el formato, tamaño y contenido." /> : null}{feedback ? <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.title} /> : null}<Input label="Título" placeholder="Título del documento" value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy !== null} /><Input label="Archivo (PDF / MD / TXT / CSV)" type="file" accept={ACCEPTED_EXTENSIONS.join(",")} onChange={(event) => setFile(event.target.files?.[0] ?? null)} disabled={busy !== null} /><p className="kb-search__hint">Formatos admitidos: PDF, Markdown, TXT y CSV. Máximo 5 MB.</p><Select label="Audiencia" value={visibility} options={AUDIENCE_OPTIONS} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} /><p className="kb-search__hint">Un documento interno nunca se usa para responder a clientes.</p><Button disabled={busy !== null} onClick={submitUpload}>Agregar</Button>{feedback?.retry ? <Button variant="secondary" disabled={busy !== null} onClick={retryUpload}>Reintentar carga</Button> : null}</div></section>
-             <SearchPanel />
-           </div>
+            <div className="kb-list__secondary">
+              <Card title="Agregar documento" icon={Upload} description="Sube un documento para que esté disponible en la base de conocimientos." className="kb-upload-card"><UploadFields title={title} setTitle={setTitle} file={file} setFile={setFile} visibility={visibility} setVisibility={setVisibility} busy={busy !== null} feedback={feedback} submitUpload={submitUpload} retryUpload={retryUpload} /></Card>
+              <SearchPanel />
+            </div>
          </div>
       </> : null}
-    {state === "error" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}
+     {state === "error" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}
   </PageFrame>;
 }

@@ -2662,6 +2662,18 @@
   display: grid;
   gap: var(--space-3);
 }
+.kb-search__query { display: flex; align-items: flex-end; gap: var(--space-2); }
+.kb-search__query > .field { flex: 1; min-width: 0; }
+.kb-search__query .btn { flex: 0 0 auto; }
+.kb-search__advanced { display: grid; gap: var(--space-2); }
+.kb-search__advanced summary { width: fit-content; color: var(--text); cursor: pointer; font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.kb-upload-form { display: grid; gap: var(--space-3); }
+.kb-upload__picker { display: grid; gap: var(--space-2); }
+.kb-upload__dropzone { display: grid; min-height: 9rem; place-items: center; gap: var(--space-2); padding: var(--space-4); border: 1px dashed var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--text-muted); text-align: center; cursor: pointer; }
+.kb-upload__dropzone:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.kb-upload__dropzone--active { border-color: var(--brand); background: var(--brand-bg-elevated); }
+.kb-upload__input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.kb-list__mobile-add { display: none; }
 .kb-search__fields > .field:first-child { flex: 1 1 20rem; }
 .kb-search__fields > .field { min-width: 8rem; }
 .kb-search__summary,
@@ -2690,6 +2702,9 @@
 @media (max-width: 39.99rem) {
   .kb-search__fields,
   .kb-actions__restore { align-items: stretch; flex-direction: column; }
+  .kb-upload-card { display: none; }
+  .kb-list__mobile-add { display: inline-flex; width: 100%; }
+  .dialog:has(.kb-upload-form) { position: fixed; inset: auto 0 0; width: 100%; max-width: none; max-height: min(90dvh, 52rem); margin: 0; overflow-y: auto; border-radius: var(--radius-xl) var(--radius-xl) 0 0; }
 }
 
 /* State message: shared status and alert presentation stays in the tokenized boundary. */
