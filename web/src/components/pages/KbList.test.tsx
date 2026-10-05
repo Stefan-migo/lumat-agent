@@ -1,0 +1,49 @@
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import type { Doc } from "../../types";
+import { KbList } from "./KbList";
+
+const docs: Doc[] = [
+  { id: 1, title: "Manual de atención", format: "pdf", version: 3, active_version: 2, active: true, visibility: "customer", provider: null, model: null, cost_meta: 0.0012, created_at: "2026-07-10T14:02:00-04:00" },
+  { id: 2, title: "Procedimiento interno", format: "md", version: 1, active_version: 1, active: false, visibility: "internal", provider: null, model: null, cost_meta: null, created_at: "2026-07-14T09:30:00-04:00" },
+];
+
+describe("KbList landing", () => {
+  it("renders the page header and the document card composition", () => {
+    render(<KbList data={{ docs }} />);
+
+    expect(screen.getByText("Gestiona los documentos y prueba la recuperación de información.")).toBeInTheDocument();
+    expect(screen.getByText("2 documentos", { selector: ".page-header__title-row .badge" })).toBeInTheDocument();
+
+    const card = screen.getByRole("heading", { name: "Documentos" }).closest(".card") as HTMLElement;
+    expect(within(card).getByRole("searchbox", { name: "Buscar documentos" })).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Filtros" })).toBeInTheDocument();
+    expect(within(card).getByRole("table")).toBeInTheDocument();
+    const firstRow = within(within(card).getByRole("table")).getAllByRole("row")[1];
+    expect(within(firstRow).getByText(`v${docs[0].active_version} · Activa`)).toBeInTheDocument();
+    expect(within(firstRow).getByText("Cliente · Cliente y Lumat")).toBeInTheDocument();
+    expect(within(card).getAllByText("Interno · Solo Lumat").length).toBeGreaterThan(0);
+    expect(within(card).getByText("2 documentos", { selector: ".kb-list__count" })).toBeInTheDocument();
+
+    const titleLink = within(firstRow).getByRole("link", { name: /Manual de atención/ });
+    expect(titleLink.closest(".kb-list__identity")).toHaveTextContent(`#${docs[0].id} · PDF`);
+    expect(screen.getByRole("list", { name: "Documentos" })).toBeInTheDocument();
+    const mobileCard = screen.getByRole("listitem", { name: /Manual de atención/ });
+    expect(mobileCard).toHaveTextContent("Activo");
+    expect(mobileCard).toHaveTextContent("$0.001200");
+  });
+
+  it("filters document rows by query and status without another request", () => {
+    render(<KbList data={{ docs }} />);
+    const table = screen.getByRole("table");
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar documentos" }), { target: { value: "interno" } });
+    expect(within(table).getAllByRole("row")).toHaveLength(2);
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar documentos" }), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Filtros" }));
+    fireEvent.change(screen.getByLabelText("Estado"), { target: { value: "inactive" } });
+    expect(within(table).getAllByRole("row")).toHaveLength(2);
+    expect(within(table).getByRole("link", { name: /Procedimiento interno/ })).toBeInTheDocument();
+    expect(within(table).queryByRole("link", { name: /Manual de atención/ })).toBeNull();
+  });
+});
