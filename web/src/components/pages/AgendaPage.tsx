@@ -15,6 +15,7 @@ import { Select } from "../primitives/Select";
 import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
 import { EmptyState } from "../shared/EmptyState";
+import { AppointmentRescheduleDialog, type AppointmentRescheduleForm } from "../shared/AppointmentRescheduleDialog";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { AgendaTimeError, agendaMonthDays, agendaPeriodLabel, agendaShiftPeriod, agendaTodayKey, agendaWeekDays, composeAgendaTime, formatAgendaSlot } from "../shared/agendaTime";
@@ -48,7 +49,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const [cancelTarget, setCancelTarget] = useState<AgendaAppointment | null>(null);
   const [closeTarget, setCloseTarget] = useState<AgendaAppointment | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<AgendaAppointment | null>(null);
-  const [rescheduleForm, setRescheduleForm] = useState({ local_date: "", local_time: "", duration_minutes: "60", technician_id: "" });
+  const [rescheduleForm, setRescheduleForm] = useState<AppointmentRescheduleForm>({ local_date: "", local_time: "", duration_minutes: "60", technician_id: "" });
   const [rescheduleFeedback, setRescheduleFeedback] = useState<{ tone: "success" | "danger"; title: string; detail?: string } | null>(null);
   const [reason, setReason] = useState("");
   const [mutatingId, setMutatingId] = useState<number | null>(null);
@@ -290,16 +291,18 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void close("completed")}>Completar</Button>
       <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void close("no_show")}>No asistió</Button>
     </Dialog>
-    <Dialog open={rescheduleTarget !== null} onClose={() => { if (mutatingId === null) setRescheduleTarget(null); }} title="Reprogramar visita">
-      {rescheduleTarget ? <div>
-        <Input label="Fecha local" type="date" value={rescheduleForm.local_date} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_date: event.target.value }))} />
-        <Input label="Hora local" type="time" value={rescheduleForm.local_time} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_time: event.target.value }))} />
-        <Input label="Duración (minutos)" type="number" min="1" value={rescheduleForm.duration_minutes} onChange={(event) => setRescheduleForm((form) => ({ ...form, duration_minutes: event.target.value }))} />
-        <Select label="Técnico" value={rescheduleForm.technician_id} onChange={(event) => setRescheduleForm((form) => ({ ...form, technician_id: event.target.value }))} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
-        {rescheduleFeedback?.tone === "danger" ? <StateMessage tone="danger" role="alert" title={rescheduleFeedback.title} detail={rescheduleFeedback.detail} /> : null}
-        <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void reschedule()}>{mutatingId === rescheduleTarget?.id ? "Reprogramando…" : "Confirmar reprogramación"}</Button>
-      </div> : null}
-    </Dialog>
+    {rescheduleTarget ? <AppointmentRescheduleDialog
+      open={rescheduleTarget !== null}
+      onClose={() => setRescheduleTarget(null)}
+      appointment={rescheduleTarget}
+      technicianLabel={rescheduleTarget.technician_name ?? (rescheduleTarget.technician_id ? `Técnico #${rescheduleTarget.technician_id}` : "Técnico no asignado")}
+      technicians={technicians}
+      form={rescheduleForm}
+      onChange={(key, value) => setRescheduleForm((form) => ({ ...form, [key]: value }))}
+      onSubmit={() => void reschedule()}
+      mutating={mutatingId !== null}
+      feedback={rescheduleFeedback?.tone === "danger" ? rescheduleFeedback : null}
+    /> : null}
     <Dialog open={createOpen} onClose={() => { if (!createBusy) setCreateOpen(false); }} title="Nueva visita" icon={CalendarPlus} description="Completa los datos para agendar una visita.">
       <div className="agenda-create-form">
         <section className="agenda-create-form__section" aria-labelledby="agenda-create-visit-heading">

@@ -121,7 +121,11 @@ describe("AgendaPage Storybook state matrix", () => {
     await user.click(screen.getByRole("button", { name: "Acciones para Mantención de calefón" }));
     await user.click(screen.getByRole("menuitem", { name: "Reprogramar" }));
     const dialog = screen.getByRole("dialog", { name: "Reprogramar visita" });
-    expect(within(dialog).getByLabelText("Fecha local")).toHaveValue("2026-09-05");
+    expect(dialog.querySelector(".dialog__icon svg")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Actualiza la fecha, el horario y el técnico asignado.");
+    expect(within(dialog).getByRole("heading", { name: "Programación actual" })).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Fecha")).toHaveValue("2026-09-05");
+    expect(within(dialog).getByRole("button", { name: "Cancelar" })).toBeInTheDocument();
     expect(screen.getByText("Mantención de calefón")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Confirmar reprogramación" }));
     await waitFor(() => expect(rescheduleAppointment).toHaveBeenCalled());

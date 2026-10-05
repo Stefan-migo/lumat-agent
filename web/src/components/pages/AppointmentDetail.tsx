@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowRight, CalendarDays, CalendarCheck, CalendarClock, Check, ChevronDown, CircleCheck, Clock3, FileText, UserRound, UserRoundX } from 'lucide-react';
+import { ArrowRight, CalendarDays, CalendarCheck, Check, ChevronDown, CircleCheck, Clock3, FileText, UserRound, UserRoundX } from 'lucide-react';
 import { closeAppointment, fetchTechnicians, fetchUsers, getAppointment, rescheduleAppointment } from '../../api';
 import { useAsyncData, type AsyncDataState } from '../../hooks/useAsyncData';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
 import { Badge } from '../primitives/Badge';
 import { Button } from '../primitives/Button';
 import { Dialog } from '../primitives/Dialog';
-import { Input } from '../primitives/Input';
-import { Select } from '../primitives/Select';
 import { Card } from '../primitives/Card';
 import { Avatar } from '../primitives/Avatar';
 import { Icon } from '../primitives/Icon';
 import { PageFrame } from '../shared/PageFrame';
+import { AppointmentRescheduleDialog, type AppointmentRescheduleForm } from '../shared/AppointmentRescheduleDialog';
 import { StateMessage } from '../shared/StateMessage';
 import { appointmentStatusLabel, appointmentStatusTone } from '../shared/toneMaps';
 import { composeAgendaTime } from '../shared/agendaTime';
@@ -93,7 +92,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [technicians, setTechnicians] = useState<{ id: number; username: string }[]>([]);
   const [technicianUsername, setTechnicianUsername] = useState<string | null>(null);
-  const [rescheduleForm, setRescheduleForm] = useState({ local_date: '', local_time: '', duration_minutes: '60', technician_id: '' });
+  const [rescheduleForm, setRescheduleForm] = useState<AppointmentRescheduleForm>({ local_date: '', local_time: '', duration_minutes: '60', technician_id: '' });
   const [mutating, setMutating] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; title: string; detail?: string } | null>(null);
   const fetchDetail = useCallback(() => {
@@ -237,27 +236,17 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
         <Button disabled={mutating} onClick={() => void close(closeOutcome)}>{mutating ? 'Guardando…' : 'Confirmar cierre'}</Button>
       </div>
     </Dialog>
-    <Dialog open={rescheduleOpen} onClose={() => { if (!mutating) setRescheduleOpen(false); }} title="Reprogramar visita" icon={CalendarClock} description="Actualiza la fecha, el horario y el técnico asignado.">
-      <section className="appointment-detail__current-schedule" aria-labelledby="appointment-current-schedule">
-        <h3 id="appointment-current-schedule">Programación actual</h3>
-        <strong>{DATE_LONG_FORMAT.format(localStart)} · {localStart.getFullYear()} · {TIME_FORMAT.format(localStart)}</strong>
-        <span>{appointment.duration_minutes ?? 60} min · {technicianLabel}</span>
-      </section>
-      <section className="appointment-detail__new-schedule" aria-labelledby="appointment-new-schedule">
-        <h3 id="appointment-new-schedule">Nueva programación</h3>
-        <div className="appointment-detail__reschedule-fields">
-          <Input label="Fecha" type="date" value={rescheduleForm.local_date} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_date: event.target.value }))} />
-          <Input label="Hora local" type="time" value={rescheduleForm.local_time} onChange={(event) => setRescheduleForm((form) => ({ ...form, local_time: event.target.value }))} />
-          <Input label="Duración" type="number" min="1" value={rescheduleForm.duration_minutes} onChange={(event) => setRescheduleForm((form) => ({ ...form, duration_minutes: event.target.value }))} />
-          <Select label="Técnico" value={rescheduleForm.technician_id} onChange={(event) => setRescheduleForm((form) => ({ ...form, technician_id: event.target.value }))} options={[{ value: '', label: 'Selecciona un técnico' }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} />
-        </div>
-        <p>La fecha y la hora corresponden al horario local de la agenda.</p>
-      </section>
-      {feedback?.tone === 'danger' ? <StateMessage tone="danger" role="alert" title={feedback.title} detail={feedback.detail} /> : null}
-      <div className="appointment-detail__dialog-footer">
-        <Button variant="secondary" disabled={mutating} onClick={() => setRescheduleOpen(false)}>Cancelar</Button>
-        <Button disabled={mutating} onClick={() => void reschedule()}>{mutating ? 'Reprogramando…' : 'Confirmar reprogramación'}</Button>
-      </div>
-    </Dialog>
+    <AppointmentRescheduleDialog
+      open={rescheduleOpen}
+      onClose={() => setRescheduleOpen(false)}
+      appointment={appointment}
+      technicianLabel={technicianLabel}
+      technicians={technicians}
+      form={rescheduleForm}
+      onChange={(field, value) => setRescheduleForm((form) => ({ ...form, [field]: value }))}
+      onSubmit={() => void reschedule()}
+      mutating={mutating}
+      feedback={feedback?.tone === 'danger' ? feedback : null}
+    />
   </PageFrame>;
 }
