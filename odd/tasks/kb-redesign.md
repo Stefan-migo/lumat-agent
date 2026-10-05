@@ -167,6 +167,9 @@ restore) carries a test; pure layout/CSS findings assert structure.
 - Final `cd web && npm run build` — PASS; Vite built successfully (existing >500 kB chunk-size warning).
 - Commits: lifecycle `d32564cc35fe2d791709c24bb926c9d3ca65a2aa`; WU1 code `c7a5befc4441e05dd7b74a4f2f845b891f9a8626`.
 - Graph nodes/edges consulted: `KbList()` / `KbList.tsx`, `Card()` / `Card.tsx`, `DataTable()` / `DataTable.tsx`, `PageFrame()` / `PageFrame.tsx`, `Badge()` / `Badge.tsx`; edge `KbList.tsx --imports_from--> Card.tsx`. The directed path to `DataTable.tsx` was not found.
+- Independent read-only verification (parent): findings 001-010 each mapped to a code/CSS anchor — all `implemented`; no upload/search/retry/permission regression; no literal white background; `tokens.css` untouched; scope confined to the landing page and KB-scoped CSS. Remaining test gaps are presentation-only (icon rendering for 006/008 and responsive-breakpoint CSS for 001/010).
+- RDD assess (base `ba413425`, committed-only): risk `medium`, 7 paths / 341 changed lines, `review_due: false` (`under_budget`) — boundary stays pending in the slice.
+- Note: the writer self-reported `partial` because the RED run stopped at the first failing assertion and did not demonstrate RED per finding; the functional checks (full suite 1001 tests, `tsc -b`, build) are green and verified.
 
 ## Follow-ups (not blocking)
 - None identified yet. The KB API already returns every field the references need, so no
