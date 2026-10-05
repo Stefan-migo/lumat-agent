@@ -150,8 +150,17 @@ commits per work unit.
 - [x] Final iteration-4 gates after WU19–WU22: `eval "$(infra/test-db.sh env)" && .venv/bin/python -m pytest tests/functional/test_api_scheduling.py -q` passed **18/18**; `cd web && npm test` passed **94 files / 998 tests**; `cd web && npm run build` passed `tsc -b` and Vite build (existing >500 kB chunk advisory only).
 ## Next step
 
-All work units T0–T6 and WU7–WU18 are implemented and committed. RDD review (medium, lineage
-`review-751415fdd96e5a0c`, lens `review-reliability`): **approved, no findings; authority burned**
-(`gentle-ai.review-acknowledged/v1`). Remaining: owner visual validation of the built section against
-the references (desktop/tablet/mobile) — dev server `http://localhost:5177/panel/app/agenda` — and,
-when the owner requests delivery, chained PRs (forecast ≈453 authored lines, above the 400 advisory).
+All work units T0–T6, WU7–WU18 and the iteration-4 batch WU19–WU22 are implemented and committed.
+Iteration-4 findings `agenda-045..048` are closed in code; canonical records `agenda-021..044` still
+live only in the main worktree's uncommitted analysis edits (pre-existing drift, not reconciled here).
+
+RDD: the earlier review (medium, lineage `review-751415fdd96e5a0c`) is approved and burned. The
+iteration-4 range `bbdd106d..11322c5f` assessed `medium` / `review_due: false` (`under_budget`, 378
+authored lines) — no review is due yet; the reviewed boundary stays at `bbdd106d` until the owner
+requests delivery.
+
+Remaining: owner visual validation of the built section against the references (desktop/tablet/mobile)
+— dev server `http://localhost:5177/panel/app/agenda` — and, when the owner requests delivery, chained
+PRs (branch is now above the 400-line advisory). The "dialog opens on load" report was not
+reproducible in code (`createOpen` initializes to `false`); the mobile fullscreen change is expected to
+remove the "stuck, cannot close" symptom regardless.
