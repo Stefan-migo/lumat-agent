@@ -92,7 +92,7 @@ describe("KB document detail route", () => {
     expect(within(right).getByRole("button", { name: "Deshabilitar" })).toBeInTheDocument();
   });
 
-  it("renders the redesigned header, summary cards, and working content and version tabs", async () => {
+  it("renders the redesigned header and the unified content and versions tab", async () => {
     const user = userEvent.setup();
     render(<KbDocumentDetail data={document} state="ready" />);
 
@@ -100,17 +100,53 @@ describe("KB document detail route", () => {
     expect(screen.getAllByText("Activo")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Editar contenido" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Resumen" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Contenido" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Versiones" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Contenido y versiones" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Contenido" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Versiones" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Información del documento" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Detalles técnicos" })).toBeInTheDocument();
     expect(screen.getByText("v2")).toBeInTheDocument();
     expect(screen.getByText("En uso")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Editar contenido" }));
-    expect(screen.getByRole("tab", { name: "Contenido" })).toHaveAttribute("data-state", "active");
-    await user.click(screen.getByRole("tab", { name: "Versiones" }));
-    expect(screen.getByRole("tab", { name: "Versiones" })).toHaveAttribute("data-state", "active");
+    expect(screen.getByRole("tab", { name: "Contenido y versiones" })).toHaveAttribute("data-state", "active");
+    expect(await screen.findByLabelText("Contenido")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Versiones" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Restaurar")).toBeInTheDocument();
+  });
+
+  it("previews editor text as markdown and can return to editing", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ...document, content: "# Texto guardado\n\n- Primer punto" }), { status: 200 }));
+    render(<KbDocumentDetail data={document} state="ready" />);
+
+    await user.click(screen.getByRole("tab", { name: "Contenido y versiones" }));
+    const editor = await screen.findByLabelText("Contenido");
+    expect(editor).toHaveValue("# Texto guardado\n\n- Primer punto");
+    await user.click(screen.getByRole("button", { name: "Vista previa" }));
+    expect(screen.getByRole("heading", { name: "Texto guardado" })).toBeInTheDocument();
+    expect(screen.getByRole("listitem")).toHaveTextContent("Primer punto");
+    await user.click(screen.getByRole("button", { name: "Editar" }));
+    expect(screen.getByLabelText("Contenido")).toBeInTheDocument();
+  });
+
+  it("enables a disabled document and refreshes its availability", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).endsWith("/enable") && init?.method === "POST") {
+        return new Response(JSON.stringify({ ok: true, doc: { ...document, active: true } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ...document, active: true }), { status: 200 });
+    });
+    render(<KbDocumentDetail data={{ ...document, active: false }} state="ready" />);
+
+    expect(screen.getByText("El documento está deshabilitado.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Habilitar" }));
+
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith(`/kb/${document.id}/enable`) && init?.method === "POST")).toBe(true);
+    expect(await screen.findByText("El documento está habilitado.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Deshabilitar" })).toBeInTheDocument();
+    fetchMock.mockRestore();
   });
 
   it("keeps disable confirmation page-owned and names the document", async () => {
@@ -133,7 +169,7 @@ describe("KB document detail route", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ ...document, active: false }), { status: 200 }));
     render(<KbDocumentDetail data={document} state="ready" />);
 
-    await user.click(screen.getByRole("tab", { name: "Versiones" }));
+    await user.click(screen.getByRole("tab", { name: "Contenido y versiones" }));
     await user.selectOptions(screen.getByLabelText("Restaurar"), "1");
     await user.click(screen.getByRole("button", { name: "Restaurar" }));
     await user.click(screen.getByRole("tab", { name: "Resumen" }));
@@ -176,7 +212,7 @@ describe("KB document detail route", () => {
     const user = userEvent.setup();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ ...document, content: "Contenido" }), { status: 200 }));
     render(<KbDocumentDetail data={document} state="ready" />);
-    await user.click(screen.getByRole("tab", { name: "Versiones" }));
+    await user.click(screen.getByRole("tab", { name: "Contenido y versiones" }));
     await user.selectOptions(screen.getByLabelText("Restaurar"), "1");
     await user.click(screen.getByRole("button", { name: "Restaurar" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/reabrirá como Interno \(solo Lumat\)/i);
