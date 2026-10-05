@@ -153,11 +153,25 @@ restore) carries a test; pure layout/CSS findings assert structure.
 
 ## Progress
 - [x] WU1 — landing: header + "Documentos" card (findings 001-010)
-- [ ] WU2 — landing: retrieval + upload cards + mobile (findings 011-019)
+- [x] WU2 — landing: retrieval + upload cards + mobile (findings 011-019)
 - [ ] WU3 — detail: header + tabs + information cards (findings 020-027)
 - [ ] WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
 
 ## Verification evidence
+### WU2 — landing retrieval + upload cards + mobile
+- Baseline before edits: `cd web && npm run test` — PASS, 95 files / 1001 tests.
+- RED — retrieval layout/disclosure/initial state: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx -t "presents retrieval|shows the initial retrieval"` — FAIL as expected, 2 failed / 27 skipped; missing retrieval description and initial empty-state assertions.
+- RED — upload card/dropzone: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx -t "keyboard-operable upload dropzone|accepts a dropped file"` — FAIL as expected, 2 failed / 27 skipped; missing upload card description/dropzone assertions.
+- RED — mobile add entry/sheet: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx -t "mobile entry dialog|full-width entry action"` — FAIL as expected, 2 failed / 27 skipped; entry action and dialog were absent.
+- GREEN — retrieval: same targeted command — PASS, 2 tests / 27 skipped.
+- GREEN — upload: same targeted command — PASS, 2 tests / 27 skipped; the dropped file appears in the upload form and the picker input remains wired.
+- GREEN — mobile: same targeted command — PASS, 2 tests / 27 skipped.
+- Final `cd web && npm run test` — PASS, 95 files / 1007 tests.
+- Final `cd web && npx tsc -b --noEmit` — PASS (exit 0).
+- Final `cd web && npm run build` — PASS; Vite built successfully with the existing >500 kB chunk-size warning.
+- Commit: `3b799ff4aff5eccbfdd1ab2ecadef4081dca57e0` — WU2 implementation and tests.
+- Graph nodes/edges consulted: `KbList.tsx`, `KbList()`, `Card()` / `Card.tsx`, `Dialog()` / `Dialog.tsx`, `Icon.tsx`, and landing reference `BaseDeConocimiento.png`; undirected path `KbList.tsx --imports_from--> Icon.tsx <--imports_from-- Dialog.tsx`.
+
 ### WU1 — landing header + "Documentos" card
 - Baseline before edits: `cd web && npm run test` — PASS, 94 files / 999 tests.
 - RED: `cd web && npx vitest run src/components/pages/KbList.test.tsx` — FAIL as expected against the original page; the subtitle assertion reported that the required text was absent. This structural test also asserts the count badge, documents card/toolbar, identity/version/audience cells, footer and mobile list.
