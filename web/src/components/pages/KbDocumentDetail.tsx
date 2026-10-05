@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { FileText } from "lucide-react";
+import { Code2, FileText, Layers, LockKeyhole, Pause } from "lucide-react";
 import { ApiError, disableKbDocument, editKbDocument, getKbDocument, restoreKbDocument, setKbVisibility } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { KbDocument, KbVisibility } from "../../types";
@@ -132,44 +132,45 @@ export function KbDocumentDetail({ documentId, data: controlledData, state: cont
     <div className="detail-region__main">
       {feedback ? <StateMessage tone={feedback.tone} role="alert" title={feedback.title} /> : null}
       <Tabs tabs={DETAIL_TABS} activeTab={activeTab} ariaLabel="Secciones del documento" onTabChange={(tab) => { setActiveTab(tab); if (tab === "content" && contentState === "idle") void loadContent(); }}>
-        {(tab) => tab === "summary" ? <div className="detail-region">
-          <section className="detail-region__rail" aria-label="Información del documento">
-            <Card title="Información del documento">
+        {(tab) => tab === "summary" ? <div className="kb-document__layout" role="region" aria-label="Resumen del documento">
+          <section className="kb-document__column" aria-label="Información y detalles técnicos">
+            <Card title="Información del documento" icon={FileText}>
               <dl className="detail-region__facts">
                 <div><dt>Título</dt><dd>{current.title}</dd></div>
-                <div><dt>Formato</dt><dd>{current.format.toUpperCase()}</dd></div>
+                <div><dt>Formato</dt><dd><span className="kb-document__format"><Icon icon={FileText} size="sm" />{current.format.toUpperCase()}</span></dd></div>
                 <div><dt>Creado</dt><dd>{current.created_at ? DATE_FORMAT.format(new Date(current.created_at)) : "—"}</dd></div>
                 <div><dt>Cantidad de versiones</dt><dd>{current.version}</dd></div>
               </dl>
+              <div className="kb-document__active-version"><Icon icon={Layers} size="lg" /><strong>Versión activa</strong><b>v{current.active_version}</b><Badge tone="success">En uso</Badge><button className="kb-document__versions-link" type="button" onClick={() => setActiveTab("versions")}>Ver versiones →</button></div>
             </Card>
-            <Card title="Detalles técnicos">
-              <dl className="detail-region__facts">
-                <div><dt>Proveedor</dt><dd>{current.provider ?? "—"}</dd></div>
-                <div><dt>Modelo</dt><dd>{current.model ?? "—"}</dd></div>
-                <div><dt>Costo</dt><dd>{current.cost_meta !== null ? `$${current.cost_meta.toFixed(6)}` : "—"}</dd></div>
-              </dl>
+            <details className="card kb-document__technical" aria-label="Detalles técnicos" open>
+              <summary><Icon icon={Code2} size="lg" /><h2>Detalles técnicos</h2></summary>
+              <div className="kb-document__technical-fields">
+                <Input label="Proveedor" value={current.provider ?? "—"} disabled />
+                <Input label="Costo" value={current.cost_meta !== null ? `$${current.cost_meta.toFixed(6)}` : "—"} disabled />
+                <Input label="Modelo" value={current.model ?? "—"} disabled />
+              </div>
+            </details>
+          </section>
+          <section className="kb-document__column" aria-label="Audiencia y disponibilidad">
+            <Card title="Audiencia" icon={LockKeyhole} description="Define quién puede utilizar este documento.">
+              <div className="kb-document__audience">
+                <Select label="Audiencia del documento" value={visibility} options={AUDIENCE_OPTIONS} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} />
+                <p className="kb-document__notice"><Icon icon={LockKeyhole} />Los documentos internos no se usan para responder a clientes.</p>
+                <Button variant="secondary" disabled={busy !== null || visibility === current.visibility} onClick={() => void mutate("visibility", () => setKbVisibility(current.id, visibility))}>Guardar audiencia</Button>
+              </div>
             </Card>
-            <Card title="Versión activa">
-              <div className="kb-document__active-version"><strong>v{current.active_version}</strong><Badge tone="success">En uso</Badge><button className="kb-document__versions-link" type="button" onClick={() => setActiveTab("versions")}>Ver versiones →</button></div>
+            <Card title="Disponibilidad" icon={FileText}>
+              <div className="kb-document__availability">
+                <div className="kb-document__availability-heading"><Badge tone={kbStatusTone(docStatus(current))}>{kbStatusLabel(docStatus(current))}</Badge></div>
+                <p>{current.active ? "El documento está habilitado." : "El documento está deshabilitado."}</p>
+                {current.active ? <Button variant="secondary" disabled={busy !== null} onClick={() => setConfirmation({ kind: "disable", doc: current })}><Icon icon={Pause} />Deshabilitar</Button> : null}
+              </div>
             </Card>
           </section>
-          <div className="detail-region__main">
-            <Card title="Operaciones">
-
-          {current.active ? <Button variant="secondary" disabled={busy !== null} onClick={() => setConfirmation({ kind: "disable", doc: current })}>Deshabilitar</Button> : <p>Deshabilitado</p>}
-
-          <div className="kb-actions__visibility">
-            <Select label="Audiencia" value={visibility} options={AUDIENCE_OPTIONS} onChange={(event) => setVisibility(event.target.value as KbVisibility)} disabled={busy !== null} />
-            <p>Un documento interno nunca se usa para responder a clientes.</p>
-            <Button variant="secondary" disabled={busy !== null || visibility === current.visibility} onClick={() => void mutate("visibility", () => setKbVisibility(current.id, visibility))}>Cambiar audiencia</Button>
-          </div>
-
-          {current.version > 1 ? <div className="kb-actions__restore"><Select label="Restaurar" value={String(restoreVersion)} options={Array.from({ length: current.version }, (_, index) => ({ value: String(index + 1), label: `v${index + 1}` }))} size="sm" disabled={busy !== null} onChange={(event) => setRestoreVersion(Number(event.target.value))} /><Button variant="secondary" disabled={busy !== null} onClick={() => setConfirmation({ kind: "restore", doc: current, version: restoreVersion })}>Restaurar</Button></div> : null}
-            </Card>
-            {confirmation ? <><StateMessage tone="warning" role="alert" title={confirmation.kind === "restore" ? "Confirma la restauración" : "Confirma la desactivación"} detail={confirmation.kind === "restore" ? "El documento se reabrirá como Interno (solo Lumat). El asistente dejará de usarlo para responder a clientes hasta que lo marques como Cliente y Lumat nuevamente." : `Al deshabilitar «${confirmation.doc.title}», el agente dejará de responder con él. Puedes volver a activarlo cuando quieras.`} /><div className="kb-actions__confirmation"><Button disabled={busy !== null} onClick={() => { const pending = confirmation; setConfirmation(null); void mutate(pending.kind, () => pending.kind === "restore" ? restoreKbDocument(pending.doc.id, pending.version) : disableKbDocument(pending.doc.id)); }}>Confirmar</Button><Button variant="secondary" onClick={() => setConfirmation(null)}>Cancelar</Button></div></> : null}
-          </div>
-        </div> : tab === "content" ? editForm : <Card title="Versiones"><p>Versión activa: v{current.active_version} · {current.version} versiones disponibles.</p></Card>}
+        </div> : tab === "content" ? editForm : <Card title="Versiones"><p>Versión activa: v{current.active_version} · {current.version} versiones disponibles.</p>{current.version > 1 ? <div className="kb-actions__restore"><Select label="Restaurar" value={String(restoreVersion)} options={Array.from({ length: current.version }, (_, index) => ({ value: String(index + 1), label: `v${index + 1}` }))} size="sm" disabled={busy !== null} onChange={(event) => setRestoreVersion(Number(event.target.value))} /><Button variant="secondary" disabled={busy !== null} onClick={() => setConfirmation({ kind: "restore", doc: current, version: restoreVersion })}>Restaurar</Button></div> : null}</Card>}
       </Tabs>
+      {confirmation ? <><StateMessage tone="warning" role="alert" title={confirmation.kind === "restore" ? "Confirma la restauración" : "Confirma la desactivación"} detail={confirmation.kind === "restore" ? "El documento se reabrirá como Interno (solo Lumat). El asistente dejará de usarlo para responder a clientes hasta que lo marques como Cliente y Lumat nuevamente." : `Al deshabilitar «${confirmation.doc.title}», el agente dejará de responder con él. Puedes volver a activarlo cuando quieras.`} /><div className="kb-actions__confirmation"><Button disabled={busy !== null} onClick={() => { const pending = confirmation; setConfirmation(null); void mutate(pending.kind, () => pending.kind === "restore" ? restoreKbDocument(pending.doc.id, pending.version) : disableKbDocument(pending.doc.id)); }}>Confirmar</Button><Button variant="secondary" onClick={() => setConfirmation(null)}>Cancelar</Button></div></> : null}
     </div>
   </PageFrame>;
 }
