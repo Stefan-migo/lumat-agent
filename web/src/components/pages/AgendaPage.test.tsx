@@ -147,7 +147,7 @@ describe('AgendaPage', () => {
 
   it('uses the reference sections, leading field icons, and primary create action', async () => {
     const user = userEvent.setup();
-    render(<AgendaPage data={[]} state="empty" />);
+    render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
 
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nueva visita' });
@@ -160,14 +160,18 @@ describe('AgendaPage', () => {
     expect(dialog).toHaveTextContent('Completa los datos para agendar una visita.');
     expect(within(dialog).getByRole('heading', { name: 'Datos de la visita' })).toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { name: 'Fecha y horario' })).toBeInTheDocument();
-    for (const label of ['Cliente', 'Caso vinculado', 'Servicio', 'Técnico', 'Fecha', 'Hora local', 'Duración', 'Zona horaria']) {
+    for (const label of ['Cliente', 'Caso vinculado', 'Servicio', 'Técnico', 'Fecha', 'Hora', 'Duración', 'Zona horaria']) {
       expect(within(dialog).getByLabelText(label)).toBeInTheDocument();
     }
     expect(form?.querySelectorAll('.agenda-create-form__leading-icon').length).toBeGreaterThanOrEqual(4);
     expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toHaveClass('btn--secondary');
     expect(within(dialog).getByRole('button', { name: 'Crear visita' })).toHaveClass('btn--primary');
-    expect(identityRow).toMatch(/grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+    expect(identityRow).toMatch(/grid-template-columns:\s*minmax\(0, 1fr\)/);
     expect(leadingIcon).toMatch(/position:\s*absolute/);
+    expect(within(dialog).getByLabelText('Caso vinculado')).toBeDisabled();
+    expect(dialog.querySelector('.agenda-create-form__timezone small')).toHaveTextContent('America/Santiago');
+    expect(stylesheet).toMatch(/\.agenda-create-form__icon-field\s+select\.field__control\s*\{[^}]*padding-left:\s*calc\(var\(--space-2\) \+ var\(--icon-md\) \+ var\(--space-2\)\)/s);
+    expect(stylesheet).toMatch(/\.agenda-create-form__row--schedule\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
   });
 
   it('keeps calendar day and register surfaces aligned by CSS contract', () => {
@@ -517,8 +521,8 @@ describe('AgendaPage', () => {
     await user.type(screen.getByLabelText('Servicio'), 'Maintenance');
     await user.clear(screen.getByLabelText('Fecha'));
     await user.type(screen.getByLabelText('Fecha'), '2026-09-05');
-    await user.clear(screen.getByLabelText('Hora local'));
-    await user.type(screen.getByLabelText('Hora local'), '10:00');
+    await user.clear(screen.getByLabelText('Hora'));
+    await user.type(screen.getByLabelText('Hora'), '10:00');
     await user.clear(screen.getByLabelText('Duración'));
     await user.type(screen.getByLabelText('Duración'), '60');
     await user.click(screen.getByRole('button', { name: 'Crear visita' }));
@@ -562,8 +566,8 @@ describe('AgendaPage', () => {
     await user.selectOptions(screen.getByLabelText('Técnico'), '30');
     await user.clear(screen.getByLabelText('Fecha'));
     await user.type(screen.getByLabelText('Fecha'), '2026-09-05');
-    await user.clear(screen.getByLabelText('Hora local'));
-    await user.type(screen.getByLabelText('Hora local'), '10:00');
+    await user.clear(screen.getByLabelText('Hora'));
+    await user.type(screen.getByLabelText('Hora'), '10:00');
     await user.click(screen.getByRole('button', { name: 'Crear visita' }));
 
     expect(screen.getByRole('alert')).toHaveTextContent('Completa todos los campos de la visita');
@@ -624,7 +628,7 @@ describe('AgendaPage', () => {
     await waitFor(() => expect(caseInput).toHaveValue('Instalación (#21)'));
   });
 
-  it('requires a customer before creating a manual case', async () => {
+  it('keeps case selection disabled until a customer is chosen', async () => {
     const user = userEvent.setup();
     vi.mocked(fetchClients).mockResolvedValue({ clients: [] as never });
     vi.mocked(fetchCases).mockResolvedValue({ cases: [] as never, users: [] });
@@ -632,10 +636,8 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[]} state="empty" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
-    await user.type(screen.getByRole('combobox', { name: 'Caso vinculado' }), 'Instalación');
-    await user.click(screen.getByRole('option', { name: 'Crear «Instalación»' }));
+    expect(screen.getByRole('combobox', { name: 'Caso vinculado' })).toBeDisabled();
     expect(createCase).not.toHaveBeenCalled();
-    expect(await screen.findByRole('alert')).toHaveTextContent(/cliente/i);
   });
 
   it('keeps the agenda calendar CSS contract aligned with the design system', () => {

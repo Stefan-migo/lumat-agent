@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { BriefcaseBusiness, CalendarDays, CalendarPlus, CalendarX, Check, Clock3, FileText, Globe, Plus, RefreshCw, Timer, UserRound, Wrench, X } from "lucide-react";
+import { CalendarDays, CalendarPlus, CalendarX, Check, Clock3, FileText, Globe, Plus, RefreshCw, Timer, UserRound, Wrench, X } from "lucide-react";
 import { ApiError, cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AgendaAppointment, Case, Customer, UserRef } from "../../types";
@@ -321,10 +321,10 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
           <h3 id="agenda-create-visit-heading">Datos de la visita</h3>
           <div className="agenda-create-form__row agenda-create-form__row--identity">
             <div className="agenda-create-form__icon-field"><Icon icon={UserRound} className="agenda-create-form__leading-icon" /><Select label="Cliente" className="agenda-create-form__select--icon" value={createForm.customer_id} onChange={(event) => { field("customer_id", event.target.value); field("case_id", ""); }} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} /></div>
-            <div className="agenda-create-form__icon-field"><Icon icon={FileText} className="agenda-create-form__leading-icon" /><Combobox label="Caso vinculado" value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={createBusy ? undefined : (query) => void createManualCase(query)} options={cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} /></div>
+            <div className="agenda-create-form__icon-field"><Icon icon={FileText} className="agenda-create-form__leading-icon" /><Combobox label="Caso vinculado" disabled={!createForm.customer_id} value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={createBusy ? undefined : (query) => void createManualCase(query)} options={cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} /></div>
           </div>
           <div className="agenda-create-form__row agenda-create-form__row--visit">
-            <Input label="Servicio" icon={BriefcaseBusiness} value={createForm.service} onChange={(event) => field("service", event.target.value)} />
+            <Input label="Servicio" icon={FileText} value={createForm.service} onChange={(event) => field("service", event.target.value)} />
             <div className="agenda-create-form__icon-field"><Icon icon={Wrench} className="agenda-create-form__leading-icon" /><Select label="Técnico" className="agenda-create-form__select--icon" value={createForm.technician_id} onChange={(event) => field("technician_id", event.target.value)} options={[{ value: "", label: "Selecciona un técnico" }, ...technicians.map((user) => ({ value: String(user.id), label: user.username }))]} /></div>
           </div>
         </section>
@@ -332,10 +332,10 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
           <h3 id="agenda-create-schedule-heading">Fecha y horario</h3>
           <div className="agenda-create-form__row agenda-create-form__row--schedule">
             <Input label="Fecha" icon={CalendarDays} type="date" value={createForm.local_date} onChange={(event) => field("local_date", event.target.value)} />
-            <Input label="Hora local" icon={Clock3} type="time" value={createForm.local_time} onChange={(event) => field("local_time", event.target.value)} />
+            <Input label="Hora" icon={Clock3} type="time" value={createForm.local_time} onChange={(event) => field("local_time", event.target.value)} />
             <Input label="Duración" icon={Timer} type="number" min="1" value={createForm.duration_minutes} onChange={(event) => field("duration_minutes", event.target.value)} />
           </div>
-          <div className="agenda-create-form__icon-field"><Icon icon={Globe} className="agenda-create-form__leading-icon" /><Input label="Zona horaria" className="agenda-create-form__text-control--icon" value={timezone} readOnly /></div>
+          <div className="agenda-create-form__icon-field agenda-create-form__timezone"><Icon icon={Globe} className="agenda-create-form__leading-icon" /><Select label="Zona horaria" className="agenda-create-form__select--icon" value={timezone} disabled options={[{ value: timezone, label: timezone }]} /><small>{timezone}</small></div>
         </section>
         {createFeedback?.tone === "danger" ? <StateMessage tone="danger" role="alert" title={createFeedback.title} detail={createFeedback.detail} /> : null}
         <div className="agenda-create-form__actions">
