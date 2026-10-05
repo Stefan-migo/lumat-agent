@@ -2217,6 +2217,10 @@
     overflow-y: auto;
     overscroll-behavior: contain;
   }
+  /* The sheet layout above sets `display: flex`, which would otherwise override
+     the UA `dialog:not([open]) { display: none }` and leave always-mounted
+     dialogs (e.g. the new-visit form) visible on load. Keep closed dialogs hidden. */
+  .dialog:not([open]) { display: none; }
 }
 @keyframes dialog-sheet-enter {
   from { transform: translateY(100%); }

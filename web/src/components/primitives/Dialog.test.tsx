@@ -143,4 +143,11 @@ describe("Dialog (CST-PRIM-7, CORP-DIALOG-1)", () => {
     expect(primitives).toMatch(/\.agenda-create-form__row\s*>\s*\*\s*\{[^}]*min-width:\s*0/);
     expect(primitives).toMatch(/\.agenda-create-form__row\s+\.field__control-wrap\s*\{[^}]*min-width:\s*0/);
   });
+
+  it("keeps closed dialogs hidden on mobile despite the sheet layout", () => {
+    const mobileRules = primitives.split('@media (max-width: 40rem)').find((rules) => rules.includes('dialog-sheet-enter')) ?? '';
+    const closed = mobileRules.match(/\.dialog:not\(\[open\]\)\s*\{([^}]*)\}/)?.[1] ?? "";
+
+    expect(closed).toMatch(/display:\s*none/);
+  });
 });
