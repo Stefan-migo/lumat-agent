@@ -32,25 +32,52 @@ const TIME_FORMAT = new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: 
 
 const HISTORY_DETAIL_LABELS: Record<string, string> = {
   from_start: 'Hora anterior',
-  from_technician_id: 'Técnico anterior',
+  from_technician_id: 'Técnico anterior (ID)',
   reason: 'Motivo',
   source: 'Origen',
   to_start: 'Nueva hora',
-  to_technician_id: 'Nuevo técnico',
+  to_technician_id: 'Técnico nuevo (ID)',
+};
+
+const HISTORY_ACTION_LABELS: Record<string, string> = {
+  booked: 'Visita reservada',
+  cancelled: 'Visita cancelada',
+  completed: 'Visita completada',
+  created: 'Visita reservada',
+  no_show: 'Visita no completada',
+  rescheduled: 'Visita reprogramada',
 };
 
 function historyDetailLabel(key: string) {
   return HISTORY_DETAIL_LABELS[key] ?? key.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
 }
 
-function historyDetailValue(value: unknown): string {
+function historyDetailValue(value: unknown, key?: string): string {
   if (value == null) return '—';
   if (typeof value === 'boolean') return value ? 'Sí' : 'No';
-  if (Array.isArray(value)) return value.map(historyDetailValue).join(' · ');
+  if ((key === 'from_technician_id' || key === 'to_technician_id') && (typeof value === 'number' || /^\d+$/.test(String(value)))) {
+    return `Técnico #${value} (ID no resuelto)`;
+  }
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.test(value)) {
+    const date = new Date(value);
+    if (Number.isFinite(date.getTime())) {
+      const formatted = value.includes('T') ? DATE_TIME_FORMAT.format(date) : DATE_LONG_FORMAT.format(date);
+      return formatted.charAt(0).toLocaleUpperCase('es-CL') + formatted.slice(1);
+    }
+  }
+  if (Array.isArray(value)) return value.map((item) => historyDetailValue(item)).join(' · ');
   if (typeof value === 'object') {
-    return Object.entries(value).map(([key, nested]) => `${historyDetailLabel(key)}: ${historyDetailValue(nested)}`).join(' · ');
+    return Object.entries(value).map(([nestedKey, nested]) => `${historyDetailLabel(nestedKey)}: ${historyDetailValue(nested, nestedKey)}`).join(' · ');
   }
   return String(value);
+}
+
+function historyActionLabel(action: string) {
+  return HISTORY_ACTION_LABELS[action] ?? historyDetailLabel(action);
+}
+
+function historyStatusLabel(status: string | null) {
+  return status ? appointmentStatusLabel(status) : '—';
 }
 
 function stateMessage(state: AsyncDataState) {
@@ -156,14 +183,14 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
           {appointment.history.length ? <ol aria-label="Historial de la visita">
             {appointment.history.map((entry) => <li key={entry.id}>
               <span className="appointment-detail__history-icon"><Icon icon={CalendarCheck} /></span>
-              <div className="appointment-detail__history-copy"><strong>{entry.action === 'booked' || entry.action === 'created' ? 'Visita reservada' : entry.action}</strong>
-                <time dateTime={entry.created_at}>{DATE_TIME_FORMAT.format(new Date(entry.created_at))}</time>
-                <p>{entry.action === 'booked' || entry.action === 'created' ? `Se creó la reserva con estado «${appointmentStatusLabel(entry.to_status)}».` : `${entry.actor} registró el cambio de ${entry.from_status ?? '—'} a ${entry.to_status}.`}</p>
+                 <div className="appointment-detail__history-copy"><strong>{historyActionLabel(entry.action)}</strong>
+                 <time dateTime={entry.created_at}>{DATE_TIME_FORMAT.format(new Date(entry.created_at))}</time>
+                 <p>{entry.action === 'booked' || entry.action === 'created' ? `Se creó la reserva con estado «${historyStatusLabel(entry.to_status)}».` : `${entry.actor} registró el cambio de estado ${historyStatusLabel(entry.from_status)} a ${historyStatusLabel(entry.to_status)}.`}</p>
                 {!entry.from_status ? <Badge tone="success">Registro inicial</Badge> : null}
                 <details><summary><Icon icon={ChevronDown} />Ver detalles</summary><dl className="appointment-detail__history-details">
                   <div><dt>Responsable</dt><dd>{entry.actor}</dd></div>
-                  <div><dt>Estado</dt><dd>{entry.from_status ?? '—'} → {entry.to_status}</dd></div>
-                  {entry.details ? Object.entries(entry.details).map(([key, value]) => <div key={key}><dt>{historyDetailLabel(key)}</dt><dd>{historyDetailValue(value)}</dd></div>) : null}
+                  <div><dt>Estado</dt><dd>{historyStatusLabel(entry.from_status)} → {historyStatusLabel(entry.to_status)}</dd></div>
+                  {entry.details ? Object.entries(entry.details).map(([key, value]) => <div key={key}><dt>{historyDetailLabel(key)}</dt><dd>{historyDetailValue(value, key)}</dd></div>) : null}
                 </dl></details>
               </div>
             </li>)}

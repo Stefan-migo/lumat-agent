@@ -14,7 +14,10 @@ const detail: AppointmentDetailData = {
     id: 7, service: 'Reparación de calefón', customer_id: 2, case_id: 3, technician_id: 4,
     local_start: '2026-09-26T10:00:00', timezone: 'America/Santiago', starts_at: '2026-09-26T13:00:00Z',
     ends_at: '2026-09-26T14:00:00Z', duration_minutes: 60, status: 'booked',
-    history: [{ id: 9, actor: 'ana', action: 'created', from_status: null, to_status: 'booked', details: { source: 'panel', reason: 'Cliente solicitó revisión' }, created_at: '2026-09-25T12:00:00Z' }],
+    history: [
+      { id: 9, actor: 'ana', action: 'created', from_status: null, to_status: 'booked', details: { source: 'panel', reason: 'Cliente solicitó revisión' }, created_at: '2026-09-25T12:00:00Z' },
+      { id: 10, actor: 'ana', action: 'rescheduled', from_status: 'booked', to_status: 'booked', details: { from_start: '2026-09-26T10:00:00', to_start: '2026-09-27T11:30:00', from_technician_id: 3, to_technician_id: 4 }, created_at: '2026-09-25T13:00:00Z' },
+    ],
   },
   customer: { id: 2, name: 'Ana' },
   case: { id: 3, conversation_id: null },
@@ -81,8 +84,8 @@ describe('AppointmentDetail', () => {
     const history = screen.getByRole('list', { name: 'Historial de la visita' });
     expect(history).toHaveTextContent('Visita reservada');
     expect(history).toHaveTextContent('Registro inicial');
-    const disclosure = within(history).getByText('Ver detalles');
-    expect(disclosure).toBeInTheDocument();
+    const disclosures = within(history).getAllByText('Ver detalles');
+    expect(disclosures).toHaveLength(2);
     expect(history.querySelector('pre')).not.toBeInTheDocument();
     expect(history).toHaveTextContent('Origen');
     expect(history).toHaveTextContent('panel');
@@ -90,6 +93,15 @@ describe('AppointmentDetail', () => {
     expect(history).toHaveTextContent('Cliente solicitó revisión');
     expect(history).toHaveTextContent('Responsable');
     expect(history).toHaveTextContent('Estado');
+    expect(history).toHaveTextContent('Visita reprogramada');
+    expect(history).toHaveTextContent('Hora anterior');
+    expect(history).toHaveTextContent('Nueva hora');
+    expect(history).toHaveTextContent('Técnico anterior (ID)');
+    expect(history).toHaveTextContent('Técnico #3 (ID no resuelto)');
+    expect(history).toHaveTextContent('Técnico #4 (ID no resuelto)');
+    expect(history).not.toHaveTextContent('rescheduled');
+    expect(history).not.toHaveTextContent('2026-09-26T10:00:00');
+    expect(history).not.toHaveTextContent(/\bbooked\b/);
     expect(history.querySelector('time')).toHaveAttribute('dateTime', '2026-09-25T12:00:00Z');
   });
 
