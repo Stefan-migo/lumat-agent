@@ -13,7 +13,7 @@ implementing any section. The v1 dashboard record predates this flow and has no 
 | `conversaciones` | pending | — | — |
 | `agenda` | validated | [agenda/visual.md](agenda/visual.md) | [agenda/findings.md](agenda/findings.md) |
 | `usuarios` | done | [visual.md](usuarios/visual.md) | [findings.md](usuarios/findings.md) |
-| `conocimiento` | pending | — | — |
+| `conocimiento` | validated | [conocimiento/visual.md](conocimiento/visual.md) | [conocimiento/findings.md](conocimiento/findings.md) |
 | `configuracion` | pending | — | — |
 
 ## Legend
