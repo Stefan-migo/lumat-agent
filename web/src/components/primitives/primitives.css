@@ -2173,9 +2173,39 @@
 }
 .technician-shell .panel-shell__footer-nav { display: grid; }
 @media (max-width: 40rem) {
-  .technician-shell__header-inner {
-    align-items: flex-start;
+.technician-shell__header-inner {
+  align-items: flex-start;
+}
+}
+
+@media (max-width: 40rem) {
+  .dialog {
+    position: fixed;
+    inset: auto 0 0;
+    display: flex;
+    width: 100vw;
+    max-width: none;
+    max-height: 90vh;
+    max-height: 90dvh;
+    flex-direction: column;
+    margin: 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    animation: dialog-sheet-enter var(--duration-base) var(--ease-out);
   }
+  .dialog__header { flex: 0 0 auto; }
+  .dialog__body {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+@keyframes dialog-sheet-enter {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open] { animation: none; }
 }
 
 /* ---- Technician agenda (TECH-AGENDA-1) ---- */

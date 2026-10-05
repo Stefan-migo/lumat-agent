@@ -106,4 +106,20 @@ describe("Dialog (CST-PRIM-7, CORP-DIALOG-1)", () => {
     rerender(dialogMarkup(false, onClose));
     expect(dialog).not.toHaveAttribute("open");
   });
+
+  it("anchors mobile dialogs as animated, scrollable bottom sheets", () => {
+    const mobileRules = primitives.split('@media (max-width: 40rem)').find((rules) => rules.includes('dialog-sheet-enter')) ?? '';
+    const sheet = mobileRules.match(/\.dialog\s*\{([^}]*)\}/)?.[1] ?? "";
+    const header = mobileRules.match(/\.dialog__header\s*\{([^}]*)\}/)?.[1] ?? "";
+    const body = mobileRules.match(/\.dialog__body\s*\{([^}]*)\}/)?.[1] ?? "";
+
+    expect(sheet).toMatch(/position:\s*fixed/);
+    expect(sheet).toMatch(/inset:\s*auto 0 0/);
+    expect(sheet).toMatch(/width:\s*100vw/);
+    expect(sheet).toMatch(/border-radius:\s*var\(--radius-xl\) var\(--radius-xl\) 0 0/);
+    expect(sheet).toMatch(/animation:/);
+    expect(header).toMatch(/flex:\s*0 0 auto/);
+    expect(body).toMatch(/min-height:\s*0/);
+    expect(body).toMatch(/overflow-y:\s*auto/);
+  });
 });
