@@ -37,7 +37,7 @@ describe("KB document detail route", () => {
     expect(parsePanelPath(`/panel/app/kb/${document.id}`)).toEqual({ view: "kb", kbDocId: document.id });
   });
 
-  it("renders the detail for a document route with the shared back control", async () => {
+  it("renders the detail route with edit action while keeping the KB list reachable", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const path = new URL(String(input), "http://localhost").pathname;
       if (path === "/panel/api/notifications") return new Response(JSON.stringify({ notifications: [] }), { status: 200 });
@@ -48,10 +48,11 @@ describe("KB document detail route", () => {
     render(<AppShell user={admin} />);
 
     expect(await screen.findByRole("heading", { name: document.title })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Volver a documentos" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Editar contenido" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Base de Conocimientos" })).toBeInTheDocument();
   });
 
-  it("renders labelled identity facts in a rail and operations in the main region", () => {
+  it("renders document and technical facts in the summary and operations in the main region", () => {
     render(<KbDocumentDetail data={document} state="ready" />);
 
     const surface = screen.getByRole("heading", { name: document.title }).closest("main") as HTMLElement;
@@ -59,13 +60,36 @@ describe("KB document detail route", () => {
     expect(surface.querySelector(".detail-region")).toBeInTheDocument();
     expect(surface.querySelector(".detail-region__rail")).toBeInTheDocument();
     expect(surface.querySelector(".detail-region__main")).toBeInTheDocument();
+    expect(within(rail).getByRole("heading", { name: "Información del documento" })).toBeInTheDocument();
+    expect(within(rail).getByRole("heading", { name: "Detalles técnicos" })).toBeInTheDocument();
     expect(within(rail).getByText("Título")).toBeInTheDocument();
     expect(within(rail).getByText(document.title)).toBeInTheDocument();
-    for (const label of ["Formato", "Versión activa", "Cantidad de versiones", "Estado", "Audiencia", "Proveedor", "Modelo", "Costo", "Creado"]) {
+    for (const label of ["Formato", "Versión activa", "Cantidad de versiones", "Proveedor", "Modelo", "Costo", "Creado"]) {
       expect(within(rail).getByText(label)).toBeInTheDocument();
     }
     expect(within(rail).getByText(document.provider)).toBeInTheDocument();
     expect(within(rail).getByText(document.model)).toBeInTheDocument();
+  });
+
+  it("renders the redesigned header, summary cards, and working content and version tabs", async () => {
+    const user = userEvent.setup();
+    render(<KbDocumentDetail data={document} state="ready" />);
+
+    expect(screen.getByText(`#${document.id} · PDF · Creado el 10 jul 2026`)).toBeInTheDocument();
+    expect(screen.getByText("Activo")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Editar contenido" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Resumen" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Contenido" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Versiones" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Información del documento" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Detalles técnicos" })).toBeInTheDocument();
+    expect(screen.getAllByText("v2")).toHaveLength(2);
+    expect(screen.getByText("En uso")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Editar contenido" }));
+    expect(screen.getByRole("tab", { name: "Contenido" })).toHaveAttribute("data-state", "active");
+    await user.click(screen.getByRole("tab", { name: "Versiones" }));
+    expect(screen.getByRole("tab", { name: "Versiones" })).toHaveAttribute("data-state", "active");
   });
 
   it("keeps disable confirmation page-owned and names the document", async () => {

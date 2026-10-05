@@ -2641,6 +2641,9 @@
 .kb-list__identity-copy strong { overflow-wrap: anywhere; }
 .kb-list__identity-copy small { color: var(--text-muted); }
 .kb-list__file { display: grid; place-items: center; flex: 0 0 2.5rem; height: 2.5rem; border-radius: var(--radius-md); color: var(--text); background: var(--brand-bg-elevated); }
+.kb-document__active-version { display: flex; align-items: center; gap: var(--space-2); }
+.kb-document__active-version strong { font-size: var(--text-lg); }
+.kb-document__versions-link { margin-left: auto; padding: 0; border: 0; background: transparent; color: var(--primary-700); font: inherit; font-weight: var(--weight-semibold); cursor: pointer; }
 .kb-list__audience { display: inline-flex; align-items: center; gap: var(--space-1); }
 .kb-list__count { margin-top: var(--space-3); color: var(--text-muted); font-size: var(--text-sm); }
 .kb-list__mobile { display: none; list-style: none; margin: 0; padding: 0; }

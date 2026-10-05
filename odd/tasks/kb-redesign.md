@@ -171,10 +171,21 @@ this supersedes the WU2 secondary placement (where retrieval sat in the narrow r
 - [x] WU1 — landing: header + "Documentos" card (findings 001-010)
 - [x] WU2 — landing: retrieval + upload cards + mobile (findings 011-019)
 - [x] WU3a — landing: retrieval placement + results redesign (owner additions A1/A2)
-- [ ] WU3b — detail: header + tabs + information cards (findings 020-027)
+- [x] WU3b — detail: header + tabs + information cards (findings 020-027)
 - [ ] WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
 
 ## Verification evidence
+### WU3b — detail header, tabs + information cards
+- Baseline before edits: `cd web && npm run test` — PASS, 95 files / 1008 tests.
+- RED: `cd web && npx vitest run src/components/pages/KbDocumentDetail.test.tsx -t "redesigned header"` — FAIL as expected, 1 failed / 11 skipped; the metadata line was absent.
+- GREEN: `cd web && npx vitest run src/components/pages/KbDocumentDetail.test.tsx src/stories/pages/KbDocumentDetail.stories.test.tsx` — PASS, 2 files / 13 tests.
+- Final `cd web && npm run test` — PASS, 96 files / 1010 tests.
+- Final `cd web && npx tsc -b --noEmit` — FAIL, `src/components/pages/KbList.tsx(72,42): error TS2304: Cannot find name 'KbSearchResult'.` This is unchanged in the WU3b diff and present at the pre-WU3b base (`8ae58e3c`); kept out of scope.
+- Final `cd web && npm run build` — FAIL at its `tsc -b` phase with the same pre-existing `KbSearchResult` error; Vite did not run.
+- Commit: `bbee0523d379ba28934b8cc064c5973a00782068` — `feat(kb): rebuild document detail summary tabs`.
+- Graphify nodes consulted: `KbDocumentDetail.tsx` / `KbDocumentDetail()`, `Tabs.tsx` / `Tabs()`, `PageFrame()` / `PageFrame.tsx`, `Badge()`, `Icon()`, `Card()`, `kbStatusLabel()` / `kbStatusTone()`, `getKbDocument()` / `editKbDocument()`, community hub `KbList.tsx`. `graphify path "KbDocumentDetail.tsx" "Tabs.tsx"` returned no directed path.
+- Scope stayed on detail composition and its component/story tests plus KB-scoped CSS; no shared primitive or token files changed. The primary navigation still exposes “Base de Conocimientos” after replacing the detail back action. WU4 remains unchecked.
+
 ### WU3a — landing retrieval placement + results redesign
 - Baseline before edits: `cd web && npm run test` — PASS, 95 files / 1007 tests.
 - RED: `cd web && npx vitest run src/components/pages/KbList.test.tsx src/stories/pages/KbList.stories.test.tsx -t "stacks retrieval|makes documents and retrieval|renders loading, ready"` — FAIL as expected, 3 failed / 27 skipped; retrieval was still secondary and results lacked the fragment meta/content-first list.
