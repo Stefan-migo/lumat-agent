@@ -74,6 +74,7 @@ export const uploadKbDocument = (title: string, file: File, visibility: KbVisibi
 };
 export const editKbDocument = (id: number, body: { title: string; content: string }) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/edit`, body);
 export const disableKbDocument = (id: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/disable`);
+export const enableKbDocument = (id: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/enable`);
 export const restoreKbDocument = (id: number, version: number) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/restore`, { version });
 export const setKbVisibility = (id: number, visibility: KbVisibility) => postJson<KbMutationResponse>(`/panel/api/kb/${id}/visibility`, { visibility });
 export const refreshKbDocuments = () => apiFetch<DocsResponse>('/panel/api/kb');

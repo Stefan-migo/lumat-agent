@@ -2713,6 +2713,11 @@
   gap: var(--space-2);
   margin-top: var(--space-2);
 }
+.kb-document__content-panel { display: grid; gap: var(--space-4); }
+.kb-document__content-toggle { display: flex; gap: var(--space-2); }
+.kb-document__preview { min-height: 8rem; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); overflow-wrap: anywhere; }
+.kb-document__preview > :first-child { margin-top: 0; }
+.kb-document__preview > :last-child { margin-bottom: 0; }
 .kb-actions__confirmation { display: flex; gap: var(--space-2); }
 .kb-search__results { display: grid; gap: var(--space-3); min-width: 0; }
 .kb-search__result { min-width: 0; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }

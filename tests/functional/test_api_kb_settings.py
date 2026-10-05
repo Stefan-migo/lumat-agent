@@ -12,6 +12,7 @@ KB (endpoints 13-17):
                                      ingest + audit (PDW-API-1)
 - POST /panel/api/kb/{id}/edit     -> {"title","content"} new version re-embed
 - POST /panel/api/kb/{id}/disable  -> KB-3 disable, audited
+- POST /panel/api/kb/{id}/enable   -> re-enable without changing version or visibility
 - POST /panel/api/kb/{id}/restore  -> {"version":n} pointer flip, audited (D8)
 - POST /panel/api/kb/{id}/visibility -> {"visibility":...} reclassification, audited
 
@@ -88,6 +89,7 @@ def test_kb_endpoints_require_login_401_json(client):
         ("post", "/panel/api/kb"),
         ("post", "/panel/api/kb/1/edit"),
         ("post", "/panel/api/kb/1/disable"),
+        ("post", "/panel/api/kb/1/enable"),
         ("post", "/panel/api/kb/1/restore"),
         ("post", "/panel/api/kb/1/visibility"),
     ]
@@ -139,6 +141,7 @@ def test_kb_endpoints_denied_403_for_operador_json(client, make_user):
         ("post", "/panel/api/kb"),
         ("post", "/panel/api/kb/1/edit"),
         ("post", "/panel/api/kb/1/disable"),
+        ("post", "/panel/api/kb/1/enable"),
         ("post", "/panel/api/kb/1/restore"),
         ("post", "/panel/api/kb/1/visibility"),
     ]
@@ -569,6 +572,47 @@ def test_kb_disable_missing_doc_404_json(client, make_user):
     _login(client)
 
     resp = client.post("/panel/api/kb/999999/disable", follow_redirects=False)
+
+    assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("application/json")
+    assert resp.json() == {"detail": "kb document not found"}
+
+
+def test_kb_enable_preserves_version_and_visibility_and_restores_retrieval(
+    client, make_user, fake_embedder
+):
+    doc_id = _seed_doc(content=b"shared customer retrieval phrase")
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+    client.post(f"/panel/api/kb/{doc_id}/visibility", json={"visibility": "customer"})
+    client.post(f"/panel/api/kb/{doc_id}/disable")
+
+    resp = client.post(f"/panel/api/kb/{doc_id}/enable", follow_redirects=False)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body.keys()) == {"ok", "doc"}
+    assert body["ok"] is True
+    assert body["doc"]["active"] is True
+    assert body["doc"]["active_version"] == 1
+    assert body["doc"]["visibility"] == "customer"
+    with SessionLocal() as session:
+        doc = session.get(KbDocument, doc_id)
+        assert doc.active is True
+        assert doc.active_version == 1
+        assert doc.visibility.value == "customer"
+    search = client.get("/panel/api/kb/search?q=shared customer retrieval phrase&min_sim=0")
+    assert [item["document_id"] for item in search.json()["results"]] == [doc_id]
+    audit = _last_audit("kb.document_enable")
+    assert audit is not None and audit.actor == "adm"
+    assert audit.after == {"active": True}
+
+
+def test_kb_enable_missing_doc_404_json(client, make_user):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post("/panel/api/kb/999999/enable", follow_redirects=False)
 
     assert resp.status_code == 404
     assert resp.headers["content-type"].startswith("application/json")

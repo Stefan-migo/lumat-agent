@@ -161,11 +161,29 @@ this supersedes the WU2 secondary placement (where retrieval sat in the narrow r
 - Update `KbDocumentDetail.tsx`, `primitives.css`, `KbDocumentDetail.test.tsx`,
   `KbDocumentDetail.stories.test.tsx`.
 
+### WU5 — owner additions (2026-10-05, post-WU4; approved)
+Owner ruled the reference may be overridden here.
+- O1 — unify tabs: merge "Contenido" + "Versiones" into a single tab "Contenido y versiones"
+  (the detail then has Resumen | Contenido y versiones). Improve the content editor and place the
+  version list (with restore) in that same tab.
+- O2 — markdown edit/preview: in the content editor add an Editar | Vista previa toggle using the
+  existing `web/src/components/shared/Markdown.tsx` (react-markdown + remark-gfm). Editing still
+  creates a new version (`editKbDocument`). Honest caveat: `.md`/`.txt` preview well; PDF-extracted
+  content is pypdf plain text and previews as paragraphs (no fabricated structure).
+- O3 — enable path (backend scope expansion, approved): add `enable_document` (set `active=True`
+  only — no version or visibility change) in `app/services/kb.py`, `POST /panel/api/kb/{id}/enable`
+  in `app/panel/api/routes/kb.py`, `enableKbDocument` in `web/src/api.ts`, and a "Habilitar" action
+  in the Disponibilidad card shown when the document is disabled. Restore is NOT a substitute: it
+  also flips `active_version` and resets `visibility` to internal.
+- Update backend (`app/services/kb.py`, `app/panel/api/routes/kb.py`, backend tests) and frontend
+  (`api.ts`, `KbDocumentDetail.tsx/.test.tsx/.stories.test.tsx`, `primitives.css`).
+
 ## Delivery
 - Forecast: ~650–950 authored changed lines across 2 pages + CSS + tests → over the 400-line
   review budget.
 - Planned slices: PR1 = WU1+WU2 (landing foundation, reviewed), PR2 = WU3a (retrieval
-  placement + results redesign), PR3 = WU3b (detail), PR4 = WU4 (detail follow-up).
+  placement + results redesign), PR3 = WU3b (detail), PR4 = WU4 (detail follow-up), PR5 = WU5
+  (owner additions).
 - Chain strategy: pending owner decision (default `ask-on-risk`); decide before the first PR.
 - Local work-unit commits are allowed on the branch without a chain decision.
 
@@ -173,6 +191,8 @@ this supersedes the WU2 secondary placement (where retrieval sat in the narrow r
 - [ ] Findings `conocimiento-001..030` implemented.
 - [ ] Owner additions A1/A2: "Probar recuperación" sits in the left column below "Documentos"
       per the reference; the results surface is content-first and never overflows.
+- [ ] Owner additions O1/O2/O3: Contenido + Versiones unified in one tab; editable markdown
+      preview; a short "Habilitar" path in the Disponibilidad card backed by `POST /kb/{id}/enable`.
 - [ ] `npm run test`, `npx tsc -b --noEmit`, `npm run build` all green.
 - [ ] Mobile landing uses a card list with no horizontal overflow; the add form opens as a
       bottom sheet.
@@ -189,8 +209,22 @@ this supersedes the WU2 secondary placement (where retrieval sat in the narrow r
 - [x] WU3a — landing: retrieval placement + results redesign (owner additions A1/A2)
 - [x] WU3b — detail: header + tabs + information cards (findings 020-027)
 - [x] WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
+- [x] WU5 — owner additions: unify Contenido+Versiones tab, markdown preview, enable path
 
 ## Verification evidence
+### WU5 — unified content/version tab, markdown preview and enable path
+- WU5a backend commit: `a5834fbf` — `POST /panel/api/kb/{id}/enable` sets only `active=True`.
+- WU5a functional: `eval "$(infra/test-db.sh env)" && uv run pytest tests/functional/test_api_kb_settings.py -k kb_enable` — PASS, 2 passed.
+- WU5a integration: `eval "$(infra/test-db.sh env)" && uv run pytest tests/integration/test_kb.py` — PASS, 19 passed.
+- RED: `cd web && npx vitest run src/components/pages/KbDocumentDetail.test.tsx src/stories/pages/KbDocumentDetail.stories.test.tsx` — FAIL as expected, 6 failed / 10 passed; old tabs, missing preview, and disabled-document enable action did not meet the new assertions.
+- GREEN focused: same Vitest command — PASS, 2 files / 16 tests.
+- Final `cd web && npm run test` — PASS, 96 files / 1013 tests. An earlier run had failures only in the known-flaky `AgendaPage.stories.test.tsx`; isolated rerun passed 12/12, and the final full run passed.
+- Final `cd web && npx tsc -b --noEmit` — PASS (exit 0; no diagnostics).
+- Final `cd web && npm run build` — PASS; Vite built successfully with the existing >500 kB chunk-size warning.
+- Frontend commit: `a1e25ee5` — `feat(kb): unify versions, markdown preview, and enable`.
+- Graphify consulted: nodes `KbDocumentDetail.tsx` / `KbDocumentDetail()`, `KbDocumentDetail.test.tsx`, `Tabs.tsx` / `Tabs()`, `Markdown.tsx` / `Markdown()`, `api.ts`, `postJson()`, `disableKbDocument()`, `editKbDocument()`, `restoreKbDocument()`, and backend `enable_document()`. `graphify path "KbDocumentDetail.tsx" "Markdown.tsx"` found no directed path; the earlier undirected traversal linked the detail through `api.ts` and `AgentChat.tsx` to `Markdown.tsx`.
+- Scope: API function, detail page and its component/story tests, and additive tokenized KB CSS only. Shared primitive components and token definitions were not changed; the pre-existing disable confirmation and restore endpoint/payload remain intact.
+
 ### WU4 — detail columns, audience and availability
 - Baseline before edits: `cd web && npm run test` — PASS, 96 files / 1010 tests.
 - RED: `cd web && npx vitest run src/components/pages/KbDocumentDetail.test.tsx src/stories/pages/KbDocumentDetail.stories.test.tsx` — FAIL as expected against the old surface, 3 failed / 11 passed; required two-column groups, Audience/Availability cards and restore-on-Versiones assertions were absent.
@@ -260,6 +294,14 @@ this supersedes the WU2 secondary placement (where retrieval sat in the narrow r
 - Native review lineage `review-04d267427e08e26a`, lens `review-reliability`, tier `medium`, correction budget 200.
 - Outcome: **approved**, no findings; authority `burned` (`gentle-ai.review-acknowledged/v1`). Reviewed boundary advances to the WU2 head; WU3/WU4 start from that base.
 
+### Review record — WU3a..WU5 slice (2026-10-05)
+- RDD assess (base `5f96f193`, committed-only): risk `medium`, 12 paths / 562 changed lines, `review_due: true` (`slice_budget_reached`).
+- Consent: owner granted ("Review this change").
+- Native review lineage `review-380e022998683d90`, lens `review-reliability`, tier `medium`, correction budget 200.
+- Outcome: **approved**, no findings; authority `burned` (`gentle-ai.review-acknowledged/v1`). Reviewed boundary = `1334ddff`.
+
 ## Follow-ups (not blocking)
 - None identified yet. The KB API already returns every field the references need, so no
   backend follow-up is expected (unlike the agenda technician-name gap).
+- Minor test gaps noted by independent verification: KB detail file icon (022), edit payload/refreshed
+  version, and the "Ver versiones" affordance are not directly asserted.
