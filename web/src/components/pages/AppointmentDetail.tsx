@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowRight, CalendarDays, CalendarCheck, Check, ChevronDown, CircleCheck, Clock3, FileText, UserRound, UserRoundX } from 'lucide-react';
+import { ArrowRight, CalendarDays, CalendarCheck, Check, ChevronDown, Clock3, FileText, UserRound } from 'lucide-react';
 import { closeAppointment, fetchTechnicians, fetchUsers, getAppointment, rescheduleAppointment } from '../../api';
 import { useAsyncData, type AsyncDataState } from '../../hooks/useAsyncData';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
 import { Badge } from '../primitives/Badge';
 import { Button } from '../primitives/Button';
-import { Dialog } from '../primitives/Dialog';
 import { Card } from '../primitives/Card';
 import { Avatar } from '../primitives/Avatar';
 import { Icon } from '../primitives/Icon';
 import { PageFrame } from '../shared/PageFrame';
+import { AppointmentClosureDialog, type AppointmentClosureOutcome } from '../shared/AppointmentClosureDialog';
 import { AppointmentRescheduleDialog, type AppointmentRescheduleForm } from '../shared/AppointmentRescheduleDialog';
 import { StateMessage } from '../shared/StateMessage';
 import { appointmentStatusLabel, appointmentStatusTone } from '../shared/toneMaps';
@@ -88,7 +88,7 @@ function stateMessage(state: AsyncDataState) {
 
 export function AppointmentDetail({ appointmentId, data: controlledData, state: controlledState, onRetry }: AppointmentDetailProps) {
   const [closeOpen, setCloseOpen] = useState(false);
-  const [closeOutcome, setCloseOutcome] = useState<'completed' | 'no_show'>('completed');
+  const [closeOutcome, setCloseOutcome] = useState<AppointmentClosureOutcome>('completed');
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [technicians, setTechnicians] = useState<{ id: number; username: string }[]>([]);
   const [technicianUsername, setTechnicianUsername] = useState<string | null>(null);
@@ -214,28 +214,18 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
         </Card>
       </div>
     </div>
-    <Dialog open={closeOpen} onClose={() => { if (!mutating) setCloseOpen(false); }} title="Cerrar visita" icon={CircleCheck} description="Selecciona el resultado de la visita.">
-      <div className="appointment-detail__selected-visit"><Icon icon={CalendarDays} /><div><strong>{customer.name ?? 'Cliente sin nombre'}</strong><time dateTime={appointment.local_start}>{DATE_TIME_FORMAT.format(localStart)}</time><span>Visita seleccionada</span></div></div>
-      <fieldset className="appointment-detail__outcomes" disabled={mutating}>
-        <legend>Resultado</legend>
-        <label className={closeOutcome === 'completed' ? 'appointment-detail__outcome appointment-detail__outcome--selected' : 'appointment-detail__outcome'}>
-          <Icon icon={Check} />
-          <span><strong>Completada</strong><small>La visita se realizó.</small></span>
-          <input type="radio" name="appointment-outcome" value="completed" checked={closeOutcome === 'completed'} onChange={() => setCloseOutcome('completed')} />
-        </label>
-        <label className={closeOutcome === 'no_show' ? 'appointment-detail__outcome appointment-detail__outcome--selected' : 'appointment-detail__outcome'}>
-          <Icon icon={UserRoundX} />
-          <span><strong>No completada</strong><small>La visita no se completó.</small></span>
-          <input type="radio" name="appointment-outcome" value="no_show" checked={closeOutcome === 'no_show'} onChange={() => setCloseOutcome('no_show')} />
-        </label>
-      </fieldset>
-      <p className="appointment-detail__closure-warning">Este cierre no se puede revertir desde la agenda.</p>
-      {feedback?.tone === 'danger' ? <StateMessage tone="danger" role="alert" title={feedback.title} detail={feedback.detail} /> : null}
-      <div className="appointment-detail__dialog-footer">
-        <Button variant="secondary" disabled={mutating} onClick={() => setCloseOpen(false)}>Cancelar</Button>
-        <Button disabled={mutating} onClick={() => void close(closeOutcome)}>{mutating ? 'Guardando…' : 'Confirmar cierre'}</Button>
-      </div>
-    </Dialog>
+    <AppointmentClosureDialog
+      open={closeOpen}
+      onClose={() => setCloseOpen(false)}
+      customerName={customer.name ?? 'Cliente sin nombre'}
+      appointmentDateTime={appointment.local_start}
+      dateTimeLabel={DATE_TIME_FORMAT.format(localStart)}
+      outcome={closeOutcome}
+      onOutcomeChange={setCloseOutcome}
+      onSubmit={() => void close(closeOutcome)}
+      mutating={mutating}
+      feedback={feedback?.tone === 'danger' ? feedback : null}
+    />
     <AppointmentRescheduleDialog
       open={rescheduleOpen}
       onClose={() => setRescheduleOpen(false)}

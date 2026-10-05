@@ -102,14 +102,18 @@ describe("AgendaPage Storybook state matrix", () => {
     expect(screen.getByText("Camila Soto")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Acciones para Mantención de calefón" }));
     await user.click(screen.getByRole("menuitem", { name: "Cerrar visita" }));
-    expect(screen.getByRole("dialog")).toHaveTextContent("Esta acción no se puede revertir");
-    await user.click(screen.getByRole("button", { name: "Completar" }));
+    const dialog = screen.getByRole("dialog", { name: "Cerrar visita" });
+    expect(dialog.querySelector(".dialog__icon svg")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Camila Soto");
+    expect(dialog).toHaveTextContent("Visita seleccionada");
+    expect(dialog).toHaveTextContent("Este cierre no se puede revertir desde la agenda.");
+    await user.click(screen.getByRole("button", { name: "Confirmar cierre" }));
     await waitFor(() => expect(closeAppointment).toHaveBeenCalledWith(1, "completed"));
     const { container: storyContainer } = render(<AgendaPageStory data={Data.args?.data} state="ready" />);
     await act(async () => {
       await CloseConfirmation.play?.({ canvasElement: storyContainer } as Parameters<NonNullable<typeof CloseConfirmation.play>>[0]);
     });
-    expect(within(storyContainer).getByRole("dialog", { name: "Cerrar visita de Camila Soto — Mantención de calefón" })).toBeInTheDocument();
+    expect(within(storyContainer).getByRole("dialog", { name: "Cerrar visita" })).toBeInTheDocument();
   });
 
   it("covers rescheduling while preserving appointment facts", async () => {

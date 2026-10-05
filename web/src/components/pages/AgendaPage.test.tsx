@@ -254,7 +254,15 @@ describe('AgendaPage', () => {
 
     await openVisitActions(user);
     await user.click(screen.getByRole('menuitem', { name: 'Cerrar visita' }));
-    await user.click(screen.getByRole('button', { name: 'Completar' }));
+    const dialog = screen.getByRole('dialog', { name: 'Cerrar visita' });
+    expect(dialog.querySelector('.dialog__icon svg')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Selecciona el resultado de la visita.');
+    expect(dialog).toHaveTextContent('Camila Soto');
+    expect(dialog).toHaveTextContent('Visita seleccionada');
+    expect(within(dialog).getByRole('radio', { name: /Completada.*La visita se realizó/ })).toBeChecked();
+    expect(within(dialog).getByRole('radio', { name: /No completada.*La visita no se completó/ })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Este cierre no se puede revertir desde la agenda.');
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
     await waitFor(() => expect(closeAppointment).toHaveBeenCalledWith(1, 'completed'));
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
     expect(await screen.findByText('Visita completada')).toBeInTheDocument();
@@ -268,7 +276,8 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[appointment()]} state="ready" />);
     await openVisitActions(user);
     await user.click(screen.getByRole('menuitem', { name: 'Cerrar visita' }));
-    await user.click(screen.getByRole('button', { name: 'No asistió' }));
+    await user.click(screen.getByRole('radio', { name: /No completada.*La visita no se completó/ }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Intenta nuevamente');
     expect(closeAppointment).toHaveBeenCalledWith(1, 'no_show');
   });

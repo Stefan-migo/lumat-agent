@@ -15,6 +15,7 @@ import { Select } from "../primitives/Select";
 import { Tabs } from "../primitives/Tabs";
 import { Textarea } from "../primitives/Textarea";
 import { EmptyState } from "../shared/EmptyState";
+import { AppointmentClosureDialog, type AppointmentClosureOutcome } from "../shared/AppointmentClosureDialog";
 import { AppointmentRescheduleDialog, type AppointmentRescheduleForm } from "../shared/AppointmentRescheduleDialog";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
@@ -48,6 +49,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
   const [updatedData, setUpdatedData] = useState<AgendaAppointment[] | null>(null);
   const [cancelTarget, setCancelTarget] = useState<AgendaAppointment | null>(null);
   const [closeTarget, setCloseTarget] = useState<AgendaAppointment | null>(null);
+  const [closeOutcome, setCloseOutcome] = useState<AppointmentClosureOutcome>("completed");
   const [rescheduleTarget, setRescheduleTarget] = useState<AgendaAppointment | null>(null);
   const [rescheduleForm, setRescheduleForm] = useState<AppointmentRescheduleForm>({ local_date: "", local_time: "", duration_minutes: "60", technician_id: "" });
   const [rescheduleFeedback, setRescheduleFeedback] = useState<{ tone: "success" | "danger"; title: string; detail?: string } | null>(null);
@@ -241,7 +243,7 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
            <Menu label={`Acciones para ${row.service}`} trigger="icon" disabled={mutatingId !== null} items={[
              ...(row.status === "booked" ? [{ value: "reschedule", label: "Reprogramar", icon: CalendarDays }, { value: "cancel", label: "Cancelar visita", icon: X, tone: "danger" as const }, { value: "close", label: "Cerrar visita", icon: Check }] : []),
              ...(row.sync.status === "pending" || row.sync.status === "failed" ? [{ value: "retry", label: "Reintentar calendario", icon: RefreshCw }] : []),
-          ]} onSelect={(action) => { if (action === "reschedule") openReschedule(row); if (action === "cancel") { setCancelTarget(row); setCancelFeedback(null); } if (action === "close") { setCloseTarget(row); setCloseFeedback(null); } if (action === "retry") void retrySync(row.id); }} />
+             ]} onSelect={(action) => { if (action === "reschedule") openReschedule(row); if (action === "cancel") { setCancelTarget(row); setCancelFeedback(null); } if (action === "close") { setCloseTarget(row); setCloseOutcome("completed"); setCloseFeedback(null); } if (action === "retry") void retrySync(row.id); }} />
         </div>
         <dl className="agenda-page__visit-details"><div><dt>Cliente</dt><dd>{row.customer_name ?? "—"}</dd></div><div><dt>Técnico</dt><dd>{row.technician_name ?? "—"}</dd></div></dl>
         <div className="agenda-page__sync"><Badge tone={appointmentSyncTone(row.sync.status)}>{appointmentSyncLabel(row.sync.status)}</Badge>{row.sync.error ? <small>{row.sync.error}</small> : null}</div>
@@ -285,12 +287,18 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       {cancelTarget && cancelFeedback?.id === cancelTarget.id && cancelFeedback.tone === "danger" ? <StateMessage tone="danger" role="alert" title={cancelFeedback.title} detail={cancelFeedback.detail} /> : null}
       <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void cancel()}>Confirmar cancelación</Button>
     </Dialog>
-    <Dialog open={closeTarget !== null} onClose={() => { if (mutatingId === null) setCloseTarget(null); }} title={closeTarget ? `Cerrar visita de ${closeTarget.customer_name ?? "cliente"} — ${closeTarget.service}` : "Cerrar visita"}>
-      <p>Registra el resultado de la visita. Esta acción no se puede revertir desde la agenda.</p>
-      {closeTarget && closeFeedback?.id === closeTarget.id && closeFeedback.tone === "danger" ? <StateMessage tone="danger" role="alert" title={closeFeedback.title} detail={closeFeedback.detail} /> : null}
-      <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void close("completed")}>Completar</Button>
-      <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void close("no_show")}>No asistió</Button>
-    </Dialog>
+    {closeTarget ? <AppointmentClosureDialog
+      open={closeTarget !== null}
+      onClose={() => setCloseTarget(null)}
+      customerName={closeTarget.customer_name ?? "Cliente sin nombre"}
+      appointmentDateTime={closeTarget.local_start}
+      dateTimeLabel={`${agendaPeriodLabel(localDate(closeTarget.local_start), closeTarget.timezone)} · ${formatAgendaSlot(closeTarget.starts_at, closeTarget.timezone)}`}
+      outcome={closeOutcome}
+      onOutcomeChange={setCloseOutcome}
+      onSubmit={() => void close(closeOutcome)}
+      mutating={mutatingId !== null}
+      feedback={closeFeedback?.id === closeTarget.id && closeFeedback.tone === "danger" ? closeFeedback : null}
+    /> : null}
     {rescheduleTarget ? <AppointmentRescheduleDialog
       open={rescheduleTarget !== null}
       onClose={() => setRescheduleTarget(null)}
