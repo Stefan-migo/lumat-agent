@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { ChevronRight, FileText, Lock, Search, Upload } from "lucide-react";
 import { ApiError, refreshKbDocuments, searchKb, uploadKbDocument } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
-import type { Doc, DocsResponse, KbVisibility } from "../../types";
+import type { Doc, DocsResponse, KbSearchResult, KbVisibility } from "../../types";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
