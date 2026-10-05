@@ -46,6 +46,12 @@ async function openVisitActions(user: ReturnType<typeof userEvent.setup>, servic
   await user.click(screen.getAllByRole('button', { name: `Acciones para ${service}` })[0]);
 }
 
+async function selectCustomer(user: ReturnType<typeof userEvent.setup>, query = 'Camila') {
+  const input = screen.getByRole('combobox', { name: 'Cliente' });
+  await user.type(input, query);
+  await user.click(screen.getByRole('option', { name: /Camila Soto/ }));
+}
+
 describe('AgendaPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -514,7 +520,7 @@ describe('AgendaPage', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent('Fecha y horario');
     expect(screen.getByRole('heading', { name: 'Datos de la visita', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Fecha y horario', level: 3 })).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
+    await selectCustomer(user);
     await user.type(screen.getByLabelText('Caso vinculado'), 'Mantención');
     await user.click(screen.getByRole('option', { name: 'Mantención (#20)' }));
     await user.selectOptions(screen.getByLabelText('Técnico'), '30');
@@ -530,6 +536,39 @@ describe('AgendaPage', () => {
     await waitFor(() => expect(createAppointment).toHaveBeenCalledWith(expect.objectContaining({ customer_id: 10, case_id: 20, technician_id: 30, timezone: 'America/Santiago', local_time: '10:00:00' })));
     await waitFor(() => expect(listAppointments).toHaveBeenCalled());
   }, 15000);
+
+  it('searches clients by email and phone and filters cases to the selected client', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchClients).mockResolvedValue({ clients: [
+      { id: 10, name: 'Camila Soto', email: 'camila@example.test', phone_e164: '+56911111111' },
+      { id: 11, name: 'Carlos Díaz', email: 'carlos@example.test', phone_e164: '+56922222222' },
+    ] as never });
+    vi.mocked(fetchCases).mockResolvedValue({ cases: [
+      { id: 20, service: 'Mantención', customer: { id: 10, name: 'Camila Soto' } },
+      { id: 21, service: 'Mantención', customer: { id: 11, name: 'Carlos Díaz' } },
+    ] as never, users: [] });
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [] });
+    render(<AgendaPage data={[]} state="empty" />);
+    await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
+
+    const clientInput = screen.getByRole('combobox', { name: 'Cliente' });
+    await user.type(clientInput, 'camila@example.test');
+    const emailMatch = screen.getByRole('option', { name: /Camila Soto.*camila@example\.test/ });
+    expect(emailMatch).toBeInTheDocument();
+    await user.click(emailMatch);
+    expect(clientInput).toHaveValue('Camila Soto · camila@example.test · +56911111111');
+
+    await user.clear(clientInput);
+    await user.type(clientInput, '+56911111111');
+    expect(screen.getByRole('option', { name: /Camila Soto.*camila@example\.test/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: /Camila Soto.*camila@example\.test/ }));
+
+    const caseInput = screen.getByRole('combobox', { name: 'Caso vinculado' });
+    await user.type(caseInput, 'Mantención');
+    expect(screen.getByRole('option', { name: 'Mantención (#20)' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Mantención (#21)' })).not.toBeInTheDocument();
+  });
 
   it('closes the new-visit dialog when cancelling', async () => {
     const user = userEvent.setup();
@@ -552,7 +591,7 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
-    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
+    await selectCustomer(user);
     await user.type(screen.getByLabelText('Caso vinculado'), 'Caso sin servicio');
     await user.click(screen.getByRole('option', { name: 'Caso sin servicio (#20)' }));
     expect(screen.getByLabelText('Servicio')).toHaveValue('');
@@ -586,7 +625,7 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[]} state="empty" timezone="America/Santiago" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
-    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
+    await selectCustomer(user);
     const caseInput = screen.getByRole('combobox', { name: 'Caso vinculado' });
     await user.type(caseInput, 'Instalación');
     expect(screen.getByRole('option', { name: 'Crear «Instalación»' })).toBeInTheDocument();
@@ -613,7 +652,7 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[]} state="empty" />);
     await user.click(screen.getByRole('button', { name: 'Nueva visita' }));
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'Nueva visita' })).toBeInTheDocument());
-    await user.selectOptions(screen.getByLabelText('Cliente'), '10');
+    await selectCustomer(user);
     const caseInput = screen.getByRole('combobox', { name: 'Caso vinculado' });
     await user.type(caseInput, 'Instalación');
     const createOption = screen.getByRole('option', { name: 'Crear «Instalación»' });

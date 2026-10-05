@@ -36,6 +36,9 @@ export interface AgendaPageProps {
 type ActionFeedback = { id: number; tone: "success" | "danger"; title: string; detail?: string };
 
 function localDate(value: string) { return value.slice(0, 10); }
+function clientOptionLabel(client: Customer) {
+  return [client.name ?? `Cliente ${client.id}`, client.email, client.phone_e164].filter(Boolean).join(" · ");
+}
 
 function stateMessage(state: AgendaPageState, retry: () => void) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando agenda" />;
@@ -320,8 +323,8 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
         <section className="agenda-create-form__section" aria-labelledby="agenda-create-visit-heading">
           <h3 id="agenda-create-visit-heading">Datos de la visita</h3>
           <div className="agenda-create-form__row agenda-create-form__row--identity">
-            <div className="agenda-create-form__icon-field"><Icon icon={UserRound} className="agenda-create-form__leading-icon" /><Select label="Cliente" className="agenda-create-form__select--icon" value={createForm.customer_id} onChange={(event) => { field("customer_id", event.target.value); field("case_id", ""); }} options={[{ value: "", label: "Selecciona un cliente" }, ...clients.map((client) => ({ value: String(client.id), label: client.name ?? client.phone_e164 ?? `Cliente ${client.id}` }))]} /></div>
-            <div className="agenda-create-form__icon-field"><Icon icon={FileText} className="agenda-create-form__leading-icon" /><Combobox label="Caso vinculado" disabled={!createForm.customer_id} value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={createBusy ? undefined : (query) => void createManualCase(query)} options={cases.filter((item) => !createForm.customer_id || item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} /></div>
+            <div className="agenda-create-form__icon-field"><Icon icon={UserRound} className="agenda-create-form__leading-icon" /><Combobox label="Cliente" placeholder="Busca por nombre, correo o teléfono" options={clients.map((client) => ({ value: String(client.id), label: clientOptionLabel(client) }))} value={createForm.customer_id || null} onChange={(value) => { field("customer_id", value); field("case_id", ""); }} /></div>
+            <div className="agenda-create-form__icon-field"><Icon icon={FileText} className="agenda-create-form__leading-icon" /><Combobox label="Caso vinculado" disabled={!createForm.customer_id} value={createForm.case_id || null} onChange={(value) => { field("case_id", value); const selected = cases.find((item) => item.id === Number(value)); if (selected?.service && !createForm.service) field("service", selected.service); }} onCreate={createBusy ? undefined : (query) => void createManualCase(query)} options={cases.filter((item) => item.customer?.id === Number(createForm.customer_id)).map((item) => ({ value: String(item.id), label: `${item.service ?? "Caso sin servicio"} (#${item.id})` }))} /></div>
           </div>
           <div className="agenda-create-form__row agenda-create-form__row--visit">
             <Input label="Servicio" icon={FileText} value={createForm.service} onChange={(event) => field("service", event.target.value)} />
