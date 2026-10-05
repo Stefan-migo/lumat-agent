@@ -185,6 +185,8 @@ this supersedes the WU2 secondary placement (where retrieval sat in the narrow r
 - Commit: `bbee0523d379ba28934b8cc064c5973a00782068` — `feat(kb): rebuild document detail summary tabs`. Import fix: `6931934c`.
 - Graphify nodes consulted: `KbDocumentDetail.tsx` / `KbDocumentDetail()`, `Tabs.tsx` / `Tabs()`, `PageFrame()` / `PageFrame.tsx`, `Badge()`, `Icon()`, `Card()`, `kbStatusLabel()` / `kbStatusTone()`, `getKbDocument()` / `editKbDocument()`, community hub `KbList.tsx`. `graphify path "KbDocumentDetail.tsx" "Tabs.tsx"` returned no directed path.
 - Scope stayed on detail composition and its component/story tests plus KB-scoped CSS; no shared primitive or token files changed. The primary navigation still exposes “Base de Conocimientos” after replacing the detail back action. WU4 remains unchecked.
+- Independent read-only verification (parent): findings 020-027 each mapped to a code anchor — all `implemented`; behaviors (content load, edit, visibility, disable, restore, confirmation, loading/denied/error) preserved; navigation not stranded; no `tokens.css` or shared-primitive change (confirmed by path diff). Remaining test gaps are minor: file icon (022), edit payload/refreshed version, and the “Ver versiones” affordance.
+- Parent fix + reverification: `6931934c` restored `KbSearchResult` in `KbList.tsx`; after it `npx tsc -b --noEmit` PASS, `npm run build` PASS, full suite 96 files / 1010 tests PASS.
 
 ### WU3a — landing retrieval placement + results redesign
 - Baseline before edits: `cd web && npm run test` — PASS, 95 files / 1007 tests.
