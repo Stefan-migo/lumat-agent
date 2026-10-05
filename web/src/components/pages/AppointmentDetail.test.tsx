@@ -1,13 +1,13 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { AppointmentDetail } from './AppointmentDetail';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
-import { closeAppointment, fetchUsers, rescheduleAppointment } from '../../api';
+import { closeAppointment, fetchTechnicians, fetchUsers, rescheduleAppointment } from '../../api';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-vi.mock('../../api', () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn(), fetchUsers: vi.fn(), rescheduleAppointment: vi.fn() }));
+vi.mock('../../api', () => ({ getAppointment: vi.fn(), closeAppointment: vi.fn(), fetchTechnicians: vi.fn(), fetchUsers: vi.fn(), rescheduleAppointment: vi.fn() }));
 
 const detail: AppointmentDetailData = {
   appointment: {
@@ -25,6 +25,11 @@ const detail: AppointmentDetailData = {
 };
 
 describe('AppointmentDetail', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [] });
+  });
+
   it('offers confirmed outcomes for booked appointments and reports success', async () => {
     const user = userEvent.setup();
     vi.mocked(closeAppointment).mockResolvedValue({ ok: true, appointment: {} });
@@ -103,6 +108,22 @@ describe('AppointmentDetail', () => {
     expect(history).not.toHaveTextContent('2026-09-26T10:00:00');
     expect(history).not.toHaveTextContent(/\bbooked\b/);
     expect(history.querySelector('time')).toHaveAttribute('dateTime', '2026-09-25T12:00:00Z');
+  });
+
+  it('resolves the assigned technician username asynchronously and keeps the fallback on lookup failure', async () => {
+    vi.mocked(fetchTechnicians).mockResolvedValue({ technicians: [{ id: 4, username: 'jperez' }] });
+    const { unmount } = render(<AppointmentDetail data={detail} />);
+
+    expect(screen.getByText('Técnico #4')).toBeInTheDocument();
+    expect(await screen.findByText('jperez')).toBeInTheDocument();
+    expect(screen.queryByText('Técnico #4')).not.toBeInTheDocument();
+
+    unmount();
+    vi.mocked(fetchTechnicians).mockRejectedValue(new Error('Lookup unavailable'));
+    render(<AppointmentDetail data={detail} />);
+    expect(screen.getByText('Técnico #4')).toBeInTheDocument();
+    await waitFor(() => expect(fetchTechnicians).toHaveBeenCalled());
+    expect(screen.getByText('Técnico #4')).toBeInTheDocument();
   });
 
   it('separates the history title and connects event icons with a timeline rule', () => {

@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, CalendarDays, CalendarCheck, CalendarClock, Check, ChevronDown, CircleCheck, Clock3, FileText, UserRound, UserRoundX } from 'lucide-react';
-import { closeAppointment, fetchUsers, getAppointment, rescheduleAppointment } from '../../api';
+import { closeAppointment, fetchTechnicians, fetchUsers, getAppointment, rescheduleAppointment } from '../../api';
 import { useAsyncData, type AsyncDataState } from '../../hooks/useAsyncData';
 import type { AppointmentDetail as AppointmentDetailData } from '../../types';
 import { Badge } from '../primitives/Badge';
@@ -92,6 +92,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
   const [closeOutcome, setCloseOutcome] = useState<'completed' | 'no_show'>('completed');
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [technicians, setTechnicians] = useState<{ id: number; username: string }[]>([]);
+  const [technicianUsername, setTechnicianUsername] = useState<string | null>(null);
   const [rescheduleForm, setRescheduleForm] = useState({ local_date: '', local_time: '', duration_minutes: '60', technician_id: '' });
   const [mutating, setMutating] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; title: string; detail?: string } | null>(null);
@@ -103,6 +104,22 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
   const detail = controlledData ?? fetched.data;
   const state = controlledState ?? (controlledData !== undefined ? 'ready' : fetched.state);
   const retry = onRetry ?? fetched.retry;
+  const technicianId = detail?.appointment.technician_id;
+  useEffect(() => {
+    if (technicianId == null) {
+      setTechnicianUsername(null);
+      return;
+    }
+    let current = true;
+    void fetchTechnicians()
+      .then(({ technicians: available }) => {
+        if (current) setTechnicianUsername(available.find((technician) => technician.id === technicianId)?.username ?? null);
+      })
+      .catch(() => {
+        if (current) setTechnicianUsername(null);
+      });
+    return () => { current = false; };
+  }, [technicianId]);
   const close = async (outcome: 'completed' | 'no_show') => {
     if (!detail || mutating) return;
     setMutating(true);
@@ -146,7 +163,7 @@ export function AppointmentDetail({ appointmentId, data: controlledData, state: 
 
   const { appointment, customer, conversation_summary: summary } = detail;
   const localStart = new Date(`${appointment.local_start.slice(0, 16)}:00Z`);
-  const technicianLabel = appointment.technician_id ? `Técnico #${appointment.technician_id}` : 'Técnico no asignado';
+  const technicianLabel = appointment.technician_id ? technicianUsername ?? `Técnico #${appointment.technician_id}` : 'Técnico no asignado';
   return <PageFrame className="appointment-detail-page" title={appointment.service} subtitle="Información y seguimiento de la visita."
     titleAdornment={<Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge>}
     actions={<>
