@@ -76,8 +76,13 @@ describe("AgendaPage Storybook state matrix", () => {
 
     await user.click(screen.getByRole("button", { name: "Acciones para Mantención de calefón" }));
     await user.click(screen.getByRole("menuitem", { name: "Cancelar visita" }));
-    expect(screen.getByRole("dialog", { name: "Cancelar visita de Camila Soto — Mantención de calefón" })).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toHaveTextContent("La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.");
+    const dialog = screen.getByRole("dialog", { name: "Cancelar visita" });
+    expect(dialog.querySelector(".dialog__icon svg")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Indica el motivo de la cancelación de esta visita.");
+    expect(dialog).toHaveTextContent("Camila Soto");
+    expect(dialog).toHaveTextContent("Visita seleccionada");
+    expect(dialog).toHaveTextContent("Esta acción no se puede revertir desde la agenda.");
+    expect(within(dialog).getByLabelText("Motivo de cancelación")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Confirmar cancelación" }));
     await waitFor(() => expect(cancelAppointment).toHaveBeenCalled());
 
@@ -90,7 +95,7 @@ describe("AgendaPage Storybook state matrix", () => {
     await act(async () => {
       await CancelConfirmation.play?.({ canvasElement: confirmationContainer } as Parameters<NonNullable<typeof CancelConfirmation.play>>[0]);
     });
-    expect(screen.getAllByRole("dialog", { name: "Cancelar visita de Camila Soto — Mantención de calefón" })).toHaveLength(1);
+    expect(screen.getAllByRole("dialog", { name: "Cancelar visita" })).toHaveLength(1);
   });
 
   it("covers the outcome confirmation while preserving the appointment facts", async () => {

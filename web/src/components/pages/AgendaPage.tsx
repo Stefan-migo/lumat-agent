@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { BriefcaseBusiness, CalendarDays, CalendarPlus, Check, Clock3, FileText, Globe, Plus, RefreshCw, Timer, UserRound, Wrench, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, CalendarPlus, CalendarX, Check, Clock3, FileText, Globe, Plus, RefreshCw, Timer, UserRound, Wrench, X } from "lucide-react";
 import { ApiError, cancelAppointment, closeAppointment, createAppointment, createCase, fetchCases, fetchClients, fetchTechnicians, listAppointments, rescheduleAppointment, retryCalendarSync } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { AgendaAppointment, Case, Customer, UserRef } from "../../types";
@@ -281,11 +281,15 @@ export function AgendaPage({ data: controlledData, state: controlledState, onRet
       <AgendaCalendar view={view} anchor={anchor} selectedDay={selectedDay} visitCounts={visitCounts} timezone={timezone} onSelectDay={setSelectedDay} onViewChange={changeView} onNavigate={navigate} today={today} />
       <section aria-label="Registro de agenda"><Tabs tabs={[{ id: "active", label: "Activas" }, { id: "non-active", label: "No activas" }]} activeTab={registerView} onTabChange={setRegisterView} ariaLabel="Filtro del registro de visitas">{() => showEmpty ? <EmptyState title="No hay visitas" description="No hay visitas para el período solicitado." /> : register}</Tabs></section>
     </div>}
-    <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title={cancelTarget ? `Cancelar visita de ${cancelTarget.customer_name ?? "cliente"} — ${cancelTarget.service}` : "Cancelar visita"}>
-      <p>La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.</p>
+    <Dialog open={cancelTarget !== null} onClose={() => { if (mutatingId === null) setCancelTarget(null); }} title="Cancelar visita" icon={CalendarX} description="Indica el motivo de la cancelación de esta visita.">
+      {cancelTarget ? <div className="appointment-detail__selected-visit"><Icon icon={CalendarDays} /><div><strong>{cancelTarget.customer_name ?? "Cliente sin nombre"}</strong><time dateTime={cancelTarget.local_start}>{agendaPeriodLabel(localDate(cancelTarget.local_start), cancelTarget.timezone)} · {formatAgendaSlot(cancelTarget.starts_at, cancelTarget.timezone)}</time><span>Visita seleccionada</span></div></div> : null}
       <Textarea id="cancel-reason" label="Motivo de cancelación" value={reason} onChange={(event) => setReason(event.target.value)} />
+      <p className="appointment-detail__closure-warning">Esta acción no se puede revertir desde la agenda.</p>
       {cancelTarget && cancelFeedback?.id === cancelTarget.id && cancelFeedback.tone === "danger" ? <StateMessage tone="danger" role="alert" title={cancelFeedback.title} detail={cancelFeedback.detail} /> : null}
-      <Button variant="secondary" disabled={mutatingId !== null} onClick={() => void cancel()}>Confirmar cancelación</Button>
+      <div className="appointment-detail__dialog-footer">
+        <Button variant="secondary" disabled={mutatingId !== null} onClick={() => setCancelTarget(null)}>Cancelar</Button>
+        <Button disabled={mutatingId !== null} onClick={() => void cancel()}>Confirmar cancelación</Button>
+      </div>
     </Dialog>
     {closeTarget ? <AppointmentClosureDialog
       open={closeTarget !== null}

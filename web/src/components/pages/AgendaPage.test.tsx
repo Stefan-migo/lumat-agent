@@ -225,10 +225,18 @@ describe('AgendaPage', () => {
     render(<AgendaPage data={[appointment()]} state="ready" />);
     await openVisitActions(user);
     await user.click(screen.getByRole('menuitem', { name: 'Cancelar visita' }));
-    expect(screen.getByRole('dialog', { name: 'Cancelar visita de Camila Soto — Mantención' })).toBeInTheDocument();
-    expect(screen.getByRole('dialog')).toHaveTextContent('La visita se marcará como cancelada y esta agenda no ofrece volver a reservarla.');
-    expect(screen.getByLabelText('Motivo de cancelación')).toHaveClass('field__control');
+    const dialog = screen.getByRole('dialog', { name: 'Cancelar visita' });
+    expect(dialog.querySelector('.dialog__icon svg')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Indica el motivo de la cancelación de esta visita.');
+    expect(dialog).toHaveTextContent('Camila Soto');
+    expect(dialog).toHaveTextContent('Visita seleccionada');
+    expect(dialog.querySelector('time')).toHaveAttribute('dateTime', '2026-09-05T10:00:00-04:00');
+    expect(dialog.querySelector('time')).toHaveTextContent(/Sábado 5 de septiembre.*10:00/);
+    expect(dialog).toHaveTextContent('Esta acción no se puede revertir desde la agenda.');
+    expect(within(dialog).getByLabelText('Motivo de cancelación')).toHaveClass('field__control');
     await user.type(screen.getByLabelText('Motivo de cancelación'), 'Cliente avisó');
+    expect(dialog.querySelector('.appointment-detail__dialog-footer')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }));
 
     await waitFor(() => expect(cancelAppointment).toHaveBeenCalledWith(1, 'Cliente avisó'));
