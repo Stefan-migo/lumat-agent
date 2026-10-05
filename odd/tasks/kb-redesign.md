@@ -188,9 +188,20 @@ this supersedes the WU2 secondary placement (where retrieval sat in the narrow r
 - [x] WU2 — landing: retrieval + upload cards + mobile (findings 011-019)
 - [x] WU3a — landing: retrieval placement + results redesign (owner additions A1/A2)
 - [x] WU3b — detail: header + tabs + information cards (findings 020-027)
-- [ ] WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
+- [x] WU4 — detail: audience/disponibilidad + tablet (findings 028-030)
 
 ## Verification evidence
+### WU4 — detail columns, audience and availability
+- Baseline before edits: `cd web && npm run test` — PASS, 96 files / 1010 tests.
+- RED: `cd web && npx vitest run src/components/pages/KbDocumentDetail.test.tsx src/stories/pages/KbDocumentDetail.stories.test.tsx` — FAIL as expected against the old surface, 3 failed / 11 passed; required two-column groups, Audience/Availability cards and restore-on-Versiones assertions were absent.
+- GREEN focused: same command — PASS, 2 files / 14 tests.
+- Final `cd web && npm run test` — PASS, 96 files / 1011 tests.
+- Final `cd web && npx tsc -b --noEmit` — PASS (exit 0; no diagnostics).
+- Final `cd web && npm run build` — PASS; Vite built successfully with the existing >500 kB chunk-size warning.
+- Implementation commit: `1e1f9652` — `feat(kb): rebuild document audience and availability cards`.
+- Graphify consulted nodes `KbDocumentDetail.tsx`, `KbDocumentDetail()`, `KbDocumentDetail.test.tsx`, `Card.tsx` / `Card()`, `Button.tsx` / `Button()`, and `primitives.css`; `graphify path "KbDocumentDetail.tsx" "Card.tsx"` returned `KbDocumentDetail.tsx --imports_from--> Card.tsx`.
+- Scope: detail page, KB-scoped CSS, component/story tests; no shared primitives, tokens, or primary-worktree files changed. Visibility and disable mutations retain their API methods and payloads; restore remains confirmed and is now available in Versiones.
+
 ### WU3b — detail header, tabs + information cards
 - Baseline before edits: `cd web && npm run test` — PASS, 95 files / 1008 tests.
 - RED: `cd web && npx vitest run src/components/pages/KbDocumentDetail.test.tsx -t "redesigned header"` — FAIL as expected, 1 failed / 11 skipped; the metadata line was absent.
