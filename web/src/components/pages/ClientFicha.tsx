@@ -478,7 +478,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             </> : <EmptyState title="Sin caso activo" />}
           </Card>
           <Dialog open={caseEditorOpen && activeCase !== null} onClose={() => setCaseEditorOpen(false)} title="Editar caso" icon={BriefcaseBusiness} description="Actualiza el estado y el responsable.">
-            {activeCase ? <div className="client-ficha-dialog">
+             {activeCase ? <div className="client-ficha-dialog client-ficha-dialog__case-edit">
               <div className="client-ficha-dialog__case-context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>#{activeCase.id} · {activeCase.service}</span></div></div>
               <Select label="Estado" value={caseEdit.status} onChange={(event) => setCaseEdit({ ...caseEdit, status: event.target.value })} options={[{value:"abierto",label:"Abierto"},{value:"en_evaluacion",label:"En evaluación"},{value:"escalado",label:"Escalado"},{value:"cerrado",label:"Cerrado"}]}/>
               <Select label="Responsable" value={caseEdit.responsibleId} onChange={(event) => setCaseEdit({ ...caseEdit, responsibleId: event.target.value })} options={[{value:"",label:"Sin asignar"},...data.users.map((user) => ({value:String(user.id),label:user.username}))]}/>
@@ -486,7 +486,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             </div> : null}
           </Dialog>
           <Dialog open={amountOpen} onClose={() => setAmountOpen(false)} title="Definir monto del caso" icon={CircleDollarSign} description="Registra el monto del servicio asociado al caso.">
-            <form onSubmit={(event) => void saveCaseAmount(event)}>
+             <form className="client-ficha-dialog client-ficha-dialog__amount-form" onSubmit={(event) => void saveCaseAmount(event)}>
               {activeCase ? <div className="client-ficha-dialog__case-context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>#{activeCase.id} · {activeCase.service}</span></div><div className="client-ficha-dialog__current"><span>Monto actual:</span><strong>{activeCase.amount === null ? "Sin registrar" : CLP_FORMAT.format(activeCase.amount)}</strong></div></div> : null}
               <div className="client-ficha-dialog__amount"><span aria-hidden="true">$</span><Input label="Monto del servicio" type="number" min="0" step="1" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} helper="Ingresa el monto en pesos chilenos."/><span aria-hidden="true">CLP</span></div>
               <LocalFeedback feedback={caseFeedback} />
