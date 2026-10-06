@@ -19,6 +19,7 @@ const customers: Customer[] = [
     comuna: "Ñuñoa",
     address: "Av. Italia 123",
     state: "contactado",
+    allowed_transitions: ["pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado"],
     consent_status: true,
     consent_at: null,
     created_at: "2026-07-15T12:00:00Z",
@@ -258,7 +259,6 @@ describe("ClientesList", () => {
   it("changes a client's state from the row and refreshes the list", async () => {
     const user = userEvent.setup();
     vi.mocked(fetchClients).mockResolvedValue({ clients: customers });
-    vi.mocked(getClientFicha).mockResolvedValue({ customer: customers[0], states: ["nuevo", "contactado", "en_evaluacion"], history: {} } as never);
     vi.mocked(changeClientState).mockResolvedValue({ customer: { ...customers[0], state: "en_evaluacion" } } as never);
 
     render(<ClientesList />);
@@ -266,30 +266,24 @@ describe("ClientesList", () => {
     expect(row).not.toBeNull();
     const menu = await openRowActions(user, row!, "Marcela Fuentes");
     await user.click(menu.getByRole("menuitem", { name: "Cambiar estado" }));
-    await user.click(await screen.findByRole("radio", { name: "Nuevo" }));
+    expect(screen.getAllByRole("radio").map((radio) => radio.getAttribute("aria-label") ?? radio.textContent)).toHaveLength(5);
+    expect(screen.queryByRole("radio", { name: "Nuevo" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /En evaluación/ }));
     await user.click(screen.getByRole("button", { name: "Guardar estado" }));
 
-    expect(changeClientState).toHaveBeenCalledWith(1, "nuevo");
+    expect(changeClientState).toHaveBeenCalledWith(1, "en_evaluacion");
     await waitFor(() => expect(fetchClients).toHaveBeenCalledTimes(2));
   });
 
-  it("does not let a stale ficha response replace the latest state options", async () => {
+  it("shows no state options or save action for a terminal customer", async () => {
     const user = userEvent.setup();
-    vi.mocked(fetchClients).mockResolvedValue({ clients: customers });
-    let resolveFirst!: (value: unknown) => void;
-    vi.mocked(getClientFicha)
-      .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }) as never)
-      .mockResolvedValueOnce({ customer: customers[1], states: ["nuevo", "pendiente"] } as never);
-    render(<ClientesList />);
-    const row1 = (await screen.findByText("Marcela Fuentes")).closest("tr")!;
-    const row2 = screen.getByText("Pedro Soto").closest("tr")!;
-
-    await user.click((await openRowActions(user, row1, "Marcela Fuentes")).getByRole("menuitem", { name: "Cambiar estado" }));
-    await user.click((await openRowActions(user, row2, "Pedro Soto")).getByRole("menuitem", { name: "Cambiar estado" }));
-    resolveFirst({ customer: customers[0], states: ["contactado", "cancelado"] });
-    await waitFor(() => expect(screen.getByRole("radio", { name: "Agendado" })).toBeDisabled());
-    expect(screen.getByRole("radio", { name: "Agendado" })).toBeDisabled();
-    expect(screen.getByRole("radio", { name: "Agendado" })).toBeDisabled();
+    const terminal = { ...customers[1], state: "cancelado" as const, allowed_transitions: [] };
+    render(<ClientesList data={[terminal]} state="ready" />);
+    const row = screen.getByText("Pedro Soto").closest("tr")!;
+    await user.click((await openRowActions(user, row, "Pedro Soto")).getByRole("menuitem", { name: "Cambiar estado" }));
+    expect(screen.getByRole("status")).toHaveTextContent("no tiene transiciones");
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar estado" })).not.toBeInTheDocument();
   });
 
   it("opens the create dialog and offers ficha navigation for a duplicate phone", async () => {

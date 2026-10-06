@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from "react";
-import { Archive, ArchiveRestore, ArrowRightLeft, CalendarDays, Check, CircleCheck, CircleMinus, ChevronDown, Download, FileText, Home, Mail, MapPin, Phone, Plus, RotateCw, Sparkles, UserRound, UserRoundPlus } from "lucide-react";
+import { useCallback, useState } from "react";
+import { Archive, ArchiveRestore, ArrowRightLeft, CalendarDays, Check, CircleCheck, CircleMinus, ChevronDown, Download, FileText, Home, Mail, MapPin, Phone, Plus, RotateCw, Sparkles, UserRound, UserRoundPlus, MessageCircle, Clock3, ClipboardCheck, XCircle, Headphones } from "lucide-react";
 import { ApiError, archiveCustomer, changeClientState, createCustomer, fetchClients as listClients, getClientFicha, unarchiveCustomer } from "../../api";
 import type { Customer, CustomerState } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -101,10 +101,8 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const [busy, setBusy] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<Customer | null>(null);
   const [stateTarget, setStateTarget] = useState<Customer | null>(null);
-  const [stateOptions, setStateOptions] = useState<CustomerState[]>([]);
   const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
   const [archiveCounts, setArchiveCounts] = useState<{ cases: number; appointments: number } | null>(null);
-  const stateRequestSequence = useRef(0);
   const fetchClients = useCallback(
     () => listClients({ includeArchived, query, consent: consent === "" ? undefined : consent === "true", sort }).then((response) => response.clients),
     [includeArchived, query, consent, sort],
@@ -188,21 +186,12 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       setDialogError("No pudimos restaurar el cliente. Inténtalo nuevamente.");
     }
   };
-  const openState = async (customer: Customer) => {
-    const requestSequence = ++stateRequestSequence.current;
+  const openState = (customer: Customer) => {
     setStateTarget(customer);
-    setSelectedState(customer.state);
-    setStateOptions([]);
+    const allowed = customer.allowed_transitions ?? [];
+    setSelectedState(allowed[0] ?? null);
     setDialogError("");
     setDialog("state");
-    try {
-      const ficha = await getClientFicha(customer.id);
-      if (requestSequence !== stateRequestSequence.current) return;
-      setStateOptions(ficha.states ?? []);
-    } catch {
-      if (requestSequence !== stateRequestSequence.current) return;
-      setDialogError("No pudimos cargar los estados disponibles. Inténtalo nuevamente.");
-    }
   };
   const saveState = async () => {
     if (!stateTarget || !selectedState || busy) return;
@@ -305,10 +294,10 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       <Dialog open={dialog === "state"} onClose={() => setDialog(null)} title="Cambiar estado del cliente" icon={RotateCw} description="Selecciona el nuevo estado de atención.">
         {stateTarget ? <div className="clientes-list__confirm">
           <div className="clientes-list__client-context"><Avatar name={stateTarget.name ?? stateTarget.phone_e164 ?? "Cliente"} /><div><strong>{stateTarget.name ?? stateTarget.phone_e164 ?? "Cliente"}</strong><span>{stateTarget.phone_e164 ?? "—"}</span></div><div className="clientes-list__current-state"><span>Estado actual</span><Badge tone={customerStateTone(stateTarget.state)}>{customerStateLabel(stateTarget.state)}</Badge></div></div>
-          <h3>Nuevo estado</h3><div className="clientes-list__state-options" role="radiogroup" aria-label="Nuevo estado">{([ ["nuevo", "Nuevo", Sparkles], ["agendado", "Agendado", CalendarDays], ["finalizado", "Finalizado", CircleCheck] ] as const).map(([value, label, StateIcon]) => <button key={value} type="button" role="radio" aria-checked={selectedState === value} disabled={!stateOptions.includes(value) || busy} className={selectedState === value ? "clientes-list__state-option is-selected" : "clientes-list__state-option"} onClick={() => setSelectedState(value)}><StateIcon /><span>{label}</span><span className="clientes-list__radio" /></button>)}</div>
-          <div className="clientes-list__transition"><span>Cambio:</span><Badge tone={customerStateTone(stateTarget.state)}>{customerStateLabel(stateTarget.state)}</Badge><span aria-hidden="true">→</span><Badge tone={customerStateTone(selectedState ?? stateTarget.state)}>{customerStateLabel(selectedState ?? stateTarget.state)}</Badge></div>
+          <h3>Nuevo estado</h3>{(stateTarget.allowed_transitions ?? []).length ? <div className="clientes-list__state-options" role="radiogroup" aria-label="Nuevo estado">{(stateTarget.allowed_transitions ?? []).map((value) => { const stateIcons = { nuevo: Sparkles, contactado: MessageCircle, pendiente: Clock3, agendado: CalendarDays, en_evaluacion: ClipboardCheck, finalizado: CircleCheck, cancelado: XCircle, postventa: Headphones }; const StateIcon = stateIcons[value]; return <button key={value} type="button" role="radio" aria-checked={selectedState === value} disabled={busy} className={selectedState === value ? "clientes-list__state-option is-selected" : "clientes-list__state-option"} onClick={() => setSelectedState(value)}><StateIcon /><span>{customerStateLabel(value)}</span><span className="clientes-list__radio" /></button>; })}</div> : <p role="status">Este cliente no tiene transiciones de estado disponibles.</p>}
+          {(stateTarget.allowed_transitions ?? []).length ? <div className="clientes-list__transition"><span>Cambio:</span><Badge tone={customerStateTone(stateTarget.state)}>{customerStateLabel(stateTarget.state)}</Badge><span aria-hidden="true">→</span><Badge tone={customerStateTone(selectedState ?? stateTarget.state)}>{customerStateLabel(selectedState ?? stateTarget.state)}</Badge></div> : null}
           {dialogError ? <p role="alert">{dialogError}</p> : null}
-          <footer><Button variant="secondary" onClick={() => setDialog(null)}>Cancelar</Button><Button onClick={() => void saveState()} disabled={busy || !selectedState || selectedState === stateTarget.state || stateOptions.length === 0}><Check />{busy ? "Guardando…" : "Guardar estado"}</Button></footer>
+          <footer><Button variant="secondary" onClick={() => setDialog(null)}>Cancelar</Button>{(stateTarget.allowed_transitions ?? []).length ? <Button onClick={() => void saveState()} disabled={busy || !selectedState}><Check />{busy ? "Guardando…" : "Guardar estado"}</Button> : null}</footer>
         </div> : null}
       </Dialog>
     </PageFrame>

@@ -77,6 +77,7 @@ export interface Customer {
   comuna: string | null;
   address: string | null;
   state: CustomerState;
+  allowed_transitions?: CustomerState[];
   consent_status: boolean;
   consent_at: string | null;
   created_at: string | null;

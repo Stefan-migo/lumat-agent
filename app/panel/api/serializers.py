@@ -36,6 +36,7 @@ from app.models import (
     Project,
     MemoryRelation,
 )
+from app.services.customers import CUSTOMER_STATE_TRANSITIONS
 
 
 def _iso(value) -> str | None:
@@ -53,6 +54,7 @@ def to_customer_dict(customer: Customer) -> dict:
         "comuna": customer.comuna,
         "address": customer.address,
         "state": customer.state.value,
+        "allowed_transitions": [state.value for state in CUSTOMER_STATE_TRANSITIONS[customer.state]],
         "consent_status": customer.consent_status,
         "consent_at": _iso(customer.consent_at),
         "archived_at": _iso(customer.archived_at),
