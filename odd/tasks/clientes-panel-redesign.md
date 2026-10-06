@@ -141,8 +141,8 @@ Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`descripti
 - [x] Archive confirmation label/danger tone on the ficha entry point (`clientes-032`, ficha side; `2a06a356`).
 
 ### CL-3-r3 / CL-4-r1 — owner visual review 2026-10-06 #3 (Resumen cards + dialogs)
-- [ ] `Datos del cliente`: move `Editar` into the `...` menu (no standalone Editar pill); add an **icon to every `...` item**; remove the **copy-button borders**.
-- [ ] `Caso activo`: move `Editar caso` + `Definir monto` into the `...` menu (no visible buttons); add an icon to every `...` item; **remove the `⌄` arrow** next to the responsible name; proper small-card adaptation.
+- [x] `Datos del cliente`: move `Editar` into the `...` menu (no standalone Editar pill); add an **icon to every `...` item**; remove the **copy-button borders** (`cdea3671`).
+- [x] `Caso activo`: move `Editar caso` + `Definir monto` into the `...` menu (no visible buttons); add an icon to every `...` item; **remove the `⌄` arrow** next to the responsible name; proper small-card adaptation (`cdea3671`).
 - [x] Dialog **Editar datos del cliente**: more width; lighter field borders scoped to the ficha dialogs (`daca9d9e`).
 - [x] Dialog **Cambiar estado del cliente**: FIX — allowed transition radio cards now render; terminal states retain no cards or save action (`daca9d9e`).
 - [x] Dialog **Cambiar consentimiento**: Sí/No are selectable radio cards with visible selection; save persists through `updateCustomerConsent` (`daca9d9e`).
@@ -186,6 +186,7 @@ Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`descripti
 - Graph `graph.json` current at commit `7e484635` (HEAD at CL-3-r1 start); `GRAPH_REPORT.md` header remains at `2cea04a7` because incremental refresh regenerates the report only at session close. No graph rebuild was needed.
 - CL-4 dialog graph query `ClientFicha archive merge dialog`: `ClientFicha()`, `ClientFicha.tsx`, `Dialog()`, `ClientesList.tsx`, `ClientFicha.test.tsx`, `ClientFicha.stories.tsx`, `archiveCustomer()`, `mergeClient()`, `previewClientMerge()`, `fetchClients()`, and the related API operations. Path `ClientFicha.tsx` → `Dialog()` is a direct `imports` edge; no directed path exists between `ClientFicha.tsx` and `ClientesList.tsx`. `GRAPH_REPORT.md` identifies `ClientFicha.tsx` as a community hub; its header lags the current graph by design.
 - CL-3-r3 query `ClientFicha dialogs estado consentimiento editar datos`: `ClientFicha()`, `ClientFicha.tsx`, `ClientFicha.test.tsx`, `ClientesList.tsx`, `Dialog()`, `Button.tsx`, `api.ts`, `updateCustomerConsent()`, `updateCustomerProfile()`, `changeClientState()`, and `Customer`. Path `ClientFicha.tsx` → `ClientesList.tsx` has no directed path. `ClientFicha.tsx` uses customer `allowed_transitions`; the ficha serializer (`to_customer_dict`) provides this same field as the list endpoint. Radio-role attributes were previously dropped by `Button`, preventing the CSS `radiogroup` selectors from styling either dialog's controls.
+- CL-3-r3 card-menu query `ClientFicha Datos del cliente Caso activo menu`: `ClientFicha()`, `Menu()`, `ClientFicha.tsx`, `Menu.tsx`, `ClientesList.tsx`, `ClientFicha.test.tsx`, `ClientesList.test.tsx`, and `clientes-panel-redesign Task`; path `ClientFicha()` → `Menu()` has no directed path. The graph already exposes optional Lucide icons per `MenuItem`; no primitive change was required. `GRAPH_REPORT.md`'s header still lags the current graph as expected.
 
 ## Evidence
 
