@@ -686,7 +686,7 @@
   .client-ficha__note-row { grid-template-columns:auto minmax(0,1fr) auto; }
   .client-ficha__note-row p { grid-column:2 / -1; }
 }
-@media (max-width: 44rem) {
+@media (max-width: 64rem) {
   .client-ficha-page .detail-region { grid-template-columns: minmax(0, 1fr); }
   .client-ficha__case-card, .client-ficha__data-card, .client-ficha__memory-card,
   .client-ficha__equipment-card, .client-ficha__notes-card, .client-ficha__history-entry,
