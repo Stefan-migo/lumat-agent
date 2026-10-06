@@ -329,9 +329,9 @@ def _operational_history(session, args: OperationalHistoryArgs):
     }
 
 
-def _retrieve_kb(session, args: KbArgs):
+def _retrieve_kb(session, args: KbArgs, *, project_id: int | None = None):
     # The Lumat assistant is internal and deliberately reads the whole corpus, including internal documents.
-    return kb.retrieve(session, args.query, top_k=args.top_k, audience=None)
+    return kb.retrieve(session, args.query, top_k=args.top_k, audience=None, project_id=project_id)
 
 
 def _kpis(session, args: KpiArgs):
@@ -675,6 +675,7 @@ def execute_tool(
     trusted_thread_id: int | None = None,
     proyecto: str = "default",
     owner_id: int | None = None,
+    project_id: int | None = None,
 ) -> dict:
     """Execute one allow-listed tool using the authenticated chat-thread owner."""
     definition = get_tool(name)
@@ -760,6 +761,8 @@ def execute_tool(
                     session, parsed, trusted_thread_id=trusted_thread_id, proyecto=proyecto, owner_id=owner_id
                 )
             )
+        elif name == "kb.retrieve":
+            result = _plain(definition.handler(session, parsed, project_id=project_id))
         elif name == "appointments.upcoming":
             result = _plain(definition.handler(session, parsed, role=role, owner_id=owner_id))
         else:

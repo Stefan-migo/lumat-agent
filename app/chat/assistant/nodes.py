@@ -571,6 +571,7 @@ def delegation_span(state: AssistantState, scope) -> AssistantState:
                 trusted_thread_id=state.get("thread_id"),
                 owner_id=state.get("user_id"),
                 proyecto=_project_slug(state),
+                project_id=(state.get("effective") or {}).get("project_id"),
             )
         except (ToolExecutionError, ToolValidationError) as exc:
             result = {"tool": tool_name, "status": "error", "error": str(exc), "result": {"unavailable": True}}
@@ -701,6 +702,7 @@ def assemble_context_node(state: AssistantState) -> AssistantState:
     if thread is not None:
         config = resolve_effective_config(state["session"], thread, state.get("actor_role") or "")
         effective = {
+            "project_id": config.project_id,
             "instructions": config.instructions,
             "tools_whitelist": list(config.tools_whitelist),
             "skills_index": [
@@ -962,6 +964,7 @@ def retrieve_kb(state: AssistantState) -> AssistantState:
     # `content` is a caller error, not a knowledge-base outage, and must not be
     # disguised as one.
     query = state["content"].strip()
+    project_id = (state.get("effective") or {}).get("project_id")
     with session_scope() if session is None else nullcontext(session) as session:
         try:
             chunks = kb.retrieve(
@@ -970,6 +973,7 @@ def retrieve_kb(state: AssistantState) -> AssistantState:
                 top_k=kb.DEFAULT_TOP_K,
                 min_sim=kb.DEFAULT_MIN_SIM,
                 audience=None,
+                **({"project_id": project_id} if project_id is not None else {}),
             )
         except Exception as error:
             detail = f"Knowledge-base retrieval failed: {error}"
@@ -1043,6 +1047,7 @@ def execute(state: AssistantState) -> AssistantState:
                 trusted_thread_id=state.get("thread_id"),
                 owner_id=state.get("user_id"),
                 proyecto=_project_slug(state),
+                project_id=(state.get("effective") or {}).get("project_id"),
             )
         except (ToolExecutionError, ToolValidationError) as exc:
             detail = str(exc)

@@ -52,6 +52,7 @@ class ProjectConfig(BaseModel):
 
 @dataclass(frozen=True)
 class EffectiveConfig:
+    project_id: int | None
     instructions: str
     tools_whitelist: tuple[str, ...]
     skills_index: tuple[SkillDefinition, ...]
@@ -62,12 +63,14 @@ def resolve_effective_config(session, thread, role: UserRole | str) -> Effective
     from app.services.projects import normalize_slug
 
     project_cfg = ProjectConfig()
+    project_id = None
     proyecto = thread.proyecto
     if proyecto and normalize_slug(proyecto) != "default":
         slug = normalize_slug(proyecto)
         owner_filter = Project.owner_id.is_(None) if thread.user_id is None else Project.owner_id == thread.user_id
         project = session.scalar(select(Project).where(Project.slug == slug, owner_filter))
         if project is not None:
+            project_id = project.id
             project_cfg = ProjectConfig.model_validate(project.config or {})
 
     global_skills = global_skill_index(load_assistant_config())
@@ -100,6 +103,7 @@ def resolve_effective_config(session, thread, role: UserRole | str) -> Effective
         and (TOOL_REGISTRY[name].tier == "default" or name in enabled)
     )
     return EffectiveConfig(
+        project_id=project_id,
         instructions=project_cfg.instructions,
         tools_whitelist=tools,
         skills_index=skills_index,
