@@ -148,8 +148,9 @@ Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`descripti
 - [x] Dialog **Cambiar consentimiento**: Sí/No are selectable radio cards with visible selection; save persists through `updateCustomerConsent` (`daca9d9e`).
 - [x] Dialog **Editar caso**: increase internal spacing and padding; apply ficha-scoped lighter borders to the dialog and controls; retain case context and the Cancelar/Guardar cambios footer (`ec79e4ab`).
 - [x] Dialog **Definir monto del caso**: increase padding and spacing and apply ficha-scoped lighter borders; retain case context/current amount, CLP field presentation, helper, and Cancelar/Guardar monto footer (`ec79e4ab`).
-- [ ] Cards **Memoria / Notas / Próximas visitas**: fix the broken vertical spacing.
-- [ ] Cards **Equipos / Historial del cliente**: design details per the reference.
+- [x] Cards **Memoria / Notas / Próximas visitas**: stack in an independent left-column flow with a consistent gap; remove explicit grid-row placement (`c68faabc`).
+- [x] Cards **Equipos / Historial del cliente**: plain-text header action, unboxed empty state, and compact aligned history row (`c68faabc`).
+- Mobile/tablet layout: summary columns collapse to one column at `max-width: 64rem`; confirmed in the authored responsive CSS. Browser screenshot verification was not available in this run.
 
 ## Acceptance criteria
 
@@ -187,6 +188,7 @@ Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`descripti
 - CL-4 dialog graph query `ClientFicha archive merge dialog`: `ClientFicha()`, `ClientFicha.tsx`, `Dialog()`, `ClientesList.tsx`, `ClientFicha.test.tsx`, `ClientFicha.stories.tsx`, `archiveCustomer()`, `mergeClient()`, `previewClientMerge()`, `fetchClients()`, and the related API operations. Path `ClientFicha.tsx` → `Dialog()` is a direct `imports` edge; no directed path exists between `ClientFicha.tsx` and `ClientesList.tsx`. `GRAPH_REPORT.md` identifies `ClientFicha.tsx` as a community hub; its header lags the current graph by design.
 - CL-3-r3 query `ClientFicha dialogs estado consentimiento editar datos`: `ClientFicha()`, `ClientFicha.tsx`, `ClientFicha.test.tsx`, `ClientesList.tsx`, `Dialog()`, `Button.tsx`, `api.ts`, `updateCustomerConsent()`, `updateCustomerProfile()`, `changeClientState()`, and `Customer`. Path `ClientFicha.tsx` → `ClientesList.tsx` has no directed path. `ClientFicha.tsx` uses customer `allowed_transitions`; the ficha serializer (`to_customer_dict`) provides this same field as the list endpoint. Radio-role attributes were previously dropped by `Button`, preventing the CSS `radiogroup` selectors from styling either dialog's controls.
 - CL-3-r3 card-menu query `ClientFicha Datos del cliente Caso activo menu`: `ClientFicha()`, `Menu()`, `ClientFicha.tsx`, `Menu.tsx`, `ClientesList.tsx`, `ClientFicha.test.tsx`, `ClientesList.test.tsx`, and `clientes-panel-redesign Task`; path `ClientFicha()` → `Menu()` has no directed path. The graph already exposes optional Lucide icons per `MenuItem`; no primitive change was required. `GRAPH_REPORT.md`'s header still lags the current graph as expected.
+- CL-3-r3 spacing query `ClientFicha Resumen memoria notas visitas equipos historial spacing`: `ClientFicha()`, `ClientFicha.tsx`, `ClientFicha.test.tsx`, `ClientFicha.stories.tsx`, `ClientFicha.stories.test.tsx`, `primitives.css`, `spacing`, `ClientFicha` (ODD task/document), and `Clientes Pilot Dense Surface`. `GRAPH_REPORT.md` god/community hubs consulted: `ClientFicha.tsx`, `stories/pages/ClientFicha.stories.tsx`, and the `Clientes Pilot Dense Surface` hyperedge linking `ClientFicha`, `DataTable`, `.data-region`, and `primitives.css`. Path query `ClientFicha()` ↔ `ClientMemories()` found `ClientFicha.tsx --imports--> ClientMemories()`; path to `primitives.css` had no directed path.
 
 ## Evidence
 
