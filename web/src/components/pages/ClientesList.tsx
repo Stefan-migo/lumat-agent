@@ -60,6 +60,10 @@ const columns = (onOpenClient?: (id: number) => void, selected: Set<number> = ne
 
 const CUSTOMER_STATES: CustomerState[] = ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"];
 
+function bulkActionTitle(action: "archive" | "restore", count: number) {
+  return `${action === "archive" ? "Archivar" : "Restaurar"} ${count} ${count === 1 ? "cliente" : "clientes"}`;
+}
+
 function stateMessage(state: ClientesListState, retry: () => void) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando clientes" />;
   if (state === "empty") return null;
@@ -92,6 +96,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const [tab, setTab] = useState<"all" | CustomerState>("all");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkAction, setBulkAction] = useState<{ action: "archive" | "restore"; ids: number[] } | null>(null);
   const [dialog, setDialog] = useState<"create" | "archive" | "state" | null>(null);
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
@@ -118,6 +123,9 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const pageSize = 10;
   const rows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const selectedRows = allRows.filter((row) => selected.has(row.id));
+  const selectedActive = selectedRows.filter((row) => !row.archived_at);
+  const selectedArchived = selectedRows.filter((row) => Boolean(row.archived_at));
   const toggleSelected = (id: number) => setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const retry = onRetry ?? fetched.retry;
   const filtered = query.trim().length > 0;
@@ -209,6 +217,22 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       setBusy(false);
     }
   };
+  const confirmBulkAction = async () => {
+    if (!bulkAction || busy) return;
+    setBusy(true);
+    setDialogError("");
+    const results = await Promise.allSettled(bulkAction.ids.map((id) => bulkAction.action === "archive" ? archiveCustomer(id) : unarchiveCustomer(id)));
+    const failedIds = bulkAction.ids.filter((_, index) => results[index].status === "rejected");
+    const succeeded = bulkAction.ids.length - failedIds.length;
+    setBulkAction(null);
+    setSelected(new Set(failedIds));
+    refresh();
+    if (failedIds.length) {
+      const verb = bulkAction.action === "archive" ? "archivaron" : "restauraron";
+      setDialogError(`Se ${verb} ${succeeded} de ${bulkAction.ids.length} clientes. Fallaron ${failedIds.length}.`);
+    }
+    setBusy(false);
+  };
 
   return (
     <PageFrame
@@ -230,7 +254,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
         {dialog === null && dialogError ? <p role="alert">{dialogError}</p> : null}
         {state === "loading" ? null : data && data.length > 0 ? (
           <div className="data-region">
-              <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar todos" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar todos</label>{selected.size ? <span>{selected.size} seleccionados</span> : null}</div>
+              <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar todos" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar todos</label>{selected.size ? <div className="clientes-list__selection-actions"><span>{selected.size} seleccionados</span>{selectedActive.length ? <Button variant="danger" disabled={busy} onClick={() => { setDialogError(""); setBulkAction({ action: "archive", ids: selectedActive.map((row) => row.id) }); }}><Archive />Archivar seleccionados</Button> : null}{selectedArchived.length ? <Button variant="secondary" disabled={busy} onClick={() => { setDialogError(""); setBulkAction({ action: "restore", ids: selectedArchived.map((row) => row.id) }); }}><ArchiveRestore />Restaurar seleccionados</Button> : null}</div> : null}</div>
                <div className="table-card__desktop"><DataTable columns={columns(onOpenClient, selected, toggleSelected, sort, () => { setSort((value) => value === "created_desc" ? "created_asc" : "created_desc"); refresh(); })} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
               // The row's identity lives in the trigger's accessible name, not in every
               // action label: two pills repeating the customer name dominated the cell
@@ -325,6 +349,9 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
           {dialogError ? <p role="alert">{dialogError}</p> : null}
           <footer><Button variant="secondary" onClick={() => setDialog(null)}>Cancelar</Button>{(stateTarget.allowed_transitions ?? []).length ? <Button onClick={() => void saveState()} disabled={busy || !selectedState}><Check />{busy ? "Guardando…" : "Guardar estado"}</Button> : null}</footer>
         </div> : null}
+      </Dialog>
+      <Dialog open={bulkAction !== null} onClose={() => { if (!busy) setBulkAction(null); }} title={bulkAction ? bulkActionTitle(bulkAction.action, bulkAction.ids.length) : "Acciones masivas"} icon={bulkAction?.action === "archive" ? Archive : ArchiveRestore} description={bulkAction?.action === "archive" ? "Esta acción archivará varios clientes seleccionados." : "Esta acción restaurará varios clientes seleccionados."}>
+        {bulkAction ? <div className="clientes-list__bulk-confirm"><p className={bulkAction.action === "archive" ? "clientes-list__warning" : "clientes-list__bulk-note"}>{bulkAction.action === "archive" ? <><CircleMinus />Se archivarán solo los clientes activos seleccionados.</> : <><ArchiveRestore />Se restaurarán solo los clientes archivados seleccionados.</>}</p>{dialogError ? <p role="alert">{dialogError}</p> : null}<footer><Button variant="secondary" disabled={busy} onClick={() => setBulkAction(null)}>Cancelar</Button><Button variant={bulkAction.action === "archive" ? "danger" : "primary"} disabled={busy} onClick={() => void confirmBulkAction()}>{busy ? (bulkAction.action === "archive" ? "Archivando…" : "Restaurando…") : bulkActionTitle(bulkAction.action, bulkAction.ids.length)}</Button></footer></div> : null}
       </Dialog>
     </PageFrame>
   );
