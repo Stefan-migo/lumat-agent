@@ -610,8 +610,8 @@
 .client-ficha-page .detail-region { grid-template-columns: minmax(0, 1.7fr) minmax(16rem, 1fr); }
 .client-ficha-page .detail-region__rail,
 .client-ficha-page .detail-region__main { display: contents; }
-.client-ficha__case-card { grid-column: 1; grid-row: 1; }
-.client-ficha__data-card { grid-column: 2; grid-row: 1; }
+.client-ficha__data-card { grid-column: 1; grid-row: 1; }
+.client-ficha__case-card { grid-column: 2; grid-row: 1; }
 .client-ficha__memory-card { grid-column: 1; grid-row: 2; }
 .client-ficha__equipment-slot { display: contents; }
 .client-ficha__equipment-card { grid-column: 2; grid-row: 2; }
@@ -619,6 +619,9 @@
 .client-ficha__history-entry { grid-column: 2; grid-row: 3; }
 .client-ficha__upcoming-card { grid-column: 1; grid-row: 4; }
 .client-ficha__memory-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
+.client-ficha__card-heading { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); min-width:0; }
+.client-ficha__card-heading h2 { margin:0; color:var(--corp-text); font-family:var(--font-ui); font-size:var(--text-lg); }
+.client-ficha__memory-title { display:flex; align-items:center; gap:var(--space-3); min-width:0; }
 .client-ficha__history-entry {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
   width: 100%; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg);
@@ -657,7 +660,8 @@
 .client-ficha__case-details small { color:var(--text-muted); }
 .client-ficha__case-details strong { display:flex; align-items:center; gap:var(--space-2); }
 .client-ficha__text-action { padding:0; border:0; background:none; color:var(--corp-text); text-align:left; text-decoration:underline; cursor:pointer; }
-.client-ficha__edit-case { float:right; }
+.client-ficha__case-actions { display:flex; justify-content:flex-end; }
+.client-ficha__edit-case { margin-left:auto; }
 .client-ficha__case-inline { display:grid; gap:var(--space-2); }
 .client-ficha__case-edit { margin-top:var(--space-3); }
  .client-ficha__contact-facts > div:not(.client-ficha__customer-state):not(:last-child) { grid-template-columns: minmax(5rem, .7fr) 1.3fr; align-items: start; padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }

@@ -79,8 +79,8 @@ export function ClientMemories({
   ];
 
   return (
-    <Card title={compact ? "Memoria del cliente" : "Memorias del cliente"} className={compact ? "client-ficha__memory-card" : ""}>
-      {compact ? <div className="client-ficha__memory-meta"><Badge>{memories.length}</Badge><Button variant="secondary" onClick={onViewAll}>Ver todo →</Button></div> : null}
+    <Card title={compact ? undefined : "Memorias del cliente"} className={compact ? "client-ficha__memory-card" : ""}>
+      {compact ? <header className="client-ficha__card-heading"><div className="client-ficha__memory-title"><h2>Memoria del cliente</h2><Badge>{memories.length}</Badge></div><Button className="client-ficha__text-action" onClick={onViewAll}>Ver todo →</Button></header> : null}
       {featuredMemo ? (
         <div className="client-memories__memo">
           {compact ? <small>CONVERSACIÓN #{conversationId ?? "—"}</small> : null}
