@@ -9,9 +9,9 @@ implementing any section. The v1 dashboard record predates this flow and has no 
 | Section | Status | visual.md | findings.md |
 | --- | --- | --- | --- |
 | `dashboard` | analyzed (predates v2) | — | [findings.md](dashboard/findings.md) |
-| `clientes` | pending | — | — |
-| `conversaciones` | pending | — | — |
-| `agenda` | validated | [agenda/visual.md](agenda/visual.md) | [agenda/findings.md](agenda/findings.md) |
+| `clientes` | validated | [clientes/visual.md](clientes/visual.md) | [clientes/findings.md](clientes/findings.md) |
+| `conversaciones` | validated (27) | [conversaciones/visual.md](conversaciones/visual.md) | [conversaciones/findings.md](conversaciones/findings.md) |
+| `agenda` | implementing (48) | [agenda/visual.md](agenda/visual.md) | [agenda/findings.md](agenda/findings.md) |
 | `usuarios` | done | [visual.md](usuarios/visual.md) | [findings.md](usuarios/findings.md) |
 | `conocimiento` | done | [conocimiento/visual.md](conocimiento/visual.md) | [conocimiento/findings.md](conocimiento/findings.md) |
 | `configuracion` | pending | — | — |
@@ -50,6 +50,17 @@ Findings that belong to one upstream unit. Implement these **before** per-sectio
 | agenda-005 | agenda | Calendar lacks the reference legend + period-count footer | `web/src/components/primitives/primitives.css` |
 | agenda-018 | agenda | Dialog header lacks the reference icon + supporting sentence | `web/src/components/primitives/primitives.css` |
 | agenda-019 | agenda | Create-form layout: flat single column vs the reference's sectioned, multi-column form | `web/src/components/primitives/primitives.css` |
+| agenda-023 | agenda | Scheduled-visit title link renders with the browser-default underline | `web/src/components/primitives/primitives.css` |
+| agenda-025 | agenda | Mobile calendar needs the reference's round, compact day grid | `web/src/components/primitives/primitives.css` |
+| agenda-026 | agenda | Rescheduling dialog off-reference (layout + content) | `web/src/components/primitives/primitives.css` |
+| agenda-027 | agenda | Closure dialog off-reference (layout + content) | `web/src/components/primitives/primitives.css` |
+| agenda-030 | agenda | Mobile detail header title/subtitle layout is broken | `web/src/components/primitives/primitives.css` |
+| agenda-031 | agenda | Programación card must sit left at two-thirds width, like Historial | `web/src/components/primitives/primitives.css` |
+| agenda-032 | agenda | History card lacks the separator line beneath its title | `web/src/components/primitives/primitives.css` |
+| agenda-034 | agenda | Cliente + Resumen must merge into one elongated card | `web/src/components/primitives/primitives.css` |
+| agenda-035 | agenda | Detail client/technician avatars are too small | `web/src/components/primitives/Avatar.tsx` |
+| conversaciones-012 | conversaciones | Mobile filter controls stack vertically instead of the reference compact filter card | `web/src/components/primitives/primitives.css` |
+| conversaciones-023 | conversaciones | Tablet conversation workspace collapses to one column instead of the reference two-column layout | `web/src/components/primitives/primitives.css` |
 
 ## Token/palette escalations
 
