@@ -115,7 +115,7 @@ is dead flexibility. They arrive with their slices. The cheapest correct slice i
 
 ## Tasks
 
-- [ ] **T1 (RED)** Model + migration. `Project.config` JSONB `NOT NULL DEFAULT '{}'`; a
+- [x] **T1 (RED)** Model + migration. `Project.config` JSONB `NOT NULL DEFAULT '{}'`; a
       `ProjectConfig` Pydantic model (`instructions: str = ""`,
       `tool_policy.opt_in_enabled: list[str] = []`) that fails closed on unknown tool names.
       Tests: empty config resolves to global defaults; invalid tool name is rejected.
@@ -164,3 +164,10 @@ is dead flexibility. They arrive with their slices. The cheapest correct slice i
 - **2026-10-06** — Worktree created from `main` `d94152f4`. Design read; harness mapped;
   storage decision **JSONB on `Project`** (owner). Migration number `040` reserved; no
   collision yet (both worktrees still at `039`). No code written yet.
+- **2026-10-06** — **T1 complete.** `0387cc6d` adds `db/migrations/040_project_config.sql`
+  (`config JSONB NOT NULL DEFAULT '{}'::jsonb`), the `Project.config` ORM column, and
+  `app/services/project_config.py` (`ProjectConfig` + `ToolPolicy`, fail-closed on unknown
+  tool names, `extra="ignore"` for forward-compatible JSONB keys). Unit tests
+  `tests/unit/test_project_config.py`; integration default-`{}` round-trip in
+  `tests/integration/test_db.py`. `11147c8e` extends `test_schema_migrations_records_version`
+  to expect `040`. **Verify:** `.venv/bin/python -m pytest tests/unit tests/integration/test_migrations.py tests/integration/test_db.py` → exit 0 (test DB on port 6321, `infra/.env` present). Strict TDD RED observed (module missing during collection) → GREEN.
