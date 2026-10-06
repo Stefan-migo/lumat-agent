@@ -748,6 +748,30 @@ def _effective_persona(state, config) -> str:
     return f"{config.persona}\n\n{instructions}" if instructions else config.persona
 
 
+def _skill_context(state) -> str:
+    from app.services.skills import SkillError, load_skill_body
+
+    definitions = {skill.name: skill for skill in _effective_skill_index(state)}
+    bodies = []
+    for name in (state.get("guardrails", {}).get("skills") or []):
+        definition = definitions.get(name)
+        if definition is None:
+            continue
+        try:
+            body = load_skill_body(definition)
+        except SkillError as exc:
+            logger.warning("Skipping unavailable assistant skill %r: %s", name, exc)
+            continue
+        bodies.append(f"### Skill: {name}\n{body}")
+    return "\n\n".join(bodies)
+
+
+def _responder_system_prompt(state, config) -> str:
+    persona = _effective_persona(state, config)
+    skills = _skill_context(state)
+    return f"{persona}\n\n{skills}" if skills else persona
+
+
 def _is_autonomous_write(tool_name: str | None, thread_id: object) -> bool:
     return tool_name in AUTONOMOUS_WRITE_ALLOWLIST and type(thread_id) is int and thread_id > 0
 
@@ -1131,7 +1155,7 @@ def execute(state: AssistantState) -> AssistantState:
         completion = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": _effective_persona(state, config)},
+                {"role": "system", "content": _responder_system_prompt(state, config)},
                 {"role": "user", "content": build_multimodal_content(attachments, prompt) if attachments else prompt},
             ],
             temperature=0,

@@ -10,6 +10,8 @@ from pydantic import ValidationError
 from app.chat.assistant.nodes import (
     _PLANNER_FAILURE_EXCERPT_LIMIT,
     _context_text,
+    _skill_context,
+    _responder_system_prompt,
     bounded_fallback,
     guardrails,
     parse_planner_output,
@@ -265,6 +267,54 @@ def test_plan_llm_includes_effective_skill_index_without_bodies(monkeypatch):
     assert index == [{"name": "guide", "description": "Guidance summary"}]
     assert "SECRET SKILL BODY" not in prompt
     assert "SECRET SKILL BODY" not in captured["messages"][0]["content"]
+
+
+def test_skill_context_injects_only_validated_skill_bodies(monkeypatch):
+    from app.services.skills import SkillDefinition
+
+    definitions = {
+        "declared": SkillDefinition("declared", "Declared", "project", body="DECLARED BODY"),
+        "other": SkillDefinition("other", "Other", "project", body="OTHER BODY"),
+    }
+    monkeypatch.setattr("app.chat.assistant.nodes._effective_skill_index", lambda state: tuple(definitions.values()))
+    state = {"guardrails": {"skills": ["declared"]}}
+
+    assert _skill_context(state) == "### Skill: declared\nDECLARED BODY"
+    assert "OTHER BODY" not in _skill_context(state)
+
+
+def test_skill_context_skips_missing_validated_body(monkeypatch, caplog):
+    from app.services.skills import SkillDefinition, SkillError
+
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._effective_skill_index",
+        lambda state: (SkillDefinition("missing", "Missing", "global", path="missing.md"),),
+    )
+    monkeypatch.setattr(
+        "app.services.skills.load_skill_body",
+        lambda definition: (_ for _ in ()).throw(SkillError("missing body")),
+    )
+
+    assert _skill_context({"guardrails": {"skills": ["missing"]}}) == ""
+    assert "missing" in caplog.text
+
+
+def test_skill_context_is_empty_without_validated_skills():
+    assert _skill_context({"guardrails": {"skills": []}}) == ""
+
+
+def test_responder_system_prompt_includes_validated_body_but_planner_does_not(monkeypatch):
+    from app.services.skills import SkillDefinition
+
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._effective_skill_index",
+        lambda state: (SkillDefinition("guide", "Guidance", "project", body="RESPONDER ONLY BODY"),),
+    )
+    state = {"guardrails": {"skills": ["guide"]}}
+    config = SimpleNamespace(persona="persona")
+
+    assert "RESPONDER ONLY BODY" in _responder_system_prompt(state, config)
+    assert "RESPONDER ONLY BODY" not in config.persona
 
 
 def test_plan_llm_substitutes_empty_effective_skill_index(monkeypatch):
