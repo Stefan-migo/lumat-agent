@@ -626,7 +626,8 @@
   background: var(--surface); color: var(--text); text-align: left; cursor: pointer;
 }
 .client-ficha__history-entry > span:nth-child(2) { display: grid; flex: 1; gap: var(--space-1); }
-.client-ficha__history-entry small { color: var(--text-muted); }
+.client-ficha__history-entry strong { font-family: var(--font-ui); font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.client-ficha__history-entry small { color: var(--text-muted); font-size: var(--text-sm); }
 .client-ficha__identity-person,
 .client-ficha__identity-actions {
   display: flex;
@@ -658,6 +659,7 @@
 .client-ficha__case-details small { color:var(--text-muted); }
 .client-ficha__case-details strong { display:flex; align-items:center; gap:var(--space-2); }
 .client-ficha__text-action { padding:0; border:0; background:none; color:var(--corp-text); text-align:left; text-decoration:underline; cursor:pointer; }
+.client-ficha__text-action:hover { background: none; color: var(--corp-primary); }
 .client-ficha__case-actions { display:flex; justify-content:flex-end; }
 .client-ficha__edit-case { margin-left:auto; }
 .client-ficha__case-inline { display:grid; gap:var(--space-2); }
@@ -677,8 +679,11 @@
 .client-ficha__note-row small { color:var(--text-muted); }
 .client-ficha__note-row p { margin:0; }
 .client-ficha__notes-card .client-ficha__card-heading button { padding:0; border:0; background:transparent; color:var(--corp-text); box-shadow:none; }
-.client-ficha__equipment-empty { display:grid; justify-items:center; gap:var(--space-2); min-height:12rem; padding:var(--space-4); }
-.client-ficha__equipment-illustration { display:grid; place-items:center; width:3rem; height:4rem; border:2px solid var(--text-muted); border-radius:var(--radius-sm); color:var(--text-muted); font-size:var(--text-xl); }
+.client-ficha__equipment-empty { display:grid; justify-items:center; align-content:center; gap:var(--space-3); min-height:12rem; padding:var(--space-4); border:1px solid var(--border); border-radius:var(--radius-md); }
+.client-ficha__equipment-empty > svg { width:2rem; height:2rem; color:var(--corp-primary); }
+.client-ficha__equipment-row { display:grid; justify-items:start; gap:var(--space-2); padding:var(--space-3); border:1px solid var(--border); border-radius:var(--radius-md); }
+.client-ficha__equipment-row > strong { font-family:var(--font-ui); font-size:var(--text-md); font-weight:var(--weight-semibold); }
+.client-ficha__equipment-row > p { margin:0; color:var(--text-muted); font-size:var(--text-sm); }
 .client-ficha__memory-card .client-memories__memo { grid-template-columns:minmax(0,1fr) auto; align-items:center; border-color:var(--border); border-left:var(--space-1) solid var(--success); background:var(--surface); }
 .client-ficha__memory-card .client-memories__memo > small { grid-column:1 / -1; color:var(--text-muted); }
 .client-ficha__memory-card .client-memories__memo > strong { grid-column:1; color:var(--corp-text); }

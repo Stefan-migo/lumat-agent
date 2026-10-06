@@ -24,6 +24,7 @@ export interface ClientMemoriesProps {
   compact?: boolean;
   onViewAll?: () => void;
   conversationId?: number;
+  bare?: boolean;
 }
 
 /** Ficha memories panel (MEM-6): list + edit + delete + mark(pin) over the
@@ -40,6 +41,7 @@ export function ClientMemories({
   compact = false,
   onViewAll,
   conversationId,
+  bare = false,
 }: ClientMemoriesProps) {
   const [draft, setDraft] = useState("");
   const [resolvingId, setResolvingId] = useState<number | null>(null);
@@ -78,8 +80,7 @@ export function ClientMemories({
     { key: "pin", header: "Pin", render: (m) => (m.pin ? "✓" : "—") },
   ];
 
-  return (
-    <Card title={compact ? undefined : "Memorias del cliente"} className={compact ? "client-ficha__memory-card" : ""}>
+  const content = <>
       {compact ? <header className="client-ficha__card-heading"><div className="client-ficha__memory-title"><h2>Memoria del cliente</h2><Badge>{memories.length}</Badge></div><Button className="client-ficha__text-action" onClick={onViewAll}>Ver todo →</Button></header> : null}
       {featuredMemo ? (
         <div className="client-memories__memo">
@@ -149,6 +150,6 @@ export function ClientMemories({
           ))}
         </div>
       ) : null}
-    </Card>
-  );
+  </>;
+  return bare ? content : <Card title={compact ? undefined : "Memorias del cliente"} className={compact ? "client-ficha__memory-card" : ""}>{content}</Card>;
 }
