@@ -176,6 +176,7 @@ class AssistantState(TypedDict, total=False):
     error: str | None
     on_token: Callable[[str], None] | None
     session: object
+    effective: dict
     actor: str
     actor_role: str
     attachments: list[object]
