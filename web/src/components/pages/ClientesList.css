@@ -66,6 +66,9 @@
   .clientes-list__mobile-grid { gap: var(--space-1) var(--space-2); }
   .clientes-list__mobile-grid > div { gap: 0; line-height: 1.2; font-size: var(--text-sm); }
   .clientes-list__mobile-grid > div > span:first-child { line-height: 1; }
+  .clientes-list__card .table-footer { justify-content: space-between; }
+  .clientes-list__card .table-footer__count { display: inline; }
+  .clientes-list__card .table-footer__pagination { display: flex; }
   .clientes-list__toolbar { grid-template-columns: 1fr; }
   .clientes-list__contact-grid { grid-template-columns: 1fr; }
   .clientes-list__create-form > footer { flex-wrap: wrap; }

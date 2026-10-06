@@ -409,6 +409,15 @@ describe("ClientesList", () => {
     expect(container.querySelector(".clientes-list__mobile-card")?.textContent).not.toContain(">");
   });
 
+  it("keeps the caption and pagination in the clientes mobile footer", () => {
+    render(<ClientesList data={customers} state="ready" />);
+    const footer = document.querySelector(".clientes-list__card .table-footer") as HTMLElement;
+
+    expect(within(footer).getByText("Mostrando 3 de 3 clientes")).toBeInTheDocument();
+    expect(within(footer).getByRole("button", { name: "Página anterior" })).toBeInTheDocument();
+    expect(within(footer).getByRole("button", { name: "Página siguiente" })).toBeInTheDocument();
+  });
+
   // T2 — clearing the search must return to the unfiltered list. Today the refetch only
   // fires for a non-empty query, so a cleared search leaves the filtered result on screen.
   it("resets the list when the search is cleared", async () => {
