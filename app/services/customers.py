@@ -607,16 +607,27 @@ def search_customers(
     limit: int = 100,
     *,
     include_archived: bool = False,
+    consent: bool | None = None,
+    sort: str = "created_desc",
 ) -> list[Customer]:
-    """List customers, optionally filtered by name or phone (AP-3).
+    """List customers, optionally filtered by name, phone, or consent (AP-3).
 
     `query` matches case-insensitively against the name, or as a digit
-    substring against the E.164 phone ("3333" finds +56933334444). No query
-    -> newest-first list. Used by the panel clients view.
+    substring against the E.164 phone ("3333" finds +56933334444). `sort`
+    selects newest-first (`created_desc`) or oldest-first (`created_asc`).
+    Used by the panel clients view.
     """
-    statement = select(Customer).order_by(Customer.created_at.desc(), Customer.id.desc())
+    ordering = {
+        "created_desc": (Customer.created_at.desc(), Customer.id.desc()),
+        "created_asc": (Customer.created_at.asc(), Customer.id.asc()),
+    }
+    if sort not in ordering:
+        raise ValueError(f"Unknown customer sort: {sort}")
+    statement = select(Customer).order_by(*ordering[sort])
     if not include_archived:
         statement = statement.where(Customer.archived_at.is_(None))
+    if consent is not None:
+        statement = statement.where(Customer.consent_status.is_(consent))
     q = (query or "").strip()
     if q:
         digits = "".join(ch for ch in q if ch.isdigit())

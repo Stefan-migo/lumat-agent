@@ -38,10 +38,10 @@ the owner corrects the design visually per work unit.
 ## Work units (stable IDs)
 
 ### CL-1 — Backend customer list params
-- [ ] Extend `search_customers` (`app/services/customers.py:604`) with a consent filter and a sort
+- [x] Extend `search_customers` (`app/services/customers.py:604`) with a consent filter and a sort
       parameter; keep the current default (newest-first) and the existing `q`/`include_archived`.
-- [ ] Wire the params through the clientes list route (`app/panel/api/routes/clients.py`).
-- [ ] API tests: consent filter, sort, and unchanged default ordering.
+- [x] Wire the params through the clientes list route (`app/panel/api/routes/clients.py`).
+- [x] API tests: consent filter, sort, and unchanged default ordering.
 - Findings: `clientes-003`, `clientes-004`.
 
 ### CL-2 — Clientes list surface + list dialogs
