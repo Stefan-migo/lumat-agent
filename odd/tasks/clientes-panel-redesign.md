@@ -131,14 +131,14 @@ Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`descripti
 - [x] Change-state dialog (ficha): client/current-state row, allowed-transition radio cards, "Cambio de estado" summary (`ClientFichaDialogs.png`). Replaces the inline state select (`da5bcf33`).
 - [x] Edit-data dialog: title/fields/order/editability (`clientes-024`; `8bde2851`). Phone remains read-only because the profile API does not support changing it.
 - [x] Change-consent confirmation dialog (`clientes-025`; `da5bcf33`).
-- [ ] Archive dialog: "Información del cliente" grouping + warning (`clientes-026`).
+- [x] Archive dialog: "Información del cliente" grouping + warning (`clientes-026`; `2a06a356`).
 - [x] Edit-case dialog: context + "Guardar cambios" (`clientes-027`; `8bde2851`).
 - [x] Define-amount dialog: context + CLP presentation (`clientes-028`; `8bde2851`).
 - [ ] Add-equipment dialog: fields + "Agregar equipo" (`clientes-029`).
 - [ ] Add-note dialog: context + "Guardar nota" (`clientes-030`).
-- [ ] Merge dialog: two-client comparison + responsive single column (`clientes-031`).
+- [x] Merge dialog: two-client comparison + responsive single column (`clientes-031`; `2a06a356`).
 - [ ] Dialog headers `icon`/`description` at ficha call sites (`clientes-020`, ficha side).
-- [ ] Archive confirmation label/danger tone on the ficha entry point (`clientes-032`, ficha side).
+- [x] Archive confirmation label/danger tone on the ficha entry point (`clientes-032`, ficha side; `2a06a356`).
 
 ## Acceptance criteria
 
@@ -173,6 +173,7 @@ Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`descripti
 - CL-3-r1 path `ClientFicha.tsx` ↔ `ClientMemories.tsx`: direct extracted edge
   `ClientFicha.tsx --imports_from--> ClientMemories.tsx` (one hop).
 - Graph `graph.json` current at commit `7e484635` (HEAD at CL-3-r1 start); `GRAPH_REPORT.md` header remains at `2cea04a7` because incremental refresh regenerates the report only at session close. No graph rebuild was needed.
+- CL-4 dialog graph query `ClientFicha archive merge dialog`: `ClientFicha()`, `ClientFicha.tsx`, `Dialog()`, `ClientesList.tsx`, `ClientFicha.test.tsx`, `ClientFicha.stories.tsx`, `archiveCustomer()`, `mergeClient()`, `previewClientMerge()`, `fetchClients()`, and the related API operations. Path `ClientFicha.tsx` → `Dialog()` is a direct `imports` edge; no directed path exists between `ClientFicha.tsx` and `ClientesList.tsx`. `GRAPH_REPORT.md` identifies `ClientFicha.tsx` as a community hub; its header lags the current graph by design.
 
 ## Evidence
 
