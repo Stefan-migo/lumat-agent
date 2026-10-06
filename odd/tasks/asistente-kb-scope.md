@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-kb-scope`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-asistente-kb-scope`
 **Base**: `85d51825` (= `main` = `origin/main`, merge of PR #486)
-**Status**: slice 3 planning (design documented; no code yet)
+**Status**: slice 3 complete (T1–T6). RDD review approved (lineage `review-e782e872429ef56b`, authority burned); a CRITICAL finding (R4-001) was found and fixed. Pending push/PR (owner decision).
 
 ## Objective
 
@@ -20,6 +20,9 @@ the same corpus. `kb.retrieve` (`app/services/kb.py:346`) filters only on `activ
 `active_version`, `distance`, and `visibility == audience` — there is no project filter and no
 way to scope a document. The assistant reads the full corpus (`audience=None`), which is
 correct for the internal panel but cannot isolate per project.
+
+**Addressed by this slice** — the assistant now reads `global ∪ its project` (fail-closed to
+`global` when no project resolves); the admin search probe stays full-corpus.
 
 ## Naming — do NOT reuse the retired `scope`
 
@@ -99,22 +102,22 @@ orthogonal, legacy → `global`).
 
 ## Tasks
 
-- [ ] **T1 (RED)** Schema. `KbDocument.project_id` nullable FK to `projects.id`
+- [x] **T1 (RED)** Schema. `KbDocument.project_id` nullable FK to `projects.id`
       (`ON DELETE CASCADE`) + migration `041_kb_project_scope.sql` + index. Tests: default
       `NULL`; existing/legacy rows are global; a document can bind to a project.
-- [ ] **T2 (RED)** Service. `ingest_document(..., project_id=None)` and
+- [x] **T2 (RED)** Service. `ingest_document(..., project_id=None)` and
       `retrieve(..., project_id=None, global_only=False)` with the filter rules; a
       `set_project` method. Tests: `global_only` returns only global; `project_id=X` returns
       `global ∪ X`; **project A never returns project B**; defaults unchanged (all); audience
       still applies.
-- [ ] **T3 (RED)** WhatsApp bot global-only. `respond.py` + `research_triage.py` pass
+- [x] **T3 (RED)** WhatsApp bot global-only. `respond.py` + `research_triage.py` pass
       `global_only=True`. Tests: a project-scoped doc is never returned to the WhatsApp path.
-- [ ] **T4 (RED)** Assistant project scope. `kb.retrieve` tool handler + pre-answer pass the
+- [x] **T4 (RED)** Assistant project scope. `kb.retrieve` tool handler + pre-answer pass the
       resolved `project_id`. Tests: the assistant sees global ∪ its project, not another's.
-- [ ] **T5 (GREEN)** Admin surface. Upload accepts optional `project_id` (validated against
+- [x] **T5 (GREEN)** Admin surface. Upload accepts optional `project_id` (validated against
       the caller's projects); serializers expose it. Tests: upload with/without scope; invalid
       project rejected.
-- [ ] **T6** Verify: full suite green; spot check; RDD assessment.
+- [x] **T6** Verify: full suite green; spot check; RDD assessment.
 
 ## Acceptance criteria
 
@@ -141,14 +144,36 @@ orthogonal, legacy → `global`).
 
 ## Delivery
 
-- Forecast: **~350–450 authored changed lines** across ~10 files (model, migration,
-  `services/kb.py`, `respond.py`, `research_triage.py`, `tools/registry.py`, `nodes.py`,
-  `routes/kb.py`, `serializers.py`, tests). Re-forecast after T2; if it exceeds ~400, apply the
-  delivery strategy (`ask-on-risk`, default).
+- Actual: **19 paths / 593 changed lines**, high risk → a 4-lens review was required (and, after
+  the R4-001 fix, a second 4-lens review, approved). One cohesive feature → delivery strategy
+  (`ask-on-risk`) to be applied by the owner: single PR with `size:exception`, or chained.
 
 ## Progress
 
 - **2026-10-06** — Worktree `../lumat-agent-odd-asistente-kb-scope` created from `main`
   `85d51825` (branch `odd/asistente-kb-scope`). Graph Check run; KB seams mapped via read-only
-  exploration. Design documented here. No code written yet.
+  exploration. Design documented here. `94e62f76` commits this plan.
+- **2026-10-06** — **T1 complete.** `e278dcab` adds `KbDocument.project_id` (nullable FK to
+  `projects.id`, `ON DELETE CASCADE`) + `db/migrations/041_kb_project_scope.sql` + index.
+  Legacy rows stay global (`NULL`), no backfill. **Verify:** `test_migrations` + `test_db` → 44 tests.
+- **2026-10-06** — **T2 complete.** `df0a12b6` adds `ingest_document(project_id=...)`,
+  `retrieve(project_id=..., global_only=...)` and `set_project`. Tests: global-only; `project_id=X`
+  → `global ∪ X` (never another project's); defaults unchanged; audience orthogonal.
+  **Verify:** `test_kb.py` → 25 tests.
+- **2026-10-06** — **T3 complete.** `48e6f4c7` makes the WhatsApp/customer paths read only global
+  (`respond.py` + `research_triage.py` pass `global_only=True`; audience unchanged). **Verify:** 44 tests.
+- **2026-10-06** — **T4 complete.** `49822bd8` resolves `EffectiveConfig.project_id` and scopes the
+  assistant (`kb.retrieve` tool handler + pre-answer) to `global ∪ its project`. **Verify:** 12 tests.
+- **2026-10-06** — **T5 complete.** `561fd70e` lets the admin upload bind a document to one of the
+  owner's projects (validated; foreign/unknown → 400) and exposes `project_id` in the serializer.
+- **2026-10-06** — **T6 + full-suite verify.** `uv run --no-sync pytest tests/` → exit 0.
+- **2026-10-06** — **RDD review #1 escalated on R4-001 (CRITICAL).** The `review-resilience` lens
+  found that an unresolved project (`project_id is None`) omitted the filter, exposing every
+  project's KB. Escalated with `unknown_causality`; the maintainer confirmed reachability
+  (`default`/stale project threads) and authorized the fix.
+- **2026-10-06** — **R4-001 fixed (fail-closed).** `f0b5e575` makes both assistant call sites read
+  `global` only when no project resolves; `0e37a206` aligns the grounding-gate test. Full suite green.
+- **2026-10-06** — **RDD re-review approved.** `review-e782e872429ef56b` (4 lenses): risk/resilience/
+  reliability **0 findings**; readability 2 **advisory** findings (R2-001/R2-002) about this doc's
+  stale status, resolved by this close. Acknowledgement `authority: burned`.
 </content>
