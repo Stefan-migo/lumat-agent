@@ -231,7 +231,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
         {state === "loading" ? null : data && data.length > 0 ? (
           <div className="data-region">
               <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar todos" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar todos</label>{selected.size ? <span>{selected.size} seleccionados</span> : null}</div>
-               <DataTable columns={columns(onOpenClient, selected, toggleSelected, sort, () => { setSort((value) => value === "created_desc" ? "created_asc" : "created_desc"); refresh(); })} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
+               <div className="table-card__desktop"><DataTable columns={columns(onOpenClient, selected, toggleSelected, sort, () => { setSort((value) => value === "created_desc" ? "created_asc" : "created_desc"); refresh(); })} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
               // The row's identity lives in the trigger's accessible name, not in every
               // action label: two pills repeating the customer name dominated the cell
               // (DESIGN_SYSTEM.md:475). `Archivar` is the only destructive action and
@@ -260,7 +260,32 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
                   />
                 </div>
               );
-            }} />
+            }} /></div>
+              <ul className="table-cards table-cards--mobile clientes-list__cards" aria-label="Lista de clientes">
+                {rows.map((customer) => {
+                  const rowLabel = `Acciones para ${customer.name ?? customer.phone_e164 ?? "cliente"}`;
+                  const items = customer.archived_at
+                    ? [
+                        { value: "state", label: "Cambiar estado", icon: ArrowRightLeft },
+                        { value: "restore", label: "Restaurar", icon: ArchiveRestore },
+                      ]
+                    : [
+                        { value: "state", label: "Cambiar estado", icon: ArrowRightLeft },
+                        { value: "archive", label: "Archivar", icon: Archive, tone: "danger" as const },
+                      ];
+                  return <li className="table-card__item clientes-list__mobile-card" key={customer.id}>
+                    <div className="clientes-list__mobile-identity"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} className="table__resource-avatar" /><a className="clientes-list__name" href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>{customer.name ?? "—"}</a><input type="checkbox" aria-label={`Seleccionar ${customer.name ?? customer.phone_e164 ?? "cliente"}`} checked={selected.has(customer.id)} onChange={() => toggleSelected(customer.id)} /></div>
+                    <div className="clientes-list__mobile-grid">
+                      <div><span>Registro</span>{customer.archived_at ? <Badge tone="warning">Archivado</Badge> : "—"}</div>
+                      <div><span>Teléfono</span>{customer.phone_e164 ?? "—"}</div>
+                      <div><span>Estado</span><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div>
+                      <div><span>Consentimiento</span><span className="clientes-list__consent"><span aria-hidden="true">{customer.consent_status ? <Check /> : <CircleMinus />}</span>{customer.consent_status ? "Sí" : "No"}</span></div>
+                      <div><span>Creado</span>{customer.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(customer.created_at)).replace(".", "") : "—"}</div>
+                    </div>
+                    <div className="clientes-list__mobile-actions"><Menu trigger="icon" label={rowLabel} items={items} onSelect={(value) => { if (value === "state") void openState(customer); else if (value === "archive") void openArchive(customer); else void restore(customer); }} /></div>
+                  </li>;
+                })}
+              </ul>
               <footer className="table-footer"><span className="table-footer__count">Mostrando {rows.length} de {filteredRows.length} clientes</span><div className="table-footer__pagination"><Button variant="secondary" disabled={page <= 1} aria-label="Página anterior" onClick={() => setPage((value) => value - 1)}>‹</Button><span className="table-footer__page" aria-current="page">{page}</span><Button variant="secondary" disabled={page >= pageCount} aria-label="Página siguiente" onClick={() => setPage((value) => value + 1)}>›</Button></div></footer>
           </div>
         ) : filtered ? (
