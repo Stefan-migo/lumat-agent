@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-skills`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-asistente-skills`
 **Base**: `1b689229` (= `main` = `origin/main`, merge of PR #484)
-**Status**: slice 2 in progress (T1–T2 done and reviewed; T3–T7 pending)
+**Status**: slice 2 complete (T1–T7). PR1 = T1–T2 (reviewed, authority burned); PR2 = T3–T6 + test alignment (under budget). Pending push/PR (owner decision).
 
 ## Objective
 
@@ -133,21 +133,21 @@ effective_skills = dedup_by_name(global_index + project_index)   # project wins
       `resolve_skill_index(session, thread)` = global + project, project overrides by name,
       dedup, order preserved. Tests: global-only; project adds; project overrides global by
       name; malformed project skill rejected.
-- [ ] **T3 (RED)** Planner contract + prompt. `PlannerOutput.skills: list[str] = []` (extras
+- [x] **T3 (RED)** Planner contract + prompt. `PlannerOutput.skills: list[str] = []` (extras
       still forbidden); `plan_llm` passes the effective index as `<available_skills>`
       (name + description, **no bodies**); `agent/prompts/assistant_plan.md` instructs the
       field. Tests: plan accepts `skills`; unknown key still rejected; planner prompt
       contains the index and not any body.
-- [ ] **T4 (RED)** Guardrails. Declared skills filtered against the effective index
+- [x] **T4 (RED)** Guardrails. Declared skills filtered against the effective index
       (unknown dropped, fail-closed); result carried forward in state. Tests: known kept,
       unknown dropped, no index → empty.
-- [ ] **T5 (GREEN)** Responder injection. `_skill_context(state)` returns the bodies of the
+- [x] **T5 (GREEN)** Responder injection. `_skill_context(state)` returns the bodies of the
       declared/validated skills; appended to the **responder** system prompt only. Tests:
       declared body present in the responder prompt; absent from the planner prompt; the
       whole corpus is never injected.
-- [ ] **T6** Seed skill `agent/skills/assistant/memoria-tukulpan.md` + registry declaration.
+- [x] **T6** Seed skill `agent/skills/assistant/memoria-tukulpan.md` + registry declaration.
       Content: Tukulpan scopes, when to read/write, correct argument shapes.
-- [ ] **T7** Verify: full suite green; spot check over affected files; RDD assessment.
+- [x] **T7** Verify: full suite green; spot check over affected files; RDD assessment.
 
 ## Acceptance criteria
 
@@ -176,12 +176,15 @@ effective_skills = dedup_by_name(global_index + project_index)   # project wins
 
 ## Delivery
 
-- Forecast: **~450–600 authored changed lines** across ~9 files (`skills.py` new,
-  `project_config.py`, `agent_registry.py`, `state.py`, `nodes.py`,
-  `agent/prompts/assistant_plan.md`, `agent/registry.yaml`, the seed skill, tests) — likely
-  **over the ~400 budget → chained PR or a scoped split**. Re-forecast after T2; apply the
-  cached `ask-on-risk` strategy (no delivery strategy cached yet — ask once if the forecast
-  holds).
+- **Decision (owner, 2026-10-06): `stacked-to-main`.**
+  - **PR1** = `odd/asistente-skills` (T1–T2: global index + project layer). 8 paths / 455 lines;
+    reviewed by the `review-reliability` lens (`review-fba9ba3a8f530dfe`, approved, authority
+    burned).
+  - **PR2** = `odd/asistente-skills-turn` (T3–T6 + test alignment: planner/guardrails/responder +
+    seed). 12 paths / 381 lines, under budget.
+  - Push and PR creation are the owner's decision under ordinary repository policy.
+- Forecast (superseded): ~450–600 authored lines across ~9 files; the actual split landed at the
+  review boundary.
 
 ## Progress
 
@@ -212,6 +215,31 @@ effective_skills = dedup_by_name(global_index + project_index)   # project wins
   `review-reliability` lens (lineage `review-fba9ba3a8f530dfe`); **state: approved**,
   acknowledgement `authority: burned`, correction budget 200 unused. One **advisory** finding
   (non-blocking) recorded under Follow-ups.
+- **2026-10-06** — **T3 complete.** `99c497a6` gives the planner the effective skill index:
+  `PlannerOutput.skills: list[str]`, `assemble_context_node` carries `skills_index` (name,
+  description, scope, path, body) in `state["effective"]`, `_effective_skill_index` reconstructs
+  it (fallback = global index), and `plan_llm` substitutes `<available_skills>` (name +
+  description only — **no bodies**). `agent/prompts/assistant_plan.md` documents the field.
+  `test_assistant_config.py` updated to the new intent. **Verify:** 43 tests, exit 0.
+- **2026-10-06** — **T4 complete.** `620a0859` adds `_validated_skills` and intersects the
+  declared skills with the effective index in `guardrails` (fail-closed: unknown dropped,
+  order preserved, duplicates collapsed), carried in `guardrails["skills"]`. **Verify:** 77 tests.
+- **2026-10-06** — **T5 complete.** `64329e59` adds `_skill_context` (loads the bodies of the
+  validated skills via `load_skill_body`, skips a `SkillError` instead of crashing the turn) and
+  appends them to the **responder** system prompt only; the planner prompt stays body-free.
+  **Verify:** 47 tests.
+- **2026-10-06** — **T6 complete.** `d5b531a3` seeds `agent/skills/assistant/memoria-tukulpan.md`
+  (own vs customer axis, scopes, argument shapes, gotchas — code-grounded) and declares it under
+  `assistant.skills`. Adds the **end-to-end override** test through the real
+  `resolve_effective_config` (closes the T2 follow-up). **Verify:** 20 tests.
+- **2026-10-06** — **T7 complete.** Full suite `uv run --no-sync pytest tests/` → **exit 0**.
+  Two integration tests needed alignment with the new shape (`aed9e897`): the serialized planner
+  dict now carries `skills: []`, and one `load_assistant_config` test double lacked `skills`.
+  No lint/typecheck tooling is configured (CI runs `pytest` + frontend `npm run build`; the
+  frontend is untouched by this slice).
+- **2026-10-06** — **Second-range RDD assessment:** `assess --base-ref cab70481 --committed-only`
+  → `review_due: false`, `under_budget` (12 paths / 381 lines, medium). PR2 stays under the
+  400-line budget, so no additional review is due.
 
 ## Follow-ups (post-Slice-2, non-blocking)
 
@@ -220,7 +248,4 @@ effective_skills = dedup_by_name(global_index + project_index)   # project wins
   a `..` component could read outside it. The registry is git-controlled (trusted), so impact is
   low; the project layer carries inline bodies, not paths. Harden by resolving and asserting the
   path stays under `_AGENT_DIR` when this module is next touched (needs its own reviewed commit).
-- **End-to-end override test** — `test_project_skill_overrides_global_skill_in_place` monkeypatches
-  the global index because no global skill exists until T6. After T6 seeds one, add an end-to-end
-  override assertion against the real registry.
 </content>
