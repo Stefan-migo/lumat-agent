@@ -13,6 +13,7 @@ import { Input } from "../primitives/Input";
 import { Menu } from "../primitives/Menu";
 import { Select } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
+import { Tabs } from "../primitives/Tabs";
 import { DataTable, type Column } from "../shared/DataTable";
 import { CaseActions } from "../shared/CaseActions";
 import { CollapsibleMessages } from "../shared/CollapsibleMessages";
@@ -37,6 +38,7 @@ const MESSAGE_PREVIEW = 10;
 const EQUIPMENT_TYPE_LABELS: Record<string, string> = { calefont: "Calefont", caldera: "Caldera", calefaccion: "Sistema de calefacción" };
 const EQUIPMENT_TYPE_OPTIONS = [{ value: "", label: "Sin especificar" }, ...Object.entries(EQUIPMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }))];
 const MERGE_COUNT_LABELS: Record<keyof ClientMergePreview["moved"], string> = { conversations: "conversaciones", cases: "casos", customer_notes: "notas", customer_equipment: "equipos", appointments: "visitas" };
+const FICHA_TABS = [{ id: "summary", label: "Resumen" }, { id: "cases", label: "Casos" }, { id: "visits", label: "Visitas" }, { id: "conversations", label: "Conversaciones" }];
 
 const formatDate = (value: string | null | undefined) => (value ? DATE_FORMAT.format(new Date(value)) : "—");
 const formatDateTime = (value: string | null | undefined) => (value ? DATE_TIME_FORMAT.format(new Date(value)) : "—");
@@ -336,12 +338,23 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   ];
 
   return (
-    <PageFrame
-      title={`Ficha: ${customer.name ?? customer.phone_e164 ?? "—"}`}
-      meta={`${customer.phone_e164 ?? "—"} · Estado: ${customerStateLabel(customer.state)}`}
-      actions={<Button variant="secondary" onClick={() => window.history.back()}>Volver a clientes</Button>}
-      state={stateMessage(state)}
-    >
+    <PageFrame title="" className="client-ficha-page" state={stateMessage(state)}>
+      <header className="client-ficha__identity">
+        <div className="client-ficha__identity-person">
+          <Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} />
+          <div>
+            <h1>{customer.name ?? customer.phone_e164 ?? "—"}</h1>
+            <p>Cliente desde {formatDate(customer.created_at)}</p>
+          </div>
+        </div>
+        <div className="client-ficha__identity-actions">
+          <Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "agenda" }); }}>Agendar visita</Button>
+          <Button onClick={() => { window.location.href = pathForRoute({ view: "conversations" }); }}>Ver conversación</Button>
+        </div>
+      </header>
+      <Tabs tabs={FICHA_TABS} ariaLabel="Secciones de la ficha del cliente">
+        {(activeTab) => <>
+      {activeTab === "summary" ? <>
       <div className="detail-region">
         <section className="detail-region__rail" aria-label="Resumen del cliente">
           <Card title="Cliente">
@@ -498,61 +511,21 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             <LocalFeedback feedback={noteFeedback} />
           </Card>
 
-          <details className="client-ficha__history">
-            <summary>
-              <h2>Historial</h2>
-            </summary>
-            <section aria-labelledby="ficha-visits-heading" className="client-ficha__history-block">
-              <h3 id="ficha-visits-heading">Visitas</h3>
-              <p>Historial de visitas ordenado cronológicamente</p>
-              {appointments.length ? (
-                <ul className="client-ficha__visits data-region">
-                  {appointments.map((appointment: Appointment) => (
-                    <li key={appointment.id}>
-                      <a className="table__link" href={pathForRoute({ view: "agenda", appointmentId: appointment.id })}>
-                        <span>{appointment.service}</span>
-                        <span>{formatDateTime(appointment.starts_at)}</span>
-                        <Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge>
-                      </a>
-                      {appointment.calendar_error ? (
-                        <>
-                          <StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`} />
-                          <Button variant="secondary" disabled={retryingCalendarId === appointment.id} onClick={() => void retryCalendar(appointment.id)}>
-                            Reintentar calendario
-                          </Button>
-                        </>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : <EmptyState title="No hay visitas" />}
-            </section>
-
-            <section aria-labelledby="ficha-conversations-heading" className="client-ficha__history-block">
-              <h3 id="ficha-conversations-heading">Conversaciones</h3>
-              <div className={surfaceClass(history.conversations.length)}>
-                <DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row) => String(row.id)} />
-              </div>
-            </section>
-
-            <section aria-labelledby="ficha-cases-heading" className="client-ficha__history-block">
-              <h3 id="ficha-cases-heading">Casos anteriores</h3>
-              <div className={surfaceClass(archivedCases.length)}>
-                <DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} />
-              </div>
-            </section>
-
-            <section aria-labelledby="ficha-messages-heading" className="client-ficha__history-block">
-              <h3 id="ficha-messages-heading">Mensajes</h3>
-              <div className={surfaceClass(history.messages.length)}>
-                <CollapsibleMessages total={history.messages_total} expanded={messagesExpanded} onToggle={toggleMessages}>
-                  <DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} />
-                </CollapsibleMessages>
-              </div>
-            </section>
-          </details>
         </div>
       </div>
+      </> : null}
+      {activeTab === "cases" ? <div className="detail-region__main">
+        <section aria-label="Casos anteriores" className="client-ficha__history-block"><h2>Casos anteriores</h2><div className={surfaceClass(archivedCases.length)}><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></div></section>
+      </div> : null}
+      {activeTab === "visits" ? <div className="detail-region__main">
+        <section aria-label="Visitas" className="client-ficha__history-block"><h2>Visitas</h2>{appointments.length ? <ul className="client-ficha__visits data-region">{appointments.map((appointment: Appointment) => <li key={appointment.id}><a className="table__link" href={pathForRoute({ view: "agenda", appointmentId: appointment.id })}><span>{appointment.service}</span><span>{formatDateTime(appointment.starts_at)}</span><Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge></a>{appointment.calendar_error ? <><StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`} /><Button variant="secondary" disabled={retryingCalendarId === appointment.id} onClick={() => void retryCalendar(appointment.id)}>Reintentar calendario</Button></> : null}</li>)}</ul> : <EmptyState title="No hay visitas" />}</section>
+      </div> : null}
+      {activeTab === "conversations" ? <div className="detail-region__main">
+        <section aria-label="Conversaciones" className="client-ficha__history-block"><h2>Conversaciones</h2><div className={surfaceClass(history.conversations.length)}><DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row) => String(row.id)} /></div></section>
+        <section aria-label="Mensajes" className="client-ficha__history-block"><h2>Mensajes</h2><div className={surfaceClass(history.messages.length)}><CollapsibleMessages total={history.messages_total} expanded={messagesExpanded} onToggle={toggleMessages}><DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} /></CollapsibleMessages></div></section>
+      </div> : null}
+        </>}
+      </Tabs>
     </PageFrame>
   );
 }

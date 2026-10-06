@@ -59,7 +59,7 @@ describe("ClientFicha page", () => {
 
     render(<ClientFicha customerId={customer.id} />);
     expect(screen.getByRole("heading", { name: "Cargando ficha" })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("heading", { name: `Ficha: ${customer.name}` })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: customer.name })).toBeInTheDocument());
     expect(screen.queryByRole("heading", { name: "Memo del cliente" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Memorias del cliente" })).toBeInTheDocument();
     expect(screen.getByText("Prefiere contacto por la tarde.")).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe("ClientFicha page", () => {
 
   it("preserves story wrappers for populated and no-memo variants", () => {
     render(<><ClientFichaView /><NoMemo /></>);
-    expect(screen.getAllByRole("heading", { name: "Ficha: Marcela Fuentes" })).toHaveLength(2);
+    expect(screen.getAllByRole("heading", { level: 1, name: "Marcela Fuentes" })).toHaveLength(2);
     expect(screen.queryByText("Todavía no hay memo para este cliente.")).not.toBeInTheDocument();
   });
 
@@ -94,10 +94,10 @@ describe("ClientFicha page", () => {
       ...fichaResponse,
       history: { ...fichaResponse.history, appointments: [failedCalendarAppointment] },
     }} memories={[]} onRetryCalendar={onRetryCalendar} />);
+    await user.click(screen.getByRole("tab", { name: "Visitas" }));
     expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
     // The approved appointment label is "Reservada" (DS StatusBadge table).
     expect(screen.getByText("Reservada")).toBeInTheDocument();
-    expect(screen.getByText("Historial de visitas ordenado cronológicamente")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toContainElement(screen.getByRole("heading", { name: "No se pudo sincronizar el calendario" }));
     await user.click(screen.getByRole("button", { name: "Reintentar calendario" }));
     await waitFor(() => expect(onRetryCalendar).toHaveBeenCalledWith(4));
@@ -118,9 +118,11 @@ describe("ClientFicha state matrix stories", () => {
     expect(await screen.findByRole("menuitem", { name: "Restaurar" })).toBeInTheDocument();
   });
 
-  it("renders the calendar-sync failure with its retry control", () => {
+  it("renders the calendar-sync failure with its retry control", async () => {
+    const user = userEvent.setup();
     render(<ClientFichaCalendarFailure />);
 
+    await user.click(screen.getByRole("tab", { name: "Visitas" }));
     expect(screen.getByRole("alert")).toHaveTextContent("No se pudo sincronizar el calendario");
     expect(screen.getByRole("button", { name: "Reintentar calendario" })).toBeInTheDocument();
   });
@@ -136,7 +138,7 @@ describe("ClientFicha state matrix stories", () => {
     render(<ClientFichaLoading />);
 
     expect(screen.getByRole("heading", { name: "Cargando ficha" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /^Ficha:/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: customer.name })).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -144,7 +146,7 @@ describe("ClientFicha state matrix stories", () => {
     render(<ClientFichaError />);
 
     expect(screen.getByRole("alert")).toHaveTextContent("No pudimos cargar la ficha");
-    expect(screen.getByRole("heading", { name: `Ficha: ${customer.name}` })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: customer.name })).toBeInTheDocument();
   });
 
   it("renders the denied state", () => {
@@ -158,6 +160,7 @@ describe("ClientFicha state matrix stories", () => {
 
     expect(container.querySelector(".detail-region__rail")).not.toBeNull();
     expect(container.querySelector(".detail-region__main")).not.toBeNull();
-    expect(container.querySelectorAll(".data-region").length).toBeGreaterThan(0);
+    expect(container.querySelector('[role="tablist"]')).not.toBeNull();
+    expect(container.querySelectorAll(".data-region").length).toBe(0);
   });
 });

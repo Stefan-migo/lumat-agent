@@ -599,6 +599,32 @@
   gap: var(--space-2);
   justify-items: start;
 }
+.client-ficha__identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+.client-ficha-page > .page-frame__titlebar { display: none; }
+.client-ficha__identity-person,
+.client-ficha__identity-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.client-ficha__identity h1,
+.client-ficha__identity p { margin: 0; }
+.client-ficha__identity h1 { font-size: var(--text-2xl); }
+.client-ficha__identity p { color: var(--text-muted); }
+.client-ficha__identity + .tabs .tabs__tab[aria-selected="true"] {
+  border-bottom-color: var(--corp-text);
+  font-weight: var(--weight-bold);
+}
+@media (max-width: 40rem) {
+  .client-ficha__identity { align-items: stretch; flex-direction: column; }
+  .client-ficha__identity-actions { display: grid; grid-template-columns: 1fr 1fr; }
+}
 /* ---- ClientMemories (MEM-6) ---- */
 .client-memories__memo {
   display: grid;

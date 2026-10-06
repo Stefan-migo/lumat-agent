@@ -114,8 +114,10 @@ describe("ClientFicha page grammar", () => {
   it("uses page rhythm and customer context without reserving a shell inspector", () => {
     render(<ClientFicha data={ficha} memories={memories} />);
 
-    expect(screen.getByRole("main")).toHaveTextContent("Ficha: Marcela Fuentes");
-    expect(screen.getByText("+56912345678 · Estado: Contactado")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Marcela Fuentes" })).toBeInTheDocument();
+    expect(screen.getAllByText(/Cliente desde/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Agendar visita" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ver conversación" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Resumen del cliente" })).toBeInTheDocument();
     expect(screen.getByRole("main").querySelector(".detail-region")).toBeInTheDocument();
     expect(screen.getByRole("main").querySelector(".detail-region__rail")).toBeInTheDocument();
@@ -132,20 +134,19 @@ describe("ClientFicha page grammar", () => {
     expect(screen.getAllByText("Prefiere contacto por la tarde.")).toHaveLength(1);
     expect(screen.getByText("operador · Confirmar por WhatsApp")).toBeInTheDocument();
     expect(screen.getAllByText("Contactado").length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("table")).toHaveLength(3);
-    expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Conversaciones" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Casos anteriores" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Mensajes" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Casos anteriores" })).not.toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: "Secciones de la ficha del cliente" })).toBeInTheDocument();
     expect(container.querySelector('ol[aria-label="Ciclo de vida de visitas"]')).toBeNull();
   });
 
-  it("renders active case facts and keeps it out of the archive", () => {
+  it("renders active case facts and keeps it out of the archive", async () => {
+    const user = userEvent.setup();
     render(<ClientFicha data={ficha} memories={memories} />);
     expect(screen.getByRole("heading", { name: "Caso activo" })).toBeInTheDocument();
     expect(screen.getByText("Emergencia sin reconocer")).toBeInTheDocument();
     expect(screen.getAllByText("operador").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Estado caso 2")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Casos" }));
     const archive = screen.getByRole("region", { name: "Casos anteriores" });
     expect(within(archive).queryByText("#2")).not.toBeInTheDocument();
     expect(within(archive).getByText("#1")).toBeInTheDocument();
@@ -159,7 +160,9 @@ describe("ClientFicha page grammar", () => {
     render(<ClientFicha customerId={7} data={withAmount} memories={memories} />);
 
     expect(screen.getByText(/125\.000/)).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Casos" }));
     expect(screen.getByText("Sin monto registrado")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Resumen" }));
     await user.click(screen.getByRole("button", { name: "Editar monto del caso" }));
     const dialog = screen.getByRole("dialog");
     await user.clear(within(dialog).getByLabelText("Monto CLP"));
@@ -458,7 +461,7 @@ describe("ClientFicha merge dialog", () => {
     await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
     await user.click(await within(dialog).findByRole("button", { name: "Confirmar fusión" }));
 
-    expect(await screen.findByRole("heading", { name: "Ficha: José Soto" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "José Soto" })).toBeInTheDocument();
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/8?messages_limit=10");
   });
 
@@ -487,7 +490,7 @@ describe("ClientFicha slice 2 — product register", () => {
 
     expect(container.querySelector("select")).toHaveClass("field__control");
     expect(container.querySelector("textarea")).toHaveClass("field__control");
-    expect(container.querySelectorAll("button:not(.btn):not(.dialog__close):not(.menu__trigger)")).toHaveLength(0);
+    expect(container.querySelectorAll("button:not(.btn):not(.dialog__close):not(.menu__trigger):not(.tabs__tab)")).toHaveLength(0);
   });
 
   // T11 — no raw backend identifier on the surface.
@@ -527,41 +530,16 @@ describe("ClientFicha slice 2 — product register", () => {
   });
 
   // T14 — history decomposed into named regions with Chilean-locale dates.
-  it("splits the history into named regions instead of one card", () => {
-    render(<ClientFicha data={ficha} memories={memories} />);
-
-    expect(screen.getByRole("region", { name: "Visitas" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Conversaciones" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Casos anteriores" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Mensajes" })).toBeInTheDocument();
-  });
-
-  // B3 — the history is a native disclosure, collapsed by default.
-  // This stack does not apply the UA rule that hides content inside a closed
-  // <details>: a role query still finds the region, the heading and the table there
-  // (empirically verified). These tests therefore assert the mechanism — the `open`
-  // property — and never visibility. A visibility assertion here would pass in both
-  // states and be a false negative. The real hiding is the browser's, which is
-  // exactly why the native element is the right substrate.
-  it("collapses the history behind a native disclosure that starts closed", () => {
-    const { container } = render(<ClientFicha data={ficha} memories={memories} />);
-
-    const history = container.querySelector<HTMLDetailsElement>(".client-ficha__history");
-    expect(history).not.toBeNull();
-    expect(history!.tagName).toBe("DETAILS");
-    expect(history!.open).toBe(false);
-    // The heading survives inside the summary, so the outline is unchanged.
-    expect(screen.getByRole("heading", { name: "Historial" })).toBeInTheDocument();
-  });
-
-  it("opens the history disclosure when the operator activates its summary", async () => {
+  it("moves existing history content into its matching tabs", async () => {
     const user = userEvent.setup();
-    const { container } = render(<ClientFicha data={ficha} memories={memories} />);
-
-    const history = container.querySelector<HTMLDetailsElement>(".client-ficha__history")!;
-    await user.click(screen.getByRole("heading", { name: "Historial" }));
-
-    expect(history.open).toBe(true);
+    render(<ClientFicha data={ficha} memories={memories} />);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Resumen", "Casos", "Visitas", "Conversaciones"]);
+    await user.click(screen.getByRole("tab", { name: "Casos" }));
+    expect(screen.getByRole("heading", { name: "Casos anteriores" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Visitas" }));
+    expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Conversaciones" }));
+    expect(screen.getByRole("heading", { name: "Mensajes" })).toBeInTheDocument();
   });
 
   it("formats history dates in the Chilean locale instead of slicing the ISO string", () => {
@@ -577,6 +555,7 @@ describe("ClientFicha slice 2 — product register", () => {
     const visit = { id: 42, service: "Reparación", customer_id: 7, case_id: 2, technician_id: 3, local_start: "2026-07-15T12:00:00Z", timezone: "UTC", starts_at: "2026-07-15T12:00:00Z", ends_at: "2026-07-15T13:00:00Z", duration_minutes: 60, status: "booked", calendar_error: "Proveedor no disponible" };
     render(<ClientFicha data={{ ...ficha, history: { ...ficha.history, appointments: [visit] } }} memories={memories} onRetryCalendar={vi.fn()} />);
 
+    await user.click(screen.getByRole("tab", { name: "Visitas" }));
     const link = screen.getByRole("link", { name: /Reparación/ });
     expect(link).toHaveAttribute("href", "/panel/app/agenda/42");
     const retry = screen.getByRole("button", { name: "Reintentar calendario" });
@@ -586,7 +565,7 @@ describe("ClientFicha slice 2 — product register", () => {
   });
 
   // T15 — the layout decision: two regions with a summary rail.
-  it("composes the ficha into a summary rail plus a main region, with no conversation component", () => {
+  it("composes the ficha into tabbed content, with no conversation component", () => {
     const { container } = render(<ClientFicha data={ficha} memories={memories} />);
 
     expect(container.querySelector(".detail-region__rail")).not.toBeNull();
@@ -595,25 +574,17 @@ describe("ClientFicha slice 2 — product register", () => {
   });
 
   // New requirement from the owner's review: the ficha had no way back.
-  it("offers an explicit back control to the clients list", () => {
-    render(<ClientFicha data={ficha} memories={memories} />);
-
-    expect(screen.getByRole("button", { name: "Volver a clientes" })).toBeInTheDocument();
-  });
-
-  it("returns through history when the back control is used", async () => {
+  it("keeps history messages reachable from the conversations tab", async () => {
     const user = userEvent.setup();
-    const back = vi.spyOn(window.history, "back").mockImplementation(() => {});
     render(<ClientFicha data={ficha} memories={memories} />);
-
-    await user.click(screen.getByRole("button", { name: "Volver a clientes" }));
-
-    expect(back).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("tab", { name: "Conversaciones" }));
+    expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute("href", "/panel/app/conversations/1");
   });
 
-  it("links each message to its conversation and offers expansion when more than ten exist", () => {
+  it("links each message to its conversation and offers expansion when more than ten exist", async () => {
+    const user = userEvent.setup();
     render(<ClientFicha data={ficha} memories={memories} />);
-
+    await user.click(screen.getByRole("tab", { name: "Conversaciones" }));
     expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute("href", "/panel/app/conversations/1");
     expect(screen.getByRole("button", { name: "Ver todos (12)" })).toBeInTheDocument();
   });
@@ -636,6 +607,8 @@ describe("ClientFicha slice 2 — product register", () => {
     });
 
     render(<ClientFicha customerId={7} memories={memories} />);
+    await screen.findByRole("tab", { name: "Conversaciones" });
+    await user.click(screen.getByRole("tab", { name: "Conversaciones" }));
     expect(await screen.findByText("Mensaje 3")).toBeInTheDocument();
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10");
     await user.click(screen.getByRole("button", { name: "Ver todos (12)" }));
