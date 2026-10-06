@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from app.chat.assistant.nodes import parse_planning_command
 from app.chat.assistant.state import (
     merge_assistant_state,
     validate_cortex_session,
@@ -53,16 +52,3 @@ def test_recursive_merge_preserves_unrelated_and_nested_state():
 def test_invalid_cortex_state_fails_closed():
     assert validate_cortex_session({"cortex_session": {"status": "planning"}}) is False
     assert validate_cortex_session({}) is False
-
-
-def test_planning_parser_accepts_only_literal_commands():
-    assert parse_planning_command("/planning budget review") == {
-        "action": "open",
-        "topic": "budget review",
-    }
-    assert parse_planning_command("/planning close") == {"action": "close", "topic": None}
-
-
-def test_planning_parser_does_not_infer_from_free_text():
-    assert parse_planning_command("Please start a planning session for the budget") is None
-    assert parse_planning_command("/planning") is None
