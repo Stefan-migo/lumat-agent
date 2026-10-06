@@ -973,7 +973,7 @@ def retrieve_kb(state: AssistantState) -> AssistantState:
                 top_k=kb.DEFAULT_TOP_K,
                 min_sim=kb.DEFAULT_MIN_SIM,
                 audience=None,
-                **({"project_id": project_id} if project_id is not None else {}),
+                **({"project_id": project_id} if project_id is not None else {"global_only": True}),
             )
         except Exception as error:
             detail = f"Knowledge-base retrieval failed: {error}"

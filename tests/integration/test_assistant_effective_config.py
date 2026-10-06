@@ -114,8 +114,18 @@ def test_assistant_kb_reads_global_and_current_project_only(fake_embedder):
             session, "kb.retrieve", {"query": query},
             project_id=assembled["effective"]["project_id"], role="admin",
         )
+        unresolved_preanswer = nodes.retrieve_kb({
+            "session": session,
+            "content": query,
+            "effective": {"project_id": None},
+        })
+        unresolved_tool_result = execute_tool(
+            session, "kb.retrieve", {"query": query}, project_id=None, role="admin",
+        )
 
     expected = set(doc_ids[:2])
     assert assembled["effective"]["project_id"] == projects[0].id
     assert {chunk["document_id"] for chunk in preanswer["kb_chunks"]} == expected
     assert {chunk["document_id"] for chunk in tool_result["result"]} == expected
+    assert {chunk["document_id"] for chunk in unresolved_preanswer["kb_chunks"]} == {doc_ids[0]}
+    assert {chunk["document_id"] for chunk in unresolved_tool_result["result"]} == {doc_ids[0]}

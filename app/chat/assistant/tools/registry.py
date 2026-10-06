@@ -331,7 +331,10 @@ def _operational_history(session, args: OperationalHistoryArgs):
 
 def _retrieve_kb(session, args: KbArgs, *, project_id: int | None = None):
     # The Lumat assistant is internal and deliberately reads the whole corpus, including internal documents.
-    return kb.retrieve(session, args.query, top_k=args.top_k, audience=None, project_id=project_id)
+    return kb.retrieve(
+        session, args.query, top_k=args.top_k, audience=None,
+        project_id=project_id, global_only=project_id is None,
+    )
 
 
 def _kpis(session, args: KpiArgs):
