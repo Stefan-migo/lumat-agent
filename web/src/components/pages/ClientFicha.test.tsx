@@ -152,6 +152,7 @@ describe("ClientFicha page grammar", () => {
     const archive = screen.getByRole("region", { name: "Casos anteriores" });
     expect(within(archive).queryByText("#2")).not.toBeInTheDocument();
     expect(within(archive).getByText("#1")).toBeInTheDocument();
+    expect(within(archive).getByText("Mostrando 1 caso anterior")).toBeInTheDocument();
   });
 
   it("renders a nullable CLP case amount and saves it through the existing update API", async () => {
