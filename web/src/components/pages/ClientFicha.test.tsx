@@ -556,6 +556,8 @@ describe("ClientFicha slice 2 — product register", () => {
     expect(within(dialog).getByRole("heading", { name: "Casos anteriores" })).toBeInTheDocument();
     expect(within(dialog).getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
     expect(within(dialog).getByRole("heading", { name: "Conversaciones" })).toBeInTheDocument();
+    expect(within(dialog).getByText("Gasfitería")).toBeInTheDocument();
+    expect(within(dialog).getByText("Coordinar visita")).toBeInTheDocument();
   });
 
   it("formats history dates in the Chilean locale instead of slicing the ISO string", () => {

@@ -537,9 +537,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
         </>}
       </Tabs>
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} title="Historial del cliente" description="Visitas, conversaciones y casos anteriores">
-        <section><h3>Casos anteriores</h3><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></section>
-        <section><h3>Visitas</h3><DataTable columns={[{key:"service",header:"Servicio",render:(row: Appointment)=>row.service},{key:"date",header:"Fecha",render:(row: Appointment)=>formatDateTime(row.starts_at)},{key:"status",header:"Estado",render:(row: Appointment)=><Badge>{appointmentStatusLabel(row.status)}</Badge>}] as Column<Appointment>[]} rows={appointments} rowKey={(row)=>String(row.id)}/></section>
-        <section><h3>Conversaciones</h3><DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row)=>String(row.id)}/></section>
+        <Card title="Casos anteriores"><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></Card>
+        <Card title="Visitas"><DataTable columns={[{key:"service",header:"Servicio",render:(row: Appointment)=>row.service},{key:"date",header:"Fecha",render:(row: Appointment)=>formatDateTime(row.starts_at)},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>}] as Column<Appointment>[]} rows={appointments} rowKey={(row)=>String(row.id)}/></Card>
+        <Card title="Conversaciones"><DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row)=>String(row.id)}/></Card>
       </Dialog>
     </PageFrame>
   );
