@@ -381,6 +381,40 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
       {activeTab === "summary" ? <>
       <div className="detail-region">
         <section className="detail-region__rail" aria-label="Resumen del cliente">
+          <Card className="client-ficha__data-card">
+            <header className="client-ficha__card-heading"><h2>Datos del cliente</h2><div className="client-ficha__customer-controls">
+              {customer.archived_at ? <Badge tone="warning">Cliente archivado</Badge> : null}
+              <Menu
+                trigger="icon"
+                label={`Acciones para ${customer.name ?? customer.phone_e164 ?? "cliente"}`}
+                items={[
+                  { value: "edit", label: "Editar", icon: Pencil, disabled: customerId === undefined || customerMutation !== null },
+                  { value: "state", label: "Cambiar estado", icon: RefreshCw, disabled: customerId === undefined || customerMutation !== null },
+                  { value: "consent", label: "Cambiar consentimiento", icon: ShieldCheck, disabled: customerId === undefined || customerMutation !== null },
+                  { value: "merge", label: "Fusionar con otro cliente", icon: ArrowLeftRight, tone: "danger", disabled: customerId === undefined || customerMutation !== null },
+                  { value: "archive", label: customer.archived_at ? "Restaurar" : "Archivar", icon: Archive, tone: "danger", disabled: customerId === undefined || customerMutation !== null },
+                ]}
+                onSelect={(value) => {
+                  if (value === "edit") openProfile();
+                  if (value === "state") { setSelectedState((customer.allowed_transitions ?? [])[0] ?? null); setStateFeedback(null); setStateDialogOpen(true); }
+                  if (value === "consent") { setSelectedConsent(customer.consent_status); setConsentFeedback(null); setConsentDialogOpen(true); }
+                  if (value === "merge") void openMerge();
+                  if (value === "archive") customer.archived_at ? void saveArchive() : setArchiveOpen(true);
+                }}
+              />
+              <LocalFeedback feedback={consentDialogOpen ? null : consentFeedback} />
+              <LocalFeedback feedback={stateDialogOpen ? null : stateFeedback} />
+              {profileOpen ? null : <LocalFeedback feedback={profileFeedback} />}
+              {archiveOpen ? null : <LocalFeedback feedback={archiveFeedback} />}
+            </div></header>
+            <dl className="detail-region__facts client-ficha__contact-facts">
+              <div><dt>Teléfono</dt><dd>{customer.phone_e164 ?? "—"}<Button className="client-ficha__copy-button" aria-label="Copiar teléfono" onClick={() => void navigator.clipboard?.writeText(customer.phone_e164 ?? "") }><Copy/></Button></dd></div>
+              <div><dt>Correo</dt><dd>{customer.email ?? "—"}<Button className="client-ficha__copy-button" aria-label="Copiar correo" onClick={() => void navigator.clipboard?.writeText(customer.email ?? "") }><Copy/></Button></dd></div>
+              <div><dt>Dirección</dt><dd>{customer.address ?? "—"}{customer.comuna ? <><br/>{customer.comuna}</> : null}<Button className="client-ficha__copy-button" aria-label="Copiar dirección" onClick={() => void navigator.clipboard?.writeText([customer.address, customer.comuna].filter(Boolean).join(", "))}><Copy/></Button></dd></div>
+              <div className="client-ficha__customer-state"><dt>Estado del cliente</dt><dd><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></dd></div>
+              <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
+            </dl>
+          </Card>
           <Dialog open={stateDialogOpen} onClose={() => setStateDialogOpen(false)} title="Cambiar estado del cliente" icon={RefreshCw} description="Selecciona el nuevo estado para este cliente.">
             <div className="client-ficha-dialog">
               <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div><div className="client-ficha-dialog__current"><span>Estado actual</span><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div></div>
@@ -432,40 +466,6 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
 
         <div className="detail-region__main">
           <div className="client-ficha__summary-column client-ficha__summary-column--left">
-          <Card className="client-ficha__data-card">
-            <header className="client-ficha__card-heading"><h2>Datos del cliente</h2><div className="client-ficha__customer-controls">
-              {customer.archived_at ? <Badge tone="warning">Cliente archivado</Badge> : null}
-              <Menu
-                trigger="icon"
-                label={`Acciones para ${customer.name ?? customer.phone_e164 ?? "cliente"}`}
-                items={[
-                  { value: "edit", label: "Editar", icon: Pencil, disabled: customerId === undefined || customerMutation !== null },
-                  { value: "state", label: "Cambiar estado", icon: RefreshCw, disabled: customerId === undefined || customerMutation !== null },
-                  { value: "consent", label: "Cambiar consentimiento", icon: ShieldCheck, disabled: customerId === undefined || customerMutation !== null },
-                  { value: "merge", label: "Fusionar con otro cliente", icon: ArrowLeftRight, tone: "danger", disabled: customerId === undefined || customerMutation !== null },
-                  { value: "archive", label: customer.archived_at ? "Restaurar" : "Archivar", icon: Archive, tone: "danger", disabled: customerId === undefined || customerMutation !== null },
-                ]}
-                onSelect={(value) => {
-                if (value === "edit") openProfile();
-                if (value === "state") { setSelectedState((customer.allowed_transitions ?? [])[0] ?? null); setStateFeedback(null); setStateDialogOpen(true); }
-                if (value === "consent") { setSelectedConsent(customer.consent_status); setConsentFeedback(null); setConsentDialogOpen(true); }
-                if (value === "merge") void openMerge();
-                if (value === "archive") customer.archived_at ? void saveArchive() : setArchiveOpen(true);
-                }}
-              />
-              <LocalFeedback feedback={consentDialogOpen ? null : consentFeedback} />
-              <LocalFeedback feedback={stateDialogOpen ? null : stateFeedback} />
-              {profileOpen ? null : <LocalFeedback feedback={profileFeedback} />}
-              {archiveOpen ? null : <LocalFeedback feedback={archiveFeedback} />}
-            </div></header>
-            <dl className="detail-region__facts client-ficha__contact-facts">
-              <div><dt>Teléfono</dt><dd>{customer.phone_e164 ?? "—"}<Button className="client-ficha__copy-button" aria-label="Copiar teléfono" onClick={() => void navigator.clipboard?.writeText(customer.phone_e164 ?? "") }><Copy/></Button></dd></div>
-              <div><dt>Correo</dt><dd>{customer.email ?? "—"}<Button className="client-ficha__copy-button" aria-label="Copiar correo" onClick={() => void navigator.clipboard?.writeText(customer.email ?? "") }><Copy/></Button></dd></div>
-              <div><dt>Dirección</dt><dd>{customer.address ?? "—"}{customer.comuna ? <><br/>{customer.comuna}</> : null}<Button className="client-ficha__copy-button" aria-label="Copiar dirección" onClick={() => void navigator.clipboard?.writeText([customer.address, customer.comuna].filter(Boolean).join(", "))}><Copy/></Button></dd></div>
-              <div className="client-ficha__customer-state"><dt>Estado del cliente</dt><dd><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></dd></div>
-              <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
-            </dl>
-          </Card>
           <ClientMemories memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} compact conversationId={history.conversations[0]?.id} onViewAll={() => setActiveTab("conversations")} />
           <Card className="client-ficha__notes-card">
             <header className="client-ficha__card-heading"><h2>Notas</h2><Button variant="secondary" aria-expanded={noteComposerOpen} disabled={customerId === undefined || mutation !== null} onClick={() => setNoteComposerOpen(true)}>⊕ Agregar nota</Button></header>

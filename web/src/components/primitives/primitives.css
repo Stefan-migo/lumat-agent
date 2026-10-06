@@ -611,8 +611,9 @@
 .client-ficha-page .detail-region__rail,
 .client-ficha-page .detail-region__main { display: contents; }
 .client-ficha__summary-column { display: grid; align-content: start; gap: var(--space-4); min-width: 0; }
-.client-ficha__summary-column--left { grid-column: 1; }
-.client-ficha__summary-column--right { grid-column: 2; }
+.client-ficha__data-card { grid-column: 1; grid-row: 1; }
+.client-ficha__summary-column--left { grid-column: 1; grid-row: 2; }
+.client-ficha__summary-column--right { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
 .client-ficha__equipment-slot { display: contents; }
 .client-ficha__memory-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
 .client-ficha__card-heading { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); min-width:0; }
@@ -691,7 +692,7 @@
 }
 @media (max-width: 64rem) {
   .client-ficha-page .detail-region { grid-template-columns: minmax(0, 1fr); }
-  .client-ficha__summary-column--left, .client-ficha__summary-column--right { grid-column: 1; }
+  .client-ficha__summary-column--left, .client-ficha__summary-column--right { grid-column: 1; grid-row: auto; }
 }
 /* ---- ClientMemories (MEM-6) ---- */
 .client-memories__memo {
