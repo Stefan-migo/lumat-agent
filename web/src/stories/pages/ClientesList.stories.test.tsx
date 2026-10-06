@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { clients as customers } from "./_shared/mockData/clients";
@@ -149,7 +149,7 @@ describe("ClientesList appearance axis (amended DS-GRAMMAR-1)", () => {
 
 describe("ClientesList API behavior", () => {
   it("adds the search query to the clients API request", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ clients: customers.slice(0, 1), query: "Jorge" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -162,7 +162,7 @@ describe("ClientesList API behavior", () => {
     fireEvent.change(search, { target: { value: "Jorge" } });
 
     await waitFor(() => {
-      expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Jorge")).toBe(true);
+      expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Jorge&sort=created_desc")).toBe(true);
     });
   });
 
@@ -173,7 +173,7 @@ describe("ClientesList API behavior", () => {
   });
 
   it("encodes spaces in a search query before requesting the API", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ clients: [], query: "Marcela Fuentes" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -187,7 +187,7 @@ describe("ClientesList API behavior", () => {
     });
 
     await waitFor(() => {
-      expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Marcela+Fuentes")).toBe(true);
+      expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Marcela+Fuentes&sort=created_desc")).toBe(true);
     });
   });
 });

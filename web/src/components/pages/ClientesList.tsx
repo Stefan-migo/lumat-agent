@@ -31,7 +31,7 @@ export interface ClientesListProps {
   query?: string;
 }
 
-const columns = (onOpenClient?: (id: number) => void, selected: Set<number> = new Set(), toggle: (id: number) => void = () => {}, sort: string = "created_desc"): Column<Customer>[] => [
+const columns = (onOpenClient?: (id: number) => void, selected: Set<number> = new Set(), toggle: (id: number) => void = () => {}): Column<Customer>[] => [
   { key: "select", header: "", render: (customer) => <input type="checkbox" aria-label={`Seleccionar ${customer.name ?? customer.phone_e164 ?? "cliente"}`} checked={selected.has(customer.id)} onChange={() => toggle(customer.id)} /> },
   {
     key: "name",
@@ -236,7 +236,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
         {state === "loading" ? null : data && data.length > 0 ? (
           <div className="data-region">
              <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar todos" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar todos</label>{selected.size ? <span>{selected.size} seleccionados · Acciones masivas</span> : null}</div>
-             <DataTable columns={columns(onOpenClient, selected, toggleSelected, sort)} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
+             <DataTable columns={columns(onOpenClient, selected, toggleSelected)} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
               // The row's identity lives in the trigger's accessible name, not in every
               // action label: two pills repeating the customer name dominated the cell
               // (DESIGN_SYSTEM.md:475). `Archivar` is the only destructive action and

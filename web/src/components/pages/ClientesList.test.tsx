@@ -98,7 +98,9 @@ describe("ClientesList", () => {
   it("reports the pluralised count for several records", () => {
     render(<ClientesList data={customers} state="ready" />);
 
-    expect(screen.getByText("3")).toBeInTheDocument();
+    const titleRow = screen.getByRole("heading", { name: "Clientes" }).closest(".page-header__title-row");
+    expect(titleRow).not.toBeNull();
+    expect(within(titleRow as HTMLElement).getByText("3")).toBeInTheDocument();
   });
 
   // T3 — the singular form. Today the meta renders "1 clientes".
