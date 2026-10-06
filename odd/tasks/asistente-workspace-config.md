@@ -71,7 +71,8 @@ is dead flexibility. They arrive with their slices. The cheapest correct slice i
 }
 ```
 
-- Missing / `{}` config → the project inherits the global prompt completely (D12).
+- Missing / `{}` config → the project inherits the global **prompt** completely (D12); for
+  **tools** it enables no opt-in (D7), so it gets the `default` tier ∩ role (see AC1 revision).
 - `instructions` are **additive**; they never replace the global persona (D10).
 - `tool_policy.opt_in_enabled` selects which **opt-in** tools the project enables. A project
   can never enable a tool outside `global_whitelist ∩ role_allowlist` (D7/D11).
@@ -97,6 +98,9 @@ is dead flexibility. They arrive with their slices. The cheapest correct slice i
    turn a default tool off. No `disabled` list in the model.
 2. **A2 — thread override reads existing `assistant_state`.** No new thread column; the key
    is read from the JSONB field that already exists.
+3. **A3 — opt-in tier is OFF by default. CONFIRMED by the owner (2026-10-06).** Empty/absent
+   `tool_policy` enables no opt-in tool (D7). This resolved a conflict between D7 and the original
+   AC1 ("byte-identical to today"): the owner chose opt-in-off, so AC1 was revised (see above).
 
 ## Constraints
 
@@ -110,8 +114,11 @@ is dead flexibility. They arrive with their slices. The cheapest correct slice i
   rewritten). Test DB: `eval "$(bash infra/test-db.sh env)"`; do **not** source
   `infra/.env` (it points at the compose host `db`, unresolvable from the host).
 - Atomic commits, one concern each, ≤5 files; conventional commits; no `Co-Authored-By`.
-- Preserve existing behavior when no project config exists: the resolved catalog and prompt
-  must be identical to today's.
+- **Opt-in default (D7, owner-confirmed 2026-10-06)**: a project/thread with no `tool_policy`
+  enables **no** opt-in tool. Effective tools = `global_whitelist ∩ role_allowlist ∩ default_tier`
+  (17). This **intentionally changes** today's planner catalog (24), which was unfiltered by role
+  and un-gated for opt-in tools. Slice 1 has no config editor yet (Slice 6), so real projects stay
+  on the safe default until then.
 
 ## Tasks
 
@@ -122,10 +129,10 @@ is dead flexibility. They arrive with their slices. The cheapest correct slice i
 - [x] **T2 (RED)** Tier metadata. Add `tier: Literal["default","opt_in"]` to
       `ToolDefinition`; classify all 24. Tests: every tool has a tier; `default` is exactly
       the 17 above; `default ∪ opt_in` == `TOOL_REGISTRY`.
-- [ ] **T3 (RED)** Resolver `resolve_effective_config(session, thread, role) -> EffectiveConfig`
+- [x] **T3 (RED)** Resolver `resolve_effective_config(session, thread, role) -> EffectiveConfig`
       (instructions + effective tool whitelist). Tests: global-only; project narrows opt-in;
-      project cannot add beyond role; thread overrides opt-in only; empty project inherits
-      global; a non-permitted opt-in tool stays out.
+      project cannot add beyond role; thread overrides opt-in only; empty project yields the
+      default tier (opt-in off, D7); a non-permitted opt-in tool stays out.
 - [ ] **T4 (GREEN)** Wire into the turn: planner catalog uses the effective whitelist;
       system prompt = global persona + project instructions (appended, never replaced);
       guardrails enforce the effective set. Existing planner/guardrail tests stay green.
@@ -133,8 +140,12 @@ is dead flexibility. They arrive with their slices. The cheapest correct slice i
 
 ## Acceptance criteria
 
-- **AC1** `Project.config` exists, defaults to `{}`, and a project with empty config yields
-  byte-identical planner catalog and system prompt to today.
+- **AC1 (revised 2026-10-06 — owner decision D7)** `Project.config` exists and defaults to `{}`.
+  A project with empty config enables **no opt-in tool**: its effective tool set is the 17
+  `default`-tier tools ∩ role_allowlist ∩ global whitelist, and its system prompt is the global
+  persona unchanged (no additive instructions). The planner catalog therefore narrows from today's
+  unfiltered 24 — this is the intended safe-default behavior, superseding the original
+  "byte-identical to today" criterion.
 - **AC2** Every tool declares a tier; `default` = 17, `opt_in` = 7, union = 24.
 - **AC3** A project config enabling an opt-in tool the role cannot use is still denied
   (intersection enforced in code, not by prompt).
@@ -173,3 +184,6 @@ is dead flexibility. They arrive with their slices. The cheapest correct slice i
   to expect `040`. **Verify:** `.venv/bin/python -m pytest tests/unit tests/integration/test_migrations.py tests/integration/test_db.py` → exit 0 (test DB on port 6321, `infra/.env` present). Strict TDD RED observed (module missing during collection) → GREEN.
 - **2026-10-06** — **T1 review approved.** RDD on; assess `high_risk` → 4R review lineaged `review-819ff0cf5ae9bf9d` (risk/resilience/readability/reliability) returned **0 findings**, `state: approved`, acknowledgement `authority: burned`, correction budget 117 unused. No doc commit added for the review record itself (rolled into this update).
 - **2026-10-06** — **T2 complete.** `3fcf96c0` adds required `tier: Literal["default","opt_in"]` as the last field of `ToolDefinition` and classifies all 24 registry entries: **17 `default` / 7 `opt_in`**. Updated the two `ToolDefinition(...)` test doubles (`test_assistant_tools.py`, `test_assistant_tool_roles.py`). New `tests/unit/test_tool_tiers.py` asserts every tool declares a known tier, the exact default/opt_in sets, disjointness, and union == `TOOL_REGISTRY`. **Verify:** `tests/unit` → exit 0; independent spot check confirms `{'default': 17, 'opt_in': 7}`. Strict TDD RED (`AttributeError: 'ToolDefinition' object has no attribute 'tier'`) → GREEN.
+- **2026-10-06** — **T2 RDD assessment:** `review assess --base-ref 2c58ddb0 --committed-only` → `review_due: false`, `under_budget` (5 paths / 99 lines). Boundary stays `2c58ddb0`; T2 accumulates until the slice budget is reached.
+- **2026-10-06** — **Owner decision (A3 / D7): opt-in OFF by default.** Surfaced a spec conflict: D7 (`default` always on, opt-in selectable) yields 17 tools for an empty project, but the original AC1 asked for a byte-identical 24-tool catalog. Owner chose D7; AC1 + constraint revised.
+- **2026-10-06** — **T3 complete.** `418be75d` adds `EffectiveConfig` + `resolve_effective_config(session, thread, role)` to `app/services/project_config.py`: project looked up by `thread.proyecto` slug (owner-scoped, mirrors `agent_context`; skips `default`/empty), thread `assistant_state["tool_policy"]` **replaces** the project opt-in selection, result = `global ∩ role ∩ (default ∪ (opt_in ∩ enabled))` preserving global order; `role` accepts `UserRole | str` and fails closed. New `tests/unit/test_effective_config.py` (7 tests). **Verify:** `tests/unit` → exit 0; independent spot check: empty/admin=17 (no `web.search`), project+`web.search`=18, thread override=only `web.fetch`, tecnico=9 (loses `customers.search`, keeps `memory.read`). Strict TDD RED (`ImportError: resolve_effective_config`) → GREEN.
