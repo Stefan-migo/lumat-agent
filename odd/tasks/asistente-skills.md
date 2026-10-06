@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-skills`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-asistente-skills`
 **Base**: `1b689229` (= `main` = `origin/main`, merge of PR #484)
-**Status**: slice 2 in progress (T1 done; T2–T7 pending)
+**Status**: slice 2 in progress (T1–T2 done and reviewed; T3–T7 pending)
 
 ## Objective
 
@@ -128,7 +128,7 @@ effective_skills = dedup_by_name(global_index + project_index)   # project wins
       path, body)` + `global_skill_index(config)` (no body read) + `load_skill_body(defn)`.
       Tests: index order/descriptions; body loads on demand; missing body file fails closed;
       a WhatsApp stub is never part of the index.
-- [ ] **T2 (RED)** Project layer + effective index. `ProjectSkill(name, description, body)`
+- [x] **T2 (RED)** Project layer + effective index. `ProjectSkill(name, description, body)`
       on `ProjectConfig.skills`; `EffectiveConfig.skills_index`;
       `resolve_skill_index(session, thread)` = global + project, project overrides by name,
       dedup, order preserved. Tests: global-only; project adds; project overrides global by
@@ -199,4 +199,28 @@ effective_skills = dedup_by_name(global_index + project_index)   # project wins
 - **2026-10-06** — **T1 RDD assessment:** `assess --base-ref 1b689229 --committed-only` →
   `review_due: false`, `under_budget` (5 paths / 351 lines, medium). Boundary stays `1b689229`;
   T1 accumulates until the slice budget is reached.
+- **2026-10-06** — **T2 complete.** `cab70481` adds the project skill layer and the merge:
+  `ProjectSkill` + `ProjectConfig.skills` (non-empty fields, unique names, fail closed),
+  `EffectiveConfig.skills_index`, and the merge in `resolve_effective_config` (global order
+  preserved; a project skill with the same name **replaces in place**; project-only entries
+  appended). Tests: `tests/unit/test_effective_config.py` (+3), `tests/unit/test_project_config.py`
+  (+2). **Verify:** focused suite (`test_effective_config` + `test_skills` + `test_project_config`)
+  → exit 0, 20 tests; independent spot check re-ran it green. Strict TDD RED (`skills_index` /
+  `ProjectConfig.skills` missing; blank/duplicate not rejected) → GREEN.
+- **2026-10-06** — **Slice-budget review approved.** `assess --base-ref 1b689229 --committed-only`
+  → `review_due: true` (`slice_budget_reached`, 8 paths / 455 lines, medium). Native selected the
+  `review-reliability` lens (lineage `review-fba9ba3a8f530dfe`); **state: approved**,
+  acknowledgement `authority: burned`, correction budget 200 unused. One **advisory** finding
+  (non-blocking) recorded under Follow-ups.
+
+## Follow-ups (post-Slice-2, non-blocking)
+
+- **R3-001 (WARNING, advisory)** — `app/services/skills.py:34-39`: `load_skill_body` joins the
+  registry-declared `path` to `_AGENT_DIR` without constraining the resolved path to that tree, so
+  a `..` component could read outside it. The registry is git-controlled (trusted), so impact is
+  low; the project layer carries inline bodies, not paths. Harden by resolving and asserting the
+  path stays under `_AGENT_DIR` when this module is next touched (needs its own reviewed commit).
+- **End-to-end override test** — `test_project_skill_overrides_global_skill_in_place` monkeypatches
+  the global index because no global skill exists until T6. After T6 seeds one, add an end-to-end
+  override assertion against the real registry.
 </content>
