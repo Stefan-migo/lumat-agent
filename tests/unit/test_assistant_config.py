@@ -7,7 +7,7 @@ from app.agent_registry import RegistryError
 from app.chat.assistant.tools.registry import AUTONOMOUS_WRITE_ALLOWLIST
 
 
-def test_complete_assistant_configuration_loads_without_skills(repo_root):
+def test_complete_assistant_configuration_loads_declared_skill_index(repo_root):
     config = load_assistant_config(repo_root / "agent" / "registry.yaml")
 
     assert config.name == "assistant"
@@ -15,7 +15,13 @@ def test_complete_assistant_configuration_loads_without_skills(repo_root):
     assert set(config.prompts) == {"plan", "respond", "classify"}
     assert "<available_tools>" in config.prompts["plan"]
     assert "<available_skills>{{available_skills}}</available_skills>" in config.prompts["plan"]
-    assert config.skills == ()
+    assert [(skill.name, skill.description, skill.path) for skill in config.skills] == [
+        (
+            "memoria-tukulpan",
+            "Tukulpan memory: own vs customer axis, when to read/write, and correct memory.* argument shapes.",
+            "skills/assistant/memoria-tukulpan.md",
+        )
+    ]
     assert "SECRET SKILL BODY" not in config.prompts["plan"]
     assert config.memoria_scope == "panel"
 

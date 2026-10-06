@@ -7,7 +7,7 @@ from app.chat.assistant.tools.registry import TOOL_REGISTRY
 from app.models import UserRole
 from app.services.prompts import load_assistant_config
 from app.services.project_config import resolve_effective_config
-from app.services.skills import SkillDefinition, global_skill_index
+from app.services.skills import global_skill_index
 
 
 DEFAULT_TOOLS = {
@@ -62,20 +62,21 @@ def test_project_skill_is_appended_to_effective_index():
     )
 
 
-def test_project_skill_overrides_global_skill_in_place(monkeypatch):
-    global_skill = SkillDefinition("existing", "Global description", "global", "skill.md")
-    monkeypatch.setattr("app.services.project_config.global_skill_index", lambda config: (global_skill,))
+def test_project_skill_overrides_global_skill_in_place():
+    global_index = global_skill_index(load_assistant_config())
+    global_skill = next(skill for skill in global_index if skill.name == "memoria-tukulpan")
     effective = resolve(
         proyecto="workspace",
         config={"skills": [{"name": global_skill.name, "description": "Project description", "body": "Project body"}]},
     )
 
     assert len([skill for skill in effective.skills_index if skill.name == global_skill.name]) == 1
-    assert effective.skills_index[0].name == global_skill.name
-    assert effective.skills_index[0].description == "Project description"
-    assert effective.skills_index[0].scope == "project"
-    assert effective.skills_index[0].path is None
-    assert effective.skills_index[0].body == "Project body"
+    overridden = next(skill for skill in effective.skills_index if skill.name == global_skill.name)
+    assert effective.skills_index.index(overridden) == global_index.index(global_skill)
+    assert overridden.description == "Project description"
+    assert overridden.scope == "project"
+    assert overridden.path is None
+    assert overridden.body == "Project body"
 
 
 def test_empty_project_config_enables_default_tier_only():
