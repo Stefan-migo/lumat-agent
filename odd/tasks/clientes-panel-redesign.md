@@ -85,6 +85,8 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
 - [x] Shared button primitive inherits the UI font and uses the tokenized semibold control-label weight (`b7a7f2d1`, `acc74c34`).
 - [x] Render paginated cliente cards on mobile, preserving selection and row actions; retain the horizontally scrollable nine-tab strip (`f19a051d`).
 - [x] Constrain mobile card/table descendants to the viewport, move selection and actions into the identity row, and compact the detail grid (`bc9c6216`).
+- [x] Restore the clientes caption and pagination controls in the mobile footer without changing Usuarios (`862ee7ec`).
+- [x] Add selected-client bulk archive/restore, including mixed-selection subsets and partial-failure recovery (`0d06865a`).
 
 ### CL-3 — Client ficha shell
 - [ ] Identity header: avatar, name, "Cliente desde [date]", Agendar visita/Ver conversación
