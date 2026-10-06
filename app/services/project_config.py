@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app.chat.assistant.tools.registry import TOOL_REGISTRY, is_tool_allowed_for_role
 from app.models import Project, UserRole
 from app.services.prompts import load_assistant_config
+from app.services.skills import SkillDefinition, global_skill_index
 
 
 class ToolPolicy(BaseModel):
@@ -22,15 +23,38 @@ class ToolPolicy(BaseModel):
         return names
 
 
+class ProjectSkill(BaseModel):
+    name: str
+    description: str
+    body: str
+
+    @field_validator("name", "description", "body")
+    @classmethod
+    def validate_non_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Project skill fields must not be empty")
+        return value
+
+
 class ProjectConfig(BaseModel):
     instructions: str = ""
     tool_policy: ToolPolicy = ToolPolicy()
+    skills: list[ProjectSkill] = []
+
+    @field_validator("skills")
+    @classmethod
+    def validate_unique_skill_names(cls, skills: list[ProjectSkill]) -> list[ProjectSkill]:
+        names = [skill.name for skill in skills]
+        if len(names) != len(set(names)):
+            raise ValueError("Duplicate project skill name")
+        return skills
 
 
 @dataclass(frozen=True)
 class EffectiveConfig:
     instructions: str
     tools_whitelist: tuple[str, ...]
+    skills_index: tuple[SkillDefinition, ...]
 
 
 def resolve_effective_config(session, thread, role: UserRole | str) -> EffectiveConfig:
@@ -46,6 +70,21 @@ def resolve_effective_config(session, thread, role: UserRole | str) -> Effective
         if project is not None:
             project_cfg = ProjectConfig.model_validate(project.config or {})
 
+    global_skills = global_skill_index(load_assistant_config())
+    project_skills = {
+        skill.name: SkillDefinition(
+            name=skill.name,
+            description=skill.description,
+            scope="project",
+            path=None,
+            body=skill.body,
+        )
+        for skill in project_cfg.skills
+    }
+    skills_index = tuple(
+        project_skills.pop(skill.name, skill) for skill in global_skills
+    ) + tuple(project_skills.values())
+
     enabled_opt_in = project_cfg.tool_policy.opt_in_enabled
     assistant_state = thread.assistant_state or {}
     if "tool_policy" in assistant_state:
@@ -60,4 +99,8 @@ def resolve_effective_config(session, thread, role: UserRole | str) -> Effective
         if is_tool_allowed_for_role(name, role_value)
         and (TOOL_REGISTRY[name].tier == "default" or name in enabled)
     )
-    return EffectiveConfig(instructions=project_cfg.instructions, tools_whitelist=tools)
+    return EffectiveConfig(
+        instructions=project_cfg.instructions,
+        tools_whitelist=tools,
+        skills_index=skills_index,
+    )
