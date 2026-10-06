@@ -80,6 +80,11 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
 - [x] Owner decision: **Reinicio de ciclo por re-contacto** — inbound WhatsApp from a `finalizado`, `postventa`, or `cancelado` customer resets only the customer state to `nuevo` and audits `customer.cycle_restarted`; manual CR-3 transitions remain unchanged, and conversation/case history is preserved.
 - [x] Owner corrections (2026-10-06): state-option cards inherit the official UI font; list tabs show Todos plus all eight customer states in canonical order with client-side counts and filtering.
 
+### CL-2a-mobile
+- [x] R3-001: reset pagination and selection when the archived filter changes (`ae0459d5`).
+- [x] Shared button primitive inherits the UI font (`b7a7f2d1`).
+- [x] Render paginated cliente cards on mobile, preserving selection and row actions; retain the horizontally scrollable nine-tab strip (`f19a051d`).
+
 ### CL-3 — Client ficha shell
 - [ ] Identity header: avatar, name, "Cliente desde [date]", Agendar visita/Ver conversación
       (`clientes-011`, blocker).
