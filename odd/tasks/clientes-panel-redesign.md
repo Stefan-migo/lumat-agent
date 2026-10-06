@@ -82,8 +82,9 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
 
 ### CL-2a-mobile
 - [x] R3-001: reset pagination and selection when the archived filter changes (`ae0459d5`).
-- [x] Shared button primitive inherits the UI font (`b7a7f2d1`).
+- [x] Shared button primitive inherits the UI font and uses the tokenized semibold control-label weight (`b7a7f2d1`, `acc74c34`).
 - [x] Render paginated cliente cards on mobile, preserving selection and row actions; retain the horizontally scrollable nine-tab strip (`f19a051d`).
+- [x] Constrain mobile card/table descendants to the viewport, move selection and actions into the identity row, and compact the detail grid (`bc9c6216`).
 
 ### CL-3 — Client ficha shell
 - [ ] Identity header: avatar, name, "Cliente desde [date]", Agendar visita/Ver conversación
