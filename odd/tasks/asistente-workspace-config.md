@@ -119,7 +119,7 @@ is dead flexibility. They arrive with their slices. The cheapest correct slice i
       `ProjectConfig` Pydantic model (`instructions: str = ""`,
       `tool_policy.opt_in_enabled: list[str] = []`) that fails closed on unknown tool names.
       Tests: empty config resolves to global defaults; invalid tool name is rejected.
-- [ ] **T2 (RED)** Tier metadata. Add `tier: Literal["default","opt_in"]` to
+- [x] **T2 (RED)** Tier metadata. Add `tier: Literal["default","opt_in"]` to
       `ToolDefinition`; classify all 24. Tests: every tool has a tier; `default` is exactly
       the 17 above; `default ∪ opt_in` == `TOOL_REGISTRY`.
 - [ ] **T3 (RED)** Resolver `resolve_effective_config(session, thread, role) -> EffectiveConfig`
@@ -171,3 +171,5 @@ is dead flexibility. They arrive with their slices. The cheapest correct slice i
   `tests/unit/test_project_config.py`; integration default-`{}` round-trip in
   `tests/integration/test_db.py`. `11147c8e` extends `test_schema_migrations_records_version`
   to expect `040`. **Verify:** `.venv/bin/python -m pytest tests/unit tests/integration/test_migrations.py tests/integration/test_db.py` → exit 0 (test DB on port 6321, `infra/.env` present). Strict TDD RED observed (module missing during collection) → GREEN.
+- **2026-10-06** — **T1 review approved.** RDD on; assess `high_risk` → 4R review lineaged `review-819ff0cf5ae9bf9d` (risk/resilience/readability/reliability) returned **0 findings**, `state: approved`, acknowledgement `authority: burned`, correction budget 117 unused. No doc commit added for the review record itself (rolled into this update).
+- **2026-10-06** — **T2 complete.** `3fcf96c0` adds required `tier: Literal["default","opt_in"]` as the last field of `ToolDefinition` and classifies all 24 registry entries: **17 `default` / 7 `opt_in`**. Updated the two `ToolDefinition(...)` test doubles (`test_assistant_tools.py`, `test_assistant_tool_roles.py`). New `tests/unit/test_tool_tiers.py` asserts every tool declares a known tier, the exact default/opt_in sets, disjointness, and union == `TOOL_REGISTRY`. **Verify:** `tests/unit` → exit 0; independent spot check confirms `{'default': 17, 'opt_in': 7}`. Strict TDD RED (`AttributeError: 'ToolDefinition' object has no attribute 'tier'`) → GREEN.
