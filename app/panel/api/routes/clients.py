@@ -27,6 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
 
 from app.models import (
+    CustomerNote,
     CustomerEquipment,
     CustomerState,
     Memory,
@@ -394,6 +395,70 @@ def client_add_note(
     )
     session.commit()
     return {"ok": True, "note": to_note_dict(entry)}
+
+
+@router.patch("/clients/{customer_id}/notes/{note_id}")
+def client_update_note(
+    customer_id: int,
+    note_id: int,
+    body: NoteBody,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    _customer_or_404(session, customer_id)
+    entry = session.scalar(
+        select(CustomerNote).where(
+            CustomerNote.id == note_id,
+            CustomerNote.customer_id == customer_id,
+        )
+    )
+    if entry is None:
+        raise HTTPException(status_code=404, detail="note not found")
+    text = body.note.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="note cannot be empty")
+    before = {"note": entry.note}
+    customers.update_note(session, entry, text)
+    record_audit(
+        session,
+        actor=current.username,
+        action="customer.note_updated",
+        entity="customer",
+        entity_id=str(customer_id),
+        before=before,
+        after={"note": text},
+    )
+    session.commit()
+    return {"ok": True, "note": to_note_dict(entry)}
+
+
+@router.delete("/clients/{customer_id}/notes/{note_id}")
+def client_delete_note(
+    customer_id: int,
+    note_id: int,
+    session: Session = Depends(get_db),
+    current: User = Depends(require_operator_json),
+) -> dict:
+    _customer_or_404(session, customer_id)
+    entry = session.scalar(
+        select(CustomerNote).where(
+            CustomerNote.id == note_id,
+            CustomerNote.customer_id == customer_id,
+        )
+    )
+    if entry is None:
+        raise HTTPException(status_code=404, detail="note not found")
+    record_audit(
+        session,
+        actor=current.username,
+        action="customer.note_deleted",
+        entity="customer",
+        entity_id=str(customer_id),
+        before={"note": entry.note},
+    )
+    customers.delete_note(session, entry)
+    session.commit()
+    return {"ok": True}
 
 
 @router.get("/clients/{customer_id}/equipment")

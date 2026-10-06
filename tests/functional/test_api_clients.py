@@ -105,6 +105,8 @@ def test_clients_endpoints_require_login_401_json(client):
         ("get", "/panel/api/clients/1"),
         ("post", "/panel/api/clients/1/state"),
         ("post", "/panel/api/clients/1/notes"),
+        ("patch", "/panel/api/clients/1/notes/1"),
+        ("delete", "/panel/api/clients/1/notes/1"),
         ("post", "/panel/api/clients/1/archive"),
         ("post", "/panel/api/clients/1/unarchive"),
         ("post", "/panel/api/clients"),
@@ -605,6 +607,97 @@ def test_client_ficha_includes_notes(client, make_user):
     assert notes[0]["author"] == "oper"
     assert notes[0]["customer_id"] == customer_id
     datetime.fromisoformat(notes[0]["created_at"])
+
+
+def test_client_note_edit_audits_and_updates_ficha(client, make_user):
+    customer_id = _seed_customer()
+    with SessionLocal() as session:
+        entry = CustomerNote(customer_id=customer_id, note="old note", author="oper")
+        session.add(entry)
+        session.commit()
+        note_id = entry.id
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.patch(
+        f"/panel/api/clients/{customer_id}/notes/{note_id}", json={"note": "  new note  "}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["note"]["note"] == "new note"
+    ficha = client.get(f"/panel/api/clients/{customer_id}")
+    assert ficha.status_code == 200
+    assert [note["note"] for note in ficha.json()["notes"]] == ["new note"]
+    with SessionLocal() as session:
+        audit = session.scalar(
+            select(AuditLog).where(AuditLog.action == "customer.note_updated")
+        )
+        assert audit is not None
+
+
+def test_client_note_delete_audits_and_removes_from_ficha(client, make_user):
+    customer_id = _seed_customer()
+    with SessionLocal() as session:
+        entry = CustomerNote(customer_id=customer_id, note="remove me", author="oper")
+        session.add(entry)
+        session.commit()
+        note_id = entry.id
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.delete(f"/panel/api/clients/{customer_id}/notes/{note_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    ficha = client.get(f"/panel/api/clients/{customer_id}")
+    assert ficha.status_code == 200
+    assert ficha.json()["notes"] == []
+    with SessionLocal() as session:
+        audit = session.scalar(
+            select(AuditLog).where(AuditLog.action == "customer.note_deleted")
+        )
+        assert audit is not None
+
+
+def test_client_note_patch_delete_missing_or_foreign_note_return_404(client, make_user):
+    customer_id = _seed_customer()
+    other_customer_id = _seed_customer(phone="+56933334444")
+    with SessionLocal() as session:
+        entry = CustomerNote(customer_id=other_customer_id, note="foreign", author="oper")
+        session.add(entry)
+        session.commit()
+        foreign_note_id = entry.id
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    patch = client.patch(
+        f"/panel/api/clients/{customer_id}/notes/{foreign_note_id}",
+        json={"note": "updated"},
+    )
+    delete = client.delete(f"/panel/api/clients/{customer_id}/notes/{foreign_note_id}")
+
+    assert patch.status_code == 404
+    assert patch.json() == {"detail": "note not found"}
+    assert delete.status_code == 404
+    assert delete.json() == {"detail": "note not found"}
+
+
+def test_client_note_patch_rejects_empty_text(client, make_user):
+    customer_id = _seed_customer()
+    with SessionLocal() as session:
+        entry = CustomerNote(customer_id=customer_id, note="keep me", author="oper")
+        session.add(entry)
+        session.commit()
+        note_id = entry.id
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    response = client.patch(
+        f"/panel/api/clients/{customer_id}/notes/{note_id}", json={"note": "  \t "}
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "note cannot be empty"}
 
 
 # ---------------------------------------------------------------------------

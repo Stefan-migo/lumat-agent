@@ -452,6 +452,16 @@ def add_note(session: Session, customer_id: int, note: str, actor: str) -> Custo
     return entry
 
 
+def update_note(session: Session, note: CustomerNote, text: str) -> CustomerNote:
+    note.note = text
+    session.flush()
+    return note
+
+
+def delete_note(session: Session, note: CustomerNote) -> None:
+    session.delete(note)
+
+
 def list_notes(session: Session, customer_id: int) -> list[CustomerNote]:
     """Internal notes in chronological order (CR-4 panel view)."""
     return list(
