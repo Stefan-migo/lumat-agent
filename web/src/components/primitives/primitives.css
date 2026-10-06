@@ -817,6 +817,13 @@
 .dialog__body {
   padding: var(--space-4);
 }
+.client-ficha__history-dialog { display: grid; gap: var(--space-4); }
+.client-ficha__history-table { overflow-x: auto; }
+.dialog:has(.client-ficha__history-dialog) { display: flex; flex-direction: column; max-height: min(90dvh, 52rem); overflow: hidden; }
+.dialog:has(.client-ficha__history-dialog) .dialog__body { min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--primary-700) transparent; }
+.dialog:has(.client-ficha__history-dialog) .dialog__body::-webkit-scrollbar { width: var(--space-2); }
+.dialog:has(.client-ficha__history-dialog) .dialog__body::-webkit-scrollbar-thumb { background: var(--primary-700); border-radius: var(--radius-lg); }
+.dialog:has(.client-ficha__history-dialog) .dialog__body::-webkit-scrollbar-track { background: transparent; }
 .dialog__message { margin: 0 0 var(--space-3); }
 .dialog__actions { display: flex; gap: var(--space-2); justify-content: flex-end; }
 .spinner {

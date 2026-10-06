@@ -566,10 +566,12 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
       </div> : null}
         </>}
       </Tabs>
-      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} title="Historial del cliente" icon={Clock3} description="Visitas, conversaciones y casos anteriores">
-        <Card title="Casos anteriores"><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></Card>
-        <Card title="Visitas"><DataTable columns={[{key:"service",header:"Servicio",render:(row: Appointment)=>row.service},{key:"date",header:"Fecha",render:(row: Appointment)=>formatDateTime(row.starts_at)},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>}] as Column<Appointment>[]} rows={appointments} rowKey={(row)=>String(row.id)}/></Card>
-        <Card title="Conversaciones"><DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row)=>String(row.id)}/></Card>
+      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} title="Historial del cliente" icon={Clock3} description="Visitas, conversaciones y casos anteriores" size="wide">
+        <div className="client-ficha__history-dialog">
+          <Card title="Casos anteriores"><div className="client-ficha__history-table"><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></div></Card>
+          <Card title="Visitas"><div className="client-ficha__history-table"><DataTable columns={[{key:"service",header:"Servicio",render:(row: Appointment)=>row.service},{key:"date",header:"Fecha",render:(row: Appointment)=>formatDateTime(row.starts_at)},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>}] as Column<Appointment>[]} rows={appointments} rowKey={(row)=>String(row.id)}/></div></Card>
+          <Card title="Conversaciones"><div className="client-ficha__history-table"><DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row)=>String(row.id)}/></div></Card>
+        </div>
       </Dialog>
     </PageFrame>
   );
