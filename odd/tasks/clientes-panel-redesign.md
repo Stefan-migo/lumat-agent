@@ -146,8 +146,8 @@ Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`descripti
 - [x] Dialog **Editar datos del cliente**: more width; lighter field borders scoped to the ficha dialogs (`daca9d9e`).
 - [x] Dialog **Cambiar estado del cliente**: FIX — allowed transition radio cards now render; terminal states retain no cards or save action (`daca9d9e`).
 - [x] Dialog **Cambiar consentimiento**: Sí/No are selectable radio cards with visible selection; save persists through `updateCustomerConsent` (`daca9d9e`).
-- [x] Dialog **Editar caso**: increase internal spacing and padding; apply ficha-scoped lighter borders to the dialog and controls; retain case context and the Cancelar/Guardar cambios footer.
-- [x] Dialog **Definir monto del caso**: increase padding and spacing and apply ficha-scoped lighter borders; retain case context/current amount, CLP field presentation, helper, and Cancelar/Guardar monto footer.
+- [x] Dialog **Editar caso**: increase internal spacing and padding; apply ficha-scoped lighter borders to the dialog and controls; retain case context and the Cancelar/Guardar cambios footer (`ec79e4ab`).
+- [x] Dialog **Definir monto del caso**: increase padding and spacing and apply ficha-scoped lighter borders; retain case context/current amount, CLP field presentation, helper, and Cancelar/Guardar monto footer (`ec79e4ab`).
 - [ ] Cards **Memoria / Notas / Próximas visitas**: fix the broken vertical spacing.
 - [ ] Cards **Equipos / Historial del cliente**: design details per the reference.
 
