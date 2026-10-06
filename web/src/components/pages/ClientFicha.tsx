@@ -39,7 +39,6 @@ const DATE_TIME_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short", 
 const CLP_FORMAT = new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 });
 const MESSAGE_PREVIEW = 10;
 const EQUIPMENT_TYPE_LABELS: Record<string, string> = { calefont: "Calefont", caldera: "Caldera", calefaccion: "Sistema de calefacción" };
-const EQUIPMENT_TYPE_OPTIONS = [{ value: "", label: "Ej. Calefont" }, ...Object.entries(EQUIPMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }))];
 const MERGE_COUNT_LABELS: Record<keyof ClientMergePreview["moved"], string> = { conversations: "conversaciones", cases: "casos", customer_notes: "notas", customer_equipment: "equipos", appointments: "visitas" };
 const FICHA_TABS = [{ id: "summary", label: "Resumen" }, { id: "cases", label: "Casos" }, { id: "visits", label: "Visitas" }, { id: "conversations", label: "Conversaciones" }];
 
@@ -432,8 +431,8 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <footer><Button variant="secondary" onClick={() => setConsentDialogOpen(false)}>Cancelar</Button><Button disabled={customerMutation !== null || customerId === undefined || selectedConsent === null} onClick={() => void saveConsent()}>{customerMutation === "consent" ? "Guardando…" : "Guardar consentimiento"}</Button></footer>
             </div>
           </Dialog>
-          <Dialog open={profileOpen} onClose={() => setProfileOpen(false)} title="Editar datos del cliente" icon={UserRound} description="Actualiza su información de contacto." size="wide">
-            <form onSubmit={(event) => void saveProfile(event)}>
+          <Dialog open={profileOpen} onClose={() => setProfileOpen(false)} title="Editar datos del cliente" icon={UserRound} description="Actualiza su información de contacto.">
+            <form className="client-ficha-dialog client-ficha-dialog__profile-form" onSubmit={(event) => void saveProfile(event)}>
               <div className="client-ficha-dialog__profile-row"><Input label="Nombre" icon={UserRound} value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /><Input label="Teléfono *" icon={Phone} value={customer.phone_e164 ?? "—"} readOnly /></div>
               <Input label="Correo (opcional)" icon={Mail} type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
               <Input label="Comuna (opcional)" icon={MapPin} value={profile.comuna} onChange={(event) => setProfile({ ...profile, comuna: event.target.value })} />
@@ -455,7 +454,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             <div className="client-ficha-dialog client-ficha-dialog__merge">
               <div className="client-ficha-dialog__merge-current"><strong>Cliente actual</strong><div><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><span><b>{customer.name ?? customer.phone_e164 ?? "Cliente"}</b><small>Cliente desde el {formatIdentityDate(customer.created_at)}</small></span><span className="client-ficha-dialog__merge-phone"><Phone />{customer.phone_e164 ?? "—"}</span></div></div>
               <Select id="merge-other-client" label="Otro cliente" value={mergeOtherId} options={[{ value: "", label: "Buscar por nombre o teléfono…" }, ...mergeClients.map((client) => ({ value: String(client.id), label: `${client.name ?? "Sin nombre"} · ${client.phone_e164 ?? "Sin teléfono"}` }))]} onChange={(event) => void selectMergeClient(event.target.value)} />
-              <div className="client-ficha-dialog__merge-cards"><section><strong>Ficha actual</strong><div><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><span><b>{customer.name ?? customer.phone_e164 ?? "Cliente"}</b><small>{customer.phone_e164 ?? "—"}</small></span></div></section><section><strong>Otra ficha</strong><div><Avatar name={mergeClients.find((client) => String(client.id) === mergeOtherId)?.name ?? "Sin seleccionar"} /><span><b>{mergeClients.find((client) => String(client.id) === mergeOtherId)?.name ?? "Sin seleccionar"}</b><small>{mergeClients.find((client) => String(client.id) === mergeOtherId)?.phone_e164 ?? "—"}</small></span></div></section></div>
+              <div className="client-ficha-dialog__merge-cards"><section>{mergePreview ? <strong>{mergePreview.survivor_id === fichaCustomerId ? "Se conserva" : "Se fusiona"}</strong> : <strong>Ficha actual</strong>}<div><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><span><b>{customer.name ?? customer.phone_e164 ?? "Cliente"}</b><small>{customer.phone_e164 ?? "—"}</small></span></div></section><section>{mergePreview ? <strong>{mergePreview.survivor_id === Number(mergeOtherId) ? "Se conserva" : "Se fusiona"}</strong> : <strong>Otra ficha</strong>}<div><Avatar name={mergeClients.find((client) => String(client.id) === mergeOtherId)?.name ?? "Sin seleccionar"} /><span><b>{mergeClients.find((client) => String(client.id) === mergeOtherId)?.name ?? "Sin seleccionar"}</b><small>{mergeClients.find((client) => String(client.id) === mergeOtherId)?.phone_e164 ?? "—"}</small></span></div></section></div>
               <p className="client-ficha-dialog__warning"><CircleAlert aria-hidden="true" />Comprueba que ambas fichas correspondan a la misma persona.</p>
               {mergePreview ? <p className="client-ficha-dialog__merge-preview">Vista previa: se moverán {Object.entries(mergePreview.moved).map(([table, count]) => `${MERGE_COUNT_LABELS[table as keyof ClientMergePreview["moved"]]}: ${count}`).join(" · ")}; {mergePreview.memory_conflicts} conflictos de memoria{mergePreview.scalar_conflicts.length ? `; se conservan los datos del cliente superviviente en ${mergePreview.scalar_conflicts.join(", ")}` : ""}.</p> : null}
               <LocalFeedback feedback={mergeFeedback} />
@@ -531,7 +530,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           </section>
           <Dialog open={equipmentOpen} onClose={() => setEquipmentOpen(false)} title={editingEquipment ? "Editar equipo" : "Agregar equipo"} icon={Smartphone} description="Registra un equipo asociado al cliente.">
             <form className="client-ficha-dialog" onSubmit={(event) => void saveEquipment(event)}>
-              <Select id="equipment-type" label="Tipo de equipo" value={equipmentForm.equipment_type ?? ""} options={EQUIPMENT_TYPE_OPTIONS} onChange={(event) => setEquipmentForm({ ...equipmentForm, equipment_type: event.target.value })} />
+              <Input id="equipment-type" label="Tipo de equipo" placeholder="Ej. Calefont" value={equipmentForm.equipment_type ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, equipment_type: event.target.value })} />
               <Input label="Marca (opcional)" placeholder="Ej. Marca del equipo" value={equipmentForm.brand ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, brand: event.target.value })} />
               <Input label="Modelo (opcional)" placeholder="Modelo del equipo" value={equipmentForm.model ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, model: event.target.value })} />
               <LocalFeedback feedback={equipmentFeedback} />
