@@ -121,10 +121,10 @@ Owner verdict: CL-3's first pass is structurally right (title/subtitle/actions/t
 ### CL-3-r2 — Resumen tab layout + reference fidelity (owner visual review 2026-10-06 #2)
 Owner verdict: the Resumen cards still do not match `ClientFicha.png`, and the owner asked for a **deliberate layout deviation**. Scope: the Resumen tab only (the Casos/Visitas/Conversaciones tab bodies stay as they are for now).
 
-- [ ] **Swap the primary column** (owner decision — conscious deviation from the reference, which shows the case large): `Datos del cliente` becomes the large/primary card (left); `Caso activo` becomes the smaller secondary card (right).
-- [ ] Card style to the reference: card header with the large title and its action aligned **right** (`Editar` pill, `Ver todo →`, `⊕ Agregar nota`, `+ Agregar equipo`, `Ver agenda →`); use pill/outlined buttons and underlined links instead of full-width secondary buttons (`Definir monto` = underlined link; `Editar caso` = right-aligned pill).
-- [ ] `Datos del cliente`: `Editar` pill + `...` menu in the header; Teléfono/Correo/Dirección rows with copy icons; Estado del cliente badge; Consentimiento value. **Remove the inline state editor** (select + "Guardar estado"). Move Cambiar estado / Cambiar consentimiento / Fusionar / Archivar into the `...` menu, each opening its dialog.
-- [ ] `Memoria del cliente`, `Notas`, `Próximas visitas`, `Equipos`, `Historial del cliente` restyled to the reference (header-action placement, date tiles, illustrated empty state, pill buttons/link rows).
+- [x] **Swap the primary column** (owner decision — conscious deviation from the reference, which shows the case large): `Datos del cliente` becomes the large/primary card (left); `Caso activo` becomes the smaller secondary card (right) (`ee306798`).
+- [x] Card style to the reference: card header with the large title and its action aligned **right** (`Editar` pill, `Ver todo →`, `⊕ Agregar nota`, `+ Agregar equipo`, `Ver agenda →`); use pill/outlined buttons and underlined links instead of full-width secondary buttons (`Definir monto` = underlined link; `Editar caso` = right-aligned pill) (`ee306798`).
+- [x] `Datos del cliente`: `Editar` pill + `...` menu in the header; Teléfono/Correo/Dirección rows with copy icons; Estado del cliente badge; Consentimiento value. **No inline state editor**. Cambiar estado / Cambiar consentimiento / Fusionar / Archivar remain in the `...` menu and open their dialogs (`ee306798`).
+- [x] `Memoria del cliente`, `Notas`, `Próximas visitas`, `Equipos`, `Historial del cliente` restyled to the reference (header-action placement, date tiles, illustrated empty state, pill buttons/link rows) (`ee306798`).
 
 ### CL-4 — Client ficha dialogs
 Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`description`; `Input` exposes `icon`/`helper`): header = icon tile + title + supporting subtitle; a client-context row (avatar + name + "Cliente desde [date]"); fields with leading icons; footer = `Cancelar` (outlined) + the action (filled; danger for archive/merge). References: `ClientFichaDialogs.png`, `ClientFichaDialogs2.png`, `ClientFichaCustomerMerge.png` + mobile equivalents.
@@ -137,7 +137,7 @@ Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`descripti
 - [x] Add-equipment dialog: fields + "Agregar equipo" (`clientes-029`; `c01ee56e`).
 - [x] Add-note dialog: context + "Guardar nota" (`clientes-030`; `c01ee56e`).
 - [x] Merge dialog: two-client comparison + responsive single column (`clientes-031`; `2a06a356`).
-- [ ] Dialog headers `icon`/`description` at ficha call sites (`clientes-020`, ficha side).
+- [x] Dialog headers `icon`/`description` at ficha call sites (`clientes-020`, ficha side; `ee306798`).
 - [x] Archive confirmation label/danger tone on the ficha entry point (`clientes-032`, ficha side; `2a06a356`).
 
 ## Acceptance criteria
