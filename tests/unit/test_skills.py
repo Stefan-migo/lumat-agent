@@ -76,6 +76,19 @@ def test_whatsapp_roster_stubs_are_not_in_assistant_index(repo_root):
     assert not names.intersection({"sdb", "emergency", "handoff", "capture"})
 
 
+def test_real_registry_indexes_and_lazily_loads_memoria_tukulpan(repo_root):
+    from app.services.skills import global_skill_index, load_skill_body
+
+    index = global_skill_index(load_assistant_config(repo_root / "agent" / "registry.yaml"))
+    skill = next(item for item in index if item.name == "memoria-tukulpan")
+
+    assert skill.description == "Tukulpan memory: own vs customer axis, when to read/write, and correct memory.* argument shapes."
+    assert skill.path == "skills/assistant/memoria-tukulpan.md"
+    assert skill.scope == "global"
+    assert load_skill_body(skill) == (repo_root / "agent" / skill.path).read_text(encoding="utf-8")
+    assert not {item.name for item in index}.intersection({"sdb", "emergency", "handoff", "capture"})
+
+
 def test_malformed_assistant_skill_entry_is_rejected(repo_root, tmp_path):
     registry_path = _registry_with_skills(
         repo_root, tmp_path,

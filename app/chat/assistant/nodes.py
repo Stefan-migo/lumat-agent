@@ -28,6 +28,7 @@ from app.services.costs import (
     maybe_alert_owner,
     record_llm_cost,
 )
+from app.services.skills import SkillDefinition
 from app.chat.assistant.attachments import build_multimodal_content, prepare_attachment_context
 from app.models import InternalChatMessage
 
@@ -619,7 +620,13 @@ def plan_llm(state: AssistantState) -> AssistantState:
     config = load_assistant_config()
     user_prompt = config.prompts["plan"]
     available_tools = _planner_tool_catalog(list(_effective_tools(state)))
-    for key, value in {"user_input": state["content"], "available_tools": available_tools, "context": _planner_context_text(state)}.items():
+    available_skills = json.dumps(
+        [{"name": skill.name, "description": skill.description} for skill in _effective_skill_index(state)],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    for key, value in {"user_input": state["content"], "available_tools": available_tools,
+                       "available_skills": available_skills, "context": _planner_context_text(state)}.items():
         user_prompt = user_prompt.replace("{{" + key + "}}", str(value))
     if state.get("cost_directive"):
         user_prompt += "\n\n" + state["cost_directive"]
@@ -693,7 +700,15 @@ def assemble_context_node(state: AssistantState) -> AssistantState:
     effective = None
     if thread is not None:
         config = resolve_effective_config(state["session"], thread, state.get("actor_role") or "")
-        effective = {"instructions": config.instructions, "tools_whitelist": list(config.tools_whitelist)}
+        effective = {
+            "instructions": config.instructions,
+            "tools_whitelist": list(config.tools_whitelist),
+            "skills_index": [
+                {"name": skill.name, "description": skill.description, "scope": skill.scope,
+                 "path": skill.path, "body": skill.body}
+                for skill in config.skills_index
+            ],
+        }
     context = assemble_context(state["session"], state["thread_id"], attachments=state.get("attachments", []))
     return {"context": context, "context_meta": context["meta"], "projection_evidence": context["meta"], "effective": effective}
 
@@ -707,10 +722,54 @@ def _effective_tools(state) -> tuple[str, ...]:
     return load_assistant_config().tools_whitelist
 
 
+def _effective_skill_index(state) -> tuple[SkillDefinition, ...]:
+    from app.services.prompts import load_assistant_config
+    from app.services.skills import global_skill_index
+
+    effective = state.get("effective")
+    if effective:
+        return tuple(SkillDefinition(**skill) for skill in effective["skills_index"])
+    return global_skill_index(load_assistant_config())
+
+
+def _validated_skills(state) -> list[str]:
+    declared = (state.get("plan") or {}).get("skills") or []
+    allowed = {skill.name for skill in _effective_skill_index(state)}
+    valid = []
+    for name in declared:
+        if isinstance(name, str) and name in allowed and name not in valid:
+            valid.append(name)
+    return valid
+
+
 def _effective_persona(state, config) -> str:
     effective = state.get("effective") or {}
     instructions = (effective.get("instructions") or "").strip()
     return f"{config.persona}\n\n{instructions}" if instructions else config.persona
+
+
+def _skill_context(state) -> str:
+    from app.services.skills import SkillError, load_skill_body
+
+    definitions = {skill.name: skill for skill in _effective_skill_index(state)}
+    bodies = []
+    for name in (state.get("guardrails", {}).get("skills") or []):
+        definition = definitions.get(name)
+        if definition is None:
+            continue
+        try:
+            body = load_skill_body(definition)
+        except SkillError as exc:
+            logger.warning("Skipping unavailable assistant skill %r: %s", name, exc)
+            continue
+        bodies.append(f"### Skill: {name}\n{body}")
+    return "\n\n".join(bodies)
+
+
+def _responder_system_prompt(state, config) -> str:
+    persona = _effective_persona(state, config)
+    skills = _skill_context(state)
+    return f"{persona}\n\n{skills}" if skills else persona
 
 
 def _is_autonomous_write(tool_name: str | None, thread_id: object) -> bool:
@@ -733,6 +792,7 @@ def guardrails(state: AssistantState) -> AssistantState:
         return {"approval": issue_approval(plan_data), "guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": True, "decision": "approval_pending"}, "status": "approval_pending"}
     if not state.get("planner", {}).get("valid", True):
         return {"guardrails": {"whitelisted": False, "arguments_valid": False, "cost_allowed": True, "approval_required": False, "decision": "fallback"}, "status": "responding"}
+    validated_skills = _validated_skills(state)
     if plan_data.get("kind") == "delegate":
         from app.chat.assistant.delegation import DelegationScopeError, resolve_delegation_scope
 
@@ -769,12 +829,13 @@ def guardrails(state: AssistantState) -> AssistantState:
                 "cost_allowed": True,
                 "approval_required": False,
                 "decision": "delegate",
+                "skills": validated_skills,
             },
         }
     tool_name = plan_data.get("tool")
     if plan_data.get("kind") != "tool" or not tool_name:
         decision = "respond" if _is_conversational_turn(state.get("content", "")) else "retrieve_kb"
-        return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": decision}, "status": "responding"}
+        return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": decision, "skills": validated_skills}, "status": "responding"}
     whitelisted = tool_name in _effective_tools(state)
     arguments_valid = False
     if whitelisted:
@@ -782,7 +843,7 @@ def guardrails(state: AssistantState) -> AssistantState:
             arguments_valid = bool(get_tool(tool_name).args_model.model_validate(plan_data.get("arguments", {})))
         except Exception:
             pass
-    decisions = {"whitelisted": whitelisted, "arguments_valid": arguments_valid, "cost_allowed": True, "approval_required": False, "decision": "execute"}
+    decisions = {"whitelisted": whitelisted, "arguments_valid": arguments_valid, "cost_allowed": True, "approval_required": False, "decision": "execute", "skills": validated_skills}
     if not whitelisted or not arguments_valid:
         diagnosis = _planner_failure(
             "unsafe_plan", "guardrails", ValueError("planner plan failed guardrails"), plan_data
@@ -1094,7 +1155,7 @@ def execute(state: AssistantState) -> AssistantState:
         completion = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": _effective_persona(state, config)},
+                {"role": "system", "content": _responder_system_prompt(state, config)},
                 {"role": "user", "content": build_multimodal_content(attachments, prompt) if attachments else prompt},
             ],
             temperature=0,

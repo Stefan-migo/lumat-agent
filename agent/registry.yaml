@@ -58,7 +58,10 @@ sub_agents:
 assistant:
   name: assistant
   persona: personas/assistant.md
-  skills: []
+  skills:
+    - name: memoria-tukulpan
+      description: "Tukulpan memory: own vs customer axis, when to read/write, and correct memory.* argument shapes."
+      path: skills/assistant/memoria-tukulpan.md
   prompts:
     plan: prompts/assistant_plan.md
     respond: prompts/assistant_respond.md
