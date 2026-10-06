@@ -5,6 +5,7 @@ import { Card } from "../primitives/Card";
 import { Textarea } from "../primitives/Textarea";
 import type { Column } from "../shared/DataTable";
 import { DataTable } from "../shared/DataTable";
+import { EmptyState } from "../shared/EmptyState";
 import { memoryStatusLabel, memoryStatusTone, memoryTypeLabel, memoryTypeTone } from "../shared/toneMaps";
 import type { Memory, MemoryRelation, MemoryRelationKind } from "../../types";
 
@@ -20,6 +21,8 @@ export interface ClientMemoriesProps {
   onPin?: MemoryPinHandler;
   pendingRelations?: MemoryRelation[];
   onResolveRelation?: (relationId: number, relation: MemoryRelationKind) => Promise<void> | void;
+  compact?: boolean;
+  onViewAll?: () => void;
 }
 
 /** Ficha memories panel (MEM-6): list + edit + delete + mark(pin) over the
@@ -33,10 +36,12 @@ export function ClientMemories({
   onPin,
   pendingRelations = [],
   onResolveRelation,
+  compact = false,
+  onViewAll,
 }: ClientMemoriesProps) {
   const [draft, setDraft] = useState("");
   const [resolvingId, setResolvingId] = useState<number | null>(null);
-  const featuredMemo = memories.find((memory) => memory.topic_key === "customer_memo");
+  const featuredMemo = memories.find((memory) => memory.topic_key === "customer_memo") ?? (compact ? memories[0] : undefined);
   const tableMemories = featuredMemo
     ? memories.filter((memory) => memory.id !== featuredMemo.id)
     : memories;
@@ -72,7 +77,8 @@ export function ClientMemories({
   ];
 
   return (
-    <Card title="Memorias del cliente">
+    <Card title={compact ? "Memoria del cliente" : "Memorias del cliente"} className={compact ? "client-ficha__memory-card" : ""}>
+      {compact ? <div className="client-ficha__memory-meta"><Badge>{memories.length}</Badge><Button variant="secondary" onClick={onViewAll}>Ver todo →</Button></div> : null}
       {featuredMemo ? (
         <div className="client-memories__memo">
           <strong>{featuredMemo.contenido}</strong>
@@ -83,13 +89,14 @@ export function ClientMemories({
           {renderActions(featuredMemo)}
         </div>
       ) : null}
-      <DataTable
+      {compact && !featuredMemo ? <EmptyState title="Sin memorias todavía" /> : null}
+      {!compact ? <DataTable
         columns={columns}
         rows={tableMemories}
         emptyMessage="Sin memorias todavía"
         rowKey={(m) => String(m.id)}
         actions={renderActions}
-      />
+      /> : null}
       {onUpsert ? (
         <div className="client-memories__section">
           <Textarea

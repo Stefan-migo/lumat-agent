@@ -129,7 +129,7 @@ describe("ClientFicha page grammar", () => {
     const { container } = render(<ClientFicha data={ficha} memories={memories} />);
 
     expect(screen.queryByRole("heading", { name: "Memo del cliente" })).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Memorias del cliente" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Memoria del cliente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Notas" })).toBeInTheDocument();
     expect(screen.getAllByText("Prefiere contacto por la tarde.")).toHaveLength(1);
     expect(screen.getByText("operador · Confirmar por WhatsApp")).toBeInTheDocument();
@@ -302,7 +302,7 @@ describe("ClientFicha customer controls", () => {
 
     const rail = screen.getByRole("region", { name: "Resumen del cliente" });
     expect(rail.querySelectorAll(":scope > .card")).toHaveLength(1);
-    expect(within(rail).getByRole("heading", { name: "Cliente" })).toBeInTheDocument();
+    expect(within(rail).getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
     expect(within(rail).queryByRole("heading", { name: "Identidad" })).not.toBeInTheDocument();
     expect(within(rail).queryByRole("heading", { name: "Estado" })).not.toBeInTheDocument();
     expect(within(rail).getByText("MF")).toBeInTheDocument();
@@ -312,8 +312,7 @@ describe("ClientFicha customer controls", () => {
     expect(within(rail).getByText("Contactado", { selector: ".badge" })).toBeInTheDocument();
 
     const actions = rail.querySelector(".client-ficha__customer-controls") as HTMLElement;
-    expect(within(actions).getByRole("button", { name: "Editar identidad" })).toHaveClass("btn--primary");
-    expect(actions.querySelectorAll(".btn--primary")).toHaveLength(1);
+    expect(within(actions).getByRole("button", { name: "Editar identidad" })).toHaveClass("btn--secondary");
     expect(actions.querySelectorAll(".menu__trigger--icon")).toHaveLength(1);
     expect(within(actions).getByRole("button", { name: "Acciones para Marcela Fuentes" })).toBeInTheDocument();
     expect(within(actions).getAllByRole("button").every((button) => !button.textContent?.includes("Marcela Fuentes"))).toBe(true);
@@ -490,7 +489,7 @@ describe("ClientFicha slice 2 — product register", () => {
 
     expect(container.querySelector("select")).toHaveClass("field__control");
     expect(container.querySelector("textarea")).toHaveClass("field__control");
-    expect(container.querySelectorAll("button:not(.btn):not(.dialog__close):not(.menu__trigger):not(.tabs__tab)")).toHaveLength(0);
+    expect(container.querySelectorAll("button:not(.btn):not(.dialog__close):not(.menu__trigger):not(.tabs__tab):not(.client-ficha__history-entry)")).toHaveLength(0);
   });
 
   // T11 — no raw backend identifier on the surface.

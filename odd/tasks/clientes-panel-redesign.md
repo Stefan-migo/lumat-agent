@@ -90,17 +90,17 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
 - [x] Rename the archive-status column to "Archivo", move it last, and show "Disponible" / "Archivado" badges in desktop and mobile (`f06c8105`).
 
 ### CL-3 — Client ficha shell
-- [ ] Identity header: avatar, name, "Cliente desde [date]", Agendar visita/Ver conversación
-      (`clientes-011`, blocker).
-- [ ] Resumen/Casos/Visitas/Conversaciones tabs replacing the single `Historial` disclosure
-      (`clientes-012`, blocker).
-- [ ] Active-case card + "Editar caso" action (`clientes-013`).
-- [ ] "Memoria del cliente" card heading/count + "Ver todo →" (`clientes-014`).
-- [ ] Notes card + "+ Agregar nota" entry point (`clientes-015`).
-- [ ] "Próximas visitas" card + "Ver agenda →" (`clientes-016`).
-- [ ] "Datos del cliente" card + Editar action/contact facts (`clientes-017`).
-- [ ] Equipment card + empty state (`clientes-018`).
-- [ ] "Historial del cliente" summary card (`clientes-019`).
+- [x] Identity header: avatar, name, "Cliente desde [date]", Agendar visita/Ver conversación
+      (`clientes-011`, blocker; `ebe2edd8`).
+- [x] Resumen/Casos/Visitas/Conversaciones tabs replacing the single `Historial` disclosure
+      (`clientes-012`, blocker; `ebe2edd8`).
+- [x] Active-case card + "Editar caso" action (`clientes-013`; this CL-3 summary commit).
+- [x] "Memoria del cliente" card heading/count + "Ver todo →" (`clientes-014`; this CL-3 summary commit).
+- [x] Notes card + "+ Agregar nota" entry point (`clientes-015`; this CL-3 summary commit).
+- [x] "Próximas visitas" card + "Ver agenda →" (`clientes-016`; this CL-3 summary commit).
+- [x] "Datos del cliente" card + Editar action/contact facts (`clientes-017`; this CL-3 summary commit).
+- [x] Equipment card + empty state (`clientes-018`; this CL-3 summary commit).
+- [x] "Historial del cliente" summary card (`clientes-019`; this CL-3 summary commit).
 
 ### CL-4 — Client ficha dialogs
 - [ ] Edit-data dialog: title/fields/order/editability (`clientes-024`).
@@ -137,6 +137,10 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
   `api.ts`, `types.ts`, `useAsyncData.ts`, `panelRoutes.ts`.
 - Community hubs (GRAPH_REPORT): `ClientFicha.tsx`, `api.ts`, `shared/toneMaps.ts`, `clients.py`,
   `serializers.py`, `Customer`.
+- CL-3 query `ClientFicha ficha cliente tabs cards`: `ClientFicha()`, `ClientFicha.tsx`, `Tabs()`/`Tabs.tsx`,
+  `ClientFicha.test.tsx`, `stories/pages/ClientFicha.stories.tsx`, `Avatar()`, `Badge()`, `DataTable()`.
+- Path `ClientFicha.tsx` ↔ `Tabs.tsx` (undirected): `ClientFicha.tsx <--imports_from-- AppShell.tsx
+  --imports_from--> PanelShell.tsx --imports_from--> Tabs.tsx`; directed query returned no path.
 - Graph refreshed to commit `072660fb` (this branch base).
 
 ## Evidence

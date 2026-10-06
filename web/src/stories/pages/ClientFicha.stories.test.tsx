@@ -7,6 +7,7 @@ import { clients } from "./_shared/mockData/clients";
 import type { ClientFichaResponse } from "../../types";
 
 const customer = clients[0];
+const customerName = customer.name ?? "Cliente";
 const fichaResponse: ClientFichaResponse = {
   customer,
   history: {
@@ -59,9 +60,9 @@ describe("ClientFicha page", () => {
 
     render(<ClientFicha customerId={customer.id} />);
     expect(screen.getByRole("heading", { name: "Cargando ficha" })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: customer.name })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: customerName })).toBeInTheDocument());
     expect(screen.queryByRole("heading", { name: "Memo del cliente" })).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Memorias del cliente" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Memoria del cliente" })).toBeInTheDocument();
     expect(screen.getByText("Prefiere contacto por la tarde.")).toBeInTheDocument();
     expect(screen.queryByText("Acta de cierre de Marcela")).not.toBeInTheDocument();
   });
@@ -138,7 +139,7 @@ describe("ClientFicha state matrix stories", () => {
     render(<ClientFichaLoading />);
 
     expect(screen.getByRole("heading", { name: "Cargando ficha" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: customer.name })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: customerName })).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -146,7 +147,7 @@ describe("ClientFicha state matrix stories", () => {
     render(<ClientFichaError />);
 
     expect(screen.getByRole("alert")).toHaveTextContent("No pudimos cargar la ficha");
-    expect(screen.getByRole("heading", { level: 1, name: customer.name })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: customerName })).toBeInTheDocument();
   });
 
   it("renders the denied state", () => {
