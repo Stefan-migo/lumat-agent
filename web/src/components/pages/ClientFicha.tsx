@@ -466,6 +466,27 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
         </section>
 
         <div className="detail-region__main">
+          <div className="client-ficha__summary-column client-ficha__summary-column--left">
+          <ClientMemories memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} compact conversationId={history.conversations[0]?.id} onViewAll={() => setActiveTab("conversations")} />
+          <Card className="client-ficha__notes-card">
+            <header className="client-ficha__card-heading"><h2>Notas</h2><Button variant="secondary" aria-expanded={noteComposerOpen} disabled={customerId === undefined || mutation !== null} onClick={() => setNoteComposerOpen(true)}>⊕ Agregar nota</Button></header>
+            {data.notes.length ? data.notes.map((entry) => <article className="client-ficha__note-row" key={entry.id}><Avatar name={entry.author ?? "Operador"}/><div><strong>{entry.author ?? "—"}</strong><small>{formatDate(entry.created_at)}</small></div><p>{entry.note}</p><Menu trigger="icon" label="Acciones de nota" items={[{value:"copy",label:"Copiar nota"}]} onSelect={()=>void navigator.clipboard?.writeText(entry.note)}/></article>) : <EmptyState title="No hay notas" />}
+          </Card>
+          <Dialog open={noteComposerOpen} onClose={() => setNoteComposerOpen(false)} title="Agregar nota" icon={NotebookPen} description="Registra una nota asociada al cliente.">
+            <form className="client-ficha-dialog" onSubmit={(event) => { event.preventDefault(); void saveNote(); }}>
+              <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div><span className="client-ficha-dialog__context-phone"><Phone aria-hidden="true"/>{customer.phone_e164 ?? "—"}</span></div>
+              <Textarea id="new-note" label="Nota" placeholder="Escribe información útil para el seguimiento del cliente…" value={note} disabled={mutation !== null || customerId === undefined} onChange={(event) => setNote(event.target.value)} />
+              <p className="client-ficha-dialog__helper">La nota quedará asociada a esta ficha.</p>
+              <LocalFeedback feedback={noteFeedback} />
+              <footer><Button type="button" variant="secondary" onClick={() => setNoteComposerOpen(false)}>Cancelar</Button><Button type="submit" disabled={mutation !== null || customerId === undefined}>{mutation === "note" ? "Guardando…" : "Guardar nota"}</Button></footer>
+            </form>
+          </Dialog>
+          <Card className="client-ficha__upcoming-card">
+            <header className="client-ficha__card-heading"><h2>Próximas visitas</h2><Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "agenda" }); }}>Ver agenda →</Button></header>
+            {upcomingAppointments.length ? <ul className="client-ficha__visits">{upcomingAppointments.map((appointment) => { const date = new Date(appointment.starts_at); return <li key={appointment.id}><a className="client-ficha__upcoming-row" href={pathForRoute({ view: "agenda", appointmentId: appointment.id })}><span className="client-ficha__date-tile"><strong>{date.getDate().toString().padStart(2, "0")}</strong><small>{new Intl.DateTimeFormat("es-CL", { month: "short" }).format(date).replace(".", "").toUpperCase()}</small></span><span>{appointment.service}</span><span><Clock3/>{new Intl.DateTimeFormat("es-CL",{hour:"2-digit",minute:"2-digit"}).format(date)}</span><Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge></a></li>; })}</ul> : <EmptyState title="No hay próximas visitas" />}
+          </Card>
+          </div>
+          <div className="client-ficha__summary-column client-ficha__summary-column--right">
           <Card className="client-ficha__case-card">
             {activeCase ? <>
                 <div className="client-ficha__case-eyebrow"><span className="client-ficha__status-dot"/> CASO ACTIVO <span>#{activeCase.id}</span><Menu trigger="icon" label="Acciones del caso" items={[{ value: "edit", label: "Editar caso", icon: BriefcaseBusiness }, { value: "amount", label: "Definir monto", icon: CircleDollarSign }]} onSelect={(value) => value === "amount" ? (setAmountInput(activeCase.amount === null ? "" : String(activeCase.amount)), setAmountOpen(true)) : openCaseEditor()} /></div>
@@ -493,8 +514,6 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <footer><Button type="button" variant="secondary" onClick={() => setAmountOpen(false)}>Cancelar</Button><Button type="submit" disabled={amountMutation}>{amountMutation ? "Guardando…" : "Guardar monto"}</Button></footer>
             </form>
           </Dialog>
-          <ClientMemories memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} compact conversationId={history.conversations[0]?.id} onViewAll={() => setActiveTab("conversations")} />
-
           <section aria-label="Equipos" className="client-ficha__equipment-slot">
              <Card className="client-ficha__equipment-card">
                <header className="client-ficha__card-heading"><h2>Equipos</h2><Button variant="secondary" disabled={customerId === undefined || equipmentMutation} onClick={() => openEquipment()}>＋ Agregar equipo</Button></header>
@@ -521,29 +540,10 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             </form>
           </Dialog>
 
-          <Card className="client-ficha__notes-card">
-            <header className="client-ficha__card-heading"><h2>Notas</h2><Button variant="secondary" aria-expanded={noteComposerOpen} disabled={customerId === undefined || mutation !== null} onClick={() => setNoteComposerOpen(true)}>⊕ Agregar nota</Button></header>
-            {data.notes.length ? data.notes.map((entry) => <article className="client-ficha__note-row" key={entry.id}><Avatar name={entry.author ?? "Operador"}/><div><strong>{entry.author ?? "—"}</strong><small>{formatDate(entry.created_at)}</small></div><p>{entry.note}</p><Menu trigger="icon" label="Acciones de nota" items={[{value:"copy",label:"Copiar nota"}]} onSelect={()=>void navigator.clipboard?.writeText(entry.note)}/></article>) : <EmptyState title="No hay notas" />}
-          </Card>
-          <Dialog open={noteComposerOpen} onClose={() => setNoteComposerOpen(false)} title="Agregar nota" icon={NotebookPen} description="Registra una nota asociada al cliente.">
-            <form className="client-ficha-dialog" onSubmit={(event) => { event.preventDefault(); void saveNote(); }}>
-              <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div><span className="client-ficha-dialog__context-phone"><Phone aria-hidden="true"/>{customer.phone_e164 ?? "—"}</span></div>
-              <Textarea id="new-note" label="Nota" placeholder="Escribe información útil para el seguimiento del cliente…" value={note} disabled={mutation !== null || customerId === undefined} onChange={(event) => setNote(event.target.value)} />
-              <p className="client-ficha-dialog__helper">La nota quedará asociada a esta ficha.</p>
-              <LocalFeedback feedback={noteFeedback} />
-              <footer><Button type="button" variant="secondary" onClick={() => setNoteComposerOpen(false)}>Cancelar</Button><Button type="submit" disabled={mutation !== null || customerId === undefined}>{mutation === "note" ? "Guardando…" : "Guardar nota"}</Button></footer>
-            </form>
-          </Dialog>
-
-          <Card className="client-ficha__upcoming-card">
-            <header className="client-ficha__card-heading"><h2>Próximas visitas</h2><Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "agenda" }); }}>Ver agenda →</Button></header>
-            {upcomingAppointments.length ? <ul className="client-ficha__visits">{upcomingAppointments.map((appointment) => { const date = new Date(appointment.starts_at); return <li key={appointment.id}><a className="client-ficha__upcoming-row" href={pathForRoute({ view: "agenda", appointmentId: appointment.id })}><span className="client-ficha__date-tile"><strong>{date.getDate().toString().padStart(2, "0")}</strong><small>{new Intl.DateTimeFormat("es-CL", { month: "short" }).format(date).replace(".", "").toUpperCase()}</small></span><span>{appointment.service}</span><span><Clock3/>{new Intl.DateTimeFormat("es-CL",{hour:"2-digit",minute:"2-digit"}).format(date)}</span><Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge></a></li>; })}</ul> : <EmptyState title="No hay próximas visitas" />}
-          </Card>
-
           <button type="button" className="client-ficha__history-entry" onClick={() => setHistoryOpen(true)}>
             <Clock3 aria-hidden="true"/><span><strong>Historial del cliente</strong><small>Visitas, conversaciones y casos anteriores</small></span><span aria-hidden="true">›</span>
           </button>
-
+          </div>
         </div>
       </div>
       </> : null}

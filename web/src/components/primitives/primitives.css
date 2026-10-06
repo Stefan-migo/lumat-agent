@@ -610,24 +610,21 @@
 .client-ficha-page .detail-region { grid-template-columns: minmax(0, 1.7fr) minmax(16rem, 1fr); }
 .client-ficha-page .detail-region__rail,
 .client-ficha-page .detail-region__main { display: contents; }
-.client-ficha__data-card { grid-column: 1; grid-row: 1; }
-.client-ficha__case-card { grid-column: 2; grid-row: 1; }
-.client-ficha__memory-card { grid-column: 1; grid-row: 2; }
+.client-ficha__summary-column { display: grid; align-content: start; gap: var(--space-4); min-width: 0; }
+.client-ficha__summary-column--left { grid-column: 1; }
+.client-ficha__summary-column--right { grid-column: 2; }
 .client-ficha__equipment-slot { display: contents; }
-.client-ficha__equipment-card { grid-column: 2; grid-row: 2; }
-.client-ficha__notes-card { grid-column: 1; grid-row: 3; }
-.client-ficha__history-entry { grid-column: 2; grid-row: 3; }
-.client-ficha__upcoming-card { grid-column: 1; grid-row: 4; }
 .client-ficha__memory-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
 .client-ficha__card-heading { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); min-width:0; }
 .client-ficha__card-heading h2 { margin:0; color:var(--corp-text); font-family:var(--font-ui); font-size:var(--text-lg); }
+.client-ficha__equipment-card .client-ficha__card-heading button { padding:0; border:0; background:transparent; color:var(--corp-text); box-shadow:none; }
 .client-ficha__memory-title { display:flex; align-items:center; gap:var(--space-3); min-width:0; }
 .client-ficha__history-entry {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
-  width: 100%; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  width: 100%; padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg);
   background: var(--surface); color: var(--text); text-align: left; cursor: pointer;
 }
-.client-ficha__history-entry > span:nth-child(2) { display: grid; flex: 1; }
+.client-ficha__history-entry > span:nth-child(2) { display: grid; flex: 1; gap: var(--space-1); }
 .client-ficha__history-entry small { color: var(--text-muted); }
 .client-ficha__identity-person,
 .client-ficha__identity-actions {
@@ -677,7 +674,7 @@
 .client-ficha__note-row > div { display:grid; }
 .client-ficha__note-row small { color:var(--text-muted); }
 .client-ficha__note-row p { margin:0; }
-.client-ficha__equipment-empty { display:grid; justify-items:center; gap:var(--space-2); min-height:12rem; padding:var(--space-4); border:1px solid var(--border); border-radius:var(--radius-md); }
+.client-ficha__equipment-empty { display:grid; justify-items:center; gap:var(--space-2); min-height:12rem; padding:var(--space-4); }
 .client-ficha__equipment-illustration { display:grid; place-items:center; width:3rem; height:4rem; border:2px solid var(--text-muted); border-radius:var(--radius-sm); color:var(--text-muted); font-size:var(--text-xl); }
 .client-memories__memo { border-left-color:var(--success); background:var(--surface); }
 @media (max-width: 40rem) {
@@ -688,9 +685,7 @@
 }
 @media (max-width: 64rem) {
   .client-ficha-page .detail-region { grid-template-columns: minmax(0, 1fr); }
-  .client-ficha__case-card, .client-ficha__data-card, .client-ficha__memory-card,
-  .client-ficha__equipment-card, .client-ficha__notes-card, .client-ficha__history-entry,
-  .client-ficha__upcoming-card { grid-column: 1; grid-row: auto; }
+  .client-ficha__summary-column--left, .client-ficha__summary-column--right { grid-column: 1; }
 }
 /* ---- ClientMemories (MEM-6) ---- */
 .client-memories__memo {
