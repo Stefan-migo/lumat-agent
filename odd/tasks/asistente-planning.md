@@ -89,7 +89,7 @@ execution (`:1039–1051`) must use it too instead of the global
 
 ## Tasks
 
-- [ ] **T1 — Planning rejoins the normal pipeline with a read-only policy; delete the dead-end.**
+- [x] **T1 — Planning rejoins the normal pipeline with a read-only policy; delete the dead-end.**
   - `_effective_tools(state)`: when `state["cortex_session"]` is a valid, `active` session, drop
     write tools (`get_tool(name).write`) **except `memory.write`**.
   - `execute` (`nodes.py:1039–1051`): pass `whitelist=set(_effective_tools(state))`, not the global catalog.
@@ -144,6 +144,13 @@ execution (`:1039–1051`) must use it too instead of the global
 ## Progress log
 
 - Provisioned worktree (`uv sync --frozen`, `cp ../lumat-agent/infra/.env infra/.env`), test DB up.
+- **T1 done** — commits `3f16c4be` (feat) + `e19fdb06` (test). Active planning sessions now
+  filter write tools from `_effective_tools` (except `memory.write`) and the execution boundary
+  uses the effective whitelist; `cortex_session_gate`/`cortex_turn` nodes, `_after_cortex_gate`,
+  `classify_cortex_turn`, `cortex_session_turn`, and `parse_planning_command` removed. Files:
+  `app/chat/assistant/{nodes.py,graph.py}` + 4 test files. Evidence: `pytest -k "assistant or
+  cortex"` green; parent spot-check of the 3 focused files green (36 passed). No report/SDB/state
+  changes.
 
 ## Verification
 
