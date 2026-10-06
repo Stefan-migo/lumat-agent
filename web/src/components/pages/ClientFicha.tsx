@@ -1,5 +1,5 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { BriefcaseBusiness, CalendarDays, Clock3, Copy, Home, Mail, MapPin, MessageSquare, Pencil, Phone, RefreshCw, ShieldCheck, UserRound, CircleDollarSign } from "lucide-react";
+import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CircleAlert, Clock3, Copy, FileText, Home, Mail, MapPin, MessageSquare, Pencil, Phone, RefreshCw, ShieldCheck, UserRound, CircleDollarSign } from "lucide-react";
 import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
@@ -442,22 +442,25 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <footer><Button type="button" variant="secondary" onClick={() => setProfileOpen(false)}>Cancelar</Button><Button type="submit" disabled={customerMutation !== null}>{customerMutation === "profile" ? "Guardando…" : "Guardar cambios"}</Button></footer>
             </form>
           </Dialog>
-          <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} title="Archivar cliente">
-            <p>Vas a archivar a {customer.name ?? customer.phone_e164 ?? "este cliente"}.</p>
-            <p>Tiene {openCaseCount} {openCaseCount === 1 ? "caso abierto" : "casos abiertos"} y {futureAppointmentCount} {futureAppointmentCount === 1 ? "visita futura" : "visitas futuras"}. Puedes continuar; estos trabajos seguirán registrados.</p>
-            <LocalFeedback feedback={archiveFeedback} />
-            <Button variant="danger" disabled={customerMutation !== null} onClick={() => void saveArchive()}>{customerMutation === "archive" ? "Guardando…" : "Confirmar archivo"}</Button>
+          <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} title="Archivar cliente" icon={Archive} description="El cliente dejará de aparecer en la lista habitual.">
+            <div className="client-ficha-dialog">
+              <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div></div>
+              <section className="client-ficha-dialog__archive-info" aria-label="Información del cliente"><strong>Información del cliente</strong><div className="client-ficha-dialog__archive-stats"><div><FileText /><strong>{openCaseCount}</strong><span>{openCaseCount === 1 ? "caso abierto" : "casos abiertos"}</span></div><div><CalendarDays /><strong>{futureAppointmentCount}</strong><span>{futureAppointmentCount === 1 ? "visita futura" : "visitas futuras"}</span></div></div></section>
+              <p className="client-ficha-dialog__warning"><CircleAlert aria-hidden="true" />Estos trabajos seguirán registrados.</p>
+              <LocalFeedback feedback={archiveFeedback} />
+              <footer><Button variant="secondary" onClick={() => setArchiveOpen(false)}>Cancelar</Button><Button variant="danger" disabled={customerMutation !== null} onClick={() => void saveArchive()}>{customerMutation === "archive" ? "Guardando…" : "Archivar cliente"}</Button></footer>
+            </div>
           </Dialog>
-          <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)} title="Fusionar clientes">
-            <Select id="merge-other-client" label="Otro cliente" value={mergeOtherId} options={[{ value: "", label: "Selecciona un cliente" }, ...mergeClients.map((client) => ({ value: String(client.id), label: `${client.name ?? "Sin nombre"} · ${client.phone_e164 ?? "Sin teléfono"}` }))]} onChange={(event) => void selectMergeClient(event.target.value)} />
-            {mergePreview ? <>
-              <p>Cliente superviviente: {mergePreview.survivor_id === customer.id ? customer.name : mergeClients.find((client) => client.id === mergePreview.survivor_id)?.name ?? `#${mergePreview.survivor_id}`}</p>
-              <p>Se moverán: {Object.entries(mergePreview.moved).map(([table, count]) => `${MERGE_COUNT_LABELS[table as keyof ClientMergePreview["moved"]]}: ${count}`).join(" · ")}.</p>
-              <p>{mergePreview.memory_conflicts} conflictos de memoria.</p>
-              {mergePreview.scalar_conflicts.length ? <p>En conflictos de identidad, se conserva el valor del cliente superviviente: {mergePreview.scalar_conflicts.join(", ")}.</p> : null}
-            </> : null}
-            <LocalFeedback feedback={mergeFeedback} />
-            <Button variant="danger" disabled={!mergePreview || mergeLoading} onClick={() => void confirmMerge()}>{mergeLoading ? "Fusionando…" : "Confirmar fusión"}</Button>
+          <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)} title="Fusionar clientes" icon={ArrowLeftRight} description="Revisa las fichas antes de confirmar." size="wide">
+            <div className="client-ficha-dialog client-ficha-dialog__merge">
+              <div className="client-ficha-dialog__merge-current"><strong>Cliente actual</strong><div><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><span><b>{customer.name ?? customer.phone_e164 ?? "Cliente"}</b><small>Cliente desde el {formatIdentityDate(customer.created_at)}</small></span><span className="client-ficha-dialog__merge-phone"><Phone />{customer.phone_e164 ?? "—"}</span></div></div>
+              <Select id="merge-other-client" label="Otro cliente" value={mergeOtherId} options={[{ value: "", label: "Buscar por nombre o teléfono…" }, ...mergeClients.map((client) => ({ value: String(client.id), label: `${client.name ?? "Sin nombre"} · ${client.phone_e164 ?? "Sin teléfono"}` }))]} onChange={(event) => void selectMergeClient(event.target.value)} />
+              <div className="client-ficha-dialog__merge-cards"><section><strong>Ficha actual</strong><div><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><span><b>{customer.name ?? customer.phone_e164 ?? "Cliente"}</b><small>{customer.phone_e164 ?? "—"}</small></span></div></section><section><strong>Otra ficha</strong><div><Avatar name={mergeClients.find((client) => String(client.id) === mergeOtherId)?.name ?? "Sin seleccionar"} /><span><b>{mergeClients.find((client) => String(client.id) === mergeOtherId)?.name ?? "Sin seleccionar"}</b><small>{mergeClients.find((client) => String(client.id) === mergeOtherId)?.phone_e164 ?? "—"}</small></span></div></section></div>
+              <p className="client-ficha-dialog__warning"><CircleAlert aria-hidden="true" />Comprueba que ambas fichas correspondan a la misma persona.</p>
+              {mergePreview ? <p className="client-ficha-dialog__merge-preview">Vista previa: se moverán {Object.entries(mergePreview.moved).map(([table, count]) => `${MERGE_COUNT_LABELS[table as keyof ClientMergePreview["moved"]]}: ${count}`).join(" · ")}; {mergePreview.memory_conflicts} conflictos de memoria{mergePreview.scalar_conflicts.length ? `; se conservan los datos del cliente superviviente en ${mergePreview.scalar_conflicts.join(", ")}` : ""}.</p> : null}
+              <LocalFeedback feedback={mergeFeedback} />
+              <footer><Button variant="secondary" onClick={() => setMergeOpen(false)}>Cancelar</Button><Button variant="danger" disabled={!mergePreview || mergeLoading} onClick={() => void confirmMerge()}>{mergeLoading ? "Fusionando…" : "Confirmar fusión"}</Button></footer>
+            </div>
           </Dialog>
         </section>
 

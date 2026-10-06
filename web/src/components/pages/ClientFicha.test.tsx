@@ -318,7 +318,7 @@ describe("ClientFicha customer controls", () => {
     expect(within(rail).queryByRole("heading", { name: "Identidad" })).not.toBeInTheDocument();
     expect(within(rail).queryByRole("heading", { name: "Estado" })).not.toBeInTheDocument();
     expect(within(rail).getByText("Teléfono", { selector: "dt" })).toBeInTheDocument();
-    expect(within(rail).getByText("+56912345678")).toBeInTheDocument();
+    expect(within(rail).getByText("+56912345678", { selector: "dd" })).toBeInTheDocument();
     expect(within(rail).getAllByText("Contactado", { selector: ".badge" }).length).toBeGreaterThan(0);
 
     const actions = rail.querySelector(".client-ficha__customer-controls") as HTMLElement;
@@ -384,10 +384,12 @@ describe("ClientFicha customer controls", () => {
     render(<ClientFicha customerId={7} data={{ ...ficha, history: { ...ficha.history, appointments: [futureAppointment] } }} memories={memories} />);
     await clickCustomerMenuItem(user, "Archivar");
     const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveTextContent("1 caso abierto");
-    expect(dialog).toHaveTextContent("1 visita futura");
-    expect(within(dialog).getByRole("button", { name: "Confirmar archivo" })).toHaveClass("btn--danger");
-    await user.click(within(dialog).getByRole("button", { name: "Confirmar archivo" }));
+    expect(within(dialog).getByText("caso abierto")).toBeInTheDocument();
+    expect(within(dialog).getByText("visita futura")).toBeInTheDocument();
+    expect(within(dialog).getByText("Información del cliente")).toBeInTheDocument();
+    expect(within(dialog).getByText("Estos trabajos seguirán registrados.")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Archivar cliente" })).toHaveClass("btn--danger");
+    await user.click(within(dialog).getByRole("button", { name: "Archivar cliente" }));
     expect(archiveCustomer).toHaveBeenCalledWith(7);
     expect(await screen.findByRole("heading", { name: "Cliente archivado" })).toBeInTheDocument();
   });
@@ -398,7 +400,7 @@ describe("ClientFicha customer controls", () => {
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
     await clickCustomerMenuItem(user, "Archivar");
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Confirmar archivo" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Archivar cliente" }));
     expect(await screen.findAllByRole("heading", { name: "No pudimos guardar el archivo" })).toHaveLength(1);
   });
 
@@ -427,10 +429,10 @@ describe("ClientFicha merge dialog", () => {
     await clickCustomerMenuItem(user, "Fusionar con otro cliente");
     const dialog = screen.getByRole("dialog");
     await user.selectOptions(within(dialog).getByLabelText("Otro cliente"), "8");
-    expect(await within(dialog).findByText("Cliente superviviente: Marcela Fuentes")).toBeInTheDocument();
-    expect(within(dialog).getByText(/Se moverán:/)).toHaveTextContent("conversaciones: 2 · casos: 1 · notas: 3 · equipos: 1 · visitas: 0");
+    expect(within(dialog).getByText("Revisa las fichas antes de confirmar.")).toBeInTheDocument();
+    expect(within(dialog).getByText(/Vista previa: se moverán/)).toHaveTextContent("conversaciones: 2 · casos: 1 · notas: 3 · equipos: 1 · visitas: 0");
     expect(within(dialog).getByText(/2 conflictos de memoria/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/name/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/se conservan los datos del cliente superviviente en name/)).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Confirmar fusión" })).toHaveClass("btn--danger");
     await user.click(within(dialog).getByRole("button", { name: "Confirmar fusión" }));
 
@@ -519,7 +521,7 @@ describe("ClientFicha slice 2 — product register", () => {
 
     const summary = screen.getByRole("region", { name: "Resumen del cliente" });
     expect(within(summary).getByText("Teléfono", { selector: "dt" })).toBeInTheDocument();
-    expect(within(summary).getByText("+56912345678")).toBeInTheDocument();
+    expect(within(summary).getByText("+56912345678", { selector: "dd" })).toBeInTheDocument();
     expect(within(summary).getByText("Dirección", { selector: "dt" })).toBeInTheDocument();
     expect(within(summary).getByText("Dirección", { selector: "dt" }).parentElement).toHaveTextContent(/Av\. Italia 123\s*Ñuñoa/);
     expect(within(summary).getByText("Consentimiento", { selector: "dt" })).toBeInTheDocument();
