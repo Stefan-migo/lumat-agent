@@ -7,8 +7,6 @@ from langgraph.graph import END, START, StateGraph
 from app.chat.assistant.nodes import (
     assemble_context_node,
     collect_evidence,
-    cortex_session_gate,
-    cortex_session_turn,
     delegation_node,
     execute,
     guardrails,
@@ -55,10 +53,6 @@ def _after_sdb_trigger_gate(state: AssistantState) -> str:
     return "sdb_clarify" if state.get("sdb_route") == "sdb" else "guardrails"
 
 
-def _after_cortex_gate(state: AssistantState) -> str:
-    return "cortex_turn" if state.get("cortex_route") == "cortex" else "sdb_trigger_gate"
-
-
 # Stages where the model's own output was unusable. A provider or instrumentation failure is not a plan:
 # it keeps its existing path, where the responder is attempted and a second failure leaves the turn
 # recoverable instead of quietly answering with a summary.
@@ -103,7 +97,7 @@ def _after_tool_loop(state: AssistantState) -> str:
 
 
 def _after_plan(state: AssistantState) -> str:
-    return "guardrails" if state.get("tool_steps", 0) else "cortex_session_gate"
+    return "guardrails"
 
 
 def _after_cost_gate(state: AssistantState) -> str:
@@ -119,8 +113,6 @@ def build_assistant_graph():
     builder.add_node("assemble_context", assemble_context_node)
     builder.add_node("panel_cost_gate", panel_cost_gate)
     builder.add_node("plan_llm", plan_llm)
-    builder.add_node("cortex_session_gate", cortex_session_gate)
-    builder.add_node("cortex_turn", cortex_session_turn)
     builder.add_node("sdb_trigger_gate", sdb_trigger_gate)
     builder.add_node("sdb_clarify", sdb_clarify)
     builder.add_node("sdb_spec", sdb_spec)
@@ -141,13 +133,8 @@ def build_assistant_graph():
     builder.add_conditional_edges("panel_cost_gate", _after_cost_gate, {"plan_llm": "plan_llm", "evidence": "evidence"})
     builder.add_conditional_edges(
         "plan_llm", _after_plan,
-        {"cortex_session_gate": "cortex_session_gate", "guardrails": "guardrails"},
+        {"guardrails": "guardrails"},
     )
-    builder.add_conditional_edges(
-        "cortex_session_gate", _after_cortex_gate,
-        {"cortex_turn": "cortex_turn", "sdb_trigger_gate": "sdb_trigger_gate"},
-    )
-    builder.add_edge("cortex_turn", "evidence")
     builder.add_conditional_edges(
         "sdb_trigger_gate", _after_sdb_trigger_gate,
         {"guardrails": "guardrails", "sdb_clarify": "sdb_clarify"},
@@ -202,8 +189,8 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
     last_state = None
     stage_nodes = {
         "assemble_context": "planning", "panel_cost_gate": "planning", "plan_llm": "planning",
-        "cortex_session_gate": "planning", "guardrails": "planning", "sdb_trigger_gate": "planning",
-        "cortex_turn": "responding", "sdb_clarify": "planning", "sdb_spec": "planning",
+        "guardrails": "planning", "sdb_trigger_gate": "planning",
+        "sdb_clarify": "planning", "sdb_spec": "planning",
         "sdb_plan": "planning", "sdb_approve": "planning", "sdb_execute": "executing",
         "sdb_verify": "executing", "sdb_deliver": "responding", "execute_tool": "executing",
         "respond_stream": "streaming",

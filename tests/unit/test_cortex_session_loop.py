@@ -2,10 +2,8 @@
 
 from types import SimpleNamespace
 
-import pytest
-
-from app.chat.assistant.graph import build_assistant_graph
-from app.chat.assistant.nodes import classify_cortex_turn, cortex_session_turn
+from app.chat.assistant.graph import _after_plan, build_assistant_graph
+from app.chat.assistant.nodes import _effective_tools
 from app.models import MemoryStatus
 
 
@@ -27,49 +25,40 @@ def _active_state(**overrides):
     return {"cortex_session": session}
 
 
-@pytest.mark.parametrize(
-    ("content", "expected"),
-    [
-        ("What does this cost?", "question"),
-        ("Research the current supplier rates", "research"),
-        ("We will use the existing provider", "decision"),
-        ("Keep going", "continue"),
-        ("/planning close", "close"),
-    ],
-)
-def test_cortex_turn_classification_has_five_classes(content, expected):
-    assert classify_cortex_turn(content) == expected
-
-
-def test_cortex_question_does_not_require_decision(monkeypatch):
-    state = {"content": "What does this cost?", **_active_state()}
-    monkeypatch.setattr("app.chat.assistant.nodes.record_audit", lambda *args, **kwargs: None)
-
-    result = cortex_session_turn(state)
-
-    assert result["cortex_session"]["last_class"] == "question"
-    assert result["cortex_session"]["turn_index"] == 1
-    assert result["cortex_session"]["decision_keys"] == []
-
-
-def test_graph_places_cortex_gate_after_context_and_cost_preflight():
+def test_graph_planner_routes_to_guardrails_without_cortex_turn():
     graph = build_assistant_graph()
     edges = graph.get_graph().edges
     names = [(edge.source, edge.target) for edge in edges]
 
     assert ("assemble_context", "panel_cost_gate") in names
     assert ("panel_cost_gate", "plan_llm") in names
-    assert ("plan_llm", "cortex_session_gate") in names
+    assert _after_plan({"tool_steps": 0}) == "guardrails"
+    assert ("plan_llm", "guardrails") in names
+    assert "cortex_turn" not in graph.get_graph().nodes
+    assert "cortex_session_gate" not in graph.get_graph().nodes
 
 
-def test_inactive_session_routes_to_normal_graph():
-    from app.chat.assistant.nodes import cortex_session_gate
+def test_active_planning_session_filters_write_tools_but_keeps_memory_write_and_reads():
+    effective = {
+        "tools_whitelist": (
+            "memory.delete", "project.create", "automation.create_rule",
+            "memory.write", "kb.retrieve",
+        )
+    }
 
-    state = _active_state(status="closed")
-    result = cortex_session_gate(state)
+    tools = _effective_tools({**_active_state(), "effective": effective})
 
-    assert result["cortex_route"] == "normal"
-    assert result["cortex_rejection"] == "inactive-session"
+    assert "memory.delete" not in tools
+    assert "project.create" not in tools
+    assert "automation.create_rule" not in tools
+    assert "memory.write" in tools
+    assert "kb.retrieve" in tools
+
+
+def test_non_planning_effective_tools_are_unchanged():
+    effective = {"tools_whitelist": ("memory.delete", "project.create", "kb.retrieve")}
+
+    assert _effective_tools({"effective": effective}) == effective["tools_whitelist"]
 
 
 def test_report_closure_archives_upserted_report(monkeypatch):
