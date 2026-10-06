@@ -464,8 +464,12 @@ class ConversationEvent(Base):
 
 class KbDocument(Base):
     __tablename__ = "kb_documents"
+    __table_args__ = (Index("idx_kb_documents_project_id", "project_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    project_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("projects.id", ondelete="CASCADE")
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     format: Mapped[DocumentFormat] = mapped_column(
         pg_enum(DocumentFormat, "document_format"),

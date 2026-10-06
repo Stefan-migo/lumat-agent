@@ -681,6 +681,7 @@ def test_schema_migrations_records_version(migrated_db, admin_conn):
         ("038_customer_merge",),
         ("039_user_profile",),
         ("040_project_config",),
+        ("041_kb_project_scope",),
     ]
 
 
