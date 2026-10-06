@@ -570,6 +570,7 @@ class ToolDefinition:
     read_only: bool
     handler: Callable[[Any, BaseModel], Any]
     description: str
+    tier: Literal["default", "opt_in"]
 
     @property
     def write(self) -> bool:
@@ -580,30 +581,30 @@ class ToolDefinition:
 
 
 TOOL_REGISTRY: dict[str, ToolDefinition] = {
-    "assistant.capabilities": ToolDefinition("assistant.capabilities", CapabilitiesArgs, True, _assistant_capabilities, "List the assistant's own available tools and their purpose."),
-    "customers.search": ToolDefinition("customers.search", SearchArgs, True, _search_customers, "Search customer records."),
-    "customers.list": ToolDefinition("customers.list", SearchArgs, True, _search_customers, "List customer records."),
-    "conversations.search": ToolDefinition("conversations.search", QueryArgs, True, _search_conversations, "Search panel conversations."),
-    "conversations.list": ToolDefinition("conversations.list", QueryArgs, True, _search_conversations, "List panel conversations."),
-    "appointments.upcoming": ToolDefinition("appointments.upcoming", AppointmentArgs, True, _upcoming_appointments, "List upcoming appointments."),
-    "customers.operational_history": ToolDefinition("customers.operational_history", OperationalHistoryArgs, True, _operational_history, "Read one customer's cases (including closed) and appointments (including past)."),
-    "cases.list": ToolDefinition("cases.list", CasesArgs, True, _open_cases, "List open cases."),
-    "kb.retrieve": ToolDefinition("kb.retrieve", KbArgs, True, _retrieve_kb, "Retrieve grounded knowledge-base results."),
-    "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory, "Read scoped memory."),
-    "memory.search": ToolDefinition("memory.search", MemorySearchArgs, True, _search_memory, "Search scoped memory."),
-    "memory.write": ToolDefinition("memory.write", MemoryWriteArgs, False, _write_memory, "Write memory; global across threads by default."),
-    "memory.update": ToolDefinition("memory.update", MemoryUpdateArgs, False, _update_memory, "Update an agent-authored memory."),
-    "memory.delete": ToolDefinition("memory.delete", MemoryDeleteArgs, False, _delete_memory, "Delete an agent-authored memory."),
-    "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis, "Read the operational dashboard summary."),
-    "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter."),
-    "web.fetch": ToolDefinition("web.fetch", WebFetchArgs, True, _web_fetch, "Read one public http(s) page as bounded citable text."),
-    "automation.create_rule": ToolDefinition("automation.create_rule", RuleArgs, False, _create_rule, "Create an automation after approval."),
-    "project.list": ToolDefinition("project.list", ProjectListArgs, True, _project_list, "List project namespaces."),
-    "project.find": ToolDefinition("project.find", ProjectFindArgs, True, _project_find, "Find a project namespace."),
-    "project.create": ToolDefinition("project.create", ProjectCreateArgs, False, _project_create, "Create a project namespace after approval."),
-    "project.rename": ToolDefinition("project.rename", ProjectRenameArgs, False, _project_rename, "Rename a project after approval."),
-    "project.archive": ToolDefinition("project.archive", ProjectArchiveArgs, False, _project_archive, "Archive a project after approval."),
-    "project.merge": ToolDefinition("project.merge", ProjectMergeArgs, False, _project_merge, "Merge projects after approval."),
+    "assistant.capabilities": ToolDefinition("assistant.capabilities", CapabilitiesArgs, True, _assistant_capabilities, "List the assistant's own available tools and their purpose.", tier="default"),
+    "customers.search": ToolDefinition("customers.search", SearchArgs, True, _search_customers, "Search customer records.", tier="default"),
+    "customers.list": ToolDefinition("customers.list", SearchArgs, True, _search_customers, "List customer records.", tier="default"),
+    "conversations.search": ToolDefinition("conversations.search", QueryArgs, True, _search_conversations, "Search panel conversations.", tier="default"),
+    "conversations.list": ToolDefinition("conversations.list", QueryArgs, True, _search_conversations, "List panel conversations.", tier="default"),
+    "appointments.upcoming": ToolDefinition("appointments.upcoming", AppointmentArgs, True, _upcoming_appointments, "List upcoming appointments.", tier="default"),
+    "customers.operational_history": ToolDefinition("customers.operational_history", OperationalHistoryArgs, True, _operational_history, "Read one customer's cases (including closed) and appointments (including past).", tier="default"),
+    "cases.list": ToolDefinition("cases.list", CasesArgs, True, _open_cases, "List open cases.", tier="default"),
+    "kb.retrieve": ToolDefinition("kb.retrieve", KbArgs, True, _retrieve_kb, "Retrieve grounded knowledge-base results.", tier="default"),
+    "memory.read": ToolDefinition("memory.read", MemoryArgs, True, _read_memory, "Read scoped memory.", tier="default"),
+    "memory.search": ToolDefinition("memory.search", MemorySearchArgs, True, _search_memory, "Search scoped memory.", tier="default"),
+    "memory.write": ToolDefinition("memory.write", MemoryWriteArgs, False, _write_memory, "Write memory; global across threads by default.", tier="default"),
+    "memory.update": ToolDefinition("memory.update", MemoryUpdateArgs, False, _update_memory, "Update an agent-authored memory.", tier="default"),
+    "memory.delete": ToolDefinition("memory.delete", MemoryDeleteArgs, False, _delete_memory, "Delete an agent-authored memory.", tier="default"),
+    "dashboard.summary": ToolDefinition("dashboard.summary", KpiArgs, True, _kpis, "Read the operational dashboard summary.", tier="default"),
+    "web.search": ToolDefinition("web.search", WebSearchArgs, True, _web_search, "Search the bounded web adapter.", tier="opt_in"),
+    "web.fetch": ToolDefinition("web.fetch", WebFetchArgs, True, _web_fetch, "Read one public http(s) page as bounded citable text.", tier="opt_in"),
+    "automation.create_rule": ToolDefinition("automation.create_rule", RuleArgs, False, _create_rule, "Create an automation after approval.", tier="opt_in"),
+    "project.list": ToolDefinition("project.list", ProjectListArgs, True, _project_list, "List project namespaces.", tier="default"),
+    "project.find": ToolDefinition("project.find", ProjectFindArgs, True, _project_find, "Find a project namespace.", tier="default"),
+    "project.create": ToolDefinition("project.create", ProjectCreateArgs, False, _project_create, "Create a project namespace after approval.", tier="opt_in"),
+    "project.rename": ToolDefinition("project.rename", ProjectRenameArgs, False, _project_rename, "Rename a project after approval.", tier="opt_in"),
+    "project.archive": ToolDefinition("project.archive", ProjectArchiveArgs, False, _project_archive, "Archive a project after approval.", tier="opt_in"),
+    "project.merge": ToolDefinition("project.merge", ProjectMergeArgs, False, _project_merge, "Merge projects after approval.", tier="opt_in"),
 }
 
 ROLE_TOOL_ALLOWLIST: dict[str, frozenset[UserRole]] = {
