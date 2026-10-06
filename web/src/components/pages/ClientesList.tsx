@@ -219,7 +219,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       meta={!data ? "Clientes del negocio" : undefined}
       state={stateMessage(state, retry)}
     >
-      <section aria-label="Listado de clientes">
+      <section className="clientes-list" aria-label="Listado de clientes">
         <Tabs ariaLabel="Estado de clientes" activeTab={tab} onTabChange={(value) => { setTab(value as typeof tab); setPage(1); setSelected(new Set()); }} tabs={[{ id: "all", label: <>Todos <Badge>{allRows.length}</Badge></> }, ...CUSTOMER_STATES.map((customerState) => ({ id: customerState, label: <>{customerStateLabel(customerState)} <Badge>{counts[customerState]}</Badge></> }))]}>
         {() => <div className="table-card clientes-list__card">
         <div className="table-toolbar clientes-list__toolbar">
@@ -274,7 +274,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
                         { value: "archive", label: "Archivar", icon: Archive, tone: "danger" as const },
                       ];
                   return <li className="table-card__item clientes-list__mobile-card" key={customer.id}>
-                    <div className="clientes-list__mobile-identity"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} className="table__resource-avatar" /><a className="clientes-list__name" href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>{customer.name ?? "—"}</a><input type="checkbox" aria-label={`Seleccionar ${customer.name ?? customer.phone_e164 ?? "cliente"}`} checked={selected.has(customer.id)} onChange={() => toggleSelected(customer.id)} /></div>
+                    <div className="clientes-list__mobile-identity"><input type="checkbox" aria-label={`Seleccionar ${customer.name ?? customer.phone_e164 ?? "cliente"}`} checked={selected.has(customer.id)} onChange={() => toggleSelected(customer.id)} /><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} className="table__resource-avatar" /><a className="clientes-list__name" href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>{customer.name ?? "—"}</a><Menu trigger="icon" label={rowLabel} items={items} onSelect={(value) => { if (value === "state") void openState(customer); else if (value === "archive") void openArchive(customer); else void restore(customer); }} /></div>
                     <div className="clientes-list__mobile-grid">
                       <div><span>Registro</span>{customer.archived_at ? <Badge tone="warning">Archivado</Badge> : "—"}</div>
                       <div><span>Teléfono</span>{customer.phone_e164 ?? "—"}</div>
@@ -282,7 +282,6 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
                       <div><span>Consentimiento</span><span className="clientes-list__consent"><span aria-hidden="true">{customer.consent_status ? <Check /> : <CircleMinus />}</span>{customer.consent_status ? "Sí" : "No"}</span></div>
                       <div><span>Creado</span>{customer.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(customer.created_at)).replace(".", "") : "—"}</div>
                     </div>
-                    <div className="clientes-list__mobile-actions"><Menu trigger="icon" label={rowLabel} items={items} onSelect={(value) => { if (value === "state") void openState(customer); else if (value === "archive") void openArchive(customer); else void restore(customer); }} /></div>
                   </li>;
                 })}
               </ul>

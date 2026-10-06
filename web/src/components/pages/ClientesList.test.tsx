@@ -394,15 +394,18 @@ describe("ClientesList", () => {
     const { container } = render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
     const list = screen.getByRole("list", { name: "Lista de clientes" });
     const card = within(list).getByRole("listitem");
+    const identity = card.querySelector(".clientes-list__mobile-identity") as HTMLElement;
 
     expect(within(card).getByRole("link", { name: "Marcela Fuentes" })).toHaveAttribute("href");
     expect(within(card).getByRole("checkbox", { name: "Seleccionar Marcela Fuentes" })).toBeInTheDocument();
+    expect(identity.firstElementChild).toBe(within(identity).getByRole("checkbox", { name: "Seleccionar Marcela Fuentes" }));
+    expect(within(identity).getByRole("button", { name: "Acciones para Marcela Fuentes" })).toBeInTheDocument();
+    expect(card.querySelector(".clientes-list__mobile-actions")).toBeNull();
     expect(card).toHaveTextContent("RegistroArchivado");
     expect(card).toHaveTextContent("Teléfono+56912345678");
     expect(card).toHaveTextContent("EstadoContactado");
     expect(card).toHaveTextContent("ConsentimientoSí");
     expect(card).toHaveTextContent("Creado15 jul 2026");
-    expect(within(card).getByRole("button", { name: "Acciones para Marcela Fuentes" })).toBeInTheDocument();
     expect(container.querySelector(".clientes-list__mobile-card")?.textContent).not.toContain(">");
   });
 
