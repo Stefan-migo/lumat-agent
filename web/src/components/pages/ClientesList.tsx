@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Archive, ArchiveRestore, ArrowRightLeft, Check, CircleMinus, ChevronDown, Download, Home, Mail, MapPin, Phone, Plus, UserRound, UserRoundPlus } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowRightLeft, CalendarDays, Check, CircleCheck, CircleMinus, ChevronDown, Download, FileText, Home, Mail, MapPin, Phone, Plus, RotateCw, Sparkles, UserRound, UserRoundPlus } from "lucide-react";
 import { ApiError, archiveCustomer, changeClientState, createCustomer, fetchClients as listClients, getClientFicha, unarchiveCustomer } from "../../api";
 import type { Customer, CustomerState } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -15,8 +15,8 @@ import { customerStateLabel, customerStateTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import { Dialog } from "../primitives/Dialog";
 import { Input } from "../primitives/Input";
-import { Select } from "../primitives/Select";
 import { Menu } from "../primitives/Menu";
+import { Tabs } from "../primitives/Tabs";
 import "./ClientesList.css";
 
 export type ClientesListState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
@@ -229,18 +229,18 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       state={stateMessage(state, retry)}
     >
       <section aria-label="Listado de clientes">
-        <nav className="clientes-list__tabs" aria-label="Estado de clientes">{([ ["all", "Todos"], ["scheduled", "Agendados"], ["finished", "Finalizados"] ] as const).map(([key, label]) => <button key={key} type="button" aria-pressed={tab === key} onClick={() => { setTab(key); setPage(1); setSelected(new Set()); }}>{label} <Badge>{counts[key]}</Badge></button>)}</nav>
-        <div className="clientes-list__card">
-        <div className="clientes-list__toolbar">
-          <SearchInput key={searchResetKey} aria-label="Buscar clientes" placeholder="Buscar por nombre o teléfono..." onSearch={(next) => { setSearchTerm(next); setQueryVersion((current) => current + 1); }} />
-          <label className="clientes-list__filter"><span>Consentimiento</span><select aria-label="Consentimiento" value={consent} onChange={(event) => { setConsent(event.target.value as typeof consent); setPage(1); setSelected(new Set()); refresh(); }}><option value="">Todos</option><option value="true">Sí</option><option value="false">No</option></select></label>
+        <Tabs ariaLabel="Estado de clientes" activeTab={tab} onTabChange={(value) => { setTab(value as typeof tab); setPage(1); setSelected(new Set()); }} tabs={[{ id: "all", label: <>Todos <Badge>{counts.all}</Badge></> }, { id: "scheduled", label: <>Agendados <Badge>{counts.scheduled}</Badge></> }, { id: "finished", label: <>Finalizados <Badge>{counts.finished}</Badge></> }]}>
+        {() => <div className="table-card clientes-list__card">
+        <div className="table-toolbar clientes-list__toolbar">
+          <SearchInput key={searchResetKey} aria-label="Buscar clientes" placeholder="Buscar por nombre o teléfono..." onSearch={(next) => { setSearchTerm(next); setPage(1); setQueryVersion((current) => current + 1); }} />
+          <label className="clientes-list__filter"><span>Consentimiento</span><select aria-label="Consentimiento" value={consent} onChange={(event) => { setConsent(event.target.value as typeof consent); setPage(1); setSelected(new Set()); refresh(); }}><option value="">Consentimiento</option><option value="true">Sí</option><option value="false">No</option></select></label>
           <label className="clientes-list__switch"><input type="checkbox" role="switch" aria-label="Mostrar archivados" checked={includeArchived} onChange={(event) => { setIncludeArchived(event.target.checked); refresh(); }} /><span>Mostrar archivados</span></label>
         </div>
         {dialog === null && dialogError ? <p role="alert">{dialogError}</p> : null}
         {state === "loading" ? null : data && data.length > 0 ? (
           <div className="data-region">
-             <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar todos" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar todos</label>{selected.size ? <span>{selected.size} seleccionados · Acciones masivas</span> : null}</div>
-              <DataTable columns={columns(onOpenClient, selected, toggleSelected, sort, () => { setSort((value) => value === "created_desc" ? "created_asc" : "created_desc"); refresh(); })} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
+              <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar todos" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar todos</label>{selected.size ? <span>{selected.size} seleccionados</span> : null}</div>
+               <DataTable columns={columns(onOpenClient, selected, toggleSelected, sort, () => { setSort((value) => value === "created_desc" ? "created_asc" : "created_desc"); refresh(); })} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
               // The row's identity lives in the trigger's accessible name, not in every
               // action label: two pills repeating the customer name dominated the cell
               // (DESIGN_SYSTEM.md:475). `Archivar` is the only destructive action and
@@ -270,7 +270,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
                 </div>
               );
             }} />
-             <footer className="clientes-list__footer"><span>Mostrando {rows.length} de {filteredRows.length} clientes</span><div><Button variant="secondary" disabled={page <= 1} aria-label="Página anterior" onClick={() => setPage((value) => value - 1)}>‹</Button><button className="clientes-list__page-current" aria-current="page">{page}</button><Button variant="secondary" disabled={page >= pageCount} aria-label="Página siguiente" onClick={() => setPage((value) => value + 1)}>›</Button></div></footer>
+              <footer className="table-footer"><span className="table-footer__count">Mostrando {rows.length} de {filteredRows.length} clientes</span><div className="table-footer__pagination"><Button variant="secondary" disabled={page <= 1} aria-label="Página anterior" onClick={() => setPage((value) => value - 1)}>‹</Button><span className="table-footer__page" aria-current="page">{page}</span><Button variant="secondary" disabled={page >= pageCount} aria-label="Página siguiente" onClick={() => setPage((value) => value + 1)}>›</Button></div></footer>
           </div>
         ) : filtered ? (
           <div>
@@ -280,9 +280,10 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
         ) : state === "empty" || (state === "ready" && data?.length === 0) ? (
           <EmptyState title="No hay registros" description="Ajusta tu búsqueda o agrega nuevos clientes." />
         ) : null}
-        </div>
+        </div>}
+        </Tabs>
       </section>
-      <Dialog open={dialog === "create"} onClose={() => setDialog(null)} title="Nuevo cliente" icon={UserRoundPlus} description="Registra sus datos de contacto y ubicación.">
+      <Dialog open={dialog === "create"} onClose={() => setDialog(null)} title="Nuevo cliente" icon={UserRoundPlus} description="Registra sus datos de contacto y ubicación." size="wide">
         <form className="clientes-list__create-form" onSubmit={(event) => void submitCreate(event)}>
           <section><h3>Datos de contacto</h3><div className="clientes-list__contact-grid"><Input label="Teléfono" type="tel" required icon={Phone} helper="Incluye el código de país." placeholder="+56 9 1234 5678" value={phone} onChange={(event) => setPhone(event.target.value)} /><Input label="Nombre (opcional)" icon={UserRound} placeholder="Ej. Carla Núñez" value={name} onChange={(event) => setName(event.target.value)} /></div><Input label="Correo (opcional)" type="email" icon={Mail} placeholder="correo@ejemplo.com" value={email} onChange={(event) => setEmail(event.target.value)} /></section>
           <section><h3>Ubicación</h3><Input label="Comuna (opcional)" icon={MapPin} placeholder="Ej. Providencia" value={comuna} onChange={(event) => setComuna(event.target.value)} /><Input label="Dirección (opcional)" icon={Home} placeholder="Calle, número y departamento" helper="Estos datos facilitan la coordinación de visitas." value={address} onChange={(event) => setAddress(event.target.value)} /></section>
@@ -292,15 +293,23 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
           <Button type="submit" disabled={busy}><UserRoundPlus />Crear cliente</Button></footer>
         </form>
       </Dialog>
-      <Dialog open={dialog === "archive"} onClose={() => setDialog(null)} title="Archivar cliente">
-        <p>{archiveTarget?.name ?? "Este cliente"}: {archiveCounts ? `${archiveCounts.cases} ${archiveCounts.cases === 1 ? "caso abierto" : "casos abiertos"} y ${archiveCounts.appointments} ${archiveCounts.appointments === 1 ? "visita futura" : "visitas futuras"}.` : "Cargando antecedentes…"}</p>
-        {dialogError ? <p role="alert">{dialogError}</p> : null}
-        <Button onClick={() => void confirmArchive()} disabled={busy || !archiveCounts}>Confirmar archivo</Button>
+      <Dialog open={dialog === "archive"} onClose={() => setDialog(null)} title="Archivar cliente" icon={Archive} description="El cliente dejará de aparecer en la lista habitual.">
+        {archiveTarget ? <div className="clientes-list__confirm">
+          <div className="clientes-list__client-context"><Avatar name={archiveTarget.name ?? archiveTarget.phone_e164 ?? "Cliente"} /><div><strong>{archiveTarget.name ?? archiveTarget.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {archiveTarget.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(archiveTarget.created_at)).replace(".", "") : "—"}</span></div></div>
+          <h3>Información del cliente</h3><div className="clientes-list__archive-stats"><div><FileText /><strong>{archiveCounts?.cases ?? "—"}</strong><span>casos abiertos</span></div><div><CalendarDays /><strong>{archiveCounts?.appointments ?? "—"}</strong><span>visitas futuras</span></div></div>
+          <p className="clientes-list__warning"><CircleMinus />Estos trabajos seguirán registrados.</p>
+          {dialogError ? <p role="alert">{dialogError}</p> : null}
+          <footer><Button variant="secondary" onClick={() => setDialog(null)}>Cancelar</Button><Button variant="danger" onClick={() => void confirmArchive()} disabled={busy || !archiveCounts}><Archive />Archivar cliente</Button></footer>
+        </div> : null}
       </Dialog>
-      <Dialog open={dialog === "state"} onClose={() => setDialog(null)} title="Cambiar estado del cliente">
-        <Select id="client-state" label="Estado del cliente" value={selectedState ?? stateTarget?.state ?? ""} options={stateOptions.map((option) => ({ value: option, label: customerStateLabel(option) }))} disabled={busy || stateOptions.length === 0} onChange={(event) => setSelectedState(event.target.value as CustomerState)} />
-        {dialogError ? <p role="alert">{dialogError}</p> : null}
-        <Button onClick={() => void saveState()} disabled={busy || !selectedState || selectedState === stateTarget?.state || stateOptions.length === 0}>{busy ? "Guardando…" : "Guardar estado"}</Button>
+      <Dialog open={dialog === "state"} onClose={() => setDialog(null)} title="Cambiar estado del cliente" icon={RotateCw} description="Selecciona el nuevo estado de atención.">
+        {stateTarget ? <div className="clientes-list__confirm">
+          <div className="clientes-list__client-context"><Avatar name={stateTarget.name ?? stateTarget.phone_e164 ?? "Cliente"} /><div><strong>{stateTarget.name ?? stateTarget.phone_e164 ?? "Cliente"}</strong><span>{stateTarget.phone_e164 ?? "—"}</span></div><div className="clientes-list__current-state"><span>Estado actual</span><Badge tone={customerStateTone(stateTarget.state)}>{customerStateLabel(stateTarget.state)}</Badge></div></div>
+          <h3>Nuevo estado</h3><div className="clientes-list__state-options" role="radiogroup" aria-label="Nuevo estado">{([ ["nuevo", "Nuevo", Sparkles], ["agendado", "Agendado", CalendarDays], ["finalizado", "Finalizado", CircleCheck] ] as const).map(([value, label, StateIcon]) => <button key={value} type="button" role="radio" aria-checked={selectedState === value} disabled={!stateOptions.includes(value) || busy} className={selectedState === value ? "clientes-list__state-option is-selected" : "clientes-list__state-option"} onClick={() => setSelectedState(value)}><StateIcon /><span>{label}</span><span className="clientes-list__radio" /></button>)}</div>
+          <div className="clientes-list__transition"><span>Cambio:</span><Badge tone={customerStateTone(stateTarget.state)}>{customerStateLabel(stateTarget.state)}</Badge><span aria-hidden="true">→</span><Badge tone={customerStateTone(selectedState ?? stateTarget.state)}>{customerStateLabel(selectedState ?? stateTarget.state)}</Badge></div>
+          {dialogError ? <p role="alert">{dialogError}</p> : null}
+          <footer><Button variant="secondary" onClick={() => setDialog(null)}>Cancelar</Button><Button onClick={() => void saveState()} disabled={busy || !selectedState || selectedState === stateTarget.state || stateOptions.length === 0}><Check />{busy ? "Guardando…" : "Guardar estado"}</Button></footer>
+        </div> : null}
       </Dialog>
     </PageFrame>
   );

@@ -266,11 +266,10 @@ describe("ClientesList", () => {
     expect(row).not.toBeNull();
     const menu = await openRowActions(user, row!, "Marcela Fuentes");
     await user.click(menu.getByRole("menuitem", { name: "Cambiar estado" }));
-    const stateSelect = await screen.findByLabelText("Estado del cliente");
-    await user.selectOptions(stateSelect, "en_evaluacion");
+    await user.click(await screen.findByRole("radio", { name: "Nuevo" }));
     await user.click(screen.getByRole("button", { name: "Guardar estado" }));
 
-    expect(changeClientState).toHaveBeenCalledWith(1, "en_evaluacion");
+    expect(changeClientState).toHaveBeenCalledWith(1, "nuevo");
     await waitFor(() => expect(fetchClients).toHaveBeenCalledTimes(2));
   });
 
@@ -287,13 +286,10 @@ describe("ClientesList", () => {
 
     await user.click((await openRowActions(user, row1, "Marcela Fuentes")).getByRole("menuitem", { name: "Cambiar estado" }));
     await user.click((await openRowActions(user, row2, "Pedro Soto")).getByRole("menuitem", { name: "Cambiar estado" }));
-    const select = await screen.findByLabelText("Estado del cliente");
-    await waitFor(() => expect(select.querySelectorAll("option")).toHaveLength(2));
     resolveFirst({ customer: customers[0], states: ["contactado", "cancelado"] });
-
-    await waitFor(() => expect(select.querySelectorAll("option")).toHaveLength(2));
-    expect(within(select).getByRole("option", { name: "Pendiente" })).toBeInTheDocument();
-    expect(within(select).queryByRole("option", { name: "Cancelado" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Agendado" })).toBeDisabled());
+    expect(screen.getByRole("radio", { name: "Agendado" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Agendado" })).toBeDisabled();
   });
 
   it("opens the create dialog and offers ficha navigation for a duplicate phone", async () => {
@@ -327,8 +323,8 @@ describe("ClientesList", () => {
     const activeRow = screen.getByText("Marcela Fuentes").closest("tr")!;
     await user.click((await openRowActions(user, activeRow, "Marcela Fuentes")).getByRole("menuitem", { name: "Archivar" }));
     expect(getClientFicha).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText(/1 caso abierto y 1 visita futura/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Confirmar archivo" }));
+    await waitFor(() => expect(screen.getAllByText("1", { selector: ".clientes-list__archive-stats strong" })).toHaveLength(2));
+    await user.click(screen.getByRole("button", { name: "Archivar cliente" }));
     expect(archiveCustomer).toHaveBeenCalledWith(1);
     unmount();
 
@@ -430,7 +426,7 @@ describe("ClientesList — row actions", () => {
     const user = userEvent.setup();
     render(<ClientesList data={customers} state="ready" />);
     await user.click(screen.getByRole("checkbox", { name: "Seleccionar todos" }));
-    expect(screen.getByText("3 seleccionados · Acciones masivas")).toBeInTheDocument();
+    expect(screen.getByText("3 seleccionados")).toBeInTheDocument();
     expect(screen.getByText("Mostrando 3 de 3 clientes")).toBeInTheDocument();
   });
 

@@ -66,14 +66,15 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
 - [x] Style the client-name link (no browser underline; plain name per the reference).
 - [x] Date format "20 sep 2026" (day month year).
 - [x] Match the estado/consent badges and the pagination active-page button to the reference.
+- [x] CL-2a-r2 polish: reuse shared Tabs/list patterns, make archived toggle readable, remove the dead bulk-action label, and reset pagination on search.
 
 ### CL-2b — Clientes list dialogs
 - [x] Dialog headers: pass existing `Dialog` `icon`/`description` (`clientes-020`, list call sites).
 - [x] New-client form: icon header + description, "Datos de contacto" (Teléfono * + Nombre),
       Correo, "Ubicación" (Comuna + Dirección), "* Campo obligatorio", Cancelar/Crear cliente
       (`clientes-021`, `clientes-022`).
-- [ ] Change-state dialog: client/current-state row, three radio cards, summary (`clientes-023`).
-- [ ] Archive confirmation label/danger tone on the list entry point (`clientes-032`, list side).
+- [x] Change-state dialog: client/current-state row, three radio cards, summary (`clientes-023`).
+- [x] Archive confirmation label/danger tone and client information block on the list entry point (`clientes-032`, list side).
 
 ### CL-3 — Client ficha shell
 - [ ] Identity header: avatar, name, "Cliente desde [date]", Agendar visita/Ver conversación
