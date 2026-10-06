@@ -48,13 +48,6 @@
 .clientes-list__client-context > div > span, .clientes-list__current-state > span { color: var(--corp-fg-muted); font-size: var(--text-sm); }
 .clientes-list__current-state { display: grid; justify-items: end; gap: var(--space-1); margin-left: auto; }
 .clientes-list__confirm h3 { margin: 0; font-size: var(--text-md); }
-.clientes-list__state-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
-.clientes-list__state-option { position: relative; display: grid; grid-template-rows: 1fr auto; gap: var(--space-3); min-height: 7rem; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); font: inherit; text-align: left; cursor: pointer; }
-.clientes-list__state-option > svg { width: var(--icon-lg); height: var(--icon-lg); }
-.clientes-list__state-option.is-selected { border: 2px solid var(--corp-primary); background: var(--success-bg); }
-.clientes-list__radio { position: absolute; top: var(--space-3); right: var(--space-3); width: var(--space-4); height: var(--space-4); border: 1px solid var(--border-strong); border-radius: 50%; }
-.clientes-list__state-option.is-selected .clientes-list__radio { border: 5px solid var(--corp-primary); }
-.clientes-list__transition { display: flex; align-items: center; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
 .clientes-list__confirm footer { display: flex; justify-content: flex-end; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border); }
 .clientes-list__archive-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .clientes-list__archive-stats > div { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
@@ -81,8 +74,6 @@
   .clientes-list__toolbar { grid-template-columns: 1fr; }
   .clientes-list__contact-grid { grid-template-columns: 1fr; }
   .clientes-list__create-form > footer { flex-wrap: wrap; }
-  .clientes-list__state-options { grid-template-columns: 1fr; }
-  .clientes-list__state-option { min-height: 3.5rem; grid-template-columns: auto 1fr; grid-template-rows: auto; align-items: center; }
   .clientes-list__confirm footer { flex-direction: column-reverse; }
   .clientes-list__confirm footer .btn { width: 100%; }
 }

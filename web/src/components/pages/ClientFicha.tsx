@@ -22,6 +22,7 @@ import { CollapsibleMessages } from "../shared/CollapsibleMessages";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
+import { ChangeCustomerStateDialog } from "../shared/ChangeCustomerStateDialog";
 import {
   appointmentStatusLabel,
   appointmentStatusTone,
@@ -414,15 +415,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
             </dl>
           </Card>
-          <Dialog open={stateDialogOpen} onClose={() => setStateDialogOpen(false)} title="Cambiar estado del cliente" icon={RefreshCw} description="Selecciona el nuevo estado para este cliente.">
-            <div className="client-ficha-dialog">
-              <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div><div className="client-ficha-dialog__current"><span>Estado actual</span><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div></div>
-              <div className="client-ficha-dialog__options"><strong>Nuevo estado</strong><div role="radiogroup" aria-label="Nuevo estado">{(customer.allowed_transitions ?? []).map((value) => <Button key={value} type="button" role="radio" aria-checked={selectedState === value} variant="secondary" className={selectedState === value ? "client-ficha-dialog__option is-selected" : "client-ficha-dialog__option"} disabled={mutation !== null} onClick={() => setSelectedState(value)}><strong>{customerStateLabel(value)}</strong><span className="client-ficha-dialog__radio" aria-hidden="true" /></Button>)}</div>{!(customer.allowed_transitions ?? []).length ? <p role="status">Este cliente no tiene transiciones de estado disponibles.</p> : null}</div>
-              {(customer.allowed_transitions ?? []).length ? <div className="client-ficha-dialog__transition"><span>Cambio de estado</span><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge><span aria-hidden="true">→</span><Badge tone={customerStateTone(selectedState ?? customer.state)}>{customerStateLabel(selectedState ?? customer.state)}</Badge></div> : null}
-              <LocalFeedback feedback={stateFeedback} />
-              <footer><Button variant="secondary" onClick={() => setStateDialogOpen(false)}>Cancelar</Button>{(customer.allowed_transitions ?? []).length ? <Button disabled={mutation !== null || customerId === undefined || !selectedState || selectedState === customer.state} onClick={() => void saveState()}>{mutation === "state" ? "Guardando…" : "Guardar estado"}</Button> : null}</footer>
-            </div>
-          </Dialog>
+          <ChangeCustomerStateDialog open={stateDialogOpen} onClose={() => setStateDialogOpen(false)} customer={customer} subtitle={`Cliente desde el ${formatIdentityDate(customer.created_at)}`} selectedState={selectedState} onSelect={setSelectedState} onSave={() => void saveState()} busy={mutation !== null || customerId === undefined || selectedState === customer.state} feedback={<LocalFeedback feedback={stateFeedback} />} />
           <Dialog open={consentDialogOpen} onClose={() => setConsentDialogOpen(false)} title="Cambiar consentimiento" icon={ShieldCheck} description="Registra la elección expresada por el cliente.">
             <div className="client-ficha-dialog">
               <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div><div className="client-ficha-dialog__current"><span>Consentimiento actual</span><Badge tone={customer.consent_status ? "success" : "neutral"}>{customer.consent_status ? "Sí" : "No"}</Badge></div></div>
