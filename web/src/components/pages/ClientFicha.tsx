@@ -1,4 +1,5 @@
 import { useCallback, useState, type FormEvent } from "react";
+import { CalendarDays, Clock3, Copy, MessageSquare, Pencil } from "lucide-react";
 import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
@@ -32,6 +33,7 @@ import {
 } from "../shared/toneMaps";
 
 const DATE_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short" });
+const IDENTITY_DATE_FORMAT = new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric" });
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" });
 const CLP_FORMAT = new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 });
 const MESSAGE_PREVIEW = 10;
@@ -41,6 +43,7 @@ const MERGE_COUNT_LABELS: Record<keyof ClientMergePreview["moved"], string> = { 
 const FICHA_TABS = [{ id: "summary", label: "Resumen" }, { id: "cases", label: "Casos" }, { id: "visits", label: "Visitas" }, { id: "conversations", label: "Conversaciones" }];
 
 const formatDate = (value: string | null | undefined) => (value ? DATE_FORMAT.format(new Date(value)) : "—");
+const formatIdentityDate = (value: string | null | undefined) => (value ? IDENTITY_DATE_FORMAT.format(new Date(value)).replace(".", "") : "—");
 const formatDateTime = (value: string | null | undefined) => (value ? DATE_TIME_FORMAT.format(new Date(value)) : "—");
 
 export interface ClientFichaProps {
@@ -80,11 +83,14 @@ function surfaceClass(rowCount: number) {
 
 export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, isSaving = false, onRetryCalendar, state: controlledState }: ClientFichaProps) {
   const [activeTab, setActiveTab] = useState("summary");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [caseEditorOpen, setCaseEditorOpen] = useState(false);
   const [retryingCalendarId, setRetryingCalendarId] = useState<number | null>(null);
   const [messagesExpanded, setMessagesExpanded] = useState(false);
   const [refreshed, setRefreshed] = useState<{ ficha: ClientFichaResponse; memories: Memory[]; pendingRelations: MemoryRelation[] } | null>(null);
   const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
   const [note, setNote] = useState("");
+  const [noteComposerOpen, setNoteComposerOpen] = useState(false);
   const [mutation, setMutation] = useState<"state" | "note" | null>(null);
   const [stateFeedback, setStateFeedback] = useState<Feedback | null>(null);
   const [noteFeedback, setNoteFeedback] = useState<Feedback | null>(null);
@@ -343,15 +349,15 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     <PageFrame title="" className="client-ficha-page" state={stateMessage(state)}>
       <header className="client-ficha__identity">
         <div className="client-ficha__identity-person">
-          <Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} />
+          <Avatar className="client-ficha__hero-avatar" name={customer.name ?? customer.phone_e164 ?? "Cliente"} />
           <div>
             <h1>{customer.name ?? customer.phone_e164 ?? "—"}</h1>
-            <p>Cliente desde {formatDate(customer.created_at)}</p>
+            <p>Cliente desde el {formatIdentityDate(customer.created_at)}</p>
           </div>
         </div>
         <div className="client-ficha__identity-actions">
-          <Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "agenda" }); }}>Agendar visita</Button>
-          <Button onClick={() => { window.location.href = pathForRoute({ view: "conversations" }); }}>Ver conversación</Button>
+          <Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "agenda" }); }}><CalendarDays /> Agendar visita</Button>
+          <Button onClick={() => { window.location.href = pathForRoute({ view: "conversations" }); }}><MessageSquare /> Ver conversación</Button>
         </div>
       </header>
       <Tabs tabs={FICHA_TABS} activeTab={activeTab} onTabChange={setActiveTab} ariaLabel="Secciones de la ficha del cliente">
@@ -361,8 +367,6 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
         <section className="detail-region__rail" aria-label="Resumen del cliente">
           <Card title="Datos del cliente" className="client-ficha__data-card">
             <div className="client-ficha__customer-controls">
-              <Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} />
-              <strong>{customer.name ?? customer.phone_e164 ?? "—"}</strong>
               {customer.archived_at ? <Badge tone="warning">Cliente archivado</Badge> : null}
             <Button variant="secondary" aria-label="Editar identidad" disabled={customerId === undefined || customerMutation !== null} onClick={openProfile}>Editar</Button>
               <Menu
@@ -384,14 +388,12 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               {profileOpen ? null : <LocalFeedback feedback={profileFeedback} />}
               {archiveOpen ? null : <LocalFeedback feedback={archiveFeedback} />}
             </div>
-            <dl className="detail-region__facts">
-              <div><dt>Teléfono</dt><dd>{customer.phone_e164 ?? "—"}</dd></div>
-              <div><dt>Correo</dt><dd>{customer.email ?? "—"}</dd></div>
-              <div><dt>Dirección</dt><dd>{customer.address ?? "—"}</dd></div>
-              <div><dt>Comuna</dt><dd>{customer.comuna ?? "—"}</dd></div>
-              <div><dt>Estado del cliente</dt><dd><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></dd></div>
+            <dl className="detail-region__facts client-ficha__contact-facts">
+              <div><dt>Teléfono</dt><dd>{customer.phone_e164 ?? "—"}<Button variant="secondary" aria-label="Copiar teléfono" onClick={() => void navigator.clipboard?.writeText(customer.phone_e164 ?? "") }><Copy/></Button></dd></div>
+              <div><dt>Correo</dt><dd>{customer.email ?? "—"}<Button variant="secondary" aria-label="Copiar correo" onClick={() => void navigator.clipboard?.writeText(customer.email ?? "") }><Copy/></Button></dd></div>
+              <div><dt>Dirección</dt><dd>{customer.address ?? "—"}{customer.comuna ? <><br/>{customer.comuna}</> : null}<Button variant="secondary" aria-label="Copiar dirección" onClick={() => void navigator.clipboard?.writeText([customer.address, customer.comuna].filter(Boolean).join(", "))}><Copy/></Button></dd></div>
+              <div className="client-ficha__customer-state"><dt>Estado del cliente</dt><dd><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></dd></div>
               <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
-              <div><dt>Cliente desde</dt><dd>{formatDate(customer.created_at)}</dd></div>
             </dl>
             <div className="client-ficha__state-control">
               <Select
@@ -443,23 +445,16 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
         </section>
 
         <div className="detail-region__main">
-          <Card title="Caso activo" className="client-ficha__case-card">
+          <Card className="client-ficha__case-card">
             {activeCase ? <>
-              <dl className="detail-region__facts">
-                <div><dt>#</dt><dd>#{activeCase.id}</dd></div>
-                <div><dt>Servicio</dt><dd>{activeCase.service}</dd></div>
-                <div><dt>Prioridad</dt><dd>{activeCase.priority}</dd></div>
-                <div><dt>Estado</dt><dd><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge></dd></div>
-                <div><dt>Responsable</dt><dd>{data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"}</dd></div>
-                <div><dt>Resumen</dt><dd>{activeCase.summary ?? "—"}</dd></div>
-                <div><dt>Monto del servicio</dt><dd>{activeCase.amount === null ? "Sin monto registrado" : CLP_FORMAT.format(activeCase.amount)}</dd></div>
-              </dl>
-              <Button variant="secondary" disabled={customerId === undefined || amountMutation} onClick={() => { setAmountInput(activeCase.amount === null ? "" : String(activeCase.amount)); setAmountOpen(true); }}>Editar monto del caso</Button>
+                <div className="client-ficha__case-eyebrow"><span className="client-ficha__status-dot"/> CASO ACTIVO <span>#{activeCase.id}</span><Menu trigger="icon" label="Acciones del caso" items={[{ value: "edit", label: "Editar caso" }, { value: "amount", label: "Definir monto" }]} onSelect={(value) => value === "amount" ? (setAmountInput(activeCase.amount === null ? "" : String(activeCase.amount)), setAmountOpen(true)) : setCaseEditorOpen(true)} /></div>
+              <h2 className="client-ficha__case-title">{activeCase.service}</h2>
+              <div className="client-ficha__case-badges"><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge><Badge tone="warning">Prioridad {activeCase.priority}</Badge></div>
+              <p>{activeCase.summary ?? "—"}</p>
+              <div className="client-ficha__case-details"><div><small>Responsable</small><strong><Avatar name={data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"} /> {data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"}⌄</strong></div><div><small>Monto del servicio</small><strong>{activeCase.amount === null ? "Sin registrar" : CLP_FORMAT.format(activeCase.amount)}</strong><Button variant="secondary" onClick={() => { setAmountInput(activeCase.amount === null ? "" : String(activeCase.amount)); setAmountOpen(true); }}>Definir monto</Button></div></div>
               {activeCase.emergency ? <Badge tone={activeCase.ack_by === null ? "danger" : "warning"}>{activeCase.ack_by === null ? "Emergencia sin reconocer" : `Emergencia reconocida por ${activeCase.ack_by}`}</Badge> : null}
-              <details className="client-ficha__case-edit">
-                <summary>Editar caso</summary>
-                <CaseActions target={activeCase} users={data.users} onUpdate={updateCase} onAcknowledge={acknowledgeCase} />
-              </details>
+              <Button className="client-ficha__edit-case" variant="secondary" onClick={() => setCaseEditorOpen((open) => !open)}><Pencil/> {caseEditorOpen ? "Cerrar edición" : "Editar caso"}</Button>
+              {caseEditorOpen ? <div className="client-ficha__case-edit"><CaseActions target={activeCase} users={data.users} onUpdate={updateCase} onAcknowledge={acknowledgeCase} /></div> : null}
               <LocalFeedback feedback={caseFeedback} />
             </> : <EmptyState title="Sin caso activo" />}
           </Card>
@@ -471,11 +466,11 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <Button type="submit" disabled={amountMutation}>{amountMutation ? "Guardando…" : "Guardar monto"}</Button>
             </form>
           </Dialog>
-          <ClientMemories memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} compact onViewAll={() => setActiveTab("conversations")} />
+          <ClientMemories memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} compact conversationId={history.conversations[0]?.id} onViewAll={() => setActiveTab("conversations")} />
 
           <section aria-label="Equipos" className="client-ficha__equipment-slot">
             <Card title="Equipos" className="client-ficha__equipment-card">
-              <Button variant="secondary" disabled={customerId === undefined || equipmentMutation} onClick={() => openEquipment()}>Agregar equipo</Button>
+              <Button variant="secondary" disabled={customerId === undefined || equipmentMutation} onClick={() => openEquipment()}>＋ Agregar equipo</Button>
               {equipmentData.state === "loading" ? <p role="status">Cargando equipos…</p> : null}
               {equipmentData.state === "error" || equipmentData.state === "denied" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar los equipos" /> : null}
               {equipmentRows.length ? <ul className="data-region">
@@ -485,7 +480,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
                   {entry.details ? <p>{entry.details}</p> : null}
                   <Button variant="secondary" disabled={equipmentMutation} onClick={() => openEquipment(entry)}>Editar equipo</Button>
                 </li>)}
-              </ul> : equipmentData.state === "empty" || equipmentData.state === "ready" ? <EmptyState title="No hay equipos registrados" /> : null}
+              </ul> : equipmentData.state === "empty" || equipmentData.state === "ready" ? <div className="client-ficha__equipment-empty"><div className="client-ficha__equipment-illustration" aria-hidden="true">♧</div><EmptyState title="Sin equipos registrados"/><Button variant="secondary" disabled={customerId === undefined || equipmentMutation} onClick={() => openEquipment()}>Agregar equipo</Button></div> : null}
               {equipmentOpen ? null : <LocalFeedback feedback={equipmentFeedback} />}
             </Card>
           </section>
@@ -502,45 +497,50 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           </Dialog>
 
           <Card title="Notas" className="client-ficha__notes-card">
-            {data.notes.length ? data.notes.map((entry) => <p key={entry.id}>{entry.author ?? "—"} · {entry.note}</p>) : <EmptyState title="No hay notas" />}
-            <Textarea
+            <Button variant="secondary" aria-expanded={noteComposerOpen} disabled={customerId === undefined || mutation !== null} onClick={() => setNoteComposerOpen(true)}>⊕ Agregar nota</Button>
+            {data.notes.length ? data.notes.map((entry) => <article className="client-ficha__note-row" key={entry.id}><Avatar name={entry.author ?? "Operador"}/><div><strong>{entry.author ?? "—"}</strong><small>{formatDate(entry.created_at)}</small></div><p>{entry.note}</p><Menu trigger="icon" label="Acciones de nota" items={[{value:"copy",label:"Copiar nota"}]} onSelect={()=>void navigator.clipboard?.writeText(entry.note)}/></article>) : <EmptyState title="No hay notas" />}
+            {noteComposerOpen ? <Textarea
               id="new-note"
               label="Nueva nota"
               value={note}
               disabled={mutation !== null || customerId === undefined}
               onChange={(event) => setNote(event.target.value)}
-            />
-            <Button disabled={mutation !== null || customerId === undefined} onClick={() => void saveNote()}>
+            /> : null}
+            {noteComposerOpen ? <Button disabled={mutation !== null || customerId === undefined} onClick={() => void saveNote()}>
               {mutation === "note" ? "Guardando…" : "Agregar nota"}
-            </Button>
+            </Button> : null}
             <LocalFeedback feedback={noteFeedback} />
           </Card>
 
           <Card title="Próximas visitas" className="client-ficha__upcoming-card">
-            {upcomingAppointments.length ? <ul className="client-ficha__visits">{upcomingAppointments.map((appointment) => <li key={appointment.id}><a className="table__link" href={pathForRoute({ view: "agenda", appointmentId: appointment.id })}><span>{formatDateTime(appointment.starts_at)}</span><span>{appointment.service}</span><Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge></a></li>)}</ul> : <EmptyState title="No hay próximas visitas" />}
+            {upcomingAppointments.length ? <ul className="client-ficha__visits">{upcomingAppointments.map((appointment) => { const date = new Date(appointment.starts_at); return <li key={appointment.id}><a className="client-ficha__upcoming-row" href={pathForRoute({ view: "agenda", appointmentId: appointment.id })}><span className="client-ficha__date-tile"><strong>{date.getDate().toString().padStart(2, "0")}</strong><small>{new Intl.DateTimeFormat("es-CL", { month: "short" }).format(date).replace(".", "").toUpperCase()}</small></span><span>{appointment.service}</span><span><Clock3/>{new Intl.DateTimeFormat("es-CL",{hour:"2-digit",minute:"2-digit"}).format(date)}</span><Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge></a></li>; })}</ul> : <EmptyState title="No hay próximas visitas" />}
             <Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "agenda" }); }}>Ver agenda →</Button>
           </Card>
 
-          <button type="button" className="client-ficha__history-entry" onClick={() => setActiveTab("cases")}>
-            <span aria-hidden="true">◷</span><span><strong>Historial del cliente</strong><small>Visitas, conversaciones y casos anteriores</small></span><span aria-hidden="true">›</span>
+          <button type="button" className="client-ficha__history-entry" onClick={() => setHistoryOpen(true)}>
+            <Clock3 aria-hidden="true"/><span><strong>Historial del cliente</strong><small>Visitas, conversaciones y casos anteriores</small></span><span aria-hidden="true">›</span>
           </button>
 
         </div>
       </div>
       </> : null}
-      {activeTab === "cases" ? <div className="detail-region__main">
-        {activeCase ? <Card title="Caso activo"><p>{activeCase.service} · #{activeCase.id}</p><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge></Card> : null}
-        <section aria-label="Casos anteriores" className="client-ficha__history-block"><h2>Casos anteriores</h2><div className={surfaceClass(archivedCases.length)}><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></div></section>
+      {activeTab === "cases" ? <div className="detail-region">
+        <section className="detail-region__main"><Card title="Casos del cliente" description="Caso activo e historial de atención.">{activeCase ? <div className="client-ficha__case-inline"><span className="client-ficha__status-dot"/> CASO ACTIVO <strong>{activeCase.service}</strong><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge><Badge tone="warning">Prioridad {activeCase.priority}</Badge><p>{activeCase.summary}</p><Button variant="secondary" onClick={() => setCaseEditorOpen((open) => !open)}>Editar caso</Button>{caseEditorOpen ? <CaseActions target={activeCase} users={data.users} onUpdate={updateCase} onAcknowledge={acknowledgeCase}/> : null}</div> : <EmptyState title="Sin caso activo"/>}</Card><section aria-label="Casos anteriores" className="client-ficha__history-block"><h2>Casos anteriores</h2><div className={surfaceClass(archivedCases.length)}><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></div></section></section>
       </div> : null}
       {activeTab === "visits" ? <div className="detail-region__main">
-        <section aria-label="Visitas" className="client-ficha__history-block"><h2>Visitas</h2>{appointments.length ? <ul className="client-ficha__visits data-region">{appointments.map((appointment: Appointment) => <li key={appointment.id}><a className="table__link" href={pathForRoute({ view: "agenda", appointmentId: appointment.id })}><span>{appointment.service}</span><span>{formatDateTime(appointment.starts_at)}</span><Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge></a>{appointment.calendar_error ? <><StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`} /><Button variant="secondary" disabled={retryingCalendarId === appointment.id} onClick={() => void retryCalendar(appointment.id)}>Reintentar calendario</Button></> : null}</li>)}</ul> : <EmptyState title="No hay visitas" />}</section>
+        <section aria-label="Próximas visitas" className="client-ficha__history-block"><h2>Visitas</h2><Card title="Próximas visitas" description="Visitas pendientes de este cliente.">{upcomingAppointments.length ? <div className="data-region"><DataTable columns={[{key:"date",header:"Fecha y hora",render:(row: Appointment)=><><strong>{formatDate(row.starts_at)}</strong><br/><Clock3/> {new Intl.DateTimeFormat("es-CL",{hour:"2-digit",minute:"2-digit"}).format(new Date(row.starts_at))}</>},{key:"service",header:"Servicio",render:(row: Appointment)=><a href={pathForRoute({view:"agenda",appointmentId:row.id})}>{row.service}</a>},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>},{key:"actions",header:"Acciones",render:(row: Appointment)=><Button variant="secondary" onClick={()=>{window.location.href=pathForRoute({view:"agenda",appointmentId:row.id})}}>Reprogramar</Button>}] as Column<Appointment>[]} rows={upcomingAppointments} rowKey={(row)=>String(row.id)}/></div>:<EmptyState title="No hay próximas visitas"/>}</Card><Card title="Historial de visitas"><DataTable columns={[{key:"date",header:"Fecha y hora",render:(row: Appointment)=><>{formatDate(row.starts_at)}<br/><Clock3/> {formatDateTime(row.starts_at)}</>},{key:"service",header:"Servicio",render:(row: Appointment)=><a href={pathForRoute({view:"agenda",appointmentId:row.id})}>{row.service}</a>},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>}] as Column<Appointment>[]} rows={appointments.filter(row=>!upcomingAppointments.includes(row))} rowKey={(row)=>String(row.id)} /></Card>{appointments.some((appointment)=>appointment.calendar_error) ? appointments.filter((appointment)=>appointment.calendar_error).map((appointment)=><div key={appointment.id}><StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`}/><Button variant="secondary" disabled={retryingCalendarId===appointment.id} onClick={()=>void retryCalendar(appointment.id)}>Reintentar calendario</Button></div>):null}</section>
       </div> : null}
       {activeTab === "conversations" ? <div className="detail-region__main">
-        <section aria-label="Conversaciones" className="client-ficha__history-block"><h2>Conversaciones</h2><div className={surfaceClass(history.conversations.length)}><DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row) => String(row.id)} /></div></section>
-        <section aria-label="Mensajes" className="client-ficha__history-block"><h2>Mensajes</h2><div className={surfaceClass(history.messages.length)}><CollapsibleMessages total={history.messages_total} expanded={messagesExpanded} onToggle={toggleMessages}><DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} /></CollapsibleMessages></div></section>
+        <section aria-label="Conversaciones" className="client-ficha__history-block"><Card title="Conversaciones del cliente"><div className={surfaceClass(history.conversations.length)}><DataTable columns={[...conversationColumns,{key:"actions",header:"Acciones",render:(row)=><Button variant="secondary" onClick={()=>{window.location.href=pathForRoute({view:"conversations",conversationId:row.id})}}>Abrir conversación</Button>}] as Column<(typeof history.conversations)[number]>[]} rows={history.conversations} rowKey={(row) => String(row.id)} /></div></Card></section>
+        <section aria-label="Mensajes" className="client-ficha__history-block"><h2>Mensajes de la conversación #{history.conversations[0]?.id ?? "—"}</h2><p>Historial de mensajes del hilo seleccionado.</p><div className={surfaceClass(history.messages.length)}><CollapsibleMessages total={history.messages_total} expanded={messagesExpanded} onToggle={toggleMessages}><DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} /></CollapsibleMessages></div></section>
       </div> : null}
         </>}
       </Tabs>
+      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} title="Historial del cliente" description="Visitas, conversaciones y casos anteriores">
+        <section><h3>Casos anteriores</h3><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></section>
+        <section><h3>Visitas</h3><DataTable columns={[{key:"service",header:"Servicio",render:(row: Appointment)=>row.service},{key:"date",header:"Fecha",render:(row: Appointment)=>formatDateTime(row.starts_at)},{key:"status",header:"Estado",render:(row: Appointment)=><Badge>{appointmentStatusLabel(row.status)}</Badge>}] as Column<Appointment>[]} rows={appointments} rowKey={(row)=>String(row.id)}/></section>
+        <section><h3>Conversaciones</h3><DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row)=>String(row.id)}/></section>
+      </Dialog>
     </PageFrame>
   );
 }

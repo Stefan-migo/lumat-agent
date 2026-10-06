@@ -132,7 +132,7 @@ describe("ClientFicha page grammar", () => {
     expect(screen.getByRole("heading", { name: "Memoria del cliente" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Notas" })).toBeInTheDocument();
     expect(screen.getAllByText("Prefiere contacto por la tarde.")).toHaveLength(1);
-    expect(screen.getByText("operador · Confirmar por WhatsApp")).toBeInTheDocument();
+    expect(screen.getByText("Confirmar por WhatsApp")).toBeInTheDocument();
     expect(screen.getAllByText("Contactado").length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "Casos anteriores" })).not.toBeInTheDocument();
     expect(screen.getByRole("tablist", { name: "Secciones de la ficha del cliente" })).toBeInTheDocument();
@@ -142,9 +142,11 @@ describe("ClientFicha page grammar", () => {
   it("renders active case facts and keeps it out of the archive", async () => {
     const user = userEvent.setup();
     render(<ClientFicha data={ficha} memories={memories} />);
-    expect(screen.getByRole("heading", { name: "Caso activo" })).toBeInTheDocument();
+    expect(screen.getByText("CASO ACTIVO")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Reparación" })).toBeInTheDocument();
     expect(screen.getByText("Emergencia sin reconocer")).toBeInTheDocument();
-    expect(screen.getAllByText("operador").length).toBeGreaterThan(0);
+    expect(screen.getByText("operador⌄")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Editar caso" }));
     expect(screen.getByLabelText("Estado caso 2")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Casos" }));
     const archive = screen.getByRole("region", { name: "Casos anteriores" });
@@ -161,9 +163,9 @@ describe("ClientFicha page grammar", () => {
 
     expect(screen.getByText(/125\.000/)).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Casos" }));
-    expect(screen.getByText("Sin monto registrado")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Casos anteriores" })).getByText("Sin monto registrado")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Resumen" }));
-    await user.click(screen.getByRole("button", { name: "Editar monto del caso" }));
+    await user.click(screen.getByRole("button", { name: "Definir monto" }));
     const dialog = screen.getByRole("dialog");
     await user.clear(within(dialog).getByLabelText("Monto CLP"));
     await user.type(within(dialog).getByLabelText("Monto CLP"), "200000");
@@ -177,7 +179,7 @@ describe("ClientFicha page grammar", () => {
     const user = userEvent.setup();
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
-    await user.click(screen.getByRole("button", { name: "Editar monto del caso" }));
+    await user.click(screen.getByRole("button", { name: "Definir monto" }));
     const dialog = screen.getByRole("dialog");
     const input = within(dialog).getByLabelText("Monto CLP");
     // fireEvent bypasses native constraint validation, mirroring the advisory's
@@ -196,6 +198,7 @@ describe("ClientFicha page grammar", () => {
     vi.mocked(postJson).mockResolvedValue({ ok: true });
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+    await user.click(screen.getByRole("button", { name: "Editar caso" }));
     await user.selectOptions(screen.getByLabelText("Estado caso 2"), "cerrado");
     await user.selectOptions(screen.getByLabelText("Responsable caso 2"), "");
     await user.click(screen.getByRole("button", { name: "Actualizar" }));
@@ -209,6 +212,7 @@ describe("ClientFicha page grammar", () => {
     const user = userEvent.setup();
     vi.mocked(postJson).mockRejectedValue(new ApiError(500, "private error"));
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+    await user.click(screen.getByRole("button", { name: "Editar caso" }));
     await user.click(screen.getByRole("button", { name: "Actualizar" }));
     expect(await screen.findByRole("heading", { name: "No pudimos guardar el caso" })).toBeInTheDocument();
   });
@@ -222,6 +226,7 @@ describe("ClientFicha page grammar", () => {
 
     await user.selectOptions(screen.getByLabelText("Estado del cliente"), "pendiente");
     await user.click(screen.getByRole("button", { name: "Guardar estado" }));
+    await user.click(screen.getByRole("button", { name: "⊕ Agregar nota" }));
     await user.type(screen.getByLabelText("Nueva nota"), "Llamar mañana");
     await user.click(screen.getByRole("button", { name: "Agregar nota" }));
 
@@ -286,6 +291,7 @@ describe("ClientFicha page grammar", () => {
     const user = userEvent.setup();
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
+    await user.click(screen.getByRole("button", { name: "⊕ Agregar nota" }));
     await user.click(screen.getByRole("button", { name: "Agregar nota" }));
 
     expect(addClientNote).not.toHaveBeenCalled();
@@ -305,8 +311,6 @@ describe("ClientFicha customer controls", () => {
     expect(within(rail).getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
     expect(within(rail).queryByRole("heading", { name: "Identidad" })).not.toBeInTheDocument();
     expect(within(rail).queryByRole("heading", { name: "Estado" })).not.toBeInTheDocument();
-    expect(within(rail).getByText("MF")).toBeInTheDocument();
-    expect(within(rail).getByText("Marcela Fuentes")).toBeInTheDocument();
     expect(within(rail).getByText("Teléfono", { selector: "dt" })).toBeInTheDocument();
     expect(within(rail).getByText("+56912345678")).toBeInTheDocument();
     expect(within(rail).getByText("Contactado", { selector: ".badge" })).toBeInTheDocument();
@@ -506,8 +510,8 @@ describe("ClientFicha slice 2 — product register", () => {
     const summary = screen.getByRole("region", { name: "Resumen del cliente" });
     expect(within(summary).getByText("Teléfono", { selector: "dt" })).toBeInTheDocument();
     expect(within(summary).getByText("+56912345678")).toBeInTheDocument();
-    expect(within(summary).getByText("Comuna", { selector: "dt" })).toBeInTheDocument();
-    expect(within(summary).getByText("Ñuñoa")).toBeInTheDocument();
+    expect(within(summary).getByText("Dirección", { selector: "dt" })).toBeInTheDocument();
+    expect(within(summary).getByText("Dirección", { selector: "dt" }).parentElement).toHaveTextContent(/Av\. Italia 123\s*Ñuñoa/);
     expect(within(summary).getByText("Consentimiento", { selector: "dt" })).toBeInTheDocument();
   });
 
@@ -535,10 +539,22 @@ describe("ClientFicha slice 2 — product register", () => {
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Resumen", "Casos", "Visitas", "Conversaciones"]);
     await user.click(screen.getByRole("tab", { name: "Casos" }));
     expect(screen.getByRole("heading", { name: "Casos anteriores" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Datos del cliente" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Visitas" }));
     expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Conversaciones" }));
-    expect(screen.getByRole("heading", { name: "Mensajes" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Mensajes de la conversación/ })).toBeInTheDocument();
+  });
+
+  it("opens one combined history dialog from the summary history entry", async () => {
+    const user = userEvent.setup();
+    render(<ClientFicha data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("button", { name: /Historial del cliente/ }));
+    const dialog = screen.getByRole("dialog", { name: "Historial del cliente" });
+    expect(within(dialog).getByRole("heading", { name: "Casos anteriores" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: "Conversaciones" })).toBeInTheDocument();
   });
 
   it("formats history dates in the Chilean locale instead of slicing the ISO string", () => {

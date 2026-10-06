@@ -98,7 +98,7 @@ describe("ClientFicha page", () => {
     await user.click(screen.getByRole("tab", { name: "Visitas" }));
     expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
     // The approved appointment label is "Reservada" (DS StatusBadge table).
-    expect(screen.getByText("Reservada")).toBeInTheDocument();
+    expect(screen.getAllByText("Reservada").length).toBeGreaterThan(0);
     expect(screen.getByRole("alert")).toContainElement(screen.getByRole("heading", { name: "No se pudo sincronizar el calendario" }));
     await user.click(screen.getByRole("button", { name: "Reintentar calendario" }));
     await waitFor(() => expect(onRetryCalendar).toHaveBeenCalledWith(4));
@@ -128,9 +128,11 @@ describe("ClientFicha state matrix stories", () => {
     expect(screen.getByRole("button", { name: "Reintentar calendario" })).toBeInTheDocument();
   });
 
-  it("shows acknowledge control for an unanswered emergency story", () => {
+  it("shows acknowledge control for an unanswered emergency story", async () => {
+    const user = userEvent.setup();
     render(<UnansweredEmergency />);
     expect(screen.getByText("Emergencia sin reconocer")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Editar caso" }));
     expect(screen.getByRole("button", { name: "Reconocer" })).toBeInTheDocument();
   });
 
