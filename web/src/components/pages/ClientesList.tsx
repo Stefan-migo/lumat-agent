@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Archive, ArchiveRestore, ArrowRightLeft, Check, CircleMinus, Download, Plus } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowRightLeft, Check, CircleMinus, ChevronDown, Download, Home, Mail, MapPin, Phone, Plus, UserRound, UserRoundPlus } from "lucide-react";
 import { ApiError, archiveCustomer, changeClientState, createCustomer, fetchClients as listClients, getClientFicha, unarchiveCustomer } from "../../api";
 import type { Customer, CustomerState } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -55,7 +55,7 @@ const columns = (onOpenClient?: (id: number) => void, selected: Set<number> = ne
     render: (customer) => <Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge>,
   },
   { key: "consent", header: "Consentimiento", render: (customer) => <span className="clientes-list__consent"><span aria-hidden="true">{customer.consent_status ? <Check /> : <CircleMinus />}</span>{customer.consent_status ? "Sí" : "No"}</span> },
-  { key: "created", header: <button className="clientes-list__sort" type="button" aria-label={`Creado ${sort === "created_desc" ? "descendente" : "ascendente"}`} onClick={toggleSort}>Creado {sort === "created_desc" ? "↓" : "↑"}</button>, render: (customer) => customer.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(customer.created_at)).replace(".", "") : "—" },
+  { key: "created", header: (<button className="clientes-list__sort" type="button" aria-label={`Creado ${sort === "created_desc" ? "descendente" : "ascendente"}`} onClick={toggleSort}>Creado {sort === "created_desc" ? "↓" : "↑"}</button>) as unknown as string, render: (customer) => customer.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(customer.created_at)).replace(".", "") : "—" },
 ];
 
 function stateMessage(state: ClientesListState, retry: () => void) {
@@ -92,6 +92,10 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [dialog, setDialog] = useState<"create" | "archive" | "state" | null>(null);
   const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [comuna, setComuna] = useState("");
+  const [address, setAddress] = useState("");
   const [dialogError, setDialogError] = useState("");
   const [existingCustomerId, setExistingCustomerId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -145,9 +149,10 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
     setDialogError("");
     setExistingCustomerId(null);
     try {
-      const result = await createCustomer({ phone: phone.trim() });
+      const result = await createCustomer({ phone: phone.trim(), name: name.trim() || undefined, email: email.trim() || undefined, comuna: comuna.trim() || undefined, address: address.trim() || undefined });
       setDialog(null);
       setPhone("");
+      setName(""); setEmail(""); setComuna(""); setAddress("");
       refresh();
       onOpenClient?.(result.customer.id);
     } catch (error) {
@@ -219,7 +224,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       title="Clientes"
       titleAdornment={<Badge>{allRows.length}</Badge>}
       subtitle="Gestiona tus clientes y su historial de atención."
-      actions={<><Menu label="Exportar" items={[{ value: "clients", label: "Exportar clientes CSV", icon: Download }, { value: "cases", label: "Exportar casos CSV", icon: Download }]} onSelect={(value) => { window.location.href = value === "clients" ? "/panel/export/clients.csv" : "/panel/export/cases.csv"; }} /><Button onClick={() => { setDialogError(""); setExistingCustomerId(null); setDialog("create"); }}><Plus />Nuevo cliente</Button></>}
+      actions={<><span className="clientes-list__export"><Download aria-hidden="true" /><Menu label="Exportar" items={[{ value: "clients", label: "Exportar clientes CSV", icon: Download }, { value: "cases", label: "Exportar casos CSV", icon: Download }]} onSelect={(value) => { window.location.href = value === "clients" ? "/panel/export/clients.csv" : "/panel/export/cases.csv"; }} /><ChevronDown aria-hidden="true" /></span><Button onClick={() => { setDialogError(""); setExistingCustomerId(null); setDialog("create"); }}><Plus />Nuevo cliente</Button></>}
       meta={!data ? "Clientes del negocio" : undefined}
       state={stateMessage(state, retry)}
     >
@@ -277,12 +282,14 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
         ) : null}
         </div>
       </section>
-      <Dialog open={dialog === "create"} onClose={() => setDialog(null)} title="Nuevo cliente">
-        <form onSubmit={(event) => void submitCreate(event)}>
-          <Input label="Teléfono" type="tel" required value={phone} onChange={(event) => setPhone(event.target.value)} />
+      <Dialog open={dialog === "create"} onClose={() => setDialog(null)} title="Nuevo cliente" icon={UserRoundPlus} description="Registra sus datos de contacto y ubicación.">
+        <form className="clientes-list__create-form" onSubmit={(event) => void submitCreate(event)}>
+          <section><h3>Datos de contacto</h3><div className="clientes-list__contact-grid"><Input label="Teléfono" type="tel" required icon={Phone} helper="Incluye el código de país." placeholder="+56 9 1234 5678" value={phone} onChange={(event) => setPhone(event.target.value)} /><Input label="Nombre (opcional)" icon={UserRound} placeholder="Ej. Carla Núñez" value={name} onChange={(event) => setName(event.target.value)} /></div><Input label="Correo (opcional)" type="email" icon={Mail} placeholder="correo@ejemplo.com" value={email} onChange={(event) => setEmail(event.target.value)} /></section>
+          <section><h3>Ubicación</h3><Input label="Comuna (opcional)" icon={MapPin} placeholder="Ej. Providencia" value={comuna} onChange={(event) => setComuna(event.target.value)} /><Input label="Dirección (opcional)" icon={Home} placeholder="Calle, número y departamento" helper="Estos datos facilitan la coordinación de visitas." value={address} onChange={(event) => setAddress(event.target.value)} /></section>
+          <footer><span><strong>*</strong> Campo obligatorio</span><Button type="button" variant="secondary" onClick={() => setDialog(null)}>Cancelar</Button>
           {dialogError ? <p role="alert">{dialogError}</p> : null}
           {existingCustomerId !== null ? <Button type="button" onClick={() => { setDialog(null); onOpenClient?.(existingCustomerId); }}>Abrir la ficha existente</Button> : null}
-          <Button type="submit" disabled={busy}>Crear cliente</Button>
+          <Button type="submit" disabled={busy}><UserRoundPlus />Crear cliente</Button></footer>
         </form>
       </Dialog>
       <Dialog open={dialog === "archive"} onClose={() => setDialog(null)} title="Archivar cliente">

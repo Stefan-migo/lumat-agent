@@ -96,7 +96,7 @@ export interface CustomerEquipment {
   updated_at: string | null;
 }
 
-export interface CustomerCreateRequest { phone: string; }
+export interface CustomerCreateRequest { phone: string; name?: string; email?: string; comuna?: string; address?: string; }
 export interface CustomerProfileUpdateRequest { name?: string | null; email?: string | null; comuna?: string | null; address?: string | null; }
 export interface CustomerMutationResponse { customer: Customer; }
 export interface ClientMergeCounts { conversations: number; cases: number; customer_notes: number; customer_equipment: number; appointments: number; }

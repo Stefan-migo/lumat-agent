@@ -41,7 +41,7 @@ describe("ClientesList page story (R-PRD-PG-6)", () => {
 
     const consentCell = within(firstRow).getByText(first.consent_status ? "Sí" : "No");
     expect(consentCell).toBeInTheDocument();
-    expect(within(firstRow).getByText(new RegExp("^2026"))).toBeInTheDocument();
+    expect(within(firstRow).getByText(/\d{1,2} \w{3} 2026/)).toBeInTheDocument();
   });
 
   it("renders each customer's approved Spanish state label (triangulation)", () => {
@@ -113,15 +113,16 @@ describe("ClientesList appearance axis (amended DS-GRAMMAR-1)", () => {
     const { container } = render(<ClientesListView />);
 
     expect(screen.getByRole("region", { name: "Listado de clientes" })).toBeInTheDocument();
-    expect(container.querySelector(".toolbar")).not.toBeNull();
+    expect(container.querySelector(".clientes-list__toolbar")).not.toBeNull();
+    expect(container.querySelector(".clientes-list__card")).not.toBeNull();
     expect(container.querySelector(".data-region")).not.toBeNull();
   });
 
-  it("styles the drill-down link through the shared table link contract", () => {
+  it("styles the drill-down link without browser-default underlining", () => {
     render(<ClientesListView />);
 
     const link = screen.getByRole("link", { name: customers[0].name! });
-    expect(link).toHaveClass("table__link");
+    expect(link).toHaveClass("clientes-list__name");
     expect(link).not.toHaveAttribute("style");
   });
 

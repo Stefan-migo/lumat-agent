@@ -68,8 +68,8 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
 - [x] Match the estado/consent badges and the pagination active-page button to the reference.
 
 ### CL-2b — Clientes list dialogs
-- [ ] Dialog headers: pass existing `Dialog` `icon`/`description` (`clientes-020`, list call sites).
-- [ ] New-client form: icon header + description, "Datos de contacto" (Teléfono * + Nombre),
+- [x] Dialog headers: pass existing `Dialog` `icon`/`description` (`clientes-020`, list call sites).
+- [x] New-client form: icon header + description, "Datos de contacto" (Teléfono * + Nombre),
       Correo, "Ubicación" (Comuna + Dirección), "* Campo obligatorio", Cancelar/Crear cliente
       (`clientes-021`, `clientes-022`).
 - [ ] Change-state dialog: client/current-state row, three radio cards, summary (`clientes-023`).

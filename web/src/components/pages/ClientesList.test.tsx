@@ -70,7 +70,7 @@ describe("ClientesList", () => {
     expect(screen.getByRole("columnheader", { name: "Teléfono" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Estado" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Consentimiento" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Creado" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Creado ↓" })).toBeInTheDocument();
 
     // The client name and phone remain distinct reference columns.
     const cell = screen.getByRole("link", { name: "Marcela Fuentes" }).closest(".table__resource");
@@ -303,9 +303,17 @@ describe("ClientesList", () => {
     render(<ClientesList data={customers} state="ready" onOpenClient={onOpenClient} />);
     await user.click(screen.getByRole("button", { name: "Nuevo cliente" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Registra sus datos de contacto y ubicación.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Datos de contacto" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ubicación" })).toBeInTheDocument();
     expect(screen.getByLabelText("Teléfono")).toBeRequired();
-    await user.type(screen.getByLabelText("Teléfono"), "+56912345678");
+    await user.click(screen.getByLabelText("Teléfono")); await user.paste("+56912345678");
+    await user.click(screen.getByLabelText("Nombre (opcional)")); await user.paste("Carla Núñez");
+    await user.click(screen.getByLabelText("Correo (opcional)")); await user.paste("carla@example.com");
+    await user.click(screen.getByLabelText("Comuna (opcional)")); await user.paste("Providencia");
+    await user.click(screen.getByLabelText("Dirección (opcional)")); await user.paste("Av. Providencia 123");
     await user.click(screen.getByRole("button", { name: "Crear cliente" }));
+    expect(createCustomer).toHaveBeenCalledWith({ phone: "+56912345678", name: "Carla Núñez", email: "carla@example.com", comuna: "Providencia", address: "Av. Providencia 123" });
     await user.click(await screen.findByRole("button", { name: "Abrir la ficha existente" }));
     expect(onOpenClient).toHaveBeenCalledWith(9);
     expect(screen.queryByText("phone_exists")).not.toBeInTheDocument();
