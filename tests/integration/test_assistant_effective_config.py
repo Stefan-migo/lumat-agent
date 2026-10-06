@@ -7,8 +7,10 @@ from uuid import uuid4
 
 from app.chat.assistant import nodes
 from app.chat.assistant.graph import run_assistant
+from app.chat.assistant.tools.registry import execute_tool
 from app.db import SessionLocal
-from app.models import InternalChatThread, Project, User
+from app.models import DocumentFormat, InternalChatThread, Project, User
+from app.services import kb
 from app.services.prompts import load_assistant_config
 from app.services.users import hash_password
 
@@ -72,3 +74,58 @@ def test_run_assistant_uses_effective_project_config(monkeypatch):
     assert system_message.startswith(
         f"{load_assistant_config().persona}\n\nUse the project-specific vocabulary."
     )
+
+
+def test_assistant_kb_reads_global_and_current_project_only(fake_embedder):
+    query = "assistant project knowledge isolation"
+    with SessionLocal() as session:
+        user = User(username=f"assistant-kb-{uuid4().hex[:10]}", password_hash="pass", role="admin")
+        session.add(user)
+        session.flush()
+        projects = [
+            Project(
+                owner_id=user.id, slug=f"assistant-kb-{suffix}-{uuid4().hex[:6]}",
+                name=suffix, purpose="Assistant KB test", purpose_embedding=[0.0] * 384,
+            )
+            for suffix in ("current", "other")
+        ]
+        session.add_all(projects)
+        session.flush()
+        thread = InternalChatThread(user_id=user.id, proyecto=projects[0].slug)
+        session.add(thread)
+        session.flush()
+        doc_ids = [
+            kb.ingest_document(session, title=title, fmt=DocumentFormat.MD, content=query.encode(), project_id=project_id).id
+            for title, project_id in (("Global", None), ("Current", projects[0].id), ("Other", projects[1].id))
+        ]
+        session.flush()
+
+        assembled = nodes.assemble_context_node({
+            "session": session,
+            "thread_id": thread.id,
+            "actor_role": "admin",
+        })
+        preanswer = nodes.retrieve_kb({
+            "session": session,
+            "content": query,
+            "effective": assembled["effective"],
+        })
+        tool_result = execute_tool(
+            session, "kb.retrieve", {"query": query},
+            project_id=assembled["effective"]["project_id"], role="admin",
+        )
+        unresolved_preanswer = nodes.retrieve_kb({
+            "session": session,
+            "content": query,
+            "effective": {"project_id": None},
+        })
+        unresolved_tool_result = execute_tool(
+            session, "kb.retrieve", {"query": query}, project_id=None, role="admin",
+        )
+
+    expected = set(doc_ids[:2])
+    assert assembled["effective"]["project_id"] == projects[0].id
+    assert {chunk["document_id"] for chunk in preanswer["kb_chunks"]} == expected
+    assert {chunk["document_id"] for chunk in tool_result["result"]} == expected
+    assert {chunk["document_id"] for chunk in unresolved_preanswer["kb_chunks"]} == {doc_ids[0]}
+    assert {chunk["document_id"] for chunk in unresolved_tool_result["result"]} == {doc_ids[0]}

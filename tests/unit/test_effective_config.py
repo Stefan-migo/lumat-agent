@@ -33,7 +33,7 @@ DEFAULT_TOOLS = {
 
 def resolve(*, proyecto="default", config=None, role=UserRole.ADMIN, assistant_state=None):
     session = MagicMock()
-    session.scalar.return_value = SimpleNamespace(config=config) if config is not None else None
+    session.scalar.return_value = SimpleNamespace(id=42, config=config) if config is not None else None
     thread = SimpleNamespace(
         proyecto=proyecto,
         user_id=1,
@@ -48,6 +48,17 @@ def test_global_only_enables_default_tier_for_admin():
     assert set(effective.tools_whitelist) == DEFAULT_TOOLS
     assert effective.instructions == ""
     assert effective.skills_index == global_skill_index(load_assistant_config())
+    assert effective.project_id is None
+
+
+def test_effective_config_includes_resolved_project_id():
+    session = MagicMock()
+    session.scalar.return_value = SimpleNamespace(id=42, config={})
+    thread = SimpleNamespace(proyecto="workspace", user_id=1, assistant_state={})
+
+    effective = resolve_effective_config(session, thread, UserRole.ADMIN)
+
+    assert effective.project_id == 42
 
 
 def test_project_skill_is_appended_to_effective_index():

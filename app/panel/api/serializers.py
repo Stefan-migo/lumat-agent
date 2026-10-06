@@ -449,6 +449,7 @@ def to_doc_dict(doc: KbDocument, *, include_content: bool = False) -> dict:
         "active_version": doc.active_version,
         "active": doc.active,
         "visibility": doc.visibility.value,
+        "project_id": doc.project_id,
         "provider": doc.provider,
         "model": doc.model,
         "cost_meta": float(doc.cost_meta) if doc.cost_meta is not None else None,
