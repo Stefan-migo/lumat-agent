@@ -76,24 +76,39 @@ Closed before this slice; recorded in Engram
 | Report / close | `app/services/agent_chat.py:89–115`; `app/services/tukulpan.py` `record_decision` (414), `archive_report` (440), `AGENT_SCOPE` (58); route close `chat.py:217–225` |
 | Thread field | `app/models.py` `InternalChatThread.current_plan` (864–877) — generic; also used by SDB/approval |
 
+## Design note — planning must rejoin the normal pipeline
+
+The current `cortex_session_gate → cortex_turn → evidence` branch is a **dead-end**: an active
+planning turn runs the planner but never reaches `guardrails`/`execute_tool`, so no tool ever
+runs. D16 (planning allows KB/web investigation) requires the opposite: an active planning
+session must flow through the normal pipeline (`guardrails → execute`), with a **read-only
+policy** applied. The single seam is `_effective_tools(state)` (`app/chat/assistant/nodes.py:718`),
+consumed by the planner catalog (`:623`), guardrails (`:841`) and the responder (`:1149`);
+execution (`:1039–1051`) must use it too instead of the global
+`load_assistant_config().tools_whitelist`.
+
 ## Tasks
 
-- [ ] **T1 — Remove classifier and per-turn ceremony.**
-  Remove `classify_cortex_turn`, `PlannerOutput.cortex_class`, `CortexHandoff`, the
-  ceremony-only `CortexSession` fields (`decision_keys`, `last_class`, `next_decision`), the
-  dead `parse_planning_command`, the `cortex_session` classes/commands in `agent/registry.yaml`
-  and its validation in `app/agent_registry.py`. Keep the lifecycle fields
-  (`slug`, `topic`, `status`, `opened_at`, `closed_at`, `report_key`). Confirm call sites
-  before deleting any field.
-  *AC*: no reference to `cortex_class`/`classify_cortex_turn`/`CortexHandoff` remains; the
-  session still validates and the gate still routes active sessions to planning.
+- [ ] **T1 — Planning rejoins the normal pipeline with a read-only policy; delete the dead-end.**
+  - `_effective_tools(state)`: when `state["cortex_session"]` is a valid, `active` session, drop
+    write tools (`get_tool(name).write`) **except `memory.write`**.
+  - `execute` (`nodes.py:1039–1051`): pass `whitelist=set(_effective_tools(state))`, not the global catalog.
+  - `graph.py`: remove the `cortex_session_gate` and `cortex_turn` nodes, `_after_cortex_gate`,
+    and their edges; `_after_plan` routes to `guardrails` when `tool_steps == 0`.
+  - `nodes.py`: delete `classify_cortex_turn`, `cortex_session_turn`, and the dead
+    `parse_planning_command`.
+  *AC*: an active planning turn executes KB/web reads and `memory.write`; it refuses
+  `memory.delete`, `project.create`, `automation.*`; non-planning turns keep today's behavior;
+  no turn reaches `cortex_turn`.
 
-- [ ] **T2 — Deterministic planning read-only.**
-  Derive the planning tool policy from the effective whitelist (project ∩ role ∩ tier) minus
-  writes, **except** `memory.write`. Enforce it at guardrails **and** at execution by passing
-  the effective/planning whitelist into `execute_tool`.
-  *AC*: an active planning session refuses `memory.delete`, `project.create`, `automation.*`,
-  etc.; `memory.write` and KB/web reads still work; normal (non-planning) turns are unchanged.
+- [ ] **T2 — Remove classifier/ceremony state and registry surface.**
+  `state.py`: remove `PlannerOutput.cortex_class`, `CortexHandoff`, and the `CortexSession`
+  ceremony fields (`decision_keys`, `last_class`, `next_decision`, `turn_index`); keep the
+  lifecycle (`slug`, `topic`, `status`, `opened_at`, `closed_at`, `report_key`).
+  `agent/registry.yaml`: remove the `cortex_session` block; drop `cortex_classes` from
+  `app/services/prompts.py` and its validation in `app/agent_registry.py`; update the open-route
+  init in `app/panel/api/routes/chat.py:182–183`. Update `test_cortex_session_foundation.py`
+  and `test_agent_registry.py`.
 
 - [ ] **T3 — Single `agent`-scope report at close, decoupled from SDB.**
   Replace the close path's `archive_report` (`panel` scope) + mandatory handoff with one write
@@ -102,15 +117,11 @@ Closed before this slice; recorded in Engram
   *AC*: close writes exactly one `agent`-scope report memory; no SDB handoff/approval is
   created by planning close; `sdb_*` nodes are untouched.
 
-- [ ] **T4 — Remove the Cortex → SDB graph edge only.**
-  *AC*: `graph.py` no longer edges Cortex into `sdb_trigger_gate`; every `sdb_*` node and its
-  wiring is byte-unchanged otherwise.
-
-- [ ] **T5 — Retarget lifecycle/API tests and verify.**
-  Update `tests/unit/test_cortex_session_foundation.py`, `test_cortex_session_loop.py`,
-  `tests/integration/test_cortex_session_runtime.py`, `tests/unit/test_agent_registry.py`,
-  the `cortex_class` planner fixture in `tests/integration/test_assistant_chat.py`, and the
-  report/handoff case in `tests/integration/test_sdb_persistence.py` (SDB-only cases stay).
+- [ ] **T4 — Retarget lifecycle/API tests and verify.**
+  Update `tests/unit/test_cortex_session_loop.py`, `tests/integration/test_cortex_session_runtime.py`,
+  the graph-route assertion in `tests/unit/test_assistant_tool_loop.py`, the `cortex_class`
+  fixture in `tests/integration/test_assistant_chat.py`, and the report/handoff case in
+  `tests/integration/test_sdb_persistence.py` (SDB-only cases stay).
 
 ## Acceptance criteria (slice)
 
