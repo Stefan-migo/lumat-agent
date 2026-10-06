@@ -253,7 +253,7 @@ describe("ClientesList", () => {
     render(<ClientesList />);
 
     expect(await screen.findByText("Marcela Fuentes")).toBeInTheDocument();
-    expect(fetchClients).toHaveBeenCalledWith({ includeArchived: false, query: "", consent: undefined, sort: "created_desc" });
+    expect(fetchClients).toHaveBeenCalledWith({ onlyArchived: false, query: "", consent: undefined, sort: "created_desc" });
   });
 
   it("changes a client's state from the row and refreshes the list", async () => {
@@ -349,7 +349,7 @@ describe("ClientesList", () => {
     render(<ClientesList />);
     await screen.findByText("Marcela Fuentes");
     await user.click(screen.getByRole("switch", { name: "Mostrar archivados" }));
-    await waitFor(() => expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: true, query: "", consent: undefined, sort: "created_desc" }));
+    await waitFor(() => expect(fetchClients).toHaveBeenLastCalledWith({ onlyArchived: true, query: "", consent: undefined, sort: "created_desc" }));
   });
 
   // T2 — clearing the search must return to the unfiltered list. Today the refetch only
@@ -369,7 +369,7 @@ describe("ClientesList", () => {
 
     await user.clear(search);
     await waitFor(() => expect(screen.getByText("Pedro Soto")).toBeInTheDocument());
-    expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: false, query: "", consent: undefined, sort: "created_desc" });
+    expect(fetchClients).toHaveBeenLastCalledWith({ onlyArchived: false, query: "", consent: undefined, sort: "created_desc" });
   });
 });
 

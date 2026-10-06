@@ -607,6 +607,7 @@ def search_customers(
     limit: int = 100,
     *,
     include_archived: bool = False,
+    only_archived: bool = False,
     consent: bool | None = None,
     sort: str = "created_desc",
 ) -> list[Customer]:
@@ -624,7 +625,9 @@ def search_customers(
     if sort not in ordering:
         raise ValueError(f"Unknown customer sort: {sort}")
     statement = select(Customer).order_by(*ordering[sort])
-    if not include_archived:
+    if only_archived:
+        statement = statement.where(Customer.archived_at.is_not(None))
+    elif not include_archived:
         statement = statement.where(Customer.archived_at.is_(None))
     if consent is not None:
         statement = statement.where(Customer.consent_status.is_(consent))

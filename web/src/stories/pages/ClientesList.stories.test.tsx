@@ -207,4 +207,14 @@ describe("ClientesList API behavior", () => {
     });
   });
 
+  it("sends only_archived when the archived toggle is enabled", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ clients: customers }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<ClientesList />);
+    await screen.findByRole("table");
+    await user.click(screen.getByRole("switch", { name: "Mostrar archivados" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("only_archived=true"))).toBe(true));
+  });
+
 });
