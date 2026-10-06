@@ -225,7 +225,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
         <div className="table-toolbar clientes-list__toolbar">
           <SearchInput key={searchResetKey} aria-label="Buscar clientes" placeholder="Buscar por nombre o teléfono..." onSearch={(next) => { setSearchTerm(next); setPage(1); setQueryVersion((current) => current + 1); }} />
           <label className="clientes-list__filter"><span>Consentimiento</span><select aria-label="Consentimiento" value={consent} onChange={(event) => { setConsent(event.target.value as typeof consent); setPage(1); setSelected(new Set()); refresh(); }}><option value="">Consentimiento</option><option value="true">Sí</option><option value="false">No</option></select></label>
-          <label className="clientes-list__switch"><input type="checkbox" role="switch" aria-label="Mostrar archivados" checked={onlyArchived} onChange={(event) => { setOnlyArchived(event.target.checked); refresh(); }} /><span>Mostrar archivados</span></label>
+          <label className="clientes-list__switch"><input type="checkbox" role="switch" aria-label="Mostrar archivados" checked={onlyArchived} onChange={(event) => { setOnlyArchived(event.target.checked); setPage(1); setSelected(new Set()); refresh(); }} /><span>Mostrar archivados</span></label>
         </div>
         {dialog === null && dialogError ? <p role="alert">{dialogError}</p> : null}
         {state === "loading" ? null : data && data.length > 0 ? (
