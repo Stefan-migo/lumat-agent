@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApiError, apiFetch, addClientNote, changeClientState, postJson, resolveMemoryRelation, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, listClientEquipment, fetchClients, previewClientMerge, mergeClient } from "../../api";
+import { ApiError, apiFetch, addClientNote, changeClientState, deleteClientNote, postJson, resolveMemoryRelation, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, updateClientNote, listClientEquipment, fetchClients, previewClientMerge, mergeClient } from "../../api";
 import { ClientFicha } from "./ClientFicha";
 import type { ClientFichaResponse, Memory } from "../../types";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCaseAmount: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), listClientEquipment: vi.fn(), fetchClients: vi.fn(), previewClientMerge: vi.fn(), mergeClient: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), deleteClientNote: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCaseAmount: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), updateClientNote: vi.fn(), listClientEquipment: vi.fn(), fetchClients: vi.fn(), previewClientMerge: vi.fn(), mergeClient: vi.fn() };
 });
 
 describe("ClientFicha equipment", () => {
@@ -249,6 +249,39 @@ describe("ClientFicha page grammar", () => {
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10");
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7/memories");
     expect(await screen.findByRole("heading", { name: "Nota agregada" })).toBeInTheDocument();
+  });
+
+  it("edits a customer note and refreshes the ficha", async () => {
+    const user = userEvent.setup();
+    vi.mocked(updateClientNote).mockResolvedValue({ ok: true, note: { ...ficha.notes[0], note: "Nueva nota" } });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("button", { name: "Acciones de nota" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Editar" }));
+    const dialog = screen.getByRole("dialog", { name: "Editar nota" });
+    await user.clear(within(dialog).getByLabelText("Nota"));
+    await user.type(within(dialog).getByLabelText("Nota"), "Nueva nota");
+    await user.click(within(dialog).getByRole("button", { name: "Guardar cambios" }));
+
+    expect(updateClientNote).toHaveBeenCalledWith(7, 4, "Nueva nota");
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10"));
+  });
+
+  it("confirms deletion of a customer note", async () => {
+    const user = userEvent.setup();
+    vi.mocked(deleteClientNote).mockResolvedValue({ ok: true });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("button", { name: "Acciones de nota" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Eliminar" }));
+    const dialog = screen.getByRole("dialog", { name: "Eliminar nota" });
+    expect(within(dialog).getByText("Esta acción no se puede deshacer.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Eliminar nota" }));
+
+    expect(deleteClientNote).toHaveBeenCalledWith(7, 4);
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10"));
   });
 
   it("renders the ficha allowed transitions as selectable radio cards and hides save for terminal states", async () => {

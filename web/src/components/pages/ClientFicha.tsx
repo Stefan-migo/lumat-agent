@@ -1,6 +1,6 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CircleAlert, Clock3, Copy, Check, ChevronRight, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, Thermometer, UserRound, CircleDollarSign } from "lucide-react";
-import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
+import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CircleAlert, Clock3, Copy, Check, ChevronRight, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, Thermometer, UserRound, CircleDollarSign, Trash2 } from "lucide-react";
+import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, deleteClientNote, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateClientNote, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
@@ -106,6 +106,8 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [selectedConsent, setSelectedConsent] = useState<boolean | null>(null);
   const [note, setNote] = useState("");
   const [noteComposerOpen, setNoteComposerOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<{ id: number; note: string } | null>(null);
+  const [deletingNote, setDeletingNote] = useState<number | null>(null);
   const [mutation, setMutation] = useState<"state" | "note" | null>(null);
   const [stateFeedback, setStateFeedback] = useState<Feedback | null>(null);
   const [noteFeedback, setNoteFeedback] = useState<Feedback | null>(null);
@@ -289,6 +291,22 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     }
     setMutation("note"); setNoteFeedback(null);
     try { await addClientNote(customerId, note.trim()); await refresh(); setNote(""); setNoteFeedback({ tone: "success", title: "Nota agregada" }); }
+    catch (error) { setNoteFeedback({ tone: "danger", ...safeError(error, "nota") }); }
+    finally { setMutation(null); }
+  };
+  const saveEditedNote = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (customerId === undefined || !editingNote || mutation) return;
+    if (!editingNote.note.trim()) { setNoteFeedback({ tone: "danger", title: "La nota no puede estar vacía" }); return; }
+    setMutation("note"); setNoteFeedback(null);
+    try { await updateClientNote(customerId, editingNote.id, editingNote.note.trim()); await refresh(); setEditingNote(null); setNoteFeedback({ tone: "success", title: "Nota actualizada" }); }
+    catch (error) { setNoteFeedback({ tone: "danger", ...safeError(error, "nota") }); }
+    finally { setMutation(null); }
+  };
+  const confirmDeleteNote = async () => {
+    if (customerId === undefined || deletingNote === null || mutation) return;
+    setMutation("note"); setNoteFeedback(null);
+    try { await deleteClientNote(customerId, deletingNote); await refresh(); setDeletingNote(null); setNoteFeedback({ tone: "success", title: "Nota eliminada" }); }
     catch (error) { setNoteFeedback({ tone: "danger", ...safeError(error, "nota") }); }
     finally { setMutation(null); }
   };
@@ -477,7 +495,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           </Dialog>
           <Card className="client-ficha__notes-card">
             <header className="client-ficha__card-heading"><h2>Notas</h2><Button variant="secondary" aria-expanded={noteComposerOpen} disabled={customerId === undefined || mutation !== null} onClick={() => setNoteComposerOpen(true)}>⊕ Agregar nota</Button></header>
-            {data.notes.length ? data.notes.map((entry) => <article className="client-ficha__note-row" key={entry.id}><Avatar name={entry.author ?? "Operador"}/><div><strong>{entry.author ?? "—"}</strong><small>{formatDate(entry.created_at)}</small></div><p>{entry.note}</p><Menu trigger="icon" label="Acciones de nota" items={[{value:"copy",label:"Copiar nota",icon:Copy}]} onSelect={()=>void navigator.clipboard?.writeText(entry.note)}/></article>) : <EmptyState title="No hay notas" />}
+            {data.notes.length ? data.notes.map((entry) => <article className="client-ficha__note-row" key={entry.id}><Avatar name={entry.author ?? "Operador"}/><div><strong>{entry.author ?? "—"}</strong><small>{formatDate(entry.created_at)}</small></div><p>{entry.note}</p><Menu trigger="icon" label="Acciones de nota" items={[{value:"edit",label:"Editar",icon:Pencil},{value:"delete",label:"Eliminar",icon:Trash2,tone:"danger"},{value:"copy",label:"Copiar nota",icon:Copy}]} onSelect={(value)=>{ if(value==="copy") void navigator.clipboard?.writeText(entry.note); if(value==="edit") { setEditingNote({ id: entry.id, note: entry.note }); setNoteFeedback(null); } if(value==="delete") { setDeletingNote(entry.id); setNoteFeedback(null); } }}/></article>) : <EmptyState title="No hay notas" />}
           </Card>
           <Dialog open={noteComposerOpen} onClose={() => setNoteComposerOpen(false)} title="Agregar nota" icon={NotebookPen} description="Registra una nota asociada al cliente.">
             <form className="client-ficha-dialog" onSubmit={(event) => { event.preventDefault(); void saveNote(); }}>
@@ -487,6 +505,17 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <LocalFeedback feedback={noteFeedback} />
               <footer><Button type="button" variant="secondary" onClick={() => setNoteComposerOpen(false)}>Cancelar</Button><Button type="submit" disabled={mutation !== null || customerId === undefined}>{mutation === "note" ? "Guardando…" : "Guardar nota"}</Button></footer>
             </form>
+          </Dialog>
+          <Dialog open={editingNote !== null} onClose={() => setEditingNote(null)} title="Editar nota" icon={NotebookPen} description="Actualiza la nota asociada al cliente.">
+            {editingNote ? <form className="client-ficha-dialog" onSubmit={(event) => void saveEditedNote(event)}>
+              <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div><span className="client-ficha-dialog__context-phone"><Phone aria-hidden="true"/>{customer.phone_e164 ?? "—"}</span></div>
+              <Textarea id="edit-note" label="Nota" value={editingNote.note} disabled={mutation !== null || customerId === undefined} onChange={(event) => setEditingNote({ ...editingNote, note: event.target.value })} />
+              <LocalFeedback feedback={editingNote ? noteFeedback : null} />
+              <footer><Button type="button" variant="secondary" onClick={() => setEditingNote(null)}>Cancelar</Button><Button type="submit" disabled={mutation !== null || customerId === undefined}>{mutation === "note" ? "Guardando…" : "Guardar cambios"}</Button></footer>
+            </form> : null}
+          </Dialog>
+          <Dialog open={deletingNote !== null} onClose={() => setDeletingNote(null)} title="Eliminar nota" icon={Trash2} description="Esta acción no se puede deshacer.">
+            <div className="client-ficha-dialog"><div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div></div><LocalFeedback feedback={deletingNote !== null ? noteFeedback : null}/><footer><Button variant="secondary" onClick={() => setDeletingNote(null)}>Cancelar</Button><Button variant="danger" disabled={mutation !== null || customerId === undefined} onClick={() => void confirmDeleteNote()}>{mutation === "note" ? "Eliminando…" : "Eliminar nota"}</Button></footer></div>
           </Dialog>
           <Card className="client-ficha__upcoming-card">
             <header className="client-ficha__card-heading"><h2>Próximas visitas</h2><Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "agenda" }); }}>Ver agenda →</Button></header>
