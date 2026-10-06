@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-skills`
 **Worktree**: `/home/stefan/repos/lumat-agent-odd-asistente-skills`
 **Base**: `1b689229` (= `main` = `origin/main`, merge of PR #484)
-**Status**: slice 2 planning (design documented; no code yet)
+**Status**: slice 2 in progress (T1 done; T2–T7 pending)
 
 ## Objective
 
@@ -121,7 +121,7 @@ effective_skills = dedup_by_name(global_index + project_index)   # project wins
 
 ## Tasks
 
-- [ ] **T1 (RED)** Global skill index. Change the registry schema: `assistant.skills` becomes
+- [x] **T1 (RED)** Global skill index. Change the registry schema: `assistant.skills` becomes
       a structured list (`AssistantSkill` = `name` + `description` + `path`), validated with
       non-empty strings, known-shape extras ignored; `agent.skills` (orchestrator) stays a
       `list[str]`. New `app/services/skills.py`: `SkillDefinition(name, description, scope,
@@ -187,5 +187,16 @@ effective_skills = dedup_by_name(global_index + project_index)   # project wins
 
 - **2026-10-06** — Worktree `../lumat-agent-odd-asistente-skills` created from `main`
   `1b689229` (branch `odd/asistente-skills`). Graph Check run; harness mapped via read-only
-  exploration. Design documented here. No code written yet.
+  exploration. Design documented here. `75d0ff00` commits this plan.
+- **2026-10-06** — **T1 complete.** `23a2aeac` turns `assistant.skills` into a structured,
+  validated index (`AssistantSkill` = `name` + `description` + `path` in `agent_registry.py`;
+  `agent.skills` stays `list[str]`) and adds `app/services/skills.py` (`SkillDefinition`,
+  `SkillError`, `global_skill_index` — reads no bodies, `load_skill_body` — fails closed on a
+  missing file). New `tests/unit/test_skills.py` (5 tests). **Verify:** focused suite
+  (`test_skills` + `test_assistant_config` + `test_agent_registry` + `test_prompts`) → exit 0,
+  59 tests; independent spot check re-ran it green. Strict TDD RED (module missing; malformed
+  entry unvalidated) → GREEN. `agent/registry.yaml` and the four WhatsApp stubs untouched.
+- **2026-10-06** — **T1 RDD assessment:** `assess --base-ref 1b689229 --committed-only` →
+  `review_due: false`, `under_budget` (5 paths / 351 lines, medium). Boundary stays `1b689229`;
+  T1 accumulates until the slice budget is reached.
 </content>
