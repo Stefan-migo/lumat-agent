@@ -1,0 +1,12 @@
+.client-ficha-dialog { display: grid; gap: var(--space-4); }
+.client-ficha-dialog__context { display: flex; align-items: center; gap: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); }
+.client-ficha-dialog__context > div:nth-child(2) { display: grid; flex: 1; }
+.client-ficha-dialog__context > div:nth-child(2) span,
+.client-ficha-dialog__current > span { color: var(--text-muted); }
+.client-ficha-dialog__current { display: grid; justify-items: end; gap: var(--space-1); }
+.client-ficha-dialog__options { display: grid; gap: var(--space-2); }
+.client-ficha-dialog__options [role="radiogroup"] { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--space-2); }
+.client-ficha-dialog__options [role="radiogroup"] .client-ficha-dialog__option { display: grid; justify-items: start; align-content: start; gap: var(--space-2); min-height: 5rem; text-align: left; white-space: normal; }
+.client-ficha-dialog__options [role="radiogroup"] .client-ficha-dialog__option.is-selected { border-color: var(--corp-text); background: var(--success-tint); }
+.client-ficha-dialog__transition { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.client-ficha-dialog > footer { display: flex; justify-content: flex-end; gap: var(--space-2); }

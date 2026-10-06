@@ -1,5 +1,5 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { CalendarDays, Clock3, Copy, MessageSquare, Pencil } from "lucide-react";
+import { CalendarDays, Clock3, Copy, MessageSquare, Pencil, RefreshCw, ShieldCheck } from "lucide-react";
 import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
@@ -15,6 +15,7 @@ import { Menu } from "../primitives/Menu";
 import { Select } from "../primitives/Select";
 import { Textarea } from "../primitives/Textarea";
 import { Tabs } from "../primitives/Tabs";
+import "./ClientFichaDialogs.css";
 import { DataTable, type Column } from "../shared/DataTable";
 import { CaseActions } from "../shared/CaseActions";
 import { CollapsibleMessages } from "../shared/CollapsibleMessages";
@@ -81,7 +82,7 @@ function surfaceClass(rowCount: number) {
   return rowCount > 0 ? "data-region" : undefined;
 }
 
-export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, isSaving = false, onRetryCalendar, state: controlledState }: ClientFichaProps) {
+export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, onRetryCalendar, state: controlledState }: ClientFichaProps) {
   const [activeTab, setActiveTab] = useState("summary");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [caseEditorOpen, setCaseEditorOpen] = useState(false);
@@ -89,6 +90,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [messagesExpanded, setMessagesExpanded] = useState(false);
   const [refreshed, setRefreshed] = useState<{ ficha: ClientFichaResponse; memories: Memory[]; pendingRelations: MemoryRelation[] } | null>(null);
   const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
+  const [stateDialogOpen, setStateDialogOpen] = useState(false);
+  const [consentDialogOpen, setConsentDialogOpen] = useState(false);
+  const [selectedConsent, setSelectedConsent] = useState<boolean | null>(null);
   const [note, setNote] = useState("");
   const [noteComposerOpen, setNoteComposerOpen] = useState(false);
   const [mutation, setMutation] = useState<"state" | "note" | null>(null);
@@ -250,9 +254,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     catch (error) { setCaseFeedback({ tone: "danger", ...safeError(error, "caso") }); }
   };
   const saveState = async () => {
-    if (customerId === undefined || !selectedState || mutation) return;
+    if (customerId === undefined || !selectedState || selectedState === customer.state || mutation) return;
     setMutation("state"); setStateFeedback(null);
-    try { await changeClientState(customerId, selectedState); await refresh(); setStateFeedback({ tone: "success", title: "Estado guardado" }); }
+    try { await changeClientState(customerId, selectedState); await refresh(); setStateDialogOpen(false); setStateFeedback({ tone: "success", title: "Estado guardado" }); }
     catch (error) { setStateFeedback({ tone: "danger", ...safeError(error, "estado") }); }
     finally { setMutation(null); }
   };
@@ -293,12 +297,13 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     finally { setCustomerMutation(null); }
   };
   const saveConsent = async () => {
-    if (customerId === undefined || customerMutation) return;
+    if (customerId === undefined || selectedConsent === null || customerMutation) return;
     setConsentFeedback(null);
     setCustomerMutation("consent");
     try {
-      await updateCustomerConsent(customerId, !customer.consent_status);
+      await updateCustomerConsent(customerId, selectedConsent);
       await refresh();
+      setConsentDialogOpen(false);
       setConsentFeedback({ tone: "success", title: "Consentimiento actualizado" });
     } catch (error) { setConsentFeedback({ tone: "danger", ...safeError(error, "consentimiento") }); }
     finally { setCustomerMutation(null); }
@@ -373,17 +378,20 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
                 trigger="icon"
                 label={`Acciones para ${customer.name ?? customer.phone_e164 ?? "cliente"}`}
                 items={[
+                  { value: "state", label: "Cambiar estado", disabled: customerId === undefined || customerMutation !== null },
                   { value: "consent", label: "Cambiar consentimiento", disabled: customerId === undefined || customerMutation !== null },
                   { value: "merge", label: "Fusionar con otro cliente", tone: "danger", disabled: customerId === undefined || customerMutation !== null },
                   { value: "archive", label: customer.archived_at ? "Restaurar" : "Archivar", tone: "danger", disabled: customerId === undefined || customerMutation !== null },
                 ]}
                 onSelect={(value) => {
-                  if (value === "consent") { setConsentFeedback(null); void saveConsent(); }
+                  if (value === "state") { setSelectedState((customer.allowed_transitions ?? [])[0] ?? null); setStateFeedback(null); setStateDialogOpen(true); }
+                  if (value === "consent") { setSelectedConsent(customer.consent_status); setConsentFeedback(null); setConsentDialogOpen(true); }
                   if (value === "merge") void openMerge();
                   if (value === "archive") customer.archived_at ? void saveArchive() : setArchiveOpen(true);
                 }}
               />
-              <LocalFeedback feedback={consentFeedback} />
+              <LocalFeedback feedback={consentDialogOpen ? null : consentFeedback} />
+              <LocalFeedback feedback={stateDialogOpen ? null : stateFeedback} />
               {/* The dialog owns the surface while it is open, so the same failure never renders twice. */}
               {profileOpen ? null : <LocalFeedback feedback={profileFeedback} />}
               {archiveOpen ? null : <LocalFeedback feedback={archiveFeedback} />}
@@ -395,25 +403,24 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <div className="client-ficha__customer-state"><dt>Estado del cliente</dt><dd><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></dd></div>
               <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
             </dl>
-            <div className="client-ficha__state-control">
-              <Select
-                id="client-state"
-                label="Estado del cliente"
-                value={selectedState ?? customer.state}
-                options={(data.states ?? []).map((option) => ({ value: option, label: customerStateLabel(option) }))}
-                disabled={mutation !== null || customerId === undefined}
-                onChange={(event) => setSelectedState(event.target.value as CustomerState)}
-              />
-              <Button
-                disabled={mutation !== null || customerId === undefined || !selectedState || selectedState === customer.state}
-                onClick={() => void saveState()}
-              >
-                {mutation === "state" ? "Guardando…" : "Guardar estado"}
-              </Button>
-              <LocalFeedback feedback={stateFeedback} />
-              {isSaving ? <p role="status">Guardando estado…</p> : null}
-            </div>
           </Card>
+          <Dialog open={stateDialogOpen} onClose={() => setStateDialogOpen(false)} title="Cambiar estado del cliente" icon={RefreshCw} description="Selecciona el nuevo estado para este cliente.">
+            <div className="client-ficha-dialog">
+              <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div><div className="client-ficha-dialog__current"><span>Estado actual</span><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div></div>
+              <div className="client-ficha-dialog__options"><strong>Nuevo estado</strong><div aria-label="Nuevo estado">{(customer.allowed_transitions ?? []).map((value) => <Button key={value} type="button" aria-label={`${customerStateLabel(value)}${selectedState === value ? " (seleccionado)" : ""}`} variant="secondary" className={selectedState === value ? "client-ficha-dialog__option is-selected" : "client-ficha-dialog__option"} disabled={mutation !== null} onClick={() => setSelectedState(value)}>{customerStateLabel(value)}</Button>)}</div>{!(customer.allowed_transitions ?? []).length ? <p role="status">Este cliente no tiene transiciones de estado disponibles.</p> : null}</div>
+              {(customer.allowed_transitions ?? []).length ? <div className="client-ficha-dialog__transition"><span>Cambio de estado</span><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge><span aria-hidden="true">→</span><Badge tone={customerStateTone(selectedState ?? customer.state)}>{customerStateLabel(selectedState ?? customer.state)}</Badge></div> : null}
+              <LocalFeedback feedback={stateFeedback} />
+              <footer><Button variant="secondary" onClick={() => setStateDialogOpen(false)}>Cancelar</Button><Button disabled={mutation !== null || customerId === undefined || !selectedState || selectedState === customer.state} onClick={() => void saveState()}>{mutation === "state" ? "Guardando…" : "Guardar estado"}</Button></footer>
+            </div>
+          </Dialog>
+          <Dialog open={consentDialogOpen} onClose={() => setConsentDialogOpen(false)} title="Cambiar consentimiento" icon={ShieldCheck} description="Registra la elección expresada por el cliente.">
+            <div className="client-ficha-dialog">
+              <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div><div className="client-ficha-dialog__current"><span>Consentimiento actual</span><Badge tone={customer.consent_status ? "success" : "neutral"}>{customer.consent_status ? "Sí" : "No"}</Badge></div></div>
+              <div className="client-ficha-dialog__options"><strong>Nuevo consentimiento</strong><div aria-label="Nuevo consentimiento">{[[true, "Sí", "El cliente acepta ser contactado por la tarde."], [false, "No", "El cliente prefiere no ser contactado."]].map(([value, label, detail]) => <Button key={String(value)} type="button" aria-label={`${label}: ${detail}`} variant="secondary" className={selectedConsent === value ? "client-ficha-dialog__option is-selected" : "client-ficha-dialog__option"} disabled={customerMutation !== null} onClick={() => setSelectedConsent(value as boolean)}><strong>{label}</strong><span>{detail}</span></Button>)}</div></div>
+              <LocalFeedback feedback={consentFeedback} />
+              <footer><Button variant="secondary" onClick={() => setConsentDialogOpen(false)}>Cancelar</Button><Button disabled={customerMutation !== null || customerId === undefined || selectedConsent === null} onClick={() => void saveConsent()}>{customerMutation === "consent" ? "Guardando…" : "Guardar consentimiento"}</Button></footer>
+            </div>
+          </Dialog>
           <Dialog open={profileOpen} onClose={() => setProfileOpen(false)} title="Editar identidad">
             <form onSubmit={(event) => void saveProfile(event)}>
               <Input label="Nombre" value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} />
