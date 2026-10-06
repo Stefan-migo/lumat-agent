@@ -492,6 +492,32 @@ def test_plan_invalid_output_and_guardrail_unsafe_plan_have_distinct_diagnostics
     assert unsafe["planner"]["failure"]["reason"] == "unsafe_plan"
 
 
+@pytest.mark.parametrize(
+    ("declared", "index", "expected"),
+    [
+        (["guide"], ["guide"], ["guide"]),
+        (["unknown"], ["guide"], []),
+        ([], ["guide"], []),
+        (["second", "first", "second", 4], ["first", "second"], ["second", "first"]),
+        (["guide"], [], []),
+    ],
+)
+def test_guardrails_keeps_only_ordered_unique_effective_skills(declared, index, expected):
+    state = {
+        "planner": {"valid": True},
+        "plan": {"kind": "respond", "skills": declared},
+        "content": "Explain this",
+        "effective": {"skills_index": [
+            {"name": name, "description": "Description", "scope": "project", "path": None, "body": "Body"}
+            for name in index
+        ]},
+    }
+
+    result = guardrails(state)
+
+    assert result["guardrails"]["skills"] == expected
+
+
 def test_planner_failure_excerpt_is_bounded_and_guardrail_logs_diagnosis(caplog):
     raw_text = "x" * (_PLANNER_FAILURE_EXCERPT_LIMIT + 100)
     plan_state = {

@@ -732,6 +732,16 @@ def _effective_skill_index(state) -> tuple[SkillDefinition, ...]:
     return global_skill_index(load_assistant_config())
 
 
+def _validated_skills(state) -> list[str]:
+    declared = (state.get("plan") or {}).get("skills") or []
+    allowed = {skill.name for skill in _effective_skill_index(state)}
+    valid = []
+    for name in declared:
+        if isinstance(name, str) and name in allowed and name not in valid:
+            valid.append(name)
+    return valid
+
+
 def _effective_persona(state, config) -> str:
     effective = state.get("effective") or {}
     instructions = (effective.get("instructions") or "").strip()
@@ -758,6 +768,7 @@ def guardrails(state: AssistantState) -> AssistantState:
         return {"approval": issue_approval(plan_data), "guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": True, "decision": "approval_pending"}, "status": "approval_pending"}
     if not state.get("planner", {}).get("valid", True):
         return {"guardrails": {"whitelisted": False, "arguments_valid": False, "cost_allowed": True, "approval_required": False, "decision": "fallback"}, "status": "responding"}
+    validated_skills = _validated_skills(state)
     if plan_data.get("kind") == "delegate":
         from app.chat.assistant.delegation import DelegationScopeError, resolve_delegation_scope
 
@@ -794,12 +805,13 @@ def guardrails(state: AssistantState) -> AssistantState:
                 "cost_allowed": True,
                 "approval_required": False,
                 "decision": "delegate",
+                "skills": validated_skills,
             },
         }
     tool_name = plan_data.get("tool")
     if plan_data.get("kind") != "tool" or not tool_name:
         decision = "respond" if _is_conversational_turn(state.get("content", "")) else "retrieve_kb"
-        return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": decision}, "status": "responding"}
+        return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": decision, "skills": validated_skills}, "status": "responding"}
     whitelisted = tool_name in _effective_tools(state)
     arguments_valid = False
     if whitelisted:
@@ -807,7 +819,7 @@ def guardrails(state: AssistantState) -> AssistantState:
             arguments_valid = bool(get_tool(tool_name).args_model.model_validate(plan_data.get("arguments", {})))
         except Exception:
             pass
-    decisions = {"whitelisted": whitelisted, "arguments_valid": arguments_valid, "cost_allowed": True, "approval_required": False, "decision": "execute"}
+    decisions = {"whitelisted": whitelisted, "arguments_valid": arguments_valid, "cost_allowed": True, "approval_required": False, "decision": "execute", "skills": validated_skills}
     if not whitelisted or not arguments_valid:
         diagnosis = _planner_failure(
             "unsafe_plan", "guardrails", ValueError("planner plan failed guardrails"), plan_data
