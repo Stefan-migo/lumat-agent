@@ -70,49 +70,24 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _sdb_plan(spec: dict, tasks: list[dict]) -> dict:
-    return {"phase": "EXECUTE", "spec": spec, "tasks": tasks}
-
-
-def cortex_approved_plan(spec: dict, tasks: list[dict]) -> dict:
-    """Represent the closed report as an approved-plan-only SDB handoff."""
-    return {
-        "status": "approved-plan",
-        "execution": "pending-approval",
-        "sdb": _sdb_plan(spec, tasks),
-        "tool": None,
-        "arguments": {},
-        "requires_approval": True,
-    }
-
-
 def close_cortex_session(session, thread: InternalChatThread, *, report: str) -> dict:
-    """Persist and archive a Cortex report before exposing its SDB handoff."""
+    """Persist the final planning report and close its thread lifecycle."""
     cortex = dict((thread.assistant_state or {}).get("cortex_session") or {})
     slug = cortex["slug"]
     report_key = f"cortex-session/{slug}:report"
-    tukulpan.archive_report(
-        session, thread_id=thread.id, topic_key=report_key,
-        title=cortex.get("topic", slug), content=report,
+    proyecto = thread.proyecto or "default"
+    authorization = _thread_project_authorization(session, thread)
+    tukulpan.write_agent_report(
+        session, topic_key=report_key, title=cortex.get("topic", slug),
+        content=report, proyecto=proyecto, origin_thread_id=str(thread.id),
+        authorization=authorization,
     )
-    spec = {"scope": {"request": cortex.get("topic", ""), "report": report}, "report_key": report_key}
-    plan = cortex_approved_plan(spec, [{
-        "id": "cortex-report", "scope": {"entities": ["service history"], "request": cortex.get("topic", "")},
-        "summary": "Read service history for the approved report",
-        "verifiable_output": "A bounded service-history result",
-        "tool": "conversations.search", "arguments": {"query": cortex.get("topic", ""), "limit": 10},
-    }])
-    run_id = uuid4().hex
     thread.assistant_state = merge_assistant_state(
         thread.assistant_state or {},
-        {"stage": "approval_pending", "recoverable": True, "execution_status": "pending",
-         "cortex_session": {"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat(),
-                             "report_key": report_key, "handoff": {"status": "pending", "sdb_phase": "SPEC"}},
-         "approval": issue_approval(plan)},
+        {"cortex_session": {"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat(),
+                             "report_key": report_key}},
     )
-    thread.current_plan = plan
-    thread.active_run_id = run_id
-    return {"report_key": report_key, "report": report, "plan": plan, "run_id": run_id}
+    return {"report_key": report_key, "report": report}
 
 
 def _thread_project_authorization(session: Session, thread: InternalChatThread):
