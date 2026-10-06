@@ -230,7 +230,7 @@ describe("ClientFicha page grammar", () => {
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
     await clickCustomerMenuItem(user, "Cambiar estado");
-    await user.click(screen.getByRole("button", { name: "Pendiente (seleccionado)" }));
+    await user.click(screen.getByRole("radio", { name: "Pendiente" }));
     await user.click(screen.getByRole("button", { name: "Guardar estado" }));
     await user.click(screen.getByRole("button", { name: "⊕ Agregar nota" }));
     const noteDialog = screen.getByRole("dialog", { name: "Agregar nota" });
@@ -242,6 +242,25 @@ describe("ClientFicha page grammar", () => {
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10");
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7/memories");
     expect(await screen.findByRole("heading", { name: "Nota agregada" })).toBeInTheDocument();
+  });
+
+  it("renders the ficha allowed transitions as selectable radio cards and hides save for terminal states", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await clickCustomerMenuItem(user, "Cambiar estado");
+    const group = screen.getByRole("radiogroup", { name: "Nuevo estado" });
+    expect(within(group).getAllByRole("radio")).toHaveLength(2);
+    expect(within(group).getByRole("radio", { name: "Pendiente" })).toHaveAttribute("aria-checked", "true");
+    await user.click(within(group).getByRole("radio", { name: "Agendado" }));
+    expect(within(group).getByRole("radio", { name: "Agendado" })).toHaveAttribute("aria-checked", "true");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancelar" }));
+
+    rerender(<ClientFicha customerId={7} data={{ ...ficha, customer: { ...ficha.customer, state: "cancelado", allowed_transitions: [] } }} memories={memories} />);
+    await clickCustomerMenuItem(user, "Cambiar estado");
+    const terminalDialog = screen.getByRole("dialog");
+    expect(within(terminalDialog).queryByRole("radio")).not.toBeInTheDocument();
+    expect(within(terminalDialog).queryByRole("button", { name: "Guardar estado" })).not.toBeInTheDocument();
   });
 
   it("shows a pending relation and resolves it through the panel API", async () => {
@@ -285,7 +304,7 @@ describe("ClientFicha page grammar", () => {
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
     await clickCustomerMenuItem(user, "Cambiar estado");
-    await user.click(screen.getByRole("button", { name: "Pendiente (seleccionado)" }));
+    await user.click(screen.getByRole("radio", { name: "Pendiente" }));
     const save = screen.getByRole("button", { name: "Guardar estado" });
     await user.click(save);
     expect(save).toBeDisabled();
@@ -371,7 +390,10 @@ describe("ClientFicha customer controls", () => {
     await clickCustomerMenuItem(user, "Cambiar consentimiento");
     const dialog = screen.getByRole("dialog");
     expect(updateCustomerConsent).not.toHaveBeenCalled();
-    await user.click(within(dialog).getByRole("button", { name: /No: El cliente prefiere/ }));
+    const group = within(dialog).getByRole("radiogroup", { name: "Nuevo consentimiento" });
+    expect(within(group).getByRole("radio", { name: /Sí El cliente acepta/ })).toHaveAttribute("aria-checked", "true");
+    await user.click(within(group).getByRole("radio", { name: /No El cliente prefiere/ }));
+    expect(within(group).getByRole("radio", { name: /No El cliente prefiere/ })).toHaveAttribute("aria-checked", "true");
     await user.click(within(dialog).getByRole("button", { name: "Guardar consentimiento" }));
     expect(updateCustomerConsent).toHaveBeenCalledWith(7, false);
     expect(await within(dialog).findByRole("heading", { name: "No pudimos guardar el consentimiento" })).toBeInTheDocument();
@@ -537,7 +559,7 @@ describe("ClientFicha slice 2 — product register", () => {
     const { container } = render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
     await clickCustomerMenuItem(user, "Cambiar estado");
-    await user.click(screen.getByRole("button", { name: "Pendiente (seleccionado)" }));
+    await user.click(screen.getByRole("radio", { name: "Pendiente" }));
     await user.click(screen.getByRole("button", { name: "Guardar estado" }));
 
     expect(container.querySelector(".client-ficha__state-control")).toBeNull();
