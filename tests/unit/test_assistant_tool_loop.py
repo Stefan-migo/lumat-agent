@@ -613,12 +613,7 @@ def test_execution_boundary_refuses_write_tool_in_active_planning_session():
             "status": "active",
             "opened_at": "2026-09-13T12:00:00Z",
             "closed_at": None,
-            "turn_index": 0,
-            "next_decision": None,
-            "last_class": None,
-            "decision_keys": [],
             "report_key": None,
-            "handoff": {"status": "none", "sdb_phase": None},
         },
         plan={
             "kind": "tool", "tool": "memory.delete", "arguments": {"memory_id": 1},
