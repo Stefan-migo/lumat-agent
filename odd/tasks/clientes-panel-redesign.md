@@ -134,8 +134,8 @@ Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`descripti
 - [x] Archive dialog: "Información del cliente" grouping + warning (`clientes-026`; `2a06a356`).
 - [x] Edit-case dialog: context + "Guardar cambios" (`clientes-027`; `8bde2851`).
 - [x] Define-amount dialog: context + CLP presentation (`clientes-028`; `8bde2851`).
-- [ ] Add-equipment dialog: fields + "Agregar equipo" (`clientes-029`).
-- [ ] Add-note dialog: context + "Guardar nota" (`clientes-030`).
+- [x] Add-equipment dialog: fields + "Agregar equipo" (`clientes-029`; `c01ee56e`).
+- [x] Add-note dialog: context + "Guardar nota" (`clientes-030`; `c01ee56e`).
 - [x] Merge dialog: two-client comparison + responsive single column (`clientes-031`; `2a06a356`).
 - [ ] Dialog headers `icon`/`description` at ficha call sites (`clientes-020`, ficha side).
 - [x] Archive confirmation label/danger tone on the ficha entry point (`clientes-032`, ficha side; `2a06a356`).
