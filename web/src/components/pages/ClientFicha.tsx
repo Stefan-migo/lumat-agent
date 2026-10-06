@@ -1,5 +1,5 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CircleAlert, Clock3, Copy, Check, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, Thermometer, UserRound, CircleDollarSign } from "lucide-react";
+import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CircleAlert, Clock3, Copy, Check, ChevronRight, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, Thermometer, UserRound, CircleDollarSign } from "lucide-react";
 import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
@@ -473,7 +473,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           <div className="client-ficha__summary-column client-ficha__summary-column--left">
           <ClientMemories memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} compact conversationId={history.conversations[0]?.id} onViewAll={() => setMemoriesOpen(true)} />
           <Dialog open={memoriesOpen} onClose={() => setMemoriesOpen(false)} title="Memorias del cliente" icon={MessageSquare} size="wide">
-            {memoriesOpen ? <ClientMemories bare memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} /> : null}
+            {memoriesOpen ? <div className="client-ficha__memories-dialog"><ClientMemories bare memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} /></div> : null}
           </Dialog>
           <Card className="client-ficha__notes-card">
             <header className="client-ficha__card-heading"><h2>Notas</h2><Button variant="secondary" aria-expanded={noteComposerOpen} disabled={customerId === undefined || mutation !== null} onClick={() => setNoteComposerOpen(true)}>⊕ Agregar nota</Button></header>
@@ -526,7 +526,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
                <header className="client-ficha__card-heading"><h2>Equipos</h2><Button variant="secondary" disabled={customerId === undefined || equipmentMutation} onClick={() => openEquipment()}>＋ Agregar equipo</Button></header>
               {equipmentData.state === "loading" ? <p role="status">Cargando equipos…</p> : null}
               {equipmentData.state === "error" || equipmentData.state === "denied" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar los equipos" /> : null}
-              {equipmentRows.length ? <ul className="data-region">
+              {equipmentRows.length ? <ul className="client-ficha__equipment-list">
                  {equipmentRows.map((entry) => <li className="client-ficha__equipment-row" key={entry.id}>
                    <div className="client-ficha__equipment-eyebrow">{entry.equipment_type ? <Badge>{EQUIPMENT_TYPE_LABELS[entry.equipment_type] ?? entry.equipment_type}</Badge> : <span>Sin especificar</span>}</div>
                    <strong>{[entry.brand, entry.model, entry.age].filter(Boolean).join(" · ") || "Sin datos estructurados"}</strong>
@@ -548,7 +548,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           </Dialog>
 
           <button type="button" className="client-ficha__history-entry" onClick={() => setHistoryOpen(true)}>
-            <Clock3 aria-hidden="true"/><span><strong>Historial del cliente</strong><small>Visitas, conversaciones y casos anteriores</small></span><span aria-hidden="true">›</span>
+            <Clock3 aria-hidden="true"/><span><strong>Historial del cliente</strong><small>Visitas, conversaciones y casos anteriores</small></span><ChevronRight aria-hidden="true" />
           </button>
           </div>
         </div>
