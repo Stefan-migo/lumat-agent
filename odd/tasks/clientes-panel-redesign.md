@@ -44,7 +44,7 @@ the owner corrects the design visually per work unit.
 - [x] API tests: consent filter, sort, and unchanged default ordering.
 - Findings: `clientes-003`, `clientes-004`.
 
-### CL-2 — Clientes list surface + list dialogs
+### CL-2a — Clientes list surface
 - [ ] Reference title composition: count badge/accent bar + subtitle (`clientes-001`).
 - [ ] Todos/Agendados/Finalizados tabs with per-state counts (`clientes-002`).
 - [ ] Consent filter control wired to the CL-1 param (`clientes-003`).
@@ -55,6 +55,8 @@ the owner corrects the design visually per work unit.
 - [ ] Dedicated Teléfono column (`clientes-008`).
 - [ ] Consent check/minus icon treatment (`clientes-009`).
 - [ ] Row chevron `>` ficha affordance alongside the ⋯ menu (`clientes-010`).
+
+### CL-2b — Clientes list dialogs
 - [ ] Dialog headers: pass existing `Dialog` `icon`/`description` (`clientes-020`, list call sites).
 - [ ] New-client form: optional name/email/comuna/address + `Input` `icon`/`helper`
       (`clientes-021`, `clientes-022`).
