@@ -7,6 +7,7 @@ from app.chat.assistant.tools.registry import TOOL_REGISTRY
 from app.models import UserRole
 from app.services.prompts import load_assistant_config
 from app.services.project_config import resolve_effective_config
+from app.services.skills import SkillDefinition, global_skill_index
 
 
 DEFAULT_TOOLS = {
@@ -46,6 +47,35 @@ def test_global_only_enables_default_tier_for_admin():
 
     assert set(effective.tools_whitelist) == DEFAULT_TOOLS
     assert effective.instructions == ""
+    assert effective.skills_index == global_skill_index(load_assistant_config())
+
+
+def test_project_skill_is_appended_to_effective_index():
+    effective = resolve(
+        proyecto="workspace",
+        config={"skills": [{"name": "local", "description": "Local skill", "body": "Inline body"}]},
+    )
+
+    skill = effective.skills_index[-1]
+    assert (skill.name, skill.description, skill.scope, skill.path, skill.body) == (
+        "local", "Local skill", "project", None, "Inline body"
+    )
+
+
+def test_project_skill_overrides_global_skill_in_place(monkeypatch):
+    global_skill = SkillDefinition("existing", "Global description", "global", "skill.md")
+    monkeypatch.setattr("app.services.project_config.global_skill_index", lambda config: (global_skill,))
+    effective = resolve(
+        proyecto="workspace",
+        config={"skills": [{"name": global_skill.name, "description": "Project description", "body": "Project body"}]},
+    )
+
+    assert len([skill for skill in effective.skills_index if skill.name == global_skill.name]) == 1
+    assert effective.skills_index[0].name == global_skill.name
+    assert effective.skills_index[0].description == "Project description"
+    assert effective.skills_index[0].scope == "project"
+    assert effective.skills_index[0].path is None
+    assert effective.skills_index[0].body == "Project body"
 
 
 def test_empty_project_config_enables_default_tier_only():
