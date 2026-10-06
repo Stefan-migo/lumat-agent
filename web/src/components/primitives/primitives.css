@@ -699,6 +699,7 @@
   .client-ficha__note-row { grid-template-columns:auto minmax(0,1fr) auto; align-items:start; }
   .client-ficha__note-row > div { padding-right:0; border-right:0; }
   .client-ficha__note-row p { grid-column:1 / -1; }
+  .client-ficha__note-row > .menu__trigger { grid-column:3; grid-row:1; align-self:start; min-width:2rem; min-height:2rem; padding:var(--space-1); }
 }
 @media (max-width: 64rem) {
   .client-ficha-page .detail-region { grid-template-columns: minmax(0, 1fr); }
