@@ -1,5 +1,5 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { CalendarDays, Clock3, Copy, MessageSquare, Pencil, RefreshCw, ShieldCheck } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, Clock3, Copy, Home, Mail, MapPin, MessageSquare, Pencil, Phone, RefreshCw, ShieldCheck, UserRound, CircleDollarSign } from "lucide-react";
 import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
@@ -102,6 +102,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [profileOpen, setProfileOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [profile, setProfile] = useState({ name: "", email: "", comuna: "", address: "" });
+  const [caseEdit, setCaseEdit] = useState({ status: "", responsibleId: "" });
   const [profileFeedback, setProfileFeedback] = useState<Feedback | null>(null);
   const [consentFeedback, setConsentFeedback] = useState<Feedback | null>(null);
   const [archiveFeedback, setArchiveFeedback] = useState<Feedback | null>(null);
@@ -245,8 +246,18 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   };
   const updateCase = async (caseId: number, status: string, responsibleId: number | null) => {
     setCaseFeedback(null);
-    try { await postJson(`/panel/api/cases/${caseId}/update`, { status, responsible_id: responsibleId }); await refresh(); }
-    catch (error) { setCaseFeedback({ tone: "danger", ...safeError(error, "caso") }); }
+    try { await postJson(`/panel/api/cases/${caseId}/update`, { status, responsible_id: responsibleId }); await refresh(); return true; }
+    catch (error) { setCaseFeedback({ tone: "danger", ...safeError(error, "caso") }); return false; }
+  };
+  const openCaseEditor = () => {
+    if (!activeCase) return;
+    setCaseEdit({ status: activeCase.status, responsibleId: activeCase.responsible_id === null ? "" : String(activeCase.responsible_id) });
+    setCaseFeedback(null);
+    setCaseEditorOpen(true);
+  };
+  const saveCaseEdit = async () => {
+    if (!activeCase || !caseEdit.status) return;
+    if (await updateCase(activeCase.id, caseEdit.status, caseEdit.responsibleId ? Number(caseEdit.responsibleId) : null)) setCaseEditorOpen(false);
   };
   const acknowledgeCase = async (caseId: number) => {
     setCaseFeedback(null);
@@ -421,15 +432,14 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <footer><Button variant="secondary" onClick={() => setConsentDialogOpen(false)}>Cancelar</Button><Button disabled={customerMutation !== null || customerId === undefined || selectedConsent === null} onClick={() => void saveConsent()}>{customerMutation === "consent" ? "Guardando…" : "Guardar consentimiento"}</Button></footer>
             </div>
           </Dialog>
-          <Dialog open={profileOpen} onClose={() => setProfileOpen(false)} title="Editar identidad">
+          <Dialog open={profileOpen} onClose={() => setProfileOpen(false)} title="Editar datos del cliente" icon={UserRound} description="Actualiza su información de contacto.">
             <form onSubmit={(event) => void saveProfile(event)}>
-              <Input label="Nombre" value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} />
-              <Input label="Correo" type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
-              <Input label="Comuna" value={profile.comuna} onChange={(event) => setProfile({ ...profile, comuna: event.target.value })} />
-              <Input label="Dirección" value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} />
-              <Input label="Teléfono" value={customer.phone_e164 ?? "—"} readOnly />
+              <div className="client-ficha-dialog__profile-row"><Input label="Nombre" icon={UserRound} value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /><Input label="Teléfono *" icon={Phone} value={customer.phone_e164 ?? "—"} readOnly /></div>
+              <Input label="Correo (opcional)" icon={Mail} type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
+              <Input label="Comuna (opcional)" icon={MapPin} value={profile.comuna} onChange={(event) => setProfile({ ...profile, comuna: event.target.value })} />
+              <Input label="Dirección (opcional)" icon={Home} value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} />
               <LocalFeedback feedback={profileFeedback} />
-              <Button type="submit" disabled={customerMutation !== null}>{customerMutation === "profile" ? "Guardando…" : "Guardar cambios"}</Button>
+              <footer><Button type="button" variant="secondary" onClick={() => setProfileOpen(false)}>Cancelar</Button><Button type="submit" disabled={customerMutation !== null}>{customerMutation === "profile" ? "Guardando…" : "Guardar cambios"}</Button></footer>
             </form>
           </Dialog>
           <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} title="Archivar cliente">
@@ -454,23 +464,30 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
         <div className="detail-region__main">
           <Card className="client-ficha__case-card">
             {activeCase ? <>
-                <div className="client-ficha__case-eyebrow"><span className="client-ficha__status-dot"/> CASO ACTIVO <span>#{activeCase.id}</span><Menu trigger="icon" label="Acciones del caso" items={[{ value: "edit", label: "Editar caso" }, { value: "amount", label: "Definir monto" }]} onSelect={(value) => value === "amount" ? (setAmountInput(activeCase.amount === null ? "" : String(activeCase.amount)), setAmountOpen(true)) : setCaseEditorOpen(true)} /></div>
+                <div className="client-ficha__case-eyebrow"><span className="client-ficha__status-dot"/> CASO ACTIVO <span>#{activeCase.id}</span><Menu trigger="icon" label="Acciones del caso" items={[{ value: "edit", label: "Editar caso" }, { value: "amount", label: "Definir monto" }]} onSelect={(value) => value === "amount" ? (setAmountInput(activeCase.amount === null ? "" : String(activeCase.amount)), setAmountOpen(true)) : openCaseEditor()} /></div>
               <h2 className="client-ficha__case-title">{activeCase.service}</h2>
               <div className="client-ficha__case-badges"><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge><Badge tone="warning">Prioridad {activeCase.priority}</Badge></div>
               <p>{activeCase.summary ?? "—"}</p>
               <div className="client-ficha__case-details"><div><small>Responsable</small><strong><Avatar name={data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"} /> {data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"}⌄</strong></div><div><small>Monto del servicio</small><strong>{activeCase.amount === null ? "Sin registrar" : CLP_FORMAT.format(activeCase.amount)}</strong><Button variant="secondary" onClick={() => { setAmountInput(activeCase.amount === null ? "" : String(activeCase.amount)); setAmountOpen(true); }}>Definir monto</Button></div></div>
               {activeCase.emergency ? <Badge tone={activeCase.ack_by === null ? "danger" : "warning"}>{activeCase.ack_by === null ? "Emergencia sin reconocer" : `Emergencia reconocida por ${activeCase.ack_by}`}</Badge> : null}
-              <Button className="client-ficha__edit-case" variant="secondary" onClick={() => setCaseEditorOpen((open) => !open)}><Pencil/> {caseEditorOpen ? "Cerrar edición" : "Editar caso"}</Button>
-              {caseEditorOpen ? <div className="client-ficha__case-edit"><CaseActions target={activeCase} users={data.users} onUpdate={updateCase} onAcknowledge={acknowledgeCase} /></div> : null}
-              <LocalFeedback feedback={caseFeedback} />
+               <Button className="client-ficha__edit-case" variant="secondary" onClick={openCaseEditor}><Pencil/> Editar caso</Button>
+               <LocalFeedback feedback={caseEditorOpen || amountOpen ? null : caseFeedback} />
             </> : <EmptyState title="Sin caso activo" />}
           </Card>
-          <Dialog open={amountOpen} onClose={() => setAmountOpen(false)} title="Monto del servicio">
+          <Dialog open={caseEditorOpen && activeCase !== null} onClose={() => setCaseEditorOpen(false)} title="Editar caso" icon={BriefcaseBusiness} description="Actualiza el estado y el responsable.">
+            {activeCase ? <div className="client-ficha-dialog">
+              <div className="client-ficha-dialog__case-context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>#{activeCase.id} · {activeCase.service}</span></div></div>
+              <Select label="Estado" value={caseEdit.status} onChange={(event) => setCaseEdit({ ...caseEdit, status: event.target.value })} options={[{value:"abierto",label:"Abierto"},{value:"en_evaluacion",label:"En evaluación"},{value:"escalado",label:"Escalado"},{value:"cerrado",label:"Cerrado"}]}/>
+              <Select label="Responsable" value={caseEdit.responsibleId} onChange={(event) => setCaseEdit({ ...caseEdit, responsibleId: event.target.value })} options={[{value:"",label:"Sin asignar"},...data.users.map((user) => ({value:String(user.id),label:user.username}))]}/>
+              <LocalFeedback feedback={caseFeedback}/><footer><Button variant="secondary" onClick={() => setCaseEditorOpen(false)}>Cancelar</Button>{activeCase.emergency && activeCase.ack_by === null ? <Button variant="secondary" onClick={() => void acknowledgeCase(activeCase.id)}>Reconocer</Button> : null}<Button onClick={() => void saveCaseEdit()}>Guardar cambios</Button></footer>
+            </div> : null}
+          </Dialog>
+          <Dialog open={amountOpen} onClose={() => setAmountOpen(false)} title="Definir monto del caso" icon={CircleDollarSign} description="Registra el monto del servicio asociado al caso.">
             <form onSubmit={(event) => void saveCaseAmount(event)}>
-              <Input label="Monto CLP" type="number" min="0" step="1" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} />
-              <p>Deja el campo vacío para quitar el monto.</p>
+              {activeCase ? <div className="client-ficha-dialog__case-context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>#{activeCase.id} · {activeCase.service}</span></div><div className="client-ficha-dialog__current"><span>Monto actual:</span><strong>{activeCase.amount === null ? "Sin registrar" : CLP_FORMAT.format(activeCase.amount)}</strong></div></div> : null}
+              <div className="client-ficha-dialog__amount"><span aria-hidden="true">$</span><Input label="Monto del servicio" type="number" min="0" step="1" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} helper="Ingresa el monto en pesos chilenos."/><span aria-hidden="true">CLP</span></div>
               <LocalFeedback feedback={caseFeedback} />
-              <Button type="submit" disabled={amountMutation}>{amountMutation ? "Guardando…" : "Guardar monto"}</Button>
+              <footer><Button type="button" variant="secondary" onClick={() => setAmountOpen(false)}>Cancelar</Button><Button type="submit" disabled={amountMutation}>{amountMutation ? "Guardando…" : "Guardar monto"}</Button></footer>
             </form>
           </Dialog>
           <ClientMemories memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} compact conversationId={history.conversations[0]?.id} onViewAll={() => setActiveTab("conversations")} />
@@ -531,8 +548,8 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
         </div>
       </div>
       </> : null}
-      {activeTab === "cases" ? <div className="detail-region">
-        <section className="detail-region__main"><Card title="Casos del cliente" description="Caso activo e historial de atención.">{activeCase ? <div className="client-ficha__case-inline"><span className="client-ficha__status-dot"/> CASO ACTIVO <strong>{activeCase.service}</strong><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge><Badge tone="warning">Prioridad {activeCase.priority}</Badge><p>{activeCase.summary}</p><Button variant="secondary" onClick={() => setCaseEditorOpen((open) => !open)}>Editar caso</Button>{caseEditorOpen ? <CaseActions target={activeCase} users={data.users} onUpdate={updateCase} onAcknowledge={acknowledgeCase}/> : null}</div> : <EmptyState title="Sin caso activo"/>}</Card><section aria-label="Casos anteriores" className="client-ficha__history-block"><Card title="Casos anteriores"><div className={surfaceClass(archivedCases.length)}><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></div><p>Mostrando {archivedCases.length} {archivedCases.length === 1 ? "caso anterior" : "casos anteriores"}</p></Card></section></section>
+       {activeTab === "cases" ? <div className="detail-region">
+         <section className="detail-region__main"><Card title="Casos del cliente" description="Caso activo e historial de atención.">{activeCase ? <div className="client-ficha__case-inline"><span className="client-ficha__status-dot"/> CASO ACTIVO <strong>{activeCase.service}</strong><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge><Badge tone="warning">Prioridad {activeCase.priority}</Badge><p>{activeCase.summary}</p><Button variant="secondary" onClick={() => setCaseEditorOpen((open) => !open)}>Editar caso</Button>{caseEditorOpen ? <CaseActions target={activeCase} users={data.users} onUpdate={async (...args) => { await updateCase(...args); }} onAcknowledge={acknowledgeCase}/> : null}</div> : <EmptyState title="Sin caso activo"/>}</Card><section aria-label="Casos anteriores" className="client-ficha__history-block"><Card title="Casos anteriores"><div className={surfaceClass(archivedCases.length)}><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></div><p>Mostrando {archivedCases.length} {archivedCases.length === 1 ? "caso anterior" : "casos anteriores"}</p></Card></section></section>
       </div> : null}
       {activeTab === "visits" ? <div className="detail-region__main">
         <section aria-label="Próximas visitas" className="client-ficha__history-block"><h2>Visitas</h2><Card title="Próximas visitas" description="Visitas pendientes de este cliente.">{upcomingAppointments.length ? <div className="data-region"><DataTable columns={[{key:"date",header:"Fecha y hora",render:(row: Appointment)=><><strong>{formatDate(row.starts_at)}</strong><br/><Clock3/> {new Intl.DateTimeFormat("es-CL",{hour:"2-digit",minute:"2-digit"}).format(new Date(row.starts_at))}</>},{key:"service",header:"Servicio",render:(row: Appointment)=><a href={pathForRoute({view:"agenda",appointmentId:row.id})}>{row.service}</a>},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>},{key:"actions",header:"Acciones",render:(row: Appointment)=><Button variant="secondary" onClick={()=>{window.location.href=pathForRoute({view:"agenda",appointmentId:row.id})}}>Reprogramar</Button>}] as Column<Appointment>[]} rows={upcomingAppointments} rowKey={(row)=>String(row.id)}/></div>:<EmptyState title="No hay próximas visitas"/>}</Card><Card title="Historial de visitas"><DataTable columns={[{key:"date",header:"Fecha y hora",render:(row: Appointment)=><>{formatDate(row.starts_at)}<br/><Clock3/> {formatDateTime(row.starts_at)}</>},{key:"service",header:"Servicio",render:(row: Appointment)=><a href={pathForRoute({view:"agenda",appointmentId:row.id})}>{row.service}</a>},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>}] as Column<Appointment>[]} rows={appointments.filter(row=>!upcomingAppointments.includes(row))} rowKey={(row)=>String(row.id)} /></Card>{appointments.some((appointment)=>appointment.calendar_error) ? appointments.filter((appointment)=>appointment.calendar_error).map((appointment)=><div key={appointment.id}><StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`}/><Button variant="secondary" disabled={retryingCalendarId===appointment.id} onClick={()=>void retryCalendar(appointment.id)}>Reintentar calendario</Button></div>):null}</section>

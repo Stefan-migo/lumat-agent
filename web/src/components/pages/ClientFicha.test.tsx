@@ -148,7 +148,7 @@ describe("ClientFicha page grammar", () => {
     expect(screen.getByText("Emergencia sin reconocer")).toBeInTheDocument();
     expect(screen.getByText("operador⌄")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Editar caso" }));
-    expect(screen.getByLabelText("Estado caso 2")).toBeInTheDocument();
+    expect(screen.getByLabelText("Estado")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Casos" }));
     const archive = screen.getByRole("region", { name: "Casos anteriores" });
     expect(within(archive).queryByText("#2")).not.toBeInTheDocument();
@@ -163,14 +163,14 @@ describe("ClientFicha page grammar", () => {
     const withAmount = { ...ficha, history: { ...ficha.history, cases: ficha.history.cases.map((row) => row.id === 2 ? { ...row, amount: 125000 } : row) } };
     render(<ClientFicha customerId={7} data={withAmount} memories={memories} />);
 
-    expect(screen.getByText(/125\.000/)).toBeInTheDocument();
+    expect(screen.getAllByText(/125\.000/).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("tab", { name: "Casos" }));
     expect(within(screen.getByRole("region", { name: "Casos anteriores" })).getByText("Sin monto registrado")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Resumen" }));
     await user.click(screen.getByRole("button", { name: "Definir monto" }));
     const dialog = screen.getByRole("dialog");
-    await user.clear(within(dialog).getByLabelText("Monto CLP"));
-    await user.type(within(dialog).getByLabelText("Monto CLP"), "200000");
+    await user.clear(within(dialog).getByLabelText("Monto del servicio"));
+    await user.type(within(dialog).getByLabelText("Monto del servicio"), "200000");
     await user.click(within(dialog).getByRole("button", { name: "Guardar monto" }));
 
     expect(updateCaseAmount).toHaveBeenCalledWith(2, 200000);
@@ -183,7 +183,7 @@ describe("ClientFicha page grammar", () => {
 
     await user.click(screen.getByRole("button", { name: "Definir monto" }));
     const dialog = screen.getByRole("dialog");
-    const input = within(dialog).getByLabelText("Monto CLP");
+    const input = within(dialog).getByLabelText("Monto del servicio");
     // fireEvent bypasses native constraint validation, mirroring the advisory's
     // "submitted outside the HTML form UI" case for a `type="number"` field.
     // A malformed/non-finite value is not representable here: the number input
@@ -201,11 +201,13 @@ describe("ClientFicha page grammar", () => {
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
     await user.click(screen.getByRole("button", { name: "Editar caso" }));
-    await user.selectOptions(screen.getByLabelText("Estado caso 2"), "cerrado");
-    await user.selectOptions(screen.getByLabelText("Responsable caso 2"), "");
-    await user.click(screen.getByRole("button", { name: "Actualizar" }));
+    await user.selectOptions(screen.getByLabelText("Estado"), "cerrado");
+    await user.selectOptions(screen.getByLabelText("Responsable"), "");
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(postJson).toHaveBeenCalledWith("/panel/api/cases/2/update", { status: "cerrado", responsible_id: null });
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10"));
+    await user.click(screen.getByRole("tab", { name: "Casos" }));
+    await user.click(screen.getByRole("button", { name: "Editar caso" }));
     await user.click(screen.getByRole("button", { name: "Reconocer" }));
     expect(postJson).toHaveBeenCalledWith("/panel/api/cases/2/ack");
   });
@@ -215,8 +217,8 @@ describe("ClientFicha page grammar", () => {
     vi.mocked(postJson).mockRejectedValue(new ApiError(500, "private error"));
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
     await user.click(screen.getByRole("button", { name: "Editar caso" }));
-    await user.click(screen.getByRole("button", { name: "Actualizar" }));
-    expect(await screen.findByRole("heading", { name: "No pudimos guardar el caso" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
+    expect(await screen.findAllByRole("heading", { name: "No pudimos guardar el caso" })).toHaveLength(1);
   });
 
   it("posts state changes and notes, then refreshes ficha and memories", async () => {
@@ -340,7 +342,7 @@ describe("ClientFicha customer controls", () => {
 
     await user.click(screen.getByRole("button", { name: "Editar identidad" }));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByLabelText("Teléfono")).toHaveAttribute("readonly");
+    expect(within(dialog).getByLabelText("Teléfono *")).toHaveAttribute("readonly");
     await user.clear(within(dialog).getByLabelText("Nombre"));
     await user.type(within(dialog).getByLabelText("Nombre"), "Marcela Rojas");
     await user.click(within(dialog).getByRole("button", { name: "Guardar cambios" }));
