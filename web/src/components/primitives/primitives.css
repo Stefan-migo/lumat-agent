@@ -696,8 +696,9 @@
 @media (max-width: 40rem) {
   .client-ficha__upcoming-row { grid-template-columns:auto minmax(0,1fr) auto; }
   .client-ficha__upcoming-row .badge { grid-column:2 / -1; }
-  .client-ficha__note-row { grid-template-columns:auto minmax(0,1fr) auto; }
-  .client-ficha__note-row p { grid-column:2 / -1; }
+  .client-ficha__note-row { grid-template-columns:auto minmax(0,1fr) auto; align-items:start; }
+  .client-ficha__note-row > div { padding-right:0; border-right:0; }
+  .client-ficha__note-row p { grid-column:1 / -1; }
 }
 @media (max-width: 64rem) {
   .client-ficha-page .detail-region { grid-template-columns: minmax(0, 1fr); }
@@ -819,7 +820,7 @@
 }
 .client-ficha__history-dialog { display: grid; gap: var(--space-4); }
 .client-ficha__history-table { overflow-x: auto; }
-.dialog:has(.client-ficha__history-dialog) { display: flex; flex-direction: column; max-height: min(90dvh, 52rem); overflow: hidden; }
+.dialog[open]:has(.client-ficha__history-dialog) { display: flex; flex-direction: column; max-height: min(90dvh, 52rem); overflow: hidden; }
 .dialog:has(.client-ficha__history-dialog) .dialog__body { min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--primary-700) transparent; }
 .dialog:has(.client-ficha__history-dialog) .dialog__body::-webkit-scrollbar { width: var(--space-2); }
 .dialog:has(.client-ficha__history-dialog) .dialog__body::-webkit-scrollbar-thumb { background: var(--primary-700); border-radius: var(--radius-lg); }
