@@ -26,6 +26,7 @@ from app.models import (  # noqa: E402
     Message,
     MessageDirection,
     MessageStatus,
+    Project,
     Settings,
 )
 from app.services.audit import list_audit_entries, record_audit  # noqa: E402
@@ -124,6 +125,22 @@ def test_settings_jsonb_round_trip():
             select(Settings).where(Settings.key == "emergency_keywords")
         ).scalar_one()
         assert row.value == {"list": ["gas", "fuga"]}
+
+
+def test_project_config_defaults_to_empty_jsonb():
+    with SessionLocal() as session:
+        project = Project(
+            slug="project-config-default",
+            name="Project Config Default",
+            purpose="Verify project config default",
+            purpose_embedding=[0.0] * 384,
+        )
+        session.add(project)
+        session.commit()
+        project_id = project.id
+
+        fetched = session.get(Project, project_id)
+        assert fetched.config == {}
 
 
 def test_kb_chunk_vector_round_trip():
