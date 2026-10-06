@@ -74,6 +74,11 @@ describe("Button (T7.1)", () => {
     expect(css).toMatch(/\.btn--secondary\s*\{[^}]*background:\s*var\(--surface\)[^}]*border-color:\s*var\(--border-strong\)/s);
   });
 
+  it("uses the tokenized control-label weight for every button variant", () => {
+    const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
+    expect(css).toMatch(/\.btn\s*\{[^}]*font-weight:\s*var\(--weight-semibold\)/s);
+  });
+
   it("keeps visible keyboard focus on action controls", () => {
     const css = readFileSync(join(process.cwd(), "src/components/primitives/primitives.css"), "utf8");
     expect(css).toMatch(/\.btn:focus-visible[\s\S]*?outline:\s*var\(--focus-ring-width\) solid var\(--focus-ring\)/);
