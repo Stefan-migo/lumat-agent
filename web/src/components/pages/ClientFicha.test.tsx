@@ -36,9 +36,10 @@ describe("ClientFicha equipment", () => {
 
     await user.click(await screen.findByRole("button", { name: "Agregar equipo" }));
     const dialog = screen.getByRole("dialog");
-    await user.selectOptions(within(dialog).getByLabelText("Tipo"), "calefont");
-    await user.type(within(dialog).getByLabelText("Marca"), "Bosch");
-    await user.click(within(dialog).getByRole("button", { name: "Guardar equipo" }));
+    expect(within(dialog).getByText("Registra un equipo asociado al cliente.")).toBeInTheDocument();
+    await user.selectOptions(within(dialog).getByLabelText("Tipo de equipo"), "calefont");
+    await user.type(within(dialog).getByLabelText("Marca (opcional)"), "Bosch");
+    await user.click(within(dialog).getByRole("button", { name: "Agregar equipo" }));
 
     expect(createClientEquipment).toHaveBeenCalledWith(7, { equipment_type: "calefont", brand: "Bosch", model: null, age: null, details: null });
   });
@@ -51,8 +52,8 @@ describe("ClientFicha equipment", () => {
 
     await user.click(await screen.findByRole("button", { name: "Editar equipo" }));
     const dialog = screen.getByRole("dialog");
-    await user.clear(within(dialog).getByLabelText("Marca"));
-    await user.type(within(dialog).getByLabelText("Marca"), "Bosch renovado");
+    await user.clear(within(dialog).getByLabelText("Marca (opcional)"));
+    await user.type(within(dialog).getByLabelText("Marca (opcional)"), "Bosch renovado");
     await user.click(within(dialog).getByRole("button", { name: "Guardar equipo" }));
 
     expect(updateClientEquipment).toHaveBeenCalledWith(7, 11, { equipment_type: "calefont", brand: "Bosch renovado", model: "Therm 5600", age: "5 años", details: "Calefont Bosch, instalado hace cinco años" });
@@ -232,8 +233,9 @@ describe("ClientFicha page grammar", () => {
     await user.click(screen.getByRole("button", { name: "Pendiente (seleccionado)" }));
     await user.click(screen.getByRole("button", { name: "Guardar estado" }));
     await user.click(screen.getByRole("button", { name: "⊕ Agregar nota" }));
-    await user.type(screen.getByLabelText("Nueva nota"), "Llamar mañana");
-    await user.click(screen.getByRole("button", { name: "Agregar nota" }));
+    const noteDialog = screen.getByRole("dialog", { name: "Agregar nota" });
+    await user.type(within(noteDialog).getByLabelText("Nota"), "Llamar mañana");
+    await user.click(within(noteDialog).getByRole("button", { name: "Guardar nota" }));
 
     expect(changeClientState).toHaveBeenCalledWith(7, "pendiente");
     expect(addClientNote).toHaveBeenCalledWith(7, "Llamar mañana");
@@ -298,7 +300,7 @@ describe("ClientFicha page grammar", () => {
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
     await user.click(screen.getByRole("button", { name: "⊕ Agregar nota" }));
-    await user.click(screen.getByRole("button", { name: "Agregar nota" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Agregar nota" })).getByRole("button", { name: "Guardar nota" }));
 
     expect(addClientNote).not.toHaveBeenCalled();
     expect(screen.getByText("La nota no puede estar vacía")).toBeInTheDocument();

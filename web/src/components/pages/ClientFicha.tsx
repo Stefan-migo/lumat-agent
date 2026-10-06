@@ -1,5 +1,5 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CircleAlert, Clock3, Copy, FileText, Home, Mail, MapPin, MessageSquare, Pencil, Phone, RefreshCw, ShieldCheck, UserRound, CircleDollarSign } from "lucide-react";
+import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CircleAlert, Clock3, Copy, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, UserRound, CircleDollarSign } from "lucide-react";
 import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
@@ -39,7 +39,7 @@ const DATE_TIME_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "short", 
 const CLP_FORMAT = new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 });
 const MESSAGE_PREVIEW = 10;
 const EQUIPMENT_TYPE_LABELS: Record<string, string> = { calefont: "Calefont", caldera: "Caldera", calefaccion: "Sistema de calefacción" };
-const EQUIPMENT_TYPE_OPTIONS = [{ value: "", label: "Sin especificar" }, ...Object.entries(EQUIPMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }))];
+const EQUIPMENT_TYPE_OPTIONS = [{ value: "", label: "Ej. Calefont" }, ...Object.entries(EQUIPMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }))];
 const MERGE_COUNT_LABELS: Record<keyof ClientMergePreview["moved"], string> = { conversations: "conversaciones", cases: "casos", customer_notes: "notas", customer_equipment: "equipos", appointments: "visitas" };
 const FICHA_TABS = [{ id: "summary", label: "Resumen" }, { id: "cases", label: "Casos" }, { id: "visits", label: "Visitas" }, { id: "conversations", label: "Conversaciones" }];
 
@@ -511,33 +511,29 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               {equipmentOpen ? null : <LocalFeedback feedback={equipmentFeedback} />}
             </Card>
           </section>
-          <Dialog open={equipmentOpen} onClose={() => setEquipmentOpen(false)} title={editingEquipment ? "Editar equipo" : "Agregar equipo"}>
-            <form onSubmit={(event) => void saveEquipment(event)}>
-              <Select id="equipment-type" label="Tipo" value={equipmentForm.equipment_type ?? ""} options={EQUIPMENT_TYPE_OPTIONS} onChange={(event) => setEquipmentForm({ ...equipmentForm, equipment_type: event.target.value })} />
-              <Input label="Marca" value={equipmentForm.brand ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, brand: event.target.value })} />
-              <Input label="Modelo" value={equipmentForm.model ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, model: event.target.value })} />
-              <Input label="Antigüedad" value={equipmentForm.age ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, age: event.target.value })} />
-              <Textarea label="Detalle capturado" value={equipmentForm.details ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, details: event.target.value })} />
+          <Dialog open={equipmentOpen} onClose={() => setEquipmentOpen(false)} title={editingEquipment ? "Editar equipo" : "Agregar equipo"} icon={Smartphone} description="Registra un equipo asociado al cliente.">
+            <form className="client-ficha-dialog" onSubmit={(event) => void saveEquipment(event)}>
+              <Select id="equipment-type" label="Tipo de equipo" value={equipmentForm.equipment_type ?? ""} options={EQUIPMENT_TYPE_OPTIONS} onChange={(event) => setEquipmentForm({ ...equipmentForm, equipment_type: event.target.value })} />
+              <Input label="Marca (opcional)" placeholder="Ej. Marca del equipo" value={equipmentForm.brand ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, brand: event.target.value })} />
+              <Input label="Modelo (opcional)" placeholder="Modelo del equipo" value={equipmentForm.model ?? ""} onChange={(event) => setEquipmentForm({ ...equipmentForm, model: event.target.value })} />
               <LocalFeedback feedback={equipmentFeedback} />
-              <Button type="submit" disabled={equipmentMutation}>{equipmentMutation ? "Guardando…" : "Guardar equipo"}</Button>
+              <footer><Button type="button" variant="secondary" onClick={() => setEquipmentOpen(false)}>Cancelar</Button><Button type="submit" disabled={equipmentMutation}>{equipmentMutation ? "Guardando…" : editingEquipment ? "Guardar equipo" : "Agregar equipo"}</Button></footer>
             </form>
           </Dialog>
 
           <Card title="Notas" className="client-ficha__notes-card">
             <Button variant="secondary" aria-expanded={noteComposerOpen} disabled={customerId === undefined || mutation !== null} onClick={() => setNoteComposerOpen(true)}>⊕ Agregar nota</Button>
             {data.notes.length ? data.notes.map((entry) => <article className="client-ficha__note-row" key={entry.id}><Avatar name={entry.author ?? "Operador"}/><div><strong>{entry.author ?? "—"}</strong><small>{formatDate(entry.created_at)}</small></div><p>{entry.note}</p><Menu trigger="icon" label="Acciones de nota" items={[{value:"copy",label:"Copiar nota"}]} onSelect={()=>void navigator.clipboard?.writeText(entry.note)}/></article>) : <EmptyState title="No hay notas" />}
-            {noteComposerOpen ? <Textarea
-              id="new-note"
-              label="Nueva nota"
-              value={note}
-              disabled={mutation !== null || customerId === undefined}
-              onChange={(event) => setNote(event.target.value)}
-            /> : null}
-            {noteComposerOpen ? <Button disabled={mutation !== null || customerId === undefined} onClick={() => void saveNote()}>
-              {mutation === "note" ? "Guardando…" : "Agregar nota"}
-            </Button> : null}
-            <LocalFeedback feedback={noteFeedback} />
           </Card>
+          <Dialog open={noteComposerOpen} onClose={() => setNoteComposerOpen(false)} title="Agregar nota" icon={NotebookPen} description="Registra una nota asociada al cliente.">
+            <form className="client-ficha-dialog" onSubmit={(event) => { event.preventDefault(); void saveNote(); }}>
+              <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div><span className="client-ficha-dialog__context-phone"><Phone aria-hidden="true"/>{customer.phone_e164 ?? "—"}</span></div>
+              <Textarea id="new-note" label="Nota" placeholder="Escribe información útil para el seguimiento del cliente…" value={note} disabled={mutation !== null || customerId === undefined} onChange={(event) => setNote(event.target.value)} />
+              <p className="client-ficha-dialog__helper">La nota quedará asociada a esta ficha.</p>
+              <LocalFeedback feedback={noteFeedback} />
+              <footer><Button type="button" variant="secondary" onClick={() => setNoteComposerOpen(false)}>Cancelar</Button><Button type="submit" disabled={mutation !== null || customerId === undefined}>{mutation === "note" ? "Guardando…" : "Guardar nota"}</Button></footer>
+            </form>
+          </Dialog>
 
           <Card title="Próximas visitas" className="client-ficha__upcoming-card">
             {upcomingAppointments.length ? <ul className="client-ficha__visits">{upcomingAppointments.map((appointment) => { const date = new Date(appointment.starts_at); return <li key={appointment.id}><a className="client-ficha__upcoming-row" href={pathForRoute({ view: "agenda", appointmentId: appointment.id })}><span className="client-ficha__date-tile"><strong>{date.getDate().toString().padStart(2, "0")}</strong><small>{new Intl.DateTimeFormat("es-CL", { month: "short" }).format(date).replace(".", "").toUpperCase()}</small></span><span>{appointment.service}</span><span><Clock3/>{new Intl.DateTimeFormat("es-CL",{hour:"2-digit",minute:"2-digit"}).format(date)}</span><Badge tone={appointmentStatusTone(appointment.status)}>{appointmentStatusLabel(appointment.status)}</Badge></a></li>; })}</ul> : <EmptyState title="No hay próximas visitas" />}
