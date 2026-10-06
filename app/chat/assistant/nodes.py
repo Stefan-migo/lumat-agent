@@ -28,6 +28,7 @@ from app.services.costs import (
     maybe_alert_owner,
     record_llm_cost,
 )
+from app.services.skills import SkillDefinition
 from app.chat.assistant.attachments import build_multimodal_content, prepare_attachment_context
 from app.models import InternalChatMessage
 
@@ -619,7 +620,13 @@ def plan_llm(state: AssistantState) -> AssistantState:
     config = load_assistant_config()
     user_prompt = config.prompts["plan"]
     available_tools = _planner_tool_catalog(list(_effective_tools(state)))
-    for key, value in {"user_input": state["content"], "available_tools": available_tools, "context": _planner_context_text(state)}.items():
+    available_skills = json.dumps(
+        [{"name": skill.name, "description": skill.description} for skill in _effective_skill_index(state)],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    for key, value in {"user_input": state["content"], "available_tools": available_tools,
+                       "available_skills": available_skills, "context": _planner_context_text(state)}.items():
         user_prompt = user_prompt.replace("{{" + key + "}}", str(value))
     if state.get("cost_directive"):
         user_prompt += "\n\n" + state["cost_directive"]
@@ -693,7 +700,15 @@ def assemble_context_node(state: AssistantState) -> AssistantState:
     effective = None
     if thread is not None:
         config = resolve_effective_config(state["session"], thread, state.get("actor_role") or "")
-        effective = {"instructions": config.instructions, "tools_whitelist": list(config.tools_whitelist)}
+        effective = {
+            "instructions": config.instructions,
+            "tools_whitelist": list(config.tools_whitelist),
+            "skills_index": [
+                {"name": skill.name, "description": skill.description, "scope": skill.scope,
+                 "path": skill.path, "body": skill.body}
+                for skill in config.skills_index
+            ],
+        }
     context = assemble_context(state["session"], state["thread_id"], attachments=state.get("attachments", []))
     return {"context": context, "context_meta": context["meta"], "projection_evidence": context["meta"], "effective": effective}
 
@@ -705,6 +720,16 @@ def _effective_tools(state) -> tuple[str, ...]:
     from app.services.prompts import load_assistant_config
 
     return load_assistant_config().tools_whitelist
+
+
+def _effective_skill_index(state) -> tuple[SkillDefinition, ...]:
+    from app.services.prompts import load_assistant_config
+    from app.services.skills import global_skill_index
+
+    effective = state.get("effective")
+    if effective:
+        return tuple(SkillDefinition(**skill) for skill in effective["skills_index"])
+    return global_skill_index(load_assistant_config())
 
 
 def _effective_persona(state, config) -> str:

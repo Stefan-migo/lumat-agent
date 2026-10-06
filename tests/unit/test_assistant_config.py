@@ -14,8 +14,9 @@ def test_complete_assistant_configuration_loads_without_skills(repo_root):
     assert "Lumat internal executive operator" in config.persona
     assert set(config.prompts) == {"plan", "respond", "classify"}
     assert "<available_tools>" in config.prompts["plan"]
+    assert "<available_skills>{{available_skills}}</available_skills>" in config.prompts["plan"]
     assert config.skills == ()
-    assert "skills" not in config.prompts["plan"]
+    assert "SECRET SKILL BODY" not in config.prompts["plan"]
     assert config.memoria_scope == "panel"
 
 

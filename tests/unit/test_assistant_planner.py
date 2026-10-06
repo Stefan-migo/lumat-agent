@@ -32,6 +32,11 @@ def test_planner_accepts_strict_tool_plan_and_rejects_extra_fields():
     assert result.kind == "tool"
     assert result.arguments == {"query": "Ana"}
 
+    skills = PlannerOutput.model_validate(
+        {"kind": "respond", "summary": "Answer.", "skills": ["a", "b"]}
+    )
+    assert skills.skills == ["a", "b"]
+
     with pytest.raises(ValidationError):
         PlannerOutput.model_validate(
             {
@@ -105,7 +110,7 @@ def test_planner_output_accepts_explicit_null_arguments():
 def test_plan_llm_keeps_respond_plan_with_null_arguments(monkeypatch, caplog):
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",
-        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], persona="persona"),
+        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], skills=(), persona="persona"),
     )
     monkeypatch.setattr(
         "app.chat.assistant.nodes._assistant_client",
@@ -168,6 +173,7 @@ def test_plan_llm_does_not_treat_fallback_summary_collision_as_invalid(monkeypat
         lambda: SimpleNamespace(
             prompts={"plan": "{{user_input}}"},
             tools_whitelist=["customers.search"],
+            skills=(),
             persona="persona",
         ),
     )
@@ -195,6 +201,7 @@ def test_plan_llm_includes_whitelisted_tool_catalog_in_prompt(monkeypatch):
         lambda: SimpleNamespace(
             prompts={"plan": "<available_tools>{{available_tools}}</available_tools>"},
             tools_whitelist=["memory.read", "customers.search"],
+            skills=(),
             persona="persona",
         ),
     )
@@ -223,10 +230,68 @@ def test_plan_llm_includes_whitelisted_tool_catalog_in_prompt(monkeypatch):
     assert "project.archive" not in prompt
 
 
+def test_plan_llm_includes_effective_skill_index_without_bodies(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(
+            prompts={"plan": "<available_skills>{{available_skills}}</available_skills>"},
+            tools_whitelist=[], skills=(), persona="persona",
+        ),
+    )
+
+    def create(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+            content='{"kind":"respond","summary":"Done."}',
+        ))])
+
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))),
+    )
+
+    plan_llm({
+        "content": "Help",
+        "context": {"items": []},
+        "effective": {"tools_whitelist": [], "skills_index": [{
+            "name": "guide", "description": "Guidance summary", "scope": "project",
+            "path": None, "body": "SECRET SKILL BODY",
+        }]},
+    })
+
+    prompt = captured["messages"][1]["content"]
+    index = json.loads(prompt.split("<available_skills>", 1)[1].split("</available_skills>", 1)[0])
+    assert index == [{"name": "guide", "description": "Guidance summary"}]
+    assert "SECRET SKILL BODY" not in prompt
+    assert "SECRET SKILL BODY" not in captured["messages"][0]["content"]
+
+
+def test_plan_llm_substitutes_empty_effective_skill_index(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        "app.services.prompts.load_assistant_config",
+        lambda: SimpleNamespace(prompts={"plan": "<available_skills>{{available_skills}}</available_skills>"},
+                                tools_whitelist=[], skills=(), persona="persona"),
+    )
+    monkeypatch.setattr(
+        "app.chat.assistant.nodes._assistant_client",
+        lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: (captured.update(kwargs) or SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content='{"kind":"respond","summary":"Done."}'))]
+            )),
+        ))),
+    )
+    plan_llm({"content": "Help", "context": {"items": []},
+              "effective": {"tools_whitelist": [], "skills_index": []}})
+
+    assert "<available_skills>[]</available_skills>" in captured["messages"][1]["content"]
+
+
 def test_plan_llm_keeps_malformed_output_invalid(monkeypatch):
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",
-        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], persona="persona"),
+        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], skills=(), persona="persona"),
     )
     monkeypatch.setattr(
         "app.chat.assistant.nodes._assistant_client",
@@ -299,7 +364,7 @@ def test_plan_llm_keeps_malformed_output_invalid(monkeypatch):
 def test_plan_llm_records_distinct_failure_diagnostics(monkeypatch, caplog, client, reason, stage, exception_type, raw_text):
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",
-        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], persona="persona"),
+        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], skills=(), persona="persona"),
     )
     monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: client)
 
@@ -321,7 +386,7 @@ def test_plan_llm_records_distinct_failure_diagnostics(monkeypatch, caplog, clie
 def test_plan_llm_bounds_usage_recording_failure(monkeypatch, caplog):
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",
-        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], persona="persona"),
+        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], skills=(), persona="persona"),
     )
     monkeypatch.setattr(
         "app.chat.assistant.nodes._assistant_client",
@@ -355,7 +420,7 @@ def test_plan_llm_bounds_usage_recording_failure(monkeypatch, caplog):
 def test_plan_llm_bounds_completion_extraction_failure(monkeypatch, caplog):
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",
-        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], persona="persona"),
+        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], skills=(), persona="persona"),
     )
     monkeypatch.setattr(
         "app.chat.assistant.nodes._assistant_client",
@@ -389,7 +454,7 @@ def test_plan_llm_bounds_completion_extraction_failure(monkeypatch, caplog):
 def test_plan_llm_records_no_failure_for_valid_plan(monkeypatch, caplog):
     monkeypatch.setattr(
         "app.services.prompts.load_assistant_config",
-        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], persona="persona"),
+        lambda: SimpleNamespace(prompts={"plan": "{{user_input}}"}, tools_whitelist=[], skills=(), persona="persona"),
     )
     monkeypatch.setattr(
         "app.chat.assistant.nodes._assistant_client",
