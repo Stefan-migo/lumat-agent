@@ -280,7 +280,7 @@ describe("ClientesList", () => {
     render(<ClientesList />);
 
     expect(await within(await screen.findByRole("table")).findByText("Marcela Fuentes")).toBeInTheDocument();
-    expect(fetchClients).toHaveBeenCalledWith({ onlyArchived: false, query: "", consent: undefined, sort: "created_desc" });
+    expect(fetchClients).toHaveBeenCalledWith({ includeArchived: false, query: "", consent: undefined, sort: "created_desc" });
   });
 
   it("changes a client's state from the row and refreshes the list", async () => {
@@ -372,13 +372,19 @@ describe("ClientesList", () => {
     expect(within(table).getByText("Archivado")).toHaveAttribute("data-tone", "warning");
   });
 
-  it("requests archived clients only after enabling the toggle", async () => {
+  it("includes archived clients alongside active clients after enabling the toggle", async () => {
     const user = userEvent.setup();
-    vi.mocked(fetchClients).mockResolvedValue({ clients: customers });
+    const archivedCustomer = { ...customers[0], id: 4, name: "Archived client", archived_at: "2026-01-01" };
+    vi.mocked(fetchClients).mockImplementation(async ({ includeArchived = false } = {}) => ({ clients: includeArchived ? [...customers, archivedCustomer] : customers }));
     render(<ClientesList />);
     await within(await screen.findByRole("table")).findByText("Marcela Fuentes");
     await user.click(screen.getByRole("switch", { name: "Mostrar archivados" }));
-    await waitFor(() => expect(fetchClients).toHaveBeenLastCalledWith({ onlyArchived: true, query: "", consent: undefined, sort: "created_desc" }));
+    await waitFor(() => expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: true, query: "", consent: undefined, sort: "created_desc" }));
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Marcela Fuentes")).toBeInTheDocument();
+    expect(within(table).getByText("Archived client")).toBeInTheDocument();
+    expect(within(desktopRow(table, "Marcela Fuentes")).getByText("Disponible")).toHaveAttribute("data-tone", "success");
+    expect(within(desktopRow(table, "Archived client")).getByText("Archivado")).toHaveAttribute("data-tone", "warning");
   });
 
   it("resets pagination and selection when the archived filter changes", async () => {
@@ -523,7 +529,7 @@ describe("ClientesList", () => {
 
     await user.clear(search);
     await waitFor(() => expect(within(screen.getByRole("table")).getByText("Pedro Soto")).toBeInTheDocument());
-    expect(fetchClients).toHaveBeenLastCalledWith({ onlyArchived: false, query: "", consent: undefined, sort: "created_desc" });
+    expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: false, query: "", consent: undefined, sort: "created_desc" });
   });
 });
 

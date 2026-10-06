@@ -90,7 +90,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   // Remounting the debounced input is the only way to clear it: the primitive owns its own
   // text, so resetting our query state alone would leave the stale term on screen.
   const [searchResetKey, setSearchResetKey] = useState(0);
-  const [onlyArchived, setOnlyArchived] = useState(false);
+  const [includeArchived, setIncludeArchived] = useState(false);
   const [consent, setConsent] = useState<"" | "true" | "false">("");
   const [sort, setSort] = useState<"created_desc" | "created_asc">("created_desc");
   const [tab, setTab] = useState<"all" | CustomerState>("all");
@@ -111,8 +111,8 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
   const [archiveCounts, setArchiveCounts] = useState<{ cases: number; appointments: number } | null>(null);
   const fetchClients = useCallback(
-    () => listClients({ onlyArchived, query, consent: consent === "" ? undefined : consent === "true", sort }).then((response) => response.clients),
-    [onlyArchived, query, consent, sort],
+    () => listClients({ includeArchived, query, consent: consent === "" ? undefined : consent === "true", sort }).then((response) => response.clients),
+    [includeArchived, query, consent, sort],
   );
   const fetched = useAsyncData(fetchClients, controlledData === undefined, queryVersion);
   const data = controlledData === undefined ? fetched.data : controlledData;
@@ -249,7 +249,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
         <div className="table-toolbar clientes-list__toolbar">
           <SearchInput key={searchResetKey} aria-label="Buscar clientes" placeholder="Buscar por nombre o teléfono..." onSearch={(next) => { setSearchTerm(next); setPage(1); setQueryVersion((current) => current + 1); }} />
           <label className="clientes-list__filter"><span>Consentimiento</span><select aria-label="Consentimiento" value={consent} onChange={(event) => { setConsent(event.target.value as typeof consent); setPage(1); setSelected(new Set()); refresh(); }}><option value="">Consentimiento</option><option value="true">Sí</option><option value="false">No</option></select></label>
-          <label className="clientes-list__switch"><input type="checkbox" role="switch" aria-label="Mostrar archivados" checked={onlyArchived} onChange={(event) => { setOnlyArchived(event.target.checked); setPage(1); setSelected(new Set()); refresh(); }} /><span>Mostrar archivados</span></label>
+          <label className="clientes-list__switch"><input type="checkbox" role="switch" aria-label="Mostrar archivados" checked={includeArchived} onChange={(event) => { setIncludeArchived(event.target.checked); setPage(1); setSelected(new Set()); refresh(); }} /><span>Mostrar archivados</span></label>
         </div>
         {dialog === null && dialogError ? <p role="alert">{dialogError}</p> : null}
         {state === "loading" ? null : data && data.length > 0 ? (
