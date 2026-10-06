@@ -90,12 +90,11 @@ is dead flexibility. They arrive with their slices. The cheapest correct slice i
 `memory.*` (including writes) is `default` per D7 ("memoria own"). Project admin = the
 `SDB_WRITE_ALLOWLIST` set (`registry.py:27`). The two tiers partition all 24 tools.
 
-## Assumptions to confirm
+## Assumptions
 
-1. **A1 — default tier is not disableable.** D7 says the safe default is "siempre on". So a
-   project selects only among **opt-in** tools; it cannot turn a default tool off. If the
-   owner instead wants per-project disabling of default tools, the model gains a
-   `disabled` list — say so before T1.
+1. **A1 — default tier is not disableable. CONFIRMED by the owner (2026-10-06).** D7 says the
+   safe default is "siempre on". So a project selects only among **opt-in** tools; it cannot
+   turn a default tool off. No `disabled` list in the model.
 2. **A2 — thread override reads existing `assistant_state`.** No new thread column; the key
    is read from the JSONB field that already exists.
 
