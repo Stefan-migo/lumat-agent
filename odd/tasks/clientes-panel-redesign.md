@@ -78,6 +78,7 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
 - [x] Owner decision: **Transiciones válidas** — change-state radio cards contain only the customer's CR-3 `allowed_transitions`; terminal states show no state cards or save action.
 - [x] Owner decision: **Solo archivados** — enabling "Mostrar archivados" filters the list to archived clients only; disabling it shows active clients only.
 - [x] Owner decision: **Reinicio de ciclo por re-contacto** — inbound WhatsApp from a `finalizado`, `postventa`, or `cancelado` customer resets only the customer state to `nuevo` and audits `customer.cycle_restarted`; manual CR-3 transitions remain unchanged, and conversation/case history is preserved.
+- [x] Owner corrections (2026-10-06): state-option cards inherit the official UI font; list tabs show Todos plus all eight customer states in canonical order with client-side counts and filtering.
 
 ### CL-3 — Client ficha shell
 - [ ] Identity header: avatar, name, "Cliente desde [date]", Agendar visita/Ver conversación

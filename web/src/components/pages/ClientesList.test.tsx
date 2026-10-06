@@ -80,8 +80,8 @@ describe("ClientesList", () => {
     expect(within(cell as HTMLElement).queryByText("+56912345678")).not.toBeInTheDocument();
     expect(screen.getByText("Marcela Fuentes")).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "+56912345678" })).toBeInTheDocument();
-    expect(screen.getByText("Contactado")).toBeInTheDocument();
-    expect(screen.getByText("En evaluación")).toBeInTheDocument();
+    expect(screen.getAllByText("Contactado").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("En evaluación").length).toBeGreaterThan(1);
     expect(screen.getByText("15 jul 2026")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
@@ -166,6 +166,23 @@ describe("ClientesList", () => {
 
     expect(screen.getByRole("table")).toBeInTheDocument();
     expect(container.querySelector(".ai-agent-grammar__bubble, .assistant-chat__conversation, .ai-agent-grammar__composer")).toBeNull();
+  });
+
+  it("shows all customer-state tabs in canonical order with counts and filters by state", async () => {
+    const user = userEvent.setup();
+    const allStates: Customer[] = ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"].map((state, index) => ({
+      ...customers[0], id: index + 1, name: `Customer ${state}`, state: state as Customer["state"],
+    }));
+    render(<ClientesList data={allStates} state="ready" />);
+
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent?.replace(/\s+/g, " ").trim())).toEqual([
+      "Todos 8", "Nuevo 1", "Contactado 1", "Pendiente 1", "Agendado 1", "En evaluación 1", "Finalizado 1", "Cancelado 1", "Postventa 1",
+    ]);
+    await user.click(screen.getByRole("tab", { name: "Cancelado 1" }));
+    expect(screen.getByRole("link", { name: "Customer cancelado" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Customer nuevo" })).not.toBeInTheDocument();
+    expect(screen.getByText("Mostrando 1 de 1 clientes")).toBeInTheDocument();
   });
 
   // T9 — the story contract must be able to render the filtered-empty state, which depends on

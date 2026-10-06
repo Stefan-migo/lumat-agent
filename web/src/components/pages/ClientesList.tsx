@@ -58,6 +58,8 @@ const columns = (onOpenClient?: (id: number) => void, selected: Set<number> = ne
   { key: "created", header: (<button className="clientes-list__sort" type="button" aria-label={`Creado ${sort === "created_desc" ? "descendente" : "ascendente"}`} onClick={toggleSort}>Creado {sort === "created_desc" ? "↓" : "↑"}</button>) as unknown as string, render: (customer) => customer.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(customer.created_at)).replace(".", "") : "—" },
 ];
 
+const CUSTOMER_STATES: CustomerState[] = ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"];
+
 function stateMessage(state: ClientesListState, retry: () => void) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando clientes" />;
   if (state === "empty") return null;
@@ -87,7 +89,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const [onlyArchived, setOnlyArchived] = useState(false);
   const [consent, setConsent] = useState<"" | "true" | "false">("");
   const [sort, setSort] = useState<"created_desc" | "created_asc">("created_desc");
-  const [tab, setTab] = useState<"all" | "scheduled" | "finished">("all");
+  const [tab, setTab] = useState<"all" | CustomerState>("all");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [dialog, setDialog] = useState<"create" | "archive" | "state" | null>(null);
@@ -111,8 +113,8 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const data = controlledData === undefined ? fetched.data : controlledData;
   const state = controlledState ?? fetched.state;
   const allRows = data ?? [];
-  const counts = { all: allRows.length, scheduled: allRows.filter((row) => row.state === "agendado").length, finished: allRows.filter((row) => row.state === "finalizado").length };
-  const filteredRows = tab === "scheduled" ? allRows.filter((row) => row.state === "agendado") : tab === "finished" ? allRows.filter((row) => row.state === "finalizado") : allRows;
+  const counts = Object.fromEntries(CUSTOMER_STATES.map((customerState) => [customerState, allRows.filter((row) => row.state === customerState).length])) as Record<CustomerState, number>;
+  const filteredRows = tab === "all" ? allRows : allRows.filter((row) => row.state === tab);
   const pageSize = 10;
   const rows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -218,7 +220,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       state={stateMessage(state, retry)}
     >
       <section aria-label="Listado de clientes">
-        <Tabs ariaLabel="Estado de clientes" activeTab={tab} onTabChange={(value) => { setTab(value as typeof tab); setPage(1); setSelected(new Set()); }} tabs={[{ id: "all", label: <>Todos <Badge>{counts.all}</Badge></> }, { id: "scheduled", label: <>Agendados <Badge>{counts.scheduled}</Badge></> }, { id: "finished", label: <>Finalizados <Badge>{counts.finished}</Badge></> }]}>
+        <Tabs ariaLabel="Estado de clientes" activeTab={tab} onTabChange={(value) => { setTab(value as typeof tab); setPage(1); setSelected(new Set()); }} tabs={[{ id: "all", label: <>Todos <Badge>{allRows.length}</Badge></> }, ...CUSTOMER_STATES.map((customerState) => ({ id: customerState, label: <>{customerStateLabel(customerState)} <Badge>{counts[customerState]}</Badge></> }))]}>
         {() => <div className="table-card clientes-list__card">
         <div className="table-toolbar clientes-list__toolbar">
           <SearchInput key={searchResetKey} aria-label="Buscar clientes" placeholder="Buscar por nombre o teléfono..." onSearch={(next) => { setSearchTerm(next); setPage(1); setQueryVersion((current) => current + 1); }} />
