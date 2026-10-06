@@ -663,7 +663,18 @@ def _effective_tools(state) -> tuple[str, ...]:
         return tools
     from app.chat.assistant.tools.registry import get_tool
 
-    return tuple(name for name in tools if name == "memory.write" or not get_tool(name).write)
+    allowed = []
+    for name in tools:
+        if name == "memory.write":
+            allowed.append(name)
+            continue
+        try:
+            definition = get_tool(name)
+        except ValueError:
+            continue
+        if not definition.write:
+            allowed.append(name)
+    return tuple(allowed)
 
 
 def _effective_skill_index(state) -> tuple[SkillDefinition, ...]:

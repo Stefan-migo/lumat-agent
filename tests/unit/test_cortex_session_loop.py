@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 from app.chat.assistant.graph import _after_plan, build_assistant_graph
 from app.chat.assistant.nodes import _effective_tools
-from app.models import MemoryStatus
 
 
 def _active_state(**overrides):
@@ -14,12 +13,7 @@ def _active_state(**overrides):
         "status": "active",
         "opened_at": "2026-09-13T12:00:00Z",
         "closed_at": None,
-        "turn_index": 0,
-        "next_decision": None,
-        "last_class": None,
-        "decision_keys": [],
         "report_key": None,
-        "handoff": {"status": "none", "sdb_phase": None},
     }
     session.update(overrides)
     return {"cortex_session": session}
@@ -61,25 +55,26 @@ def test_non_planning_effective_tools_are_unchanged():
     assert _effective_tools({"effective": effective}) == effective["tools_whitelist"]
 
 
-def test_report_closure_archives_upserted_report(monkeypatch):
+def test_report_closure_writes_one_agent_scope_memory_without_handoff(monkeypatch):
     calls = []
     report = SimpleNamespace(id=41, topic_key="cortex-session/budget-review:report")
     monkeypatch.setattr("app.services.tukulpan.upsert", lambda *args, **kwargs: calls.append(("upsert", kwargs)) or report)
-    monkeypatch.setattr("app.services.tukulpan.set_mark", lambda *args, **kwargs: calls.append(("set_mark", kwargs)) or report)
 
     from app.services.agent_chat import close_cortex_session
 
-    result = close_cortex_session("db", SimpleNamespace(id=7, assistant_state=_active_state()), report="closed report")
+    thread = SimpleNamespace(id=7, assistant_state=_active_state(), current_plan={}, proyecto="default", user_id=1)
+    result = close_cortex_session("db", thread, report="closed report")
 
     assert result["report_key"] == report.topic_key
-    assert calls[0][0] == "upsert"
-    assert calls[1] == ("set_mark", {"status": MemoryStatus.ARCHIVED})
+    assert result == {"report_key": report.topic_key, "report": "closed report"}
+    assert len(calls) == 1
+    assert calls[0][1]["scope"] == "agent"
+    assert calls[0][1]["entity_id"] == "agent:default"
+    assert "handoff" not in thread.assistant_state["cortex_session"]
+    assert thread.current_plan == {}
 
 
-def test_approved_cortex_plan_is_truthful_pending_handoff():
-    from app.services.agent_chat import cortex_approved_plan
+def test_active_session_unknown_whitelist_tool_is_skipped():
+    effective = {"tools_whitelist": ("unknown.tool", "memory.write", "kb.retrieve")}
 
-    result = cortex_approved_plan({"scope": {"request": "review budget"}}, [{"id": "task-1"}])
-
-    assert result["status"] == "approved-plan"
-    assert result["execution"] == "pending-approval"
+    assert _effective_tools({**_active_state(), "effective": effective}) == ("memory.write", "kb.retrieve")
