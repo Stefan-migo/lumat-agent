@@ -66,6 +66,7 @@ describe("ClientesList", () => {
 
     expect(screen.getByRole("main")).toHaveTextContent("Clientes");
     expect(screen.getByRole("columnheader", { name: "Cliente" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Registro" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Teléfono" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Estado" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Consentimiento" })).toBeInTheDocument();
@@ -80,7 +81,7 @@ describe("ClientesList", () => {
     expect(screen.getByRole("cell", { name: "+56912345678" })).toBeInTheDocument();
     expect(screen.getByText("Contactado")).toBeInTheDocument();
     expect(screen.getByText("En evaluación")).toBeInTheDocument();
-    expect(screen.getByText("2026-07-15")).toBeInTheDocument();
+    expect(screen.getByText("15 jul 2026")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
@@ -207,14 +208,14 @@ describe("ClientesList", () => {
     expect(screen.getByRole("button", { name: "Reintentar" })).toHaveClass("btn");
   });
 
-  // T6 — the filter and export controls belong to the region they control, not to the page header.
-  it("binds the search and the exports to a toolbar inside the list content", () => {
+  it("binds the search and filters to the list card and keeps exports in the page header", () => {
     const { container } = render(<ClientesList data={customers} state="ready" />);
 
-    const toolbar = container.querySelector(".toolbar");
+    const toolbar = container.querySelector(".clientes-list__toolbar");
     expect(toolbar).not.toBeNull();
     expect(toolbar).toContainElement(screen.getByLabelText("Buscar clientes"));
-    expect(toolbar).toContainElement(screen.getByRole("button", { name: "Exportar" }));
+    expect(toolbar).not.toContainElement(screen.getByRole("button", { name: "Exportar" }));
+    expect(screen.getByRole("button", { name: "Nuevo cliente" }).closest(".page-header__actions")).not.toBeNull();
   });
 
   it("exposes the search and export dropdown", () => {
@@ -237,11 +238,11 @@ describe("ClientesList", () => {
   });
 
   // T4 — the accessible link colour is a shared contract, not an inline call-site style.
-  it("styles the drill-down link through the shared table link contract", () => {
+  it("styles the drill-down link without browser-default underlining", () => {
     render(<ClientesList data={customers} state="ready" />);
 
     const link = screen.getByRole("link", { name: "Marcela Fuentes" });
-    expect(link).toHaveClass("table__link");
+    expect(link).toHaveClass("clientes-list__name");
     expect(link).not.toHaveAttribute("style");
   });
 
@@ -340,7 +341,7 @@ describe("ClientesList", () => {
 
   it("shows the archived filter and marks archived customers", () => {
     render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
-    expect(screen.getByRole("checkbox", { name: "Mostrar archivados" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Mostrar archivados" })).toBeInTheDocument();
     expect(screen.getByText("Archivado")).toBeInTheDocument();
   });
 
@@ -349,7 +350,7 @@ describe("ClientesList", () => {
     vi.mocked(fetchClients).mockResolvedValue({ clients: customers });
     render(<ClientesList />);
     await screen.findByText("Marcela Fuentes");
-    await user.click(screen.getByRole("checkbox", { name: "Mostrar archivados" }));
+    await user.click(screen.getByRole("switch", { name: "Mostrar archivados" }));
     await waitFor(() => expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: true, query: "", consent: undefined, sort: "created_desc" }));
   });
 
@@ -380,12 +381,12 @@ describe("ClientesList", () => {
 describe("ClientesList — row actions", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("gives each row an action menu and ficha affordance", () => {
+  it("gives each row only its action menu", () => {
     render(<ClientesList data={customers} state="ready" />);
 
     const row = screen.getByText("Marcela Fuentes").closest("tr");
     expect(row).not.toBeNull();
-    expect(within(row!).getAllByRole("button")).toHaveLength(2);
+    expect(within(row!).getAllByRole("button")).toHaveLength(1);
     expect(
       within(row!).getByRole("button", { name: "Acciones para Marcela Fuentes" }),
     ).toBeInTheDocument();

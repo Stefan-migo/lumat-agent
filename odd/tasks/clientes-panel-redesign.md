@@ -58,14 +58,14 @@ the owner corrects the design visually per work unit.
 
 ### CL-2a-r1 — list reference-fidelity refinement (owner visual review 2026-10-05)
 Owner verdict: the first pass is still far from the reference. Concrete corrections:
-- [ ] Move "Exportar" + "Nuevo cliente" to the page header (top-right); remove them from the table toolbar.
-- [ ] Wrap the search toolbar + table + footer in one card.
-- [ ] Toolbar composition: search input ("Buscar por nombre o teléfono...") + "Consentimiento" dropdown + "Mostrar archivados" toggle switch.
-- [ ] Column order: Cliente | Registro | Teléfono | Estado | Consentimiento | Creado ↓ (actions last).
-- [ ] Remove the row chevron `>` (owner reversal of `clientes-010`).
-- [ ] Style the client-name link (no browser underline; plain name per the reference).
-- [ ] Date format "20 sep 2026" (day month year).
-- [ ] Match the estado/consent badges and the pagination active-page button to the reference.
+- [x] Move "Exportar" + "Nuevo cliente" to the page header (top-right); remove them from the table toolbar.
+- [x] Wrap the search toolbar + table + footer in one card.
+- [x] Toolbar composition: search input ("Buscar por nombre o teléfono...") + "Consentimiento" dropdown + "Mostrar archivados" toggle switch.
+- [x] Column order: Cliente | Registro | Teléfono | Estado | Consentimiento | Creado ↓ (actions last).
+- [x] Remove the row chevron `>` (owner reversal of `clientes-010`).
+- [x] Style the client-name link (no browser underline; plain name per the reference).
+- [x] Date format "20 sep 2026" (day month year).
+- [x] Match the estado/consent badges and the pagination active-page button to the reference.
 
 ### CL-2b — Clientes list dialogs
 - [ ] Dialog headers: pass existing `Dialog` `icon`/`description` (`clientes-020`, list call sites).
