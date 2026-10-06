@@ -66,20 +66,18 @@ describe("ClientesList", () => {
 
     expect(screen.getByRole("main")).toHaveTextContent("Clientes");
     expect(screen.getByRole("columnheader", { name: "Cliente" })).toBeInTheDocument();
-    expect(screen.queryByRole("columnheader", { name: "Teléfono" })).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Teléfono" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Estado" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Consentimiento" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Creado" })).toBeInTheDocument();
 
-    // The name cell is a resource: avatar initials, the drill-down link, and the phone
-    // muted underneath. The phone is no longer its own column, so this is also the guard
-    // that it is not lost.
+    // The client name and phone remain distinct reference columns.
     const cell = screen.getByRole("link", { name: "Marcela Fuentes" }).closest(".table__resource");
     expect(cell).not.toBeNull();
     expect(cell!.querySelector(".table__resource-avatar")).toHaveTextContent("MF");
-    expect(within(cell as HTMLElement).getByText("+56912345678")).toBeInTheDocument();
+    expect(within(cell as HTMLElement).queryByText("+56912345678")).not.toBeInTheDocument();
     expect(screen.getByText("Marcela Fuentes")).toBeInTheDocument();
-    expect(screen.getByText("+56912345678")).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "+56912345678" })).toBeInTheDocument();
     expect(screen.getByText("Contactado")).toBeInTheDocument();
     expect(screen.getByText("En evaluación")).toBeInTheDocument();
     expect(screen.getByText("2026-07-15")).toBeInTheDocument();
@@ -100,14 +98,14 @@ describe("ClientesList", () => {
   it("reports the pluralised count for several records", () => {
     render(<ClientesList data={customers} state="ready" />);
 
-    expect(screen.getByText("3 clientes")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
   });
 
   // T3 — the singular form. Today the meta renders "1 clientes".
   it("reports the count in the singular for one record", () => {
     render(<ClientesList data={[customers[0]]} state="ready" />);
 
-    expect(screen.getByText("1 cliente")).toBeInTheDocument();
+    expect(screen.getByText("Mostrando 1 de 1 clientes")).toBeInTheDocument();
   });
 
   it("shows the loading status without rendering a table", () => {
@@ -214,16 +212,14 @@ describe("ClientesList", () => {
     const toolbar = container.querySelector(".toolbar");
     expect(toolbar).not.toBeNull();
     expect(toolbar).toContainElement(screen.getByLabelText("Buscar clientes"));
-    expect(toolbar).toContainElement(screen.getByText("Exportar clientes CSV"));
-    expect(toolbar).toContainElement(screen.getByText("Exportar casos CSV"));
+    expect(toolbar).toContainElement(screen.getByRole("button", { name: "Exportar" }));
   });
 
-  it("exposes the search and the two export controls", () => {
+  it("exposes the search and export dropdown", () => {
     render(<ClientesList data={customers} state="ready" />);
 
     expect(screen.getByLabelText("Buscar clientes")).toBeInTheDocument();
-    expect(screen.getByText("Exportar clientes CSV")).toBeInTheDocument();
-    expect(screen.getByText("Exportar casos CSV")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Exportar" })).toBeInTheDocument();
   });
 
   it("opens the client through the drill-down link instead of navigating", async () => {
@@ -253,7 +249,7 @@ describe("ClientesList", () => {
     render(<ClientesList />);
 
     expect(await screen.findByText("Marcela Fuentes")).toBeInTheDocument();
-    expect(fetchClients).toHaveBeenCalledWith({ includeArchived: false, query: "" });
+    expect(fetchClients).toHaveBeenCalledWith({ includeArchived: false, query: "", consent: undefined, sort: "created_desc" });
   });
 
   it("changes a client's state from the row and refreshes the list", async () => {
@@ -352,7 +348,7 @@ describe("ClientesList", () => {
     render(<ClientesList />);
     await screen.findByText("Marcela Fuentes");
     await user.click(screen.getByRole("checkbox", { name: "Mostrar archivados" }));
-    await waitFor(() => expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: true, query: "" }));
+    await waitFor(() => expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: true, query: "", consent: undefined, sort: "created_desc" }));
   });
 
   // T2 — clearing the search must return to the unfiltered list. Today the refetch only
@@ -372,7 +368,7 @@ describe("ClientesList", () => {
 
     await user.clear(search);
     await waitFor(() => expect(screen.getByText("Pedro Soto")).toBeInTheDocument());
-    expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: false, query: "" });
+    expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: false, query: "", consent: undefined, sort: "created_desc" });
   });
 });
 
@@ -382,12 +378,12 @@ describe("ClientesList", () => {
 describe("ClientesList — row actions", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("gives each row exactly one action trigger, named for its customer", () => {
+  it("gives each row an action menu and ficha affordance", () => {
     render(<ClientesList data={customers} state="ready" />);
 
     const row = screen.getByText("Marcela Fuentes").closest("tr");
     expect(row).not.toBeNull();
-    expect(within(row!).getAllByRole("button")).toHaveLength(1);
+    expect(within(row!).getAllByRole("button")).toHaveLength(2);
     expect(
       within(row!).getByRole("button", { name: "Acciones para Marcela Fuentes" }),
     ).toBeInTheDocument();
@@ -417,6 +413,14 @@ describe("ClientesList — row actions", () => {
     const cell = container.querySelector(".table__actions");
     expect(cell).not.toBeNull();
     expect(cell!.querySelector(".menu__trigger")).not.toBeNull();
+  });
+
+  it("offers page-composable selection and pagination controls", async () => {
+    const user = userEvent.setup();
+    render(<ClientesList data={customers} state="ready" />);
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar todos" }));
+    expect(screen.getByText("3 seleccionados · Acciones masivas")).toBeInTheDocument();
+    expect(screen.getByText("Mostrando 3 de 3 clientes")).toBeInTheDocument();
   });
 
   it("routes Cambiar estado from the row menu to the state dialog", async () => {

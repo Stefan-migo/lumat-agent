@@ -154,10 +154,12 @@ export function retryCalendarSync(id: number) {
   return postJson<{ ok: boolean; calendar: { status: string; error: string | null } }>(`/panel/api/appointments/${id}/calendar/sync`);
 }
 export const createAppointment = (body: AppointmentCreateRequest) => postJson<AppointmentMutationResponse>('/panel/api/appointments', body);
-export function fetchClients({ includeArchived = false, query = '' }: { includeArchived?: boolean; query?: string } = {}) {
+export function fetchClients({ includeArchived = false, query = '', consent, sort }: { includeArchived?: boolean; query?: string; consent?: boolean; sort?: 'created_desc' | 'created_asc' } = {}) {
   const params = new URLSearchParams();
   if (query) params.set('q', query);
   if (includeArchived) params.set('include_archived', 'true');
+  if (consent !== undefined) params.set('consent', String(consent));
+  if (sort) params.set('sort', sort);
   const search = params.toString();
   return apiFetch<{ clients: Customer[] }>(`/panel/api/clients${search ? `?${search}` : ''}`);
 }
