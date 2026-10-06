@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-planning`
 **Worktree**: `../lumat-agent-odd-asistente-planning`
 **Base**: `10dbd301` (= `main` = `origin/main`, merge of PR #487)
-**Status**: T1–T4 implemented and verified; frontend build unavailable because worktree dependencies are not installed.
+**Status**: Slice 4 complete (T1–T4). Backend + frontend suites green; two native RDD reviews approved. No DB migration. Pending push/PR (owner decision).
 
 ## Objective
 
@@ -169,6 +169,19 @@ execution (`:1039–1051`) must use it too instead of the global
 
 ## Verification
 
-`uv run --no-sync python -m compileall -q app` and `git diff --check` pass. The three requested
-pytest commands pass when run sequentially (the shared test DB deadlocks if they run concurrently).
-The frontend test/build attempt is blocked: `web/node_modules` is absent (`vitest: command not found`).
+Backend (parent-run, sequential — the shared test DB deadlocks if run concurrently): `pytest` over
+the full affected set (`test_cortex_session_foundation.py`, `test_cortex_session_loop.py`,
+`test_agent_registry.py`, `test_assistant_tool_loop.py`, `test_cortex_session_runtime.py`,
+`test_sdb_persistence.py`, `test_assistant_chat.py`, `test_api_cortex_sessions.py`) → **123 passed**.
+Frontend (parent-run, after `npm ci` in `web/`): `npm test` → **96 files / 1013 tests passed**;
+`npm run build` (includes `tsc -b`) → **success**.
+`uv run --no-sync python -m compileall -q app` and `git diff --check` pass.
+
+## Review (RDD)
+
+- Candidate 1 (T1) — lineage `review-15cdefaba08130fb`, lens `review-reliability`, **approved**.
+  Two advisory (non-blocking) findings: R3-001 (a retained runtime test still asserted stale
+  ceremony state) and R3-002 (`_effective_tools` could raise on an unknown whitelist name). Both
+  closed in T2.
+- Candidate 2 (T2 + T3 + frontend) — lineage `review-e05811ebbf91c272`, lens `review-reliability`,
+  **approved with zero findings**.
