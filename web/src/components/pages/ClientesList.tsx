@@ -47,7 +47,6 @@ const columns = (onOpenClient?: (id: number) => void, selected: Set<number> = ne
       </div>
     ),
   },
-  { key: "archived", header: "Registro", render: (customer) => customer.archived_at ? <Badge tone="warning">Archivado</Badge> : "—" },
   { key: "phone", header: "Teléfono", render: (customer) => customer.phone_e164 ?? "—" },
   {
     key: "state",
@@ -56,6 +55,7 @@ const columns = (onOpenClient?: (id: number) => void, selected: Set<number> = ne
   },
   { key: "consent", header: "Consentimiento", render: (customer) => <span className="clientes-list__consent"><span aria-hidden="true">{customer.consent_status ? <Check /> : <CircleMinus />}</span>{customer.consent_status ? "Sí" : "No"}</span> },
   { key: "created", header: (<button className="clientes-list__sort" type="button" aria-label={`Creado ${sort === "created_desc" ? "descendente" : "ascendente"}`} onClick={toggleSort}>Creado {sort === "created_desc" ? "↓" : "↑"}</button>) as unknown as string, render: (customer) => customer.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(customer.created_at)).replace(".", "") : "—" },
+  { key: "archived", header: "Archivo", render: (customer) => customer.archived_at ? <Badge tone="warning">Archivado</Badge> : <Badge tone="success">Disponible</Badge> },
 ];
 
 const CUSTOMER_STATES: CustomerState[] = ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"];
@@ -300,11 +300,11 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
                   return <li className="table-card__item clientes-list__mobile-card" key={customer.id}>
                     <div className="clientes-list__mobile-identity"><input type="checkbox" aria-label={`Seleccionar ${customer.name ?? customer.phone_e164 ?? "cliente"}`} checked={selected.has(customer.id)} onChange={() => toggleSelected(customer.id)} /><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} className="table__resource-avatar" /><a className="clientes-list__name" href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>{customer.name ?? "—"}</a><Menu trigger="icon" label={rowLabel} items={items} onSelect={(value) => { if (value === "state") void openState(customer); else if (value === "archive") void openArchive(customer); else void restore(customer); }} /></div>
                     <div className="clientes-list__mobile-grid">
-                      <div><span>Registro</span>{customer.archived_at ? <Badge tone="warning">Archivado</Badge> : "—"}</div>
                       <div><span>Teléfono</span>{customer.phone_e164 ?? "—"}</div>
                       <div><span>Estado</span><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div>
                       <div><span>Consentimiento</span><span className="clientes-list__consent"><span aria-hidden="true">{customer.consent_status ? <Check /> : <CircleMinus />}</span>{customer.consent_status ? "Sí" : "No"}</span></div>
                       <div><span>Creado</span>{customer.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(customer.created_at)).replace(".", "") : "—"}</div>
+                      <div><span>Archivo</span>{customer.archived_at ? <Badge tone="warning">Archivado</Badge> : <Badge tone="success">Disponible</Badge>}</div>
                     </div>
                   </li>;
                 })}

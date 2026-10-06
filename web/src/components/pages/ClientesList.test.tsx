@@ -72,11 +72,14 @@ describe("ClientesList", () => {
     expect(screen.getByRole("main")).toHaveTextContent("Clientes");
     const table = screen.getByRole("table");
     expect(within(table).getByRole("columnheader", { name: "Cliente" })).toBeInTheDocument();
-    expect(within(table).getByRole("columnheader", { name: "Registro" })).toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: "Teléfono" })).toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: "Estado" })).toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: "Consentimiento" })).toBeInTheDocument();
     expect(within(table).getByRole("columnheader", { name: "Creado ↓" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "Archivo" })).toBeInTheDocument();
+    expect(Array.from(table.querySelectorAll("thead th"), (header) => header.textContent?.trim())).toEqual([
+      "", "Cliente", "Teléfono", "Estado", "Consentimiento", "Creado ↓", "Archivo", "Acciones",
+    ]);
 
     // The client name and phone remain distinct reference columns.
     const cell = within(table).getByRole("link", { name: "Marcela Fuentes" }).closest(".table__resource");
@@ -85,6 +88,8 @@ describe("ClientesList", () => {
     expect(within(cell as HTMLElement).queryByText("+56912345678")).not.toBeInTheDocument();
     expect(within(table).getByText("Marcela Fuentes")).toBeInTheDocument();
     expect(within(table).getByRole("cell", { name: "+56912345678" })).toBeInTheDocument();
+    const clientRow = within(table).getByRole("link", { name: "Marcela Fuentes" }).closest("tr")!;
+    expect(within(clientRow).getByText("Disponible")).toHaveAttribute("data-tone", "success");
     expect(screen.getAllByText("Contactado").length).toBeGreaterThan(1);
     expect(screen.getAllByText("En evaluación").length).toBeGreaterThan(1);
     expect(within(table).getByText("15 jul 2026")).toBeInTheDocument();
@@ -359,10 +364,12 @@ describe("ClientesList", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos restaurar");
   });
 
-  it("shows the archived filter and marks archived customers", () => {
-    render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
+  it("shows positive available and warning archived badges", () => {
+    render(<ClientesList data={[customers[0], { ...customers[1], archived_at: "2026-01-01" }]} state="ready" />);
     expect(screen.getByRole("switch", { name: "Mostrar archivados" })).toBeInTheDocument();
-    expect(within(screen.getByRole("table")).getByText("Archivado")).toBeInTheDocument();
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Disponible")).toHaveAttribute("data-tone", "success");
+    expect(within(table).getByText("Archivado")).toHaveAttribute("data-tone", "warning");
   });
 
   it("requests archived clients only after enabling the toggle", async () => {
@@ -401,11 +408,14 @@ describe("ClientesList", () => {
     expect(identity.firstElementChild).toBe(within(identity).getByRole("checkbox", { name: "Seleccionar Marcela Fuentes" }));
     expect(within(identity).getByRole("button", { name: "Acciones para Marcela Fuentes" })).toBeInTheDocument();
     expect(card.querySelector(".clientes-list__mobile-actions")).toBeNull();
-    expect(card).toHaveTextContent("RegistroArchivado");
     expect(card).toHaveTextContent("Teléfono+56912345678");
     expect(card).toHaveTextContent("EstadoContactado");
     expect(card).toHaveTextContent("ConsentimientoSí");
     expect(card).toHaveTextContent("Creado15 jul 2026");
+    expect(card).toHaveTextContent("ArchivoArchivado");
+    expect(Array.from(card.querySelector(".clientes-list__mobile-grid")!.children, (field) => field.firstElementChild?.textContent)).toEqual([
+      "Teléfono", "Estado", "Consentimiento", "Creado", "Archivo",
+    ]);
     expect(container.querySelector(".clientes-list__mobile-card")?.textContent).not.toContain(">");
   });
 
