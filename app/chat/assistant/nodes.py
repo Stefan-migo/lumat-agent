@@ -618,7 +618,7 @@ def plan_llm(state: AssistantState) -> AssistantState:
 
     config = load_assistant_config()
     user_prompt = config.prompts["plan"]
-    available_tools = _planner_tool_catalog(config.tools_whitelist)
+    available_tools = _planner_tool_catalog(list(_effective_tools(state)))
     for key, value in {"user_input": state["content"], "available_tools": available_tools, "context": _planner_context_text(state)}.items():
         user_prompt = user_prompt.replace("{{" + key + "}}", str(value))
     if state.get("cost_directive"):
@@ -629,7 +629,7 @@ def plan_llm(state: AssistantState) -> AssistantState:
     try:
         completion = _assistant_client().chat.completions.create(
             model=getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL),
-            messages=[{"role": "system", "content": config.persona}, {"role": "user", "content": user_prompt}],
+            messages=[{"role": "system", "content": _effective_persona(state, config)}, {"role": "user", "content": user_prompt}],
             temperature=0,
             response_format={"type": "json_object"},
         )
@@ -684,11 +684,33 @@ def plan_llm(state: AssistantState) -> AssistantState:
 def assemble_context_node(state: AssistantState) -> AssistantState:
     if state.get("session") is None:
         meta = state.get("context", {}).get("meta", {})
-        return {"context": state.get("context", {"items": [], "meta": {}}), "context_meta": meta, "projection_evidence": meta}
+        return {"context": state.get("context", {"items": [], "meta": {}}), "context_meta": meta, "projection_evidence": meta, "effective": None}
+    from app.models import InternalChatThread
+    from app.services.project_config import resolve_effective_config
     from app.services.agent_chat import assemble_context
 
+    thread = state["session"].get(InternalChatThread, state["thread_id"])
+    effective = None
+    if thread is not None:
+        config = resolve_effective_config(state["session"], thread, state.get("actor_role") or "")
+        effective = {"instructions": config.instructions, "tools_whitelist": list(config.tools_whitelist)}
     context = assemble_context(state["session"], state["thread_id"], attachments=state.get("attachments", []))
-    return {"context": context, "context_meta": context["meta"], "projection_evidence": context["meta"]}
+    return {"context": context, "context_meta": context["meta"], "projection_evidence": context["meta"], "effective": effective}
+
+
+def _effective_tools(state) -> tuple[str, ...]:
+    effective = state.get("effective")
+    if effective:
+        return tuple(effective["tools_whitelist"])
+    from app.services.prompts import load_assistant_config
+
+    return load_assistant_config().tools_whitelist
+
+
+def _effective_persona(state, config) -> str:
+    effective = state.get("effective") or {}
+    instructions = (effective.get("instructions") or "").strip()
+    return f"{config.persona}\n\n{instructions}" if instructions else config.persona
 
 
 def _is_autonomous_write(tool_name: str | None, thread_id: object) -> bool:
@@ -753,9 +775,7 @@ def guardrails(state: AssistantState) -> AssistantState:
     if plan_data.get("kind") != "tool" or not tool_name:
         decision = "respond" if _is_conversational_turn(state.get("content", "")) else "retrieve_kb"
         return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": decision}, "status": "responding"}
-    from app.services.prompts import load_assistant_config
-    config = load_assistant_config()
-    whitelisted = tool_name in config.tools_whitelist
+    whitelisted = tool_name in _effective_tools(state)
     arguments_valid = False
     if whitelisted:
         try:
@@ -1060,7 +1080,7 @@ def execute(state: AssistantState) -> AssistantState:
         )
         for key, value in {
             "user_input": state["content"],
-            "available_tools": ", ".join(config.tools_whitelist),
+            "available_tools": ", ".join(_effective_tools(state)),
             "tool_statement": tool_statement,
             "tool_evidence": _render_tool_evidence(state),
             "kb_evidence": _render_kb_evidence(state),
@@ -1074,7 +1094,7 @@ def execute(state: AssistantState) -> AssistantState:
         completion = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": config.persona},
+                {"role": "system", "content": _effective_persona(state, config)},
                 {"role": "user", "content": build_multimodal_content(attachments, prompt) if attachments else prompt},
             ],
             temperature=0,

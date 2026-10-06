@@ -199,6 +199,7 @@ class Project(Base):
         nullable=False,
     )
     purpose_embedding: Mapped[list[float]] = mapped_column(Vector(EMBED_DIMS), nullable=False)
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

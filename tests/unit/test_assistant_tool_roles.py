@@ -28,7 +28,7 @@ def test_role_tool_matrix_is_enforced(role, tool_name, monkeypatch):
     monkeypatch.setitem(
         registry.TOOL_REGISTRY,
         tool_name,
-        ToolDefinition(tool_name, registry.CapabilitiesArgs, True, lambda *_, **__: {"ok": True}, "test"),
+        ToolDefinition(tool_name, registry.CapabilitiesArgs, True, lambda *_, **__: {"ok": True}, "test", tier="default"),
     )
     call = lambda: registry.execute_tool(
         SimpleNamespace(), tool_name, {}, role=role.value, owner_id=1, trusted_thread_id=1
