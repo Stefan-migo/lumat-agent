@@ -76,7 +76,7 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
 - [x] Change-state dialog: client/current-state row, three radio cards, summary (`clientes-023`).
 - [x] Archive confirmation label/danger tone and client information block on the list entry point (`clientes-032`, list side).
 - [x] Owner decision: **Transiciones válidas** — change-state radio cards contain only the customer's CR-3 `allowed_transitions`; terminal states show no state cards or save action.
-- [x] Owner decision: **Solo archivados** — enabling "Mostrar archivados" filters the list to archived clients only; disabling it shows active clients only.
+- [x] Owner decision (reversed 2026-10-06): **Mostrar archivados es aditivo** — enabling the toggle includes active and archived clients together via `include_archived`; disabling it shows active clients only (`20fcd369`). This replaces the earlier **Solo archivados** behavior.
 - [x] Owner decision: **Reinicio de ciclo por re-contacto** — inbound WhatsApp from a `finalizado`, `postventa`, or `cancelado` customer resets only the customer state to `nuevo` and audits `customer.cycle_restarted`; manual CR-3 transitions remain unchanged, and conversation/case history is preserved.
 - [x] Owner corrections (2026-10-06): state-option cards inherit the official UI font; list tabs show Todos plus all eight customer states in canonical order with client-side counts and filtering.
 
@@ -87,6 +87,7 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
 - [x] Constrain mobile card/table descendants to the viewport, move selection and actions into the identity row, and compact the detail grid (`bc9c6216`).
 - [x] Restore the clientes caption and pagination controls in the mobile footer without changing Usuarios (`862ee7ec`).
 - [x] Add selected-client bulk archive/restore, including mixed-selection subsets and partial-failure recovery (`0d06865a`).
+- [x] Rename the archive-status column to "Archivo", move it last, and show "Disponible" / "Archivado" badges in desktop and mobile (`f06c8105`).
 
 ### CL-3 — Client ficha shell
 - [ ] Identity header: avatar, name, "Cliente desde [date]", Agendar visita/Ver conversación
