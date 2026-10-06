@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-planning`
 **Worktree**: `../lumat-agent-odd-asistente-planning`
 **Base**: `10dbd301` (= `main` = `origin/main`, merge of PR #487)
-**Status**: T1 in progress.
+**Status**: T1–T4 implemented and verified; frontend build unavailable because worktree dependencies are not installed.
 
 ## Objective
 
@@ -101,7 +101,7 @@ execution (`:1039–1051`) must use it too instead of the global
   `memory.delete`, `project.create`, `automation.*`; non-planning turns keep today's behavior;
   no turn reaches `cortex_turn`.
 
-- [ ] **T2 — Remove classifier/ceremony state and registry surface.**
+- [x] **T2 — Remove classifier/ceremony state and registry surface.**
   `state.py`: remove `PlannerOutput.cortex_class`, `CortexHandoff`, and the `CortexSession`
   ceremony fields (`decision_keys`, `last_class`, `next_decision`, `turn_index`); keep the
   lifecycle (`slug`, `topic`, `status`, `opened_at`, `closed_at`, `report_key`).
@@ -110,14 +110,14 @@ execution (`:1039–1051`) must use it too instead of the global
   init in `app/panel/api/routes/chat.py:182–183`. Update `test_cortex_session_foundation.py`
   and `test_agent_registry.py`.
 
-- [ ] **T3 — Single `agent`-scope report at close, decoupled from SDB.**
+- [x] **T3 — Single `agent`-scope report at close, decoupled from SDB.**
   Replace the close path's `archive_report` (`panel` scope) + mandatory handoff with one write
   to Tukulpan scope `agent`. Update `app/services/agent_chat.py`, `app/services/tukulpan.py`,
   and the close route.
   *AC*: close writes exactly one `agent`-scope report memory; no SDB handoff/approval is
   created by planning close; `sdb_*` nodes are untouched.
 
-- [ ] **T4 — Retarget lifecycle/API tests and verify.**
+- [x] **T4 — Retarget lifecycle/API tests and verify.**
   Update `tests/unit/test_cortex_session_loop.py`, `tests/integration/test_cortex_session_runtime.py`,
   the graph-route assertion in `tests/unit/test_assistant_tool_loop.py`, the `cortex_class`
   fixture in `tests/integration/test_assistant_chat.py`, and the report/handoff case in
@@ -151,7 +151,24 @@ execution (`:1039–1051`) must use it too instead of the global
   `app/chat/assistant/{nodes.py,graph.py}` + 4 test files. Evidence: `pytest -k "assistant or
   cortex"` green; parent spot-check of the 3 focused files green (36 passed). No report/SDB/state
   changes.
+- **T2/T3 done** — removed classifier/ceremony fields, registry declarations and legacy UI
+  surfaces. Close now upserts only one final report in Tukulpan scope `agent`, entity
+  `agent:{proyecto}`, preserving the session lifecycle and leaving SDB/current-plan state alone.
+  The serializer exposes lifecycle fields only; the close API returns `{session, report}`.
+  Unknown effective whitelist entries are skipped. Commits: `dd196500`, `e1fdf409`,
+  `d880d803`, `1007f61c`, `46e5fc30`.
+- **Graph check** — queried Cortex session/report/Tukulpan and frontend lifecycle paths; consulted
+  `CortexSession`, `chat.py`, `close_cortex_session()`, `upsert()`, `tukulpan.py`,
+  `PlanningSessionDetailResponse`, `PlanningSessionCloseResponse`, `PlanningSessions.tsx`,
+  `AgentChat.tsx`; edges included `CortexSession <--shares_data_with-- chat.py --imports--> close_cortex_session()`,
+  `agent_chat.py --references--> tukulpan.py`, and `PlanningSessions.tsx --imports_from--> api.ts
+  --contains--> closePlanningSession()`.
+- **TDD evidence** — updated lifecycle/report/whitelist tests failed RED before implementation for
+  old required session fields, the previous archive/handoff close path, and unknown whitelist names;
+  focused unit and integration suites pass GREEN after the changes.
 
 ## Verification
 
-_Pending implementation._
+`uv run --no-sync python -m compileall -q app` and `git diff --check` pass. The three requested
+pytest commands pass when run sequentially (the shared test DB deadlocks if they run concurrently).
+The frontend test/build attempt is blocked: `web/node_modules` is absent (`vitest: command not found`).
