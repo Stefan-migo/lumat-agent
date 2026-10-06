@@ -118,12 +118,22 @@ Owner verdict: CL-3's first pass is structurally right (title/subtitle/actions/t
 - [x] Rebuild the **Casos / Visitas / Conversaciones** tab bodies to the desktop references and mobile/tablet variants (`ed641d05`).
 - [x] Owner decision (2026-10-06): the "Historial del cliente" card opens a **combined history panel/dialog** (casos anteriores + visitas + conversaciones), not a tab jump. Mensajes stays in the Conversaciones tab (`68dff135`).
 
+### CL-3-r2 — Resumen tab layout + reference fidelity (owner visual review 2026-10-06 #2)
+Owner verdict: the Resumen cards still do not match `ClientFicha.png`, and the owner asked for a **deliberate layout deviation**. Scope: the Resumen tab only (the Casos/Visitas/Conversaciones tab bodies stay as they are for now).
+
+- [ ] **Swap the primary column** (owner decision — conscious deviation from the reference, which shows the case large): `Datos del cliente` becomes the large/primary card (left); `Caso activo` becomes the smaller secondary card (right).
+- [ ] Card style to the reference: card header with the large title and its action aligned **right** (`Editar` pill, `Ver todo →`, `⊕ Agregar nota`, `+ Agregar equipo`, `Ver agenda →`); use pill/outlined buttons and underlined links instead of full-width secondary buttons (`Definir monto` = underlined link; `Editar caso` = right-aligned pill).
+- [ ] `Datos del cliente`: `Editar` pill + `...` menu in the header; Teléfono/Correo/Dirección rows with copy icons; Estado del cliente badge; Consentimiento value. **Remove the inline state editor** (select + "Guardar estado"). Move Cambiar estado / Cambiar consentimiento / Fusionar / Archivar into the `...` menu, each opening its dialog.
+- [ ] `Memoria del cliente`, `Notas`, `Próximas visitas`, `Equipos`, `Historial del cliente` restyled to the reference (header-action placement, date tiles, illustrated empty state, pill buttons/link rows).
+
 ### CL-4 — Client ficha dialogs
-- [ ] Edit-data dialog: title/fields/order/editability (`clientes-024`).
-- [ ] Change-consent confirmation dialog (`clientes-025`).
+Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`description`; `Input` exposes `icon`/`helper`): header = icon tile + title + supporting subtitle; a client-context row (avatar + name + "Cliente desde [date]"); fields with leading icons; footer = `Cancelar` (outlined) + the action (filled; danger for archive/merge). References: `ClientFichaDialogs.png`, `ClientFichaDialogs2.png`, `ClientFichaCustomerMerge.png` + mobile equivalents.
+- [x] Change-state dialog (ficha): client/current-state row, allowed-transition radio cards, "Cambio de estado" summary (`ClientFichaDialogs.png`). Replaces the inline state select (`da5bcf33`).
+- [x] Edit-data dialog: title/fields/order/editability (`clientes-024`; `8bde2851`). Phone remains read-only because the profile API does not support changing it.
+- [x] Change-consent confirmation dialog (`clientes-025`; `da5bcf33`).
 - [ ] Archive dialog: "Información del cliente" grouping + warning (`clientes-026`).
-- [ ] Edit-case dialog: context + "Guardar cambios" (`clientes-027`).
-- [ ] Define-amount dialog: context + CLP presentation (`clientes-028`).
+- [x] Edit-case dialog: context + "Guardar cambios" (`clientes-027`; `8bde2851`).
+- [x] Define-amount dialog: context + CLP presentation (`clientes-028`; `8bde2851`).
 - [ ] Add-equipment dialog: fields + "Agregar equipo" (`clientes-029`).
 - [ ] Add-note dialog: context + "Guardar nota" (`clientes-030`).
 - [ ] Merge dialog: two-client comparison + responsive single column (`clientes-031`).
