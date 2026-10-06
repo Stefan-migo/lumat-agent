@@ -76,6 +76,12 @@ CUSTOMER_STATE_TRANSITIONS: dict[CustomerState, set[CustomerState]] = {
     CustomerState.POSTVENTA: set(),
 }
 
+CLOSED_CUSTOMER_STATES = frozenset({
+    CustomerState.FINALIZADO,
+    CustomerState.POSTVENTA,
+    CustomerState.CANCELADO,
+})
+
 
 class InvalidStateTransition(ValueError):
     """Raised when a customer state change violates the CR-3 lifecycle."""
@@ -235,6 +241,27 @@ def set_customer_state(
         entity_id=str(customer.id),
         before=before,
         after={"state": new_state.value},
+    )
+    return customer
+
+
+def restart_cycle_if_closed(
+    session: Session, customer: Customer, *, actor: str = "system"
+) -> Customer:
+    """Restart a closed customer lifecycle on re-engagement; caller commits."""
+    if customer.state not in CLOSED_CUSTOMER_STATES:
+        return customer
+
+    before = {"state": customer.state.value}
+    customer.state = CustomerState.NUEVO
+    record_audit(
+        session,
+        actor=actor,
+        action="customer.cycle_restarted",
+        entity="customer",
+        entity_id=str(customer.id),
+        before=before,
+        after={"state": CustomerState.NUEVO.value},
     )
     return customer
 

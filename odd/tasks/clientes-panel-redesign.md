@@ -77,6 +77,7 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
 - [x] Archive confirmation label/danger tone and client information block on the list entry point (`clientes-032`, list side).
 - [x] Owner decision: **Transiciones válidas** — change-state radio cards contain only the customer's CR-3 `allowed_transitions`; terminal states show no state cards or save action.
 - [x] Owner decision: **Solo archivados** — enabling "Mostrar archivados" filters the list to archived clients only; disabling it shows active clients only.
+- [x] Owner decision: **Reinicio de ciclo por re-contacto** — inbound WhatsApp from a `finalizado`, `postventa`, or `cancelado` customer resets only the customer state to `nuevo` and audits `customer.cycle_restarted`; manual CR-3 transitions remain unchanged, and conversation/case history is preserved.
 
 ### CL-3 — Client ficha shell
 - [ ] Identity header: avatar, name, "Cliente desde [date]", Agendar visita/Ver conversación

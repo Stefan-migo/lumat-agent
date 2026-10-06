@@ -36,7 +36,9 @@ from app.main import create_app  # noqa: E402
 from app.models import (  # noqa: E402
     Conversation,
     ConversationState,
+    AuditLog,
     Customer,
+    CustomerState,
     Message,
     MessageDirection,
     MessageStatus,
@@ -115,7 +117,7 @@ def clean_db(migrated_db):
     """Reset webhook-related tables before every test (shared test DB)."""
     with psycopg.connect(ADMIN_DB_URL, autocommit=True) as conn:
         conn.execute(
-            "TRUNCATE conversation_events, cases, messages, conversations, customers "
+            "TRUNCATE audit_log, conversation_events, cases, messages, conversations, customers "
             "RESTART IDENTITY CASCADE"
         )
     yield
@@ -242,6 +244,58 @@ def test_post_dedups_customer_and_conversation_by_phone(client, monkeypatch):
     assert len(customers) == 1
     assert customers[0].phone_e164 == "+56912345678"
     assert len(conversations) == 1
+
+
+@pytest.mark.parametrize(
+    "closed_state",
+    [CustomerState.FINALIZADO, CustomerState.POSTVENTA, CustomerState.CANCELADO],
+)
+def test_inbound_restarts_closed_customer_cycle_once(client, monkeypatch, closed_state):
+    monkeypatch.setattr(router_module, "sweep_received", lambda limit=50: 0)
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56912345678", state=closed_state)
+        session.add(customer)
+        session.flush()
+        conversation = Conversation(customer_id=customer.id, wa_phone=customer.phone_e164)
+        session.add(conversation)
+        session.commit()
+        customer_id, conversation_id = customer.id, conversation.id
+
+    assert _post(client, _payload([_message("wamid.cycle.1", text="primero")])).status_code == 200
+    assert _post(client, _payload([_message("wamid.cycle.2", text="segundo")])).status_code == 200
+
+    with SessionLocal() as session:
+        customer = session.get(Customer, customer_id)
+        assert customer.state == CustomerState.NUEVO
+        assert session.scalar(select(func.count(Conversation.id))) == 1
+        assert session.get(Conversation, conversation_id) is not None
+        audits = session.scalars(
+            select(AuditLog).where(
+                AuditLog.action == "customer.cycle_restarted",
+                AuditLog.entity_id == str(customer_id),
+            )
+        ).all()
+        assert len(audits) == 1
+        assert audits[0].entity == "customer"
+        assert audits[0].actor == "system"
+        assert audits[0].before == {"state": closed_state.value}
+        assert audits[0].after == {"state": "nuevo"}
+
+
+def test_inbound_does_not_reset_active_customer(client, monkeypatch):
+    monkeypatch.setattr(router_module, "sweep_received", lambda limit=50: 0)
+    with SessionLocal() as session:
+        customer = Customer(phone_e164="+56912345678", state=CustomerState.AGENDADO)
+        session.add(customer)
+        session.commit()
+        customer_id = customer.id
+
+    assert _post(client, _payload([_message("wamid.cycle.active", text="hola")])).status_code == 200
+    with SessionLocal() as session:
+        assert session.get(Customer, customer_id).state == CustomerState.AGENDADO
+        assert session.scalar(
+            select(func.count(AuditLog.id)).where(AuditLog.action == "customer.cycle_restarted")
+        ) == 0
 
 
 # ---------------------------------------------------------------------------

@@ -43,7 +43,11 @@ from app.models import (
     MessageStatus,
     MessageType,
 )
-from app.services.customers import get_or_create_customer, normalize_phone_e164
+from app.services.customers import (
+    get_or_create_customer,
+    normalize_phone_e164,
+    restart_cycle_if_closed,
+)
 from app.services.events import publish_event
 from app.services.notify import acknowledge_emergency_if_ack, send_pending_emergency_reminders
 from app.services.send import deliver_outbound
@@ -237,6 +241,7 @@ def _get_or_create_customer_and_conversation(session, phone_e164: str):
     close opens a new conversation).
     """
     customer = get_or_create_customer(session, phone_e164)
+    restart_cycle_if_closed(session, customer)
     return get_or_create_conversation(session, customer, phone_e164)
 
 

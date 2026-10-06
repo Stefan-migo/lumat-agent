@@ -154,6 +154,16 @@ def test_cr3_invalid_transition_rejected():
         assert customer.state == CustomerState.NUEVO  # unchanged
 
 
+def test_cr3_manual_finalizado_to_nuevo_transition_rejected():
+    with SessionLocal() as session:
+        customer = customers.get_or_create_customer(session, "56912345678")
+        customer.state = CustomerState.FINALIZADO
+        session.flush()
+        with pytest.raises(customers.InvalidStateTransition):
+            customers.set_customer_state(session, customer, CustomerState.NUEVO, actor="operador1")
+        session.rollback()
+
+
 def test_cr3_postventa_reachable_only_after_finalizado():
     with SessionLocal() as session:
         customer = customers.get_or_create_customer(session, "56912345678")
