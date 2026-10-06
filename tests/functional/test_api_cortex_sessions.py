@@ -1,10 +1,7 @@
 """Authenticated Cortex planning-session API contracts (CS-5, IAC-3)."""
 
-from datetime import datetime, timedelta, timezone
-from copy import deepcopy
-
 from app.db import SessionLocal
-from app.models import InternalChatThread
+from app.models import InternalChatThread, Memory
 
 
 def _login(client, make_user, *, username="cortex-admin", role="admin"):
@@ -72,49 +69,18 @@ def test_tecnico_planning_requires_own_project_namespace(client, make_user):
         assert thread.proyecto == "tech-planning"
 
 
-def test_report_approval_reuses_existing_endpoint(client, make_user):
-    _login(client, make_user, username="cortex-approval")
-    opened = client.post("/panel/api/planning/sessions", json={"topic": "Approval report"}).json()
+def test_planning_close_writes_one_agent_report_without_handoff_or_approval(client, make_user):
+    _login(client, make_user, username="cortex-report")
+    opened = client.post("/panel/api/planning/sessions", json={"topic": "Final report"}).json()
     slug, thread_id = opened["session"]["slug"], opened["thread_id"]
     closed = client.post(f"/panel/api/planning/sessions/{slug}/close").json()
-    approval = closed["handoff"]["approval"]
-    response = client.post(
-        f"/panel/api/chat/threads/{thread_id}/approval",
-        json={"run_id": closed["handoff"]["run_id"], "token": approval["token"]},
-    )
-    assert response.status_code == 200, response.text
-    assert response.json()["status"] == "processed"
-
-    assert client.post(
-        f"/panel/api/chat/threads/{thread_id}/approval",
-        json={"run_id": closed["handoff"]["run_id"], "token": approval["token"]},
-    ).status_code == 409
-
-
-def test_report_approval_rejects_expired_and_changed_tokens(client, make_user):
-    _login(client, make_user, username="cortex-token")
-    opened = client.post("/panel/api/planning/sessions", json={"topic": "Token report"}).json()
-    slug, thread_id = opened["session"]["slug"], opened["thread_id"]
-    closed = client.post(f"/panel/api/planning/sessions/{slug}/close").json()
+    assert set(closed) == {"session", "report"}
+    assert closed["session"]["status"] == "closed"
+    assert closed["report"]["scope"] == "agent"
+    assert closed["report"]["entity_id"] == "agent:default"
     with SessionLocal() as session:
         thread = session.get(InternalChatThread, thread_id)
-        state = deepcopy(thread.assistant_state)
-        state["approval"]["expires_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
-        thread.assistant_state = state
-        session.commit()
-    approval = closed["handoff"]["approval"]
-    assert client.post(
-        f"/panel/api/chat/threads/{thread_id}/approval",
-        json={"run_id": closed["handoff"]["run_id"], "token": approval["token"]},
-    ).status_code == 409
-
-
-def test_report_approval_rejects_changed_token(client, make_user):
-    _login(client, make_user, username="cortex-changed-token")
-    opened = client.post("/panel/api/planning/sessions", json={"topic": "Changed report"}).json()
-    slug, thread_id = opened["session"]["slug"], opened["thread_id"]
-    closed = client.post(f"/panel/api/planning/sessions/{slug}/close").json()
-    assert client.post(
-        f"/panel/api/chat/threads/{thread_id}/approval",
-        json={"run_id": closed["handoff"]["run_id"], "token": "changed-token"},
-    ).status_code == 409
+        reports = session.query(Memory).filter_by(topic_key=closed["report"]["topic_key"]).all()
+        assert len(reports) == 1
+        assert "approval" not in thread.assistant_state
+        assert thread.current_plan is None
