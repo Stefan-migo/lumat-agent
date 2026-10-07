@@ -699,9 +699,9 @@ describe("ClientFicha slice 2 — product register", () => {
   it("formats history dates in the Chilean locale instead of slicing the ISO string", () => {
     render(<ClientFicha data={ficha} memories={memories} />);
 
-    // The raw ISO slice is gone; what remains is the `es-CL` short shape (dd-mm-yy here).
+    // The raw ISO slice is gone; what remains is the `es-CL` day-month-year shape (e.g. "11 sep 2026").
     expect(screen.queryByText("2026-07-15")).not.toBeInTheDocument();
-    expect(screen.getAllByText(/\d{2}-\d{2}-\d{2}/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/\d{1,2} [a-z]{3} \d{4}/i).length).toBeGreaterThan(0);
   });
 
   it("links each visit to its appointment detail and keeps calendar retry outside the link", async () => {
@@ -821,5 +821,19 @@ describe("ClientFicha slice 2 — product register", () => {
     render(<ClientFicha data={{ ...ficha, history: { ...ficha.history, messages_total: 10 } }} memories={memories} />);
 
     expect(screen.queryByRole("button", { name: /Ver todos/ })).not.toBeInTheDocument();
+  });
+
+  it("renders the conversations and messages tables with the reference labels and chips", async () => {
+    const user = userEvent.setup();
+    render(<ClientFicha data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("tab", { name: "Conversaciones" }));
+
+    expect(screen.getAllByRole("columnheader", { name: "Conversación" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("columnheader", { name: "Turno" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Mensajes de la conversación #1" })).toBeInTheDocument();
+    expect(screen.getByText("Entrante")).toBeInTheDocument();
+    expect(screen.getByText("Texto")).toBeInTheDocument();
+    expect(screen.getByText("Mostrando 1 mensaje")).toBeInTheDocument();
   });
 });

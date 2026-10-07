@@ -1,11 +1,11 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CalendarX, CircleAlert, Clock3, Copy, Check, ChevronRight, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, Thermometer, UserRound, CircleDollarSign, Trash2, X } from "lucide-react";
+import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CalendarX, CircleAlert, Clock3, Copy, Check, ChevronRight, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, Thermometer, UserRound, CircleDollarSign, Trash2, X, Bot, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { addClientNote, ApiError, apiFetch, archiveCustomer, cancelAppointment, changeClientState, closeAppointment, createClientEquipment, deleteClientNote, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateClientNote, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
 import { pathForRoute } from "../domain/panelRoutes";
-import { Badge } from "../primitives/Badge";
+import { Badge, type BadgeTone } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
@@ -47,6 +47,10 @@ const formatDate = (value: string | null | undefined) => (value ? DATE_FORMAT.fo
 const formatIdentityDate = (value: string | null | undefined) => (value ? IDENTITY_DATE_FORMAT.format(new Date(value)).replace(".", "") : "—");
 const formatDateTime = (value: string | null | undefined) => (value ? DATE_TIME_FORMAT.format(new Date(value)) : "—");
 const TIME_FORMAT = new Intl.DateTimeFormat("es-CL", { hour: "2-digit", minute: "2-digit", hour12: false });
+const CONVERSATION_TONES: Record<string, BadgeTone> = { bot: "success", human: "neutral", closed: "neutral", pending: "warning", escalated: "danger" };
+const MESSAGE_TYPE_LABELS: Record<string, string> = { text: "Texto", image: "Imagen", audio: "Audio", video: "Video", document: "Documento" };
+const messageTypeLabel = (value: string) => MESSAGE_TYPE_LABELS[value] ?? value;
+const messageWhen = (value: string | null | undefined) => value ? `${formatIdentityDate(value)} · ${TIME_FORMAT.format(new Date(value))}` : "—";
 
 // Visitas tab: the date cell mirrors the reference (bold day/month/year + muted clock time),
 // the service is a drill-down link rendered as plain text, and the row action lives in a `...` menu.
@@ -428,10 +432,10 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   };
   const toggleMessages = () => { setRefreshed(null); setMessagesExpanded((value) => !value); fetched.retry(); };
   const conversationColumns: Column<(typeof history.conversations)[number]>[] = [
-    { key: "id", header: "#", render: (row) => `#${row.id}` },
-    { key: "state", header: "Estado", render: (row) => conversationLabel(row.state) },
+    { key: "id", header: "Conversación", render: (row) => `#${row.id}` },
+    { key: "state", header: "Estado", render: (row) => <Badge tone={CONVERSATION_TONES[row.state] ?? "neutral"}><Bot aria-hidden="true" />{conversationLabel(row.state)}</Badge> },
     { key: "summary", header: "Resumen", render: (row) => row.summary ?? "—" },
-    { key: "created", header: "Creada", render: (row) => formatDate(row.created_at) },
+    { key: "created", header: "Creada", render: (row) => formatIdentityDate(row.created_at) },
   ];
   const caseColumns: Column<(typeof history.cases)[number]>[] = [
     { key: "id", header: "#", render: (row) => `#${row.id}` },
@@ -451,11 +455,11 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   ];
   const messageColumns: Column<(typeof history.messages)[number]>[] = [
     { key: "conversation", header: "Conversación", render: (row) => <a className="table__link" href={pathForRoute({ view: "conversations", conversationId: row.conversation_id })}>#{row.conversation_id}</a> },
-    { key: "id", header: "#", render: (row) => `#${row.id}` },
-    { key: "direction", header: "Dirección", render: (row) => directionLabel(row.direction) },
-    { key: "msg_type", header: "Tipo", render: (row) => row.msg_type },
+    { key: "id", header: "Turno", render: (row) => `#${row.id}` },
+    { key: "direction", header: "Dirección", render: (row) => <Badge tone={row.direction === "inbound" ? "success" : "neutral"}>{row.direction === "inbound" ? <ArrowDownLeft aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}{directionLabel(row.direction)}</Badge> },
+    { key: "msg_type", header: "Tipo", render: (row) => messageTypeLabel(row.msg_type) },
     { key: "text", header: "Mensaje", render: (row) => `${row.text ?? "—"}${row.media_url ? " 📎" : ""}` },
-    { key: "created", header: "Fecha", render: (row) => formatDate(row.created_at) },
+    { key: "created", header: "Fecha", render: (row) => messageWhen(row.created_at) },
   ];
   const activeCaseBody = activeCase ? <>
     <div className="client-ficha__case-eyebrow"><span className="client-ficha__status-dot"/> CASO ACTIVO <span>#{activeCase.id}</span><Menu trigger="icon" label="Acciones del caso" items={[{ value: "edit", label: "Editar caso", icon: BriefcaseBusiness }, { value: "amount", label: "Definir monto", icon: CircleDollarSign }]} onSelect={(value) => value === "amount" ? openAmountEditor(activeCase) : openCaseEditor(activeCase)} /></div>
@@ -689,7 +693,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
       </div> : null}
       {activeTab === "conversations" ? <div className="detail-region__main">
         <section aria-label="Conversaciones" className="client-ficha__history-block"><Card title="Conversaciones del cliente"><div className={surfaceClass(history.conversations.length)}><DataTable columns={[...conversationColumns,{key:"actions",header:"Acciones",render:(row)=><Button variant="secondary" onClick={()=>{window.location.href=pathForRoute({view:"conversations",conversationId:row.id})}}>Abrir conversación</Button>}] as Column<(typeof history.conversations)[number]>[]} rows={history.conversations} rowKey={(row) => String(row.id)} /></div></Card></section>
-        <section aria-label="Mensajes" className="client-ficha__history-block"><h2>Mensajes de la conversación #{history.conversations[0]?.id ?? "—"}</h2><p>Historial de mensajes del hilo seleccionado.</p><div className={surfaceClass(history.messages.length)}><CollapsibleMessages total={history.messages_total} expanded={messagesExpanded} onToggle={toggleMessages}><DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} /></CollapsibleMessages></div></section>
+        <section aria-label="Mensajes" className="client-ficha__history-block"><Card title={`Mensajes de la conversación #${history.conversations[0]?.id ?? "—"}`} description="Historial de mensajes del hilo seleccionado."><div className={surfaceClass(history.messages.length)}><CollapsibleMessages total={history.messages_total} expanded={messagesExpanded} onToggle={toggleMessages}><DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} /></CollapsibleMessages></div><p>Mostrando {history.messages.length} mensaje{history.messages.length === 1 ? "" : "s"}</p></Card></section>
       </div> : null}
         </>}
       </Tabs>
