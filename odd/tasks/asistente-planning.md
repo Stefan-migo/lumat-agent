@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-planning`
 **Worktree**: `../lumat-agent-odd-asistente-planning`
 **Base**: `10dbd301` (= `main` = `origin/main`, merge of PR #487)
-**Status**: Slice 4 complete (T1–T4). Backend + frontend suites green; two native RDD reviews approved. No DB migration. Pending push/PR (owner decision).
+**Status**: Slice 4 complete (T1–T4) + CI fix. PR #488 open, CI re-running after `5a7dd851`. Three native RDD reviews approved. No DB migration.
 
 ## Objective
 
@@ -185,3 +185,17 @@ Frontend (parent-run, after `npm ci` in `web/`): `npm test` → **96 files / 101
   closed in T2.
 - Candidate 2 (T2 + T3 + frontend) — lineage `review-e05811ebbf91c272`, lens `review-reliability`,
   **approved with zero findings**.
+
+## CI-caught regression and fix
+
+The first CI run on PR #488 failed the `test` job: T2/T3 deleted `_sdb_plan` from
+`app/services/agent_chat.py` along with `cortex_approved_plan`, but `_run_agent_turn_session`
+(line ~673) still calls `_sdb_plan` for the normal SDB flow → `NameError`, breaking
+`tests/integration/test_sdb_api.py`.
+
+- **Root cause**: an over-broad deletion; the call site was unchanged code, so it was outside the
+  reviewer's changed-line scope, and the parent spot-check used a file subset that did not include
+  `test_sdb_api.py`.
+- **Fix**: `5a7dd851` restores `_sdb_plan`. `review_due: false` (`under_budget`, 26 lines).
+- **Lesson**: spot-checks must run the full `pytest tests/` (the CI command), not a subset; a
+  deletion ripple must be verified against *all* call sites, including unchanged ones.
