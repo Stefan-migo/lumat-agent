@@ -183,8 +183,9 @@ Owner direction: approach both cards to `ClientFichaTabConversaciones.png` (desk
 - [x] Kept the `Conversación` column in `Mensajes`, as the owner accepted it (`history.messages` can mix threads).
 - [x] Mobile: both cards switch to cards at `max-width: 40rem` (`client-ficha__conversation-card` / `client-ficha__message-card`) (`eee986c3`).
 - [x] Removed the inline "Ver todos" expansion: the card always shows the last 10 messages; the full thread is reached through `Abrir conversación` (`eee986c3`).
-- [ ] Owner question: `Turno` currently shows the message id (`#21`); the owner expected "the turn of the conversation". Confirm the intended meaning (message order within the conversation? the conversation the message belongs to?).
-- [ ] Proposed: a conversation selector in the `Mensajes` card when the customer has more than one conversation, scoping the card to a single thread (likely via `getConversation(id, 10)`). Pending owner confirmation.
+- [x] Owner chose (2026-10-06): `Turno` = the 1-based order of the message within its own conversation (computed client-side over the loaded messages) (`62a28fd3`).
+- [x] Column priority: the `Resumen`/`Mensaje` cell grows while the meta cells shrink to content (`client-ficha__conversations-table` / `client-ficha__messages-table`) (`62a28fd3`).
+- [ ] Proposed: a conversation selector in the `Mensajes` card when the customer has more than one conversation. Pending owner confirmation. Note: the per-conversation `Turno` is currently relative to the loaded (last-10) messages; a selector backed by `getConversation(id, 10)` would make it exact.
 
 ## Acceptance criteria
 
