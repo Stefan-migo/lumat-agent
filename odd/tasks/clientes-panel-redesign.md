@@ -160,9 +160,9 @@ Reference: `ClientFichaTabCases.png` (desktop) + `LUMAT client cases on mobile a
 - [x] `Casos anteriores` full-width table redesign: `Caso | Servicio | Prioridad | Estado | Responsable | Monto CLP | Acciones` badges + "Mostrando N caso(s) anterior(es)" footer (`f7c0993a`).
 - [x] Generalize the case edit / amount dialogs to target any case; archived-row `⋮` → `Editar caso` / `Definir monto` on that row (`f7c0993a`).
 - [x] Hoist the shared ficha dialogs to the component root and extract the reused card markup (no Resumen visual change) (`f7c0993a`).
-- [ ] Mobile/tablet: the single-column collapse at `max-width: 64rem` is authored; the mobile reference-fidelity pass (`LUMAT client cases on mobile and tablet-3.png`) is still pending.
+- [x] Mobile: the archived cases switch from the table to cards at `max-width: 40rem` (`table-card__desktop` + `table-cards--mobile`, mirroring ClientesList); the active case sits in an inset panel (`client-ficha__case-panel`) and the case/data cards share a row height (`detail-region--cases { align-items: stretch }`) (`8e425d9a`, `54aa6321`). Tablet (40–64rem) still renders the table pending owner review.
 - [ ] RDD review (re-assess) after the tab pass.
-- Per-slice verification: `npx tsc -b --noEmit` green; `ClientFicha.test.tsx` 43/43, `ClientFicha.stories.test.tsx` + `closure.test.tsx` 14/14. Full suite/build deferred to the design checkpoint.
+- Per-slice verification: `npx tsc -b --noEmit` green; `ClientFicha.test.tsx` 44/44, `ClientFicha.stories.test.tsx` + `closure.test.tsx` 14/14. Full suite/build deferred to the design checkpoint.
 
 ## Acceptance criteria
 
