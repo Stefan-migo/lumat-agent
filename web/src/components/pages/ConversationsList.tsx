@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronDown, MessageSquare, UserRound, UserRoundPlus } from "lucide-react";
 import { ApiError, acknowledgeCase, listActiveConversations, listConversations, takeConversation } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Conversation, ConversationsResponse } from "../../types";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
-import { Menu } from "../primitives/Menu";
+import { Icon } from "../primitives/Icon";
+import { Menu, type MenuItem } from "../primitives/Menu";
 import { SearchInput } from "../primitives/SearchInput";
 import { Tabs } from "../primitives/Tabs";
 import { StatusBadge, type Status } from "../primitives/StatusBadge";
@@ -22,7 +24,9 @@ type QueueTab = "all" | "human" | "emergency" | "case" | "closed";
 
 const priority = (conversation: Conversation) => conversation.emergency && !conversation.acknowledged_at ? 0 : conversation.state === "human" ? 1 : conversation.state === "closed" ? 3 : 2;
 const tabRows = (rows: Conversation[], tab: QueueTab) => rows.filter((row) => tab === "all" || tab === "human" && row.state === "human" || tab === "emergency" && row.emergency || tab === "case" && row.case_id != null || tab === "closed" && row.state === "closed");
-const formatRecency = (value: string | null) => value ? new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
+const formatActivityDate = (value: string) => new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value)).replace(".", "");
+const formatActivityTime = (value: string) => new Intl.DateTimeFormat("es-CL", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
+const activityCell = (value: string | null) => value ? <time className="conversations-list__activity" dateTime={value}><span>{formatActivityDate(value)}</span><span className="conversations-list__activity-time">{formatActivityTime(value)}</span></time> : "—";
 const priorityBadge = (conversation: Conversation) => {
   if (conversation.case_priority === "alta") return <Badge tone="warning">Prioridad alta</Badge>;
   if (conversation.case_priority === "media") return <Badge tone="neutral">Prioridad normal</Badge>;
@@ -70,22 +74,22 @@ export function ConversationsList({ data: controlledData, state: controlledState
   const runAction = async (id: number, action: () => Promise<unknown>) => { setBusyId(id); try { await action(); retry(); } finally { setBusyId(undefined); } };
   const nameFor = (c: Conversation) => c.customer?.name ?? customerName?.(c.customer_id) ?? `Cliente #${c.customer_id}`;
   const openThread = (c: Conversation) => { setSelectedId(c.id); onOpenThread?.(c.id); };
-  const menuItems = (c: Conversation) => [
-    ...(onOpenThread ? [{ value: "open", label: "Abrir conversación" }] : []),
+  const menuItems = (c: Conversation): MenuItem[] => [
+    ...(onOpenThread ? [{ value: "open", label: "Abrir conversación", icon: MessageSquare }] : []),
     ...(c.emergency && !c.acknowledged_at && c.case_id != null ? [{ value: "acknowledge", label: "Reconocer emergencia" }] : []),
   ];
   const rowActions = (c: Conversation) => <div className="table__actions conversations-list__actions">
-    {c.state === "bot" ? <Button variant="secondary" disabled={busyId === c.id} onClick={() => void runAction(c.id, () => takeConversation(c.id, c.version ?? 0))}>Tomar conversación</Button> : null}
+    {c.state === "bot" ? <Button variant="secondary" disabled={busyId === c.id} onClick={() => void runAction(c.id, () => takeConversation(c.id, c.version ?? 0))}><UserRoundPlus aria-hidden="true" />Tomar conversación</Button> : null}
     {menuItems(c).length ? <Menu trigger="icon" label={`Acciones para ${nameFor(c)}`} disabled={busyId === c.id} items={menuItems(c)} onSelect={(value) => value === "open" ? openThread(c) : void runAction(c.id, () => acknowledgeCase(c.case_id!))} /> : null}
   </div>;
   const columns: Column<Conversation>[] = [
     { key: "identity", header: "Cliente y conversación", render: (c) => {
       const name = nameFor(c);
-      return <div className="table__resource"><Avatar name={name} className="table__resource-avatar" /><div className="table__resource-body"><button type="button" className="table__resource-name" data-testid={`conversation-row-${c.id}`} aria-label={`Abrir conversación #${c.id}`} aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span><span className="conversations-list__summary">{c.summary ?? "Sin resumen disponible"}</span></div></div>;
+      return <div className="table__resource"><Avatar name={name} className="table__resource-avatar" /><div className="table__resource-body"><button type="button" className="table__resource-name conversations-list__identity" data-testid={`conversation-row-${c.id}`} aria-label={`Abrir conversación #${c.id}`} aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span><span className="conversations-list__summary">{c.summary ?? "Sin resumen disponible"}</span></div></div>;
     } },
     { key: "state", header: "Estado y prioridad", render: conversationBadges },
     { key: "case", header: "Caso", render: (c) => c.case_id != null ? <Badge tone="neutral">Caso #{c.case_id}</Badge> : "—" },
-    { key: "activity", header: "Última actividad", render: (c) => <time dateTime={c.last_message_at ?? undefined}>{formatRecency(c.last_message_at)}</time> },
+    { key: "activity", header: "Última actividad", render: (c) => activityCell(c.last_message_at) },
   ];
   const tabs = [
     { id: "all", label: <>Todas <span>{counts.all}</span></> },
@@ -100,8 +104,8 @@ export function ConversationsList({ data: controlledData, state: controlledState
    return <PageFrame className="conversations-page" title="Conversaciones" titleAdornment={<Badge>{total}</Badge>} subtitle="Revisa y gestiona la atención de tus clientes." meta={data ? undefined : "Cola de conversaciones"} state={stateMessage(state, fetched.error)}>
       {connection !== "connected" ? <p className="realtime-status realtime-status--info" role="status"><span aria-hidden="true">ⓘ</span>Conexión en tiempo real: {connection === "reconnecting" ? "reconectando" : "desconectada"}. Los datos seguirán disponibles.</p> : null}
       <Tabs tabs={tabs} activeTab={tab} onTabChange={(value) => { const nextTab = value as QueueTab; setTab(nextTab); onQueueTabChange?.(nextTab); }} ariaLabel="Cola de conversaciones">{() => <div className="table-card conversations-list__card">
-        <div className="table-toolbar"><SearchInput aria-label="Buscar conversaciones" placeholder="Buscar cliente, teléfono o resumen" onSearch={(value) => { setQuery(value); setOffset(0); setRequestRevision((revision) => revision + 1); }} />{currentUserId !== undefined ? <label className="conversations-list__assignment"><span>Responsable</span><select aria-label="Filtrar por responsable" value={assignment} onChange={(event) => { setAssignment(event.target.value as "all" | "mine"); setOffset(0); setRequestRevision((revision) => revision + 1); }}><option value="all">Todas</option><option value="mine">Asignadas a mí</option></select></label> : null}{state === "error" || state === "fatal-error" || state === "denied" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}</div>
-        {state === "loading" ? null : visibleRows.length === 0 ? <EmptyState title={data?.items === undefined ? "No hay registros" : "No hay conversaciones"} description="No existen conversaciones para mostrar." /> : <><div className="table-card__desktop"><DataTable columns={columns} rows={visibleRows} rowKey={(c) => String(c.id)} actions={rowActions} /></div><ul className="table-cards table-cards--mobile" aria-label="Lista de conversaciones">{visibleRows.map((c) => { const name = nameFor(c); return <li key={c.id} className="table-card__item conversations-list__mobile-card" data-testid={`conversation-card-${c.id}`}><div className="table__resource"><Avatar name={name} className="table__resource-avatar" /><div className="table__resource-body"><button type="button" className="table__resource-name" aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span><span className="conversations-list__summary">{c.summary ?? "Sin resumen disponible"}</span>{conversationBadges(c)}<span>{c.case_id != null ? `Caso #${c.case_id}` : "—"}</span><time dateTime={c.last_message_at ?? undefined}>{formatRecency(c.last_message_at)}</time></div></div>{rowActions(c)}</li>; })}</ul></>}
+        <div className="table-toolbar"><SearchInput aria-label="Buscar conversaciones" placeholder="Buscar cliente, teléfono o resumen" onSearch={(value) => { setQuery(value); setOffset(0); setRequestRevision((revision) => revision + 1); }} />{currentUserId !== undefined ? <label className="conversations-list__filter"><Icon icon={UserRound} size="sm" aria-hidden="true" /><span className="conversations-list__filter-label">Responsable:</span><select aria-label="Filtrar por responsable" value={assignment} onChange={(event) => { setAssignment(event.target.value as "all" | "mine"); setOffset(0); setRequestRevision((revision) => revision + 1); }}><option value="all">Todos</option><option value="mine">Asignadas a mí</option></select><ChevronDown aria-hidden="true" /></label> : null}{state === "error" || state === "fatal-error" || state === "denied" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}</div>
+        {state === "loading" ? null : visibleRows.length === 0 ? <EmptyState title={data?.items === undefined ? "No hay registros" : "No hay conversaciones"} description="No existen conversaciones para mostrar." /> : <><div className="table-card__desktop"><DataTable columns={columns} rows={visibleRows} rowKey={(c) => String(c.id)} actions={rowActions} /></div><ul className="table-cards table-cards--mobile" aria-label="Lista de conversaciones">{visibleRows.map((c) => { const name = nameFor(c); return <li key={c.id} className="table-card__item conversations-list__mobile-card" data-testid={`conversation-card-${c.id}`}><div className="table__resource"><Avatar name={name} className="table__resource-avatar" /><div className="table__resource-body"><button type="button" className="table__resource-name conversations-list__identity" aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span><span className="conversations-list__summary">{c.summary ?? "Sin resumen disponible"}</span>{conversationBadges(c)}<span>{c.case_id != null ? `Caso #${c.case_id}` : "—"}</span>{activityCell(c.last_message_at)}</div></div>{rowActions(c)}</li>; })}</ul></>}
         <footer className="table-footer"><span className="table-footer__count">Mostrando {visibleRows.length} de {total} conversaciones</span><div className="table-footer__pagination"><Button variant="secondary" aria-label="Página anterior" disabled={offset === 0} onClick={() => { setOffset(Math.max(0, offset - limit)); setRequestRevision((revision) => revision + 1); }}>‹</Button><span className="table-footer__page" aria-current="page">{page}</span><Button variant="secondary" aria-label="Página siguiente" disabled={!data || offset + limit >= total} onClick={() => { setOffset(offset + limit); setRequestRevision((revision) => revision + 1); }}>›</Button></div></footer>
       </div>}</Tabs>
    </PageFrame>;

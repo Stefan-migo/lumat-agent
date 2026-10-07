@@ -1,20 +1,35 @@
 .conversations-list__card { display: grid; gap: var(--space-3); }
-.conversations-list__assignment { display: flex; align-items: center; gap: var(--space-2); color: var(--corp-fg-muted); font-size: var(--text-sm); white-space: nowrap; }
-.conversations-list__assignment select { min-height: 40px; padding: var(--space-2) var(--space-3); border: 1px solid var(--corp-border); border-radius: var(--corp-radius); background: var(--brand-bg-elevated); color: var(--corp-text); font: inherit; }
+
+/* Responsable filter: bordered control with leading icon, muted prefix, bold value, chevron. */
+.conversations-list__filter { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 40px; padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); white-space: nowrap; }
+.conversations-list__filter > svg { flex: 0 0 auto; color: var(--corp-fg-muted); }
+.conversations-list__filter-label { color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.conversations-list__filter select { appearance: none; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: var(--weight-semibold); cursor: pointer; }
+
 .conversations-list__summary { overflow: hidden; color: var(--corp-fg-muted); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
 .conversations-list__status { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
-.conversations-list__actions { align-items: center; }
+
+/* Client name reads as plain bold text, not a browser button. */
+.conversations-list__identity { padding: 0; border: 0; background: transparent; color: var(--corp-text); font: inherit; font-weight: var(--weight-semibold); text-align: left; cursor: pointer; }
+.conversations-list__identity:hover { color: var(--corp-primary); }
+
+.conversations-list__activity { display: flex; flex-direction: column; gap: var(--space-1); white-space: nowrap; }
+.conversations-list__activity-time { color: var(--corp-fg-muted); font-size: var(--text-sm); }
+
+.conversations-list__actions { justify-content: flex-end; align-items: center; }
 .conversations-list__actions .btn { white-space: nowrap; }
+.conversations-list__actions .menu__trigger--icon { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-subtle); }
+
 .conversations-list__mobile-card { grid-template-columns: minmax(0, 1fr); align-items: start; }
 .conversations-list__mobile-card .table__resource { align-items: start; }
 .conversations-list__mobile-card .table__resource-body { display: grid; gap: var(--space-1); min-width: 0; }
-.conversations-list__mobile-card .table__resource-name { justify-self: start; padding: 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.conversations-list__mobile-card .table__resource-name { justify-self: start; }
 .conversations-list__mobile-card .table__resource-meta { overflow-wrap: anywhere; }
 .conversations-list__mobile-card .table__actions { justify-content: flex-end; }
 .conversations-list__card .table-footer__count { display: inline; }
 .conversations-list__card .table-footer__pagination { display: flex; }
 
 @media (max-width: 39.99rem) {
-  .conversations-list__assignment { align-items: stretch; flex-direction: column; white-space: normal; }
+  .conversations-list__filter { width: 100%; }
   .conversations-list__mobile-card .table__actions { justify-content: flex-start; }
 }
