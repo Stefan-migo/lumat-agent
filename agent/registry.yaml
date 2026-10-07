@@ -2,7 +2,7 @@
 agent:
   name: orchestrator
   persona: personas/orchestrator.md
-  skills: [sdb, emergency, handoff, capture]
+  skills: [emergency, handoff, capture]
   tools_whitelist: []
   memoria_scope: null
   model: deepseek-chat
@@ -65,7 +65,6 @@ assistant:
   prompts:
     plan: prompts/assistant_plan.md
     respond: prompts/assistant_respond.md
-    classify: prompts/assistant_classify.md
   tools_whitelist:
     - customers.search
     - customers.list
