@@ -72,7 +72,6 @@ def test_completed_tool_routes_through_opt_in_loop_head():
     assert ("tool_loop_head", "assemble_context") not in edges
     assert ("tool_loop_head", "panel_cost_gate") not in edges
     assert all(source != "cortex_turn" and target != "cortex_turn" for source, target in edges)
-    assert ("tool_loop_head", "sdb_trigger_gate") not in edges
 
 
 def test_verify_effects_is_noop_without_gate(monkeypatch):

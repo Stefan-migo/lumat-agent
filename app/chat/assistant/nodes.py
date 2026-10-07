@@ -258,56 +258,6 @@ COST_BLOCKED_REPLY = (
     "Please review cost settings."
 )
 
-SDB_RESULT_LIMIT = 4_096
-
-
-def sdb_verify(state: AssistantState) -> AssistantState:
-    """Compare frozen task identity and bounded evidence in deterministic order."""
-    tasks = state.get("sdb_tasks", [])
-    current = state.get("sdb_result") or {}
-    persisted = state.get("sdb_persisted_results") or []
-    incoming = current.get("results", []) if isinstance(current, dict) else []
-    by_task = {item.get("task_id"): item for item in persisted + incoming if item.get("task_id")}
-    ordered = []
-    mismatches = []
-    for order, task in enumerate(tasks):
-        task_id = task.get("id")
-        item = by_task.get(task_id)
-        if item is None:
-            mismatches.append({"field": "task_id", "order": order, "expected": task_id, "actual": None})
-            continue
-        expected = {"task_id": task_id, "order": order, "tool": task.get("tool"), "status": "completed"}
-        actual = {key: item.get(key) for key in expected}
-        for field, expected_value in expected.items():
-            if actual[field] != expected_value:
-                mismatches.append({"field": field, "order": order, "expected": expected_value, "actual": actual[field]})
-        from app.chat.assistant.tools.registry import get_tool
-
-        if not get_tool(task.get("tool")).read_only and not item.get("result") and not item.get("evidence"):
-            mismatches.append({"field": "mutation_evidence", "order": order, "expected": "bounded evidence", "actual": None})
-        ordered.append(item)
-    extra = sorted(set(by_task) - {task.get("id") for task in tasks})
-    mismatches.extend({"field": "task_id", "expected": "frozen task", "actual": task_id} for task_id in extra)
-    verified = not mismatches and len(ordered) == len(tasks)
-    verification = {
-        "status": "passed" if verified else "failed", "task_ids": [task.get("id") for task in tasks],
-        "results": ordered, "mismatches": mismatches, "artifact_refs": [],
-    }
-    return {"sdb_phase": "VERIFY", "verification": verification, "status": "sdb_verified" if verified else "error"}
-
-
-def sdb_deliver(state: AssistantState) -> AssistantState:
-    """Deliver only verified evidence whose caller transaction is durable."""
-    verification = state.get("verification", {})
-    result = state.get("sdb_result") or {}
-    committed = result.get("durable_commit", True) if isinstance(result, dict) else False
-    status = "completed" if verification.get("status") == "passed" and committed else "failed"
-    evidence = [{"route": "sdb", "phase": "DELIVER", "status": status,
-                 "task_ids": verification.get("task_ids", []),
-                   **({} if status == "completed" else {"reason": "durable commit not confirmed" if not committed else "verification did not pass on real work"})}]
-    return {"sdb_phase": "DELIVER", "evidence": evidence, "status": status}
-
-
 def _cost_snapshot(session: object, thread_id: int) -> dict[str, float | str]:
     """Read the current cost state without emitting alerts or changing state."""
     if session is None:
