@@ -188,8 +188,8 @@ first while the old subgraph still exists.
 | 1 | New `sdb-native` spec (contract only) | S5-01 | ~197 | ✅ reviewed |
 | 2 | Deterministic gate + `success_criterion` (additive) | S5-03a | ~100 | ✅ committed |
 | 3 | Isolated read-only verifier (additive) | S5-03b | ~230 | ✅ committed |
-| 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~250 | next |
-| 5 | Collapse phase graph + SDB state + spec-level tests | S5-02 (removal) | ~350 | |
+| 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~110 | ✅ committed |
+| 5 | Collapse phase graph + SDB state + spec-level tests | S5-02 (removal) | ~350 | next |
 | 6 | Replace SDB service runner + integration tests | S5-04 | ~450 | |
 | 7 | Registry/config cleanup + cross-check | S5-05, S5-07 | ~300 | |
 
@@ -220,6 +220,13 @@ Push/PR creation remain the owner's decision per slice.
   `tests/unit/test_assistant_verification_runner.py`; 49 passed in the focused set. Corrective pass
   fixed three defects (hardcoded model, missing verdict round, admin default executor). Still not
   wired into the loop (Slice 4). Doc/plan: delivery split into 7 slices.
+- **Slice 4 (S5-02 routing) done** — `verify_effects` node in `nodes.py` (no-op unless the gate
+  fires; binds a thread/owner/project read-only `tool_executor`; stores `state["verification"]` and
+  evidence). `graph.py`: post-tool path `tool_loop_head → verify_effects → respond_stream`. Failed/
+  unverifiable outcomes append a deterministic qualification (`verification: <status> — <reason>`),
+  streamed via `on_token`; confirmed adds none. Tool results now carry dispatched arguments for the
+  verifier. 109 added lines; 82 passed. In-turn effects are `memory.update`/`memory.delete` (the
+  `project.*`/`automation.*` effects execute in the service → Slice 6).
 
 ## Review (RDD)
 
