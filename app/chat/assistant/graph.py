@@ -13,45 +13,10 @@ from app.chat.assistant.nodes import (
     panel_cost_gate,
     plan_llm,
     retrieve_kb,
-    sdb_approve,
-    sdb_clarify,
-    sdb_deliver,
-    sdb_execute,
-    sdb_plan,
-    sdb_spec,
-    sdb_verify,
     tool_loop_head,
     verify_effects,
 )
-from app.chat.assistant.state import AssistantState, normalize_sdb_trigger
-
-
-def sdb_trigger_gate(state: AssistantState) -> AssistantState:
-    """Select SDB only from validated planner or authenticated admin signals."""
-    planner = state.get("planner") or state.get("plan") or {}
-    signal = {
-        "classification": planner.get("classification", "normal"),
-        "sdb_requested": state.get("sdb_requested"),
-        "actor_role": state.get("actor_role") or state.get("actor"),
-    }
-    normalized = normalize_sdb_trigger(signal)
-    if normalized["route"] == "sdb":
-        return {
-            "sdb_route": "sdb",
-            "sdb_trigger": normalized["trigger"],
-            "sdb_phase": normalized["phase"],
-            "sdb_rejection": None,
-            "status": "sdb_clarify",
-        }
-    return {
-        "sdb_route": "normal",
-        "sdb_trigger": None,
-        "sdb_rejection": normalized.get("reason"),
-    }
-
-
-def _after_sdb_trigger_gate(state: AssistantState) -> str:
-    return "sdb_clarify" if state.get("sdb_route") == "sdb" else "guardrails"
+from app.chat.assistant.state import AssistantState
 
 
 # Stages where the model's own output was unusable. A provider or instrumentation failure is not a plan:
@@ -105,23 +70,11 @@ def _after_cost_gate(state: AssistantState) -> str:
     return "evidence" if state.get("cost_mode") == "blocked" else "plan_llm"
 
 
-def _after_sdb_approve(state: AssistantState) -> str:
-    return "sdb_execute" if (state.get("approval") or {}).get("status") == "consumed" else END
-
-
 def build_assistant_graph():
     builder = StateGraph(AssistantState)
     builder.add_node("assemble_context", assemble_context_node)
     builder.add_node("panel_cost_gate", panel_cost_gate)
     builder.add_node("plan_llm", plan_llm)
-    builder.add_node("sdb_trigger_gate", sdb_trigger_gate)
-    builder.add_node("sdb_clarify", sdb_clarify)
-    builder.add_node("sdb_spec", sdb_spec)
-    builder.add_node("sdb_plan", sdb_plan)
-    builder.add_node("sdb_approve", sdb_approve)
-    builder.add_node("sdb_execute", sdb_execute)
-    builder.add_node("sdb_verify", sdb_verify)
-    builder.add_node("sdb_deliver", sdb_deliver)
     builder.add_node("guardrails", guardrails)
     builder.add_node("delegation_span", delegation_node)
     builder.add_node("retrieve_kb", retrieve_kb)
@@ -137,17 +90,6 @@ def build_assistant_graph():
         "plan_llm", _after_plan,
         {"guardrails": "guardrails"},
     )
-    builder.add_conditional_edges(
-        "sdb_trigger_gate", _after_sdb_trigger_gate,
-        {"guardrails": "guardrails", "sdb_clarify": "sdb_clarify"},
-    )
-    builder.add_edge("sdb_clarify", "sdb_spec")
-    builder.add_edge("sdb_spec", "sdb_plan")
-    builder.add_edge("sdb_plan", "sdb_approve")
-    builder.add_conditional_edges("sdb_approve", _after_sdb_approve, {"sdb_execute": "sdb_execute", END: END})
-    builder.add_edge("sdb_execute", "sdb_verify")
-    builder.add_edge("sdb_verify", "sdb_deliver")
-    builder.add_edge("sdb_deliver", "evidence")
     builder.add_conditional_edges("guardrails", _after_guardrails, {"execute_tool": "execute_tool", "delegation_span": "delegation_span", "retrieve_kb": "retrieve_kb", "respond_stream": "respond_stream", END: END})
     builder.add_edge("delegation_span", "respond_stream")
     builder.add_conditional_edges("retrieve_kb", _after_retrieve_kb, {"respond_stream": "respond_stream", END: END})
@@ -192,10 +134,7 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
     last_state = None
     stage_nodes = {
         "assemble_context": "planning", "panel_cost_gate": "planning", "plan_llm": "planning",
-        "guardrails": "planning", "sdb_trigger_gate": "planning",
-        "sdb_clarify": "planning", "sdb_spec": "planning",
-        "sdb_plan": "planning", "sdb_approve": "planning", "sdb_execute": "executing",
-        "sdb_verify": "executing", "sdb_deliver": "responding", "execute_tool": "executing",
+        "guardrails": "planning", "execute_tool": "executing",
         "respond_stream": "streaming",
         "tool_loop_head": "planning",
         "verify_effects": "verifying",

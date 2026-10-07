@@ -7,13 +7,12 @@ import logging
 import re
 from contextlib import nullcontext
 from datetime import datetime, timezone
-from hashlib import sha256
 from pydantic import ValidationError
 
 from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.evidence import make_evidence
 from app.chat.assistant.markup import ToolCallMarkupSanitizer
-from app.chat.assistant.state import AssistantState, PlannerOutput, SDBTask, estimate_tokens, validate_cortex_session
+from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens, validate_cortex_session
 from app.chat.assistant.tools.registry import AUTONOMOUS_WRITE_ALLOWLIST, TOOL_REGISTRY, ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
 from app.db import session_scope
@@ -259,55 +258,7 @@ COST_BLOCKED_REPLY = (
     "Please review cost settings."
 )
 
-SDB_SPEC_LIMIT = 8_192
 SDB_RESULT_LIMIT = 4_096
-SDB_TEXT_LIMIT = 500
-
-
-def sdb_clarify(state: AssistantState) -> AssistantState:
-    """Accept one bounded scope for the native run."""
-    content = state.get("content", "").strip()[:SDB_TEXT_LIMIT]
-    scope = {"entities": ["service history"], "request": content, "proyecto": _project_slug(state)}
-    return {
-        "sdb_phase": "CLARIFY",
-        "sdb_scope": scope,
-        "status": "sdb_clarified",
-    }
-
-
-def sdb_spec(state: AssistantState) -> AssistantState:
-    """Freeze the clarified scope before any task planning."""
-    scope = state.get("sdb_scope") or {"entities": [], "request": ""}
-    spec = {"scope": scope, "scope_frozen": True}
-    encoded = str(spec).encode("utf-8")[:SDB_SPEC_LIMIT]
-    spec["sha256"] = sha256(encoded).hexdigest()
-    return {"sdb_phase": "SPEC", "sdb_spec": spec, "status": "sdb_specified"}
-
-
-def sdb_plan(state: AssistantState) -> AssistantState:
-    """Create bounded tasks, each with exactly one verifiable output."""
-    spec = state["sdb_spec"]
-    scope = spec["scope"]
-    task = SDBTask(
-        id="task-1",
-        scope=scope,
-        summary="Review the requested service history",
-        verifiable_output="A bounded service-history summary",
-        tool="conversations.search",
-        arguments={"query": scope["request"], "limit": 10},
-    )
-    return {"sdb_phase": "PLAN", "sdb_tasks": [task.model_dump()], "status": "sdb_planned"}
-
-
-def sdb_approve(state: AssistantState) -> AssistantState:
-    """Pause until a future approval flow supplies an explicit decision."""
-    return {"sdb_phase": "APPROVE", "approval": {"status": "pending"}, "status": "approval_pending"}
-
-
-def sdb_execute(state: AssistantState) -> AssistantState:
-    """Project canonical durable results without executing a second runner."""
-    result = state.get("sdb_result") or {"results": []}
-    return {"sdb_phase": "EXECUTE", "sdb_result": result, "status": "sdb_executed"}
 
 
 def sdb_verify(state: AssistantState) -> AssistantState:
@@ -355,14 +306,6 @@ def sdb_deliver(state: AssistantState) -> AssistantState:
                  "task_ids": verification.get("task_ids", []),
                    **({} if status == "completed" else {"reason": "durable commit not confirmed" if not committed else "verification did not pass on real work"})}]
     return {"sdb_phase": "DELIVER", "evidence": evidence, "status": status}
-
-
-def resolve_sdb_item(spec: dict, requested: str) -> dict:
-    """Resolve only entities in the frozen scope, with distinct absence errors."""
-    entities = spec.get("scope", {}).get("entities", [])
-    if requested not in entities:
-        return {"status": "error", "error": "scope-not-found"}
-    return {"status": "error", "error": "not-exist"}
 
 
 def _cost_snapshot(session: object, thread_id: int) -> dict[str, float | str]:
