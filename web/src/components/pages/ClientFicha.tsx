@@ -1,11 +1,11 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CalendarX, CircleAlert, Clock3, Copy, Check, ChevronRight, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, Thermometer, UserRound, CircleDollarSign, Trash2, X } from "lucide-react";
-import { addClientNote, ApiError, apiFetch, archiveCustomer, cancelAppointment, changeClientState, closeAppointment, createClientEquipment, deleteClientNote, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateClientNote, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
+import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CalendarX, CircleAlert, Clock3, Copy, Check, ChevronRight, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, Thermometer, UserRound, CircleDollarSign, Trash2, X, Bot, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { addClientNote, ApiError, apiFetch, archiveCustomer, cancelAppointment, changeClientState, closeAppointment, createClientEquipment, deleteClientNote, fetchClients, getConversation, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateClientNote, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
 import { pathForRoute } from "../domain/panelRoutes";
-import { Badge } from "../primitives/Badge";
+import { Badge, type BadgeTone } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
 import { Button } from "../primitives/Button";
 import { Card } from "../primitives/Card";
@@ -17,7 +17,6 @@ import { Textarea } from "../primitives/Textarea";
 import { Tabs } from "../primitives/Tabs";
 import "./ClientFichaDialogs.css";
 import { DataTable, type Column } from "../shared/DataTable";
-import { CollapsibleMessages } from "../shared/CollapsibleMessages";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
@@ -47,6 +46,10 @@ const formatDate = (value: string | null | undefined) => (value ? DATE_FORMAT.fo
 const formatIdentityDate = (value: string | null | undefined) => (value ? IDENTITY_DATE_FORMAT.format(new Date(value)).replace(".", "") : "—");
 const formatDateTime = (value: string | null | undefined) => (value ? DATE_TIME_FORMAT.format(new Date(value)) : "—");
 const TIME_FORMAT = new Intl.DateTimeFormat("es-CL", { hour: "2-digit", minute: "2-digit", hour12: false });
+const CONVERSATION_TONES: Record<string, BadgeTone> = { bot: "success", human: "neutral", closed: "neutral", pending: "warning", escalated: "danger" };
+const MESSAGE_TYPE_LABELS: Record<string, string> = { text: "Texto", image: "Imagen", audio: "Audio", video: "Video", document: "Documento" };
+const messageTypeLabel = (value: string) => MESSAGE_TYPE_LABELS[value] ?? value;
+const messageWhen = (value: string | null | undefined) => value ? `${formatIdentityDate(value)} · ${TIME_FORMAT.format(new Date(value))}` : "—";
 
 // Visitas tab: the date cell mirrors the reference (bold day/month/year + muted clock time),
 // the service is a drill-down link rendered as plain text, and the row action lives in a `...` menu.
@@ -115,7 +118,6 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [caseEditTarget, setCaseEditTarget] = useState<FichaCase | null>(null);
   const [retryingCalendarId, setRetryingCalendarId] = useState<number | null>(null);
-  const [messagesExpanded, setMessagesExpanded] = useState(false);
   const [refreshed, setRefreshed] = useState<{ ficha: ClientFichaResponse; memories: Memory[]; pendingRelations: MemoryRelation[] } | null>(null);
   const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
   const [stateDialogOpen, setStateDialogOpen] = useState(false);
@@ -161,15 +163,16 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [visitCloseOutcome, setVisitCloseOutcome] = useState<AppointmentClosureOutcome>("completed");
   const [visitMutation, setVisitMutation] = useState(false);
   const [visitFeedback, setVisitFeedback] = useState<Feedback | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
   const fetchFicha = useCallback(async () => {
     if (fichaCustomerId === undefined) throw new Error("customer id is required");
     const [ficha, memoryResponse, pendingResponse] = await Promise.all([
-      apiFetch<ClientFichaResponse>(`/panel/api/clients/${fichaCustomerId}${messagesExpanded ? "" : `?messages_limit=${MESSAGE_PREVIEW}`}`),
+      apiFetch<ClientFichaResponse>(`/panel/api/clients/${fichaCustomerId}?messages_limit=${MESSAGE_PREVIEW}`),
       apiFetch<MemoriesResponse>(`/panel/api/clients/${fichaCustomerId}/memories`),
       apiFetch<PendingMemoryRelationsResponse>(`/panel/api/clients/${fichaCustomerId}/memory-relations/pending`),
     ]);
     return { ficha, memories: memoryResponse.memories, pendingRelations: pendingResponse.relations };
-  }, [fichaCustomerId, messagesExpanded]);
+  }, [fichaCustomerId]);
   const fetched = useAsyncData(fetchFicha, (controlledData === undefined || mergedCustomerId !== null) && controlledState === undefined, mergedCustomerId ?? 0);
   const fetchEquipment = useCallback(async () => {
     if (fichaCustomerId === undefined) return [];
@@ -181,6 +184,16 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const memories = mergedCustomerId !== null ? fetched.data?.memories ?? [] : refreshed?.memories ?? controlledMemories ?? fetched.data?.memories ?? [];
   const pendingRelations = refreshed?.pendingRelations ?? fetched.data?.pendingRelations ?? [];
   const state: FichaState = controlledState ?? (controlledData ? "ready" : fetched.state);
+  // The Mensajes card is scoped to one conversation: a selector picks it and we load that
+  // thread's last `MESSAGE_PREVIEW` messages (the full thread lives behind `Abrir conversación`).
+  const conversationList = data?.history.conversations ?? [];
+  const defaultConversationId = conversationList.length ? conversationList[conversationList.length - 1].id : null;
+  const activeConversationId = selectedConversationId ?? defaultConversationId;
+  const conversationThread = useAsyncData(
+    async () => activeConversationId === null ? null : await getConversation(activeConversationId, MESSAGE_PREVIEW),
+    activeConversationId !== null,
+    activeConversationId ?? 0,
+  );
 
   if (!data) {
     return <PageFrame title="Ficha de cliente" meta="Datos del cliente" state={stateMessage(state)}><EmptyState title="Cargando ficha" /></PageFrame>;
@@ -194,6 +207,12 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const futureAppointmentCount = appointments.filter((appointment) => appointment.status === "booked" && new Date(appointment.starts_at).getTime() > Date.now()).length;
   const upcomingAppointments = appointments.filter((appointment) => appointment.status === "booked" && new Date(appointment.starts_at).getTime() > Date.now());
   const finishedAppointments = appointments.filter((row) => !upcomingAppointments.includes(row));
+  // "Turno" = the 1-based order of the message within the selected conversation. We load the
+  // last `MESSAGE_PREVIEW` messages, so the first shown turn is offset by the thread length.
+  const conversationMessages = conversationThread.data?.messages ?? [];
+  const conversationTotal = conversationThread.data?.messages_total ?? 0;
+  const messageTurns = new Map<number, number>();
+  conversationMessages.forEach((message, index) => messageTurns.set(message.id, conversationTotal - conversationMessages.length + index + 1));
   const retryCalendar = async (appointmentId: number) => {
     setRetryingCalendarId(appointmentId);
     try {
@@ -426,12 +445,11 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     await resolveMemoryRelation(customerId, relationId, relation);
     await refresh();
   };
-  const toggleMessages = () => { setRefreshed(null); setMessagesExpanded((value) => !value); fetched.retry(); };
   const conversationColumns: Column<(typeof history.conversations)[number]>[] = [
-    { key: "id", header: "#", render: (row) => `#${row.id}` },
-    { key: "state", header: "Estado", render: (row) => conversationLabel(row.state) },
+    { key: "id", header: "Conversación", render: (row) => `#${row.id}` },
+    { key: "state", header: "Estado", render: (row) => <Badge tone={CONVERSATION_TONES[row.state] ?? "neutral"}><Bot aria-hidden="true" />{conversationLabel(row.state)}</Badge> },
     { key: "summary", header: "Resumen", render: (row) => row.summary ?? "—" },
-    { key: "created", header: "Creada", render: (row) => formatDate(row.created_at) },
+    { key: "created", header: "Creada", render: (row) => formatIdentityDate(row.created_at) },
   ];
   const caseColumns: Column<(typeof history.cases)[number]>[] = [
     { key: "id", header: "#", render: (row) => `#${row.id}` },
@@ -451,11 +469,11 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   ];
   const messageColumns: Column<(typeof history.messages)[number]>[] = [
     { key: "conversation", header: "Conversación", render: (row) => <a className="table__link" href={pathForRoute({ view: "conversations", conversationId: row.conversation_id })}>#{row.conversation_id}</a> },
-    { key: "id", header: "#", render: (row) => `#${row.id}` },
-    { key: "direction", header: "Dirección", render: (row) => directionLabel(row.direction) },
-    { key: "msg_type", header: "Tipo", render: (row) => row.msg_type },
+    { key: "id", header: "Turno", render: (row) => messageTurns.get(row.id) ?? 1 },
+    { key: "direction", header: "Dirección", render: (row) => <Badge tone={row.direction === "inbound" ? "success" : "neutral"}>{row.direction === "inbound" ? <ArrowDownLeft aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}{directionLabel(row.direction)}</Badge> },
+    { key: "msg_type", header: "Tipo", render: (row) => messageTypeLabel(row.msg_type) },
     { key: "text", header: "Mensaje", render: (row) => `${row.text ?? "—"}${row.media_url ? " 📎" : ""}` },
-    { key: "created", header: "Fecha", render: (row) => formatDate(row.created_at) },
+    { key: "created", header: "Fecha", render: (row) => messageWhen(row.created_at) },
   ];
   const activeCaseBody = activeCase ? <>
     <div className="client-ficha__case-eyebrow"><span className="client-ficha__status-dot"/> CASO ACTIVO <span>#{activeCase.id}</span><Menu trigger="icon" label="Acciones del caso" items={[{ value: "edit", label: "Editar caso", icon: BriefcaseBusiness }, { value: "amount", label: "Definir monto", icon: CircleDollarSign }]} onSelect={(value) => value === "amount" ? openAmountEditor(activeCase) : openCaseEditor(activeCase)} /></div>
@@ -688,8 +706,32 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
         </> : <EmptyState title="No hay visitas en el historial" />}</Card>{appointments.some((appointment)=>appointment.calendar_error) ? appointments.filter((appointment)=>appointment.calendar_error).map((appointment)=><div key={appointment.id}><StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`}/><Button variant="secondary" disabled={retryingCalendarId===appointment.id} onClick={()=>void retryCalendar(appointment.id)}>Reintentar calendario</Button></div>):null}</section>
       </div> : null}
       {activeTab === "conversations" ? <div className="detail-region__main">
-        <section aria-label="Conversaciones" className="client-ficha__history-block"><Card title="Conversaciones del cliente"><div className={surfaceClass(history.conversations.length)}><DataTable columns={[...conversationColumns,{key:"actions",header:"Acciones",render:(row)=><Button variant="secondary" onClick={()=>{window.location.href=pathForRoute({view:"conversations",conversationId:row.id})}}>Abrir conversación</Button>}] as Column<(typeof history.conversations)[number]>[]} rows={history.conversations} rowKey={(row) => String(row.id)} /></div></Card></section>
-        <section aria-label="Mensajes" className="client-ficha__history-block"><h2>Mensajes de la conversación #{history.conversations[0]?.id ?? "—"}</h2><p>Historial de mensajes del hilo seleccionado.</p><div className={surfaceClass(history.messages.length)}><CollapsibleMessages total={history.messages_total} expanded={messagesExpanded} onToggle={toggleMessages}><DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} /></CollapsibleMessages></div></section>
+        <section aria-label="Conversaciones" className="client-ficha__history-block"><Card title="Conversaciones del cliente">
+          {history.conversations.length ? <>
+            <div className={surfaceClass(history.conversations.length)}><div className="table-card__desktop client-ficha__conversations-table"><DataTable columns={[...conversationColumns,{key:"actions",header:"Acciones",render:(row)=><Button variant="secondary" onClick={()=>{window.location.href=pathForRoute({view:"conversations",conversationId:row.id})}}>Abrir conversación</Button>}] as Column<(typeof history.conversations)[number]>[]} rows={history.conversations} rowKey={(row) => String(row.id)} /></div></div>
+            <ul className="table-cards table-cards--mobile client-ficha__conversation-cards" aria-label="Lista de conversaciones">
+              {history.conversations.map((row) => <li className="table-card__item client-ficha__conversation-card" key={row.id}>
+                <div className="client-ficha__conversation-card-head"><strong>#{row.id}</strong><Badge tone={CONVERSATION_TONES[row.state] ?? "neutral"}><Bot aria-hidden="true" />{conversationLabel(row.state)}</Badge></div>
+                {row.summary ? <p>{row.summary}</p> : null}
+                <div className="client-ficha__conversation-card-foot"><span>{formatIdentityDate(row.created_at)}</span><Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "conversations", conversationId: row.id }); }}>Abrir conversación</Button></div>
+              </li>)}
+            </ul>
+          </> : <EmptyState title="No hay conversaciones" />}
+        </Card></section>
+        <section aria-label="Mensajes" className="client-ficha__history-block"><Card title={`Mensajes de la conversación #${activeConversationId ?? "—"}`} description="Historial de mensajes del hilo seleccionado.">
+          {history.conversations.length > 1 ? <div className="client-ficha__messages-toolbar"><Select label="Conversación" value={activeConversationId === null ? "" : String(activeConversationId)} options={history.conversations.map((row) => ({ value: String(row.id), label: `#${row.id} · ${conversationLabel(row.state)}${row.summary ? ` · ${row.summary}` : ""}` }))} onChange={(event) => setSelectedConversationId(Number(event.target.value))} /></div> : null}
+          {conversationMessages.length ? <>
+            <div className={surfaceClass(conversationMessages.length)}><div className="table-card__desktop client-ficha__messages-table"><DataTable columns={messageColumns} rows={conversationMessages} rowKey={(row) => String(row.id)} /></div></div>
+            <ul className="table-cards table-cards--mobile client-ficha__message-cards" aria-label="Lista de mensajes">
+              {conversationMessages.map((row) => <li className="table-card__item client-ficha__message-card" key={row.id}>
+                <div className="client-ficha__message-card-head"><Badge tone={row.direction === "inbound" ? "success" : "neutral"}>{row.direction === "inbound" ? <ArrowDownLeft aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}{directionLabel(row.direction)}</Badge><span>{messageWhen(row.created_at)}</span></div>
+                <p>{row.text ?? "—"}{row.media_url ? " 📎" : ""}</p>
+                <small>Turno {messageTurns.get(row.id) ?? 1} · {messageTypeLabel(row.msg_type)}</small>
+              </li>)}
+            </ul>
+          </> : <EmptyState title="No hay mensajes" />}
+          <p>Mostrando {conversationMessages.length} mensaje{conversationMessages.length === 1 ? "" : "s"}{conversationTotal > conversationMessages.length ? ` de ${conversationTotal}` : ""}</p>
+        </Card></section>
       </div> : null}
         </>}
       </Tabs>
