@@ -42,6 +42,11 @@
 .conversations-list__card .table-footer__count { display: inline; }
 .conversations-list__card .table-footer__pagination { display: flex; }
 
+/* Desktop/tablet: the search takes every spare pixel so it meets the filter — no dead gap. */
+@media (min-width: 40rem) {
+  .conversations-list__card .table-toolbar { grid-template-columns: minmax(0, 1fr) auto auto; }
+}
+
 @media (max-width: 39.99rem) {
   .conversations-list__filter { justify-self: start; }
   .conversations-list__offline { flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
