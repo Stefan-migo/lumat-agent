@@ -26,6 +26,7 @@ from app.models import (  # noqa: E402
     Message,
     MessageDirection,
     MessageStatus,
+    Project,
     Settings,
 )
 from app.services.audit import list_audit_entries, record_audit  # noqa: E402
@@ -124,6 +125,70 @@ def test_settings_jsonb_round_trip():
             select(Settings).where(Settings.key == "emergency_keywords")
         ).scalar_one()
         assert row.value == {"list": ["gas", "fuga"]}
+
+
+def test_project_config_defaults_to_empty_jsonb():
+    with SessionLocal() as session:
+        project = Project(
+            slug="project-config-default",
+            name="Project Config Default",
+            purpose="Verify project config default",
+            purpose_embedding=[0.0] * 384,
+        )
+        session.add(project)
+        session.commit()
+        project_id = project.id
+
+        fetched = session.get(Project, project_id)
+        assert fetched.config == {}
+
+
+def test_kb_document_project_scope_defaults_global_and_round_trips():
+    with SessionLocal() as session:
+        global_doc = KbDocument(title="Global KB", format="md", content="global")
+        project = Project(
+            slug="kb-scope-round-trip",
+            name="KB Scope Round Trip",
+            purpose="Verify KB project binding",
+            purpose_embedding=[0.0] * 384,
+        )
+        session.add_all([global_doc, project])
+        session.flush()
+        assert global_doc.project_id is None
+
+        scoped_doc = KbDocument(
+            title="Scoped KB", format="md", content="scoped", project_id=project.id
+        )
+        session.add(scoped_doc)
+        session.commit()
+
+        global_id, scoped_id, project_id = global_doc.id, scoped_doc.id, project.id
+        session.expire_all()
+        assert session.get(KbDocument, global_id).project_id is None
+        assert session.get(KbDocument, scoped_id).project_id == project_id
+
+
+def test_deleting_project_cascades_to_scoped_kb_document():
+    with SessionLocal() as session:
+        project = Project(
+            slug="kb-scope-cascade",
+            name="KB Scope Cascade",
+            purpose="Verify KB project cascade",
+            purpose_embedding=[0.0] * 384,
+        )
+        session.add(project)
+        session.flush()
+        document = KbDocument(
+            title="Scoped KB Cascade", format="md", content="scoped", project_id=project.id
+        )
+        session.add(document)
+        session.commit()
+        project_id, document_id = project.id, document.id
+
+        session.delete(session.get(Project, project_id))
+        session.commit()
+        session.expire_all()
+        assert session.get(KbDocument, document_id) is None
 
 
 def test_kb_chunk_vector_round_trip():
