@@ -1,0 +1,133 @@
+# conversaciones-redesign
+
+## Objective
+
+Bring the panel **Conversaciones** section to the confirmed references:
+
+- Desktop list → a real **table** matching the table pattern already shipped for clientes
+  (`ClientesList`) and usuarios (`UserManagement`), i.e. the shared `DataTable` + `.table-card`
+  composition.
+- Conversation **thread** → design/UX improvement to `ConversationThread.png` (desktop) and
+  `MobileTabletConversationThread.png` (mobile/tablet).
+
+## Problem
+
+`ConversationsList.tsx` still renders a legacy `<ul className="conversations-queue">` of row cards,
+not the reference table. `ConversationThread.tsx` has a generic header (no customer identity, no
+"Ver ficha del cliente" action) and a flat context inspector, instead of the reference's card
+layout (Cliente / Caso vinculado / Datos capturados).
+
+Validated read-only analysis already exists: `odd/analysis/conversaciones/findings.md` and
+`odd/analysis/conversaciones/visual.md`. Owner visual input (2026-10-07) confirms: the desktop list
+must be a table reusing the clientes/usuarios table style; the thread needs its design/UI/UX
+improved to the reference.
+
+## Why
+
+The section predates the v2 reference pass. The references are the expected-state authority; the
+owner corrects the design visually per work unit (same workflow that closed clientes).
+
+## Scope
+
+- **In:** `web/src/components/pages/ConversationsList.tsx`, `web/src/components/pages/ConversationThread.tsx`,
+  their CSS/tests/stories, and the conversaciones-specific CSS patterns. Shared `DataTable` is
+  **reused as-is**; only the page-local CSS and the shared-primitive CSS additions the findings flag
+  (mobile filters, tablet workspace) are in scope.
+- **Out:** `DataTable` contract, `tokens.css` palette, backend routes/services, other sections.
+
+## Constraints
+
+- Linear top-to-bottom, identical spacing and radius to the shipped clientes table.
+- Do not reopen palette/tokens (`panel-design-system-final` settled them).
+- Do not change the shared `DataTable` contract.
+- Chat in Rioplatense Spanish; artifacts, code, comments, and commits in English; UI copy in
+  neutral Chilean Spanish. Conventional Commits, no AI attribution.
+- Reference-driven: reference images control geometry and layout.
+
+## TDD resolution
+
+No `strict_tdd` config exists in the repo (checked `sdd-init` memory, `.rapsodia-code/`, `odd/`,
+`AGENTS.md`). Effective mode: **not enabled** → ordinary functional checks per slice (component
+tests written/updated + typecheck), not no checks. Runner: `npx vitest run`.
+
+## Delivery strategy
+
+- Forecast: ~900–1300 authored changed lines across two components + tests/stories. **Exceeds the
+  ~400-line budget** → chained/stacked PRs.
+- `delivery_strategy`: `ask-on-risk` (owner already chose chained PRs; recorded here).
+- `chain_strategy`: `stacked-to-main` (handoff-confirmed; each slice PR targets `main` in order).
+- Slice boundaries below; each slice is one work unit with its own commit and verification.
+
+## Work units (stable IDs)
+
+### CV-1 — ConversationsList desktop table
+- [ ] Title composition: count badge + accent bar + subtitle "Revisa y gestiona la atención de tus clientes." (`findings` list)
+- [ ] Tab labels/counts to the reference; keep client-side filtering and existing ordering.
+- [ ] Wrap search toolbar + table + footer in one `.table-card`, reusing `DataTable`.
+- [ ] Five columns: `Cliente y conversación` | `Estado y prioridad` | `Caso` | `Última actividad` | `Acciones`.
+- [ ] Row: avatar + name + phone + `#id` + summary; distinct status and priority badges; case cell; recency; `Tomar conversación` + `...` overflow action.
+- [ ] Responsable filter control in the toolbar (`Responsable: Todos`).
+- [ ] Footer: "Mostrando N de M conversaciones" + pagination.
+- [ ] Retain mobile card list (`.table-cards--mobile`) and mobile toolbar composition.
+- [ ] Preserve behavior: ordering, search, tabs, actions (`takeConversation`, `acknowledgeCase`), realtime/recovery.
+- [ ] Update `ConversationsList.test.tsx` + stories/tests.
+
+### CV-2 — ConversationThread header + history card
+- [ ] Header: avatar + customer name + `Conversación #id · Iniciada el [date]` + state badge + `Ver ficha del cliente` action.
+- [ ] Offline banner copy to the reference.
+- [ ] `Historial de mensajes` card heading + freshness (`Actualizada el [date] · [time]`) + `Tomar conversación` + `...` menu.
+- [ ] Message bubbles to the reference (author, time, media/failure details).
+- [ ] Update `ConversationThread.test.tsx` + stories/tests.
+
+### CV-3 — ConversationThread context inspector + responsive
+- [ ] `Cliente` card: avatar, name, phone + copy action.
+- [ ] `Caso vinculado` card: title, `Abierto`/`Prioridad alta` badges, summary, `Ver caso →`, Emergencia/Reconocimiento rows.
+- [ ] `Datos capturados` disclosure (reference shows it open by default).
+- [ ] Tablet/mobile workspace layout per `MobileTabletConversationThread.png` (shared-primitive CSS scope; regression check on clientes/usuarios).
+- [ ] Update thread tests/stories.
+
+### CV-4 — ConversationThread composer + states + a11y
+- [ ] 24h-window warning banner + disabled composer to the reference.
+- [ ] Closed-conversation presentation (`Conversación cerrada`, "Respuesta no disponible").
+- [ ] Human-attention handoff presentation and state actions.
+- [ ] Accessibility pass (labels, disabled semantics, focus) + final behavior coverage.
+
+## Authorized scope
+
+Work **only** in `/home/stefan/repos/lumat-agent-odd-conversaciones-redesign` on branch
+`odd/conversaciones-redesign`. Do not modify the main worktree or another worktree.
+
+## Acceptance criteria
+
+- Each work unit visually matches its reference image and region.
+- No regression in existing conversaciones behavior (ordering, search, tabs, pagination, actions,
+  realtime recovery, 24h window, closed state) or in other sections through shared primitives.
+- Frontend checks green per slice; full suite + build at the design checkpoint.
+
+## Checks
+
+- `cd web && npx tsc -b --force --noEmit` (incremental lies — always `--force`)
+- `cd web && npx vitest run --no-file-parallelism --testTimeout=20000 <component test>`
+- Design checkpoint: `npx vitest run --no-file-parallelism --testTimeout=20000` + `npm run build`
+
+## Graph nodes consulted (Step 1)
+
+- Query `ConversationsList ConversationThread panel conversations list usages`: `ConversationsList()`
+  and `ConversationThread()` (`web/src/components/pages/`), community `ConversationThread.tsx`;
+  `ConversationsList.stories.tsx`, `ConversationThread.stories.tsx`, both component tests,
+  `listConversations()`, `getConversation()`, `listActiveConversations()`, `coalesceSnapshotRefresh()`,
+  `conversationLabel()`, `types.ts`.
+- `graphify path "ConversationsList" "ConversationThread"`: ambiguous match; no directed path
+  (not evidence of disconnection — both are page components under the same shell).
+- `GRAPH_REPORT.md` hubs: `ConversationThread.tsx`, `api.ts`, `types.ts`, `shared/toneMaps.ts`;
+  god nodes `Conversation` (134 edges), `Message` (124), `Case` (123); `DataTable` + the
+  "Clientes Pilot Dense Surface" community owns the table pattern.
+
+## Evidence
+
+- Findings ledger: `odd/analysis/conversaciones/findings.md` (validated).
+- Visual record: `odd/analysis/conversaciones/visual.md`.
+- Current captures: `refs/current/conversaciones/` (`desktop.png`, `tablet.png`, `mobile.png`).
+- Reused table pattern: `web/src/components/shared/DataTable.tsx`, `ClientesList.css`,
+  `primitives/primitives.css`.
+- Base: `main` = `32ebb4b5` (clientes section merged).
