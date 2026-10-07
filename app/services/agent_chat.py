@@ -70,6 +70,11 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _sdb_plan(spec: dict, tasks: list[dict]) -> dict:
+    """Wrap an SDB spec and its tasks in the frozen approved-plan shape."""
+    return {"phase": "EXECUTE", "spec": spec, "tasks": tasks}
+
+
 def close_cortex_session(session, thread: InternalChatThread, *, report: str) -> dict:
     """Persist the final planning report and close its thread lifecycle."""
     cortex = dict((thread.assistant_state or {}).get("cortex_session") or {})
