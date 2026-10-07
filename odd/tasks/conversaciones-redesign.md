@@ -75,6 +75,15 @@ tests written/updated + typecheck), not no checks. Runner: `npx vitest run`.
 - Graph nodes: `ConversationsList()`, `DataTable()`, `ClientesList.tsx`, `UserManagement.tsx`, `takeConversation()`, `acknowledgeCase()`; `path ConversationsList→DataTable` has no directed edge (both page-level).
 - Owner-confirmable: the priority label mapping (`alta`→"Prioridad alta"/warning, `media`→"Prioridad normal", `baja`→"Prioridad baja") is inferred — the reference only shows normal/alta.
 
+### CV-1-r1 — owner visual review 2026-10-07
+Owner verdict: title/subtitle/badge and tabs OK; table needs design detail work.
+- [x] R1 Responsable filter: bordered control with leading person icon + muted `Responsable:` prefix + bold value + chevron (option label `Todas`→`Todos`).
+- [x] R2 Client name no longer renders browser button chrome; reads as plain bold text (desktop + mobile), hover affordance kept.
+- [x] R3 Última actividad: stacked `23 sep 2026` (date) + `16:20` (muted 24h time) instead of `dateStyle: short`.
+- [x] R4 Acciones: `UserRoundPlus` icon on `Tomar conversación`; actions right-aligned; `...` trigger styled as a bordered rounded square.
+- [x] R5 `...` dropdown: `MessageSquare` icon on `Abrir conversación`.
+- [x] Evidence: commit `ebd7cc20`; `tsc -b --force --noEmit` clean; `vitest` 17/17 (ConversationsList + stories).
+
 ### CV-2 — ConversationThread header + history card
 - [ ] Header: avatar + customer name + `Conversación #id · Iniciada el [date]` + state badge + `Ver ficha del cliente` action.
 - [ ] Offline banner copy to the reference.
