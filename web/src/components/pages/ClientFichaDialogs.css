@@ -1,0 +1,40 @@
+.client-ficha-dialog { display: grid; gap: var(--space-4); }
+.client-ficha-dialog__context { display: flex; align-items: center; gap: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); }
+.client-ficha-dialog__context > div:nth-child(2) { display: grid; flex: 1; }
+.client-ficha-dialog__context-phone { display: flex; align-items: center; gap: var(--space-2); padding-left: var(--space-3); border-left: 1px solid var(--border); white-space: nowrap; }
+.client-ficha-dialog__helper { margin: calc(-1 * var(--space-3)) 0 0; color: var(--text-muted); }
+.client-ficha-dialog__context > div:nth-child(2) span,
+.client-ficha-dialog__current > span { color: var(--text-muted); }
+.client-ficha-dialog__current { display: grid; justify-items: end; gap: var(--space-1); }
+.client-ficha-dialog__options { display: grid; gap: var(--space-2); }
+.client-ficha-dialog__options [role="radiogroup"] { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--space-2); }
+.client-ficha-dialog__options [role="radiogroup"] .client-ficha-dialog__option { display: grid; justify-items: start; align-content: start; gap: var(--space-2); min-height: 5rem; text-align: left; white-space: normal; }
+.client-ficha-dialog__options [role="radiogroup"] .client-ficha-dialog__option.is-selected { border-color: var(--corp-text); background: var(--success-tint); }
+.client-ficha-dialog__transition { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.client-ficha-dialog > footer { display: flex; justify-content: flex-end; gap: var(--space-2); }
+.client-ficha-dialog__profile-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.client-ficha-dialog__case-context { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.client-ficha-dialog__case-context > div:nth-child(2) { display: grid; flex: 1; }
+.client-ficha-dialog__case-context > div:nth-child(2) span { color: var(--text-muted); }
+.client-ficha-dialog__amount { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: stretch; }
+.client-ficha-dialog__amount > span { display: grid; place-items: center; padding: 0 var(--space-3); border: 1px solid var(--border); color: var(--text); }
+.client-ficha-dialog__amount > span:first-child { border-radius: var(--radius-md) 0 0 var(--radius-md); }
+.client-ficha-dialog__amount > span:last-child { border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+.client-ficha-dialog__amount .field { min-width: 0; }
+.client-ficha-dialog__amount input { border-radius: 0; }
+.client-ficha-dialog__archive-info { display: grid; gap: var(--space-2); }
+.client-ficha-dialog__archive-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.client-ficha-dialog__archive-stats > div { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.client-ficha-dialog__archive-stats svg { grid-row: span 2; }
+.client-ficha-dialog__archive-stats span,.client-ficha-dialog__merge-current small,.client-ficha-dialog__merge-cards small { color: var(--text-muted); }
+.client-ficha-dialog__warning { display: flex; align-items: center; gap: var(--space-2); margin: 0; padding: var(--space-3); border: 1px solid var(--warning-border); border-radius: var(--radius-md); background: var(--warning-tint); color: var(--warning); }
+.client-ficha-dialog__merge-current,.client-ficha-dialog__merge-cards section { display: grid; gap: var(--space-2); }
+.client-ficha-dialog__merge-current > div,.client-ficha-dialog__merge-cards section > div { display: flex; align-items: center; gap: var(--space-3); min-width: 0; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.client-ficha-dialog__merge-current > div > span:nth-child(2),.client-ficha-dialog__merge-cards section > div > span { display: grid; flex: 1; min-width: 0; }
+.client-ficha-dialog__merge-current small,.client-ficha-dialog__merge-cards small { display: block; }
+.client-ficha-dialog__merge-phone { display: flex; align-items: center; gap: var(--space-2); padding-left: var(--space-3); border-left: 1px solid var(--border); }
+.client-ficha-dialog__merge-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.client-ficha-dialog__merge-preview { margin: 0; color: var(--text-muted); font-size: var(--text-sm); }
+@media (max-width: 640px) { .client-ficha-dialog__profile-row { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .client-ficha-dialog__merge-cards { grid-template-columns: 1fr; } .client-ficha-dialog__merge-phone { padding-left: 0; border-left: 0; } .client-ficha-dialog > footer { flex-direction: column-reverse; } .client-ficha-dialog > footer > * { width: 100%; } }
+@media (max-width: 640px) { .client-ficha-dialog__context-phone { padding-left: 0; border-left: 0; } }
