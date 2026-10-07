@@ -1,0 +1,160 @@
+# asistente-workspace-redesign
+
+## Objective
+
+Bring the **Asistente Lumat** workspace to the owner's references, reusing the shipped design
+system and primitives instead of rebuilding from scratch:
+
+- `refs/Diseño Lumat/AgenteLumat/LumatAgentNewthreadTools.png` — new thread + composer tools popover.
+- `refs/Diseño Lumat/AgenteLumat/LumatAgentProjectContextWorkspace.png` — project context workspace.
+- `refs/Diseño Lumat/AgenteLumat/LumatMulti-AgentWorkspace.png` — multi-agent thread activity.
+
+The three references describe one workspace: global icon rail, a **Proyectos** pane with project
+navigation, a center thread area with tabs + header + composer, and a right **Contexto / Actividad**
+panel; plus a project context workspace reached from the project.
+
+## Problem
+
+The assistant frontend predates thre reference pass. Today `AgentChat.tsx` (1,144 lines) is a single
+`PageFrame` column: no project sidebar, no per-thread tabs, no persistent right panel; `ProjectsPage`
+detail is an empty frame; `AssistantTabs` are page-level section routes, not workspace tabs. The
+references are the expected-state authority for **geometry and layout**.
+
+## Why
+
+The owner confirms the current assistant design is outdated and wants the workspace redone to the
+references, **reusing** components already shipped in other sections so we do not rebuild from zero.
+
+## References
+
+Owner references (2026-10-07): the three PNGs above. Canonical design constraints live in
+`openspec/changes/archive/2026-09-30-panel-design-system-final/design.md`; the owner waived further
+visual analysis ("no hay mucho más análisis visual").
+
+## Scope
+
+**In:** the assistant workspace surfaces under `web/src/components/` — `pages/AgentChat.tsx`,
+`pages/AssistantTabs.tsx`, `pages/ProjectsPage.tsx`, their CSS/tests/stories, and new region
+components extracted from `AgentChat`. Shared primitives/shell are **reused**; only additive,
+page-local changes when a finding demands them.
+
+**Out:** backend routes/services/models (except a later, explicitly-approved backend slice), the
+`tokens.css` palette, `PanelShell`/`AppShell` route ownership, and other panel sections.
+
+## Constraints
+
+- Do not reopen palette/tokens (`panel-design-system-final` settled them). References control
+  geometry/layout, not palette.
+- Do not invent routes or a parallel shell; `AppShell` owns routing, `PanelShell` owns shell chrome.
+- Reuse existing primitives/shared components wherever they fit (see Reuse inventory).
+- Chat in Rioplatense Spanish; artifacts, code, comments, commits in English; UI copy in neutral
+  Chilean Spanish. Conventional Commits, no AI attribution.
+- Honest UI only: where a reference element has **no backend contract**, render a real empty/disabled
+  state — never fabricated agents, tasks, sources, or resources.
+
+## Reuse inventory (verified from code)
+
+Reuse as-is / adapt: `primitives/` — `Avatar`, `Badge`, `Button`, `Card`, `Dialog`, `Icon`, `Input`,
+`Menu`, `Popover`, `SearchInput`, `Select`, `Skeleton`, `StatusBadge`, `Tabs`, `Textarea`, `Tooltip`,
+`Combobox`; `shared/` — `DataTable`, `EmptyState`, `PageHeader`, `PageFrame`, `StateMessage`,
+`Markdown`, `CollapsibleMessages`, `toneMaps`; `domain/` — `PanelShell`, `AppShell`, `panelRoutes`;
+tokens in `web/src/tokens/`.
+
+Net-new: projects pane with expanded sub-items, per-thread tabs, thread header controls, composer
+tools popover + `@mention`, persistent right Contexto/Actividad panel, parallel-task/agent cards,
+project workspace tabs (Contexto/Hilos/Agentes).
+
+Note: the `conversaciones-redesign` merge (#508, `5606337f`) restyled `primitives/Menu.tsx`,
+`primitives/Dialog.tsx`, `primitives/primitives.css`, `AppShell.tsx`, `panelRoutes.ts`; re-verify
+those files before AW-1 and build on the current state.
+
+## Backend gaps (honest empty states until a backend slice is approved)
+
+1. Project instructions (edit/save).
+2. Project resources/files (link, upload, "Elegir del proyecto").
+3. Project agents with status (registry sub-agents are declared but **not wired** into the runtime).
+4. Parallel/child task runs ("Trabajo en paralelo").
+5. Per-thread sources ("Fuentes del hilo") — current evidence is generic tool/status/detail.
+6. Per-thread tool toggles (web/KB/agenda) and a stop/cancel active-run endpoint.
+
+## TDD resolution
+
+No `strict_tdd` config in the repo. Effective mode: **not enabled** → ordinary functional checks per
+slice (component tests written/updated + typecheck + build), not no checks. Runner: `npx vitest run`.
+
+## Delivery strategy
+
+- Forecast: **> ~1,000 authored changed lines** across several components → exceeds the ~400 budget.
+- `delivery_strategy`: `ask-on-risk`; `chain_strategy`: `stacked-to-main` (owner-confirmed direction).
+- Each work unit is independently green with its own commit(s) and verification; PRs stack to `main`
+  in order. Push/PR/merge remain the owner's decision.
+
+## Work units (stable IDs)
+
+### AW-1 — Workspace layout foundation
+- [ ] Three-column assistant workspace (projects pane / thread area / right panel) with responsive
+      collapse, inside the existing `PanelShell` composition; no data-semantics change.
+- [ ] Extract region components from `AgentChat.tsx` (projects pane, thread area, right panel) so
+      later units fill them; keep current chat behavior working end-to-end.
+- [ ] Reuse `Icon`, `Tabs`, `Tooltip`, `Avatar`, `Card`, `Button`; tokens only, no palette edits.
+- [ ] Tests updated; `npx tsc -b --force --noEmit` clean; `vitest` green.
+
+### AW-2 — Proyectos pane
+- [ ] Project list + search + selection from the existing projects API; `SearchInput`, `Card`,
+      `Badge`, `Menu`, `EmptyState`.
+- [ ] Expanded project sub-links "Contexto y archivos" / "Historial de hilos" (routing per existing
+      `panelRoutes`; no new routes).
+- [ ] "Agentes del proyecto" section: honest empty state (no project-agent contract yet).
+
+### AW-3 — Thread navigation + header
+- [ ] Per-thread tabs (open threads) + create/close affordances from the existing thread API.
+- [ ] Thread header: title + "Proyecto: <name>" subtitle + actions; reuse `Menu`, `Button`, `Icon`.
+- [ ] Controls without a backend (clock/split) rendered only if they map to real behavior; otherwise
+      omitted.
+
+### AW-4 — Chat center + composer
+- [ ] Restyle bubbles/Markdown/attachments/status to the reference; reuse `Markdown`, `Avatar`,
+      `StateMessage`, `CollapsibleMessages`.
+- [ ] Composer with attachment chips, `+` tools popover, `@mention`, "Planificar", send/stop.
+      Supported today: upload ("Adjuntar archivo"), chips, send, Planificar (existing Cortex action).
+      Unsupported (honest disabled/hidden): "Elegir del proyecto", tool toggles, stop.
+- [ ] Preserve stream/error/retry/approval behavior and tests.
+
+### AW-5 — Right panel (Contexto / Actividad)
+- [ ] Persistent right panel with `Tabs`. Contexto: project + KB/capabilities + thread files (existing
+      data). Actividad: existing per-run tool/evidence activity restyled.
+- [ ] Project resources / project agents / "Fuentes del hilo" → honest empty states.
+
+### AW-6 — Project context workspace
+- [ ] Route-backed project workspace with tabs Contexto / Hilos / Agentes, reusing `Tabs`, `Card`,
+      `Input`, `Textarea`, `Button`, `Menu`, `Badge`.
+- [ ] Hilos: real project threads. Instrucciones / Archivos y conocimiento / Agentes → honest empty
+      or disabled until backend contracts exist.
+
+### AW-7 — Owner visual-review passes
+- [ ] Iterative visual-review work units (`AW-N-r1`, `AW-N-r2`, …) recorded with commit + evidence,
+      mirroring the conversaciones-redesign flow.
+
+## Acceptance criteria
+
+1. The workspace matches the references' geometry/layout at desktop/tablet/mobile using only the
+   settled tokens and existing primitives.
+2. No fabricated data: every unbacked region is an honest empty/disabled state.
+3. Existing assistant behavior (stream, approvals, attachments, planning sessions, recovery,
+   realtime) is preserved.
+4. `npm test` and `npm run build` green; each work unit independently green.
+
+## Checks
+
+- Runner: `npx vitest run` (from `web/`); typecheck `npx tsc -b --force --noEmit`; build `npm run build`.
+- Full frontend suite serialized if the parallel run flakes (`ClientFicha` timeouts are known).
+- Graph Check per repo AGENTS.md before editing; record nodes consulted.
+- Conventional Commits, no AI attribution; ≤5 files per work-unit commit where cohesive.
+- RDD: `review assess` per work-unit commit; run the returned transition when `review_due`.
+
+## Progress log
+
+- Worktree `../lumat-agent-odd-asistente-workspace-redesign` on `odd/asistente-workspace-redesign`
+  from `main` = `5606337f` (owner approved; note the `conversaciones-redesign` #508 merge landed
+  during planning). Owner chose option 1: full visual redesign now, real data where it exists and
+  honest empty states where backend is missing.
