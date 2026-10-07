@@ -780,15 +780,15 @@ describe("ClientFicha slice 2 — product register", () => {
     expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute("href", "/panel/app/conversations/1");
   });
 
-  it("links each message to its conversation and offers expansion when more than ten exist", async () => {
+  it("links each message to its conversation and never offers inline expansion", async () => {
     const user = userEvent.setup();
     render(<ClientFicha data={ficha} memories={memories} />);
     await user.click(screen.getByRole("tab", { name: "Conversaciones" }));
     expect(screen.getByRole("link", { name: "#1" })).toHaveAttribute("href", "/panel/app/conversations/1");
-    expect(screen.getByRole("button", { name: "Ver todos (12)" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Ver todos/ })).not.toBeInTheDocument();
   });
 
-  it("loads a ten-message preview and fetches the full list when expanded", async () => {
+  it("shows only the last ten messages and never fetches the full list", async () => {
     const user = userEvent.setup();
     const allMessages = Array.from({ length: 12 }, (_, index) => ({
       ...ficha.history.messages[0], id: index + 1, text: `Mensaje ${index + 1}`,
@@ -806,15 +806,11 @@ describe("ClientFicha slice 2 — product register", () => {
     });
 
     render(<ClientFicha customerId={7} memories={memories} />);
-    await screen.findByRole("tab", { name: "Conversaciones" });
-    await user.click(screen.getByRole("tab", { name: "Conversaciones" }));
-    expect(await screen.findByText("Mensaje 3")).toBeInTheDocument();
+    await user.click(await screen.findByRole("tab", { name: "Conversaciones" }));
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10");
-    await user.click(screen.getByRole("button", { name: "Ver todos (12)" }));
-
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7"));
-    expect(await screen.findByText("Mensaje 1")).toBeInTheDocument();
-    expect(screen.getByText("Mensaje 12")).toBeInTheDocument();
+    expect(screen.getAllByText("Mensaje 3").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Mensaje 2")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Ver todos/ })).not.toBeInTheDocument();
   });
 
   it("hides the disclosure control when ten or fewer messages exist", () => {
@@ -832,8 +828,8 @@ describe("ClientFicha slice 2 — product register", () => {
     expect(screen.getAllByRole("columnheader", { name: "Conversación" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("columnheader", { name: "Turno" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Mensajes de la conversación #1" })).toBeInTheDocument();
-    expect(screen.getByText("Entrante")).toBeInTheDocument();
-    expect(screen.getByText("Texto")).toBeInTheDocument();
+    expect(screen.getAllByText("Entrante").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Texto").length).toBeGreaterThan(0);
     expect(screen.getByText("Mostrando 1 mensaje")).toBeInTheDocument();
   });
 });

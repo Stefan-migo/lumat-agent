@@ -704,6 +704,16 @@
 /* Ficha badges may carry a leading icon (conversation state, message direction). */
 .client-ficha-page .badge { align-items: center; gap: var(--space-1); }
 .client-ficha-page .badge svg { width: 1rem; height: 1rem; flex: 0 0 auto; }
+/* Mobile: the conversation and message tables become cards at <=40rem. */
+.client-ficha__conversation-card, .client-ficha__message-card { grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: var(--space-3); }
+.client-ficha__conversation-card-head, .client-ficha__message-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.client-ficha__conversation-card-head > strong { font-size: var(--text-lg); }
+.client-ficha__message-card-head > span { color: var(--text-muted); font-size: var(--text-sm); }
+.client-ficha__conversation-card > p, .client-ficha__message-card > p { margin: 0; }
+.client-ficha__conversation-card > p { color: var(--corp-text); }
+.client-ficha__conversation-card-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.client-ficha__conversation-card-foot > span { color: var(--text-muted); font-size: var(--text-sm); }
+.client-ficha__message-card > small { color: var(--text-muted); }
 .client-ficha__note-row { display:grid; grid-template-columns:auto minmax(6rem,.45fr) minmax(0,1fr) auto; align-items:center; gap:var(--space-3); padding:var(--space-3); border:1px solid var(--border); border-radius:var(--radius-md); }
 .client-ficha__note-row > div { display:grid; padding-right:var(--space-3); border-right:1px solid var(--border); }
 .client-ficha__note-row small { color:var(--text-muted); }
