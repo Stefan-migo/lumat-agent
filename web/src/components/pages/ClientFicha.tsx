@@ -410,6 +410,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     <div className="client-ficha__case-details"><div><small>Responsable</small><strong><Avatar name={data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"} /> {data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"}</strong></div><div><small>Monto del servicio</small><strong>{activeCase.amount === null ? "Sin registrar" : CLP_FORMAT.format(activeCase.amount)}</strong></div></div>
     {activeCase.emergency ? <Badge tone={activeCase.ack_by === null ? "danger" : "warning"}>{activeCase.ack_by === null ? "Emergencia sin reconocer" : `Emergencia reconocida por ${activeCase.ack_by}`}</Badge> : null}<LocalFeedback feedback={caseEditTarget || amountTarget ? null : caseFeedback} />
   </> : <EmptyState title="Sin caso activo" />;
+  const archivedCaseMenu = (row: FichaCase) => (
+    <Menu trigger="icon" label={`Acciones del caso #${row.id}`} items={[{ value: "edit", label: "Editar caso", icon: BriefcaseBusiness }, { value: "amount", label: "Definir monto", icon: CircleDollarSign }]} onSelect={(value) => value === "amount" ? openAmountEditor(row) : openCaseEditor(row)} />
+  );
   const customerDataCard = (
     <Card className="client-ficha__data-card">
       <header className="client-ficha__card-heading"><h2>Datos del cliente</h2><div className="client-ficha__customer-controls">
@@ -602,10 +605,22 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
       </div>
       </> : null}
         {activeTab === "cases" ? <div className="detail-region detail-region--cases">
-          <Card className="client-ficha__case-card client-ficha__case-card--primary" title="Casos del cliente" description="Caso activo e historial de atención.">{activeCaseBody}</Card>
+          <Card className="client-ficha__case-card client-ficha__case-card--primary" title="Casos del cliente" description="Caso activo e historial de atención."><div className="client-ficha__case-panel">{activeCaseBody}</div></Card>
           {customerDataCard}
-          <section aria-label="Casos anteriores" className="client-ficha__history-block client-ficha__archived-cases"><Card title="Casos anteriores"><div className={surfaceClass(archivedCases.length)}><DataTable columns={archivedCaseColumns} rows={archivedCases} actions={(row) => <Menu trigger="icon" label={`Acciones del caso #${row.id}`} items={[{ value: "edit", label: "Editar caso", icon: BriefcaseBusiness }, { value: "amount", label: "Definir monto", icon: CircleDollarSign }]} onSelect={(value) => value === "amount" ? openAmountEditor(row) : openCaseEditor(row)} />} rowKey={(row) => String(row.id)} /></div><p>Mostrando {archivedCases.length} {archivedCases.length === 1 ? "caso anterior" : "casos anteriores"}</p></Card></section>
-       </div> : null}
+          <section aria-label="Casos anteriores" className="client-ficha__history-block client-ficha__archived-cases"><Card title="Casos anteriores">
+            {archivedCases.length ? <div className="data-region">
+              <div className="table-card__desktop"><DataTable columns={archivedCaseColumns} rows={archivedCases} actions={archivedCaseMenu} rowKey={(row) => String(row.id)} /></div>
+              <ul className="table-cards table-cards--mobile client-ficha__archived-cards" aria-label="Lista de casos anteriores">
+                {archivedCases.map((row) => <li className="table-card__item client-ficha__archived-card" key={row.id}>
+                  <div className="client-ficha__archived-card-head"><strong>#{row.id}</strong><span>{row.service}</span>{archivedCaseMenu(row)}</div>
+                  <div className="client-ficha__archived-card-badges">{row.priority ? <Badge tone="warning">{priorityLabel(row.priority)}</Badge> : null}<Badge tone={caseStatusTone(row.status)}>{caseStatusLabel(row.status)}</Badge></div>
+                  <div className="client-ficha__archived-card-facts"><div><small>Responsable</small><strong>{data.users.find((user) => user.id === row.responsible_id)?.username ?? "Sin asignar"}</strong></div><div><small>Monto CLP</small><strong>{row.amount === null ? "Sin registrar" : CLP_FORMAT.format(row.amount)}</strong></div></div>
+                </li>)}
+              </ul>
+            </div> : <EmptyState title="No hay casos anteriores" />}
+            <p>Mostrando {archivedCases.length} {archivedCases.length === 1 ? "caso anterior" : "casos anteriores"}</p>
+          </Card></section>
+        </div> : null}
       {activeTab === "visits" ? <div className="detail-region__main">
         <section aria-label="Próximas visitas" className="client-ficha__history-block"><h2>Visitas</h2><Card title="Próximas visitas" description="Visitas pendientes de este cliente.">{upcomingAppointments.length ? <div className="data-region"><DataTable columns={[{key:"date",header:"Fecha y hora",render:(row: Appointment)=><><strong>{formatDate(row.starts_at)}</strong><br/><Clock3/> {new Intl.DateTimeFormat("es-CL",{hour:"2-digit",minute:"2-digit"}).format(new Date(row.starts_at))}</>},{key:"service",header:"Servicio",render:(row: Appointment)=><a href={pathForRoute({view:"agenda",appointmentId:row.id})}>{row.service}</a>},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>},{key:"actions",header:"Acciones",render:(row: Appointment)=><Button variant="secondary" onClick={()=>{window.location.href=pathForRoute({view:"agenda",appointmentId:row.id})}}>Reprogramar</Button>}] as Column<Appointment>[]} rows={upcomingAppointments} rowKey={(row)=>String(row.id)}/></div>:<EmptyState title="No hay próximas visitas"/>}</Card><Card title="Historial de visitas"><DataTable columns={[{key:"date",header:"Fecha y hora",render:(row: Appointment)=><>{formatDate(row.starts_at)}<br/><Clock3/> {formatDateTime(row.starts_at)}</>},{key:"service",header:"Servicio",render:(row: Appointment)=><a href={pathForRoute({view:"agenda",appointmentId:row.id})}>{row.service}</a>},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>}] as Column<Appointment>[]} rows={appointments.filter(row=>!upcomingAppointments.includes(row))} rowKey={(row)=>String(row.id)} /></Card>{appointments.some((appointment)=>appointment.calendar_error) ? appointments.filter((appointment)=>appointment.calendar_error).map((appointment)=><div key={appointment.id}><StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`}/><Button variant="secondary" disabled={retryingCalendarId===appointment.id} onClick={()=>void retryCalendar(appointment.id)}>Reintentar calendario</Button></div>):null}</section>
       </div> : null}

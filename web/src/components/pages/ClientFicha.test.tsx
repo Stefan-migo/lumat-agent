@@ -115,6 +115,11 @@ async function clickCaseMenuItem(user: ReturnType<typeof userEvent.setup>, label
   await user.click(await screen.findByRole("menuitem", { name: label }));
 }
 
+// The archived rows render twice (desktop table + mobile cards); scope to the desktop copy.
+function archivedRowMenu(id: number) {
+  return screen.getAllByRole("button", { name: `Acciones del caso #${id}` }).find((button) => button.closest(".table-card__desktop"))!;
+}
+
 describe("ClientFicha page grammar", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.restoreAllMocks());
@@ -160,7 +165,7 @@ describe("ClientFicha page grammar", () => {
     await user.click(screen.getByRole("tab", { name: "Casos" }));
     const archive = screen.getByRole("region", { name: "Casos anteriores" });
     expect(within(archive).queryByText("#2")).not.toBeInTheDocument();
-    expect(within(archive).getByText("#1")).toBeInTheDocument();
+    expect(within(archive).getAllByText("#1").length).toBeGreaterThan(0);
     expect(within(archive).getByText("Mostrando 1 caso anterior")).toBeInTheDocument();
   });
 
@@ -173,7 +178,7 @@ describe("ClientFicha page grammar", () => {
 
     expect(screen.getAllByText(/125\.000/).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("tab", { name: "Casos" }));
-    expect(within(screen.getByRole("region", { name: "Casos anteriores" })).getByText("Sin registrar")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Casos anteriores" })).getAllByText("Sin registrar").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("tab", { name: "Resumen" }));
     await clickCaseMenuItem(user, "Definir monto");
     const dialog = screen.getByRole("dialog");
@@ -227,7 +232,7 @@ describe("ClientFicha page grammar", () => {
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
     await user.click(screen.getByRole("tab", { name: "Casos" }));
-    await user.click(screen.getByRole("button", { name: "Acciones del caso #1" }));
+    await user.click(archivedRowMenu(1));
     await user.click(await screen.findByRole("menuitem", { name: "Editar caso" }));
 
     const dialog = screen.getByRole("dialog");
@@ -245,7 +250,7 @@ describe("ClientFicha page grammar", () => {
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
     await user.click(screen.getByRole("tab", { name: "Casos" }));
-    await user.click(screen.getByRole("button", { name: "Acciones del caso #1" }));
+    await user.click(archivedRowMenu(1));
     await user.click(await screen.findByRole("menuitem", { name: "Definir monto" }));
 
     const dialog = screen.getByRole("dialog");
