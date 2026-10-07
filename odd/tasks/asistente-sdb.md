@@ -371,6 +371,17 @@ Push/PR creation remain the owner's decision per slice.
   `projects.py::_has_active_run` still reads the legacy `sdb` namespace, which is **Slice 7 scope**.
   RDD review `review-93510db7179fc56b` (lens `review-reliability`, medium, 19 files/1870 lines)
   **approved with 0 findings**; acknowledgement burned authority.
+- **Slice 7 started + done (2026-10-07)** — worktree `../lumat-agent-odd-asistente-sdb-classify` on
+  `odd/asistente-sdb-classify` from `main` = `fe81ba01` (owner approved). Graph Check on the
+  `classification`/registry cluster and the `projects`/artifacts cluster. Cleanup only:
+  `classification` + `assistant_plan.md` + `sdb_classification` (registry/`agent_registry.py`/
+  `prompts.py`); the unused `assistant_classify` prompt, the `sdb` orchestrator skill and
+  `agent/skills/sdb.md`; the `"sdb": "deferred"` extension hook; the spec AC-11 guardrails
+  classification declaration; the dead `_has_active_run` guard; and the orphaned SDB project-artifact
+  browse (backend query + `to_project_artifact_dict` + `ProjectsPage` render/copy + types/tests).
+  Owner-confirmed extra: `sdb_requested` is now admin-only (403 for a non-admin, SDB-16). Work-unit
+  commits `445b8f04`…`30371b1f`. Full backend suite green (**1,754 passed**); frontend `npm test`
+  1,032 passed (serialized) + `npm run build` green.
 
 ## Review (RDD)
 
@@ -389,6 +400,8 @@ Push/PR creation remain the owner's decision per slice.
 - Slice 8: wire the verifier into the approved service path (`approve_plan → execute`) so D15 covers
   `project.*`/`automation.create_rule`. Design TBD (reuse `verification.py`; read-only `tool_executor`
   bound to thread/owner/project).
-- Slice 7: locate the authoritative admin-only validation of `sdb_requested`; remove
+- ~~Slice 7: locate the authoritative admin-only validation of `sdb_requested`; remove
   `PlannerOutput.classification` + `assistant_plan.md` + `sdb_classification` +
-  `agent_registry.py`/`prompts.py` propagation.
+  `agent_registry.py`/`prompts.py` propagation.~~ **Resolved (Slice 7):** the `classification`
+  contract and its registry/propagation are removed; `sdb_requested` had no admin gate, so
+  `send_message` now returns 403 for a non-admin carrying the flag (SDB-16).
