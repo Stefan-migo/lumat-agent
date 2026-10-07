@@ -306,7 +306,7 @@ first while the old subgraph still exists.
 | 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~110 | ✅ merged #490 |
 | 5 | Remove the dead SDB phase subgraph + routing contract | S5-02 (removal, corrected) | ~330 | ✅ merged #491 |
 | 6 | Remove the dead SDB service runner + `sdb_verify`/`sdb_deliver` + SDB state + SDB tests | S5-04 (removal) | ~400 | ✅ committed + review approved |
-| 7 | `classification` + prompt + registry/skills cleanup + cross-check | S5-05, S5-07 | ~300 | |
+| 7 | `classification` + prompt + registry/skills cleanup + cross-check | S5-05, S5-07 | ~300 | ✅ committed + reviewed |
 | 8 | Wire the verifier into the approved service path (close D15 for `project.*`/`automation.*`) | S5-08 (new) | ~250 | |
 
 Each slice: work-unit commit(s) on `odd/asistente-sdb`, conventional message, tests with the code,
@@ -393,6 +393,10 @@ Push/PR creation remain the owner's decision per slice.
 - **Slice 6** — `review.start` published (lineage `review-93510db7179fc56b`), tier **medium**, 1 lens
   (`review-reliability`), 19 files / 1870 lines, budget 200. Consent: owner **granted**. Capture
   **approved with 0 findings**; authority burned (`gentle-ai.review-acknowledged/v1`, `authority: burned`).
+- **Slice 7** — `review.start` published (lineage `review-af150dffa1c5c676`), tier **medium**, 1 lens
+  (`review-reliability`), 29 files / 292 lines, correction budget 146. Consent: owner **granted**.
+  Capture **approved with 0 findings**; acknowledgement burned authority
+  (`gentle-ai.review-acknowledged/v1`, action `acknowledged`, `authority: burned`).
 - Slices 1–4: see progress log (`review-c781144a08c191f2`, `review-9d1562e7914d3b39`).
 
 ## Open questions
