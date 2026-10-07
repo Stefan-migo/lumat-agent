@@ -260,7 +260,7 @@ export interface Conversation {
   captured_data?: Record<string, unknown> | null;
 }
 
-export type CustomerSummary = Pick<Customer, 'id' | 'name' | 'phone_e164'>;
+export type CustomerSummary = Pick<Customer, 'id' | 'name' | 'phone_e164'> & { comuna?: string | null; address?: string | null };
 export interface CaseSummary {
   id: number;
   service: string;

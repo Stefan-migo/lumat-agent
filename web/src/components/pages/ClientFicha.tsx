@@ -67,6 +67,8 @@ const VISIT_COLUMNS: Column<Appointment>[] = [
 
 export interface ClientFichaProps {
   customerId?: number;
+  /** Ficha tab to open with (deep link from a conversation's "Ver caso"). */
+  initialTab?: string;
   data?: ClientFichaResponse;
   memories?: Memory[];
   isSaving?: boolean;
@@ -112,8 +114,8 @@ function surfaceClass(rowCount: number) {
 }
 const priorityLabel = (priority: string | null) => priority ? priority.charAt(0).toUpperCase() + priority.slice(1) : "—";
 
-export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, onRetryCalendar, state: controlledState }: ClientFichaProps) {
-  const [activeTab, setActiveTab] = useState("summary");
+export function ClientFicha({ customerId, initialTab, data: controlledData, memories: controlledMemories, onRetryCalendar, state: controlledState }: ClientFichaProps) {
+  const [activeTab, setActiveTab] = useState(initialTab ?? "summary");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [caseEditTarget, setCaseEditTarget] = useState<FichaCase | null>(null);
