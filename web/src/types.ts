@@ -28,9 +28,8 @@ export interface AdminUser { id: number; username: string; role: Role; active: b
 export type AdminUserProfileUpdate = Pick<AdminUser, 'email' | 'name' | 'phone' | 'position'>;
 export interface AdminUsersResponse { users: AdminUser[]; }
 export interface Project { id: number; slug: string; name: string; purpose: string; status: 'active' | 'archived'; created_at: string | null; updated_at: string | null; }
-export interface ProjectArtifact { id: number; entity_id: string; topic_key: string; tipo: MemoryType; titulo: string; contenido: string; status: MemoryStatus; created_at: string | null; updated_at: string | null; }
 export interface ProjectsResponse { projects: Project[]; }
-export interface ProjectDetailResponse { project: Project; artifacts: Record<string, ProjectArtifact[]>; }
+export interface ProjectDetailResponse { project: Project; }
 export interface ProjectCandidate { slug: string; name: string; similarity: number; }
 export interface ProjectCreateRequest { slug: string; name: string; purpose: string; }
 export interface ProjectCreateResponse { project: Project; }
