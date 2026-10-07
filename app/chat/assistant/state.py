@@ -35,6 +35,7 @@ class PlannerOutput(BaseModel):
     sub_agent: str | None = None
     arguments: dict = Field(default_factory=dict)
     summary: str = Field(min_length=1, max_length=200)
+    success_criterion: str | None = Field(default=None, min_length=1, max_length=300)
     requires_approval: bool = False
     follow_up: bool = False
     skills: list[str] = Field(default_factory=list)
@@ -44,6 +45,13 @@ class PlannerOutput(BaseModel):
     def clamp_summary(cls, value: object) -> object:
         if isinstance(value, str):
             return value[:200]
+        return value
+
+    @field_validator("success_criterion", mode="before")
+    @classmethod
+    def require_non_empty_success_criterion(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("success_criterion must not be empty")
         return value
 
     @field_validator("arguments", mode="before")
@@ -189,6 +197,8 @@ class AssistantState(TypedDict, total=False):
     sdb_tasks: list[SDBTask]
     sdb_result: dict
     verification: dict
+    verify_requested: bool
+    sdb_requested: bool
 
 
 def normalize_sdb_trigger(signal: object) -> dict[str, str | None]:
