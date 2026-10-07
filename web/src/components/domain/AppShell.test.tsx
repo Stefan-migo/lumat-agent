@@ -88,7 +88,7 @@ describe('AppShell (T6.4)', () => {
       new Response(JSON.stringify({ cases: [], users: [] }), { status: 200 }),
     );
     render(<AppShell user={operador} />);
-    expect(screen.getByRole('tab', { name: /casos/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /con caso/i })).toHaveAttribute('aria-selected', 'true');
     fetchMock.mockRestore();
   });
 
@@ -148,10 +148,10 @@ describe('AppShell (T6.4)', () => {
     await user.click(within(await drawer()).getByRole('button', { name: 'Clientes' }));
     expect(await within(await screen.findByRole('table')).findByText('Cliente vivo')).toBeInTheDocument();
     await user.click(within(await drawer()).getByRole('button', { name: 'Conversaciones' }));
-    await user.click(screen.getByRole('tab', { name: /casos/i }));
-    expect(await screen.findByText('Conversación viva')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: /con caso/i }));
+    expect((await screen.findAllByText('Conversación viva')).length).toBeGreaterThan(0);
     await user.click(within(await drawer()).getByRole('button', { name: 'Conversaciones' }));
-    expect(await screen.findByText('Conversación viva')).toBeInTheDocument();
+    expect((await screen.findAllByText('Conversación viva')).length).toBeGreaterThan(0);
     await user.click(within(await drawer()).getByRole('button', { name: 'Base de Conocimientos' }));
     expect(await screen.findByText('No hay documentos')).toBeInTheDocument();
     await user.click(within(await drawer()).getByRole('button', { name: 'Configuración' }));
@@ -249,7 +249,7 @@ describe('AppShell (T6.4)', () => {
     render(<AppShell user={operador} />);
 
     expect(window.location.pathname).toBe('/panel/app/cases');
-    expect(screen.getByRole('tab', { name: /casos/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /con caso/i })).toHaveAttribute('aria-selected', 'true');
     expect(await screen.findByText('No hay conversaciones')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Casos' })).not.toBeInTheDocument();
     vi.restoreAllMocks();
@@ -269,7 +269,7 @@ describe('AppShell (T6.4)', () => {
     expect(screen.queryByRole('button', { name: 'Abrir Casos' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Lucía' }));
     expect(screen.getByRole('heading', { name: 'Conversaciones', level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /casos/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /con caso/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByLabelText('Tono')).not.toBeInTheDocument();
     vi.restoreAllMocks();
   });
@@ -279,16 +279,16 @@ describe('AppShell (T6.4)', () => {
     window.history.replaceState({}, '', '/panel/app/conversations');
     const user = userEvent.setup();
     render(<AppShell user={operador} />);
-    await user.click(screen.getByRole('tab', { name: /casos/i }));
+    await user.click(screen.getByRole('tab', { name: /con caso/i }));
     expect(window.location.pathname).toBe('/panel/app/cases');
-    expect(screen.getByRole('tab', { name: /casos/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /con caso/i })).toHaveAttribute('aria-selected', 'true');
     await user.click(screen.getByRole('tab', { name: /cerradas/i }));
     expect(`${window.location.pathname}${window.location.search}`).toBe('/panel/app/conversations?tab=closed');
     expect(screen.getByRole('tab', { name: /cerradas/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: /todas/i })).toHaveAttribute('aria-selected', 'false');
     window.history.replaceState({}, '', '/panel/app/cases');
     window.dispatchEvent(new PopStateEvent('popstate'));
-    await waitFor(() => expect(screen.getByRole('tab', { name: /casos/i })).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() => expect(screen.getByRole('tab', { name: /con caso/i })).toHaveAttribute('aria-selected', 'true'));
     window.history.replaceState({}, '', '/panel/app/conversations?tab=closed');
     window.dispatchEvent(new PopStateEvent('popstate'));
     await waitFor(() => expect(screen.getByRole('tab', { name: /cerradas/i })).toHaveAttribute('aria-selected', 'true'));
@@ -306,16 +306,16 @@ describe('AppShell (T6.4)', () => {
     expect(pushState).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('tab', { name: /cerradas/i })).toHaveAttribute('aria-selected', 'true');
     pushState.mockClear();
-    await user.click(screen.getByRole('tab', { name: /humanas/i }));
+    await user.click(screen.getByRole('tab', { name: /atención humana/i }));
     expect(pushState).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('tab', { name: /humanas/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /atención humana/i })).toHaveAttribute('aria-selected', 'true');
     pushState.mockRestore();
     vi.restoreAllMocks();
   });
 
   it.each([
-    ['/panel/app/conversations', 'case', 'Casos'],
-    ['/panel/app/conversations', 'human', 'Humanas'],
+    ['/panel/app/conversations', 'case', 'Con caso'],
+    ['/panel/app/conversations', 'human', 'Atención humana'],
   ])('keeps tab %s addressable after selection and remount', async (startPath, tab, label) => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ notifications: [], items: [], total: 0, offset: 0, limit: 20, counts: { all: 0, human: 0, emergency: 0, case: 0, closed: 0 } }), { status: 200 }));
     window.history.replaceState({}, '', startPath);
