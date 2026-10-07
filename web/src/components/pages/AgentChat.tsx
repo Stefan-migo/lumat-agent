@@ -723,6 +723,10 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   };
 
   const groups = groupThreads(threads);
+  const persistedActivity = (thread?.assistant_state?.events ?? [])
+    .filter((event) => !runId || event.run_id === runId)
+    .flatMap((event) => event.evidence ?? []);
+  const activityEvidence = persistedActivity.length ? persistedActivity : evidence;
   const state = loading ? (
     <StateMessage tone="info" role="status" spinner title="Cargando chat" />
   ) : error ? (
@@ -742,7 +746,18 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   );
 
   return (
-    <AssistantWorkspace onCreateThread={() => void newChat()} loadThreadTabs={Boolean(onThreadOpened)}>
+    <AssistantWorkspace
+      onCreateThread={() => void newChat()}
+      loadThreadTabs={Boolean(onThreadOpened)}
+      attachments={attachments}
+      capabilities={capabilities}
+      capabilitiesLoading={capabilitiesLoading}
+      capabilitiesError={capabilitiesError}
+      evidence={activityEvidence}
+      plan={plan}
+      lifecycle={lifecycle}
+      processing={processing}
+    >
     <PageFrame
       title="Asistente Lumat"
       meta="Chat interno con el agente virtual."

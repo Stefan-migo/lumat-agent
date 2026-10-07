@@ -257,6 +257,30 @@
   margin-top: var(--space-3);
 }
 
+.assistant-workspace__context-content {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.assistant-workspace__context-content .card {
+  min-width: 0;
+  padding: var(--space-3);
+}
+
+.assistant-workspace__evidence {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--corp-border);
+}
+
+.assistant-workspace__evidence p,
+.assistant-workspace__context-content p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .assistant-workspace:not(.assistant-workspace--projects-visible):not(.assistant-workspace--context-visible) {
   grid-template-columns: 3.5rem minmax(0, 1fr);
 }

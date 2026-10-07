@@ -22,8 +22,8 @@ describe("AssistantWorkspace", () => {
     expect(within(thread).getByRole("heading", { name: "Asistente Lumat" })).toBeInTheDocument();
     expect(await within(thread).findByRole("heading", { name: "Comienza una conversación" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Agentes" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Contexto" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Actividad" })).toBeInTheDocument();
   });
 
   it("loads real projects, filters by name, and expands project navigation and agent state", async () => {
@@ -147,8 +147,10 @@ describe("AssistantWorkspace", () => {
         { id: 7, title: "Agenda semanal", created_at: null, updated_at: null, run_status: null, approval_status: null },
       ] }), { status: 200 });
       if (url.endsWith("/threads/7")) return new Response(JSON.stringify({
-        thread: { id: 7, proyecto: "operaciones", status: "open" }, messages: [],
+        thread: { id: 7, proyecto: "operaciones", status: "open", assistant_state: { events: [{ run_id: "run-7", evidence: [{ tool: "search_kb", status: "completed", detail: "Se encontraron documentos." }] }] } },
+        messages: [], attachments: [{ id: 3, thread_id: 7, filename: "manual.pdf", kind: "document", content_type: "application/pdf", size: 100 }],
       }), { status: 200 });
+      if (url.includes("/assistant/capabilities")) return new Response(JSON.stringify({ tools: [{ name: "search_kb", description: "Search", read_only: true, write: false }], personas: [], prompts: [], kb_available: true, memory_available: false }), { status: 200 });
       return new Response(JSON.stringify({}), { status: 200 });
     });
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
@@ -159,5 +161,8 @@ describe("AssistantWorkspace", () => {
     expect(screen.queryByRole("heading", { name: "Asistente Lumat", level: 1 })).not.toBeInTheDocument();
     expect(screen.getByText("Proyecto: Operaciones")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Acciones del hilo" })).toBeInTheDocument();
+    expect(screen.getByText("Gestión")).toBeInTheDocument();
+    expect(screen.getAllByText("manual.pdf")).toHaveLength(3);
+    expect(screen.getByRole("tab", { name: "Actividad" })).toBeInTheDocument();
   });
 });

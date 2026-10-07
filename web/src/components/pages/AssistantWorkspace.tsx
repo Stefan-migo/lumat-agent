@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { FolderKanban, MessageSquarePlus, PanelRight, Plus, X } from "lucide-react";
 import { createChatThread, deleteChatThread, listChatThreads, listProjects, renameChatThread } from "../../api";
-import type { InternalChatThreadSummary, Project } from "../../types";
+import type { AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantPlan, InternalChatThreadSummary, Project } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
@@ -17,7 +17,7 @@ import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import "./AssistantWorkspace.css";
 
-export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = true }: { children: ReactNode; onCreateThread: () => void; loadThreadTabs?: boolean }) {
+export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = true, attachments = [], capabilities, capabilitiesLoading = false, capabilitiesError = false, evidence = [], plan, lifecycle, processing = false }: { children: ReactNode; onCreateThread: () => void; loadThreadTabs?: boolean; attachments?: AssistantAttachment[]; capabilities?: AssistantCapabilities | null; capabilitiesLoading?: boolean; capabilitiesError?: boolean; evidence?: AssistantEvidence[]; plan?: AssistantPlan | null; lifecycle?: string | null; processing?: boolean }) {
   const [projectsVisible, setProjectsVisible] = useState(() => window.innerWidth > 1024);
   const [contextVisible, setContextVisible] = useState(() => window.innerWidth > 1024);
   const [creatingThread, setCreatingThread] = useState(false);
@@ -295,20 +295,29 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
         aria-label="Contexto del hilo"
         hidden={!contextVisible}
       >
-        <h2>Contexto del hilo</h2>
+        <h2>Actividad del hilo</h2>
         <Tabs
           ariaLabel="Panel del hilo"
-          tabs={[{ id: "agents", label: "Agentes" }, { id: "context", label: "Contexto" }]}
+          tabs={[{ id: "context", label: "Contexto" }, { id: "activity", label: "Actividad" }]}
         >
-          {(tab) => tab === "agents" ? (
-            <Card title="Agentes">
-              <EmptyState title="No hay agentes activos" description="La actividad del hilo aparecerá aquí." />
+          {(tab) => tab === "context" ? <div className="assistant-workspace__context-content">
+            <Card title="Proyecto">
+              {activeProject ? <><p>{activeProject.name}</p><p>{activeProject.purpose}</p><Badge tone={projectStatusTone(activeProject.status)}>{projectStatusLabel(activeProject.status)}</Badge></> : <EmptyState title="Elige un proyecto" description="Selecciona un proyecto para ver su contexto." />}
             </Card>
-          ) : (
-            <Card title="Contexto">
-              <EmptyState title="Sin contexto adicional" description="Los recursos del hilo aparecerán aquí." />
+            <Card title="Recursos del proyecto"><EmptyState title="Elegir del proyecto" description="La selección de recursos del proyecto todavía no está disponible." /></Card>
+            <Card title="Capacidades del asistente">
+              {capabilitiesLoading ? <StateMessage tone="info" role="status" spinner title="Cargando capacidades" /> : capabilitiesError ? <StateMessage tone="danger" role="alert" title="No pudimos cargar las capacidades del asistente" /> : capabilities ? <><p>{capabilities.tools?.length ?? 0} herramientas disponibles</p><p>Base de conocimientos: {capabilities.kb_available ? "Disponible" : "No disponible"}</p></> : <EmptyState title="Capacidades no disponibles" description="No hay información de capacidades para mostrar." />}
             </Card>
-          )}
+            <Card title="Archivos del hilo">{attachments.length ? <ul>{attachments.map((attachment) => <li key={attachment.id}>{attachment.filename}</li>)}</ul> : <EmptyState title="Sin archivos adjuntos" description="Los archivos adjuntos a este hilo aparecerán aquí." />}</Card>
+            <Card title="Fuentes del hilo"><EmptyState title="Fuentes no disponibles" description="El hilo no entrega fuentes asociadas a sus respuestas." /></Card>
+          </div> : <div className="assistant-workspace__context-content">
+            <Card title="Agentes del proyecto"><EmptyState title="Aún no hay agentes disponibles" description="La gestión de agentes por proyecto todavía no está disponible." /></Card>
+            <Card title="Actividad del agente">
+              {processing ? <StateMessage tone="info" role="status" spinner title={lifecycle || "Ejecución en curso"} /> : null}
+              {plan?.tool ? <p><strong>Plan:</strong> {plan.summary || plan.tool}</p> : null}
+              {evidence.length ? evidence.map((item, index) => <div className="assistant-workspace__evidence" key={`${item.tool ?? "asistente"}-${index}`}><strong>{item.tool || "Asistente"}</strong><Badge tone={item.status === "error" ? "danger" : item.status === "completed" ? "success" : "neutral"}>{item.status}</Badge>{item.detail ? <p>{item.detail}</p> : null}</div>) : !processing ? <EmptyState title="Sin actividad registrada" description="La actividad de herramientas aparecerá aquí cuando exista." /> : null}
+            </Card>
+          </div>}
         </Tabs>
       </aside>
     </div>
