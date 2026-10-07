@@ -27,7 +27,6 @@ from app.chat.assistant.tools.registry import (
     tool_schemas,
 )
 from app.services.prompts import load_assistant_config
-from app.chat.assistant.state import SDBTask
 from app.chat.assistant.approval import consume_approval, issue_approval, validate_execution
 from app.services.projects import ProjectCandidate, ProjectResult
 from app.services import tukulpan as memory
@@ -448,23 +447,19 @@ def test_write_requires_consumed_exact_approval(monkeypatch):
     assert called == []
 
 
-def _sdb_approved_project(tool, arguments, decision=None):
-    task = {
-        "id": tool,
-        "tool": tool,
-        "arguments": arguments,
-        "scope": {"proyecto": "default"},
-    }
-    if decision is not None:
-        task["decision"] = decision
-    approval = issue_approval({
-        "sdb": {"phase": "EXECUTE", "spec": {"sha256": "spec"}, "tasks": [task]},
-    })
+def _approved_project(tool, arguments, decision=None):
+    plan = {"tool": tool, "arguments": arguments}
+    if tool == "project.create":
+        plan["project_payload"] = {
+            "operation": "create", "arguments": arguments, "decision": decision,
+        }
+    approval = issue_approval(plan)
     assert consume_approval(approval, approval["token"]) is True
-    return approval, approval["sdb_bindings"][0], task
+    assert validate_execution(plan, approval) is True
+    return approval
 
 
-def test_sdb_project_create_uses_frozen_decision_and_real_execute_path(monkeypatch):
+def test_project_create_uses_approved_decision_and_real_execute_path(monkeypatch):
     called = []
     created = SimpleNamespace(slug="gas-new")
     monkeypatch.setattr(
@@ -472,30 +467,30 @@ def test_sdb_project_create_uses_frozen_decision_and_real_execute_path(monkeypat
         lambda *args, **kwargs: called.append(kwargs.get("_approval")) or created,
     )
     arguments = {"slug": "gas-new", "name": "Gas New", "purpose": "gas service"}
-    approval, binding, task = _sdb_approved_project("project.create", arguments, {"create_distinct": True})
+    approval = _approved_project("project.create", arguments, {"create_distinct": True})
 
     result = execute_tool(
-        SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=binding, owner_id=1, role="admin"
+        SimpleNamespace(), "project.create", arguments, approval=approval, owner_id=1, role="admin"
     )
 
     assert result["status"] == "completed"
     assert result["result"]["slug"] == "gas-new"
     assert called
-    assert binding["project_payload"]["decision"] == {"create_distinct": True}
+    assert approval["project_payload"]["decision"] == {"create_distinct": True}
 
 
 @pytest.mark.parametrize("decision", [None, {"unexpected": True}, {"create_distinct": False}])
-def test_sdb_project_create_rejects_missing_or_invalid_decision_without_mutation(monkeypatch, decision):
+def test_project_create_rejects_missing_or_invalid_approved_decision_without_mutation(monkeypatch, decision):
     called = []
     monkeypatch.setattr(
         "app.chat.assistant.tools.registry.projects.create",
         lambda *args, **kwargs: called.append(True),
     )
     arguments = {"slug": "gas-new", "name": "Gas New", "purpose": "gas service"}
-    approval, binding, task = _sdb_approved_project("project.create", arguments, decision)
+    approval = _approved_project("project.create", arguments, decision)
 
     with pytest.raises(ToolValidationError, match="decision"):
-        execute_tool(SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=binding, owner_id=1, role="admin")
+        execute_tool(SimpleNamespace(), "project.create", arguments, approval=approval, owner_id=1, role="admin")
     assert called == []
 
 
@@ -507,50 +502,34 @@ def test_sdb_project_create_rejects_missing_or_invalid_decision_without_mutation
         ("project.merge", {"source": "gas-old", "target": "gas"}),
     ],
 )
-def test_sdb_project_mutations_use_real_execute_path(monkeypatch, tool, arguments):
+def test_approved_project_mutations_use_real_execute_path(monkeypatch, tool, arguments):
     called = []
     monkeypatch.setattr(
         f"app.chat.assistant.tools.registry.projects.{tool.removeprefix('project.')}",
         lambda *args, **kwargs: called.append(True) or SimpleNamespace(slug="gas"),
     )
-    approval, binding, task = _sdb_approved_project(tool, arguments)
+    approval = _approved_project(tool, arguments)
 
-    result = execute_tool(SimpleNamespace(), tool, arguments, approval=approval, task_binding=binding, owner_id=1, role="admin")
+    result = execute_tool(SimpleNamespace(), tool, arguments, approval=approval, owner_id=1, role="admin")
 
     assert result["status"] == "completed"
     assert called == [True]
 
 
-@pytest.mark.parametrize("field,value", [("tool", "project.archive"), ("arguments", {"project": "other"}), ("project_payload", {"operation": "create"})])
-def test_sdb_project_binding_tampering_is_rejected_before_mutation(monkeypatch, field, value):
+@pytest.mark.parametrize("field,value", [("arguments_sha256", "wrong"), ("project_sha256", "wrong")])
+def test_project_approval_tampering_is_rejected_before_mutation(monkeypatch, field, value):
     called = []
     monkeypatch.setattr(
         "app.chat.assistant.tools.registry.projects.rename",
         lambda *args, **kwargs: called.append(True),
     )
     arguments = {"project": "gas", "name": "Gas Service"}
-    approval, binding, task = _sdb_approved_project("project.rename", arguments)
-    tampered = {**binding, field: value}
+    approval = _approved_project("project.rename", arguments)
+    approval[field] = value
 
     with pytest.raises(ToolValidationError):
-        execute_tool(SimpleNamespace(), task["tool"], arguments, approval=approval, task_binding=tampered, owner_id=1, role="admin")
+        execute_tool(SimpleNamespace(), "project.rename", arguments, approval=approval, owner_id=1, role="admin")
     assert called == []
-
-
-def test_sdb_accepts_only_registered_typed_write_tasks():
-    base = {"scope": {}, "summary": "write", "verifiable_output": "result"}
-    for tool, arguments in (
-        ("automation.create_rule", {"name": "n", "event_type": "e", "channel": "c", "template_event": "t", "cooldown_seconds": 0}),
-        ("project.create", {"slug": "s", "name": "N", "purpose": "P"}),
-        ("project.rename", {"project": "s", "name": "N"}),
-        ("project.archive", {"project": "s"}),
-        ("project.merge", {"source": "s", "target": "t"}),
-    ):
-        task = SDBTask.model_validate({**base, "id": tool, "tool": tool, "arguments": arguments})
-        assert task.tool == tool
-
-    with pytest.raises(ValueError, match="write-not-registered"):
-        SDBTask.model_validate({**base, "id": "unknown", "tool": "project.destroy", "arguments": {"project": "s"}})
 
 
 def test_write_argument_schemas_forbid_missing_and_extra_fields():

@@ -12,7 +12,7 @@ def test_complete_assistant_configuration_loads_declared_skill_index(repo_root):
 
     assert config.name == "assistant"
     assert "Lumat internal executive operator" in config.persona
-    assert set(config.prompts) == {"plan", "respond", "classify"}
+    assert set(config.prompts) == {"plan", "respond"}
     assert "<available_tools>" in config.prompts["plan"]
     assert "<available_skills>{{available_skills}}</available_skills>" in config.prompts["plan"]
     assert [(skill.name, skill.description, skill.path) for skill in config.skills] == [
@@ -71,7 +71,6 @@ def test_missing_assistant_reference_fails_before_runtime_use(tmp_path, repo_roo
         "personas/escalation.md",
         "prompts/assistant_plan.md",
         "prompts/assistant_respond.md",
-        "prompts/assistant_classify.md",
     ):
         destination = tmp_path / relative
         destination.parent.mkdir(parents=True, exist_ok=True)

@@ -30,7 +30,6 @@ class PlannerOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["tool", "respond", "complex", "delegate"]
-    classification: Literal["normal", "sdb"] = "normal"
     tool: str | None = None
     sub_agent: str | None = None
     arguments: dict = Field(default_factory=dict)
@@ -86,37 +85,6 @@ class CortexSession(BaseModel):
     opened_at: str = Field(min_length=1)
     closed_at: str | None
     report_key: str | None
-
-
-class SDBTask(BaseModel):
-    """One validated task in a frozen SDB plan."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: str = Field(min_length=1, max_length=100)
-    scope: dict
-    summary: str = Field(min_length=1, max_length=200)
-    verifiable_output: str = Field(min_length=1, max_length=200)
-    tool: str = Field(min_length=1, max_length=100)
-    arguments: dict
-    decision: dict | None = Field(default=None, exclude=True)
-
-    @model_validator(mode="after")
-    def validate_read_tool(self) -> "SDBTask":
-        from app.chat.assistant.tools.registry import get_tool
-
-        from app.chat.assistant.tools.registry import SDB_WRITE_ALLOWLIST
-
-        try:
-            definition = get_tool(self.tool)
-        except ValueError:
-            if self.tool.startswith(("automation.", "project.")):
-                raise ValueError("write-not-registered")
-            raise
-        if self.tool not in SDB_WRITE_ALLOWLIST and not definition.read_only:
-            raise ValueError("write-not-registered")
-        self.arguments = definition.args_model.model_validate(self.arguments).model_dump()
-        return self
 
 
 def validate_cortex_session(state: object) -> bool:
@@ -177,11 +145,7 @@ class AssistantState(TypedDict, total=False):
     legacy_compat: bool
     cost_mode: Literal["normal", "conservative", "blocked"]
     cost_directive: str
-    sdb_phase: Literal["CLARIFY", "SPEC", "PLAN", "APPROVE", "EXECUTE", "VERIFY", "DELIVER"]
     project_authorization: object
-    sdb_spec: dict
-    sdb_tasks: list[SDBTask]
-    sdb_result: dict
     verification: dict
     verify_requested: bool
     sdb_requested: bool

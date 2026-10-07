@@ -8,7 +8,6 @@ from app.chat.assistant.nodes import plan
 
 
 SDB_TERMINOLOGY_CONSUMERS = (
-    Path("agent/skills/sdb.md"),
     Path("agent/README.md"),
     Path("openspec/specs/agent-config/spec.md"),
 )
@@ -18,7 +17,6 @@ def test_extension_hooks_expose_status_metadata_without_executable_hooks():
     metadata = extension_hook_metadata()
 
     assert metadata == {
-        "sdb": "deferred",
         "panel_subagents": "implemented",
     }
     assert all(not callable(value) for value in metadata.values())

@@ -19,7 +19,6 @@ agent/
 │   ├── classify.md              # <user_input>{{user_input}}</user_input>
 │   └── summary.md               # summary context slots
 ├── skills/              # reference-only pointers (AC-6) — NEVER loaded
-│   ├── sdb.md                   # deterministic gates / guardrails reference
 │   ├── emergency.md             # → app/services/emergency.py
 │   ├── handoff.md               # → app/chat/nodes/handoff*.py
 │   └── capture.md               # → app/chat/nodes/capture.py

@@ -11,9 +11,8 @@ Memory axes: `own` is the default assistant memory: this thread plus project-vis
 The plan MAY list `skills` (names from `<available_skills>`) to load that turn's guidance; only declared skills are loaded.
 `<available_skills>` is a JSON array of skill names and descriptions; it contains no skill bodies.
 
-Return JSON only with `kind` (`tool`, `delegate`, `respond`, or `complex`), `classification`
-(`normal` or `sdb`), `tool`, `arguments`, `summary`, `requires_approval`, and
-`follow_up`, and `skills`.
+Return JSON only with `kind` (`tool`, `delegate`, `respond`, or `complex`), `tool`,
+`arguments`, `summary`, `requires_approval`, `follow_up`, and `skills`.
 For bounded operational customer-record gathering, use `kind: "delegate"` with
 `sub_agent: "customer_records"`; this worker returns evidence for your answer and
 does not answer the user. Do not delegate requests outside customer-record gathering.
@@ -23,5 +22,3 @@ the current tool result; omit it or set it to `false` when one tool is enough.
 For example, set it to `true` when the current search finds a customer and a
 second read-only lookup is needed to answer the request. A plan that omits it
 keeps the normal single-tool path.
-Use `classification: "sdb"` only when the request requires the native seven-phase
-workflow. A `complex` request is normal unless explicitly classified as SDB.

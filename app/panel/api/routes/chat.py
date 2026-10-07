@@ -285,6 +285,8 @@ def send_message(thread_id: int, body: ChatMessageBody, background_tasks: Backgr
     result = get_thread(session, thread_id, current.id)
     if result is None:
         raise HTTPException(status_code=404, detail="chat thread not found")
+    if body.sdb_requested and current.role.value != "admin":
+        raise HTTPException(status_code=403, detail="admin role required for sdb_requested")
     if len(body.attachment_ids) > get_settings().assistant_attachment_max_count:
         raise HTTPException(status_code=400, detail="attachment count limit reached")
     owned = list(session.scalars(select(AssistantAttachment).where(AssistantAttachment.thread_id == thread_id, AssistantAttachment.id.in_(body.attachment_ids), AssistantAttachment.deleted_at.is_(None)))) if body.attachment_ids else []

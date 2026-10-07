@@ -1074,35 +1074,6 @@ def test_memory_write_is_idempotent_in_db(migrated_db):
     assert rows[0].contenido == "Refreshed fact"
 
 
-def test_sdb_dispatch_fails_closed_for_memory_write(monkeypatch):
-    from app.services import agent_chat
-
-    task = {
-        "id": "memory-write",
-        "scope": {"proyecto": "default"},
-        "summary": "remember fact",
-        "verifiable_output": "memory row",
-        "tool": "memory.write",
-        "arguments": {"titulo": "Fact", "contenido": "Panel fact", "topic_key": "agent:fact"},
-    }
-    sdb_plan = {"phase": "EXECUTE", "spec": {"sha256": "spec"}, "tasks": [task]}
-    approval = issue_approval({"sdb": sdb_plan})
-    assert consume_approval(approval, approval["token"])
-    thread = SimpleNamespace(
-        id=7,
-        current_plan={"sdb": sdb_plan},
-        assistant_state={"sdb": {"checkpoints": []}, "approval": approval},
-    )
-    calls = []
-    monkeypatch.setattr(agent_chat, "execute_tool", lambda *args, **kwargs: calls.append(args) or {"status": "completed"})
-    monkeypatch.setattr(agent_chat, "persist_sdb_state", lambda *args, **kwargs: None)
-
-    result = agent_chat._run_sdb_tasks(SimpleNamespace(), thread, "run-sdb-memory", SimpleNamespace(slug="default"))
-
-    assert result["results"][0]["status"] == "failed"
-    assert calls == []
-
-
 def test_alerts_are_emitted_for_each_scope(monkeypatch):
     alerts = []
     monkeypatch.setattr("app.chat.assistant.nodes.internal_thread_cost_state", lambda *args: (80.0, "conservative"))

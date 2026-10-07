@@ -107,7 +107,7 @@ def test_admin_capabilities_reflect_real_tools_and_runtime_config(client, make_u
     assert next(tool for tool in payload["tools"] if tool["name"] == "automation.create_rule")["write"] is True
     assert payload["personas"] == ["personas/assistant.md"]
     assert set(payload["prompts"]) == {
-        "prompts/assistant_plan.md", "prompts/assistant_respond.md", "prompts/assistant_classify.md"
+        "prompts/assistant_plan.md", "prompts/assistant_respond.md"
     }
     assert payload["kb_available"] is True
     assert payload["memory_available"] is True
