@@ -101,11 +101,15 @@ Owner verdict: title/subtitle/badge and tabs OK; table needs design detail work.
 - **CV-1 status: owner-approved and closed** (commits `8f844391`, `ebd7cc20`, `8572326b`, `46046a06`, `71a39676`). 6 changed paths / 236 authored lines at `8f844391`; RDD assess `medium` / `under_budget`.
 
 ### CV-2 — ConversationThread header + history card
-- [ ] Header: avatar + customer name + `Conversación #id · Iniciada el [date]` + state badge + `Ver ficha del cliente` action.
-- [ ] Offline banner copy to the reference.
-- [ ] `Historial de mensajes` card heading + freshness (`Actualizada el [date] · [time]`) + `Tomar conversación` + `...` menu.
-- [ ] Message bubbles to the reference (author, time, media/failure details).
-- [ ] Update `ConversationThread.test.tsx` + stories/tests.
+- [x] Page identity header (reusing the ClientFicha pattern: `PageFrame title=""` + a page-local header): large avatar, name, state badge, `Conversación #id · Iniciada el [date]`, and `Ver ficha del cliente` (rendered only in the interactive view, gated so the read-only view stays button-free).
+- [x] Offline banner uses the shared `.conversations-offline` (moved from the list's page CSS into `primitives.css`; list copy "Los datos guardados siguen disponibles." vs thread copy "El histórico guardado sigue disponible.").
+- [x] `Historial de mensajes` card header: title + `Actualizada el [date] · [time]` on the left, state controls on the right. The state badge moved to the page header (single `role=status`); the reply-window span now renders only in the read-only view (the composer owns it when interactive).
+- [x] Message bubbles: author above the bubble, timestamp below and outside it (`.ai-agent-grammar__bubble-stack`); outbound stack right-aligned.
+- [x] Updated `ConversationThread.test.tsx` (scoped the duplicated name assertions), `ConversationThread.stories.test.tsx` (heading is now the customer name), and `AppShell.test.tsx`.
+- [x] Evidence: commits `56c69b73` + `68c21e99`; `tsc -b --force --noEmit` clean; full suite **1034/1034**; `npm run build` green.
+
+#### Regression found and fixed while validating CV-2
+The CV-1 tab-label change (`Humanas`→`Atención humana`, `Casos`→`Con caso`) and the dual-render table broke 8 `AppShell.test.tsx` specs. Fixed in `56c69b73`. **Lesson: run the FULL frontend suite after a shared-label or dual-render change — the targeted component tests do not catch cross-page specs.**
 
 ### CV-3 — ConversationThread context inspector + responsive
 - [ ] `Cliente` card: avatar, name, phone + copy action.
