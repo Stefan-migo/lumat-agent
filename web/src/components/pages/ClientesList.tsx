@@ -47,7 +47,6 @@ const columns = (onOpenClient?: (id: number) => void, selected: Set<number> = ne
       </div>
     ),
   },
-  { key: "archived", header: "Registro", render: (customer) => customer.archived_at ? <Badge tone="warning">Archivado</Badge> : "—" },
   { key: "phone", header: "Teléfono", render: (customer) => customer.phone_e164 ?? "—" },
   {
     key: "state",
@@ -56,9 +55,14 @@ const columns = (onOpenClient?: (id: number) => void, selected: Set<number> = ne
   },
   { key: "consent", header: "Consentimiento", render: (customer) => <span className="clientes-list__consent"><span aria-hidden="true">{customer.consent_status ? <Check /> : <CircleMinus />}</span>{customer.consent_status ? "Sí" : "No"}</span> },
   { key: "created", header: (<button className="clientes-list__sort" type="button" aria-label={`Creado ${sort === "created_desc" ? "descendente" : "ascendente"}`} onClick={toggleSort}>Creado {sort === "created_desc" ? "↓" : "↑"}</button>) as unknown as string, render: (customer) => customer.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(customer.created_at)).replace(".", "") : "—" },
+  { key: "archived", header: "Archivo", render: (customer) => customer.archived_at ? <Badge tone="warning">Archivado</Badge> : <Badge tone="success">Disponible</Badge> },
 ];
 
 const CUSTOMER_STATES: CustomerState[] = ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"];
+
+function bulkActionTitle(action: "archive" | "restore", count: number) {
+  return `${action === "archive" ? "Archivar" : "Restaurar"} ${count} ${count === 1 ? "cliente" : "clientes"}`;
+}
 
 function stateMessage(state: ClientesListState, retry: () => void) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando clientes" />;
@@ -86,12 +90,13 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   // Remounting the debounced input is the only way to clear it: the primitive owns its own
   // text, so resetting our query state alone would leave the stale term on screen.
   const [searchResetKey, setSearchResetKey] = useState(0);
-  const [onlyArchived, setOnlyArchived] = useState(false);
+  const [includeArchived, setIncludeArchived] = useState(false);
   const [consent, setConsent] = useState<"" | "true" | "false">("");
   const [sort, setSort] = useState<"created_desc" | "created_asc">("created_desc");
   const [tab, setTab] = useState<"all" | CustomerState>("all");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkAction, setBulkAction] = useState<{ action: "archive" | "restore"; ids: number[] } | null>(null);
   const [dialog, setDialog] = useState<"create" | "archive" | "state" | null>(null);
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
@@ -106,8 +111,8 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
   const [archiveCounts, setArchiveCounts] = useState<{ cases: number; appointments: number } | null>(null);
   const fetchClients = useCallback(
-    () => listClients({ onlyArchived, query, consent: consent === "" ? undefined : consent === "true", sort }).then((response) => response.clients),
-    [onlyArchived, query, consent, sort],
+    () => listClients({ includeArchived, query, consent: consent === "" ? undefined : consent === "true", sort }).then((response) => response.clients),
+    [includeArchived, query, consent, sort],
   );
   const fetched = useAsyncData(fetchClients, controlledData === undefined, queryVersion);
   const data = controlledData === undefined ? fetched.data : controlledData;
@@ -118,6 +123,9 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const pageSize = 10;
   const rows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const selectedRows = allRows.filter((row) => selected.has(row.id));
+  const selectedActive = selectedRows.filter((row) => !row.archived_at);
+  const selectedArchived = selectedRows.filter((row) => Boolean(row.archived_at));
   const toggleSelected = (id: number) => setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const retry = onRetry ?? fetched.retry;
   const filtered = query.trim().length > 0;
@@ -209,6 +217,22 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       setBusy(false);
     }
   };
+  const confirmBulkAction = async () => {
+    if (!bulkAction || busy) return;
+    setBusy(true);
+    setDialogError("");
+    const results = await Promise.allSettled(bulkAction.ids.map((id) => bulkAction.action === "archive" ? archiveCustomer(id) : unarchiveCustomer(id)));
+    const failedIds = bulkAction.ids.filter((_, index) => results[index].status === "rejected");
+    const succeeded = bulkAction.ids.length - failedIds.length;
+    setBulkAction(null);
+    setSelected(new Set(failedIds));
+    refresh();
+    if (failedIds.length) {
+      const verb = bulkAction.action === "archive" ? "archivaron" : "restauraron";
+      setDialogError(`Se ${verb} ${succeeded} de ${bulkAction.ids.length} clientes. Fallaron ${failedIds.length}.`);
+    }
+    setBusy(false);
+  };
 
   return (
     <PageFrame
@@ -225,12 +249,12 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
         <div className="table-toolbar clientes-list__toolbar">
           <SearchInput key={searchResetKey} aria-label="Buscar clientes" placeholder="Buscar por nombre o teléfono..." onSearch={(next) => { setSearchTerm(next); setPage(1); setQueryVersion((current) => current + 1); }} />
           <label className="clientes-list__filter"><span>Consentimiento</span><select aria-label="Consentimiento" value={consent} onChange={(event) => { setConsent(event.target.value as typeof consent); setPage(1); setSelected(new Set()); refresh(); }}><option value="">Consentimiento</option><option value="true">Sí</option><option value="false">No</option></select></label>
-          <label className="clientes-list__switch"><input type="checkbox" role="switch" aria-label="Mostrar archivados" checked={onlyArchived} onChange={(event) => { setOnlyArchived(event.target.checked); setPage(1); setSelected(new Set()); refresh(); }} /><span>Mostrar archivados</span></label>
+          <label className="clientes-list__switch"><input type="checkbox" role="switch" aria-label="Mostrar archivados" checked={includeArchived} onChange={(event) => { setIncludeArchived(event.target.checked); setPage(1); setSelected(new Set()); refresh(); }} /><span>Mostrar archivados</span></label>
         </div>
         {dialog === null && dialogError ? <p role="alert">{dialogError}</p> : null}
         {state === "loading" ? null : data && data.length > 0 ? (
           <div className="data-region">
-              <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar todos" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar todos</label>{selected.size ? <span>{selected.size} seleccionados</span> : null}</div>
+              <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar todos" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar todos</label>{selected.size ? <div className="clientes-list__selection-actions"><span>{selected.size} seleccionados</span>{selectedActive.length ? <Button variant="danger" disabled={busy} onClick={() => { setDialogError(""); setBulkAction({ action: "archive", ids: selectedActive.map((row) => row.id) }); }}><Archive />Archivar seleccionados</Button> : null}{selectedArchived.length ? <Button variant="secondary" disabled={busy} onClick={() => { setDialogError(""); setBulkAction({ action: "restore", ids: selectedArchived.map((row) => row.id) }); }}><ArchiveRestore />Restaurar seleccionados</Button> : null}</div> : null}</div>
                <div className="table-card__desktop"><DataTable columns={columns(onOpenClient, selected, toggleSelected, sort, () => { setSort((value) => value === "created_desc" ? "created_asc" : "created_desc"); refresh(); })} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
               // The row's identity lives in the trigger's accessible name, not in every
               // action label: two pills repeating the customer name dominated the cell
@@ -276,11 +300,11 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
                   return <li className="table-card__item clientes-list__mobile-card" key={customer.id}>
                     <div className="clientes-list__mobile-identity"><input type="checkbox" aria-label={`Seleccionar ${customer.name ?? customer.phone_e164 ?? "cliente"}`} checked={selected.has(customer.id)} onChange={() => toggleSelected(customer.id)} /><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} className="table__resource-avatar" /><a className="clientes-list__name" href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>{customer.name ?? "—"}</a><Menu trigger="icon" label={rowLabel} items={items} onSelect={(value) => { if (value === "state") void openState(customer); else if (value === "archive") void openArchive(customer); else void restore(customer); }} /></div>
                     <div className="clientes-list__mobile-grid">
-                      <div><span>Registro</span>{customer.archived_at ? <Badge tone="warning">Archivado</Badge> : "—"}</div>
                       <div><span>Teléfono</span>{customer.phone_e164 ?? "—"}</div>
                       <div><span>Estado</span><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div>
                       <div><span>Consentimiento</span><span className="clientes-list__consent"><span aria-hidden="true">{customer.consent_status ? <Check /> : <CircleMinus />}</span>{customer.consent_status ? "Sí" : "No"}</span></div>
                       <div><span>Creado</span>{customer.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(customer.created_at)).replace(".", "") : "—"}</div>
+                      <div><span>Archivo</span>{customer.archived_at ? <Badge tone="warning">Archivado</Badge> : <Badge tone="success">Disponible</Badge>}</div>
                     </div>
                   </li>;
                 })}
@@ -325,6 +349,9 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
           {dialogError ? <p role="alert">{dialogError}</p> : null}
           <footer><Button variant="secondary" onClick={() => setDialog(null)}>Cancelar</Button>{(stateTarget.allowed_transitions ?? []).length ? <Button onClick={() => void saveState()} disabled={busy || !selectedState}><Check />{busy ? "Guardando…" : "Guardar estado"}</Button> : null}</footer>
         </div> : null}
+      </Dialog>
+      <Dialog open={bulkAction !== null} onClose={() => { if (!busy) setBulkAction(null); }} title={bulkAction ? bulkActionTitle(bulkAction.action, bulkAction.ids.length) : "Acciones masivas"} icon={bulkAction?.action === "archive" ? Archive : ArchiveRestore} description={bulkAction?.action === "archive" ? "Esta acción archivará varios clientes seleccionados." : "Esta acción restaurará varios clientes seleccionados."}>
+        {bulkAction ? <div className="clientes-list__bulk-confirm"><p className={bulkAction.action === "archive" ? "clientes-list__warning" : "clientes-list__bulk-note"}>{bulkAction.action === "archive" ? <><CircleMinus />Se archivarán solo los clientes activos seleccionados.</> : <><ArchiveRestore />Se restaurarán solo los clientes archivados seleccionados.</>}</p>{dialogError ? <p role="alert">{dialogError}</p> : null}<footer><Button variant="secondary" disabled={busy} onClick={() => setBulkAction(null)}>Cancelar</Button><Button variant={bulkAction.action === "archive" ? "danger" : "primary"} disabled={busy} onClick={() => void confirmBulkAction()}>{busy ? (bulkAction.action === "archive" ? "Archivando…" : "Restaurando…") : bulkActionTitle(bulkAction.action, bulkAction.ids.length)}</Button></footer></div> : null}
       </Dialog>
     </PageFrame>
   );

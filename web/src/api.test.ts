@@ -75,10 +75,11 @@ describe('client API contracts', () => {
   beforeEach(() => { globalThis.fetch = vi.fn(); });
   afterEach(() => { vi.restoreAllMocks(); });
 
-  it('lists clients with encoded search and archive filters', async () => {
+  it('adds archived clients to the list without requesting archived-only results', async () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ clients: [] }), { status: 200 }));
     await fetchClients({ includeArchived: true, query: 'Ana Fuentes' });
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/clients?q=Ana+Fuentes&include_archived=true', expect.anything());
+    expect(globalThis.fetch).not.toHaveBeenCalledWith(expect.stringContaining('only_archived'), expect.anything());
   });
 
   it('sends consent and creation sort filters to the clients endpoint', async () => {
