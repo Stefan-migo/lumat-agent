@@ -830,6 +830,7 @@ describe("ClientFicha slice 2 — product register", () => {
     expect(screen.getByRole("heading", { name: "Mensajes de la conversación #1" })).toBeInTheDocument();
     expect(screen.getAllByText("Entrante").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Texto").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Turno 1 · Texto").length).toBeGreaterThan(0);
     expect(screen.getByText("Mostrando 1 mensaje")).toBeInTheDocument();
   });
 });

@@ -714,6 +714,17 @@
 .client-ficha__conversation-card-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .client-ficha__conversation-card-foot > span { color: var(--text-muted); font-size: var(--text-sm); }
 .client-ficha__message-card > small { color: var(--text-muted); }
+/* Column priority on the conversation/message tables: the summary/message cell grows,
+   the meta cells shrink to their content (1% + nowrap). */
+.client-ficha__conversations-table .table th:nth-child(1), .client-ficha__conversations-table .table td:nth-child(1),
+.client-ficha__conversations-table .table th:nth-child(2), .client-ficha__conversations-table .table td:nth-child(2),
+.client-ficha__conversations-table .table th:nth-child(4), .client-ficha__conversations-table .table td:nth-child(4),
+.client-ficha__conversations-table .table th:nth-child(5), .client-ficha__conversations-table .table td:nth-child(5) { width: 1%; white-space: nowrap; }
+.client-ficha__messages-table .table th:nth-child(1), .client-ficha__messages-table .table td:nth-child(1),
+.client-ficha__messages-table .table th:nth-child(2), .client-ficha__messages-table .table td:nth-child(2),
+.client-ficha__messages-table .table th:nth-child(3), .client-ficha__messages-table .table td:nth-child(3),
+.client-ficha__messages-table .table th:nth-child(4), .client-ficha__messages-table .table td:nth-child(4),
+.client-ficha__messages-table .table th:nth-child(6), .client-ficha__messages-table .table td:nth-child(6) { width: 1%; white-space: nowrap; }
 .client-ficha__note-row { display:grid; grid-template-columns:auto minmax(6rem,.45fr) minmax(0,1fr) auto; align-items:center; gap:var(--space-3); padding:var(--space-3); border:1px solid var(--border); border-radius:var(--radius-md); }
 .client-ficha__note-row > div { display:grid; padding-right:var(--space-3); border-right:1px solid var(--border); }
 .client-ficha__note-row small { color:var(--text-muted); }

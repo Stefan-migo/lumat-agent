@@ -196,6 +196,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const futureAppointmentCount = appointments.filter((appointment) => appointment.status === "booked" && new Date(appointment.starts_at).getTime() > Date.now()).length;
   const upcomingAppointments = appointments.filter((appointment) => appointment.status === "booked" && new Date(appointment.starts_at).getTime() > Date.now());
   const finishedAppointments = appointments.filter((row) => !upcomingAppointments.includes(row));
+  // "Turno" = the 1-based order of the message within its own conversation.
+  const messageTurns = new Map<number, number>();
+  { const counters = new Map<number, number>(); for (const message of history.messages) { const turn = (counters.get(message.conversation_id) ?? 0) + 1; counters.set(message.conversation_id, turn); messageTurns.set(message.id, turn); } }
   const retryCalendar = async (appointmentId: number) => {
     setRetryingCalendarId(appointmentId);
     try {
@@ -452,7 +455,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   ];
   const messageColumns: Column<(typeof history.messages)[number]>[] = [
     { key: "conversation", header: "Conversación", render: (row) => <a className="table__link" href={pathForRoute({ view: "conversations", conversationId: row.conversation_id })}>#{row.conversation_id}</a> },
-    { key: "id", header: "Turno", render: (row) => `#${row.id}` },
+    { key: "id", header: "Turno", render: (row) => messageTurns.get(row.id) ?? 1 },
     { key: "direction", header: "Dirección", render: (row) => <Badge tone={row.direction === "inbound" ? "success" : "neutral"}>{row.direction === "inbound" ? <ArrowDownLeft aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}{directionLabel(row.direction)}</Badge> },
     { key: "msg_type", header: "Tipo", render: (row) => messageTypeLabel(row.msg_type) },
     { key: "text", header: "Mensaje", render: (row) => `${row.text ?? "—"}${row.media_url ? " 📎" : ""}` },
@@ -691,7 +694,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
       {activeTab === "conversations" ? <div className="detail-region__main">
         <section aria-label="Conversaciones" className="client-ficha__history-block"><Card title="Conversaciones del cliente">
           {history.conversations.length ? <>
-            <div className={surfaceClass(history.conversations.length)}><div className="table-card__desktop"><DataTable columns={[...conversationColumns,{key:"actions",header:"Acciones",render:(row)=><Button variant="secondary" onClick={()=>{window.location.href=pathForRoute({view:"conversations",conversationId:row.id})}}>Abrir conversación</Button>}] as Column<(typeof history.conversations)[number]>[]} rows={history.conversations} rowKey={(row) => String(row.id)} /></div></div>
+            <div className={surfaceClass(history.conversations.length)}><div className="table-card__desktop client-ficha__conversations-table"><DataTable columns={[...conversationColumns,{key:"actions",header:"Acciones",render:(row)=><Button variant="secondary" onClick={()=>{window.location.href=pathForRoute({view:"conversations",conversationId:row.id})}}>Abrir conversación</Button>}] as Column<(typeof history.conversations)[number]>[]} rows={history.conversations} rowKey={(row) => String(row.id)} /></div></div>
             <ul className="table-cards table-cards--mobile client-ficha__conversation-cards" aria-label="Lista de conversaciones">
               {history.conversations.map((row) => <li className="table-card__item client-ficha__conversation-card" key={row.id}>
                 <div className="client-ficha__conversation-card-head"><strong>#{row.id}</strong><Badge tone={CONVERSATION_TONES[row.state] ?? "neutral"}><Bot aria-hidden="true" />{conversationLabel(row.state)}</Badge></div>
@@ -703,12 +706,12 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
         </Card></section>
         <section aria-label="Mensajes" className="client-ficha__history-block"><Card title={`Mensajes de la conversación #${history.conversations[0]?.id ?? "—"}`} description="Historial de mensajes del hilo seleccionado.">
           {history.messages.length ? <>
-            <div className={surfaceClass(history.messages.length)}><div className="table-card__desktop"><DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} /></div></div>
+            <div className={surfaceClass(history.messages.length)}><div className="table-card__desktop client-ficha__messages-table"><DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} /></div></div>
             <ul className="table-cards table-cards--mobile client-ficha__message-cards" aria-label="Lista de mensajes">
               {history.messages.map((row) => <li className="table-card__item client-ficha__message-card" key={row.id}>
                 <div className="client-ficha__message-card-head"><Badge tone={row.direction === "inbound" ? "success" : "neutral"}>{row.direction === "inbound" ? <ArrowDownLeft aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}{directionLabel(row.direction)}</Badge><span>{messageWhen(row.created_at)}</span></div>
                 <p>{row.text ?? "—"}{row.media_url ? " 📎" : ""}</p>
-                <small>Turno #{row.id} · {messageTypeLabel(row.msg_type)}</small>
+                <small>Turno {messageTurns.get(row.id) ?? 1} · {messageTypeLabel(row.msg_type)}</small>
               </li>)}
             </ul>
           </> : <EmptyState title="No hay mensajes" />}
