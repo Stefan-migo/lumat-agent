@@ -223,9 +223,9 @@ describe('conversation inspector layout CSS contract', () => {
   expect(screen.getByRole('heading', { name: 'Caso vinculado' })).toBeInTheDocument();
   expect(within(screen.getByRole('complementary', { name: /inspector de conversación/i })).getByText('María González')).toBeInTheDocument();
   expect(screen.getByText('Urgencia')).toBeInTheDocument();
-  expect(screen.getByText('preferred_language')).toBeInTheDocument();
+  expect(screen.getByText('Preferred language')).toBeInTheDocument();
   expect(screen.getByText('es')).toBeInTheDocument();
-  expect(screen.getByText('nested')).toBeInTheDocument();
+  expect(screen.getByText('Nested')).toBeInTheDocument();
   expect(screen.getByText('2')).toBeInTheDocument();
 });
 

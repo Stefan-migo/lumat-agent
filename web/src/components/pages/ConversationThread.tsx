@@ -31,7 +31,7 @@ function MessageBubble({ message, customerId, customerName }: { message: Message
   const author = messageAuthor(message, customerId, customerName);
   const outbound = message.direction === "outbound";
   return <div className={`ai-agent-grammar__bubble-row${outbound ? " ai-agent-grammar__bubble-row--outbound" : ""}`} data-bubble aria-label={`Mensaje ${outbound ? "saliente" : "entrante"} de ${author}`}>
-    {!outbound ? <Avatar name={author} /> : null}
+    {!outbound ? <Avatar name={author} className="conversation-thread__bubble-avatar" /> : null}
     <div className="ai-agent-grammar__bubble-stack">
       <span className="ai-agent-grammar__message-meta">{author}</span>
       <div className={`ai-agent-grammar__bubble${outbound ? " ai-agent-grammar__bubble--outbound" : ""}`}>
@@ -40,13 +40,18 @@ function MessageBubble({ message, customerId, customerName }: { message: Message
       </div>
       <span className="ai-agent-grammar__message-time">{message.created_at?.slice(11, 16) ?? "—"}</span>
     </div>
-    {outbound ? <Avatar name={author} /> : null}
+    {outbound ? <Avatar name={author} className="conversation-thread__bubble-avatar" /> : null}
   </div>;
 }
 
 function displayCapturedValue(value: unknown) {
   return typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "—");
 }
+// Captured data is free-form and can carry internal markers (e.g. `_pending`); hide those and
+// humanize the key so the operator never reads a raw snake_case identifier.
+const CAPTURED_LABELS: Record<string, string> = { name: "Nombre", comuna: "Comuna", urgencia: "Urgencia informada", urgencia_informada: "Urgencia informada", tipo_equipo: "Tipo de equipo", direccion: "Dirección", telefono: "Teléfono" };
+const capturedLabel = (key: string) => CAPTURED_LABELS[key] ?? key.replace(/_/g, " ").replace(/^./, (character) => character.toUpperCase());
+const capturedEntries = (data: Record<string, unknown>) => Object.entries(data).filter(([key]) => !key.startsWith("_"));
 // Activity rows are persisted with a technical vocabulary (`classified` + `intent:<intent>`,
 // `kb_retrieved` + `chunks:<n>`, `escalation` + `handoff:<reason>` — see app/services/realtime.py).
 // Translate them into operator-facing Spanish so the chip is not raw machine text.
@@ -91,7 +96,7 @@ function ConversationContext({ conversation }: { conversation: NonNullable<Threa
         {caseData.summary ? <p className="conversation-context__case-summary">{caseData.summary}</p> : null}
         <dl><div className="ai-agent-grammar__detail"><dt>Emergencia</dt><dd>{conversation.emergency ? "Sí" : "No"}</dd></div><div className="ai-agent-grammar__detail"><dt>Reconocimiento</dt><dd>{conversation.acknowledged_at ? "Reconocida" : "Pendiente"}</dd></div></dl>
       </section> : null}
-      {conversation.captured_data && Object.keys(conversation.captured_data).length > 0 ? <details open><summary>Datos capturados</summary><dl>{Object.entries(conversation.captured_data).map(([key, value]) => <div className="ai-agent-grammar__detail" key={key}><dt>{key}</dt><dd>{displayCapturedValue(value)}</dd></div>)}</dl></details> : null}
+      {conversation.captured_data && capturedEntries(conversation.captured_data).length > 0 ? <details open><summary>Datos capturados</summary><dl>{capturedEntries(conversation.captured_data).map(([key, value]) => <div className="ai-agent-grammar__detail" key={key}><dt>{capturedLabel(key)}</dt><dd>{displayCapturedValue(value)}</dd></div>)}</dl></details> : null}
   </aside>;
 }
 export function ConversationThread({ conversationId, data: controlledData, state: controlledState, customerName, refreshKey = 0, onMutate, onBack, interactive = false }: ConversationThreadProps) {
@@ -159,20 +164,20 @@ export function ConversationThread({ conversationId, data: controlledData, state
          <main className="ai-agent-grammar__main" aria-label="Conversación">
           {conversation ? <header className="ai-agent-grammar__header"><div className="ai-agent-grammar__header-copy"><h2>Historial de mensajes</h2><span className="ai-agent-grammar__freshness">Actualizada el {formatRecency(conversation.last_message_at)}</span></div><div className="ai-agent-grammar__header-actions">{interactive ? threadActions : null}</div>{!interactive ? <span className={`ai-agent-grammar__window${windowOpen ? "" : " ai-agent-grammar__window--closed"}`}>{windowOpen ? "Respuesta disponible" : "Fuera de la ventana de 24 horas"}</span> : null}</header> : null}
          <section className="ai-agent-grammar__thread-area" aria-label="Mensajes de la conversación">
-           <CollapsibleMessages total={data.messages_total ?? messages.length} expanded={messagesExpanded} onToggle={toggleMessages}><div className="ai-agent-grammar__bubbles">{messages.map((message) => <MessageBubble key={message.id} message={message} customerId={conversation?.customer_id ?? 0} customerName={customerName} />)}</div></CollapsibleMessages>
+           <CollapsibleMessages total={data.messages_total ?? messages.length} expanded={messagesExpanded} onToggle={toggleMessages}><div className="ai-agent-grammar__bubbles">{messages.map((message) => <MessageBubble key={message.id} message={message} customerId={conversation?.customer_id ?? 0} customerName={(id) => conversation?.customer?.name ?? customerName?.(id) ?? `Cliente #${id}`} />)}</div></CollapsibleMessages>
           {liveActivity.length > 0 ? <div className="ai-agent-grammar__activity-list" aria-label="Actividad persistida">{liveActivity.map((activity, index) => <div className="ai-agent-grammar__activity" role="status" key={`${activity.event}-${index}`}><span aria-hidden="true">✦</span><span className="ai-agent-grammar__activity-chip">{activityText(activity)}</span></div>)}</div> : null}
          {!interactive ? <NoReplyNote /> : null}
          {conversation?.state === "human" ? <div className="ai-agent-grammar__handoff" aria-label="Traspaso a atención humana">La conversación está en atención humana.</div> : null}
          </section>
          {interactive ? <div className="ai-agent-grammar__composer-zone">
            {messages.filter((m) => m.delivery_status === "failed").map((m) => <Button key={m.id} variant="secondary" disabled={busy} onClick={() => void mutate(() => retryMessage(m.conversation_id, m.id))}>Reintentar entrega #{m.id}</Button>)}
-           {conversation?.state === "human" ? <form className="ai-agent-grammar__composer" aria-label="Responder a la conversación" onSubmit={(e) => { e.preventDefault(); if (conversationId && text.trim()) void mutate(() => sendMessage(conversationId, { text: text.trim() })); }}>
+           {conversation?.state === "human" ? <form className={`ai-agent-grammar__composer${windowOpen ? "" : " ai-agent-grammar__composer--locked"}`} aria-label="Responder a la conversación" onSubmit={(e) => { e.preventDefault(); if (conversationId && text.trim()) void mutate(() => sendMessage(conversationId, { text: text.trim() })); }}>
              {!windowOpen ? <div className="ai-agent-grammar__window-warning" role="status" aria-label="Fuera de la ventana de 24 horas"><Icon icon={Clock} aria-hidden="true" /><div><strong>Fuera de la ventana de 24 horas</strong><span>El envío de mensajes no está disponible.</span></div></div> : null}
-             <div className="ai-agent-grammar__composer-row">{!windowOpen ? <Icon icon={Lock} aria-hidden="true" className="ai-agent-grammar__composer-lock" /> : null}<Textarea label="Respuesta" placeholder={windowOpen ? undefined : "Respuesta no disponible"} value={text} disabled={!windowOpen || busy} onChange={(e) => setText(e.target.value)} /><Button type="submit" aria-label="Enviar respuesta" disabled={!windowOpen || busy || !text.trim()}><SendHorizonal aria-hidden="true" /></Button></div>
+             <div className="ai-agent-grammar__composer-row"><div className="ai-agent-grammar__composer-field">{!windowOpen ? <Icon icon={Lock} aria-hidden="true" className="ai-agent-grammar__composer-lock" /> : null}<Textarea label="Respuesta" rows={windowOpen ? undefined : 1} placeholder={windowOpen ? undefined : "Respuesta no disponible"} value={text} disabled={!windowOpen || busy} onChange={(e) => setText(e.target.value)} /></div><Button type="submit" aria-label="Enviar respuesta" disabled={!windowOpen || busy || !text.trim()}><SendHorizonal aria-hidden="true" /></Button></div>
              {!windowOpen ? <p className="ai-agent-grammar__closed-note">Conversación cerrada</p> : null}
            </form> : <div className="ai-agent-grammar__composer ai-agent-grammar__composer--locked">
              <div className="ai-agent-grammar__window-warning" role="status" aria-label="Fuera de la ventana de 24 horas"><Icon icon={Clock} aria-hidden="true" /><div><strong>Fuera de la ventana de 24 horas</strong><span>El envío de mensajes no está disponible.</span></div></div>
-             <div className="ai-agent-grammar__composer-row"><Icon icon={Lock} aria-hidden="true" className="ai-agent-grammar__composer-lock" /><Textarea label="Respuesta" placeholder="Respuesta no disponible" value="" disabled onChange={() => {}} /><Button aria-label="Enviar respuesta" disabled><SendHorizonal aria-hidden="true" /></Button></div>
+             <div className="ai-agent-grammar__composer-row"><div className="ai-agent-grammar__composer-field"><Icon icon={Lock} aria-hidden="true" className="ai-agent-grammar__composer-lock" /><Textarea label="Respuesta" rows={1} placeholder="Respuesta no disponible" value="" disabled onChange={() => {}} /></div><Button aria-label="Enviar respuesta" disabled><SendHorizonal aria-hidden="true" /></Button></div>
              <p className="ai-agent-grammar__closed-note">{conversation?.state === "closed" ? "Conversación cerrada" : "Toma la conversación para responder."}</p>
            </div>}
            {mutationError && <p role="alert">La entrega falló: {mutationError}</p>}

@@ -1,4 +1,4 @@
-/* Page identity header: avatar + name + state badge + initiated line + ficha action. */
+/* Page identity header: avatar + name + state badge + initiated line. */
 .conversation-thread__identity { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); }
 .conversation-thread__identity-person { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .conversation-thread__hero-avatar { flex: 0 0 auto; width: calc(var(--space-8) * 1.5); height: calc(var(--space-8) * 1.5); font-size: var(--text-lg); }
@@ -6,11 +6,24 @@
 .conversation-thread__identity-title h1 { margin: 0; font-size: var(--text-xl); }
 .conversation-thread__identity-person p { margin: var(--space-1) 0 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
 
-/* Action row: "Volver a conversaciones" and "Ver ficha del cliente" share one line. */
+/* Action row: "Volver a conversaciones" and "Ver ficha del cliente" share one line and one height. */
 .conversation-thread__actions-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
+.conversation-thread__actions-row .btn { min-height: var(--space-8); }
 
-/* Thread separator between the messages and the composer state. */
+/* Separator around the human-attention notice. */
 .ai-agent-grammar__handoff { margin: var(--space-4) 0; padding: var(--space-2) 0; border-top: 2px solid var(--warning-border); border-bottom: 2px solid var(--warning-border); text-align: center; color: var(--warning); font-size: var(--text-sm); }
+
+/* Messages: author above the bubble, timestamp below; roomier avatars than the table default. */
+.ai-agent-grammar__bubble-stack { display: grid; gap: var(--space-1); max-width: 75%; min-width: 0; }
+.ai-agent-grammar__bubble-stack .ai-agent-grammar__bubble { max-width: 100%; }
+.ai-agent-grammar__bubble-stack .ai-agent-grammar__message-meta { margin-bottom: 0; }
+.ai-agent-grammar__bubble-stack .ai-agent-grammar__message-time { margin-top: 0; }
+.ai-agent-grammar__bubble-row--outbound .ai-agent-grammar__bubble-stack { justify-items: end; }
+.conversation-thread__bubble-avatar { width: calc(var(--space-8) + var(--space-2)); height: calc(var(--space-8) + var(--space-2)); font-size: var(--text-md); }
+
+/* Messages card header: title + "Actualizada el …" copy on the left, actions on the right. */
+.ai-agent-grammar__header-copy { display: grid; flex: 1 1 auto; gap: var(--space-1); min-width: 0; }
+.ai-agent-grammar__header-copy h2 { margin: 0; font-size: var(--text-md); font-weight: var(--weight-semibold); }
 
 /* Composer: closed-window warning, locked row, closed note (reference ConversationThread.png). */
 .ai-agent-grammar__window-warning { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--warning-border); border-radius: var(--radius-md); background: var(--warning-bg); color: var(--warning); }
@@ -19,36 +32,31 @@
 .ai-agent-grammar__window-warning strong { font-weight: var(--weight-semibold); }
 .ai-agent-grammar__window-warning span { color: var(--warning); font-size: var(--text-sm); }
 .ai-agent-grammar__composer { display: grid; gap: var(--space-3); }
-.ai-agent-grammar__composer-row { position: relative; display: flex; align-items: center; gap: var(--space-2); }
-.ai-agent-grammar__composer-row .textarea-field, .ai-agent-grammar__composer-row .field { flex: 1 1 auto; min-width: 0; }
-.ai-agent-grammar__composer-row .btn { flex: 0 0 auto; }
-.ai-agent-grammar__composer-lock { position: absolute; left: var(--space-3); top: var(--space-3); z-index: 1; color: var(--corp-fg-muted); pointer-events: none; }
-.ai-agent-grammar__composer--locked .ai-agent-grammar__composer-row .field__control { padding-left: calc(var(--space-3) + var(--icon-md)); }
+.ai-agent-grammar__composer-row { display: flex; align-items: center; gap: var(--space-3); }
+.ai-agent-grammar__composer-field { position: relative; display: flex; flex: 1 1 auto; align-items: center; min-width: 0; }
+.ai-agent-grammar__composer-field .field { flex: 1 1 auto; min-width: 0; }
+.ai-agent-grammar__composer-row .btn { flex: 0 0 auto; align-self: center; }
+.ai-agent-grammar__composer-lock { position: absolute; left: var(--space-3); top: 50%; z-index: 1; transform: translateY(-50%); color: var(--corp-fg-muted); pointer-events: none; }
+.ai-agent-grammar__composer--locked .field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.ai-agent-grammar__composer--locked .field__control { padding-left: calc(var(--space-3) + var(--icon-md)); resize: none; }
 .ai-agent-grammar__closed-note { margin: 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
 
 /* Context inspector (reference ConversationThread.png): identity, linked case, captured data. */
+.ai-agent-grammar__inspector section { gap: var(--space-3); }
+.ai-agent-grammar__inspector section dl { display: grid; margin: 0; }
+.ai-agent-grammar__inspector .ai-agent-grammar__detail { padding: var(--space-3) 0; border-top: 1px solid var(--border); }
 .conversation-context__customer { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
-.conversation-context__customer-body { display: grid; gap: var(--space-1); min-width: 0; }
+.conversation-context__customer .avatar { width: calc(var(--space-8) + var(--space-2)); height: calc(var(--space-8) + var(--space-2)); font-size: var(--text-md); }
+.conversation-context__customer-body { display: grid; flex: 1 1 auto; gap: var(--space-1); min-width: 0; }
 .conversation-context__phone { display: flex; align-items: center; gap: var(--space-2); color: var(--corp-fg-muted); font-size: var(--text-sm); }
-.conversation-context__copy { display: inline-flex; padding: 0; border: 0; background: transparent; color: var(--corp-fg-muted); cursor: pointer; }
+.conversation-context__copy { display: inline-flex; margin-left: auto; padding: 0; border: 0; background: transparent; color: var(--corp-fg-muted); cursor: pointer; }
 .conversation-context__copy svg { width: var(--icon-md); height: var(--icon-md); }
 .conversation-context__case-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .conversation-context__case-link { color: var(--corp-primary); font-size: var(--text-sm); font-weight: var(--weight-semibold); text-decoration: none; white-space: nowrap; }
 .conversation-context__case-link:hover { text-decoration: underline; }
-.conversation-context__case-title { margin: 0; font-weight: var(--weight-semibold); }
-.conversation-context__badges { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.conversation-context__case-summary { margin: 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
-
-/* Messages card header: title + "Actualizada el …" copy on the left, actions on the right. */
-.ai-agent-grammar__header-copy { display: grid; flex: 1 1 auto; gap: var(--space-1); min-width: 0; }
-.ai-agent-grammar__header-copy h2 { margin: 0; font-size: var(--text-md); font-weight: var(--weight-semibold); }
-
-/* Message bubble stack: author above the bubble, timestamp below it. */
-.ai-agent-grammar__bubble-stack { display: grid; gap: var(--space-1); max-width: 75%; min-width: 0; }
-.ai-agent-grammar__bubble-stack .ai-agent-grammar__bubble { max-width: 100%; }
-.ai-agent-grammar__bubble-stack .ai-agent-grammar__message-meta { margin-bottom: 0; }
-.ai-agent-grammar__bubble-stack .ai-agent-grammar__message-time { margin-top: 0; }
-.ai-agent-grammar__bubble-row--outbound .ai-agent-grammar__bubble-stack { justify-items: end; }
+.conversation-context__case-title { margin: var(--space-1) 0 0; font-size: var(--text-md); font-weight: var(--weight-semibold); }
+.conversation-context__badges { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-1); }
+.conversation-context__case-summary { margin: var(--space-1) 0 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
 
 @media (max-width: 39.99rem) {
   .conversation-thread__identity { flex-direction: column; align-items: stretch; gap: var(--space-3); }
