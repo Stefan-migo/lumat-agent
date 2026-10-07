@@ -168,3 +168,11 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
   responsive collapse). No shell/backend/token changes. Full suite 1034/1034; build green. Graph Check
   consulted `AgentChat`, `AssistantTabs`, `Tabs`, `Card`, `SearchInput`, `PageFrame`, `AppShell`,
   `PanelShell`. Open for owner visual review: the dark global icon rail.
+- **AW-1 owner review in progress (2026-10-07)** — dev stack raised for review: API dev
+  `infra-api-1` on `:8000` (bind-mounts the primary repo) + Vite dev server `:5173` from this
+  worktree → `http://localhost:5173/panel/app/chat` (login `admin`; password in `infra/.env` →
+  `PANEL_ADMIN_PASSWORD`). Session closed here at the owner's request; next chat resumes at **AW-2**.
+- **Open decision for AW-2/3** — the reference's dark icon rail: force `PanelShell` collapsed on the
+  Asistente surface, or make the rail part of the workspace. Shell untouched in AW-1.
+- **Paused backlog** — Slice 8 of `asistente-sdb` (wire the verifier into `approve_plan → execute`)
+  remains the prior backend feature; the frontend redesign takes priority.
