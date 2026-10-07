@@ -108,6 +108,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [noteComposerOpen, setNoteComposerOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<{ id: number; note: string } | null>(null);
   const [deletingNote, setDeletingNote] = useState<number | null>(null);
+  const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
   const [mutation, setMutation] = useState<"state" | "note" | null>(null);
   const [stateFeedback, setStateFeedback] = useState<Feedback | null>(null);
   const [noteFeedback, setNoteFeedback] = useState<Feedback | null>(null);
@@ -495,7 +496,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           </Dialog>
           <Card className="client-ficha__notes-card">
             <header className="client-ficha__card-heading"><h2>Notas</h2><Button variant="secondary" aria-expanded={noteComposerOpen} disabled={customerId === undefined || mutation !== null} onClick={() => setNoteComposerOpen(true)}>⊕ Agregar nota</Button></header>
-            {data.notes.length ? data.notes.map((entry) => <article className="client-ficha__note-row" key={entry.id}><Avatar name={entry.author ?? "Operador"}/><div><strong>{entry.author ?? "—"}</strong><small>{formatDate(entry.created_at)}</small></div><p>{entry.note}</p><Menu trigger="icon" label="Acciones de nota" items={[{value:"edit",label:"Editar",icon:Pencil},{value:"delete",label:"Eliminar",icon:Trash2,tone:"danger"},{value:"copy",label:"Copiar nota",icon:Copy}]} onSelect={(value)=>{ if(value==="copy") void navigator.clipboard?.writeText(entry.note); if(value==="edit") { setEditingNote({ id: entry.id, note: entry.note }); setNoteFeedback(null); } if(value==="delete") { setDeletingNote(entry.id); setNoteFeedback(null); } }}/></article>) : <EmptyState title="No hay notas" />}
+            {data.notes.length ? data.notes.map((entry) => <article className="client-ficha__note-row" key={entry.id}><Avatar name={entry.author ?? "Operador"}/><div><strong>{entry.author ?? "—"}</strong><small>{formatDate(entry.created_at)}</small></div><p>{entry.note}</p><span className="client-ficha__note-actions"><Menu trigger="icon" label="Acciones de nota" items={[{value:"edit",label:"Editar",icon:Pencil},{value:"delete",label:"Eliminar",icon:Trash2,tone:"danger"},{value:"copy",label:"Copiar nota",icon:Copy}]} onSelect={(value)=>{ if(value==="copy") { void navigator.clipboard?.writeText(entry.note); setCopiedNoteId(entry.id); window.setTimeout(() => setCopiedNoteId((current) => current === entry.id ? null : current), 1500); } if(value==="edit") { setEditingNote({ id: entry.id, note: entry.note }); setNoteFeedback(null); } if(value==="delete") { setDeletingNote(entry.id); setNoteFeedback(null); } }}/>{copiedNoteId === entry.id ? <span className="client-ficha__copy-hint" role="status">Copiado</span> : null}</span></article>) : <EmptyState title="No hay notas" />}
           </Card>
           <Dialog open={noteComposerOpen} onClose={() => setNoteComposerOpen(false)} title="Agregar nota" icon={NotebookPen} description="Registra una nota asociada al cliente.">
             <form className="client-ficha-dialog" onSubmit={(event) => { event.preventDefault(); void saveNote(); }}>
