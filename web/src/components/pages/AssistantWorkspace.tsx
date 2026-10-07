@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { FolderKanban, MessageSquarePlus, PanelRight, Plus } from "lucide-react";
-import { createChatThread, listProjects } from "../../api";
-import type { Project } from "../../types";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { FolderKanban, MessageSquarePlus, PanelRight, Plus, X } from "lucide-react";
+import { createChatThread, deleteChatThread, listChatThreads, listProjects, renameChatThread } from "../../api";
+import type { InternalChatThreadSummary, Project } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
 import { Badge } from "../primitives/Badge";
@@ -11,25 +11,102 @@ import { Menu } from "../primitives/Menu";
 import { SearchInput } from "../primitives/SearchInput";
 import { Tabs } from "../primitives/Tabs";
 import { EmptyState } from "../shared/EmptyState";
+import { Dialog } from "../primitives/Dialog";
 import { StateMessage } from "../shared/StateMessage";
 import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import "./AssistantWorkspace.css";
 
-export function AssistantWorkspace({ children }: { children: ReactNode }) {
+export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = true }: { children: ReactNode; onCreateThread: () => void; loadThreadTabs?: boolean }) {
   const [projectsVisible, setProjectsVisible] = useState(() => window.innerWidth > 1024);
   const [contextVisible, setContextVisible] = useState(() => window.innerWidth > 1024);
   const [creatingThread, setCreatingThread] = useState(false);
   const [threadError, setThreadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
+  const [threadListError, setThreadListError] = useState<string | null>(null);
+  const [, setLocationKey] = useState(() => `${window.location.pathname}${window.location.search}`);
+  const [renameTarget, setRenameTarget] = useState<InternalChatThreadSummary | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<InternalChatThreadSummary | null>(null);
+  const [threadActionError, setThreadActionError] = useState<string | null>(null);
+  const route = new URLSearchParams(window.location.search);
+  const activeThreadId = Number(route.get("thread_id")) || undefined;
+  const activeProjectSlug = route.get("proyecto") || selectedProject || undefined;
+  const activeThread = threads.find((thread) => thread.id === activeThreadId);
   const loadProjects = useCallback(() => listProjects(), []);
-  const projectsData = useAsyncData(loadProjects, projectsVisible);
+  const projectsData = useAsyncData(loadProjects, projectsVisible || Boolean(activeProjectSlug));
   const projects = projectsData.data?.projects ?? [];
+  const activeProject = projects.find((project) => project.slug === activeProjectSlug);
   const visibleProjects = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
     return query ? projects.filter((project) => project.name.toLocaleLowerCase().includes(query)) : projects;
   }, [projects, search]);
+
+  const refreshThreads = useCallback(async () => {
+    try {
+      const result = await listChatThreads(20);
+      setThreads(result.threads ?? []);
+      setThreadListError(null);
+    } catch {
+      setThreadListError("No pudimos cargar los hilos.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!loadThreadTabs) return;
+    void refreshThreads();
+  }, [activeThreadId, loadThreadTabs, refreshThreads]);
+
+  useEffect(() => {
+    if (!loadThreadTabs) return;
+    const onPopState = () => {
+      setLocationKey(`${window.location.pathname}${window.location.search}`);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [loadThreadTabs]);
+
+  const navigateToThread = (threadId: number) => {
+    window.history.pushState({}, "", pathForRoute({
+      view: "chat",
+      ...(activeProjectSlug ? { projectSlug: activeProjectSlug } : {}),
+      threadId,
+    }));
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  const renameThread = async () => {
+    if (!renameTarget || !renameTitle.trim()) return;
+    try {
+      await renameChatThread(renameTarget.id, renameTitle.trim());
+      setRenameTarget(null);
+      setRenameTitle("");
+      await refreshThreads();
+    } catch {
+      setThreadActionError("No pudimos renombrar el hilo.");
+    }
+  };
+
+  const deleteThread = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteChatThread(deleteTarget.id);
+      const remaining = threads.filter((thread) => thread.id !== deleteTarget.id);
+      setThreads(remaining);
+      setDeleteTarget(null);
+      if (deleteTarget.id === activeThreadId) {
+        if (remaining[0]) navigateToThread(remaining[0].id);
+        else {
+          window.history.pushState({}, "", pathForRoute({ view: "chat" }));
+          window.dispatchEvent(new PopStateEvent("popstate"));
+        }
+      }
+    } catch {
+      setThreadActionError("No pudimos eliminar el hilo.");
+    }
+  };
 
   const navigateToProject = (project: Project, destination: "context" | "threads") => {
     const route = destination === "context"
@@ -148,6 +225,66 @@ export function AssistantWorkspace({ children }: { children: ReactNode }) {
 
       <section className="assistant-workspace__thread" aria-label="Área del hilo">
         {threadError ? <StateMessage tone="danger" role="alert" title={threadError} /> : null}
+        <nav className="assistant-workspace__thread-tabs" aria-label="Hilos recientes">
+          <div className="assistant-workspace__thread-tab-list">
+            {threads.map((thread) => (
+              <div className="assistant-workspace__thread-tab" key={thread.id} data-active={thread.id === activeThreadId}>
+                <button type="button" aria-current={thread.id === activeThreadId ? "page" : undefined} onClick={() => navigateToThread(thread.id)}>
+                  {thread.title || "Sin título"}
+                </button>
+                <Menu
+                  label={`Acciones de ${thread.title || "hilo"}`}
+                  trigger="icon"
+                  items={[{ value: "rename", label: "Renombrar" }, { value: "delete", label: "Eliminar", tone: "danger" }]}
+                  onSelect={(value) => {
+                    setThreadActionError(null);
+                    if (value === "rename") { setRenameTarget(thread); setRenameTitle(thread.title ?? ""); }
+                    else setDeleteTarget(thread);
+                  }}
+                />
+                <button type="button" className="assistant-workspace__thread-close" aria-label={`Cerrar ${thread.title || "hilo"}`} onClick={() => { setThreadActionError(null); setDeleteTarget(thread); }}>
+                  <Icon icon={X} size="sm" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <Button variant="tertiary" aria-label="Crear nuevo hilo" title="Crear nuevo hilo" onClick={onCreateThread}>
+            <Icon icon={Plus} />
+          </Button>
+        </nav>
+        {threadListError ? <StateMessage tone="danger" role="alert" title={threadListError} /> : null}
+        <header className="assistant-workspace__thread-header">
+          <div>
+            <h1>{activeThread?.title || (activeThreadId ? "Sin título" : "Asistente Lumat")}</h1>
+            {activeProject ? <p>Proyecto: {activeProject.name}</p> : null}
+          </div>
+          {activeThread ? (
+            <Menu
+              label="Acciones del hilo"
+              trigger="icon"
+              items={[{ value: "rename", label: "Renombrar" }, { value: "delete", label: "Eliminar", tone: "danger" }]}
+              onSelect={(value) => {
+                setThreadActionError(null);
+                if (value === "rename") { setRenameTarget(activeThread); setRenameTitle(activeThread.title ?? ""); }
+                else setDeleteTarget(activeThread);
+              }}
+            />
+          ) : null}
+        </header>
+        {threadActionError ? <StateMessage tone="danger" role="alert" title={threadActionError} /> : null}
+        <Dialog open={renameTarget !== null} onClose={() => setRenameTarget(null)} title="Renombrar hilo">
+          <div className="assistant-workspace__thread-dialog">
+            <label htmlFor="workspace-thread-title">Nombre del hilo</label>
+            <input id="workspace-thread-title" value={renameTitle} onChange={(event) => setRenameTitle(event.target.value)} />
+            <Button onClick={() => void renameThread()} disabled={!renameTitle.trim()}>Guardar nombre</Button>
+          </div>
+        </Dialog>
+        <Dialog open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title="Eliminar hilo">
+          <div className="assistant-workspace__thread-dialog">
+            <p>¿Eliminar “{deleteTarget?.title || "Sin título"}”? Esta acción no se puede deshacer.</p>
+            <Button onClick={() => void deleteThread()}>Eliminar hilo</Button>
+          </div>
+        </Dialog>
         {children}
       </section>
 

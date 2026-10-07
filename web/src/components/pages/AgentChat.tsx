@@ -354,6 +354,9 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
         if (result) {
           loadThread(result);
           if (!requestedId && requestedProject) onThreadOpened?.(result.thread.id);
+        } else {
+          setThread(null);
+          setMessages([]);
         }
       })
       .catch((reason: unknown) =>
@@ -736,10 +739,11 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   );
 
   return (
-    <AssistantWorkspace>
+    <AssistantWorkspace onCreateThread={() => void newChat()} loadThreadTabs={Boolean(onThreadOpened)}>
     <PageFrame
       title="Asistente Lumat"
       meta="Chat interno con el agente virtual."
+      hideCopy
       state={state}
       className="assistant-chat"
       actions={
