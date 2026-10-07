@@ -133,6 +133,21 @@ The CV-1 tab-label change (`Humanas`→`Atención humana`, `Casos`→`Con caso`)
 ### CV-2/3/4 evidence (owner review 2026-10-07)
 - Commit `7e4dadd0`; `tsc -b --force --noEmit` clean; full suite **1034/1034**; `npm run build` green.
 
+### CV-2-r2 — owner visual review 2026-10-07 #2 (thread)
+- [x] Action row buttons share one height (`.conversation-thread__actions-row .btn { min-height: var(--space-8) }`).
+- [x] Bubble avatars enlarged (`calc(var(--space-8) + var(--space-2))`).
+- [x] **Bug fixed:** message bubbles ignored `conversation.customer`, so inbound messages and the header fell back to `Cliente #<id>` even though the thread payload carries the customer (the route does `session.get(Customer, conversation.customer_id)`). Bubbles now resolve `conversation.customer?.name` first.
+- [x] Composer row realigned: lock centred on the field (`top: 50%` + translate), send button `align-self: center`, field wrapped in `.ai-agent-grammar__composer-field`; the closed/locked state hides the visible label but keeps it accessible and uses `rows=1`.
+- [x] Inspector `Cliente`: larger avatar; copy action right-aligned.
+- [x] Inspector `Caso vinculado`: breathing room (`gap: var(--space-3)`), larger case title, badges with a top margin, separator line per detail row.
+- [x] `Datos capturados`: internal markers filtered (`_`-prefixed keys, e.g. the real `_pending` in conversation #10) and keys humanized (`name`→Nombre, `urgencia_informada`→Urgencia informada, generic fallback capitalizes + de-underscores); separator line per row.
+- [x] Evidence: commit `0b64a05c`; `tsc` clean; full suite **1034/1034**; `npm run build` green.
+
+#### Open decisions from this review
+- **`Ver caso` destination:** currently links to `/panel/app/cases`, a compatibility route that resolves back to the conversations "Con caso" tab — circular. Owner proposal (clients → ficha → Casos tab) is the right target; it needs a `tab` route param on the client ficha (`panelRoutes` + `AppShell` + `ClientFicha.initialTab`). Not implemented yet.
+- **Case badge colour:** thread badges reuse the design-system `caseStatusTone`, where `abierto` is `neutral` (identical to the owner-approved clientes ficha). The reference screenshot shows `Abierto` green because its fixture differs. Awaiting an owner call before diverging from the shared tone map.
+- **Backend follow-up:** `captured_data` is persisting internal keys (`{"name": ..., "_pending": "comuna"}`). The frontend now hides them, but the capture pipeline should stop writing `_pending` into the customer-facing payload.
+
 ## Authorized scope
 
 Work **only** in `/home/stefan/repos/lumat-agent-odd-conversaciones-redesign` on branch
