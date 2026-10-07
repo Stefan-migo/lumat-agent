@@ -87,4 +87,36 @@ describe("projects panel", () => {
 
     expect(onOpenChat).toHaveBeenCalledWith("ops");
   });
+
+  it("renders project context and honest disabled instruction and resource controls", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 }));
+    render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
+
+    expect(await screen.findByText("Run ops · Activo")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Contexto" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Nombre del proyecto")).toHaveValue("Operations");
+    expect(screen.getByLabelText("Nombre del proyecto")).toBeDisabled();
+    expect(screen.getByLabelText("Propósito")).toHaveValue("Run ops");
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Agregar recurso" })).toBeDisabled();
+  });
+
+  it("explains that project-scoped threads are not supported and shows an honest agent empty state", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 }));
+    render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
+    await screen.findByRole("tab", { name: "Hilos" });
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Hilos" }), { button: 0 });
+    expect(await screen.findByText("Esta vista todavía no puede filtrar hilos por proyecto. La API no entrega la asociación del proyecto en el listado de hilos.")).toBeInTheDocument();
+    expect(screen.queryByText(/Conversación|thread/i)).not.toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Agentes" }), { button: 0 });
+    expect(await screen.findByText("La gestión de agentes por proyecto todavía no está disponible.")).toBeInTheDocument();
+  });
+
+  it("shows a not-found state for an unknown project", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Project not found" }), { status: 404 }));
+    render(<ProjectsPage projectSlug="missing" data={{ projects: [] }} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("No encontramos este proyecto");
+  });
 });

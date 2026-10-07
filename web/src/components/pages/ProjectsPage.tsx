@@ -12,6 +12,8 @@ import { DataTable } from "../shared/DataTable";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
+import { Tabs } from "../primitives/Tabs";
+import "./ProjectsPage.css";
 
 export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, state, sectionTabs }: { projectSlug?: string; onOpenProject?: (slug: string) => void; onOpenChat?: (slug: string) => void; data?: ProjectsResponse; state?: AsyncDataState; sectionTabs?: ReactNode }) {
   const [form, setForm] = useState({ slug: "", name: "", purpose: "" });
@@ -24,8 +26,25 @@ export function ProjectsPage({ projectSlug, onOpenProject, onOpenChat, data, sta
   const detail = useAsyncData(detailLoad, projectSlug !== undefined);
   if (projectSlug) {
     const body = detail.data as ProjectDetailResponse | null;
-    return <PageFrame title={body?.project.name ?? "Proyecto"} meta={body ? `${body.project.purpose} · ${projectStatusLabel(body.project.status)}` : "Detalle del proyecto"} actions={<><Button variant="secondary" onClick={() => onOpenChat?.(body?.project.slug ?? projectSlug!)}>Abrir asistente</Button><Button variant="secondary" onClick={() => window.history.back()}>Volver a proyectos</Button></>} state={detail.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando proyecto" /> : detail.state === "error" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar el proyecto" /> : undefined}>
-      {sectionTabs}
+    const notFound = detail.state === "error" && detail.error instanceof ApiError && detail.error.status === 404;
+    return <PageFrame title={body?.project.name ?? "Proyecto"} meta={body ? `${body.project.purpose} · ${projectStatusLabel(body.project.status)}` : "Detalle del proyecto"} actions={<><Button variant="secondary" onClick={() => onOpenChat?.(body?.project.slug ?? projectSlug)}>Abrir asistente</Button><Button variant="secondary" onClick={() => window.history.back()}>Volver a proyectos</Button></>} state={detail.state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando proyecto" /> : notFound ? <StateMessage tone="warning" role="alert" title="No encontramos este proyecto" detail="Revisa el enlace o vuelve a la lista de proyectos." /> : detail.state === "error" ? <><StateMessage tone="danger" role="alert" title="No pudimos cargar el proyecto" detail="Intenta cargar el proyecto nuevamente más tarde." /><Button variant="secondary" onClick={detail.retry}>Reintentar</Button></> : undefined}>
+      {body ? <Tabs ariaLabel="Secciones del proyecto" tabs={[{ id: "context", label: "Contexto" }, { id: "threads", label: "Hilos" }, { id: "agents", label: "Agentes" }]}>{(active) => {
+        if (active === "threads") return <Card title="Hilos del proyecto"><EmptyState title="Hilos del proyecto no disponibles" description="Esta vista todavía no puede filtrar hilos por proyecto. La API no entrega la asociación del proyecto en el listado de hilos." /></Card>;
+        if (active === "agents") return <Card title="Agentes del proyecto"><EmptyState title="No hay agentes para mostrar" description="La gestión de agentes por proyecto todavía no está disponible." /></Card>;
+        return <div className="projects-page__context">
+          <Card title="Instrucciones del proyecto" description="La edición de instrucciones aún no está disponible.">
+            <Badge tone={projectStatusTone(body.project.status)}>{projectStatusLabel(body.project.status)}</Badge>
+            <Input label="Nombre del proyecto" value={body.project.name} disabled onChange={() => undefined} />
+            <Textarea label="Propósito" value={body.project.purpose} disabled onChange={() => undefined} />
+            <Button disabled>Guardar cambios</Button>
+            <p>Las instrucciones aún no se pueden editar.</p>
+          </Card>
+          <Card title="Archivos y conocimiento" description="Los recursos del proyecto aún no están disponibles.">
+            <EmptyState title="No hay recursos disponibles" description="La API todavía no permite vincular ni subir archivos para este proyecto." />
+            <Button variant="secondary" disabled>Agregar recurso</Button>
+          </Card>
+        </div>;
+      }}</Tabs> : null}
     </PageFrame>;
   }
   const projects = data ?? fetched.data;
