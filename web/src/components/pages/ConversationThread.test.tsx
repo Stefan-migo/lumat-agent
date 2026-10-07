@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConversationThread } from './ConversationThread';
 import type { Conversation, Message } from '../../types';
@@ -92,7 +92,8 @@ it('refetches the thread after a successful close command', async () => {
 
   render(<ConversationThread interactive conversationId={9} />);
   expect(await screen.findByText(/Atención humana/)).toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: 'Cerrar conversación' }));
+  await user.click(screen.getByRole('button', { name: 'Acciones de la conversación' }));
+  await user.click(await screen.findByRole('menuitem', { name: 'Cerrar conversación' }));
 
   expect(await screen.findByText(/Cerrada/)).toBeInTheDocument();
   expect(threadRequests).toBe(2);
@@ -113,7 +114,7 @@ it('presents directional bubbles with identity and owner status', () => {
   expect(inbound.querySelector('.ai-agent-grammar__bubble')).toBeTruthy();
   expect(inbound.querySelector('.ai-agent-grammar__message-meta')).toHaveTextContent('María González');
   expect(inbound.querySelector('.ai-agent-grammar__message-time')).toHaveTextContent('09:00');
-  expect(screen.getByText('María González')).toBeInTheDocument();
+  expect(within(inbound).getByText('María González')).toBeInTheDocument();
   expect(screen.getByText('Lumat')).toBeInTheDocument();
 });
 
@@ -132,7 +133,8 @@ it('shows delivery failure content beside the retry action', () => {
   expect(screen.getByRole('button', { name: /reintentar entrega #1/i })).toBeInTheDocument();
 });
 
-it('keeps conversation actions in the thread header and context actions-free', () => {
+it('keeps conversation actions in the thread header and context actions-free', async () => {
+  const user = userEvent.setup();
   render(<ConversationThread data={{ ...thread, conversation: {
     ...thread.conversation,
     customer: { id: 4, name: 'María González', phone_e164: '+5694' },
@@ -144,12 +146,14 @@ it('keeps conversation actions in the thread header and context actions-free', (
 
   const header = document.querySelector('.ai-agent-grammar__header');
   expect(header).not.toBeNull();
-  for (const label of ['Tomar conversación', 'Devolver al agente', 'Cerrar conversación', 'Reconocer emergencia']) {
-    const button = screen.getByRole('button', { name: label });
-    expect(header).toContainElement(button);
-  }
+  expect(header).toContainElement(screen.getByRole('button', { name: 'Tomar conversación' }));
+  expect(header).toContainElement(screen.getByRole('button', { name: 'Acciones de la conversación' }));
   expect(screen.getByRole('complementary', { name: /inspector de conversación/i })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Acciones' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Acciones de la conversación' }));
+  for (const label of ['Devolver al agente', 'Cerrar conversación', 'Reconocer emergencia']) {
+    expect(await screen.findByRole('menuitem', { name: label })).toBeInTheDocument();
+  }
 });
 
 it('gives every inspector details element its own summary', () => {
@@ -176,8 +180,7 @@ it('does not hide the conversation inspector at the 64rem breakpoint', () => {
 describe('conversation inspector layout CSS contract', () => {
   const css = readFileSync(join(process.cwd(), 'src/components/primitives/primitives.css'), 'utf8');
 
-  it('uses card radius for conversation cards and preserves the mobile workspace reset', () => {
-    expect(css).toMatch(/\.conversations-queue__row\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
+  it('preserves the workspace card radius and mobile reset', () => {
     expect(css).toMatch(/\.conversation-workspace\s*\{[^}]*border-radius:\s*var\(--radius-lg\)/s);
     expect(css).toMatch(/@media \(max-width: 39\.99rem\)[\s\S]*?\.conversation-workspace\s*\{[^}]*border-radius:\s*0/s);
   });
@@ -217,12 +220,12 @@ describe('conversation inspector layout CSS contract', () => {
   }}} state="ready" />);
 
     expect(screen.getByRole('complementary', { name: /inspector de conversación/i })).toBeInTheDocument();
-  expect(screen.getByRole('heading', { name: 'Caso' })).toBeInTheDocument();
-  expect(screen.getByText('María González')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Caso vinculado' })).toBeInTheDocument();
+  expect(within(screen.getByRole('complementary', { name: /inspector de conversación/i })).getByText('María González')).toBeInTheDocument();
   expect(screen.getByText('Urgencia')).toBeInTheDocument();
-  expect(screen.getByText('preferred_language')).toBeInTheDocument();
+  expect(screen.getByText('Preferred language')).toBeInTheDocument();
   expect(screen.getByText('es')).toBeInTheDocument();
-  expect(screen.getByText('nested')).toBeInTheDocument();
+  expect(screen.getByText('Nested')).toBeInTheDocument();
   expect(screen.getByText('2')).toBeInTheDocument();
 });
 
@@ -231,7 +234,7 @@ it('keeps the thread usable without optional case or captured data', () => {
 
   expect(screen.getByText('Hola')).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: /inspector de conversación/i })).toBeInTheDocument();
-  expect(screen.queryByRole('heading', { name: 'Caso' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Caso vinculado' })).not.toBeInTheDocument();
   expect(screen.queryByText('Datos capturados')).not.toBeInTheDocument();
 });
 

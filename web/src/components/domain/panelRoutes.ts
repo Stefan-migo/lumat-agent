@@ -4,6 +4,8 @@ export type PanelRoute = {
   view: PanelView;
   conversationTab?: 'all' | 'human' | 'emergency' | 'case' | 'closed';
   clientId?: number;
+  /** Which ficha tab to open a client detail with (default: `summary`). */
+  clientTab?: 'summary' | 'cases' | 'visits' | 'conversations';
   userId?: number;
   conversationId?: number;
   automationRuleId?: number;
@@ -65,7 +67,7 @@ export function pathForRoute(route: PanelRoute): string {
     return `${base}?tab=${route.conversationTab}`;
   }
   if (route.view === 'clients' && route.clientId !== undefined && Number.isSafeInteger(route.clientId) && route.clientId > 0) {
-    return `${base}/${route.clientId}`;
+    return `${base}/${route.clientId}${route.clientTab && route.clientTab !== 'summary' ? `?tab=${route.clientTab}` : ''}`;
   }
   if (route.view === 'users' && route.userId !== undefined && Number.isSafeInteger(route.userId) && route.userId > 0) {
     return `${base}/${route.userId}`;
@@ -142,7 +144,10 @@ export function parsePanelPath(pathname: string): PanelRoute {
   if (view === 'automation-rules') return { view, automationRuleId: id };
   if (view === 'kb') return { view, kbDocId: id };
   if (view === 'agenda') return { view, appointmentId: id };
-  if (view === 'clients') return { view, clientId: id };
+  if (view === 'clients') {
+    const tab = query.get('tab');
+    return { view, clientId: id, ...(tab && ['summary', 'cases', 'visits', 'conversations'].includes(tab) ? { clientTab: tab as PanelRoute['clientTab'] } : {}) };
+  }
   if (view === 'users') return { view, userId: id };
   return { view, conversationId: id };
 }

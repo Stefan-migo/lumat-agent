@@ -1,16 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { Check, ChevronDown, MessageSquare, UserRound, UserRoundPlus, WifiOff } from "lucide-react";
 import { ApiError, acknowledgeCase, listActiveConversations, listConversations, takeConversation } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Conversation, ConversationsResponse } from "../../types";
 import { Button } from "../primitives/Button";
+import { Badge } from "../primitives/Badge";
 import { Avatar } from "../primitives/Avatar";
+import { Icon } from "../primitives/Icon";
+import { Menu, type MenuItem } from "../primitives/Menu";
 import { SearchInput } from "../primitives/SearchInput";
 import { Tabs } from "../primitives/Tabs";
 import { StatusBadge, type Status } from "../primitives/StatusBadge";
+import { DataTable, type Column } from "../shared/DataTable";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { coalesceSnapshotRefresh, realtimeClient, type ConnectionStatus } from "../../realtime";
+import "./ConversationsList.css";
 
 export type ConversationsListState = AsyncDataState | "fatal-error";
 export interface ConversationsListProps { data?: ConversationsResponse | null; state?: ConversationsListState; onRetry?: () => void; onOpenThread?: (id: number) => void; onQueueTabChange?: (tab: QueueTab) => void; customerName?: (id: number) => string; refreshKey?: number; currentUserId?: number; initialQueueTab?: QueueTab; }
@@ -18,7 +25,16 @@ type QueueTab = "all" | "human" | "emergency" | "case" | "closed";
 
 const priority = (conversation: Conversation) => conversation.emergency && !conversation.acknowledged_at ? 0 : conversation.state === "human" ? 1 : conversation.state === "closed" ? 3 : 2;
 const tabRows = (rows: Conversation[], tab: QueueTab) => rows.filter((row) => tab === "all" || tab === "human" && row.state === "human" || tab === "emergency" && row.emergency || tab === "case" && row.case_id != null || tab === "closed" && row.state === "closed");
-const formatRecency = (value: string | null) => value ? new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
+const formatActivityDate = (value: string) => new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value)).replace(".", "");
+const formatActivityTime = (value: string) => new Intl.DateTimeFormat("es-CL", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
+const activityCell = (value: string | null) => value ? <time className="conversations-list__activity" dateTime={value}><span>{formatActivityDate(value)}</span><span className="conversations-list__activity-time">{formatActivityTime(value)}</span></time> : "—";
+const priorityBadge = (conversation: Conversation) => {
+  if (conversation.case_priority === "alta") return <Badge tone="warning">Prioridad alta</Badge>;
+  if (conversation.case_priority === "media") return <Badge tone="neutral">Prioridad normal</Badge>;
+  if (conversation.case_priority === "baja") return <Badge tone="neutral">Prioridad baja</Badge>;
+  return null;
+};
+const conversationBadges = (conversation: Conversation) => <div className="conversations-list__status"><StatusBadge status={conversation.state as Status} />{priorityBadge(conversation)}{conversation.emergency ? <StatusBadge status="escalated" label="Emergencia" /> : null}</div>;
 
 function stateMessage(state: ConversationsListState, error: unknown) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando conversaciones" />;
@@ -57,42 +73,53 @@ export function ConversationsList({ data: controlledData, state: controlledState
   }, [assignment, controlledData, currentUserId, offset, query, retry]);
 
   const runAction = async (id: number, action: () => Promise<unknown>) => { setBusyId(id); try { await action(); retry(); } finally { setBusyId(undefined); } };
-  const tabs = [
-    { id: "all", label: <>Todas <span className="conversations-queue__count">{counts.all}</span></> },
-    { id: "human", label: <>Humanas <span className="conversations-queue__count">{counts.human}</span></> },
-    { id: "emergency", label: <>Emergencias <span className={`conversations-queue__count${counts.emergency > 0 ? " conversations-queue__count--danger" : ""}`}>{counts.emergency}</span></> },
-    { id: "case", label: <>Casos <span className="conversations-queue__count">{counts.case}</span></> },
-    { id: "closed", label: <>Cerradas <span className="conversations-queue__count">{counts.closed}</span></> },
+  const nameFor = (c: Conversation) => c.customer?.name ?? customerName?.(c.customer_id) ?? `Cliente #${c.customer_id}`;
+  const openThread = (c: Conversation) => { setSelectedId(c.id); onOpenThread?.(c.id); };
+  const menuItems = (c: Conversation): MenuItem[] => [
+    ...(onOpenThread ? [{ value: "open", label: "Abrir conversación", icon: MessageSquare }] : []),
+    ...(c.emergency && !c.acknowledged_at && c.case_id != null ? [{ value: "acknowledge", label: "Reconocer emergencia" }] : []),
   ];
+  const rowActions = (c: Conversation) => <div className="table__actions conversations-list__actions">
+    {c.state === "bot" ? <Button variant="secondary" disabled={busyId === c.id} onClick={() => void runAction(c.id, () => takeConversation(c.id, c.version ?? 0))}><UserRoundPlus aria-hidden="true" />Tomar conversación</Button> : null}
+    {menuItems(c).length ? <Menu trigger="icon" align="end" collisionPadding={8} label={`Acciones para ${nameFor(c)}`} disabled={busyId === c.id} items={menuItems(c)} onSelect={(value) => value === "open" ? openThread(c) : void runAction(c.id, () => acknowledgeCase(c.case_id!))} /> : null}
+  </div>;
+  const columns: Column<Conversation>[] = [
+    { key: "identity", header: "Cliente y conversación", render: (c) => {
+      const name = nameFor(c);
+      return <div className="table__resource"><Avatar name={name} className="table__resource-avatar" /><div className="table__resource-body"><button type="button" className="table__resource-name conversations-list__identity" data-testid={`conversation-row-${c.id}`} aria-label={`Abrir conversación #${c.id}`} aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span><span className="conversations-list__summary">{c.summary ?? "Sin resumen disponible"}</span></div></div>;
+    } },
+    { key: "state", header: "Estado y prioridad", render: conversationBadges },
+    { key: "case", header: "Caso", render: (c) => c.case_id != null ? <Badge tone="neutral">Caso #{c.case_id}</Badge> : "—" },
+    { key: "activity", header: "Última actividad", render: (c) => activityCell(c.last_message_at) },
+  ];
+  const tabs = [
+    { id: "all", label: <>Todas <span>{counts.all}</span></> },
+    { id: "human", label: <>Atención humana <span>{counts.human}</span></> },
+    { id: "emergency", label: <>Emergencias <span>{counts.emergency}</span></> },
+    { id: "case", label: <>Con caso <span>{counts.case}</span></> },
+    { id: "closed", label: <>Cerradas <span>{counts.closed}</span></> },
+  ];
+   const total = data?.total ?? rows.length;
    const limit = data?.limit ?? 20;
    const page = Math.floor(offset / limit) + 1;
-   const pageCount = data?.total != null && data.limit != null ? Math.max(1, Math.ceil(data.total / data.limit)) : undefined;
-  return <PageFrame className="conversations-page" title="Conversaciones" meta={data ? `${data.total ?? rows.length} ${data.total === 1 ? "conversación" : "conversaciones"}` : "Cola de conversaciones"} state={stateMessage(state, fetched.error)}>
-     {connection !== "connected" ? <p className="realtime-status realtime-status--info" role="status"><span aria-hidden="true">ⓘ</span>Conexión en tiempo real: {connection === "reconnecting" ? "reconectando" : "desconectada"}. Los datos seguirán disponibles.</p> : null}
-     <section className="ai-agent-grammar__filters conversations-queue__toolbar" aria-label="Filtros de conversaciones"><SearchInput aria-label="Buscar conversaciones" placeholder="Buscar cliente, teléfono o resumen" onSearch={(value) => { setQuery(value); setOffset(0); setRequestRevision((revision) => revision + 1); }} />{currentUserId !== undefined ? <label className="conversations-queue__assignment"><span className="conversations-queue__assignment-label">Responsable</span><select aria-label="Filtrar por responsable" value={assignment} onChange={(event) => { setAssignment(event.target.value as "all" | "mine"); setOffset(0); setRequestRevision((revision) => revision + 1); }}><option value="all">Todas</option><option value="mine">Asignadas a mí</option></select></label> : null}{state === "error" || state === "fatal-error" || state === "denied" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}</section>
-      <Tabs tabs={tabs} activeTab={tab} onTabChange={(value) => { const nextTab = value as QueueTab; setTab(nextTab); onQueueTabChange?.(nextTab); }} ariaLabel="Cola de conversaciones">{() => state === "loading" ? null : visibleRows.length === 0 ? <EmptyState title={data?.items === undefined ? "No hay registros" : "No hay conversaciones"} description="No existen conversaciones para mostrar." /> : <ul className="conversations-queue" role="list">{visibleRows.map((c) => {
-       const selected = selectedId === c.id;
-       const urgent = Boolean(c.emergency && !c.acknowledged_at);
-        const name = c.customer?.name ?? customerName?.(c.customer_id) ?? `Cliente #${c.customer_id}`;
-        return <li key={c.id} className={`conversations-queue__row${selected ? " conversations-queue__row--selected" : ""}${urgent ? " conversations-queue__row--urgent" : ""}`}>
-          <span className="conversations-queue__rail" aria-hidden="true" />
-          <Avatar name={name} className="conversations-queue__avatar" />
-          <div className="conversations-queue__body">
-            <div className="conversations-queue__headline">
-              <button type="button" className="conversations-queue__identity" data-testid={`conversation-row-${c.id}`} aria-label={`Abrir conversación #${c.id}`} aria-current={selected ? "page" : undefined} onClick={() => { setSelectedId(c.id); onOpenThread?.(c.id); }}>
-                <strong>{name}</strong>
-              </button>
-              <div className="conversations-queue__badges"><StatusBadge status={c.state as Status} />{c.emergency ? <StatusBadge status="escalated" label="Emergencia" /> : null}{c.case_priority && !c.emergency ? <span className="conversations-queue__priority">{c.case_priority}</span> : null}{c.case_id != null ? <span className="conversations-queue__case">Caso #{c.case_id}</span> : null}</div>
-            </div>
-            <p className="conversations-queue__meta"><span>{c.customer?.phone_e164 ?? c.wa_phone ?? "—"}</span> · <span className="conversations-queue__reference">#{c.id}</span></p>
-            <p className="conversations-queue__summary">{c.summary ?? "—"}</p>
-          </div>
-          <div className="conversations-queue__trailing">
-            <time className="conversations-queue__time" dateTime={c.last_message_at ?? undefined}>{formatRecency(c.last_message_at)}</time>
-            <div className="conversations-queue__actions">{onOpenThread ? <Button variant="secondary" className="conversations-queue__open" onClick={() => { setSelectedId(c.id); onOpenThread(c.id); }}>Abrir</Button> : null}{c.state === "bot" ? <Button disabled={busyId === c.id} onClick={() => void runAction(c.id, () => takeConversation(c.id, c.version ?? 0))}>Tomar conversación</Button> : null}{c.emergency && !c.acknowledged_at && c.case_id != null ? <Button variant="secondary" disabled={busyId === c.id} onClick={() => void runAction(c.id, () => acknowledgeCase(c.case_id!))}>Reconocer emergencia</Button> : null}</div>
-          </div>
-        </li>;
-     })}</ul>}</Tabs>
-      <nav className="pagination" aria-label="Paginación de conversaciones"><Button variant="secondary" className="pagination__button" disabled={offset === 0} onClick={() => { setOffset(Math.max(0, offset - 20)); setRequestRevision((revision) => revision + 1); }}>Anterior</Button><span className="pagination__current">Página {page}{pageCount ? ` de ${pageCount}` : ""}</span><Button variant="secondary" className="pagination__button" disabled={!data || offset + (data.limit ?? 20) >= (data.total ?? 0)} onClick={() => { setOffset(offset + 20); setRequestRevision((revision) => revision + 1); }}>Siguiente</Button></nav>
-  </PageFrame>;
+   return <PageFrame className="conversations-page" title="Conversaciones" titleAdornment={<Badge>{total}</Badge>} subtitle="Revisa y gestiona la atención de tus clientes." meta={data ? undefined : "Cola de conversaciones"} state={stateMessage(state, fetched.error)}>
+      {connection !== "connected" ? <p className="conversations-offline" role="status"><Icon icon={WifiOff} aria-hidden="true" /><strong>{connection === "reconnecting" ? "Reconectando la conexión en tiempo real." : "Sin conexión en tiempo real."}</strong><span>Los datos guardados siguen disponibles.</span></p> : null}
+      <Tabs tabs={tabs} activeTab={tab} onTabChange={(value) => { const nextTab = value as QueueTab; setTab(nextTab); onQueueTabChange?.(nextTab); }} ariaLabel="Cola de conversaciones">{() => <div className="table-card conversations-list__card">
+        <div className="table-toolbar"><SearchInput aria-label="Buscar conversaciones" placeholder="Buscar cliente, teléfono o resumen" onSearch={(value) => { setQuery(value); setOffset(0); setRequestRevision((revision) => revision + 1); }} />{currentUserId !== undefined ? <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button type="button" className="conversations-list__filter" aria-label={`Filtrar por responsable: ${assignment === "all" ? "Todos" : "Asignadas a mí"}`}><Icon icon={UserRound} size="sm" aria-hidden="true" /><span className="conversations-list__filter-label">Responsable:</span><span className="conversations-list__filter-value">{assignment === "all" ? "Todos" : "Asignadas a mí"}</span><ChevronDown aria-hidden="true" /></button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content className="menu__content conversations-list__filter-menu" align="start" sideOffset={4} collisionPadding={8}>
+              <DropdownMenu.RadioGroup value={assignment} onValueChange={(value) => { setAssignment(value as "all" | "mine"); setOffset(0); setRequestRevision((revision) => revision + 1); }}>
+                <DropdownMenu.RadioItem className="menu__item" value="all">Todos<DropdownMenu.ItemIndicator className="conversations-list__filter-check"><Check aria-hidden="true" /></DropdownMenu.ItemIndicator></DropdownMenu.RadioItem>
+                <DropdownMenu.RadioItem className="menu__item" value="mine">Asignadas a mí<DropdownMenu.ItemIndicator className="conversations-list__filter-check"><Check aria-hidden="true" /></DropdownMenu.ItemIndicator></DropdownMenu.RadioItem>
+              </DropdownMenu.RadioGroup>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root> : null}{state === "error" || state === "fatal-error" || state === "denied" ? <Button variant="secondary" onClick={retry}>Reintentar</Button> : null}</div>
+        {state === "loading" ? null : visibleRows.length === 0 ? <EmptyState title={data?.items === undefined ? "No hay registros" : "No hay conversaciones"} description="No existen conversaciones para mostrar." /> : <><div className="table-card__desktop"><DataTable columns={columns} rows={visibleRows} rowKey={(c) => String(c.id)} actions={rowActions} /></div><ul className="table-cards table-cards--mobile" aria-label="Lista de conversaciones">{visibleRows.map((c) => { const name = nameFor(c); return <li key={c.id} className="table-card__item conversations-list__mobile-card" data-testid={`conversation-card-${c.id}`}><div className="conversations-list__mobile-head"><Avatar name={name} className="table__resource-avatar" /><div className="conversations-list__mobile-identity"><button type="button" className="table__resource-name conversations-list__identity" aria-current={selectedId === c.id ? "page" : undefined} onClick={() => openThread(c)}>{name}</button><span className="table__resource-meta">{c.customer?.phone_e164 ?? c.wa_phone ?? "—"} · #{c.id}</span></div></div><span className="conversations-list__summary">{c.summary ?? "Sin resumen disponible"}</span><div className="conversations-list__mobile-meta">{conversationBadges(c)}<div className="conversations-list__mobile-facts"><span className="conversations-list__case">{c.case_id != null ? `Caso #${c.case_id}` : "—"}</span>{activityCell(c.last_message_at)}</div></div>{rowActions(c)}</li>; })}</ul></>}
+        <footer className="table-footer"><span className="table-footer__count">Mostrando {visibleRows.length} de {total} conversaciones</span><div className="table-footer__pagination"><Button variant="secondary" aria-label="Página anterior" disabled={offset === 0} onClick={() => { setOffset(Math.max(0, offset - limit)); setRequestRevision((revision) => revision + 1); }}>‹</Button><span className="table-footer__page" aria-current="page">{page}</span><Button variant="secondary" aria-label="Página siguiente" disabled={!data || offset + limit >= total} onClick={() => { setOffset(offset + limit); setRequestRevision((revision) => revision + 1); }}>›</Button></div></footer>
+      </div>}</Tabs>
+   </PageFrame>;
 }

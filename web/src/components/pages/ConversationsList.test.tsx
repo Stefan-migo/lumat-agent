@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConversationsList } from './ConversationsList';
 
@@ -18,9 +18,11 @@ describe('production conversations list', () => {
   it('loads filters and exposes production state and assignee fields', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(queue([row(4, 'human', 7)], { all: 1, human: 1, emergency: 0, case: 0, closed: 0 })), { status: 200 }));
     render(<ConversationsList />);
-    expect(await screen.findByText('Needs visit')).toBeInTheDocument();
-    expect(screen.getByText(/Cliente 4/)).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /humanas/i })).toHaveTextContent('1');
+    await waitFor(() => expect(document.querySelector('.table-card__desktop')).toBeTruthy());
+    const desktop = document.querySelector('.table-card__desktop') as HTMLElement;
+    expect(await within(desktop).findByText('Needs visit')).toBeInTheDocument();
+    expect(within(desktop).getByText('Cliente 4')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /atención humana/i })).toHaveTextContent('1');
     expect(fetchMock).toHaveBeenCalledWith('/panel/api/conversations', expect.anything());
   });
 
@@ -31,25 +33,29 @@ describe('production conversations list', () => {
     expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
   });
 
-  it('renders row cards and marks the selected conversation after opening it', async () => {
+  it('renders a desktop table and marks the selected conversation after opening it', async () => {
     const onOpenThread = vi.fn();
     const user = userEvent.setup();
     render(<ConversationsList data={queue([row(4, 'human', 7), row(5, 'bot', null)])} onOpenThread={onOpenThread} />);
 
-    expect(screen.getByRole('list')).toBeInTheDocument();
-    expect(screen.getAllByRole('listitem')).toHaveLength(2);
-    expect(screen.getByText('Atención humana')).toBeInTheDocument();
-    expect(screen.getByText('Agente atendiendo')).toBeInTheDocument();
-    await user.click(screen.getByTestId('conversation-row-4'));
+    const desktop = document.querySelector('.table-card__desktop') as HTMLElement;
+    expect(within(desktop).getByRole('table')).toBeInTheDocument();
+    expect(within(desktop).getAllByRole('row')).toHaveLength(3);
+    expect(within(desktop).getByText('Atención humana')).toBeInTheDocument();
+    expect(within(desktop).getByText('Agente atendiendo')).toBeInTheDocument();
+    await user.click(within(desktop).getByTestId('conversation-row-4'));
 
     expect(onOpenThread).toHaveBeenCalledWith(4);
-    expect(screen.getByTestId('conversation-row-4')).toHaveAttribute('aria-current', 'page');
+    expect(within(desktop).getByTestId('conversation-row-4')).toHaveAttribute('aria-current', 'page');
+    const mobile = document.querySelector('.table-cards--mobile') as HTMLElement;
+    expect(within(mobile).getByTestId('conversation-card-4')).toBeInTheDocument();
+    expect(within(mobile).queryByTestId('conversation-row-4')).not.toBeInTheDocument();
   });
 
   it('labels filters and exposes a page-level conversation region', () => {
     render(<ConversationsList data={queue([])} />);
 
-    expect(screen.getByRole('region', { name: /filtros de conversaciones/i })).toBeInTheDocument();
+    expect(document.querySelector('.table-card .table-toolbar')).toBeInTheDocument();
     expect(screen.getByText(/no existen conversaciones/i)).toBeInTheDocument();
   });
 
@@ -63,12 +69,16 @@ describe('production conversations list', () => {
     render(<ConversationsList data={queue(items, { all: 4, human: 1, emergency: 1, case: 2, closed: 1 })} />);
     expect(screen.getByRole('tab', { name: /todas.*4/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /emergencias.*1/i })).toBeInTheDocument();
-    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('Cliente 4');
-    expect(screen.getAllByRole('listitem')[1]).toHaveTextContent('Cliente 3');
-    expect(screen.getAllByRole('listitem')[3]).toHaveTextContent('Cliente 2');
+    let desktop = document.querySelector('.table-card__desktop') as HTMLElement;
+    let rows = within(desktop).getAllByRole('row');
+    expect(rows[1]).toHaveTextContent('Cliente 4');
+    expect(rows[2]).toHaveTextContent('Cliente 3');
+    expect(rows[4]).toHaveTextContent('Cliente 2');
     await userEvent.setup().click(screen.getByRole('tab', { name: /cerradas/i }));
-    expect(screen.getAllByRole('listitem')).toHaveLength(1);
-    expect(screen.getByText('Cliente 2')).toBeInTheDocument();
+    desktop = document.querySelector('.table-card__desktop') as HTMLElement;
+    rows = within(desktop).getAllByRole('row');
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toHaveTextContent('Cliente 2');
   });
 
   it('requests search and page changes and renders empty state as a DOM row', async () => {
@@ -87,17 +97,33 @@ describe('production conversations list', () => {
     const emergency = row(8, 'bot', null, { emergency: true, case_id: 44, acknowledged_at: null });
     const user = userEvent.setup();
     render(<ConversationsList data={queue([emergency])} onRetry={onRetry} />);
-    await user.click(screen.getByRole('button', { name: 'Tomar conversación' }));
+    const desktop = document.querySelector('.table-card__desktop') as HTMLElement;
+    await user.click(within(desktop).getByRole('button', { name: 'Tomar conversación' }));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    await user.click(screen.getByRole('button', { name: /reconocer/i }));
+    await user.click(within(desktop).getByRole('button', { name: /acciones para cliente 8/i }));
+    await user.click(screen.getByRole('menuitem', { name: /reconocer/i }));
     expect(onRetry).toHaveBeenCalledTimes(2);
+  });
+
+  it('filters by responsable through the styled dropdown', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(queue([])), { status: 200 }));
+    const user = userEvent.setup();
+    render(<ConversationsList currentUserId={7} />);
+    const trigger = screen.getByRole('button', { name: /filtrar por responsable/i });
+    expect(trigger).toHaveTextContent('Responsable:');
+    await user.click(trigger);
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Asignadas a mí' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?responsible_id=7&limit=20&offset=0', expect.anything()));
   });
 
   it('posts emergency acknowledgement to the case acknowledgement route', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const emergency = row(8, 'bot', null, { emergency: true, case_id: 44, acknowledged_at: null });
     render(<ConversationsList data={queue([emergency])} />);
-    await userEvent.setup().click(screen.getByRole('button', { name: /reconocer/i }));
+    const user = userEvent.setup();
+    const desktop = document.querySelector('.table-card__desktop') as HTMLElement;
+    await user.click(within(desktop).getByRole('button', { name: /acciones para cliente 8/i }));
+    await user.click(screen.getByRole('menuitem', { name: /reconocer/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/panel/api/cases/44/ack', expect.anything()));
   });
 });

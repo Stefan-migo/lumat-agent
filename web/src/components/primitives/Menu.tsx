@@ -26,6 +26,10 @@ export interface MenuProps {
    * (DESIGN_SYSTEM.md:475).
    */
   trigger?: "label" | "icon";
+  /** Radix content alignment. `end` opens leftwards — use it for a trigger near the right edge. */
+  align?: "start" | "center" | "end";
+  /** Radix collision padding in px, keeping the panel off the viewport edge. */
+  collisionPadding?: number;
 }
 
 /** Radix-backed menu primitive (CST-PRIM-7): owns menu keyboard semantics. */
@@ -35,6 +39,8 @@ export function Menu({
   onSelect,
   disabled = false,
   trigger = "label",
+  align,
+  collisionPadding,
 }: MenuProps) {
   const iconTrigger = trigger === "icon";
   return (
@@ -47,7 +53,7 @@ export function Menu({
         {iconTrigger ? <Icon icon={MoreHorizontal} /> : label}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content className="menu__content" aria-label={label}>
+        <DropdownMenu.Content className="menu__content" aria-label={label} align={align} collisionPadding={collisionPadding}>
           {items.map((item) => (
             <DropdownMenu.Item
               key={item.value}
