@@ -92,12 +92,17 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
 ## Work units (stable IDs)
 
 ### AW-1 — Workspace layout foundation
-- [ ] Three-column assistant workspace (projects pane / thread area / right panel) with responsive
+- [x] Three-column assistant workspace (projects pane / thread area / right panel) with responsive
       collapse, inside the existing `PanelShell` composition; no data-semantics change.
-- [ ] Extract region components from `AgentChat.tsx` (projects pane, thread area, right panel) so
-      later units fill them; keep current chat behavior working end-to-end.
-- [ ] Reuse `Icon`, `Tabs`, `Tooltip`, `Avatar`, `Card`, `Button`; tokens only, no palette edits.
-- [ ] Tests updated; `npx tsc -b --force --noEmit` clean; `vitest` green.
+- [x] New `AssistantWorkspace` layout component (`web/src/components/pages/AssistantWorkspace.tsx` +
+      `.css`) wraps the existing chat; the existing `AgentChat` stays the center column unchanged
+      (no internal extraction was needed yet — regions are placeholders for AW-2/AW-5).
+- [x] Reuse `Icon`, `Tabs`, `Card`, `Button`, `SearchInput`, `EmptyState`; tokens only, no palette edits.
+- [x] Tests added (`AssistantWorkspace.test.tsx`); no existing assertion weakened.
+- [x] AW-1 evidence: commit `962945c8`; `npx tsc -b --force --noEmit` clean; focused
+      `vitest` 3 files/50 tests; full suite serialized **1034/1034 (97 files)**; `npm run build` green.
+- Owner-review item: whether to add the reference's dark global icon rail. Shell chrome left
+  unchanged in AW-1 (no `PanelShell` edit).
 
 ### AW-2 — Proyectos pane
 - [ ] Project list + search + selection from the existing projects API; `SearchInput`, `Card`,
@@ -158,3 +163,8 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
   from `main` = `5606337f` (owner approved; note the `conversaciones-redesign` #508 merge landed
   during planning). Owner chose option 1: full visual redesign now, real data where it exists and
   honest empty states where backend is missing.
+- **AW-1 done (committed)** — commit `962945c8`. `AssistantWorkspace` 3-column layout wrapping the
+  existing chat (left "Proyectos" pane + right "Contexto del hilo" panel, both placeholders;
+  responsive collapse). No shell/backend/token changes. Full suite 1034/1034; build green. Graph Check
+  consulted `AgentChat`, `AssistantTabs`, `Tabs`, `Card`, `SearchInput`, `PageFrame`, `AppShell`,
+  `PanelShell`. Open for owner visual review: the dark global icon rail.
