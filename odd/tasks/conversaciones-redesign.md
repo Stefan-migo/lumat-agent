@@ -95,6 +95,11 @@ Owner verdict: title/subtitle/badge and tabs OK; table needs design detail work.
 - [x] Responsable filter shrunk to its content (332px → 224px): `justify-self: end` on desktop, `start` when the toolbar stacks, and the chevron pinned right (`margin-left: auto`).
 - [x] Evidence: commit `46046a06`; `tsc -b --force --noEmit` clean; `vitest` 18/18; Playwright measurement `docScrollWidth 390 = docClientWidth 390` (no horizontal overflow).
 
+### CV-1-r4 — close the toolbar gap (owner 2026-10-07 #4)
+- [x] The search fills the toolbar so it meets the filter: desktop/tablet grid `minmax(0,1fr) auto auto` (scoped to `min-width: 40rem` so the ≤40rem stacking rule still wins). Measured gap is 12px = the grid gap, not dead space.
+- [x] Evidence: commit `71a39676`; `tsc` clean; `vitest` 18/18; Playwright `GAP_PX 12`.
+- **CV-1 status: owner-approved and closed** (commits `8f844391`, `ebd7cc20`, `8572326b`, `46046a06`, `71a39676`). 6 changed paths / 236 authored lines at `8f844391`; RDD assess `medium` / `under_budget`.
+
 ### CV-2 — ConversationThread header + history card
 - [ ] Header: avatar + customer name + `Conversación #id · Iniciada el [date]` + state badge + `Ver ficha del cliente` action.
 - [ ] Offline banner copy to the reference.
