@@ -29,7 +29,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import DocumentFormat, KbDocument, KbVisibility, User
+from app.models import DocumentFormat, KbDocument, KbVisibility, Project, User
 from app.panel.api.deps import require_admin_json
 from app.panel.api.serializers import to_doc_dict
 from app.panel.deps import get_db
@@ -124,6 +124,7 @@ def kb_upload(
     title: str = Form(...),
     file: UploadFile = File(...),
     visibility: str = Form("internal"),
+    project_id: int | None = Form(None),
     session: Session = Depends(get_db),
     current: User = Depends(require_admin_json),
 ) -> dict:
@@ -141,8 +142,13 @@ def kb_upload(
             status_code=400,
             detail="invalid visibility; expected customer or internal",
         )
+    if project_id is not None and session.scalar(
+        select(Project.id).where(Project.id == project_id, Project.owner_id == current.id)
+    ) is None:
+        raise HTTPException(status_code=400, detail="project not found for current owner")
     doc = kb_service.ingest_document(
-        session, title, fmt, content, actor=current.username, visibility=visibility
+        session, title, fmt, content, actor=current.username, visibility=visibility,
+        project_id=project_id,
     )
     session.commit()
     return {"ok": True, "doc": to_doc_dict(doc)}

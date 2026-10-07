@@ -4,9 +4,9 @@ import { PlanningSessions } from "./PlanningSessions";
 
 describe("planning sessions", () => {
   afterEach(() => vi.restoreAllMocks());
-  const session = { slug: "budget-review-8", topic: "Budget review", status: "closed" as const, thread_id: 8, opened_at: "2026-01-01", closed_at: "2026-01-02", turn_index: 2, next_decision: null, last_class: "decision", decision_keys: [], report_key: "report", handoff: { status: "pending" as const, sdb_phase: "SPEC" as const } };
+  const session = { slug: "budget-review-8", topic: "Budget review", status: "closed" as const, thread_id: 8, opened_at: "2026-01-01", closed_at: "2026-01-02", report_key: "report" };
   it("renders list and detail with thread identity and report state", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [session] }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ session, thread: { id: 8, status: "open" }, decisions: [], report: null }), { status: 200 }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [session] }), { status: 200 })).mockResolvedValueOnce(new Response(JSON.stringify({ session, thread: { id: 8, status: "open" }, report: null }), { status: 200 }));
     const { rerender } = render(<PlanningSessions />);
     expect(await screen.findByRole("button", { name: "Budget review" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Budget review" }));
@@ -14,16 +14,11 @@ describe("planning sessions", () => {
     expect(await screen.findByText(/Hilo 8/)).toBeInTheDocument();
     expect(screen.getByText(/Hilo 8 · Cerrada/)).toBeInTheDocument();
     expect(screen.getByText(/Hilo 8 · Cerrada/).closest("p")?.querySelector(".badge")).toBeNull();
-    expect(screen.getByText("Turno")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText("Última clasificación")).toBeInTheDocument();
-    expect(screen.queryByText("Próxima decisión")).not.toBeInTheDocument();
-    expect(screen.getByText("Pendiente")).toBeInTheDocument();
-    expect(screen.getByText("Fase SDB")).toBeInTheDocument();
+    expect(screen.queryByText("Decisiones")).not.toBeInTheDocument();
+    expect(screen.queryByText("Derivación SDB")).not.toBeInTheDocument();
     expect(screen.getByText(/Apertura:/)).toHaveTextContent(new Intl.DateTimeFormat("es-CL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(session.opened_at)));
     expect(screen.getByText(/Cierre:/)).toHaveTextContent(new Intl.DateTimeFormat("es-CL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(session.closed_at)));
     expect(screen.getByText(/No hay un informe de cierre disponible/i)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Decisiones" })).toBeInTheDocument();
     const back = vi.spyOn(window.history, "back").mockImplementation(() => undefined);
     fireEvent.click(screen.getByRole("button", { name: "Volver a las sesiones de planificación" }));
     expect(back).toHaveBeenCalled();
@@ -51,7 +46,7 @@ describe("planning sessions", () => {
   it("reopens a closed session and opens its thread", async () => {
     const onOpenThread = vi.fn();
     vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(new Response(JSON.stringify({ session, thread: { id: 8, status: "open" }, decisions: [], report: null }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ session, thread: { id: 8, status: "open" }, report: null }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ session, thread_id: 8 }), { status: 200 }));
     render(<PlanningSessions sessionSlug={session.slug} data={{ sessions: [] }} onOpenThread={onOpenThread} />);
     fireEvent.click(await screen.findByRole("button", { name: "Reabrir sesión" }));
@@ -61,7 +56,7 @@ describe("planning sessions", () => {
   it("surfaces a failed reopen instead of navigating away silently", async () => {
     const onOpenThread = vi.fn();
     vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(new Response(JSON.stringify({ session, thread: { id: 8, status: "open" }, decisions: [], report: null }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ session, thread: { id: 8, status: "open" }, report: null }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "planning session is already active" }), { status: 409 }));
     render(<PlanningSessions sessionSlug={session.slug} data={{ sessions: [] }} onOpenThread={onOpenThread} />);
     fireEvent.click(await screen.findByRole("button", { name: "Reabrir sesión" }));

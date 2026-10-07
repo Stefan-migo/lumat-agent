@@ -21,12 +21,15 @@ See `odd/tasks/kb-triage-scope.md` (the fix) and `odd/tasks/kb-answer-fidelity.m
 (F2, the measurement that found it).
 """
 
+from uuid import uuid4
+
 import psycopg
 import pytest
 from sqlalchemy import select
 
 from app.chat.graph import run_conversation  # noqa: E402
-from app.chat.state import get_or_create_conversation  # noqa: E402
+from app.chat.nodes import respond as respond_node  # noqa: E402
+from app.chat.state import ConversationState, get_or_create_conversation  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
     DocumentFormat,
@@ -36,6 +39,7 @@ from app.models import (  # noqa: E402
     MessageDirection,
     MessageStatus,
     MessageType,
+    Project,
 )
 from app.services import kb as kb_service  # noqa: E402
 from app.services.customers import get_or_create_customer  # noqa: E402
@@ -66,7 +70,9 @@ def clean_db(migrated_db):
     yield
 
 
-def _seed_like_panel(text: str, source_meta: dict | None = None) -> None:
+def _seed_like_panel(
+    text: str, source_meta: dict | None = None, project_id: int | None = None
+) -> None:
     """Ingest a document the way the panel upload does.
 
     `app/panel/api/routes/kb.py:143-145` passes title, fmt, content, actor and
@@ -82,6 +88,7 @@ def _seed_like_panel(text: str, source_meta: dict | None = None) -> None:
             actor="panel-test",
             visibility=KbVisibility.CUSTOMER,
             source_meta=source_meta,
+            project_id=project_id,
         )
         session.commit()
 
@@ -98,6 +105,21 @@ def _start_conversation() -> int:
         conv = get_or_create_conversation(session, customer, "+56912345678")
         session.commit()
         return conv.id
+
+
+def _start_project() -> int:
+    with SessionLocal() as session:
+        project = Project(
+            slug=f"customer-kb-test-{uuid4().hex}",
+            name="Customer KB test",
+            purpose="Test customer KB isolation",
+            purpose_embedding=[0.0] * kb_service.EMBED_DIMS,
+        )
+        session.add(project)
+        session.flush()
+        project_id = project.id
+        session.commit()
+        return project_id
 
 
 def _turn(conv_id: int, text: str, wamid: str) -> list[str]:
@@ -158,4 +180,22 @@ def test_a_category_outside_the_old_scope_no_longer_hides_the_document(mock_open
 
     assert any(GROUNDED_MARKER in reply for reply in replies), (
         "a non-matching category still hides the document; replies=" + repr(replies)
+    )
+
+
+def test_customer_paths_exclude_project_documents(mock_openai_chat):
+    project_id = _start_project()
+    _seed_like_panel(VALORES_DOC, project_id=project_id)
+    conv_id = _start_conversation()
+
+    triage_replies = _turn(conv_id, VALORES_QUERY, "wamid.project-only.triage")
+    assert HANDOFF_REPLY in triage_replies
+    assert not any(GROUNDED_MARKER in reply for reply in triage_replies)
+
+    with SessionLocal() as session:
+        state = ConversationState.from_db(session, conv_id)
+    response = respond_node.respond(state)
+    assert response.get("escalate_reason") == "kb_miss"
+    assert not any(
+        GROUNDED_MARKER in reply for reply in response.get("replies", [])
     )
