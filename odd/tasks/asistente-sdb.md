@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-sdb`
 **Worktree**: `../lumat-agent-odd-asistente-sdb`
 **Base**: `617cd2c2` (= `main` = `origin/main`, merge of PR #488, Slice 4)
-**Status**: Planning. D15/D6/verifier-model closed. Verifier contract PROPOSED (pending owner confirm). Delivery strategy pending. No code written yet. No DB migration expected.
+**Status**: Slices 1–2 done (spec reviewed+approved; deterministic verification gate + success criterion). Delivery strategy: chained PRs, stacked-to-main. No DB migration expected.
 
 ## Objective
 
@@ -106,7 +106,7 @@ Both verifier forks below are owner-confirmed; the rest were carried in the appr
 
 ## Tasks
 
-- [ ] **S5-01 — Rewrite the `sdb-native` spec.**
+- [x] **S5-01 — Rewrite the `sdb-native` spec.**
   Replace the seven-phase requirements with: `plan → execute → conditional verify`; the D15 tool
   set + explicit/admin conditions; isolated verifier context; criterion/evidence contract. Preserve
   the still-valid tool-security, approval and project-boundary guarantees in the normal specs.
@@ -201,7 +201,17 @@ Push/PR creation remain the owner's decision per slice.
 
 - Worktree `../lumat-agent-odd-asistente-sdb` created (consent granted) and provisioned:
   `uv sync --frozen`, `cp ../lumat-agent/infra/.env infra/.env`, graph `graphify-out/graph.json`
-  present. Test DB not started yet. No commits.
+  present.
+- **Slice 1 (S5-01) done** — commits `4ebd6ace` (task doc) + `c1335444` (spec). `sdb-native` rewritten
+  to SDB-11..SDB-16 (normal loop + conditional isolated verification). Native RDD review
+  `review-c781144a08c191f2` (lens `review-reliability`) **approved with zero findings**; authority
+  burned. Boundary advanced to `c1335444`.
+- **Slice 2 (S5-03a) done** — deterministic gate + success criterion, additive (old SDB untouched).
+  `app/chat/assistant/verification.py` (new): `EFFECT_TOOLS` (memory.write excluded) and the pure
+  `verification_required(*, dispatched_tools, explicit, handoff)` with precedence
+  effect-tool → explicit → handoff → not-required. `state.py`: `PlannerOutput.success_criterion`
+  (≤300, non-empty) + `verify_requested`/`sdb_requested` state fields. New tests 15; writer GREEN
+  143 passed; parent spot-check 143 passed. Not yet wired into the loop (Slice 3).
 
 ## Review (RDD)
 
