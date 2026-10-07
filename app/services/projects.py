@@ -205,16 +205,6 @@ def _lock_projects(session: Session, *projects: models.Project | str, owner_id: 
     return locked
 
 
-def _has_active_run(session: Session, slug: str) -> bool:
-    for thread in session.scalars(select(models.InternalChatThread)):
-        state = thread.assistant_state or {}
-        sdb = state.get("sdb") or {}
-        namespace = sdb.get("proyecto") or sdb.get("project") or state.get("proyecto")
-        if namespace == slug and (thread.active_run_id or state.get("recoverable")):
-            return True
-    return False
-
-
 def _validate_namespace(session: Session, project: models.Project) -> None:
     """Validate that the namespace has no duplicate composite keys before mutation."""
     rows = session.execute(
@@ -242,8 +232,6 @@ def _audit(session: Session, project_id: int, action: str, actor: str, before: A
 def rename(session: Session, project: models.Project | str, name: str, *, owner_id: int | None = None, actor: str = "agent") -> models.Project:
     locked = _lock_projects(session, project, owner_id=owner_id)
     row = locked[_project_id(project)]
-    if _has_active_run(session, row.slug):
-        raise ValueError("cannot rename project with an active SDB run")
     _validate_namespace(session, row)
     old = {"slug": row.slug, "name": row.name, "status": _status_value(row.status)}
     new_name = name.strip()
@@ -266,8 +254,6 @@ def archive(session: Session, project: models.Project | str, *, owner_id: int | 
     row = locked[_project_id(project)]
     if row.slug == "default":
         raise ValueError("default project cannot be archived")
-    if _has_active_run(session, row.slug):
-        raise ValueError("cannot archive project with an active SDB run")
     old = {"slug": row.slug, "name": row.name, "status": _status_value(row.status)}
     row.status = models.ProjectStatus.ARCHIVED
     _audit(session, row.id, "archive", actor, old, {**old, "status": "archived"})
@@ -292,8 +278,6 @@ def merge(session: Session, source: models.Project | str, target: models.Project
         raise ValueError("cannot merge projects across owners")
     if source_row.slug == "default":
         raise ValueError("default project cannot be merged away")
-    if _has_active_run(session, source_row.slug) or _has_active_run(session, target_row.slug):
-        raise ValueError("cannot merge projects with an active SDB run")
 
     source_memories = session.scalars(
         select(models.Memory).where(
