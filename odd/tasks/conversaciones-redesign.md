@@ -61,16 +61,19 @@ tests written/updated + typecheck), not no checks. Runner: `npx vitest run`.
 ## Work units (stable IDs)
 
 ### CV-1 — ConversationsList desktop table
-- [ ] Title composition: count badge + accent bar + subtitle "Revisa y gestiona la atención de tus clientes." (`findings` list)
-- [ ] Tab labels/counts to the reference; keep client-side filtering and existing ordering.
-- [ ] Wrap search toolbar + table + footer in one `.table-card`, reusing `DataTable`.
-- [ ] Five columns: `Cliente y conversación` | `Estado y prioridad` | `Caso` | `Última actividad` | `Acciones`.
-- [ ] Row: avatar + name + phone + `#id` + summary; distinct status and priority badges; case cell; recency; `Tomar conversación` + `...` overflow action.
-- [ ] Responsable filter control in the toolbar (`Responsable: Todos`).
-- [ ] Footer: "Mostrando N de M conversaciones" + pagination.
-- [ ] Retain mobile card list (`.table-cards--mobile`) and mobile toolbar composition.
-- [ ] Preserve behavior: ordering, search, tabs, actions (`takeConversation`, `acknowledgeCase`), realtime/recovery.
-- [ ] Update `ConversationsList.test.tsx` + stories/tests.
+- [x] Title composition: count badge + subtitle "Revisa y gestiona la atención de tus clientes."
+- [x] Tab labels/counts to the reference (`Atención humana`, `Con caso`); keep client-side filtering and existing ordering.
+- [x] Wrap search toolbar + table + footer in one `.table-card`, reusing `DataTable`.
+- [x] Five columns: `Cliente y conversación` | `Estado y prioridad` | `Caso` | `Última actividad` | `Acciones`.
+- [x] Row: avatar + name + phone + `#id` + summary; distinct status and priority badges; case cell; recency; `Tomar conversación` + `...` overflow action.
+- [x] Responsable filter control in the toolbar.
+- [x] Footer: "Mostrando N de M conversaciones" + pagination.
+- [x] Retain mobile card list (`.table-cards--mobile`) with unique test IDs.
+- [x] Preserve behavior: ordering, search, tabs, actions (`takeConversation`, `acknowledgeCase`), realtime/recovery.
+- [x] Update `ConversationsList.test.tsx` + stories/tests.
+- [x] CV-1 evidence: commit `8f844391`; `npx tsc -b --force --noEmit` clean; `vitest` 40/40 (ConversationsList, stories, ConversationThread); RDD assess `medium` / `under_budget` (236 lines).
+- Graph nodes: `ConversationsList()`, `DataTable()`, `ClientesList.tsx`, `UserManagement.tsx`, `takeConversation()`, `acknowledgeCase()`; `path ConversationsList→DataTable` has no directed edge (both page-level).
+- Owner-confirmable: the priority label mapping (`alta`→"Prioridad alta"/warning, `media`→"Prioridad normal", `baja`→"Prioridad baja") is inferred — the reference only shows normal/alta.
 
 ### CV-2 — ConversationThread header + history card
 - [ ] Header: avatar + customer name + `Conversación #id · Iniciada el [date]` + state badge + `Ver ficha del cliente` action.
