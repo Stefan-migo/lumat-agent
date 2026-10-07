@@ -1,6 +1,6 @@
 import { useCallback, useState, type FormEvent } from "react";
-import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CircleAlert, Clock3, Copy, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, UserRound, CircleDollarSign } from "lucide-react";
-import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
+import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CircleAlert, Clock3, Copy, Check, ChevronRight, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, Thermometer, UserRound, CircleDollarSign, Trash2 } from "lucide-react";
+import { addClientNote, ApiError, apiFetch, archiveCustomer, changeClientState, createClientEquipment, deleteClientNote, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateClientNote, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
@@ -76,6 +76,16 @@ function LocalFeedback({ feedback }: { feedback: Feedback | null }) {
   return <StateMessage tone={feedback.tone} role={feedback.tone === "danger" ? "alert" : "status"} title={feedback.title} detail={feedback.detail} />;
 }
 
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    await navigator.clipboard?.writeText(value);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  };
+  return <span className="client-ficha__copy"><Button className="client-ficha__copy-button" aria-label={label} onClick={() => void copy()}>{copied ? <Check /> : <Copy />}</Button>{copied ? <span className="client-ficha__copy-hint" role="status">Copiado</span> : null}</span>;
+}
+
 /** A data surface only when there is data: an empty DataTable already renders its own
  *  `.empty-state` surface, and nesting the two would be card-on-card. */
 function surfaceClass(rowCount: number) {
@@ -85,6 +95,7 @@ function surfaceClass(rowCount: number) {
 export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, onRetryCalendar, state: controlledState }: ClientFichaProps) {
   const [activeTab, setActiveTab] = useState("summary");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [caseEditorOpen, setCaseEditorOpen] = useState(false);
   const [retryingCalendarId, setRetryingCalendarId] = useState<number | null>(null);
   const [messagesExpanded, setMessagesExpanded] = useState(false);
@@ -95,6 +106,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [selectedConsent, setSelectedConsent] = useState<boolean | null>(null);
   const [note, setNote] = useState("");
   const [noteComposerOpen, setNoteComposerOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<{ id: number; note: string } | null>(null);
+  const [deletingNote, setDeletingNote] = useState<number | null>(null);
+  const [copiedNoteId, setCopiedNoteId] = useState<number | null>(null);
   const [mutation, setMutation] = useState<"state" | "note" | null>(null);
   const [stateFeedback, setStateFeedback] = useState<Feedback | null>(null);
   const [noteFeedback, setNoteFeedback] = useState<Feedback | null>(null);
@@ -281,6 +295,22 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     catch (error) { setNoteFeedback({ tone: "danger", ...safeError(error, "nota") }); }
     finally { setMutation(null); }
   };
+  const saveEditedNote = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (customerId === undefined || !editingNote || mutation) return;
+    if (!editingNote.note.trim()) { setNoteFeedback({ tone: "danger", title: "La nota no puede estar vacía" }); return; }
+    setMutation("note"); setNoteFeedback(null);
+    try { await updateClientNote(customerId, editingNote.id, editingNote.note.trim()); await refresh(); setEditingNote(null); setNoteFeedback({ tone: "success", title: "Nota actualizada" }); }
+    catch (error) { setNoteFeedback({ tone: "danger", ...safeError(error, "nota") }); }
+    finally { setMutation(null); }
+  };
+  const confirmDeleteNote = async () => {
+    if (customerId === undefined || deletingNote === null || mutation) return;
+    setMutation("note"); setNoteFeedback(null);
+    try { await deleteClientNote(customerId, deletingNote); await refresh(); setDeletingNote(null); setNoteFeedback({ tone: "success", title: "Nota eliminada" }); }
+    catch (error) { setNoteFeedback({ tone: "danger", ...safeError(error, "nota") }); }
+    finally { setMutation(null); }
+  };
   const openProfile = () => {
     setProfile({ name: customer.name ?? "", email: customer.email ?? "", comuna: customer.comuna ?? "", address: customer.address ?? "" });
     setProfileFeedback(null);
@@ -402,18 +432,20 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
                   if (value === "archive") customer.archived_at ? void saveArchive() : setArchiveOpen(true);
                 }}
               />
+            </div></header>
+            <dl className="detail-region__facts client-ficha__contact-facts">
+              <div><dt>Teléfono</dt><dd>{customer.phone_e164 ?? "—"}<CopyButton value={customer.phone_e164 ?? ""} label="Copiar teléfono" /></dd></div>
+              <div><dt>Correo</dt><dd>{customer.email ?? "—"}<CopyButton value={customer.email ?? ""} label="Copiar correo" /></dd></div>
+              <div><dt>Dirección</dt><dd>{customer.address ?? "—"}{customer.comuna ? <><br/>{customer.comuna}</> : null}<CopyButton value={[customer.address, customer.comuna].filter(Boolean).join(", ")} label="Copiar dirección" /></dd></div>
+              <div className="client-ficha__customer-state"><dt>Estado del cliente</dt><dd><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></dd></div>
+              <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
+            </dl>
+            <div className="client-ficha__local-feedback">
               <LocalFeedback feedback={consentDialogOpen ? null : consentFeedback} />
               <LocalFeedback feedback={stateDialogOpen ? null : stateFeedback} />
               {profileOpen ? null : <LocalFeedback feedback={profileFeedback} />}
               {archiveOpen ? null : <LocalFeedback feedback={archiveFeedback} />}
-            </div></header>
-            <dl className="detail-region__facts client-ficha__contact-facts">
-              <div><dt>Teléfono</dt><dd>{customer.phone_e164 ?? "—"}<Button className="client-ficha__copy-button" aria-label="Copiar teléfono" onClick={() => void navigator.clipboard?.writeText(customer.phone_e164 ?? "") }><Copy/></Button></dd></div>
-              <div><dt>Correo</dt><dd>{customer.email ?? "—"}<Button className="client-ficha__copy-button" aria-label="Copiar correo" onClick={() => void navigator.clipboard?.writeText(customer.email ?? "") }><Copy/></Button></dd></div>
-              <div><dt>Dirección</dt><dd>{customer.address ?? "—"}{customer.comuna ? <><br/>{customer.comuna}</> : null}<Button className="client-ficha__copy-button" aria-label="Copiar dirección" onClick={() => void navigator.clipboard?.writeText([customer.address, customer.comuna].filter(Boolean).join(", "))}><Copy/></Button></dd></div>
-              <div className="client-ficha__customer-state"><dt>Estado del cliente</dt><dd><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></dd></div>
-              <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
-            </dl>
+            </div>
           </Card>
           <ChangeCustomerStateDialog open={stateDialogOpen} onClose={() => setStateDialogOpen(false)} customer={customer} subtitle={`Cliente desde el ${formatIdentityDate(customer.created_at)}`} selectedState={selectedState} onSelect={setSelectedState} onSave={() => void saveState()} busy={mutation !== null || customerId === undefined || selectedState === customer.state} feedback={<LocalFeedback feedback={stateFeedback} />} />
           <Dialog open={consentDialogOpen} onClose={() => setConsentDialogOpen(false)} title="Cambiar consentimiento" icon={ShieldCheck} description="Registra la elección expresada por el cliente.">
@@ -443,7 +475,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <footer><Button variant="secondary" onClick={() => setArchiveOpen(false)}>Cancelar</Button><Button variant="danger" disabled={customerMutation !== null} onClick={() => void saveArchive()}>{customerMutation === "archive" ? "Guardando…" : "Archivar cliente"}</Button></footer>
             </div>
           </Dialog>
-          <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)} title="Fusionar clientes" icon={ArrowLeftRight} description="Revisa las fichas antes de confirmar." size="wide">
+          <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)} title="Fusionar clientes" icon={ArrowLeftRight} description="Revisa las fichas antes de confirmar.">
             <div className="client-ficha-dialog client-ficha-dialog__merge">
               <div className="client-ficha-dialog__merge-current"><strong>Cliente actual</strong><div><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><span><b>{customer.name ?? customer.phone_e164 ?? "Cliente"}</b><small>Cliente desde el {formatIdentityDate(customer.created_at)}</small></span><span className="client-ficha-dialog__merge-phone"><Phone />{customer.phone_e164 ?? "—"}</span></div></div>
               <Select id="merge-other-client" label="Otro cliente" value={mergeOtherId} options={[{ value: "", label: "Buscar por nombre o teléfono…" }, ...mergeClients.map((client) => ({ value: String(client.id), label: `${client.name ?? "Sin nombre"} · ${client.phone_e164 ?? "Sin teléfono"}` }))]} onChange={(event) => void selectMergeClient(event.target.value)} />
@@ -458,10 +490,13 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
 
         <div className="detail-region__main">
           <div className="client-ficha__summary-column client-ficha__summary-column--left">
-          <ClientMemories memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} compact conversationId={history.conversations[0]?.id} onViewAll={() => setActiveTab("conversations")} />
+          <ClientMemories memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} compact conversationId={history.conversations[0]?.id} onViewAll={() => setMemoriesOpen(true)} />
+          <Dialog open={memoriesOpen} onClose={() => setMemoriesOpen(false)} title="Memorias del cliente" icon={MessageSquare} size="wide">
+            {memoriesOpen ? <div className="client-ficha__memories-dialog"><ClientMemories bare memories={memories} pendingRelations={pendingRelations} onResolveRelation={resolveRelation} /></div> : null}
+          </Dialog>
           <Card className="client-ficha__notes-card">
             <header className="client-ficha__card-heading"><h2>Notas</h2><Button variant="secondary" aria-expanded={noteComposerOpen} disabled={customerId === undefined || mutation !== null} onClick={() => setNoteComposerOpen(true)}>⊕ Agregar nota</Button></header>
-            {data.notes.length ? data.notes.map((entry) => <article className="client-ficha__note-row" key={entry.id}><Avatar name={entry.author ?? "Operador"}/><div><strong>{entry.author ?? "—"}</strong><small>{formatDate(entry.created_at)}</small></div><p>{entry.note}</p><Menu trigger="icon" label="Acciones de nota" items={[{value:"copy",label:"Copiar nota",icon:Copy}]} onSelect={()=>void navigator.clipboard?.writeText(entry.note)}/></article>) : <EmptyState title="No hay notas" />}
+            {data.notes.length ? data.notes.map((entry) => <article className="client-ficha__note-row" key={entry.id}><Avatar name={entry.author ?? "Operador"}/><div><strong>{entry.author ?? "—"}</strong><small>{formatDate(entry.created_at)}</small></div><p>{entry.note}</p><span className="client-ficha__note-actions"><Menu trigger="icon" label="Acciones de nota" items={[{value:"edit",label:"Editar",icon:Pencil},{value:"delete",label:"Eliminar",icon:Trash2,tone:"danger"},{value:"copy",label:"Copiar nota",icon:Copy}]} onSelect={(value)=>{ if(value==="copy") { void navigator.clipboard?.writeText(entry.note); setCopiedNoteId(entry.id); window.setTimeout(() => setCopiedNoteId((current) => current === entry.id ? null : current), 1500); } if(value==="edit") { setEditingNote({ id: entry.id, note: entry.note }); setNoteFeedback(null); } if(value==="delete") { setDeletingNote(entry.id); setNoteFeedback(null); } }}/>{copiedNoteId === entry.id ? <span className="client-ficha__copy-hint" role="status">Copiado</span> : null}</span></article>) : <EmptyState title="No hay notas" />}
           </Card>
           <Dialog open={noteComposerOpen} onClose={() => setNoteComposerOpen(false)} title="Agregar nota" icon={NotebookPen} description="Registra una nota asociada al cliente.">
             <form className="client-ficha-dialog" onSubmit={(event) => { event.preventDefault(); void saveNote(); }}>
@@ -471,6 +506,17 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
               <LocalFeedback feedback={noteFeedback} />
               <footer><Button type="button" variant="secondary" onClick={() => setNoteComposerOpen(false)}>Cancelar</Button><Button type="submit" disabled={mutation !== null || customerId === undefined}>{mutation === "note" ? "Guardando…" : "Guardar nota"}</Button></footer>
             </form>
+          </Dialog>
+          <Dialog open={editingNote !== null} onClose={() => setEditingNote(null)} title="Editar nota" icon={NotebookPen} description="Actualiza la nota asociada al cliente.">
+            {editingNote ? <form className="client-ficha-dialog" onSubmit={(event) => void saveEditedNote(event)}>
+              <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div><span className="client-ficha-dialog__context-phone"><Phone aria-hidden="true"/>{customer.phone_e164 ?? "—"}</span></div>
+              <Textarea id="edit-note" label="Nota" value={editingNote.note} disabled={mutation !== null || customerId === undefined} onChange={(event) => setEditingNote({ ...editingNote, note: event.target.value })} />
+              <LocalFeedback feedback={editingNote ? noteFeedback : null} />
+              <footer><Button type="button" variant="secondary" onClick={() => setEditingNote(null)}>Cancelar</Button><Button type="submit" disabled={mutation !== null || customerId === undefined}>{mutation === "note" ? "Guardando…" : "Guardar cambios"}</Button></footer>
+            </form> : null}
+          </Dialog>
+          <Dialog open={deletingNote !== null} onClose={() => setDeletingNote(null)} title="Eliminar nota" icon={Trash2} description="Esta acción no se puede deshacer.">
+            <div className="client-ficha-dialog"><div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div></div><LocalFeedback feedback={deletingNote !== null ? noteFeedback : null}/><footer><Button variant="secondary" onClick={() => setDeletingNote(null)}>Cancelar</Button><Button variant="danger" disabled={mutation !== null || customerId === undefined} onClick={() => void confirmDeleteNote()}>{mutation === "note" ? "Eliminando…" : "Eliminar nota"}</Button></footer></div>
           </Dialog>
           <Card className="client-ficha__upcoming-card">
             <header className="client-ficha__card-heading"><h2>Próximas visitas</h2><Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "agenda" }); }}>Ver agenda →</Button></header>
@@ -510,14 +556,14 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
                <header className="client-ficha__card-heading"><h2>Equipos</h2><Button variant="secondary" disabled={customerId === undefined || equipmentMutation} onClick={() => openEquipment()}>＋ Agregar equipo</Button></header>
               {equipmentData.state === "loading" ? <p role="status">Cargando equipos…</p> : null}
               {equipmentData.state === "error" || equipmentData.state === "denied" ? <StateMessage tone="danger" role="alert" title="No pudimos cargar los equipos" /> : null}
-              {equipmentRows.length ? <ul className="data-region">
-                {equipmentRows.map((entry) => <li key={entry.id}>
-                  <div>{entry.equipment_type ? <Badge>{EQUIPMENT_TYPE_LABELS[entry.equipment_type] ?? entry.equipment_type}</Badge> : <span>Sin especificar</span>}</div>
-                  <p>{[entry.brand, entry.model, entry.age].filter(Boolean).join(" · ") || "Sin datos estructurados"}</p>
-                  {entry.details ? <p>{entry.details}</p> : null}
-                  <Button variant="secondary" disabled={equipmentMutation} onClick={() => openEquipment(entry)}>Editar equipo</Button>
-                </li>)}
-              </ul> : equipmentData.state === "empty" || equipmentData.state === "ready" ? <div className="client-ficha__equipment-empty"><div className="client-ficha__equipment-illustration" aria-hidden="true">♧</div><EmptyState title="Sin equipos registrados"/><Button variant="secondary" disabled={customerId === undefined || equipmentMutation} onClick={() => openEquipment()}>Agregar equipo</Button></div> : null}
+              {equipmentRows.length ? <ul className="client-ficha__equipment-list">
+                 {equipmentRows.map((entry) => <li className="client-ficha__equipment-row" key={entry.id}>
+                   <div className="client-ficha__equipment-eyebrow">{entry.equipment_type ? <Badge>{EQUIPMENT_TYPE_LABELS[entry.equipment_type] ?? entry.equipment_type}</Badge> : <span>Sin especificar</span>}</div>
+                   <strong>{[entry.brand, entry.model, entry.age].filter(Boolean).join(" · ") || "Sin datos estructurados"}</strong>
+                   {entry.details ? <p>{entry.details}</p> : null}
+                   <Button variant="secondary" disabled={equipmentMutation} onClick={() => openEquipment(entry)}>Editar equipo</Button>
+                 </li>)}
+               </ul> : equipmentData.state === "empty" || equipmentData.state === "ready" ? <div className="client-ficha__equipment-empty"><Thermometer aria-hidden="true" /><strong>Sin equipos registrados</strong><Button variant="secondary" disabled={customerId === undefined || equipmentMutation} onClick={() => openEquipment()}>Agregar equipo</Button></div> : null}
               {equipmentOpen ? null : <LocalFeedback feedback={equipmentFeedback} />}
             </Card>
           </section>
@@ -532,7 +578,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           </Dialog>
 
           <button type="button" className="client-ficha__history-entry" onClick={() => setHistoryOpen(true)}>
-            <Clock3 aria-hidden="true"/><span><strong>Historial del cliente</strong><small>Visitas, conversaciones y casos anteriores</small></span><span aria-hidden="true">›</span>
+            <Clock3 aria-hidden="true"/><span><strong>Historial del cliente</strong><small>Visitas, conversaciones y casos anteriores</small></span><ChevronRight aria-hidden="true" />
           </button>
           </div>
         </div>
@@ -550,10 +596,12 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
       </div> : null}
         </>}
       </Tabs>
-      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} title="Historial del cliente" icon={Clock3} description="Visitas, conversaciones y casos anteriores">
-        <Card title="Casos anteriores"><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></Card>
-        <Card title="Visitas"><DataTable columns={[{key:"service",header:"Servicio",render:(row: Appointment)=>row.service},{key:"date",header:"Fecha",render:(row: Appointment)=>formatDateTime(row.starts_at)},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>}] as Column<Appointment>[]} rows={appointments} rowKey={(row)=>String(row.id)}/></Card>
-        <Card title="Conversaciones"><DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row)=>String(row.id)}/></Card>
+      <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} title="Historial del cliente" icon={Clock3} description="Visitas, conversaciones y casos anteriores" size="wide">
+        <div className="client-ficha__history-dialog">
+          <Card title="Casos anteriores"><div className="client-ficha__history-table"><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></div></Card>
+          <Card title="Visitas"><div className="client-ficha__history-table"><DataTable columns={[{key:"service",header:"Servicio",render:(row: Appointment)=>row.service},{key:"date",header:"Fecha",render:(row: Appointment)=>formatDateTime(row.starts_at)},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>}] as Column<Appointment>[]} rows={appointments} rowKey={(row)=>String(row.id)}/></div></Card>
+          <Card title="Conversaciones"><div className="client-ficha__history-table"><DataTable columns={conversationColumns} rows={history.conversations} rowKey={(row)=>String(row.id)}/></div></Card>
+        </div>
       </Dialog>
     </PageFrame>
   );
