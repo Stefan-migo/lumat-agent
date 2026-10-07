@@ -424,7 +424,8 @@ def to_internal_chat_message_dict(message: InternalChatMessage) -> dict:
 def to_cortex_session_dict(thread: InternalChatThread) -> dict:
     """Expose the persisted Cortex lifecycle without leaking ORM state."""
     cortex = (thread.assistant_state or {}).get("cortex_session") or {}
-    return {**cortex, "thread_id": thread.id}
+    fields = ("slug", "topic", "status", "opened_at", "closed_at", "report_key")
+    return {**{field: cortex.get(field) for field in fields}, "thread_id": thread.id}
 
 
 def to_cortex_report_dict(memory: Memory | None) -> dict | None:

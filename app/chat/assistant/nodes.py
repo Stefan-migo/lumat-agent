@@ -90,71 +90,6 @@ def extension_hook_metadata() -> dict[str, str]:
     return {"sdb": "deferred", "panel_subagents": "implemented" if wired else "not_implemented"}
 
 
-_PLANNING_COMMAND = re.compile(r"^/planning(?: ([^\s].*?))?$")
-
-
-def parse_planning_command(content: str) -> dict[str, str | None] | None:
-    """Parse only the exact planning command forms; ordinary text is inert."""
-    if not isinstance(content, str):
-        return None
-    match = _PLANNING_COMMAND.fullmatch(content)
-    if not match or not match.group(1):
-        return None
-    topic = match.group(1)
-    if topic == "close":
-        return {"action": "close", "topic": None}
-    return {"action": "open", "topic": topic}
-
-
-def cortex_session_gate(state: AssistantState) -> AssistantState:
-    """Route only a valid active thread flag; missing state fails closed."""
-    if not validate_cortex_session(state):
-        return {"cortex_route": "normal", "cortex_rejection": "invalid-session"}
-    if state["cortex_session"]["status"] != "active":
-        return {"cortex_route": "normal", "cortex_rejection": "inactive-session"}
-    return {"cortex_route": "cortex", "cortex_rejection": None}
-
-
-def classify_cortex_turn(content: str) -> str:
-    """Classify the bounded Cortex loop without inferring lifecycle changes."""
-    text = content.strip()
-    if text == "/planning close":
-        return "close"
-    lowered = text.casefold()
-    if "?" in text or lowered.startswith(("what ", "why ", "how ")):
-        return "question"
-    if lowered.startswith(("research ", "investigate ", "look up ")):
-        return "research"
-    if lowered.startswith(("decide ", "we will ", "let's use ", "use ")):
-        return "decision"
-    return "continue"
-
-
-def cortex_session_turn(state: AssistantState) -> AssistantState:
-    """Advance an active Cortex session; questions/research need no decision."""
-    current = dict(state["cortex_session"])
-    turn_class = (state.get("planner") or {}).get("cortex_class") or classify_cortex_turn(state.get("content", ""))
-    index = current.get("turn_index", 0) + 1
-    current.update({"turn_index": index, "last_class": turn_class})
-    result: AssistantState = {
-        "cortex_session": current,
-        "response": "Cortex session closed." if turn_class == "close" else state.get("content", ""),
-        "status": "completed",
-    }
-    if turn_class == "close":
-        current.update({"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat()})
-    elif turn_class == "decision":
-        key = f"cortex-session/{current['slug']}:decision:{index}"
-        current["decision_keys"] = [*current.get("decision_keys", []), key]
-        session = state.get("session")
-        if session is not None and hasattr(session, "add"):
-            from app.services.tukulpan import record_decision
-            record_decision(session, thread_id=state["thread_id"], topic_key=key,
-                            title=current["topic"], content=state.get("content", ""))
-    result["cortex_session"] = current
-    return result
-
-
 def flush_panel_session(session, thread_id: int, *, source_message_ids: list[int], recap: str,
                         source_tokens: int, truncated: bool) -> dict:
     """Persist meaningful pre-rotation content through the canonical write seam."""
@@ -718,10 +653,28 @@ def assemble_context_node(state: AssistantState) -> AssistantState:
 def _effective_tools(state) -> tuple[str, ...]:
     effective = state.get("effective")
     if effective:
-        return tuple(effective["tools_whitelist"])
-    from app.services.prompts import load_assistant_config
+        tools = tuple(effective["tools_whitelist"])
+    else:
+        from app.services.prompts import load_assistant_config
 
-    return load_assistant_config().tools_whitelist
+        tools = load_assistant_config().tools_whitelist
+
+    if not validate_cortex_session(state) or state["cortex_session"]["status"] != "active":
+        return tools
+    from app.chat.assistant.tools.registry import get_tool
+
+    allowed = []
+    for name in tools:
+        if name == "memory.write":
+            allowed.append(name)
+            continue
+        try:
+            definition = get_tool(name)
+        except ValueError:
+            continue
+        if not definition.write:
+            allowed.append(name)
+    return tuple(allowed)
 
 
 def _effective_skill_index(state) -> tuple[SkillDefinition, ...]:
@@ -1033,15 +986,12 @@ def execute(state: AssistantState) -> AssistantState:
     tool_name = plan_data.get("tool")
     if tool_name and not tool_already_ran:
         try:
-            from app.services.prompts import load_assistant_config
-
-            config = load_assistant_config()
             result = execute_tool(
                 state.get("session"),
                 tool_name,
                 plan_data.get("arguments", {}),
                 approval=state.get("approval"),
-                whitelist=set(config.tools_whitelist),
+                whitelist=set(_effective_tools(state)),
                 cost_allowed=state.get("guardrails", {}).get("cost_allowed", True),
                 role=state.get("actor_role"),
                 trusted_thread_id=state.get("thread_id"),

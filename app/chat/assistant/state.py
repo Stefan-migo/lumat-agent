@@ -31,7 +31,6 @@ class PlannerOutput(BaseModel):
 
     kind: Literal["tool", "respond", "complex", "delegate"]
     classification: Literal["normal", "sdb"] = "normal"
-    cortex_class: Literal["question", "research", "decision", "continue", "close"] | None = None
     tool: str | None = None
     sub_agent: str | None = None
     arguments: dict = Field(default_factory=dict)
@@ -78,15 +77,6 @@ class SDBTrigger(BaseModel):
     actor_role: str | None = None
 
 
-class CortexHandoff(BaseModel):
-    """The persisted handoff sub-state for a Cortex session."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    status: Literal["none", "pending", "approved"]
-    sdb_phase: Literal["SPEC", "APPROVE"] | None
-
-
 class CortexSession(BaseModel):
     """Validated thread-scoped Cortex state."""
 
@@ -97,12 +87,7 @@ class CortexSession(BaseModel):
     status: Literal["active", "closed"]
     opened_at: str = Field(min_length=1)
     closed_at: str | None
-    turn_index: int = Field(ge=0)
-    next_decision: str | None
-    last_class: Literal["question", "research", "decision", "continue", "close"] | None
-    decision_keys: list[str]
     report_key: str | None
-    handoff: CortexHandoff
 
 
 class SDBTask(BaseModel):

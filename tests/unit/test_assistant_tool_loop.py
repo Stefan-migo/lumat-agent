@@ -68,7 +68,7 @@ def test_completed_tool_routes_through_opt_in_loop_head():
     assert ("tool_loop_head", "respond_stream") in edges
     assert ("tool_loop_head", "assemble_context") not in edges
     assert ("tool_loop_head", "panel_cost_gate") not in edges
-    assert ("tool_loop_head", "cortex_session_gate") not in edges
+    assert all(source != "cortex_turn" and target != "cortex_turn" for source, target in edges)
     assert ("tool_loop_head", "sdb_trigger_gate") not in edges
 
 
@@ -600,6 +600,32 @@ def test_failed_write_tool_remains_terminal_error(monkeypatch):
 
     assert result["status"] == "error"
     assert result["response"] == "Tool execution failed: write failed"
+
+
+def test_execution_boundary_refuses_write_tool_in_active_planning_session():
+    state = _tool_state(
+        actor_role="admin",
+        user_id=1,
+        effective={"tools_whitelist": ("kb.retrieve",)},
+        cortex_session={
+            "slug": "budget-review",
+            "topic": "Budget review",
+            "status": "active",
+            "opened_at": "2026-09-13T12:00:00Z",
+            "closed_at": None,
+            "report_key": None,
+        },
+        plan={
+            "kind": "tool", "tool": "memory.delete", "arguments": {"memory_id": 1},
+            "summary": "Delete memory", "requires_approval": False,
+        },
+    )
+
+    result = execute(state)
+
+    assert result["status"] == "error"
+    assert isinstance(result["error"], str)
+    assert "not whitelisted" in result["error"]
 
 
 def test_no_tool_prompt_keeps_non_invoking_statement(monkeypatch):

@@ -96,6 +96,3 @@ assistant:
   sdb_classification:
     field: classification
     allowed: [normal, sdb]
-  cortex_session:
-    classes: [question, research, decision, continue, close]
-    commands: ["/planning <topic>", "/planning close"]
