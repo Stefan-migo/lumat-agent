@@ -7,8 +7,9 @@
 .conversations-list__offline span { color: var(--corp-fg-muted); }
 
 /* Responsable filter: bordered control with leading icon, muted prefix, bold value, chevron. */
-.conversations-list__filter { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 40px; padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); font: inherit; white-space: nowrap; cursor: pointer; }
+.conversations-list__filter { display: inline-flex; align-items: center; justify-self: end; gap: var(--space-2); min-height: 40px; padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); font: inherit; white-space: nowrap; cursor: pointer; }
 .conversations-list__filter > svg { flex: 0 0 auto; color: var(--corp-fg-muted); }
+.conversations-list__filter > svg:last-child { margin-left: auto; }
 .conversations-list__filter-label { color: var(--corp-fg-muted); font-size: var(--text-sm); }
 .conversations-list__filter-value { font-weight: var(--weight-semibold); }
 .conversations-list__filter-menu { min-width: 12rem; }
@@ -42,6 +43,6 @@
 .conversations-list__card .table-footer__pagination { display: flex; }
 
 @media (max-width: 39.99rem) {
-  .conversations-list__filter { width: 100%; justify-content: flex-start; }
+  .conversations-list__filter { justify-self: start; }
   .conversations-list__offline { flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
 }
