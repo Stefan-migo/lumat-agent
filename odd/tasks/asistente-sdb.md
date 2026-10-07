@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-sdb`
 **Worktree**: `../lumat-agent-odd-asistente-sdb`
 **Base**: `617cd2c2` (= `main` = `origin/main`, merge of PR #488, Slice 4)
-**Status**: Planning. D15/D6/verifier-model closed. Verifier contract PROPOSED (pending owner confirm). Delivery strategy pending. No code written yet. No DB migration expected.
+**Status**: Slices 1–2 done (spec reviewed+approved; deterministic verification gate + success criterion). Delivery strategy: chained PRs, stacked-to-main. No DB migration expected.
 
 ## Objective
 
@@ -106,7 +106,7 @@ Both verifier forks below are owner-confirmed; the rest were carried in the appr
 
 ## Tasks
 
-- [ ] **S5-01 — Rewrite the `sdb-native` spec.**
+- [x] **S5-01 — Rewrite the `sdb-native` spec.**
   Replace the seven-phase requirements with: `plan → execute → conditional verify`; the D15 tool
   set + explicit/admin conditions; isolated verifier context; criterion/evidence contract. Preserve
   the still-valid tool-security, approval and project-boundary guarantees in the normal specs.
@@ -118,7 +118,7 @@ Both verifier forks below are owner-confirmed; the rest were carried in the appr
   `PlannerOutput.classification`; add gate/verify state and routing (insert verify after the
   execution loop, before response/evidence). Files: `graph.py`, `state.py`. ~180 lines. Depends: S5-01.
 
-- [ ] **S5-03 — Add the success criterion and the isolated verifier.**
+- [x] **S5-03 — Add the success criterion and the isolated verifier.**
   `PlannerOutput.success_criterion` + planner prompt; new isolated verifier that builds its own
   fresh messages (no `_context_text`) and inspects the evidence bundle (and, if confirmed, bounded
   read-only tools). Files: `nodes.py`, planner prompt/config as needed. ~250 lines. Depends: S5-02.
@@ -183,14 +183,15 @@ Owner-approved: chained PRs, stacked-to-main. Each slice is an independent, **gr
 tests, so the removal and its test rewrite must land in the same slice; additive scaffolding lands
 first while the old subgraph still exists.
 
-| Slice | Work unit | Tasks | Size | Green because |
+| Slice | Work unit | Tasks | Size | State |
 |---|---|---|---:|---|
-| 1 | New `sdb-native` spec (contract only) | S5-01 | ~180 | docs-only |
-| 2 | Deterministic gate + `success_criterion` (additive) | S5-03a | ~250 | old SDB untouched |
-| 3 | Isolated read-only verifier + loop wiring (additive) | S5-03b | ~300 | old SDB untouched |
-| 4 | Collapse phase graph + SDB state + spec-level tests | S5-02 | ~350 | removal + its tests together |
-| 5 | Replace SDB service runner + integration tests | S5-04 | ~450 | removal + its tests together |
-| 6 | Registry/config cleanup + cross-check | S5-05, S5-07 | ~300 | references |
+| 1 | New `sdb-native` spec (contract only) | S5-01 | ~197 | ✅ reviewed |
+| 2 | Deterministic gate + `success_criterion` (additive) | S5-03a | ~100 | ✅ committed |
+| 3 | Isolated read-only verifier (additive) | S5-03b | ~230 | ✅ committed |
+| 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~110 | ✅ committed |
+| 5 | Collapse phase graph + SDB state + spec-level tests | S5-02 (removal) | ~350 | next |
+| 6 | Replace SDB service runner + integration tests | S5-04 | ~450 | |
+| 7 | Registry/config cleanup + cross-check | S5-05, S5-07 | ~300 | |
 
 Each slice: work-unit commit(s) on `odd/asistente-sdb`, conventional message, tests with the code,
 rollback = the slice's own files. Slices 5 may approach the budget; if a cohesive split does not
@@ -201,7 +202,31 @@ Push/PR creation remain the owner's decision per slice.
 
 - Worktree `../lumat-agent-odd-asistente-sdb` created (consent granted) and provisioned:
   `uv sync --frozen`, `cp ../lumat-agent/infra/.env infra/.env`, graph `graphify-out/graph.json`
-  present. Test DB not started yet. No commits.
+  present.
+- **Slice 1 (S5-01) done** — commits `4ebd6ace` (task doc) + `c1335444` (spec). `sdb-native` rewritten
+  to SDB-11..SDB-16 (normal loop + conditional isolated verification). Native RDD review
+  `review-c781144a08c191f2` (lens `review-reliability`) **approved with zero findings**; authority
+  burned. Boundary advanced to `c1335444`.
+- **Slice 2 (S5-03a) done** — deterministic gate + success criterion, additive (old SDB untouched).
+  `app/chat/assistant/verification.py` (new): `EFFECT_TOOLS` (memory.write excluded) and the pure
+  `verification_required(*, dispatched_tools, explicit, handoff)` with precedence
+  effect-tool → explicit → handoff → not-required. `state.py`: `PlannerOutput.success_criterion`
+  (≤300, non-empty) + `verify_requested`/`sdb_requested` state fields. New tests 15; writer GREEN
+  143 passed; parent spot-check 143 passed. Not yet wired into the loop (Slice 3).
+- **Slice 3 (S5-03b) done** — isolated read-only verifier in `app/chat/assistant/verification.py`:
+  `VerificationResult` + `build_verifier_messages` (fresh, context-free) + `run_verification`
+  (configured model; ≤2 bounded read-only tool steps with results fed back for the final verdict;
+  caller-supplied `tool_executor` required — no bogus default; never writes). New tests
+  `tests/unit/test_assistant_verification_runner.py`; 49 passed in the focused set. Corrective pass
+  fixed three defects (hardcoded model, missing verdict round, admin default executor). Still not
+  wired into the loop (Slice 4). Doc/plan: delivery split into 7 slices.
+- **Slice 4 (S5-02 routing) done** — `verify_effects` node in `nodes.py` (no-op unless the gate
+  fires; binds a thread/owner/project read-only `tool_executor`; stores `state["verification"]` and
+  evidence). `graph.py`: post-tool path `tool_loop_head → verify_effects → respond_stream`. Failed/
+  unverifiable outcomes append a deterministic qualification (`verification: <status> — <reason>`),
+  streamed via `on_token`; confirmed adds none. Tool results now carry dispatched arguments for the
+  verifier. 109 added lines; 82 passed. In-turn effects are `memory.update`/`memory.delete` (the
+  `project.*`/`automation.*` effects execute in the service → Slice 6).
 
 ## Review (RDD)
 

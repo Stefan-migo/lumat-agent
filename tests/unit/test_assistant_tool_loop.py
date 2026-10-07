@@ -15,6 +15,7 @@ from app.chat.assistant.nodes import (
     guardrails,
     plan_llm,
     tool_loop_head,
+    verify_effects,
 )
 
 
@@ -65,11 +66,60 @@ def test_completed_tool_routes_through_opt_in_loop_head():
 
     assert ("execute_tool", "tool_loop_head") in edges
     assert ("tool_loop_head", "plan_llm") in edges
-    assert ("tool_loop_head", "respond_stream") in edges
+    assert ("tool_loop_head", "respond_stream") not in edges
+    assert ("tool_loop_head", "verify_effects") in edges
+    assert ("verify_effects", "respond_stream") in edges
     assert ("tool_loop_head", "assemble_context") not in edges
     assert ("tool_loop_head", "panel_cost_gate") not in edges
     assert all(source != "cortex_turn" and target != "cortex_turn" for source, target in edges)
     assert ("tool_loop_head", "sdb_trigger_gate") not in edges
+
+
+def test_verify_effects_is_noop_without_gate(monkeypatch):
+    monkeypatch.setattr("app.chat.assistant.nodes.run_verification", lambda **_kwargs: pytest.fail("unexpected verifier call"))
+    assert verify_effects({"tool_results": [], "evidence": []}) == {}
+
+
+def test_verify_effects_runs_for_memory_update_and_binds_read_only_executor(monkeypatch):
+    captured = {}
+
+    def verify(**kwargs):
+        captured.update(kwargs)
+        with pytest.raises(Exception):
+            kwargs["tool_executor"]("project.create", {})
+        return SimpleNamespace(status="failed", reason="not found")
+
+    monkeypatch.setattr("app.chat.assistant.nodes.run_verification", verify)
+    state = _tool_state(
+        plan={"success_criterion": "Memory changed"},
+        tool_results=[{"tool": "memory.update", "arguments": {"id": 4}, "result": {"status": "completed"}}],
+        evidence=[{"tool": "memory.update", "status": "completed"}],
+        session=object(), user_id=9, effective={"project_id": 12},
+    )
+    result = verify_effects(state)
+    assert result["verification"] == {
+        "required": True, "gate_reason": "effect-tool", "status": "failed", "detail": "not found"
+    }
+    assert captured["steps"] == state["tool_results"]
+
+
+@pytest.mark.parametrize("status", ["failed", "unverifiable"])
+def test_failed_verification_qualification_is_deterministic_and_streamed(monkeypatch, status):
+    calls = []
+    monkeypatch.setattr("app.chat.assistant.nodes._assistant_client", lambda: _streaming_client(calls, "Done"))
+    state = _tool_state(
+        status="completed", verification={"required": True, "status": status, "detail": "not visible"},
+        tool_results=[{"tool": "memory.update", "arguments": {}, "result": {"status": "completed"}}],
+        on_token=lambda token: calls.append(token),
+    )
+    result = execute(state)
+    assert result["response"].endswith(f"verification: {status} — not visible")
+    assert calls[-1] == f"\n\nThe effect ran. verification: {status} — not visible"
+
+
+def test_confirmed_verification_has_no_qualification():
+    result = execute(_tool_state(status="responding", verification={"required": True, "status": "confirmed", "detail": "ok"}))
+    assert "verification:" not in result["response"].lower()
 
 
 def test_opted_in_turn_executes_two_tools_and_narrates_combined_evidence(monkeypatch):
@@ -220,7 +270,7 @@ def test_cap_refuses_a_third_execution(monkeypatch):
 
     state = _tool_state(tool_steps=MAX_ASSISTANT_TOOL_STEPS, plan={**_tool_state()["plan"], "follow_up": True})
 
-    assert _after_tool_loop(state) == "respond_stream"
+    assert _after_tool_loop(state) == "verify_effects"
     result = tool_loop_head(state)
     assert result["cap_reached"] is True
     assert result["status"] == "completed"
