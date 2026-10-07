@@ -31,6 +31,7 @@ from app.services.costs import (
 from app.services.skills import SkillDefinition
 from app.chat.assistant.attachments import build_multimodal_content, prepare_attachment_context
 from app.models import InternalChatMessage
+from app.chat.assistant.verification import EFFECT_TOOLS, run_verification, verification_required
 
 
 logger = logging.getLogger(__name__)
@@ -893,9 +894,46 @@ def tool_loop_head(state: AssistantState) -> AssistantState:
 
 
 def _tool_accumulation(state: AssistantState, result: dict) -> dict:
+    # ponytail: preserve the exact dispatched arguments alongside the result for verification.
     return {
         "tool_results": [*(state.get("tool_results") or []), result],
         "tool_steps": state.get("tool_steps", 0) + 1,
+    }
+
+
+def verify_effects(state: AssistantState) -> AssistantState:
+    """Verify dispatched effects against the plan and evidence, never dispatching writes."""
+    steps = state.get("tool_results") or []
+    required, gate_reason = verification_required(
+        dispatched_tools=(item.get("tool") for item in steps),
+        explicit=bool(state.get("verify_requested")), handoff=bool(state.get("sdb_requested")),
+    )
+    if not required:
+        return {}
+
+    def tool_executor(name, arguments):
+        definition = get_tool(name)
+        whitelist = {tool for tool in _effective_tools(state) if get_tool(tool).read_only}
+        if not definition.read_only or name not in whitelist:
+            raise ToolValidationError("verification is read-only")
+        return execute_tool(
+            state.get("session"), name, arguments, whitelist=whitelist,
+            role=state.get("actor_role"), trusted_thread_id=state.get("thread_id"),
+            owner_id=state.get("user_id"), proyecto=_project_slug(state),
+            project_id=(state.get("effective") or {}).get("project_id"),
+        )
+
+    criterion = (state.get("plan") or {}).get("success_criterion") or (state.get("planner_output") or {}).get("success_criterion")
+    result = run_verification(
+        criterion=criterion, steps=steps, evidence=state.get("evidence") or [], tool_executor=tool_executor,
+    )
+    verification = {
+        "required": True, "gate_reason": gate_reason,
+        "status": result.status, "detail": result.reason,
+    }
+    return {
+        "verification": verification,
+        "evidence": [make_evidence(tool="verification", status=result.status, detail=result.reason)],
     }
 
 
@@ -1011,7 +1049,7 @@ def execute(state: AssistantState) -> AssistantState:
                 )
             return {
                 "tool_result": failed_result,
-                **_tool_accumulation(state, failed_result),
+                **_tool_accumulation(state, {**failed_result, "arguments": plan_data.get("arguments", {})}),
                 "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],
                 "error": detail,
                 "response": f"Tool execution failed: {detail}",
@@ -1030,14 +1068,14 @@ def execute(state: AssistantState) -> AssistantState:
                 bounded_result = {**result, "result": bounded_result}
                 return {
                     "tool_result": bounded_result,
-                    **_tool_accumulation(state, bounded_result),
+                    **_tool_accumulation(state, {**bounded_result, "arguments": plan_data.get("arguments", {})}),
                     "evidence": [make_evidence(tool=tool_name, status="degraded", detail=degraded_reason)],
                     "response": f"Tool {tool_name} unavailable.",
                     "status": "degraded",
                 }
             return {
                 "tool_result": result,
-                **_tool_accumulation(state, result),
+                **_tool_accumulation(state, {**result, "arguments": plan_data.get("arguments", {})}),
                 "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],
                 "error": detail,
                 "response": f"Tool execution failed: {detail}",
@@ -1046,7 +1084,7 @@ def execute(state: AssistantState) -> AssistantState:
         if result.get("status") == "approval_pending":
             return {
                 "tool_result": result,
-                **_tool_accumulation(state, result),
+                **_tool_accumulation(state, {**result, "arguments": plan_data.get("arguments", {})}),
                 "approval": result.get("approval"),
                 "guardrails": {**state.get("guardrails", {}), "approval_required": True,
                                 "decision": "approval_pending"},
@@ -1062,7 +1100,7 @@ def execute(state: AssistantState) -> AssistantState:
             )
         return {
             "tool_result": result,
-            **_tool_accumulation(state, result),
+            **_tool_accumulation(state, {**result, "arguments": plan_data.get("arguments", {})}),
             "evidence": [make_evidence(tool=tool_name, status="completed", detail="Tool execution completed")],
             "response": f"Tool {tool_name} completed.",
             "status": "completed",
@@ -1137,6 +1175,14 @@ def execute(state: AssistantState) -> AssistantState:
         if not usage_seen:
             _record_usage(state, "response", None)
         response = "".join(chunks) or response
+    verification = state.get("verification") or {}
+    if verification.get("status") in {"failed", "unverifiable"}:
+        effect_ran = EFFECT_TOOLS.intersection(item.get("tool") for item in state.get("tool_results", []))
+        prefix = "The effect ran. " if effect_ran else ""
+        qualification = f"\n\n{prefix}verification: {verification['status']} — {verification.get('detail', '')}"
+        response += qualification
+        if on_token is not None:
+            on_token(qualification)
     session = state.get("session")
     if session is not None and not tool_already_ran:
         record_audit(

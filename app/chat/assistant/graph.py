@@ -21,6 +21,7 @@ from app.chat.assistant.nodes import (
     sdb_spec,
     sdb_verify,
     tool_loop_head,
+    verify_effects,
 )
 from app.chat.assistant.state import AssistantState, normalize_sdb_trigger
 
@@ -93,7 +94,7 @@ def _after_execute(state: AssistantState) -> str:
 
 
 def _after_tool_loop(state: AssistantState) -> str:
-    return "plan_llm" if state.get("status") == "planned" else "respond_stream"
+    return "plan_llm" if state.get("status") == "planned" else "verify_effects"
 
 
 def _after_plan(state: AssistantState) -> str:
@@ -126,6 +127,7 @@ def build_assistant_graph():
     builder.add_node("retrieve_kb", retrieve_kb)
     builder.add_node("execute_tool", execute)
     builder.add_node("tool_loop_head", tool_loop_head)
+    builder.add_node("verify_effects", verify_effects)
     builder.add_node("respond_stream", execute)
     builder.add_node("evidence", collect_evidence)
     builder.add_edge(START, "assemble_context")
@@ -150,7 +152,8 @@ def build_assistant_graph():
     builder.add_edge("delegation_span", "respond_stream")
     builder.add_conditional_edges("retrieve_kb", _after_retrieve_kb, {"respond_stream": "respond_stream", END: END})
     builder.add_conditional_edges("execute_tool", _after_execute, {"tool_loop_head": "tool_loop_head", END: END})
-    builder.add_conditional_edges("tool_loop_head", _after_tool_loop, {"plan_llm": "plan_llm", "respond_stream": "respond_stream"})
+    builder.add_conditional_edges("tool_loop_head", _after_tool_loop, {"plan_llm": "plan_llm", "verify_effects": "verify_effects"})
+    builder.add_edge("verify_effects", "respond_stream")
     builder.add_edge("respond_stream", "evidence")
     builder.add_edge("evidence", END)
     return builder.compile()
@@ -195,6 +198,7 @@ def run_assistant(*, thread_id: int, user_id: int, content: str, run_id: str, re
         "sdb_verify": "executing", "sdb_deliver": "responding", "execute_tool": "executing",
         "respond_stream": "streaming",
         "tool_loop_head": "planning",
+        "verify_effects": "verifying",
     }
     for mode, chunk in graph.stream(state, stream_mode=["values", "updates"]):
         if mode == "values":
