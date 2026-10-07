@@ -147,6 +147,7 @@ def test_assistant_capabilities_reports_every_whitelisted_tool_without_truncatio
             True,
             lambda _session, _args: {},
             "Test-only capability.",
+            tier="default",
         ),
     )
     monkeypatch.setattr(
