@@ -608,8 +608,8 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           <Card className="client-ficha__case-card client-ficha__case-card--primary" title="Casos del cliente" description="Caso activo e historial de atención."><div className="client-ficha__case-panel">{activeCaseBody}</div></Card>
           {customerDataCard}
           <section aria-label="Casos anteriores" className="client-ficha__history-block client-ficha__archived-cases"><Card title="Casos anteriores">
-            {archivedCases.length ? <div className="data-region">
-              <div className="table-card__desktop"><DataTable columns={archivedCaseColumns} rows={archivedCases} actions={archivedCaseMenu} rowKey={(row) => String(row.id)} /></div>
+            {archivedCases.length ? <>
+              <div className="data-region table-card__desktop"><DataTable columns={archivedCaseColumns} rows={archivedCases} actions={archivedCaseMenu} rowKey={(row) => String(row.id)} /></div>
               <ul className="table-cards table-cards--mobile client-ficha__archived-cards" aria-label="Lista de casos anteriores">
                 {archivedCases.map((row) => <li className="table-card__item client-ficha__archived-card" key={row.id}>
                   <div className="client-ficha__archived-card-head"><strong>#{row.id}</strong><span>{row.service}</span>{archivedCaseMenu(row)}</div>
@@ -617,7 +617,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
                   <div className="client-ficha__archived-card-facts"><div><small>Responsable</small><strong>{data.users.find((user) => user.id === row.responsible_id)?.username ?? "Sin asignar"}</strong></div><div><small>Monto CLP</small><strong>{row.amount === null ? "Sin registrar" : CLP_FORMAT.format(row.amount)}</strong></div></div>
                 </li>)}
               </ul>
-            </div> : <EmptyState title="No hay casos anteriores" />}
+            </> : <EmptyState title="No hay casos anteriores" />}
             <p>Mostrando {archivedCases.length} {archivedCases.length === 1 ? "caso anterior" : "casos anteriores"}</p>
           </Card></section>
         </div> : null}
