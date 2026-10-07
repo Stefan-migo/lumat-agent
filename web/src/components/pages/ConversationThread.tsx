@@ -159,7 +159,9 @@ export function ConversationThread({ conversationId, data: controlledData, state
     if (value === "human") void mutate(() => changeConversationState(conversation.id, "human", conversation.version ?? 0));
     else if (value === "bot") void mutate(() => changeConversationState(conversation.id, "bot", conversation.version ?? 0));
     else if (value === "closed") void mutate(() => changeConversationState(conversation.id, "closed", conversation.version ?? 0));
-    else void mutate(() => acknowledgeCase(conversation.case_id!));
+    else if (value === "acknowledge" && conversation.case_id != null) void mutate(() => acknowledgeCase(conversation.case_id!));
+    // Any other value is deliberately ignored: an unknown menu action must never mutate state
+    // (previously anything unexpected fell through to emergency acknowledgement).
   };
   const desktopActions = conversation ? <><Button disabled={busy || conversation.state === "human"} onClick={() => void mutate(() => changeConversationState(conversation.id, "human", conversation.version ?? 0))}><UserRoundPlus aria-hidden="true" />Tomar conversación</Button><Menu trigger="icon" align="end" collisionPadding={8} label="Acciones de la conversación" disabled={busy} items={conversationMenuItems()} onSelect={runMenuAction} /></> : null;
   const mobileActions = conversation ? <Menu trigger="icon" align="end" collisionPadding={8} label="Más acciones de la conversación" disabled={busy} items={conversationMenuItems({ includeTake: true, includeInfo: true })} onSelect={runMenuAction} /> : null;

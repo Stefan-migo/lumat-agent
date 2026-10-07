@@ -156,6 +156,24 @@ it('keeps conversation actions in the thread header and context actions-free', a
   }
 });
 
+// Native review R3-002 claimed the mobile menu omits emergency acknowledgement. It does not:
+// both menus are built by the same `conversationMenuItems`, which appends the acknowledge item
+// outside the per-view options. This locks the behaviour so a refactor cannot drop it.
+it('offers emergency acknowledgement from the mobile action menu', async () => {
+  const user = userEvent.setup();
+  render(<ConversationThread data={{ ...thread, conversation: {
+    ...thread.conversation,
+    customer: { id: 4, name: 'María González', phone_e164: '+5694' },
+    case: { id: 22, service: 'Urgencia', priority: 'high', status: 'open', emergency: true, summary: null, acknowledged_at: null, closed_at: null },
+    case_id: 22,
+    emergency: true,
+    acknowledged_at: null,
+  }, messages: thread.messages }} state="ready" interactive />);
+
+  await user.click(screen.getByRole('button', { name: 'Más acciones de la conversación' }));
+  expect(await screen.findByRole('menuitem', { name: 'Reconocer emergencia' })).toBeInTheDocument();
+});
+
 it('gives every inspector details element its own summary', () => {
   render(<ConversationThread data={{ ...thread, conversation: {
     ...thread.conversation,
