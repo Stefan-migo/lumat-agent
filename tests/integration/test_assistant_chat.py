@@ -529,7 +529,7 @@ def test_non_delegating_turn_keeps_pre_wiring_state_and_cost_contract(client, mo
         state = session.get(InternalChatThread, thread_id).assistant_state
         request = session.get(InternalChatMessage, request_message["id"])
     assert state["planner"] == {
-        "kind": "respond", "classification": "normal",
+        "kind": "respond",
         "tool": None, "sub_agent": None, "arguments": {}, "summary": "planned",
         "requires_approval": False, "follow_up": False, "skills": [], "valid": True,
         "success_criterion": None,

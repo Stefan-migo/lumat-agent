@@ -118,7 +118,7 @@ def test_plan_llm_keeps_respond_plan_with_null_arguments(monkeypatch, caplog):
         "app.chat.assistant.nodes._assistant_client",
         lambda: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
             create=lambda **kwargs: SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
-                content='{"kind":"respond","classification":"normal","tool":null,"arguments":null,"summary":"Si: tengo acceso a memoria por ambitos (panel, cliente, agente) en modo lectura con memory.read/memory.search, y escritura solo con tu aprobacion. No accedo a memoria fuera del panel autorizado.","requires_approval":false}',
+                content='{"kind":"respond","tool":null,"arguments":null,"summary":"Si: tengo acceso a memoria por ambitos (panel, cliente, agente) en modo lectura con memory.read/memory.search, y escritura solo con tu aprobacion. No accedo a memoria fuera del panel autorizado.","requires_approval":false}',
             ))]),
         ))),
     )
