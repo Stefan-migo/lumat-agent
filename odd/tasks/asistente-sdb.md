@@ -220,7 +220,7 @@ first while the old subgraph still exists.
 | 2 | Deterministic gate + `success_criterion` (additive) | S5-03a | ~100 | ✅ merged #490 |
 | 3 | Isolated read-only verifier (additive) | S5-03b | ~230 | ✅ merged #490 |
 | 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~110 | ✅ merged #490 |
-| 5 | Remove the dead SDB phase subgraph + routing contract | S5-02 (removal, corrected) | ~330 | ✅ committed + review approved |
+| 5 | Remove the dead SDB phase subgraph + routing contract | S5-02 (removal, corrected) | ~330 | ✅ PR #491 open |
 | 6 | Remove SDB service runner + `sdb_verify`/`sdb_deliver` + integration tests | S5-04 | ~480 | |
 | 7 | `classification` + prompt + registry/skills cleanup + cross-check | S5-05, S5-07 | ~300 | |
 
@@ -272,8 +272,8 @@ Push/PR creation remain the owner's decision per slice.
 - **Slice 5 done (committed, reviewed)** — commits `edfd06c8` (removal: dead SDB phase subgraph +
   routing contract; 5 files, +32/−373) and `d540ac9a` (odd doc). Full suite green (**1,791 passed**).
   RDD review `review-df7d94ae9c298b1c` (lens `review-reliability`, medium, 6 files/467 lines)
-  **approved with 0 findings**; acknowledgement burned authority. NOT pushed — push/PR is the
-  owner's decision.
+  **approved with 0 findings**; acknowledgement burned authority. Pushed; **PR #491** open
+  (base `main`, label `type:refactor`, no `Closes`).
 
 ## Review (RDD)
 
