@@ -159,6 +159,12 @@ The CV-1 tab-label change (`Humanas`→`Atención humana`, `Casos`→`Con caso`)
 #### Environment gotcha (recurring, worth remembering)
 The Vite dev server **missed a file edit**: it served a stale transform of `Dialog.tsx` (the watcher never logged an HMR update for it), so `variant="sheet"` silently did nothing in the browser while the source was correct. `touch`ing the file re-triggered the watcher and fixed it. When a fresh page load clearly runs old code in this worktree, `touch` the file before debugging the logic.
 
+### CV-5-r1 — mobile polish (owner 2026-10-07)
+- [x] Removed the dead page top gap: the thread's `PageFrame` uses `title=""`, so its title block (an empty `h1` plus paddings) wasted ~130px. Hidden with `.conversation-thread-page > .page-frame__titlebar { display: none }`, mirroring the clientes ficha. Measured: the customer name moved from ~210px to **y=83**.
+- [x] `Ver ficha del cliente` and `Volver a conversaciones` are now **50/50 on one row** (measured 173px each at 390px wide) instead of stacked.
+- [x] `Información del chat` moved **into the mobile `…` menu**; the `…` trigger sits right-aligned with the card title/subtitle (measured x=314). Menu order: Información del chat · Tomar conversación · Devolver al agente · Cerrar conversación (+ Reconocer emergencia when applicable).
+- [x] Evidence: commit `00c2301e`; `tsc` clean; full suite **1034/1034**; `npm run build` green; Playwright measurements above.
+
 ## Authorized scope
 
 Work **only** in `/home/stefan/repos/lumat-agent-odd-conversaciones-redesign` on branch
