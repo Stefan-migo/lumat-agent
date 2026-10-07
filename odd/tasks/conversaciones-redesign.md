@@ -174,12 +174,16 @@ The Vite dev server **missed a file edit**: it served a stale transform of `Dial
 - **Non-blocking warnings** (the reviewer marked them informational; they did not open a correction and are NOT a reason to re-run review on this candidate):
   - `R3-001` — `web/src/components/pages/ConversationThread.tsx:166`: the menu dispatcher routes every unrecognized selection to `acknowledgeCase`, so an unexpected or future menu value would acknowledge the case instead of safely doing nothing. Defensive hardening.
   - `R3-002` — `web/src/components/pages/ConversationThread.tsx:197`: **real gap** — `mobileActions` omits the emergency-acknowledge item, so a mobile operator cannot acknowledge an unacknowledged emergency from the thread. **Recommended follow-up (small fix).**
-- **Delivery:** not performed. Commit/push/PR/merge remain the owner's decision under ordinary repository policy.
+- **Delivery:** opened as **PR #508** (`odd/conversaciones-redesign` → `main`), https://github.com/Stefan-migo/lumat-agent/pull/508.
+  - `size:exception`: 854 changed lines (668 additions + 186 deletions), 17 files — approved by the maintainer because the whole range was already reviewed natively as one candidate.
+  - Branch integrated with the current `origin/main` (`4df0bf6f`, 21 commits) via a clean auto-merge that overlapped on `web/src/types.ts`; the full verification was re-run **on the integrated tree**.
+  - CI: `panel` ✅, `test` ✅, GitGuardian ✅ — `mergeStateStatus: CLEAN`.
+  - Merge remains the owner's decision (no branch protection in this repo).
 
 ### Final status
 **Conversaciones section (frontend): closed and owner-approved.** Work units delivered: `8f844391` `ebd7cc20` `8572326b` `46046a06` `71a39676` `56c69b73` `68c21e99` `7e4dadd0` `0b64a05c` `fc84bb75` `64a1063d` `00c2301e`, plus the doc commits.
-- Passed: full frontend suite **1034/1034**, `tsc -b --force --noEmit`, `npm run build`, Playwright layout measurements (lists + mobile thread + bottom sheet).
-- Not performed: push, PR, merge (owner's decision) and the `R3-002` follow-up.
+- Passed: full frontend suite **1033/1033** on the integrated tree (main removed one ProjectsPage spec), `tsc -b --force --noEmit`, `npm run build`, Playwright layout measurements (lists + mobile thread + bottom sheet), CI `panel`/`test` green.
+- Not performed: merge (owner's decision) and the `R3-002` follow-up.
 - Backend follow-up still open (out of this section's scope): stop persisting `_pending` in `captured_data`.
 
 ## Authorized scope
