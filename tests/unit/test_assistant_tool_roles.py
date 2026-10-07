@@ -76,7 +76,6 @@ def test_missing_role_denies_every_tool():
 def test_all_execution_call_sites_pass_actor_role():
     expected = {
         "app/chat/assistant/nodes.py": {"delegation_span", "execute"},
-        "app/services/agent_chat.py": {"_run_sdb_tasks"},
     }
     root = Path(__file__).resolve().parents[2]
     for filename, function_names in expected.items():

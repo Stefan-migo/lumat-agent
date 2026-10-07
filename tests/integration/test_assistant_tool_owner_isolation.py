@@ -4,7 +4,7 @@ from sqlalchemy import select
 import pytest
 
 from app.db import SessionLocal
-from app.chat.assistant.approval import issue_approval
+from app.chat.assistant.approval import consume_approval, issue_approval, validate_execution
 from app.models import InternalChatThread, Project, User
 from app.services import agent_chat
 from app.chat.assistant.tools.registry import ToolValidationError, execute_tool
@@ -12,49 +12,41 @@ from app.models import MemoryType, MemoryVisibility
 from app.services import tukulpan
 
 
-def test_sdb_project_creation_is_bound_to_thread_owner():
-    plan = {
-        "phase": "EXECUTE",
-        "spec": {"sha256": "owner-isolation"},
-        "tasks": [{
-            "id": "create-project",
-            "scope": {"proyecto": "default"},
-            "summary": "Create project",
-            "verifiable_output": "Project exists",
-            "tool": "project.create",
-            "arguments": {
-                "slug": "field-ops",
-                "name": "Field Ops",
-                "purpose": "Field operations management",
-            },
-            "decision": {"create_distinct": True},
-        }, {
-            "id": "list-projects",
-            "scope": {"proyecto": "field-ops"},
-            "summary": "Use the created project",
-            "verifiable_output": "Project is listed",
-            "tool": "project.list",
-            "arguments": {},
-        }],
+def test_approved_project_creation_is_bound_to_thread_owner():
+    arguments = {
+        "slug": "field-ops",
+        "name": "Field Ops",
+        "purpose": "Field operations management",
     }
-    approval = issue_approval({"sdb": plan})
-    approval["status"] = "consumed"
+    plan = {
+        "tool": "project.create",
+        "arguments": arguments,
+        "project_payload": {
+            "operation": "create", "arguments": arguments,
+            "decision": {"create_distinct": True},
+        },
+    }
+    approval = issue_approval(plan)
+    assert consume_approval(approval, approval["token"])
+    assert validate_execution(plan, approval)
 
     with SessionLocal() as session:
         user = User(username="owner-a", password_hash="test", role="admin")
         session.add(user)
         session.flush()
-        thread = InternalChatThread(user_id=user.id, current_plan={"sdb": plan})
-        thread.assistant_state = {"sdb": {"checkpoints": []}, "approval": approval, "actor_role": "admin"}
+        thread = InternalChatThread(user_id=user.id, current_plan=plan)
+        thread.assistant_state = {"approval": approval, "actor_role": "admin"}
         session.add(thread)
         session.flush()
 
-        result = agent_chat._run_sdb_tasks(session, thread, "owner-run")
+        result = execute_tool(
+            session, "project.create", arguments, approval=approval,
+            owner_id=thread.user_id, role="admin",
+        )
         project = session.scalar(select(Project).where(Project.slug == "field-ops"))
 
         assert project is not None and project.owner_id == thread.user_id
-        assert result["status"] == "completed", result["results"]
-        assert [item["status"] for item in result["results"]] == ["completed", "completed"], [(item["status"], item.get("error")) for item in result["results"]]
+        assert result["status"] == "completed"
 
 
 def test_registry_scopes_projects_and_memory_to_authenticated_owner(fake_embedder):

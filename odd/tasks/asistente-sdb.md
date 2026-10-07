@@ -1,13 +1,13 @@
 # ODD: asistente-sdb
 
-**Branch**: `odd/asistente-sdb-removal`
-**Worktree**: `../lumat-agent-odd-asistente-sdb`
-**Base**: `9f2140a4` (= `origin/main`, PR #490 merge; contains slices 1–4). Local `main` worktree was behind at `617cd2c2`.
-**Status**: Slices 1–4 **merged to main** (PR #489 spec; PR #490 gate + isolated verifier + loop wiring). Slices 5–7 pending (collapse the phase subgraph, service-runner removal, registry cleanup). No DB migration expected. Slice 5 boundary **corrected** (see below) after discovering the service import coupling.
+**Branch**: `odd/asistente-sdb-service`
+**Worktree**: `../lumat-agent-odd-asistente-sdb-service`
+**Base**: `32ebb4b5` (= `origin/main`, PR #504 merge; contains slices 1–5 plus the clientes s09–s13 merges).
+**Status**: Slices 1–5 **merged to main** (PR #489 spec; PR #490 gate + isolated verifier + loop wiring; PR #491 phase-subgraph removal). Slice 6 in progress (service-runner removal). Slices 7–8 pending (registry/config cleanup; wire the verifier into the approved service path). No DB migration expected.
 
 ## Objective
 
-Slice 5 of the Asistente Lumat workspace: **SDB stops being a 7-phase subgraph and becomes the
+Refactor of the Asistente Lumat workspace (Slices 1–8): **SDB stops being a 7-phase subgraph and becomes the
 normal loop plus one verification step** (`plan → execute → verify`). A deterministic gate decides
 when an independent, **read-only verifier with fresh context** must confirm the outcome against an
 **observable success criterion**. The optional Cortex→SDB handoff reuses the existing admin-only
@@ -181,6 +181,46 @@ Corrected Slice 5 scope:
   `tests/spec/test_sdb_phases.py` (drop phase-node tests, preserve the DB-dependency block at
   L230–285). `test_sdb_recovery.py`, `test_sdb_api.py`, `test_sdb_persistence.py` stay (Slice 6).
 
+### Slice 6 scope (2026-10-07, owner-confirmed)
+
+Slice 6 = **removal only** (no new behaviour). Verified map:
+
+- **Remove** (`app/services/agent_chat.py`): `_sdb_plan`, `_run_sdb_tasks`, `_sdb_delivery`,
+  `persist_sdb_state`, `SDB_EVENT_LIMIT`/`SDB_EVENT_HISTORY_LIMIT`; the `result.get("sdb_phase")`
+  branches (plan construction ~L677, persistence ~L703, `_events_for` SDB branch ~L818); the
+  `if plan.get("sdb")` dispatch in `approve_plan` (~L1005) and in `resume_thread` (~L1160); the SDB
+  approval imports (`canonical_sdb_digest`, SDB use of `arguments_digest`) and `sdb_deliver`/`sdb_verify`
+  from the nodes import. **Keep** `execute`, `issue_approval`, `validate_approval`, `claim_execution`,
+  `recover_events`, and the whole normal event/approval/response path.
+- **Remove** (`app/chat/assistant/recovery.py`): `revalidate_sdb_resume`, `resumable_sdb_tasks` and
+  their SDB imports. **Keep** `recover_events`, `claim_execution`, `is_recoverable`.
+- **Remove** (`app/chat/assistant/nodes.py`): `sdb_verify`, `sdb_deliver`, `SDB_RESULT_LIMIT`.
+- **Remove** (`app/chat/assistant/state.py`): `SDBTask`, and fields `sdb_phase`, `sdb_spec`,
+  `sdb_tasks`, `sdb_result`. **Keep** `sdb_requested` (admin handoff consumed by `verify_effects`).
+- **Approval hygiene** (`app/chat/assistant/approval.py`): remove the SDB-only shape
+  (`canonical_sdb_payload`, `canonical_sdb_digest`, `_sdb_bindings`, the SDB conditional in
+  `issue_approval`/`validate_approval`/`validate_execution`, the `_bound_tool_arguments` SDB
+  fallback). **Keep** the generic `arguments_digest`, normal token/expiry/arguments validation, and
+  `canonical_project_payload`/`canonical_project_digest` (normal `project.*` approvals).
+- **Registry** (`app/chat/assistant/tools/registry.py`): rename `SDB_WRITE_ALLOWLIST` →
+  `APPROVED_WRITE_ALLOWLIST` (**keep the check** at L703 — it gates normal approved
+  `project.*`/`automation.*` writes); remove the `sdb_payload` branch at L714.
+- **Tukulpan** (`app/services/tukulpan.py`): remove `persist_sdb_artifact`, `SDB_SPEC_LIMIT`,
+  `SDB_CHECKPOINT_LIMIT`, `sdb:{run_id}:…` key formats (only caller was `persist_sdb_state`).
+- **Keep** the `sdb_requested` handoff plumbing (service params/forwards + `chat.py` API field) — it
+  feeds the general verifier.
+- **Tests**: delete `tests/spec/test_sdb_recovery.py`, `tests/integration/test_sdb_api.py`,
+  `tests/integration/test_sdb_persistence.py`; rewrite the SDB fixtures in
+  `tests/unit/test_assistant_tools.py`, `tests/integration/test_assistant_tool_owner_isolation.py`,
+  `tests/integration/test_assistant_harness_guardrails.py` (preserve their NON-SDB assertions), and
+  trim the `sdb_verify`/`sdb_deliver`/`SDBTask` tests in `tests/spec/test_sdb_phases.py`.
+
+**Known gap (→ Slice 8, NOT here).** `verify_effects` is a graph node (`nodes.py`); the service
+`approve_plan` calls `execute` directly and never runs it, and `nodes.execute` does not set
+`verification`. So approved `project.*`/`automation.create_rule` effects are not independently
+verified. This is a pre-existing gap (the old SDB branch that verified is already dead), not a
+regression introduced by Slice 6; Slice 8 wires the verifier into that path.
+
 ## Acceptance criteria (slice)
 
 1. No `sdb_*` phase node or edge survives; SDB runs through the normal loop.
@@ -220,9 +260,10 @@ first while the old subgraph still exists.
 | 2 | Deterministic gate + `success_criterion` (additive) | S5-03a | ~100 | ✅ merged #490 |
 | 3 | Isolated read-only verifier (additive) | S5-03b | ~230 | ✅ merged #490 |
 | 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~110 | ✅ merged #490 |
-| 5 | Remove the dead SDB phase subgraph + routing contract | S5-02 (removal, corrected) | ~330 | ✅ PR #491 open |
-| 6 | Remove SDB service runner + `sdb_verify`/`sdb_deliver` + integration tests | S5-04 | ~480 | |
+| 5 | Remove the dead SDB phase subgraph + routing contract | S5-02 (removal, corrected) | ~330 | ✅ merged #491 |
+| 6 | Remove the dead SDB service runner + `sdb_verify`/`sdb_deliver` + SDB state + SDB tests | S5-04 (removal) | ~400 | ✅ committed + review approved |
 | 7 | `classification` + prompt + registry/skills cleanup + cross-check | S5-05, S5-07 | ~300 | |
+| 8 | Wire the verifier into the approved service path (close D15 for `project.*`/`automation.*`) | S5-08 (new) | ~250 | |
 
 Each slice: work-unit commit(s) on `odd/asistente-sdb`, conventional message, tests with the code,
 rollback = the slice's own files. Slices 5 may approach the budget; if a cohesive split does not
@@ -272,8 +313,20 @@ Push/PR creation remain the owner's decision per slice.
 - **Slice 5 done (committed, reviewed)** — commits `edfd06c8` (removal: dead SDB phase subgraph +
   routing contract; 5 files, +32/−373) and `d540ac9a` (odd doc). Full suite green (**1,791 passed**).
   RDD review `review-df7d94ae9c298b1c` (lens `review-reliability`, medium, 6 files/467 lines)
-  **approved with 0 findings**; acknowledgement burned authority. Pushed; **PR #491** open
-  (base `main`, label `type:refactor`, no `Closes`).
+  **approved with 0 findings**; acknowledgement burned authority. Pushed as **PR #491**; CI green;
+  **merged** (merge commit `5820a04f`). Branch + worktree cleaned up.
+- **Slice 6 started (2026-10-07)** — new worktree `../lumat-agent-odd-asistente-sdb-service` on
+  `odd/asistente-sdb-service` from `main` = `32ebb4b5` (owner approved continuing). Owner confirmed
+  the split: Slice 6 = pure removal; a new **Slice 8** wires the verifier into the approved service
+  path (the D15 gap above). Graph Check done on the service path.
+- **Slice 6 done (committed, reviewed)** — work-unit commits `9cb9969c` (service runner/persistence),
+  `7d7e8806` (nodes/state), `91510a22` (approval/registry/tukulpan), `477a3972` (test fixtures).
+  18 files, +131/−1757. Full suite green (**1,755 passed**). Note: two writer stalls left the tree
+  half-migrated; the work was finished in smaller bounded steps. The writer over-deleted one valid
+  test (`test_rename_and_merge_reject_active_runs_before_changes`); it was restored (still green) —
+  `projects.py::_has_active_run` still reads the legacy `sdb` namespace, which is **Slice 7 scope**.
+  RDD review `review-93510db7179fc56b` (lens `review-reliability`, medium, 19 files/1870 lines)
+  **approved with 0 findings**; acknowledgement burned authority.
 
 ## Review (RDD)
 
@@ -281,10 +334,17 @@ Push/PR creation remain the owner's decision per slice.
   `sha256:56e9bab7…`), tier **medium**, 1 lens (`review-reliability`), 6 files / 467 lines,
   correction budget 200. Consent: owner **granted**. Capture **approved with 0 findings**;
   acknowledgement burned authority (`gentle-ai.review-acknowledged/v1`, action `acknowledged`,
-  `authority: burned`). Reviewed boundary = candidate tree (commit `d540ac9a`). Not pushed.
+  `authority: burned`). Reviewed boundary = candidate tree (commit `d540ac9a`). Merged as #491 (CI green).
+- **Slice 6** — `review.start` published (lineage `review-93510db7179fc56b`), tier **medium**, 1 lens
+  (`review-reliability`), 19 files / 1870 lines, budget 200. Consent: owner **granted**. Capture
+  **approved with 0 findings**; authority burned (`gentle-ai.review-acknowledged/v1`, `authority: burned`).
 - Slices 1–4: see progress log (`review-c781144a08c191f2`, `review-9d1562e7914d3b39`).
 
 ## Open questions
 
-- Delivery strategy (chained PRs vs `size:exception`) not chosen.
-- Locate the authoritative admin-only validation of `sdb_requested` during S5-05.
+- Slice 8: wire the verifier into the approved service path (`approve_plan → execute`) so D15 covers
+  `project.*`/`automation.create_rule`. Design TBD (reuse `verification.py`; read-only `tool_executor`
+  bound to thread/owner/project).
+- Slice 7: locate the authoritative admin-only validation of `sdb_requested`; remove
+  `PlannerOutput.classification` + `assistant_plan.md` + `sdb_classification` +
+  `agent_registry.py`/`prompts.py` propagation.

@@ -46,7 +46,7 @@ def test_thread_project_authorization_uses_thread_column(monkeypatch):
     thread = InternalChatThread(
         user_id=1,
         proyecto="bound-project",
-        assistant_state={"sdb": {"proyecto": "legacy-other"}},
+        assistant_state={"legacy_project": "legacy-other"},
     )
 
     assert agent_chat._thread_project_authorization(object(), thread) is authorization
