@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Archive, ArchiveRestore, ArrowRightLeft, CalendarDays, Check, CircleCheck, CircleMinus, ChevronDown, Download, FileText, Home, Mail, MapPin, Phone, Plus, RotateCw, Sparkles, UserRound, UserRoundPlus, MessageCircle, Clock3, ClipboardCheck, XCircle, Headphones } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowRightLeft, CalendarDays, Check, CircleMinus, ChevronDown, Download, FileText, Home, Mail, MapPin, Phone, Plus, UserRound, UserRoundPlus } from "lucide-react";
 import { ApiError, archiveCustomer, changeClientState, createCustomer, fetchClients as listClients, getClientFicha, unarchiveCustomer } from "../../api";
 import type { Customer, CustomerState } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -18,6 +18,7 @@ import { Input } from "../primitives/Input";
 import { Menu } from "../primitives/Menu";
 import { Tabs } from "../primitives/Tabs";
 import "./ClientesList.css";
+import { ChangeCustomerStateDialog } from "../shared/ChangeCustomerStateDialog";
 
 export type ClientesListState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
 
@@ -341,15 +342,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
           <footer><Button variant="secondary" onClick={() => setDialog(null)}>Cancelar</Button><Button variant="danger" onClick={() => void confirmArchive()} disabled={busy || !archiveCounts}><Archive />Archivar cliente</Button></footer>
         </div> : null}
       </Dialog>
-      <Dialog open={dialog === "state"} onClose={() => setDialog(null)} title="Cambiar estado del cliente" icon={RotateCw} description="Selecciona el nuevo estado de atención.">
-        {stateTarget ? <div className="clientes-list__confirm">
-          <div className="clientes-list__client-context"><Avatar name={stateTarget.name ?? stateTarget.phone_e164 ?? "Cliente"} /><div><strong>{stateTarget.name ?? stateTarget.phone_e164 ?? "Cliente"}</strong><span>{stateTarget.phone_e164 ?? "—"}</span></div><div className="clientes-list__current-state"><span>Estado actual</span><Badge tone={customerStateTone(stateTarget.state)}>{customerStateLabel(stateTarget.state)}</Badge></div></div>
-          <h3>Nuevo estado</h3>{(stateTarget.allowed_transitions ?? []).length ? <div className="clientes-list__state-options" role="radiogroup" aria-label="Nuevo estado">{(stateTarget.allowed_transitions ?? []).map((value) => { const stateIcons = { nuevo: Sparkles, contactado: MessageCircle, pendiente: Clock3, agendado: CalendarDays, en_evaluacion: ClipboardCheck, finalizado: CircleCheck, cancelado: XCircle, postventa: Headphones }; const StateIcon = stateIcons[value]; return <button key={value} type="button" role="radio" aria-checked={selectedState === value} disabled={busy} className={selectedState === value ? "clientes-list__state-option is-selected" : "clientes-list__state-option"} onClick={() => setSelectedState(value)}><StateIcon /><span>{customerStateLabel(value)}</span><span className="clientes-list__radio" /></button>; })}</div> : <p role="status">Este cliente no tiene transiciones de estado disponibles.</p>}
-          {(stateTarget.allowed_transitions ?? []).length ? <div className="clientes-list__transition"><span>Cambio:</span><Badge tone={customerStateTone(stateTarget.state)}>{customerStateLabel(stateTarget.state)}</Badge><span aria-hidden="true">→</span><Badge tone={customerStateTone(selectedState ?? stateTarget.state)}>{customerStateLabel(selectedState ?? stateTarget.state)}</Badge></div> : null}
-          {dialogError ? <p role="alert">{dialogError}</p> : null}
-          <footer><Button variant="secondary" onClick={() => setDialog(null)}>Cancelar</Button>{(stateTarget.allowed_transitions ?? []).length ? <Button onClick={() => void saveState()} disabled={busy || !selectedState}><Check />{busy ? "Guardando…" : "Guardar estado"}</Button> : null}</footer>
-        </div> : null}
-      </Dialog>
+      {stateTarget ? <ChangeCustomerStateDialog open={dialog === "state"} onClose={() => setDialog(null)} customer={stateTarget} subtitle={stateTarget.phone_e164 ?? "—"} selectedState={selectedState} onSelect={setSelectedState} onSave={() => void saveState()} busy={busy} feedback={dialogError ? <p role="alert">{dialogError}</p> : null} /> : null}
       <Dialog open={bulkAction !== null} onClose={() => { if (!busy) setBulkAction(null); }} title={bulkAction ? bulkActionTitle(bulkAction.action, bulkAction.ids.length) : "Acciones masivas"} icon={bulkAction?.action === "archive" ? Archive : ArchiveRestore} description={bulkAction?.action === "archive" ? "Esta acción archivará varios clientes seleccionados." : "Esta acción restaurará varios clientes seleccionados."}>
         {bulkAction ? <div className="clientes-list__bulk-confirm"><p className={bulkAction.action === "archive" ? "clientes-list__warning" : "clientes-list__bulk-note"}>{bulkAction.action === "archive" ? <><CircleMinus />Se archivarán solo los clientes activos seleccionados.</> : <><ArchiveRestore />Se restaurarán solo los clientes archivados seleccionados.</>}</p>{dialogError ? <p role="alert">{dialogError}</p> : null}<footer><Button variant="secondary" disabled={busy} onClick={() => setBulkAction(null)}>Cancelar</Button><Button variant={bulkAction.action === "archive" ? "danger" : "primary"} disabled={busy} onClick={() => void confirmBulkAction()}>{busy ? (bulkAction.action === "archive" ? "Archivando…" : "Restaurando…") : bulkActionTitle(bulkAction.action, bulkAction.ids.length)}</Button></footer></div> : null}
       </Dialog>

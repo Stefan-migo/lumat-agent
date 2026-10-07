@@ -37,11 +37,12 @@ describe("ClientFicha equipment", () => {
     await user.click(await screen.findByRole("button", { name: "Agregar equipo" }));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Registra un equipo asociado al cliente.")).toBeInTheDocument();
-    await user.selectOptions(within(dialog).getByLabelText("Tipo de equipo"), "calefont");
+    await user.clear(within(dialog).getByLabelText("Tipo de equipo"));
+    await user.type(within(dialog).getByLabelText("Tipo de equipo"), "Calefont");
     await user.type(within(dialog).getByLabelText("Marca (opcional)"), "Bosch");
     await user.click(within(dialog).getByRole("button", { name: "Agregar equipo" }));
 
-    expect(createClientEquipment).toHaveBeenCalledWith(7, { equipment_type: "calefont", brand: "Bosch", model: null, age: null, details: null });
+    expect(createClientEquipment).toHaveBeenCalledWith(7, { equipment_type: "Calefont", brand: "Bosch", model: null, age: null, details: null });
   });
 
   it("edits equipment through the dialog", async () => {
