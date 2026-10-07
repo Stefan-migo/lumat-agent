@@ -72,7 +72,7 @@ __all__ = [
     "REL_MIN_SIM",
     "WRITABLE_PROYECTO",
     "close_conversation",
-    "archive_report",
+    "write_agent_report",
     "delete",
     "update",
     "get_by_key",
@@ -437,31 +437,31 @@ def record_decision(
     )
 
 
-def archive_report(
+def write_agent_report(
     session: Session,
     *,
-    thread_id: int,
     topic_key: str,
     title: str,
     content: str,
     proyecto: str = WRITABLE_PROYECTO,
+    origin_thread_id: str | None = None,
     authorization: projects._ProjectAuthorization | None = None,
 ) -> Memory:
-    """Write a report, then mark that same memory archived as a closed report."""
-    row = upsert(
+    """Write the final planning report on the canonical agent/project axis."""
+    return upsert(
         session,
-        scope="panel",
-        entity_id=f"thread:{thread_id}",
+        scope=AGENT_SCOPE,
+        entity_id=agent_memory_entity(proyecto),
         topic_key=topic_key,
         tipo=MemoryType.SUMMARY,
         titulo=title,
         contenido=content,
         proyecto=proyecto,
         producer=MemoryProducer.SYSTEM,
-        origin_thread_id=str(thread_id),
+        origin_thread_id=origin_thread_id,
+        visibility=MemoryVisibility.GLOBAL,
         authorization=authorization,
     )
-    return set_mark(session, row.id, status=MemoryStatus.ARCHIVED)
 
 
 def _bounded_json(payload: Any, limit: int) -> str:

@@ -139,6 +139,7 @@ def respond(state: ConversationState) -> dict:
                 min_sim=kb.DEFAULT_MIN_SIM,
                 # Customer chat may use customer-audience documents only.
                 audience=KbVisibility.CUSTOMER,
+                global_only=True,
             )
         except Exception as error:
             # Unlike the panel this path records no evidence entry, so the log is
