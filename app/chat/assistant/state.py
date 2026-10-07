@@ -30,7 +30,6 @@ class PlannerOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["tool", "respond", "complex", "delegate"]
-    classification: Literal["normal", "sdb"] = "normal"
     tool: str | None = None
     sub_agent: str | None = None
     arguments: dict = Field(default_factory=dict)

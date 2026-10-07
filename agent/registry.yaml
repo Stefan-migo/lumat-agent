@@ -93,6 +93,3 @@ assistant:
     - assistant.capabilities
   memoria_scope: panel
   model: deepseek-chat
-  sdb_classification:
-    field: classification
-    allowed: [normal, sdb]
