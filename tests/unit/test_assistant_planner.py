@@ -603,7 +603,7 @@ def test_complex_plan_exposes_metadata_only_hook():
     assert result.kind == "complex"
     assert result.tool is None
     state = plan({"content": "complex request", "planner_output": result.model_dump()})
-    assert state["extension_hooks"] == {"sdb": "deferred", "panel_subagents": "implemented"}
+    assert state["extension_hooks"] == {"panel_subagents": "implemented"}
     assert state["status"] == "planned"
 
 

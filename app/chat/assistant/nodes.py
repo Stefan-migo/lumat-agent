@@ -87,7 +87,7 @@ def extension_hook_metadata() -> dict[str, str]:
         wired = False
     else:
         wired = True
-    return {"sdb": "deferred", "panel_subagents": "implemented" if wired else "not_implemented"}
+    return {"panel_subagents": "implemented" if wired else "not_implemented"}
 
 
 def flush_panel_session(session, thread_id: int, *, source_message_ids: list[int], recap: str,
