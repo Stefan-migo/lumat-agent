@@ -39,6 +39,62 @@
 
 .assistant-workspace__projects-list {
   margin-top: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.assistant-workspace__project-card {
+  padding: var(--space-3);
+}
+
+.assistant-workspace__project-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.assistant-workspace__project-select {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.assistant-workspace__project-select > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-workspace__project-select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.assistant-workspace__project-details {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--corp-border);
+}
+
+.assistant-workspace__project-details nav {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.assistant-workspace__project-details h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
 }
 
 .assistant-workspace__thread {

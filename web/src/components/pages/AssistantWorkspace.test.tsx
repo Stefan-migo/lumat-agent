@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AgentChat } from "./AgentChat";
 
 describe("AssistantWorkspace", () => {
@@ -12,7 +12,7 @@ describe("AssistantWorkspace", () => {
   it("renders the three workspace regions with the existing chat in the center", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ threads: [] }), { status: 200 }),
+      new Response(JSON.stringify({ threads: [], projects: [] }), { status: 200 }),
     );
 
     render(<AgentChat role="admin" />);
@@ -24,5 +24,52 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("complementary", { name: "Contexto del hilo" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Agentes" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Contexto" })).toBeInTheDocument();
+  });
+
+  it("loads real projects, filters by name, and expands project navigation and agent state", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [
+        { id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null },
+        { id: 2, slug: "archivo", name: "Archivo", purpose: "Registro", status: "archived", created_at: null, updated_at: null },
+      ] }), { status: 200 });
+      if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    render(<AgentChat role="admin" />);
+
+    const project = await screen.findByText("Operaciones");
+    expect(within(project.closest("button")!).getByText("Activo")).toBeInTheDocument();
+    expect(screen.getByText("Archivo")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar proyectos" }), { target: { value: "arch" } });
+    await waitFor(() => expect(screen.queryByText("Operaciones")).not.toBeInTheDocument());
+    expect(screen.getByText("Archivo")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar proyectos" }), { target: { value: "operaciones" } });
+    await waitFor(() => expect(screen.getByText("Operaciones")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Operaciones").closest("button")!);
+    expect(screen.getByRole("link", { name: "Contexto y archivos" })).toHaveAttribute("href", "/panel/app/projects/operaciones");
+    expect(screen.getByRole("link", { name: "Historial de hilos" })).toHaveAttribute("href", "/panel/app/chat?proyecto=operaciones");
+    expect(screen.getByRole("heading", { name: "Agentes del proyecto" })).toBeInTheDocument();
+    expect(screen.getByText("La gestión de agentes por proyecto todavía no está disponible.")).toBeInTheDocument();
+  });
+
+  it("shows a retryable error instead of fabricated project rows", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ detail: "failure" }), { status: 500 });
+      if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    render(<AgentChat role="admin" />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos cargar los proyectos");
+    expect(screen.queryByText("Operaciones")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
   });
 });

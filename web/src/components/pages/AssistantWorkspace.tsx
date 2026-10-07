@@ -1,16 +1,41 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
+import { listProjects } from "../../api";
+import type { Project } from "../../types";
+import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
+import { Badge } from "../primitives/Badge";
 import { Card } from "../primitives/Card";
 import { Icon } from "../primitives/Icon";
+import { Menu } from "../primitives/Menu";
 import { SearchInput } from "../primitives/SearchInput";
 import { Tabs } from "../primitives/Tabs";
 import { EmptyState } from "../shared/EmptyState";
+import { StateMessage } from "../shared/StateMessage";
+import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
+import { pathForRoute } from "../domain/panelRoutes";
 import "./AssistantWorkspace.css";
 
 export function AssistantWorkspace({ children }: { children: ReactNode }) {
   const [projectsVisible, setProjectsVisible] = useState(() => window.innerWidth > 1024);
   const [contextVisible, setContextVisible] = useState(() => window.innerWidth > 1024);
+  const [search, setSearch] = useState("");
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const loadProjects = useCallback(() => listProjects(), []);
+  const projectsData = useAsyncData(loadProjects, projectsVisible);
+  const projects = projectsData.data?.projects ?? [];
+  const visibleProjects = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    return query ? projects.filter((project) => project.name.toLocaleLowerCase().includes(query)) : projects;
+  }, [projects, search]);
+
+  const navigateToProject = (project: Project, destination: "context" | "threads") => {
+    const route = destination === "context"
+      ? { view: "projects" as const, projectSlug: project.slug }
+      : { view: "chat" as const, projectSlug: project.slug };
+    window.history.pushState({}, "", pathForRoute(route));
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
 
   useEffect(() => {
     const updateForViewport = () => {
@@ -39,9 +64,65 @@ export function AssistantWorkspace({ children }: { children: ReactNode }) {
             <Icon icon={Plus} />
           </Button>
         </header>
-        <SearchInput aria-label="Buscar proyectos" placeholder="Buscar proyectos" onSearch={() => undefined} />
+        <SearchInput aria-label="Buscar proyectos" placeholder="Buscar proyectos" onSearch={setSearch} />
         <div className="assistant-workspace__projects-list">
-          <EmptyState title="Tus proyectos aparecerán aquí" />
+          {projectsData.state === "loading" ? (
+            <StateMessage tone="info" role="status" spinner title="Cargando proyectos" />
+          ) : projectsData.state === "error" || projectsData.state === "denied" ? (
+            <>
+              <StateMessage
+                tone="danger"
+                role="alert"
+                title="No pudimos cargar los proyectos"
+                detail={projectsData.state === "denied" ? "No tienes permiso para verlos." : undefined}
+              />
+              {projectsData.state === "error" ? <Button variant="secondary" onClick={projectsData.retry}>Reintentar</Button> : null}
+            </>
+          ) : projects.length === 0 ? (
+            <EmptyState title="No hay proyectos" description="No hay espacios de proyecto registrados para mostrar." />
+          ) : visibleProjects.length === 0 ? (
+            <EmptyState title="No encontramos proyectos" description="Prueba con otro nombre." />
+          ) : (
+            visibleProjects.map((project) => {
+              const expanded = selectedProject === project.slug;
+              return (
+                <Card className="assistant-workspace__project-card" key={project.slug}>
+                  <div className="assistant-workspace__project-row">
+                    <button
+                      type="button"
+                      className="assistant-workspace__project-select"
+                      aria-expanded={expanded}
+                      onClick={() => setSelectedProject(expanded ? null : project.slug)}
+                    >
+                      <span>{project.name}</span>
+                      <Badge tone={projectStatusTone(project.status)}>{projectStatusLabel(project.status)}</Badge>
+                    </button>
+                    <Menu
+                      label={`Acciones de ${project.name}`}
+                      trigger="icon"
+                      items={[
+                        { value: "context", label: "Contexto y archivos" },
+                        { value: "threads", label: "Historial de hilos" },
+                      ]}
+                      onSelect={(value) => navigateToProject(project, value === "context" ? "context" : "threads")}
+                    />
+                  </div>
+                  {expanded ? (
+                    <div className="assistant-workspace__project-details">
+                      <nav aria-label={`Navegación de ${project.name}`}>
+                        <a href={pathForRoute({ view: "projects", projectSlug: project.slug })}>Contexto y archivos</a>
+                        <a href={pathForRoute({ view: "chat", projectSlug: project.slug })}>Historial de hilos</a>
+                      </nav>
+                      <section aria-label="Agentes del proyecto">
+                        <h3>Agentes del proyecto</h3>
+                        <EmptyState title="Aún no hay agentes disponibles" description="La gestión de agentes por proyecto todavía no está disponible." />
+                      </section>
+                    </div>
+                  ) : null}
+                </Card>
+              );
+            })
+          )}
         </div>
       </aside>
 
