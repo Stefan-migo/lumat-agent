@@ -32,6 +32,27 @@ const hiddenChromeCss = [
   ".panel-shell__content-area { grid-column: 1 / -1 !important; }",
 ].join("\n");
 
+// Clientes: the section route is the list; the ficha and its dialogs require opening the first
+// client record first. `ClientesList` row actions live under `.table__actions` (it does not use the
+// `.table-card` wrapper that `UserManagement` uses), so the `usuarios` row-action selectors do not
+// transfer here.
+async function openFirstClientFicha(page, origin) {
+  const link = page.locator("a.table__link").first();
+  const href = await link.getAttribute("href");
+  if (!href) throw new Error("No client link found to open the client ficha");
+  await page.goto(new URL(href, origin).href, { waitUntil: "domcontentloaded" });
+  await page.locator(".panel-shell").waitFor({ state: "visible", timeout: 15000 });
+  await page.waitForLoadState("networkidle", { timeout: 30000 });
+}
+
+async function openFichaActionDialog(page, itemName) {
+  const trigger = page.getByRole("button", { name: /^Acciones para / }).first();
+  if (!(await trigger.count())) throw new Error(`No ficha action menu found to open "${itemName}"`);
+  await trigger.click();
+  await page.getByRole("menuitem", { name: itemName }).click();
+  await page.locator("dialog.dialog[open]").waitFor({ state: "visible", timeout: 15000 });
+}
+
 // Extra screens beyond the section's own route. Each `open` runs after a fresh navigation to the
 // section route; the screen is then captured at every viewport (see the per-screen `fullPage`).
 // The fixed bottom nav and the section chrome stay hidden, so only the screen's own content shows.
@@ -99,6 +120,90 @@ const extraScreens = {
         if (!href) throw new Error("No document link found to open the KB document detail");
         await page.goto(new URL(href, origin).href, { waitUntil: "domcontentloaded" });
         await page.locator(".panel-shell").waitFor({ state: "visible", timeout: 15000 });
+      },
+    },
+  ],
+  clientes: [
+    {
+      name: "detail",
+      fullPage: true,
+      async open(page, origin) {
+        await openFirstClientFicha(page, origin);
+      },
+    },
+    {
+      name: "new-client-dialog",
+      fullPage: false,
+      async open(page) {
+        await page.getByRole("button", { name: "Nuevo cliente" }).click();
+        await page.locator("dialog.dialog[open]").waitFor({ state: "visible", timeout: 15000 });
+      },
+    },
+    {
+      name: "change-state-dialog",
+      fullPage: false,
+      async open(page) {
+        const trigger = page.locator(".table__actions").getByRole("button", { name: /^Acciones para / }).first();
+        if (!(await trigger.count())) throw new Error("No row action menu found to open the change-state dialog");
+        await trigger.click();
+        await page.getByRole("menuitem", { name: "Cambiar estado" }).click();
+        await page.locator("dialog.dialog[open]").waitFor({ state: "visible", timeout: 15000 });
+      },
+    },
+    {
+      name: "archive-dialog",
+      fullPage: false,
+      async open(page) {
+        const trigger = page.locator(".table__actions").getByRole("button", { name: /^Acciones para / }).first();
+        if (!(await trigger.count())) throw new Error("No row action menu found to open the archive dialog");
+        await trigger.click();
+        await page.getByRole("menuitem", { name: "Archivar" }).click();
+        await page.locator("dialog.dialog[open]").waitFor({ state: "visible", timeout: 15000 });
+      },
+    },
+    {
+      name: "edit-data-dialog",
+      fullPage: false,
+      async open(page, origin) {
+        await openFirstClientFicha(page, origin);
+        await page.getByRole("button", { name: "Editar identidad" }).click();
+        await page.locator("dialog.dialog[open]").waitFor({ state: "visible", timeout: 15000 });
+      },
+    },
+    {
+      name: "ficha-archive-dialog",
+      fullPage: false,
+      async open(page, origin) {
+        await openFirstClientFicha(page, origin);
+        await openFichaActionDialog(page, "Archivar");
+      },
+    },
+    {
+      name: "merge-dialog",
+      fullPage: false,
+      async open(page, origin) {
+        await openFirstClientFicha(page, origin);
+        await openFichaActionDialog(page, "Fusionar con otro cliente");
+      },
+    },
+    {
+      name: "equipment-dialog",
+      fullPage: false,
+      async open(page, origin) {
+        await openFirstClientFicha(page, origin);
+        await page.getByRole("button", { name: "Agregar equipo" }).click();
+        await page.locator("dialog.dialog[open]").waitFor({ state: "visible", timeout: 15000 });
+      },
+    },
+    {
+      name: "amount-dialog",
+      fullPage: false,
+      async open(page, origin) {
+        await openFirstClientFicha(page, origin);
+        const button = page.getByRole("button", { name: "Editar monto del caso" });
+        if (!(await button.count())) throw new Error("No active case amount control found to open the amount dialog");
+        await button.click();
+        await page.locator("dialog.dialog[open]").waitFor({ state: "visible", timeout: 15000 });
       },
     },
   ],
