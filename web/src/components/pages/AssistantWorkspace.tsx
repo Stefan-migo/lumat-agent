@@ -123,6 +123,17 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
     setThreadError(null);
     try {
       const result = await createChatThread(project.slug);
+      const refreshed = await listChatThreads(20);
+      const createdSummary: InternalChatThreadSummary = {
+        id: result.thread.id,
+        title: null,
+        created_at: result.thread.created_at ?? null,
+        updated_at: result.thread.updated_at ?? null,
+        run_status: null,
+        approval_status: null,
+      };
+      setThreads([createdSummary, ...(refreshed.threads ?? []).filter((item) => item.id !== result.thread.id)]);
+      setThreadListError(null);
       window.history.pushState({}, "", pathForRoute({ view: "chat", projectSlug: project.slug, threadId: result.thread.id }));
       window.dispatchEvent(new PopStateEvent("popstate"));
     } catch {

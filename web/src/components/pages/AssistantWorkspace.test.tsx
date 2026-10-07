@@ -33,6 +33,7 @@ describe("AssistantWorkspace", () => {
         { id: 1, slug: "operaciones", name: "Operaciones", purpose: "Gestión", status: "active", created_at: null, updated_at: null },
         { id: 2, slug: "archivo", name: "Archivo", purpose: "Registro", status: "archived", created_at: null, updated_at: null },
       ] }), { status: 200 });
+      if (url.includes("/threads?")) return new Response(JSON.stringify({ threads: [{ id: 42, title: "Nuevo hilo", created_at: null, updated_at: null }] }), { status: 200 });
       if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
       return new Response(JSON.stringify({}), { status: 200 });
     });
@@ -99,6 +100,7 @@ describe("AssistantWorkspace", () => {
 
     await waitFor(() => expect(window.location.search).toBe("?proyecto=operaciones&thread_id=42"));
     expect(dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "popstate" }));
+    expect(await screen.findByRole("button", { name: "Sin título" })).toBeInTheDocument();
     expect(globalThis.fetch).toHaveBeenCalledWith("/panel/api/chat/threads", expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ proyecto: "operaciones" }),
