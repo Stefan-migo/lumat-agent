@@ -255,6 +255,21 @@ describe("ClientFicha page grammar", () => {
     expect(updateCaseAmount).toHaveBeenCalledWith(1, 90000);
   });
 
+  it("renders an archived case with a null priority without crashing", async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    const withoutPriority: ClientFichaResponse = {
+      ...ficha,
+      history: { ...ficha.history, cases: ficha.history.cases.map((row) => row.id === 1 ? { ...row, priority: null as unknown as string } : row) },
+    };
+    render(<ClientFicha customerId={7} data={withoutPriority} memories={memories} />);
+
+    await user.click(screen.getByRole("tab", { name: "Casos" }));
+
+    const archive = screen.getByRole("region", { name: "Casos anteriores" });
+    expect(within(archive).getByText("—")).toBeInTheDocument();
+  });
+
   it("shows local feedback when a case update fails", async () => {
     const user = userEvent.setup();
     vi.mocked(postJson).mockRejectedValue(new ApiError(500, "private error"));

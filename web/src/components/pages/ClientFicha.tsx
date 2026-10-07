@@ -91,7 +91,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 function surfaceClass(rowCount: number) {
   return rowCount > 0 ? "data-region" : undefined;
 }
-const priorityLabel = (priority: string) => priority.charAt(0).toUpperCase() + priority.slice(1);
+const priorityLabel = (priority: string | null) => priority ? priority.charAt(0).toUpperCase() + priority.slice(1) : "—";
 
 export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, onRetryCalendar, state: controlledState }: ClientFichaProps) {
   const [activeTab, setActiveTab] = useState("summary");
@@ -391,7 +391,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const archivedCaseColumns: Column<FichaCase>[] = [
     { key: "id", header: "#", render: (row) => `#${row.id}` },
     { key: "service", header: "Servicio", render: (row) => row.service },
-    { key: "priority", header: "Prioridad", render: (row) => <Badge tone="warning">{priorityLabel(row.priority)}</Badge> },
+    { key: "priority", header: "Prioridad", render: (row) => row.priority ? <Badge tone="warning">{priorityLabel(row.priority)}</Badge> : "—" },
     { key: "status", header: "Estado", render: (row) => <Badge tone={caseStatusTone(row.status)}>{caseStatusLabel(row.status)}</Badge> },
     { key: "responsible", header: "Responsable", render: (row) => data.users.find((user) => user.id === row.responsible_id)?.username ?? "Sin asignar" },
     { key: "amount", header: "Monto CLP", render: (row) => row.amount === null ? "Sin registrar" : CLP_FORMAT.format(row.amount) },
