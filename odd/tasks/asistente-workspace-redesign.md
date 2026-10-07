@@ -172,8 +172,9 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
   `infra-api-1` on `:8000` (bind-mounts the primary repo) + Vite dev server `:5173` from this
   worktree → `http://localhost:5173/panel/app/chat` (login `admin`; password in `infra/.env` →
   `PANEL_ADMIN_PASSWORD`). Session closed here at the owner's request; next chat resumes at **AW-2**.
-- **Open decision for AW-2/3** — the reference's dark icon rail: force `PanelShell` collapsed on the
-  Asistente surface, or make the rail part of the workspace. Shell untouched in AW-1.
+- **Decision resolved (2026-10-07)** — the reference's dark icon rail is a **workspace-owned rail**,
+  not a collapsed `PanelShell`. `PanelShell` keeps owning global chrome and stays untouched; the rail
+  is an additive workspace region (to be built with AW-3). This unblocks AW-3.
 - **Paused backlog** — Slice 8 of `asistente-sdb` (wire the verifier into `approve_plan → execute`)
   remains the prior backend feature; the frontend redesign takes priority.
 - **AW-2 implemented (2026-10-07)** — feature commit `7d73af06` (`feat(assistant): render the real
@@ -192,3 +193,14 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
     `types.ts`, `useAsyncData()`, `panelRoutes.ts`, `Card.tsx`, `Badge.tsx`, `Menu.tsx`,
     `SearchInput`, `EmptyState()`, and `StateMessage()`. `graphify path listProjects
     AssistantWorkspace` found no directed path.
+- **AW-2 review closed (2026-10-07)** — native RDD review `review-383c5fc84adee850` (medium tier,
+  single `review-reliability` lens) **approved** and was acknowledged (`authority: burned`). No
+  BLOCKER/CRITICAL; no correction opened. Two non-blocking advisory findings to fold into AW-3/AW-7:
+  - `R3-001` (`AssistantWorkspace.tsx:20`) — pane visibility is viewport-derived and reset on every
+    resize with no persistent user toggle contract beyond the in-thread buttons; the narrow-viewport
+    behaviour needs a real usable toggle.
+  - `R3-002` (`AssistantWorkspace.css:120-132`) — at tablet/mobile widths showing a pane stacks it in
+    normal flow, which can push the chat below the fold instead of using a collapsible overlay.
+  These are advisories, not blockers; they do NOT reopen this review. Treat them as AW-3/AW-7 work.
+- **Branch synced with main** — merged `origin/main` (`1c8f8802`, PR #509
+  `fix/conversaciones-thread-menu`) into the branch at `fb76a199` before AW-2.
