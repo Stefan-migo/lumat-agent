@@ -162,7 +162,7 @@ Reference: `ClientFichaTabCases.png` (desktop) + `LUMAT client cases on mobile a
 - [x] Hoist the shared ficha dialogs to the component root and extract the reused card markup (no Resumen visual change) (`f7c0993a`).
 - [x] Mobile: the archived cases switch from the table to cards at `max-width: 40rem` (`table-card__desktop` + `table-cards--mobile`, mirroring ClientesList); the active case sits in an inset panel (`client-ficha__case-panel`) and the case/data cards share a row height (`detail-region--cases { align-items: stretch }`) (`8e425d9a`, `54aa6321`). Tablet (40–64rem) still renders the table pending owner review.
 - [ ] RDD review (re-assess) after the tab pass.
-- Per-slice verification: `npx tsc -b --noEmit` green; `ClientFicha.test.tsx` 47/47, `ClientFicha.stories.test.tsx` + `closure.test.tsx` 14/14. Full suite/build deferred to the design checkpoint.
+- Per-slice verification: `npx tsc -b --noEmit` green; `ClientFicha.test.tsx` 48/48, `ClientFicha.stories.test.tsx` + `closure.test.tsx` 14/14. Full suite/build deferred to the design checkpoint.
 
 ### CL-6 — Visitas tab (owner visual review 2026-10-06 #5)
 Owner direction: restyle to `ClientFichaTabVisits.png` (desktop) + `LUMAT client visits across mobile and tablet-4.png`.
@@ -174,6 +174,14 @@ Owner direction: restyle to `ClientFichaTabVisits.png` (desktop) + `LUMAT client
 - [x] Mobile: both visit tables switch to cards at `max-width: 40rem` (`table-card__desktop` + `table-cards--mobile`, `client-ficha__visit-card`) (`fdc39df0`).
 - [ ] Historial de visitas: the reference shows an `Acciones` column with a `⋮` and a "Mostrando N visita(s) del historial." footer; the owner's column list did not request them, so they are not implemented — confirm.
 - [ ] Mobile/tablet fidelity pass for both cards pending owner review.
+
+### CL-7 — Conversaciones tab (owner visual review 2026-10-06 #6)
+Owner direction: approach both cards to `ClientFichaTabConversaciones.png` (desktop) + `LUMAT client conversations on mobile and tablet-5.png`.
+- [x] `Conversaciones del cliente`: `#` → `Conversación` header; `Estado` as a tone badge with a `Bot` icon (bot=success, human/closed=neutral, pending=warning, escalated=danger); `Creada` as day/month/year (`7ee75551`).
+- [x] `Mensajes de la conversación`: title/subtitle moved INSIDE the card; `#` → `Turno`; `Dirección` as a badge with an arrow icon (inbound = success, outbound = neutral); `Tipo` labelled (`text` → `Texto`); `Fecha` as `11 sep 2026 · 16:20`; "Mostrando N mensaje(s)" footer (`7ee75551`).
+- [ ] Owner flag: the reference's `Conversaciones del cliente` row also shows a `⋮` after `Abrir conversación`; not implemented (no actions defined) — confirm.
+- [ ] The reference's `Mensajes` table has no `Conversación` column; kept it because `history.messages` can mix threads — confirm.
+- [ ] Mobile/tablet fidelity pass pending owner review.
 
 ## Acceptance criteria
 
