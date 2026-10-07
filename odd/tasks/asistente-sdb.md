@@ -261,7 +261,7 @@ first while the old subgraph still exists.
 | 3 | Isolated read-only verifier (additive) | S5-03b | ~230 | ✅ merged #490 |
 | 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~110 | ✅ merged #490 |
 | 5 | Remove the dead SDB phase subgraph + routing contract | S5-02 (removal, corrected) | ~330 | ✅ merged #491 |
-| 6 | Remove the dead SDB service runner + `sdb_verify`/`sdb_deliver` + SDB state + SDB tests | S5-04 (removal) | ~400 | next |
+| 6 | Remove the dead SDB service runner + `sdb_verify`/`sdb_deliver` + SDB state + SDB tests | S5-04 (removal) | ~400 | ✅ committed + review approved |
 | 7 | `classification` + prompt + registry/skills cleanup + cross-check | S5-05, S5-07 | ~300 | |
 | 8 | Wire the verifier into the approved service path (close D15 for `project.*`/`automation.*`) | S5-08 (new) | ~250 | |
 
@@ -319,6 +319,14 @@ Push/PR creation remain the owner's decision per slice.
   `odd/asistente-sdb-service` from `main` = `32ebb4b5` (owner approved continuing). Owner confirmed
   the split: Slice 6 = pure removal; a new **Slice 8** wires the verifier into the approved service
   path (the D15 gap above). Graph Check done on the service path.
+- **Slice 6 done (committed, reviewed)** — work-unit commits `9cb9969c` (service runner/persistence),
+  `7d7e8806` (nodes/state), `91510a22` (approval/registry/tukulpan), `477a3972` (test fixtures).
+  18 files, +131/−1757. Full suite green (**1,755 passed**). Note: two writer stalls left the tree
+  half-migrated; the work was finished in smaller bounded steps. The writer over-deleted one valid
+  test (`test_rename_and_merge_reject_active_runs_before_changes`); it was restored (still green) —
+  `projects.py::_has_active_run` still reads the legacy `sdb` namespace, which is **Slice 7 scope**.
+  RDD review `review-93510db7179fc56b` (lens `review-reliability`, medium, 19 files/1870 lines)
+  **approved with 0 findings**; acknowledgement burned authority.
 
 ## Review (RDD)
 
@@ -327,6 +335,9 @@ Push/PR creation remain the owner's decision per slice.
   correction budget 200. Consent: owner **granted**. Capture **approved with 0 findings**;
   acknowledgement burned authority (`gentle-ai.review-acknowledged/v1`, action `acknowledged`,
   `authority: burned`). Reviewed boundary = candidate tree (commit `d540ac9a`). Merged as #491 (CI green).
+- **Slice 6** — `review.start` published (lineage `review-93510db7179fc56b`), tier **medium**, 1 lens
+  (`review-reliability`), 19 files / 1870 lines, budget 200. Consent: owner **granted**. Capture
+  **approved with 0 findings**; authority burned (`gentle-ai.review-acknowledged/v1`, `authority: burned`).
 - Slices 1–4: see progress log (`review-c781144a08c191f2`, `review-9d1562e7914d3b39`).
 
 ## Open questions
