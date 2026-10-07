@@ -118,7 +118,7 @@ Both verifier forks below are owner-confirmed; the rest were carried in the appr
   `PlannerOutput.classification`; add gate/verify state and routing (insert verify after the
   execution loop, before response/evidence). Files: `graph.py`, `state.py`. ~180 lines. Depends: S5-01.
 
-- [ ] **S5-03 — Add the success criterion and the isolated verifier.**
+- [x] **S5-03 — Add the success criterion and the isolated verifier.**
   `PlannerOutput.success_criterion` + planner prompt; new isolated verifier that builds its own
   fresh messages (no `_context_text`) and inspects the evidence bundle (and, if confirmed, bounded
   read-only tools). Files: `nodes.py`, planner prompt/config as needed. ~250 lines. Depends: S5-02.
@@ -183,14 +183,15 @@ Owner-approved: chained PRs, stacked-to-main. Each slice is an independent, **gr
 tests, so the removal and its test rewrite must land in the same slice; additive scaffolding lands
 first while the old subgraph still exists.
 
-| Slice | Work unit | Tasks | Size | Green because |
+| Slice | Work unit | Tasks | Size | State |
 |---|---|---|---:|---|
-| 1 | New `sdb-native` spec (contract only) | S5-01 | ~180 | docs-only |
-| 2 | Deterministic gate + `success_criterion` (additive) | S5-03a | ~250 | old SDB untouched |
-| 3 | Isolated read-only verifier + loop wiring (additive) | S5-03b | ~300 | old SDB untouched |
-| 4 | Collapse phase graph + SDB state + spec-level tests | S5-02 | ~350 | removal + its tests together |
-| 5 | Replace SDB service runner + integration tests | S5-04 | ~450 | removal + its tests together |
-| 6 | Registry/config cleanup + cross-check | S5-05, S5-07 | ~300 | references |
+| 1 | New `sdb-native` spec (contract only) | S5-01 | ~197 | ✅ reviewed |
+| 2 | Deterministic gate + `success_criterion` (additive) | S5-03a | ~100 | ✅ committed |
+| 3 | Isolated read-only verifier (additive) | S5-03b | ~230 | ✅ committed |
+| 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~250 | next |
+| 5 | Collapse phase graph + SDB state + spec-level tests | S5-02 (removal) | ~350 | |
+| 6 | Replace SDB service runner + integration tests | S5-04 | ~450 | |
+| 7 | Registry/config cleanup + cross-check | S5-05, S5-07 | ~300 | |
 
 Each slice: work-unit commit(s) on `odd/asistente-sdb`, conventional message, tests with the code,
 rollback = the slice's own files. Slices 5 may approach the budget; if a cohesive split does not
@@ -212,6 +213,13 @@ Push/PR creation remain the owner's decision per slice.
   effect-tool → explicit → handoff → not-required. `state.py`: `PlannerOutput.success_criterion`
   (≤300, non-empty) + `verify_requested`/`sdb_requested` state fields. New tests 15; writer GREEN
   143 passed; parent spot-check 143 passed. Not yet wired into the loop (Slice 3).
+- **Slice 3 (S5-03b) done** — isolated read-only verifier in `app/chat/assistant/verification.py`:
+  `VerificationResult` + `build_verifier_messages` (fresh, context-free) + `run_verification`
+  (configured model; ≤2 bounded read-only tool steps with results fed back for the final verdict;
+  caller-supplied `tool_executor` required — no bogus default; never writes). New tests
+  `tests/unit/test_assistant_verification_runner.py`; 49 passed in the focused set. Corrective pass
+  fixed three defects (hardcoded model, missing verdict round, admin default executor). Still not
+  wired into the loop (Slice 4). Doc/plan: delivery split into 7 slices.
 
 ## Review (RDD)
 
