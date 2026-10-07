@@ -1,9 +1,9 @@
 # ODD: asistente-sdb
 
-**Branch**: `odd/asistente-sdb`
+**Branch**: `odd/asistente-sdb-removal`
 **Worktree**: `../lumat-agent-odd-asistente-sdb`
-**Base**: `617cd2c2` (= `main` = `origin/main`, merge of PR #488, Slice 4)
-**Status**: Slices 1–4 **merged to main** (PR #489 spec; PR #490 gate + isolated verifier + loop wiring). Slices 5–7 pending (collapse the phase subgraph, service-runner removal, registry cleanup). No DB migration expected.
+**Base**: `9f2140a4` (= `origin/main`, PR #490 merge; contains slices 1–4). Local `main` worktree was behind at `617cd2c2`.
+**Status**: Slices 1–4 **merged to main** (PR #489 spec; PR #490 gate + isolated verifier + loop wiring). Slices 5–7 pending (collapse the phase subgraph, service-runner removal, registry cleanup). No DB migration expected. Slice 5 boundary **corrected** (see below) after discovering the service import coupling.
 
 ## Objective
 
@@ -150,6 +150,37 @@ Both verifier forks below are owner-confirmed; the rest were carried in the appr
 Forecast: **~1,700 authored lines** → far above the ~400 budget. Delivery strategy must be chosen
 before the first commit (chained PRs or maintainer-approved `size:exception`).
 
+### Slice 5 boundary correction (2026-10-07, owner-confirmed)
+
+The original S5-02 ("remove all `sdb_*` nodes + `SDBTask`/state + `classification`") is **not
+green-separable**. Verified couplings:
+
+- `app/services/agent_chat.py:16` imports `sdb_deliver`, `sdb_verify` from `nodes.py`, and
+  `_sdb_delivery` (L237) uses them → removing them breaks the service import.
+- `tests/integration/test_sdb_api.py` monkeypatches `run_assistant` and injects `sdb_phase`, so it
+  exercises the **service** SDB path (kept for Slice 6), not the graph phase nodes.
+- `PlannerOutput.classification` is coupled to `agent/prompts/assistant_plan.md` and
+  `agent/registry.yaml` (`sdb_classification`), propagated by `app/agent_registry.py:84,171-187` and
+  `app/services/prompts.py:110,158`. `PlannerOutput` is `extra="forbid"`, so dropping the field
+  without the prompt makes the planner reject its own output.
+
+Corrected Slice 5 scope:
+
+- **Remove** (`graph.py`): `sdb_trigger_gate`, `_after_sdb_trigger_gate`, `_after_sdb_approve`, all
+  seven SDB node imports/registrations/edges and the `stage_nodes` SDB labels. (`sdb_trigger_gate`
+  is already orphaned — no incoming edge; the subgraph is dead in the normal path.)
+- **Remove** (`nodes.py`): `sdb_clarify`, `sdb_spec`, `sdb_plan`, `sdb_approve`, `sdb_execute`,
+  `resolve_sdb_item`, `SDB_SPEC_LIMIT`, `SDB_TEXT_LIMIT` (graph/test-only).
+- **Remove** (`state.py`): `SDBTrigger`, `normalize_sdb_trigger`, fields `sdb_trigger`, `sdb_route`,
+  `sdb_rejection`, `sdb_scope`.
+- **Keep for Slice 6**: `sdb_verify`, `sdb_deliver`, `SDB_RESULT_LIMIT` (service imports);
+  `SDBTask`, `sdb_phase`, `sdb_spec`, `sdb_tasks`, `sdb_result` (service contract).
+- **Defer to Slice 7**: `PlannerOutput.classification` + `assistant_plan.md` + `sdb_classification`
+  + `agent_registry.py`/`prompts.py` propagation (atomic, green).
+- **Tests**: delete `tests/spec/test_sdb_trigger.py` (only removed symbols); rewrite
+  `tests/spec/test_sdb_phases.py` (drop phase-node tests, preserve the DB-dependency block at
+  L230–285). `test_sdb_recovery.py`, `test_sdb_api.py`, `test_sdb_persistence.py` stay (Slice 6).
+
 ## Acceptance criteria (slice)
 
 1. No `sdb_*` phase node or edge survives; SDB runs through the normal loop.
@@ -189,9 +220,9 @@ first while the old subgraph still exists.
 | 2 | Deterministic gate + `success_criterion` (additive) | S5-03a | ~100 | ✅ merged #490 |
 | 3 | Isolated read-only verifier (additive) | S5-03b | ~230 | ✅ merged #490 |
 | 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~110 | ✅ merged #490 |
-| 5 | Collapse phase graph + SDB state + spec-level tests | S5-02 (removal) | ~350 | next |
-| 6 | Replace SDB service runner + integration tests | S5-04 | ~450 | |
-| 7 | Registry/config cleanup + cross-check | S5-05, S5-07 | ~300 | |
+| 5 | Remove the dead SDB phase subgraph + routing contract | S5-02 (removal, corrected) | ~330 | next |
+| 6 | Remove SDB service runner + `sdb_verify`/`sdb_deliver` + integration tests | S5-04 | ~480 | |
+| 7 | `classification` + prompt + registry/skills cleanup + cross-check | S5-05, S5-07 | ~300 | |
 
 Each slice: work-unit commit(s) on `odd/asistente-sdb`, conventional message, tests with the code,
 rollback = the slice's own files. Slices 5 may approach the budget; if a cohesive split does not
@@ -232,6 +263,12 @@ Push/PR creation remain the owner's decision per slice.
   `review-9d1562e7914d3b39` (slices 2–4, approved; advisory R3-001 deferred). Full suite green.
   A full-suite run caught a planner-dict baseline test (unchanged file, outside the reviewed diff);
   fixed in `e6ef38fb`. Working branch for the removal slices: `odd/asistente-sdb-removal`.
+- **Slice 5 boundary corrected (owner-confirmed 2026-10-07)** — exploration found the service import
+  coupling + the `classification` prompt/registry coupling; scope narrowed to the dead phase
+  subgraph + routing contract, deferring `classification` to Slice 7 and `sdb_verify`/`sdb_deliver`
+  to Slice 6. Details in "Slice 5 boundary correction" above. Graph Check done: `graphify query`
+  over `build_assistant_graph`, `sdb_trigger_gate`, `sdb_{spec,plan,verify}`, `plan`, `tool_loop_head`,
+  `execute`, `parse_planner_output`, `_context_text`; graph built from `10dbd301` (refresh at close).
 
 ## Review (RDD)
 
