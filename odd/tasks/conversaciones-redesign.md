@@ -143,10 +143,21 @@ The CV-1 tab-label change (`Humanas`→`Atención humana`, `Casos`→`Con caso`)
 - [x] `Datos capturados`: internal markers filtered (`_`-prefixed keys, e.g. the real `_pending` in conversation #10) and keys humanized (`name`→Nombre, `urgencia_informada`→Urgencia informada, generic fallback capitalizes + de-underscores); separator line per row.
 - [x] Evidence: commit `0b64a05c`; `tsc` clean; full suite **1034/1034**; `npm run build` green.
 
-#### Open decisions from this review
-- **`Ver caso` destination:** currently links to `/panel/app/cases`, a compatibility route that resolves back to the conversations "Con caso" tab — circular. Owner proposal (clients → ficha → Casos tab) is the right target; it needs a `tab` route param on the client ficha (`panelRoutes` + `AppShell` + `ClientFicha.initialTab`). Not implemented yet.
-- **Case badge colour:** thread badges reuse the design-system `caseStatusTone`, where `abierto` is `neutral` (identical to the owner-approved clientes ficha). The reference screenshot shows `Abierto` green because its fixture differs. Awaiting an owner call before diverging from the shared tone map.
-- **Backend follow-up:** `captured_data` is persisting internal keys (`{"name": ..., "_pending": "comuna"}`). The frontend now hides them, but the capture pipeline should stop writing `_pending` into the customer-facing payload.
+#### Owner decisions (2026-10-07) — all resolved
+- **`Ver caso` destination:** owner chose the client ficha Casos tab. Implemented as a `tab` route param: `PanelRoute.clientTab`, `pathForRoute` + `parsePanelPath`, `AppShell` → `ClientFicha.initialTab`. The link now targets `/panel/app/clients/{customer_id}?tab=cases`.
+- **Case badge colour:** owner decided the badges stay as they are (design-system `caseStatusTone`); no divergence.
+- **Backend follow-up:** owner accepted the frontend filter; the capture pipeline should still stop persisting `_pending` in `captured_data` (not addressed here).
+
+### CV-2-r3 / CV-3-r1 / CV-5 — mobile chat-first thread (owner 2026-10-07)
+- [x] Locked-composer breathing room: the field's left padding now clears the lock glyph (`space-3 + icon-md + space-2`).
+- [x] `Datos capturados` falls back to the customer profile: `Comuna` / `Dirección` come from the ficha when the capture flow left them unanswered (`CustomerSummary` widened with optional `comuna`/`address`; the API already sends them via `to_customer_dict`).
+- [x] Mobile is chat-first: the inline inspector is hidden inside the workspace and the conversation actions collapse into a **`…` menu** that also carries `Tomar conversación`.
+- [x] New **`Información del chat`** button opens the inspector (Cliente / Caso vinculado / Datos capturados) in a **bottom sheet**, implemented as an additive `Dialog` `variant="sheet"` (rises from the bottom edge ≤40rem, centred dialog above; reduced-motion respected).
+- [x] Verified with Playwright at 390×844: info button visible, inline inspector hidden, sheet `x=0 width=390 y=196 height=647` (bottom-anchored) with full content, `scrollWidth == clientWidth` (no overflow).
+- [x] Evidence: commits `fc84bb75` + `64a1063d`; `tsc` clean; full suite **1034/1034**; `npm run build` green.
+
+#### Environment gotcha (recurring, worth remembering)
+The Vite dev server **missed a file edit**: it served a stale transform of `Dialog.tsx` (the watcher never logged an HMR update for it), so `variant="sheet"` silently did nothing in the browser while the source was correct. `touch`ing the file re-triggered the watcher and fixed it. When a fresh page load clearly runs old code in this worktree, `touch` the file before debugging the logic.
 
 ## Authorized scope
 
