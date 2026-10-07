@@ -1,0 +1,213 @@
+# ODD: asistente-sdb
+
+**Branch**: `odd/asistente-sdb`
+**Worktree**: `../lumat-agent-odd-asistente-sdb`
+**Base**: `617cd2c2` (= `main` = `origin/main`, merge of PR #488, Slice 4)
+**Status**: Planning. D15/D6/verifier-model closed. Verifier contract PROPOSED (pending owner confirm). Delivery strategy pending. No code written yet. No DB migration expected.
+
+## Objective
+
+Slice 5 of the Asistente Lumat workspace: **SDB stops being a 7-phase subgraph and becomes the
+normal loop plus one verification step** (`plan → execute → verify`). A deterministic gate decides
+when an independent, **read-only verifier with fresh context** must confirm the outcome against an
+**observable success criterion**. The optional Cortex→SDB handoff reuses the existing admin-only
+`sdb_requested` flag.
+
+## Problem
+
+Today SDB is a separate seven-phase branch (`sdb_clarify → sdb_spec → sdb_plan → sdb_approve →
+sdb_execute → sdb_verify → sdb_deliver`) that never reuses the normal pipeline:
+
+- The phase subgraph is wired to a `sdb_trigger_gate` whose incoming edge is not declared from the
+  normal path; the real approved execution lives in the **service layer**
+  (`app/services/agent_chat.py`), and the graph's `sdb_execute` node only projects results.
+- The normal loop (`plan_llm → guardrails → execute → tool_loop_head → respond`) has **no**
+  verification step at all: an effect can be dispatched and reported without independent
+  confirmation.
+- A leftover `sdb_classification` field remains in `agent/registry.yaml` even though the
+  classifier was deleted in Slice 4.
+- The pattern that looked like a "sub-agent with fresh context" (`delegation.py`) does **not**
+  isolate context: it injects `_context_text(state)` from the parent.
+
+## Decisions (locked — do not re-open)
+
+Recorded in Engram `cortex-session/2026-10-05-asistente-lumat-workspace-multiagente/decision/*`:
+
+- **D3/D14** — SDB is no longer a 7-phase subgraph. It is the **normal loop + one verification
+  step**: `plan → execute → verify`.
+- **D4** — `verify` is a **separate read-only verifier with fresh context**. The orchestrator does
+  plan + execute; the verifier inspects only the outcome. The existing `delegation.py` pattern does
+  **not** isolate context, so a new isolation mechanism is required.
+- **D15** — verify is triggered by a **deterministic gate**: a plan step whose tool mutates state
+  (`memory.update`, `memory.delete`, `automation.create_rule`, `project.create`, `project.rename`,
+  `project.archive`, `project.merge`), OR an explicit verify request, OR the admin handoff.
+  **`memory.write` is exempt** (additive note-taking).
+- **D6** — the Cortex→SDB handoff is **optional**, triggered by explicit admin action, never
+  inferred from free text. Mechanism: reuse the existing admin-only `sdb_requested` flag; remove
+  the `sdb_classification` remnant.
+
+## Design decisions (agreed)
+
+Both verifier forks below are owner-confirmed; the rest were carried in the approved scope.
+
+- **Gate evaluation point**: evaluate **once after the execution loop finishes** and before the
+  final response, over the set of effect tools actually dispatched this turn. Not per-step, and not
+  the initial planner plan (the normal planner loops one tool per step).
+- **Approval is orthogonal**: the gate is about *effects*, not approval. Autonomous writes (when
+  the existing policy allows them) also trigger verify; approval requirements are unchanged.
+- **Success criterion**: `PlannerOutput` gains `success_criterion: str`, required whenever the plan
+  contains an effect step. If it is missing or not observable, verify returns `unverifiable` and
+  the turn is qualified (never silently claimed as success).
+- **Evidence boundary (isolation)**: the verifier receives ONLY the success criterion, the executed
+  steps (tool + arguments) and their results/evidence. It must NOT receive conversation history,
+  thread state, memory, or `_context_text`. Enforced by constructing a fresh message list.
+- **Failed verification (LOCKED)**: the turn completes but the response is **qualified** — it
+  reports that the effect ran and that verification flagged the discrepancy (`verification: failed`
+  with a reason). No automatic retry (a retry of e.g. `project.create` could duplicate the effect);
+  no silent success.
+- **Verifier capability (LOCKED)**: the verifier may call **bounded read-only tools (≤2 steps)**,
+  under the same read-only scope rules as delegation, so it can independently confirm the effect
+  (e.g. re-query the created project) instead of re-reading the executor's own evidence.
+- **Legacy threads**: no migration. Old `assistant_state.sdb` / `current_plan.sdb` keys are ignored
+  on read and dropped on next write; pre-existing pending SDB runs are not resumed.
+
+## Scope
+
+**In**
+
+- Collapse the 7-phase subgraph into normal loop + `verify`.
+- Isolated read-only verifier sub-agent with an observable success criterion.
+- Deterministic D15 gate.
+- Handoff D6 via the existing `sdb_requested` flag; remove `sdb_classification`.
+- Remove the now-dead SDB service machinery (runner, delivery, persistence, `_sdb_plan`,
+  SDB-specific recovery) while keeping the normal approval/evidence path.
+- Rewrite SDB tests and the `sdb-native` spec.
+
+**Out (later slices — do not build here)**
+
+- Project directory + UI and the Markdown preview of the planning report (Slice 6).
+- Open follow-ups: R3-001 `load_skill_body` path containment, SDB-opt-in bypass (closed by this
+  rewrite), `assistant.capabilities` over-declaration, full skills corpus, KB-scope UI,
+  `project.merge`/`archive` not moving KB docs.
+
+## Current code map (touch points)
+
+| Area | Location |
+|---|---|
+| Graph | `app/chat/assistant/graph.py`: `build_assistant_graph` (111–130), `sdb_trigger_gate` edge (138–141), `_after_sdb_trigger_gate` (52–54), `_after_sdb_approve` (107–109) |
+| Phase nodes | `app/chat/assistant/nodes.py`: `sdb_clarify` (266), `sdb_spec` (277), `sdb_plan` (286), `sdb_approve` (301), `sdb_execute` (306), `sdb_verify` (312), `sdb_deliver` (347) |
+| Normal loop | `nodes.py`: `plan_llm` (552–624), `guardrails` (743–824), `tool_loop_head` (864–892), `execute` (965+) |
+| State | `app/chat/assistant/state.py`: `PlannerOutput` (27–40), `SDBTrigger` (70–78), `SDBTask` (93–121), SDB fields (182–191), `normalize_sdb_trigger` (194–213) |
+| Service | `app/services/agent_chat.py`: `_sdb_plan` (73–76), `_run_sdb_tasks` (105–235), `_sdb_delivery` (237–255), `persist_sdb_state` (278–345), `sdb_requested` path (567–575, 625–673), `_events_for` (818–846), `approve_plan` (962–1037) |
+| Recovery | `app/chat/assistant/recovery.py`: generic `recover_events`/`claim_execution`/`is_recoverable` (12–33, 70–93) KEEP; SDB-specific resume/revalidation (36–67, 95–102) DELETE |
+| Registry | `agent/registry.yaml`: `sdb_classification` (96–98) DELETE, `classify: prompts/assistant_classify.md` (65–68) audit, `sdb` orchestrator skill (5) audit; `agent/skills/sdb.md` (reference-only) rewrite/delete |
+| Tool taxonomy | `app/chat/assistant/tools/registry.py`: `SDB_WRITE_ALLOWLIST` (27–34), catalogue (586–610), `execute_tool` (668+); `_effective_tools` `nodes.py` (653–678) |
+| Spec | `openspec/specs/sdb-native/spec.md` (SDB-1..SDB-10) |
+
+## Tasks
+
+- [ ] **S5-01 — Rewrite the `sdb-native` spec.**
+  Replace the seven-phase requirements with: `plan → execute → conditional verify`; the D15 tool
+  set + explicit/admin conditions; isolated verifier context; criterion/evidence contract. Preserve
+  the still-valid tool-security, approval and project-boundary guarantees in the normal specs.
+  Files: `openspec/specs/sdb-native/spec.md`. ~180 lines. Depends: none.
+
+- [ ] **S5-02 — Collapse the graph and the SDB state types.**
+  Remove the `sdb_*` nodes/edges, `sdb_trigger_gate`, `_after_sdb_trigger_gate`,
+  `_after_sdb_approve`; remove `SDBTrigger`/`SDBTask`/`normalize_sdb_trigger`/SDB state fields and
+  `PlannerOutput.classification`; add gate/verify state and routing (insert verify after the
+  execution loop, before response/evidence). Files: `graph.py`, `state.py`. ~180 lines. Depends: S5-01.
+
+- [ ] **S5-03 — Add the success criterion and the isolated verifier.**
+  `PlannerOutput.success_criterion` + planner prompt; new isolated verifier that builds its own
+  fresh messages (no `_context_text`) and inspects the evidence bundle (and, if confirmed, bounded
+  read-only tools). Files: `nodes.py`, planner prompt/config as needed. ~250 lines. Depends: S5-02.
+
+- [ ] **S5-04 — Replace the SDB service runner with the normal path.**
+  Delete `_run_sdb_tasks`, `_sdb_delivery`, `persist_sdb_state`, `_sdb_plan`, SDB-specific recovery
+  and SDB constants/imports; keep the shared approval/evidence/event path; remove the `if
+  plan.get("sdb")` dispatch in `approve_plan`; persist the verifier result and emit its event.
+  Files: `agent_chat.py`, `recovery.py`. ~350 lines. Depends: S5-02, S5-03.
+
+- [ ] **S5-05 — Registry/config cleanup.**
+  Remove `sdb_classification`; audit and remove/rewrite `agent/skills/sdb.md` and
+  `prompts/assistant_classify.md` (confirm no other consumers), and the orchestrator `sdb` skill
+  reference. Files: `agent/registry.yaml`, `agent/skills/sdb.md`, `agent/prompts/assistant_classify.md`,
+  loader/tests. ~100 lines. Depends: S5-02.
+
+- [ ] **S5-06 — Replace the SDB test suites.**
+  Delete/rewrite `tests/spec/test_sdb_{trigger,phases,recovery}.py` and
+  `tests/integration/test_sdb_{persistence,api}.py`; add gate, isolation, criterion and
+  failed-verification tests; update SDB wording in `test_assistant_extensions.py`, graph
+  expectations in `test_assistant_tool_loop.py`/`test_cortex_session_loop.py`, and SDB references in
+  `test_assistant_tools.py`, `test_assistant_tool_owner_isolation.py`,
+  `test_assistant_harness_guardrails.py`. ~500+ lines — **split into chained PRs**. Depends: S5-03, S5-04.
+
+- [ ] **S5-07 — Validate unrelated tool/approval/project behavior.**
+  Confirm `test_projects_spec.py` / `test_api_projects.py` SDB references describe real contracts
+  (keep) or obsolete assistant flow (update); run the cross-cutting suites. ~200 lines. Depends: S5-04..06.
+
+Forecast: **~1,700 authored lines** → far above the ~400 budget. Delivery strategy must be chosen
+before the first commit (chained PRs or maintainer-approved `size:exception`).
+
+## Acceptance criteria (slice)
+
+1. No `sdb_*` phase node or edge survives; SDB runs through the normal loop.
+2. Verify runs iff the gate says so (D15 effect set ∪ explicit ∪ admin handoff); `memory.write`
+   alone does not trigger it.
+3. The verifier runs with fresh context: no conversation history, thread, memory or parent context.
+4. A plan with an effect step carries an observable success criterion; a missing/ambiguous one is
+   reported `unverifiable`, never a silent success.
+5. `sdb_classification` is gone; the admin handoff is the existing `sdb_requested` flag, admin-only.
+6. Normal approval, evidence, events and the project boundary keep working.
+7. Full `pytest tests/` green (not a subset); no DB migration.
+
+## Checks
+
+- Strict TDD ON. RED before GREEN. Runner: `uv run --no-sync pytest tests/` (full suite ~1777
+  tests). Full suite at the spot-check — the Slice 4 `NameError` escaped a subset.
+- Test DB: `bash infra/test-db.sh up` + `eval "$(bash infra/test-db.sh env)"`; never source
+  `infra/.env`. The shared test DB deadlocks under two concurrent pytest runs → run sequentially.
+- Frontend not expected in this slice; if `web/` is touched, `npm ci`, `npm test`, `npm run build`.
+- Graph Check per repo AGENTS.md: `graphify query` / `graphify path` before each task; record the
+  nodes consulted.
+- 5-Step Gate: atomic commit (≤5 files), verify, finalize.
+- RDD on: `gentle-ai review assess --base-ref <last boundary> --committed-only --json`; if
+  `review_due`, run the returned transition verbatim. Commits conventional, no Co-Authored-By.
+- PR: base `main`, one `type:*` label, no `Closes`.
+
+## Delivery (chained PRs, stacked-to-main)
+
+Owner-approved: chained PRs, stacked-to-main. Each slice is an independent, **green** PR
+(additions + deletions counted). Boundary constraint: removing the SDB nodes breaks the old SDB
+tests, so the removal and its test rewrite must land in the same slice; additive scaffolding lands
+first while the old subgraph still exists.
+
+| Slice | Work unit | Tasks | Size | Green because |
+|---|---|---|---:|---|
+| 1 | New `sdb-native` spec (contract only) | S5-01 | ~180 | docs-only |
+| 2 | Deterministic gate + `success_criterion` (additive) | S5-03a | ~250 | old SDB untouched |
+| 3 | Isolated read-only verifier + loop wiring (additive) | S5-03b | ~300 | old SDB untouched |
+| 4 | Collapse phase graph + SDB state + spec-level tests | S5-02 | ~350 | removal + its tests together |
+| 5 | Replace SDB service runner + integration tests | S5-04 | ~450 | removal + its tests together |
+| 6 | Registry/config cleanup + cross-check | S5-05, S5-07 | ~300 | references |
+
+Each slice: work-unit commit(s) on `odd/asistente-sdb`, conventional message, tests with the code,
+rollback = the slice's own files. Slices 5 may approach the budget; if a cohesive split does not
+fit after one honest pass, report the overage and recommend `size:exception` for that slice.
+Push/PR creation remain the owner's decision per slice.
+
+## Progress log
+
+- Worktree `../lumat-agent-odd-asistente-sdb` created (consent granted) and provisioned:
+  `uv sync --frozen`, `cp ../lumat-agent/infra/.env infra/.env`, graph `graphify-out/graph.json`
+  present. Test DB not started yet. No commits.
+
+## Review (RDD)
+
+Not started.
+
+## Open questions
+
+- Delivery strategy (chained PRs vs `size:exception`) not chosen.
+- Locate the authoritative admin-only validation of `sdb_requested` during S5-05.
