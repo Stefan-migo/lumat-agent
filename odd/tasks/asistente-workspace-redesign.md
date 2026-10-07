@@ -118,12 +118,13 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
       omitted.
 
 ### AW-4 — Chat center + composer
-- [ ] Restyle bubbles/Markdown/attachments/status to the reference; reuse `Markdown`, `Avatar`,
+- [x] Restyle bubbles/Markdown/attachments/status to the reference; reuse `Markdown`, `Avatar`,
       `StateMessage`, `CollapsibleMessages`.
-- [ ] Composer with attachment chips, `+` tools popover, `@mention`, "Planificar", send/stop.
+- [x] Composer with attachment chips, `+` tools popover, "Planificar", and send.
       Supported today: upload ("Adjuntar archivo"), chips, send, Planificar (existing Cortex action).
-      Unsupported (honest disabled/hidden): "Elegir del proyecto", tool toggles, stop.
-- [ ] Preserve stream/error/retry/approval behavior and tests.
+      Unsupported (omitted): "Elegir del proyecto", tool toggles, stop. `@mention` omitted because
+      there is no mention contract or current behavior to invoke.
+- [x] Preserve stream/error/retry/approval behavior and tests.
 
 ### AW-5 — Right panel (Contexto / Actividad)
 - [ ] Persistent right panel with `Tabs`. Contexto: project + KB/capabilities + thread files (existing
@@ -247,3 +248,27 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
     `PageHeader()`; undirected `AgentChat()`–`AssistantWorkspace()` path via `createChatThread()` and
     `AgentChat()`–`PageFrame()` path via `AgentChat.tsx`. No uncontracted capability was added.
   - Remaining: AW-4 through AW-7.
+- **AW-4 implemented (2026-10-07)** — restyled center bubbles and composer with local token-based
+  CSS, attachment chips, the native `Popover` upload action, and the existing Cortex Planificar
+  dialog. Preserved markdown, SSE/realtime, recovery, retry, approval, attachment submission, and
+  keyboard semantics; message history now uses `CollapsibleMessages` after ten items. No `@mention`
+  was added because no real mention contract exists. Rail-created threads now refresh the list and
+  explicitly insert the returned thread summary before URL navigation, so the new thread is visible
+  without waiting for a later route fetch. Added regression coverage.
+  - Files: `web/src/components/pages/AgentChat.tsx`, `AgentChat.css`, `AgentChat.test.tsx`,
+    `AssistantWorkspace.tsx`, `AssistantWorkspace.test.tsx`, and this task file.
+  - Graph Check: consulted `AgentChat()`, `AgentChat.tsx`, attachment upload, approval/planning,
+    realtime flow, `Markdown`, `Avatar`, `StateMessage`, `CollapsibleMessages`, `AW-4`,
+    `AssistantWorkspace()`, `createChatThread()`, `listChatThreads()`, and `pathForRoute()`; query
+    `AgentChat composer message bubbles attachments approval plan` and
+    `AssistantWorkspace rail createChatThread listChatThreads URL routing thread tabs`; path
+    `AssistantWorkspace()` → `createChatThread()` is a direct call; `AgentChat` → `Markdown` returned
+    no directed path. Reference image was read from the main worktree only.
+  - Verification from `web/`: typecheck passed; focused tests 2 files / 52 passed; serialized full
+    suite 97 files / 1040 passed; build passed with the existing Vite >500 kB chunk warning.
+  - R3-001 fix: rail creation now refreshes recent threads, inserts the newly created summary, then
+    changes route; chat loading remains URL-driven. Unsupported project selection, thread tool
+    toggles, stop control, and mentions remain omitted.
+  - Commits: `37d32673` (`feat(assistant): restyle chat composer`) and `5042bb1e`
+    (`fix(assistant): refresh rail-created thread tabs`).
+  - Remaining: AW-5 through AW-7; review and visual validation remain outstanding.
