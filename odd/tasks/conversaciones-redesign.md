@@ -84,6 +84,12 @@ Owner verdict: title/subtitle/badge and tabs OK; table needs design detail work.
 - [x] R5 `...` dropdown: `MessageSquare` icon on `Abrir conversación`.
 - [x] Evidence: commit `ebd7cc20`; `tsc -b --force --noEmit` clean; `vitest` 17/17 (ConversationsList + stories).
 
+### CV-1-r2 — owner visual review 2026-10-07 #2
+- [x] Offline banner restyled to the reference: neutral surface, `WifiOff` icon, bold headline "Sin conexión en tiempo real." + muted "Los datos guardados siguen disponibles." (page-local `.conversations-list__offline`; shared `.realtime-status` untouched).
+- [x] Responsable filter: replaced the native `<select>` (OS-styled popup) with a page-local Radix dropdown — styled panel, radio items with a check indicator, keyboard a11y. New test covers open + select + request.
+- [x] Mobile cards redistributed: identity head (avatar + name + meta), summary, badges + facts row (caso ↔ actividad), right-aligned actions.
+- [x] Evidence: commit `8572326b`; `tsc -b --force --noEmit` clean; `vitest` 18/18.
+
 ### CV-2 — ConversationThread header + history card
 - [ ] Header: avatar + customer name + `Conversación #id · Iniciada el [date]` + state badge + `Ver ficha del cliente` action.
 - [ ] Offline banner copy to the reference.
