@@ -45,6 +45,24 @@ const FICHA_TABS = [{ id: "summary", label: "Resumen" }, { id: "cases", label: "
 const formatDate = (value: string | null | undefined) => (value ? DATE_FORMAT.format(new Date(value)) : "—");
 const formatIdentityDate = (value: string | null | undefined) => (value ? IDENTITY_DATE_FORMAT.format(new Date(value)).replace(".", "") : "—");
 const formatDateTime = (value: string | null | undefined) => (value ? DATE_TIME_FORMAT.format(new Date(value)) : "—");
+const TIME_FORMAT = new Intl.DateTimeFormat("es-CL", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+// Visitas tab: the date cell mirrors the reference (bold day/month/year + muted clock time),
+// the service is a drill-down link rendered as plain text, and the row action lives in a `...` menu.
+const visitWhenCell = (row: Appointment) => (
+  <div className="client-ficha__visit-when"><strong>{formatIdentityDate(row.starts_at)}</strong><span><Clock3 aria-hidden="true" />{TIME_FORMAT.format(new Date(row.starts_at))}</span></div>
+);
+const visitServiceCell = (row: Appointment) => (
+  <a className="table__resource-name" href={pathForRoute({ view: "agenda", appointmentId: row.id })}>{row.service}</a>
+);
+const VISIT_COLUMNS: Column<Appointment>[] = [
+  { key: "date", header: "Fecha y hora", render: visitWhenCell },
+  { key: "service", header: "Servicio", render: visitServiceCell },
+  { key: "status", header: "Estado", render: (row) => <Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge> },
+];
+const visitRowMenu = (row: Appointment) => (
+  <Menu trigger="icon" label={`Acciones de la visita #${row.id}`} items={[{ value: "reschedule", label: "Reprogramar", icon: CalendarDays }]} onSelect={() => { window.location.href = pathForRoute({ view: "agenda", appointmentId: row.id }); }} />
+);
 
 export interface ClientFichaProps {
   customerId?: number;
@@ -622,7 +640,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           </Card></section>
         </div> : null}
       {activeTab === "visits" ? <div className="detail-region__main">
-        <section aria-label="Próximas visitas" className="client-ficha__history-block"><h2>Visitas</h2><Card title="Próximas visitas" description="Visitas pendientes de este cliente.">{upcomingAppointments.length ? <div className="data-region"><DataTable columns={[{key:"date",header:"Fecha y hora",render:(row: Appointment)=><><strong>{formatDate(row.starts_at)}</strong><br/><Clock3/> {new Intl.DateTimeFormat("es-CL",{hour:"2-digit",minute:"2-digit"}).format(new Date(row.starts_at))}</>},{key:"service",header:"Servicio",render:(row: Appointment)=><a href={pathForRoute({view:"agenda",appointmentId:row.id})}>{row.service}</a>},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>},{key:"actions",header:"Acciones",render:(row: Appointment)=><Button variant="secondary" onClick={()=>{window.location.href=pathForRoute({view:"agenda",appointmentId:row.id})}}>Reprogramar</Button>}] as Column<Appointment>[]} rows={upcomingAppointments} rowKey={(row)=>String(row.id)}/></div>:<EmptyState title="No hay próximas visitas"/>}</Card><Card title="Historial de visitas"><DataTable columns={[{key:"date",header:"Fecha y hora",render:(row: Appointment)=><>{formatDate(row.starts_at)}<br/><Clock3/> {formatDateTime(row.starts_at)}</>},{key:"service",header:"Servicio",render:(row: Appointment)=><a href={pathForRoute({view:"agenda",appointmentId:row.id})}>{row.service}</a>},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>}] as Column<Appointment>[]} rows={appointments.filter(row=>!upcomingAppointments.includes(row))} rowKey={(row)=>String(row.id)} /></Card>{appointments.some((appointment)=>appointment.calendar_error) ? appointments.filter((appointment)=>appointment.calendar_error).map((appointment)=><div key={appointment.id}><StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`}/><Button variant="secondary" disabled={retryingCalendarId===appointment.id} onClick={()=>void retryCalendar(appointment.id)}>Reintentar calendario</Button></div>):null}</section>
+        <section aria-label="Próximas visitas" className="client-ficha__history-block"><Card title="Próximas visitas" description="Visitas pendientes de este cliente.">{upcomingAppointments.length ? <div className="data-region"><DataTable columns={VISIT_COLUMNS} rows={upcomingAppointments} actions={visitRowMenu} rowKey={(row)=>String(row.id)}/></div>:<EmptyState title="No hay próximas visitas"/>}</Card><Card title="Historial de visitas"><DataTable columns={VISIT_COLUMNS} rows={appointments.filter(row=>!upcomingAppointments.includes(row))} rowKey={(row)=>String(row.id)} /></Card>{appointments.some((appointment)=>appointment.calendar_error) ? appointments.filter((appointment)=>appointment.calendar_error).map((appointment)=><div key={appointment.id}><StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`}/><Button variant="secondary" disabled={retryingCalendarId===appointment.id} onClick={()=>void retryCalendar(appointment.id)}>Reintentar calendario</Button></div>):null}</section>
       </div> : null}
       {activeTab === "conversations" ? <div className="detail-region__main">
         <section aria-label="Conversaciones" className="client-ficha__history-block"><Card title="Conversaciones del cliente"><div className={surfaceClass(history.conversations.length)}><DataTable columns={[...conversationColumns,{key:"actions",header:"Acciones",render:(row)=><Button variant="secondary" onClick={()=>{window.location.href=pathForRoute({view:"conversations",conversationId:row.id})}}>Abrir conversación</Button>}] as Column<(typeof history.conversations)[number]>[]} rows={history.conversations} rowKey={(row) => String(row.id)} /></div></Card></section>

@@ -673,7 +673,7 @@ describe("ClientFicha slice 2 — product register", () => {
     expect(screen.getByRole("heading", { name: "Casos anteriores" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Visitas" }));
-    expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Próximas visitas" })).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Conversaciones" }));
     expect(screen.getByRole("heading", { name: /Mensajes de la conversación/ })).toBeInTheDocument();
   });
@@ -711,6 +711,17 @@ describe("ClientFicha slice 2 — product register", () => {
     expect(retry.closest("a")).toBeNull();
     await user.click(retry);
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/appointments/42/calendar/sync", { method: "POST" });
+  });
+
+  it("moves the reschedule action into the visit row menu", async () => {
+    const user = userEvent.setup();
+    const visit = { id: 42, service: "Reparación", customer_id: 7, case_id: 2, technician_id: 3, local_start: "2099-07-15T12:00:00Z", timezone: "UTC", starts_at: "2099-07-15T12:00:00Z", ends_at: "2099-07-15T13:00:00Z", duration_minutes: 60, status: "booked" };
+    render(<ClientFicha data={{ ...ficha, history: { ...ficha.history, appointments: [visit] } }} memories={memories} />);
+
+    await user.click(screen.getByRole("tab", { name: "Visitas" }));
+    expect(screen.queryByRole("button", { name: "Reprogramar" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Acciones de la visita #42" }));
+    expect(await screen.findByRole("menuitem", { name: "Reprogramar" })).toBeInTheDocument();
   });
 
   // T15 — the layout decision: two regions with a summary rail.
