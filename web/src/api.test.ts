@@ -87,6 +87,12 @@ describe('client API contracts', () => {
     expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/clients?consent=false&sort=created_asc', expect.anything());
   });
 
+  it('requests only archived clients independently of includeArchived', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ clients: [] }), { status: 200 }));
+    await fetchClients({ onlyArchived: true, includeArchived: true });
+    expect(globalThis.fetch).toHaveBeenCalledWith('/panel/api/clients?include_archived=true&only_archived=true', expect.anything());
+  });
+
   it('uses the customer CRUD routes and payloads', async () => {
     vi.mocked(globalThis.fetch).mockImplementation(async () => new Response(JSON.stringify({ customer: {} }), { status: 200 }));
     await createCustomer({ phone: '+56912345678' });

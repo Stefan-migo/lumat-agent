@@ -146,7 +146,7 @@ describe('AppShell (T6.4)', () => {
     };
 
     await user.click(within(await drawer()).getByRole('button', { name: 'Clientes' }));
-    expect(await screen.findByText('Cliente vivo')).toBeInTheDocument();
+    expect(await within(await screen.findByRole('table')).findByText('Cliente vivo')).toBeInTheDocument();
     await user.click(within(await drawer()).getByRole('button', { name: 'Conversaciones' }));
     await user.click(screen.getByRole('tab', { name: /casos/i }));
     expect(await screen.findByText('Conversación viva')).toBeInTheDocument();
@@ -378,7 +378,7 @@ describe('AppShell (T6.4)', () => {
     const { container } = render(<AppShell user={admin} />);
     await user.click(mobileDrawerTrigger(container));
     await user.click(within(screen.getByRole('dialog', { name: 'Navegación' })).getByRole('button', { name: 'Clientes' }));
-    await user.click(await screen.findByRole('link', { name: 'Cliente vivo' }));
+    await user.click(within(await screen.findByRole('table')).getByRole('link', { name: 'Cliente vivo' }));
     expect(await screen.findByText('Ficha: Cliente vivo')).toBeInTheDocument();
 
     await user.click(mobileDrawerTrigger(container));

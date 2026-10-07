@@ -403,10 +403,12 @@ def test_clients_list_includes_archived_only_when_requested(client, make_user):
 
     default = client.get("/panel/api/clients")
     included = client.get("/panel/api/clients", params={"include_archived": True})
+    only_archived = client.get("/panel/api/clients", params={"only_archived": True})
 
     assert {row["id"] for row in default.json()["clients"]} == {active_id}
     archived = next(row for row in included.json()["clients"] if row["id"] == archived_id)
     assert datetime.fromisoformat(archived["archived_at"])
+    assert [row["id"] for row in only_archived.json()["clients"]] == [archived_id]
     assert set(archived["allowed_transitions"]) == {
         "contactado", "pendiente", "agendado", "en_evaluacion", "cancelado"
     }

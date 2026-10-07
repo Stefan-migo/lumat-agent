@@ -154,6 +154,16 @@ def test_cr3_invalid_transition_rejected():
         assert customer.state == CustomerState.NUEVO  # unchanged
 
 
+def test_cr3_manual_finalizado_to_nuevo_transition_rejected():
+    with SessionLocal() as session:
+        customer = customers.get_or_create_customer(session, "56912345678")
+        customer.state = CustomerState.FINALIZADO
+        session.flush()
+        with pytest.raises(customers.InvalidStateTransition):
+            customers.set_customer_state(session, customer, CustomerState.NUEVO, actor="operador1")
+        session.rollback()
+
+
 def test_cr3_postventa_reachable_only_after_finalizado():
     with SessionLocal() as session:
         customer = customers.get_or_create_customer(session, "56912345678")
@@ -361,6 +371,10 @@ def test_archived_customer_hidden_by_default_and_included_on_request():
         assert {c.id for c in customers.search_customers(session, include_archived=True)} == {
             active.id, archived.id
         }
+        assert [c.id for c in customers.search_customers(session, only_archived=True)] == [archived.id]
+        assert [c.id for c in customers.search_customers(
+            session, include_archived=True, only_archived=True
+        )] == [archived.id]
 
 
 def test_search_customers_consent_and_sort_order():

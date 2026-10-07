@@ -123,7 +123,7 @@ describe("ClientesList appearance axis (amended DS-GRAMMAR-1)", () => {
   it("styles the drill-down link without browser-default underlining", () => {
     render(<ClientesListView />);
 
-    const link = screen.getByRole("link", { name: customers[0].name! });
+    const link = within(screen.getByRole("table")).getByRole("link", { name: customers[0].name! });
     expect(link).toHaveClass("clientes-list__name");
     expect(link).not.toHaveAttribute("style");
   });
@@ -155,7 +155,7 @@ describe("ClientesList API behavior", () => {
     const customer = { ...customers[0], allowed_transitions: ["contactado", "pendiente"] as CustomerState[] };
     render(<ClientesList data={[customer]} state="ready" />);
     const user = userEvent.setup();
-    const row = screen.getByRole("link", { name: customer.name! }).closest("tr")!;
+    const row = within(screen.getByRole("table")).getByRole("link", { name: customer.name! }).closest("tr")!;
     await user.click(within(row).getByRole("button", { name: `Acciones para ${customer.name}` }));
     await user.click(await screen.findByRole("menuitem", { name: "Cambiar estado" }));
     expect(screen.getAllByRole("radio")).toHaveLength(2);
@@ -205,6 +205,16 @@ describe("ClientesList API behavior", () => {
     await waitFor(() => {
       expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Marcela+Fuentes&sort=created_desc")).toBe(true);
     });
+  });
+
+  it("sends only_archived when the archived toggle is enabled", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ clients: customers }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<ClientesList />);
+    await screen.findByRole("table");
+    await user.click(screen.getByRole("switch", { name: "Mostrar archivados" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("only_archived=true"))).toBe(true));
   });
 
 });

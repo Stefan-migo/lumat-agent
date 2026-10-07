@@ -156,6 +156,7 @@ def _ficha_memory_or_404(
 def clients_list(
     q: str | None = None,
     include_archived: bool = False,
+    only_archived: bool = False,
     consent: bool | None = None,
     sort: Literal["created_desc", "created_asc"] = "created_desc",
     session: Session = Depends(get_db),
@@ -164,6 +165,7 @@ def clients_list(
     """Search/list customers (AP-3), wrapped and capped at 100."""
     found = customers.search_customers(
         session, q, limit=100, include_archived=include_archived,
+        only_archived=only_archived,
         consent=consent, sort=sort,
     )
     return {"clients": [to_customer_dict(c) for c in found], "query": q or ""}

@@ -75,6 +75,16 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
       (`clientes-021`, `clientes-022`).
 - [x] Change-state dialog: client/current-state row, three radio cards, summary (`clientes-023`).
 - [x] Archive confirmation label/danger tone and client information block on the list entry point (`clientes-032`, list side).
+- [x] Owner decision: **Transiciones válidas** — change-state radio cards contain only the customer's CR-3 `allowed_transitions`; terminal states show no state cards or save action.
+- [x] Owner decision: **Solo archivados** — enabling "Mostrar archivados" filters the list to archived clients only; disabling it shows active clients only.
+- [x] Owner decision: **Reinicio de ciclo por re-contacto** — inbound WhatsApp from a `finalizado`, `postventa`, or `cancelado` customer resets only the customer state to `nuevo` and audits `customer.cycle_restarted`; manual CR-3 transitions remain unchanged, and conversation/case history is preserved.
+- [x] Owner corrections (2026-10-06): state-option cards inherit the official UI font; list tabs show Todos plus all eight customer states in canonical order with client-side counts and filtering.
+
+### CL-2a-mobile
+- [x] R3-001: reset pagination and selection when the archived filter changes (`ae0459d5`).
+- [x] Shared button primitive inherits the UI font and uses the tokenized semibold control-label weight (`b7a7f2d1`, `acc74c34`).
+- [x] Render paginated cliente cards on mobile, preserving selection and row actions; retain the horizontally scrollable nine-tab strip (`f19a051d`).
+- [x] Constrain mobile card/table descendants to the viewport, move selection and actions into the identity row, and compact the detail grid (`bc9c6216`).
 
 ### CL-3 — Client ficha shell
 - [ ] Identity header: avatar, name, "Cliente desde [date]", Agendar visita/Ver conversación

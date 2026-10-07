@@ -58,6 +58,8 @@ const columns = (onOpenClient?: (id: number) => void, selected: Set<number> = ne
   { key: "created", header: (<button className="clientes-list__sort" type="button" aria-label={`Creado ${sort === "created_desc" ? "descendente" : "ascendente"}`} onClick={toggleSort}>Creado {sort === "created_desc" ? "↓" : "↑"}</button>) as unknown as string, render: (customer) => customer.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(customer.created_at)).replace(".", "") : "—" },
 ];
 
+const CUSTOMER_STATES: CustomerState[] = ["nuevo", "contactado", "pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado", "postventa"];
+
 function stateMessage(state: ClientesListState, retry: () => void) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando clientes" />;
   if (state === "empty") return null;
@@ -84,10 +86,10 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   // Remounting the debounced input is the only way to clear it: the primitive owns its own
   // text, so resetting our query state alone would leave the stale term on screen.
   const [searchResetKey, setSearchResetKey] = useState(0);
-  const [includeArchived, setIncludeArchived] = useState(false);
+  const [onlyArchived, setOnlyArchived] = useState(false);
   const [consent, setConsent] = useState<"" | "true" | "false">("");
   const [sort, setSort] = useState<"created_desc" | "created_asc">("created_desc");
-  const [tab, setTab] = useState<"all" | "scheduled" | "finished">("all");
+  const [tab, setTab] = useState<"all" | CustomerState>("all");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [dialog, setDialog] = useState<"create" | "archive" | "state" | null>(null);
@@ -104,15 +106,15 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const [selectedState, setSelectedState] = useState<CustomerState | null>(null);
   const [archiveCounts, setArchiveCounts] = useState<{ cases: number; appointments: number } | null>(null);
   const fetchClients = useCallback(
-    () => listClients({ includeArchived, query, consent: consent === "" ? undefined : consent === "true", sort }).then((response) => response.clients),
-    [includeArchived, query, consent, sort],
+    () => listClients({ onlyArchived, query, consent: consent === "" ? undefined : consent === "true", sort }).then((response) => response.clients),
+    [onlyArchived, query, consent, sort],
   );
   const fetched = useAsyncData(fetchClients, controlledData === undefined, queryVersion);
   const data = controlledData === undefined ? fetched.data : controlledData;
   const state = controlledState ?? fetched.state;
   const allRows = data ?? [];
-  const counts = { all: allRows.length, scheduled: allRows.filter((row) => row.state === "agendado").length, finished: allRows.filter((row) => row.state === "finalizado").length };
-  const filteredRows = tab === "scheduled" ? allRows.filter((row) => row.state === "agendado") : tab === "finished" ? allRows.filter((row) => row.state === "finalizado") : allRows;
+  const counts = Object.fromEntries(CUSTOMER_STATES.map((customerState) => [customerState, allRows.filter((row) => row.state === customerState).length])) as Record<CustomerState, number>;
+  const filteredRows = tab === "all" ? allRows : allRows.filter((row) => row.state === tab);
   const pageSize = 10;
   const rows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
@@ -217,19 +219,19 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
       meta={!data ? "Clientes del negocio" : undefined}
       state={stateMessage(state, retry)}
     >
-      <section aria-label="Listado de clientes">
-        <Tabs ariaLabel="Estado de clientes" activeTab={tab} onTabChange={(value) => { setTab(value as typeof tab); setPage(1); setSelected(new Set()); }} tabs={[{ id: "all", label: <>Todos <Badge>{counts.all}</Badge></> }, { id: "scheduled", label: <>Agendados <Badge>{counts.scheduled}</Badge></> }, { id: "finished", label: <>Finalizados <Badge>{counts.finished}</Badge></> }]}>
+      <section className="clientes-list" aria-label="Listado de clientes">
+        <Tabs ariaLabel="Estado de clientes" activeTab={tab} onTabChange={(value) => { setTab(value as typeof tab); setPage(1); setSelected(new Set()); }} tabs={[{ id: "all", label: <>Todos <Badge>{allRows.length}</Badge></> }, ...CUSTOMER_STATES.map((customerState) => ({ id: customerState, label: <>{customerStateLabel(customerState)} <Badge>{counts[customerState]}</Badge></> }))]}>
         {() => <div className="table-card clientes-list__card">
         <div className="table-toolbar clientes-list__toolbar">
           <SearchInput key={searchResetKey} aria-label="Buscar clientes" placeholder="Buscar por nombre o teléfono..." onSearch={(next) => { setSearchTerm(next); setPage(1); setQueryVersion((current) => current + 1); }} />
           <label className="clientes-list__filter"><span>Consentimiento</span><select aria-label="Consentimiento" value={consent} onChange={(event) => { setConsent(event.target.value as typeof consent); setPage(1); setSelected(new Set()); refresh(); }}><option value="">Consentimiento</option><option value="true">Sí</option><option value="false">No</option></select></label>
-          <label className="clientes-list__switch"><input type="checkbox" role="switch" aria-label="Mostrar archivados" checked={includeArchived} onChange={(event) => { setIncludeArchived(event.target.checked); refresh(); }} /><span>Mostrar archivados</span></label>
+          <label className="clientes-list__switch"><input type="checkbox" role="switch" aria-label="Mostrar archivados" checked={onlyArchived} onChange={(event) => { setOnlyArchived(event.target.checked); setPage(1); setSelected(new Set()); refresh(); }} /><span>Mostrar archivados</span></label>
         </div>
         {dialog === null && dialogError ? <p role="alert">{dialogError}</p> : null}
         {state === "loading" ? null : data && data.length > 0 ? (
           <div className="data-region">
               <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar todos" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar todos</label>{selected.size ? <span>{selected.size} seleccionados</span> : null}</div>
-               <DataTable columns={columns(onOpenClient, selected, toggleSelected, sort, () => { setSort((value) => value === "created_desc" ? "created_asc" : "created_desc"); refresh(); })} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
+               <div className="table-card__desktop"><DataTable columns={columns(onOpenClient, selected, toggleSelected, sort, () => { setSort((value) => value === "created_desc" ? "created_asc" : "created_desc"); refresh(); })} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
               // The row's identity lives in the trigger's accessible name, not in every
               // action label: two pills repeating the customer name dominated the cell
               // (DESIGN_SYSTEM.md:475). `Archivar` is the only destructive action and
@@ -258,7 +260,31 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
                   />
                 </div>
               );
-            }} />
+            }} /></div>
+              <ul className="table-cards table-cards--mobile clientes-list__cards" aria-label="Lista de clientes">
+                {rows.map((customer) => {
+                  const rowLabel = `Acciones para ${customer.name ?? customer.phone_e164 ?? "cliente"}`;
+                  const items = customer.archived_at
+                    ? [
+                        { value: "state", label: "Cambiar estado", icon: ArrowRightLeft },
+                        { value: "restore", label: "Restaurar", icon: ArchiveRestore },
+                      ]
+                    : [
+                        { value: "state", label: "Cambiar estado", icon: ArrowRightLeft },
+                        { value: "archive", label: "Archivar", icon: Archive, tone: "danger" as const },
+                      ];
+                  return <li className="table-card__item clientes-list__mobile-card" key={customer.id}>
+                    <div className="clientes-list__mobile-identity"><input type="checkbox" aria-label={`Seleccionar ${customer.name ?? customer.phone_e164 ?? "cliente"}`} checked={selected.has(customer.id)} onChange={() => toggleSelected(customer.id)} /><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} className="table__resource-avatar" /><a className="clientes-list__name" href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>{customer.name ?? "—"}</a><Menu trigger="icon" label={rowLabel} items={items} onSelect={(value) => { if (value === "state") void openState(customer); else if (value === "archive") void openArchive(customer); else void restore(customer); }} /></div>
+                    <div className="clientes-list__mobile-grid">
+                      <div><span>Registro</span>{customer.archived_at ? <Badge tone="warning">Archivado</Badge> : "—"}</div>
+                      <div><span>Teléfono</span>{customer.phone_e164 ?? "—"}</div>
+                      <div><span>Estado</span><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></div>
+                      <div><span>Consentimiento</span><span className="clientes-list__consent"><span aria-hidden="true">{customer.consent_status ? <Check /> : <CircleMinus />}</span>{customer.consent_status ? "Sí" : "No"}</span></div>
+                      <div><span>Creado</span>{customer.created_at ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(customer.created_at)).replace(".", "") : "—"}</div>
+                    </div>
+                  </li>;
+                })}
+              </ul>
               <footer className="table-footer"><span className="table-footer__count">Mostrando {rows.length} de {filteredRows.length} clientes</span><div className="table-footer__pagination"><Button variant="secondary" disabled={page <= 1} aria-label="Página anterior" onClick={() => setPage((value) => value - 1)}>‹</Button><span className="table-footer__page" aria-current="page">{page}</span><Button variant="secondary" disabled={page >= pageCount} aria-label="Página siguiente" onClick={() => setPage((value) => value + 1)}>›</Button></div></footer>
           </div>
         ) : filtered ? (

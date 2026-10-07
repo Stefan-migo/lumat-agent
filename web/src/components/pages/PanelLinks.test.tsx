@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { ClientesList } from "./ClientesList";
 import { ConversationsList } from "./ConversationsList";
 import { AppShell } from "../domain/AppShell";
@@ -22,7 +22,7 @@ describe("panel production links", () => {
 
   it("uses clean route paths for customer drill-down links", () => {
     render(<ClientesList data={[{ id: 7, name: "Cliente vivo", phone_e164: "+56911111111", email: null, comuna: null, address: null, state: "contactado", consent_status: true, consent_at: null, created_at: "2026-08-25" }]} state="ready" />);
-    expect(screen.getByRole("link", { name: "Cliente vivo" })).toHaveAttribute("href", "/panel/app/clients/7");
+    expect(within(screen.getByRole("table")).getByRole("link", { name: "Cliente vivo" })).toHaveAttribute("href", "/panel/app/clients/7");
   });
 
   it("hands conversation drill-downs to the route seam", async () => {
