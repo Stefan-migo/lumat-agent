@@ -36,13 +36,12 @@ export interface ProjectCreateRequest { slug: string; name: string; purpose: str
 export interface ProjectCreateResponse { project: Project; }
 
 export type CortexStatus = 'active' | 'closed';
-export interface CortexHandoff { status: 'none' | 'pending' | 'approved'; sdb_phase: 'SPEC' | 'APPROVE' | null; run_id?: string; approval?: AssistantApproval | null; }
-export interface PlanningSession { slug: string; topic: string; status: CortexStatus; thread_id: number; opened_at: string | null; closed_at: string | null; turn_index: number; next_decision: string | null; last_class: string | null; decision_keys: string[]; report_key: string | null; handoff: CortexHandoff; }
+export interface PlanningSession { slug: string; topic: string; status: CortexStatus; thread_id: number; opened_at: string | null; closed_at: string | null; report_key: string | null; }
 export interface CortexArtifact { id: number; scope: string; entity_id: string; tipo: MemoryType; titulo: string; contenido: string; topic_key: string; status: MemoryStatus; created_at: string | null; updated_at: string | null; }
 export interface PlanningSessionsResponse { sessions: PlanningSession[]; }
 export interface PlanningSessionOpenResponse { session: PlanningSession; thread_id: number; }
-export interface PlanningSessionCloseResponse { session: PlanningSession; report: CortexArtifact | null; handoff: CortexHandoff; }
-export interface PlanningSessionDetailResponse { session: PlanningSession; thread: InternalChatThread; decisions: CortexArtifact[]; report: CortexArtifact | null; }
+export interface PlanningSessionCloseResponse { session: PlanningSession; report: CortexArtifact | null; }
+export interface PlanningSessionDetailResponse { session: PlanningSession; thread: InternalChatThread; report: CortexArtifact | null; }
 
 export interface Rule {
   id: number;

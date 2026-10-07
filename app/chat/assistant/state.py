@@ -31,19 +31,27 @@ class PlannerOutput(BaseModel):
 
     kind: Literal["tool", "respond", "complex", "delegate"]
     classification: Literal["normal", "sdb"] = "normal"
-    cortex_class: Literal["question", "research", "decision", "continue", "close"] | None = None
     tool: str | None = None
     sub_agent: str | None = None
     arguments: dict = Field(default_factory=dict)
     summary: str = Field(min_length=1, max_length=200)
+    success_criterion: str | None = Field(default=None, min_length=1, max_length=300)
     requires_approval: bool = False
     follow_up: bool = False
+    skills: list[str] = Field(default_factory=list)
 
     @field_validator("summary", mode="before")
     @classmethod
     def clamp_summary(cls, value: object) -> object:
         if isinstance(value, str):
             return value[:200]
+        return value
+
+    @field_validator("success_criterion", mode="before")
+    @classmethod
+    def require_non_empty_success_criterion(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("success_criterion must not be empty")
         return value
 
     @field_validator("arguments", mode="before")
@@ -67,25 +75,6 @@ class PlannerOutput(BaseModel):
         return self
 
 
-class SDBTrigger(BaseModel):
-    """Strict input contract for planner and authenticated admin signals."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    classification: Literal["normal", "sdb"] = "normal"
-    sdb_requested: bool | None = None
-    actor_role: str | None = None
-
-
-class CortexHandoff(BaseModel):
-    """The persisted handoff sub-state for a Cortex session."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    status: Literal["none", "pending", "approved"]
-    sdb_phase: Literal["SPEC", "APPROVE"] | None
-
-
 class CortexSession(BaseModel):
     """Validated thread-scoped Cortex state."""
 
@@ -96,12 +85,7 @@ class CortexSession(BaseModel):
     status: Literal["active", "closed"]
     opened_at: str = Field(min_length=1)
     closed_at: str | None
-    turn_index: int = Field(ge=0)
-    next_decision: str | None
-    last_class: Literal["question", "research", "decision", "continue", "close"] | None
-    decision_keys: list[str]
     report_key: str | None
-    handoff: CortexHandoff
 
 
 class SDBTask(BaseModel):
@@ -176,6 +160,7 @@ class AssistantState(TypedDict, total=False):
     error: str | None
     on_token: Callable[[str], None] | None
     session: object
+    effective: dict
     actor: str
     actor_role: str
     attachments: list[object]
@@ -192,35 +177,11 @@ class AssistantState(TypedDict, total=False):
     legacy_compat: bool
     cost_mode: Literal["normal", "conservative", "blocked"]
     cost_directive: str
-    sdb_trigger: Literal["classified", "admin"] | None
     sdb_phase: Literal["CLARIFY", "SPEC", "PLAN", "APPROVE", "EXECUTE", "VERIFY", "DELIVER"]
-    sdb_route: Literal["normal", "sdb"]
-    sdb_rejection: str | None
-    sdb_scope: dict
     project_authorization: object
     sdb_spec: dict
     sdb_tasks: list[SDBTask]
     sdb_result: dict
     verification: dict
-
-
-def normalize_sdb_trigger(signal: object) -> dict[str, str | None]:
-    """Normalize the two trusted SDB entry signals, rejecting ambiguity."""
-    try:
-        trigger = SDBTrigger.model_validate(signal)
-    except (TypeError, ValidationError):
-        return {"route": "normal", "reason": "malformed-signal"}
-    classification = trigger.classification
-    requested = trigger.sdb_requested
-    role = trigger.actor_role
-    if classification not in {"normal", "sdb"}:
-        return {"route": "normal", "reason": "malformed-classification"}
-    if classification == "sdb" and requested is False:
-        return {"route": "normal", "reason": "conflicting-trigger"}
-    if requested is True and role != "admin":
-        return {"route": "normal", "reason": "unauthorized-request"}
-    if classification == "sdb":
-        return {"route": "sdb", "trigger": "classified", "phase": "CLARIFY"}
-    if requested is True:
-        return {"route": "sdb", "trigger": "admin", "phase": "CLARIFY"}
-    return {"route": "normal", "reason": None}
+    verify_requested: bool
+    sdb_requested: bool

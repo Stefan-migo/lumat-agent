@@ -1006,7 +1006,6 @@ describe("AgentChat", () => {
                 slug: "budget-4",
                 topic: "Budget",
                 status: "active",
-                handoff: { status: "none", sdb_phase: null },
               },
             },
           },
@@ -1017,7 +1016,6 @@ describe("AgentChat", () => {
         jsonResponse({
           session: {},
           report: { contenido: "Report" },
-          handoff: { status: "pending", sdb_phase: "SPEC" },
         }),
       );
 
@@ -1031,7 +1029,7 @@ describe("AgentChat", () => {
         expect.objectContaining({ method: "POST" }),
       ),
     );
-    expect(screen.getByText(/plan aprobado/i)).toBeInTheDocument();
+    expect(screen.getByText(/Informe de planificación: Report/i)).toBeInTheDocument();
   });
 
   it("treats exact planning commands as lifecycle controls and free text as chat", async () => {
