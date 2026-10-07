@@ -105,11 +105,11 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
   unchanged in AW-1 (no `PanelShell` edit).
 
 ### AW-2 — Proyectos pane
-- [ ] Project list + search + selection from the existing projects API; `SearchInput`, `Card`,
+- [x] Project list + search + selection from the existing projects API; `SearchInput`, `Card`,
       `Badge`, `Menu`, `EmptyState`.
-- [ ] Expanded project sub-links "Contexto y archivos" / "Historial de hilos" (routing per existing
+- [x] Expanded project sub-links "Contexto y archivos" / "Historial de hilos" (routing per existing
       `panelRoutes`; no new routes).
-- [ ] "Agentes del proyecto" section: honest empty state (no project-agent contract yet).
+- [x] "Agentes del proyecto" section: honest empty state (no project-agent contract yet).
 
 ### AW-3 — Thread navigation + header
 - [ ] Per-thread tabs (open threads) + create/close affordances from the existing thread API.
@@ -176,3 +176,19 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
   Asistente surface, or make the rail part of the workspace. Shell untouched in AW-1.
 - **Paused backlog** — Slice 8 of `asistente-sdb` (wire the verifier into `approve_plan → execute`)
   remains the prior backend feature; the frontend redesign takes priority.
+- **AW-2 implemented (2026-10-07)** — feature commit `7d73af06` (`feat(assistant): render the real
+  projects pane in the workspace`). Files: `web/src/components/pages/AssistantWorkspace.tsx`,
+  `web/src/components/pages/AssistantWorkspace.css`, and
+  `web/src/components/pages/AssistantWorkspace.test.tsx`. Projects load from `listProjects`; the
+  pane provides name filtering, real status badges, expandable navigation through existing
+  `panelRoutes`, retryable loading/error/empty feedback, and an honest project-agent empty state.
+  The request is enabled only while the pane is visible, so a hidden sidebar does not issue an
+  unnecessary project fetch alongside the existing chat fetch.
+  - Verification from `web/`: `npx tsc -b --force --noEmit` — exit 0, no output;
+    `npx vitest run src/components/pages/AssistantWorkspace.test.tsx` — 1 file, 3 tests passed;
+    `npx vitest run --no-file-parallelism` — 97 files, 1037 tests passed;
+    `npm run build` — passed (Vite emitted the existing >500 kB chunk-size advisory).
+  - Graph Check consulted `listProjects()`, `AssistantWorkspace()`, `ProjectsPage.tsx`, `api.ts`,
+    `types.ts`, `useAsyncData()`, `panelRoutes.ts`, `Card.tsx`, `Badge.tsx`, `Menu.tsx`,
+    `SearchInput`, `EmptyState()`, and `StateMessage()`. `graphify path listProjects
+    AssistantWorkspace` found no directed path.
