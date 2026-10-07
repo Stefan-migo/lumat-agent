@@ -179,9 +179,12 @@ Owner direction: restyle to `ClientFichaTabVisits.png` (desktop) + `LUMAT client
 Owner direction: approach both cards to `ClientFichaTabConversaciones.png` (desktop) + `LUMAT client conversations on mobile and tablet-5.png`.
 - [x] `Conversaciones del cliente`: `#` → `Conversación` header; `Estado` as a tone badge with a `Bot` icon (bot=success, human/closed=neutral, pending=warning, escalated=danger); `Creada` as day/month/year (`7ee75551`).
 - [x] `Mensajes de la conversación`: title/subtitle moved INSIDE the card; `#` → `Turno`; `Dirección` as a badge with an arrow icon (inbound = success, outbound = neutral); `Tipo` labelled (`text` → `Texto`); `Fecha` as `11 sep 2026 · 16:20`; "Mostrando N mensaje(s)" footer (`7ee75551`).
-- [ ] Owner flag: the reference's `Conversaciones del cliente` row also shows a `⋮` after `Abrir conversación`; not implemented (no actions defined) — confirm.
-- [ ] The reference's `Mensajes` table has no `Conversación` column; kept it because `history.messages` can mix threads — confirm.
-- [ ] Mobile/tablet fidelity pass pending owner review.
+- [x] Owner confirmed (2026-10-06): the `Conversaciones del cliente` reference `⋮` is NOT needed; do not add it.
+- [x] Kept the `Conversación` column in `Mensajes`, as the owner accepted it (`history.messages` can mix threads).
+- [x] Mobile: both cards switch to cards at `max-width: 40rem` (`client-ficha__conversation-card` / `client-ficha__message-card`) (`eee986c3`).
+- [x] Removed the inline "Ver todos" expansion: the card always shows the last 10 messages; the full thread is reached through `Abrir conversación` (`eee986c3`).
+- [ ] Owner question: `Turno` currently shows the message id (`#21`); the owner expected "the turn of the conversation". Confirm the intended meaning (message order within the conversation? the conversation the message belongs to?).
+- [ ] Proposed: a conversation selector in the `Mensajes` card when the customer has more than one conversation, scoping the card to a single thread (likely via `getConversation(id, 10)`). Pending owner confirmation.
 
 ## Acceptance criteria
 
