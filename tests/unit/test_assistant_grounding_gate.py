@@ -48,7 +48,7 @@ def test_non_empty_kb_retrieval_reaches_responder_as_bounded_evidence(monkeypatc
     result = nodes.retrieve_kb(_respond_state())
 
     assert result["kb_chunks"] == chunks
-    assert calls[0][1] == {"top_k": 5, "min_sim": 0.50, "audience": None}
+    assert calls[0][1] == {"top_k": 5, "min_sim": 0.50, "audience": None, "global_only": True}
     assert result["guardrails"]["decision"] == "respond"
     assert _after_guardrails({**_respond_state(), **result}) == "respond_stream"
 

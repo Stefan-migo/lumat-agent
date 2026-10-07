@@ -21,13 +21,14 @@ import hashlib
 import inspect
 from pathlib import Path
 from runpy import run_path
+from uuid import uuid4
 
 import psycopg
 import pytest
 from sqlalchemy import func, select
 
 from app.db import SessionLocal  # noqa: E402
-from app.models import AuditLog, DocumentFormat, KbChunk, KbDocument, KbVisibility  # noqa: E402
+from app.models import AuditLog, DocumentFormat, KbChunk, KbDocument, KbVisibility, Project  # noqa: E402
 from app.services import kb  # noqa: E402
 from _testdb import admin_database_url  # noqa: E402
 
@@ -269,6 +270,128 @@ def _ingest(session, title: str, text: str, fmt=DocumentFormat.MD) -> int:
     doc = kb.ingest_document(session, title=title, fmt=fmt, content=text.encode())
     session.flush()
     return doc.id
+
+
+def _project(session, slug: str) -> int:
+    slug = f"{slug}-{uuid4().hex}"
+    project = Project(
+        slug=slug,
+        name=slug,
+        purpose="KB test project",
+        purpose_embedding=[0.0] * kb.EMBED_DIMS,
+    )
+    session.add(project)
+    session.flush()
+    return project.id
+
+
+def test_kb_retrieve_global_only_returns_global_documents(fake_embedder):
+    query = "project scope retrieval"
+    with SessionLocal() as session:
+        project_id = _project(session, "kb-global-only")
+        global_id = _ingest(session, "Global", query)
+        project_doc = kb.ingest_document(
+            session, title="Project", fmt=DocumentFormat.MD, content=query.encode(), project_id=project_id
+        )
+        session.commit()
+
+    with SessionLocal() as session:
+        results = kb.retrieve(session, query, audience=None, global_only=True, project_id=project_id)
+
+    assert {result["document_id"] for result in results} == {global_id}
+    assert project_doc.id not in {result["document_id"] for result in results}
+
+
+def test_kb_retrieve_project_includes_global_and_own_but_excludes_other_projects(fake_embedder):
+    query = "project isolation retrieval"
+    with SessionLocal() as session:
+        project_a = _project(session, "kb-project-a")
+        project_b = _project(session, "kb-project-b")
+        global_id = _ingest(session, "Global", query)
+        project_a_id = kb.ingest_document(
+            session, title="Project A", fmt=DocumentFormat.MD, content=query.encode(), project_id=project_a
+        ).id
+        project_b_id = kb.ingest_document(
+            session, title="Project B", fmt=DocumentFormat.MD, content=query.encode(), project_id=project_b
+        ).id
+        session.commit()
+
+    with SessionLocal() as session:
+        results = kb.retrieve(session, query, audience=None, project_id=project_a)
+
+    assert {result["document_id"] for result in results} == {global_id, project_a_id}
+    assert project_b_id not in {result["document_id"] for result in results}
+
+
+def test_kb_retrieve_default_project_filter_returns_all_documents(fake_embedder):
+    query = "unfiltered project retrieval"
+    with SessionLocal() as session:
+        project_a = _project(session, "kb-default-a")
+        project_b = _project(session, "kb-default-b")
+        ids = {
+            _ingest(session, "Global", query),
+            kb.ingest_document(session, title="A", fmt=DocumentFormat.MD, content=query.encode(), project_id=project_a).id,
+            kb.ingest_document(session, title="B", fmt=DocumentFormat.MD, content=query.encode(), project_id=project_b).id,
+        }
+        session.commit()
+
+    with SessionLocal() as session:
+        results = kb.retrieve(session, query, audience=None)
+
+    assert {result["document_id"] for result in results} == ids
+
+
+def test_kb_retrieve_audience_filter_is_orthogonal_to_project_filter(fake_embedder):
+    query = "audience and project"
+    with SessionLocal() as session:
+        project_id = _project(session, "kb-audience-project")
+        matching_id = kb.ingest_document(
+            session, title="Customer project", fmt=DocumentFormat.MD, content=query.encode(),
+            visibility=KbVisibility.CUSTOMER, project_id=project_id,
+        ).id
+        internal_id = kb.ingest_document(
+            session, title="Internal project", fmt=DocumentFormat.MD, content=query.encode(),
+            visibility=KbVisibility.INTERNAL, project_id=project_id,
+        ).id
+        session.commit()
+
+    with SessionLocal() as session:
+        results = kb.retrieve(session, query, project_id=project_id)
+
+    assert {result["document_id"] for result in results} == {matching_id}
+    assert internal_id not in {result["document_id"] for result in results}
+
+
+def test_kb_ingest_project_binding_and_global_default(fake_embedder):
+    with SessionLocal() as session:
+        project_id = _project(session, "kb-ingest-project")
+        bound = kb.ingest_document(
+            session, title="Bound", fmt=DocumentFormat.MD, content=b"bound", project_id=project_id
+        )
+        global_doc = kb.ingest_document(
+            session, title="Global", fmt=DocumentFormat.MD, content=b"global"
+        )
+        session.commit()
+
+    assert bound.project_id == project_id
+    assert global_doc.project_id is None
+
+
+def test_kb_set_project_reclassifies_and_returns_document_to_global(fake_embedder):
+    with SessionLocal() as session:
+        project_id = _project(session, "kb-reclassify-project")
+        doc_id = _ingest(session, "Global", "reclassify document")
+        session.commit()
+
+    with SessionLocal() as session:
+        changed = kb.set_project(session, doc_id, project_id)
+        session.commit()
+    assert changed.project_id == project_id
+
+    with SessionLocal() as session:
+        changed = kb.set_project(session, doc_id, None)
+        session.commit()
+    assert changed.project_id is None
 
 
 def test_kb2_retrieval_relevant_hit(fake_embedder):
