@@ -90,6 +90,11 @@ Owner verdict: title/subtitle/badge and tabs OK; table needs design detail work.
 - [x] Mobile cards redistributed: identity head (avatar + name + meta), summary, badges + facts row (caso ↔ actividad), right-aligned actions.
 - [x] Evidence: commit `8572326b`; `tsc -b --force --noEmit` clean; `vitest` 18/18.
 
+### CV-1-r3 — owner visual review 2026-10-07 #3
+- [x] Mobile row menu no longer sits flush against the viewport edge: measured with Playwright, the panel's right edge moved from 390px (flush) to 348px. Added optional `align`/`collisionPadding` props to the shared `Menu` primitive (additive, defaults unchanged) and used `align="end" collisionPadding={8}`.
+- [x] Responsable filter shrunk to its content (332px → 224px): `justify-self: end` on desktop, `start` when the toolbar stacks, and the chevron pinned right (`margin-left: auto`).
+- [x] Evidence: commit `46046a06`; `tsc -b --force --noEmit` clean; `vitest` 18/18; Playwright measurement `docScrollWidth 390 = docClientWidth 390` (no horizontal overflow).
+
 ### CV-2 — ConversationThread header + history card
 - [ ] Header: avatar + customer name + `Conversación #id · Iniciada el [date]` + state badge + `Ver ficha del cliente` action.
 - [ ] Offline banner copy to the reference.
