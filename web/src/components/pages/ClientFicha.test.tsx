@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApiError, apiFetch, addClientNote, cancelAppointment, changeClientState, closeAppointment, deleteClientNote, postJson, resolveMemoryRelation, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, updateClientNote, listClientEquipment, fetchClients, previewClientMerge, mergeClient } from "../../api";
+import { ApiError, apiFetch, addClientNote, cancelAppointment, changeClientState, closeAppointment, deleteClientNote, postJson, resolveMemoryRelation, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, updateClientNote, listClientEquipment, fetchClients, getConversation, previewClientMerge, mergeClient } from "../../api";
 import { ClientFicha } from "./ClientFicha";
-import type { ClientFichaResponse, Memory } from "../../types";
+import type { ClientFichaResponse, ConversationThread, Memory } from "../../types";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), cancelAppointment: vi.fn(), changeClientState: vi.fn(), closeAppointment: vi.fn(), deleteClientNote: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCaseAmount: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), updateClientNote: vi.fn(), listClientEquipment: vi.fn(), fetchClients: vi.fn(), previewClientMerge: vi.fn(), mergeClient: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), cancelAppointment: vi.fn(), changeClientState: vi.fn(), closeAppointment: vi.fn(), deleteClientNote: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCaseAmount: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), updateClientNote: vi.fn(), listClientEquipment: vi.fn(), fetchClients: vi.fn(), getConversation: vi.fn(), previewClientMerge: vi.fn(), mergeClient: vi.fn() };
+});
+
+// The Mensajes card loads the selected conversation thread through `getConversation`.
+beforeEach(() => {
+  vi.mocked(getConversation).mockResolvedValue({ conversation: ficha.history.conversations[0], messages: ficha.history.messages, messages_total: ficha.history.messages.length } as unknown as ConversationThread);
 });
 
 describe("ClientFicha equipment", () => {
@@ -788,29 +793,38 @@ describe("ClientFicha slice 2 — product register", () => {
     expect(screen.queryByRole("button", { name: /Ver todos/ })).not.toBeInTheDocument();
   });
 
-  it("shows only the last ten messages and never fetches the full list", async () => {
+  it("loads only the last ten messages of the selected conversation", async () => {
     const user = userEvent.setup();
     const allMessages = Array.from({ length: 12 }, (_, index) => ({
       ...ficha.history.messages[0], id: index + 1, text: `Mensaje ${index + 1}`,
     }));
-    vi.mocked(apiFetch).mockImplementation(async (path) => {
-      if (path.endsWith("/memories")) return { memories };
-      if (path.endsWith("/pending")) return { relations: [] };
-      return {
-        ...ficha,
-        history: {
-          ...ficha.history,
-          messages: path.includes("messages_limit=10") ? allMessages.slice(-10) : allMessages,
-        },
-      };
-    });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    vi.mocked(getConversation).mockResolvedValue({ conversation: ficha.history.conversations[0], messages: allMessages.slice(-10), messages_total: allMessages.length } as unknown as ConversationThread);
 
     render(<ClientFicha customerId={7} memories={memories} />);
     await user.click(await screen.findByRole("tab", { name: "Conversaciones" }));
-    expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10");
+    expect(getConversation).toHaveBeenCalledWith(1, 10);
     expect(screen.getAllByText("Mensaje 3").length).toBeGreaterThan(0);
     expect(screen.queryByText("Mensaje 2")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Ver todos/ })).not.toBeInTheDocument();
+  });
+
+  it("lets the owner pick the conversation when there is more than one", async () => {
+    const user = userEvent.setup();
+    const earlierConversation = { ...ficha.history.conversations[0], id: 2, state: "closed", summary: "Consulta anterior" };
+    const earlierMessages = [{ ...ficha.history.messages[0], id: 9, conversation_id: 2, text: "Hola de nuevo" }];
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : { ...ficha, history: { ...ficha.history, conversations: [earlierConversation, ficha.history.conversations[0]] } });
+    vi.mocked(getConversation).mockImplementation(async (id) => id === 2
+      ? ({ conversation: earlierConversation, messages: earlierMessages, messages_total: 1 } as unknown as ConversationThread)
+      : ({ conversation: ficha.history.conversations[0], messages: ficha.history.messages, messages_total: 1 } as unknown as ConversationThread));
+
+    render(<ClientFicha customerId={7} memories={memories} />);
+    await user.click(await screen.findByRole("tab", { name: "Conversaciones" }));
+    expect((await screen.findAllByText("Necesito ayuda")).length).toBeGreaterThan(0);
+
+    await user.selectOptions(screen.getByLabelText("Conversación"), "2");
+    expect((await screen.findAllByText("Hola de nuevo")).length).toBeGreaterThan(0);
+    expect(getConversation).toHaveBeenCalledWith(2, 10);
   });
 
   it("hides the disclosure control when ten or fewer messages exist", () => {

@@ -1,6 +1,6 @@
 import { useCallback, useState, type FormEvent } from "react";
 import { Archive, ArrowLeftRight, BriefcaseBusiness, CalendarDays, CalendarX, CircleAlert, Clock3, Copy, Check, ChevronRight, FileText, Home, Mail, MapPin, MessageSquare, NotebookPen, Pencil, Phone, RefreshCw, ShieldCheck, Smartphone, Thermometer, UserRound, CircleDollarSign, Trash2, X, Bot, ArrowDownLeft, ArrowUpRight } from "lucide-react";
-import { addClientNote, ApiError, apiFetch, archiveCustomer, cancelAppointment, changeClientState, closeAppointment, createClientEquipment, deleteClientNote, fetchClients, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateClientNote, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
+import { addClientNote, ApiError, apiFetch, archiveCustomer, cancelAppointment, changeClientState, closeAppointment, createClientEquipment, deleteClientNote, fetchClients, getConversation, listClientEquipment, mergeClient, postJson, previewClientMerge, resolveMemoryRelation, unarchiveCustomer, updateCaseAmount, updateClientEquipment, updateClientNote, updateCustomerConsent, updateCustomerProfile, type CustomerEquipmentUpdate } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { Appointment, ClientFichaResponse, ClientMergePreview, Customer, CustomerEquipment, CustomerProfileUpdateRequest, CustomerState, Memory, MemoryRelation, MemoryRelationKind, MemoriesResponse, PendingMemoryRelationsResponse } from "../../types";
 import { ClientMemories } from "../domain/ClientMemories";
@@ -163,6 +163,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [visitCloseOutcome, setVisitCloseOutcome] = useState<AppointmentClosureOutcome>("completed");
   const [visitMutation, setVisitMutation] = useState(false);
   const [visitFeedback, setVisitFeedback] = useState<Feedback | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
   const fetchFicha = useCallback(async () => {
     if (fichaCustomerId === undefined) throw new Error("customer id is required");
     const [ficha, memoryResponse, pendingResponse] = await Promise.all([
@@ -183,6 +184,16 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const memories = mergedCustomerId !== null ? fetched.data?.memories ?? [] : refreshed?.memories ?? controlledMemories ?? fetched.data?.memories ?? [];
   const pendingRelations = refreshed?.pendingRelations ?? fetched.data?.pendingRelations ?? [];
   const state: FichaState = controlledState ?? (controlledData ? "ready" : fetched.state);
+  // The Mensajes card is scoped to one conversation: a selector picks it and we load that
+  // thread's last `MESSAGE_PREVIEW` messages (the full thread lives behind `Abrir conversación`).
+  const conversationList = data?.history.conversations ?? [];
+  const defaultConversationId = conversationList.length ? conversationList[conversationList.length - 1].id : null;
+  const activeConversationId = selectedConversationId ?? defaultConversationId;
+  const conversationThread = useAsyncData(
+    async () => activeConversationId === null ? null : await getConversation(activeConversationId, MESSAGE_PREVIEW),
+    activeConversationId !== null,
+    activeConversationId ?? 0,
+  );
 
   if (!data) {
     return <PageFrame title="Ficha de cliente" meta="Datos del cliente" state={stateMessage(state)}><EmptyState title="Cargando ficha" /></PageFrame>;
@@ -196,9 +207,12 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const futureAppointmentCount = appointments.filter((appointment) => appointment.status === "booked" && new Date(appointment.starts_at).getTime() > Date.now()).length;
   const upcomingAppointments = appointments.filter((appointment) => appointment.status === "booked" && new Date(appointment.starts_at).getTime() > Date.now());
   const finishedAppointments = appointments.filter((row) => !upcomingAppointments.includes(row));
-  // "Turno" = the 1-based order of the message within its own conversation.
+  // "Turno" = the 1-based order of the message within the selected conversation. We load the
+  // last `MESSAGE_PREVIEW` messages, so the first shown turn is offset by the thread length.
+  const conversationMessages = conversationThread.data?.messages ?? [];
+  const conversationTotal = conversationThread.data?.messages_total ?? 0;
   const messageTurns = new Map<number, number>();
-  { const counters = new Map<number, number>(); for (const message of history.messages) { const turn = (counters.get(message.conversation_id) ?? 0) + 1; counters.set(message.conversation_id, turn); messageTurns.set(message.id, turn); } }
+  conversationMessages.forEach((message, index) => messageTurns.set(message.id, conversationTotal - conversationMessages.length + index + 1));
   const retryCalendar = async (appointmentId: number) => {
     setRetryingCalendarId(appointmentId);
     try {
@@ -704,18 +718,19 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
             </ul>
           </> : <EmptyState title="No hay conversaciones" />}
         </Card></section>
-        <section aria-label="Mensajes" className="client-ficha__history-block"><Card title={`Mensajes de la conversación #${history.conversations[0]?.id ?? "—"}`} description="Historial de mensajes del hilo seleccionado.">
-          {history.messages.length ? <>
-            <div className={surfaceClass(history.messages.length)}><div className="table-card__desktop client-ficha__messages-table"><DataTable columns={messageColumns} rows={history.messages} rowKey={(row) => String(row.id)} /></div></div>
+        <section aria-label="Mensajes" className="client-ficha__history-block"><Card title={`Mensajes de la conversación #${activeConversationId ?? "—"}`} description="Historial de mensajes del hilo seleccionado.">
+          {history.conversations.length > 1 ? <div className="client-ficha__messages-toolbar"><Select label="Conversación" value={activeConversationId === null ? "" : String(activeConversationId)} options={history.conversations.map((row) => ({ value: String(row.id), label: `#${row.id} · ${conversationLabel(row.state)}${row.summary ? ` · ${row.summary}` : ""}` }))} onChange={(event) => setSelectedConversationId(Number(event.target.value))} /></div> : null}
+          {conversationMessages.length ? <>
+            <div className={surfaceClass(conversationMessages.length)}><div className="table-card__desktop client-ficha__messages-table"><DataTable columns={messageColumns} rows={conversationMessages} rowKey={(row) => String(row.id)} /></div></div>
             <ul className="table-cards table-cards--mobile client-ficha__message-cards" aria-label="Lista de mensajes">
-              {history.messages.map((row) => <li className="table-card__item client-ficha__message-card" key={row.id}>
+              {conversationMessages.map((row) => <li className="table-card__item client-ficha__message-card" key={row.id}>
                 <div className="client-ficha__message-card-head"><Badge tone={row.direction === "inbound" ? "success" : "neutral"}>{row.direction === "inbound" ? <ArrowDownLeft aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}{directionLabel(row.direction)}</Badge><span>{messageWhen(row.created_at)}</span></div>
                 <p>{row.text ?? "—"}{row.media_url ? " 📎" : ""}</p>
                 <small>Turno {messageTurns.get(row.id) ?? 1} · {messageTypeLabel(row.msg_type)}</small>
               </li>)}
             </ul>
           </> : <EmptyState title="No hay mensajes" />}
-          <p>Mostrando {history.messages.length} mensaje{history.messages.length === 1 ? "" : "s"}</p>
+          <p>Mostrando {conversationMessages.length} mensaje{conversationMessages.length === 1 ? "" : "s"}{conversationTotal > conversationMessages.length ? ` de ${conversationTotal}` : ""}</p>
         </Card></section>
       </div> : null}
         </>}

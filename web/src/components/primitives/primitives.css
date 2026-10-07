@@ -714,6 +714,8 @@
 .client-ficha__conversation-card-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .client-ficha__conversation-card-foot > span { color: var(--text-muted); font-size: var(--text-sm); }
 .client-ficha__message-card > small { color: var(--text-muted); }
+.client-ficha__messages-toolbar { margin-bottom: var(--space-3); }
+.client-ficha__messages-toolbar .field { max-width: 30rem; }
 /* Column priority on the conversation/message tables: the summary/message cell grows,
    the meta cells shrink to their content (1% + nowrap). */
 .client-ficha__conversations-table .table th:nth-child(1), .client-ficha__conversations-table .table td:nth-child(1),
