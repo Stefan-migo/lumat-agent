@@ -2,163 +2,140 @@
 
 ## Purpose
 
-Define the bounded native SDB execution mode inside the panel assistant.
+Define SDB as the normal panel assistant loop with a deterministic, isolated verification step when required.
 
 ## Requirements
 
-### Requirement: SDB-1 — Seven-Phase Execution and Fail-Closed Triggers
+### Requirement: SDB-11 — Normal Assistant Loop with Conditional Verification
 
-The system MUST execute SDB work in `CLARIFY → SPEC → PLAN → APPROVE → EXECUTE → VERIFY → DELIVER`. Entry MUST require either a valid structured planner classification, an authenticated admin request, or an approved closed Cortex session supplied as SPEC. Malformed or conflicting trigger signals MUST fail closed without entering SDB.
+SDB MUST use the normal assistant planning and execution loop (`plan → execute`), including its existing tool-loop behavior. It MUST NOT route a turn through a separate seven-phase SDB subgraph. After the execution loop, the system MUST evaluate the verification gate and, when it fires, run verification before final response and evidence collection.
 
-#### Scenario: Classified SDB request
+#### Scenario: Effectful normal-loop request
 
-- GIVEN the planner emits a valid SDB classification
-- WHEN the trigger gate evaluates the turn
-- THEN the run enters CLARIFY and records the normalized trigger
+- GIVEN a request is planned and executed by the normal assistant loop
+- WHEN the execution loop finishes
+- THEN the system evaluates whether verification is required before producing the final response and evidence
 
-#### Scenario: Explicit admin request
+#### Scenario: Verification is not required
 
-- GIVEN an authenticated admin requests SDB and the planner returns a valid non-SDB result
-- WHEN the trigger gate evaluates the turn
-- THEN the explicit request selects SDB and the non-SDB result is not executed
+- GIVEN the verification gate does not fire
+- WHEN the normal execution loop finishes
+- THEN the turn proceeds to its final response and evidence without an SDB phase sequence
 
-#### Scenario: Closed Cortex SPEC
+### Requirement: SDB-12 — Deterministic Verification Gate
 
-- GIVEN a closed Cortex report and administrator approval
-- WHEN the handoff enters SDB
-- THEN the report is consumed as the SPEC and the run proceeds through APPROVE
+The system MUST run verification if and only if at least one of these conditions holds: the turn dispatched an effect tool named `memory.update`, `memory.delete`, `automation.create_rule`, `project.create`, `project.rename`, `project.archive`, or `project.merge`; the request explicitly asks for verification; or the request carries the authenticated admin handoff flag `sdb_requested`. `memory.write` alone MUST NOT trigger verification. The gate MUST be determined from executed tool steps and trusted request fields, never inferred from free text.
 
-#### Scenario: Conflicting trigger signals
+#### Scenario: Effect tool dispatched
 
-- GIVEN trigger fields are malformed or contain contradictory SDB classifications
-- WHEN the trigger gate evaluates the turn
-- THEN SDB does not start and a bounded clarification or normal response is recorded
+- GIVEN at least one executed step dispatched a listed effect tool
+- WHEN the verification gate is evaluated
+- THEN verification runs, regardless of whether `memory.write` was also dispatched
 
-### Requirement: SDB-2 — Frozen Scope and Verifiable Tasks
+#### Scenario: Memory write alone
 
-The system MUST persist a bounded SPEC before PLAN, freeze its scope for the run, and require every planned task to declare one verifiable output. A lookup outside frozen scope MUST return `scope-not-found`; an absent requested entity inside scope MUST return `not-exist`.
+- GIVEN the only dispatched effect is `memory.write`
+- AND the request does not explicitly ask for verification or carry the admin handoff flag
+- WHEN the verification gate is evaluated
+- THEN verification does not run
 
-#### Scenario: Scope freeze
+#### Scenario: Explicit verification request
 
-- GIVEN CLARIFY produces an accepted bounded scope
-- WHEN SPEC is persisted
-- THEN later phases use that scope and reject unapproved expansion
+- GIVEN the request explicitly asks for verification
+- WHEN the verification gate is evaluated
+- THEN verification runs even if no listed effect tool was dispatched
 
-#### Scenario: Distinct absence errors
+#### Scenario: Admin handoff
 
-- GIVEN a task asks for an item outside scope or for a missing item inside scope
-- WHEN the task resolves the request
-- THEN the result is respectively `scope-not-found` or `not-exist`
+- GIVEN the authenticated request carries `sdb_requested`
+- WHEN the verification gate is evaluated
+- THEN verification runs without relying on planner classification or request prose
 
-### Requirement: SDB-3 — Checkpoints and Bounded Artifacts
+#### Scenario: Free-text mention is not a trusted trigger
 
-The system MUST persist bounded SPEC, STATE, and RESULT artifacts using typed memory semantics and MUST write a checkpoint after every task. Artifact payloads, task outputs, evidence, and event history MUST remain bounded and MUST NOT create new tables or a separate runtime.
+- GIVEN request text mentions SDB or verification but no explicit verification signal or admin handoff flag is present
+- WHEN the verification gate is evaluated
+- THEN free text alone does not trigger verification
 
-#### Scenario: Task checkpoint
+### Requirement: SDB-13 — Observable Success Criterion
 
-- GIVEN a task completes with its declared output
-- WHEN the task result is recorded
-- THEN one bounded RESULT/evidence record and a resumable checkpoint are persisted
+A plan containing an effect step MUST include an observable `success_criterion` that can be evaluated against execution evidence or independent read-only observations. If the criterion is missing or not observable, verification MUST return `unverifiable`, and the turn MUST be qualified rather than reported as a silent success.
 
-#### Scenario: Oversized output
+#### Scenario: Observable criterion supplied
 
-- GIVEN a task or event exceeds its configured bound
-- WHEN the artifact is persisted
-- THEN it is truncated or rejected with bounded degradation evidence
+- GIVEN a plan contains an effect step and an observable `success_criterion`
+- WHEN verification begins
+- THEN the verifier evaluates that criterion against the available execution evidence
 
-### Requirement: SDB-4 — Approval, Verification, and Durable Recovery
+#### Scenario: Criterion missing or not observable
 
-The system MUST reuse exact-plan approval and atomic execution claim. APPROVE MUST cover the canonical phase/task plan, VERIFY MUST compare all results with SPEC, and recovery MUST reuse the frozen plan without repeating completed tasks. Unknown commit outcomes MUST fail closed and require recovery; exactly-once is not claimed beyond the database boundary. (Seams: `app/services/agent_chat.py:567-639`, `app/chat/assistant/recovery.py:26-54`; integration tests inject persistence and unknown outcomes.)
+- GIVEN a plan contains an effect step without an observable `success_criterion`
+- WHEN verification begins
+- THEN verification returns `unverifiable` and the response qualifies the outcome
 
-#### Scenario: Persistence failure
+### Requirement: SDB-14 — Isolated Read-Only Verifier
 
-- GIVEN a mutation is flushed and checkpoint or artifact persistence fails
-- WHEN the caller transaction is rolled back
-- THEN no committed mutation remains without its checkpoint
+Verification MUST run in a separate verifier with fresh context. Its complete input MUST be limited to the success criterion, executed steps (tool names and arguments), and their results or evidence. It MUST NOT receive conversation history, thread state, memory, or parent context. The verifier MAY call at most two bounded read-only tools to independently confirm the effect, under the same read-only scope rules as delegation. It MUST NOT write or dispatch an effect tool.
 
-#### Scenario: Unknown commit outcome
+#### Scenario: Verifier receives bounded evidence only
 
-- GIVEN commit completion cannot be determined
-- WHEN execution reports the outcome
-- THEN it fails closed and requires recovery rather than blindly retrying
+- GIVEN a verification run has a criterion and execution evidence
+- WHEN the verifier is invoked
+- THEN it receives only the criterion, executed tool-and-argument steps, and their results or evidence
 
-### Requirement: SDB-5 — Project propagation through the existing seam
+#### Scenario: Independent bounded confirmation
 
-The SDB runtime MUST propagate the selected authorized project through the existing parameterized seam without changing the seven phases or recovery semantics. Writes MUST retain `scope="panel"`, thread or cross-thread entity identity, and run keys `sdb:{run_id}:{kind}`. `sdb:spec|state|result` MUST remain semantic categories, not literal key replacements; project-level artifacts MAY use `sdb:project:{kind}`.
+- GIVEN execution evidence alone is insufficient to evaluate the criterion
+- WHEN the verifier performs independent confirmation
+- THEN it may use no more than two bounded read-only tool steps under delegation read-only scope rules
 
-#### Scenario: Run artifact isolation
-- GIVEN an SDB run selects an authorized project
-- WHEN SPEC, STATE, or RESULT is persisted
-- THEN the project reaches the memory seam with panel scope and the run-specific key
+#### Scenario: Verifier attempts a write or exceeds its read bound
 
-#### Scenario: Cross-thread or project-level artifact
-- GIVEN a run records a cross-thread entity or project-level evidence
-- WHEN the artifact is persisted
-- THEN entity identity is preserved and a project-level artifact uses `sdb:project:{kind}` only when needed
+- GIVEN the verifier attempts a write or requests more than two read-only tool steps
+- WHEN the verifier scope is enforced
+- THEN the operation is refused and no write is dispatched
 
-#### Scenario: Phase and recovery compatibility
-- GIVEN a project-aware run is interrupted
-- WHEN it resumes
-- THEN the existing seven-phase flow and checkpoint recovery behavior are unchanged
+### Requirement: SDB-15 — Truthful Qualified Verification Outcomes
 
-### Requirement: SDB-6 — Typed Bounded Write Tasks
+Verification MUST report an explicit outcome. If verification flags a discrepancy, the turn MUST complete with a qualified response that reports the effect ran and identifies `verification: failed` with a reason. The system MUST NOT automatically retry the effect and MUST NOT present a failed or unverifiable verification as silent success.
 
-SDB MUST allow write tasks only after whitelist membership, Pydantic validation, and write classification. One approval MUST freeze every ordered `{task_id, tool, validated arguments}` binding in the canonical SDB digest, covering identity, tool, arguments, and order. Gate order MUST be whitelist → validation → classification → cost gate → project capability. (Seams: `app/services/agent_chat.py:90-106`, `app/chat/assistant/state.py:90-110`; unit tests cover schemas/gates.)
+#### Scenario: Verification finds a discrepancy
 
-#### Scenario: Valid frozen write plan
-- GIVEN a plan uses an allow-listed `automation.create_rule` or project lifecycle tool with valid typed arguments
-- WHEN approval is prepared
-- THEN every binding is frozen in order and approval covers the canonical digest
+- GIVEN an effect ran and verification flags a discrepancy
+- WHEN the turn completes
+- THEN the response reports that the effect ran and includes `verification: failed` with the reason
+- AND the effect is not automatically retried
 
-#### Scenario: Tampered or reordered plan
-- GIVEN a consumed approval and a changed task ID, tool, arguments, or order
-- WHEN execution validates the plan
-- THEN execution is rejected before any handler runs
+#### Scenario: Verification cannot establish the criterion
 
-#### Scenario: Gate denial
+- GIVEN verification is `unverifiable`
+- WHEN the turn completes
+- THEN the response is qualified and does not claim verified success
 
-- GIVEN a write is not allow-listed, malformed, classified read-only, cost-blocked, or missing project capability
-- WHEN EXECUTE evaluates it
-- THEN no write handler runs and rejection evidence is recorded
+#### Scenario: Verification confirms the criterion
 
-### Requirement: SDB-7 — Write Execution and Recovery
+- GIVEN verification independently confirms the observable criterion
+- WHEN the turn completes
+- THEN the response may report the effect as verified and include its evidence
 
-SDB EXECUTE MUST pass each write through `execute_tool` with consumed exact approval, audit every attempt, persist checkpoint/result/event state, and stop on first failure. A blocked cost gate MUST block all writes. Recovery MUST reuse the frozen plan and execute only incomplete tasks. (Seams: `app/services/agent_chat.py:79-136`, `app/chat/assistant/tools/registry.py:272-308`, `app/chat/assistant/recovery.py:47-54`; unit/integration tests cover ordering and rollback.)
+### Requirement: SDB-16 — Explicit Admin Handoff Signal
 
-#### Scenario: Ordered mutations
-- GIVEN an approved frozen plan and permitted cost/capability gates
-- WHEN EXECUTE runs
-- THEN writes execute in order through `execute_tool`, with audit, checkpoint, result, and event for each task
+The admin handoff is optional and MUST be triggered only by the explicit authenticated admin request flag `sdb_requested`. The system MUST NOT infer handoff from free text or planner classification. The obsolete `sdb_classification` trigger remnant MUST NOT be part of the handoff contract. Existing tool security and whitelist enforcement, approval, audit, and project-boundary guarantees remain governed by the normal assistant and tool specifications and MUST continue to apply.
 
-#### Scenario: First failure
-- GIVEN one task fails or raises
-- WHEN its attempt is persisted
-- THEN it is failed and no subsequent task executes
+#### Scenario: Explicit admin handoff requested
 
-#### Scenario: Recovery
-- GIVEN completed checkpoints and an interrupted run
-- WHEN recovery resumes
-- THEN only incomplete tasks execute and prior results remain in verification input
+- GIVEN an authenticated admin request carries `sdb_requested`
+- WHEN the assistant evaluates the handoff
+- THEN it applies the handoff contract and retains the normal assistant execution and tool safeguards
 
-### Requirement: SDB-9 — Canonical Execution Route
+#### Scenario: Handoff inferred from prose or planner output
 
-The durable `_run_sdb_tasks` route MUST be the only SDB runner. Graph routing MAY project compatibility state, but approval MUST remain `consumed` and dispatch through that route. Delivery MUST report verified mutation outcomes or truthful failure, never `not-implemented`. (Seams: `app/services/agent_chat.py:79-80,567-639`, `app/chat/assistant/graph.py:69-115`; integration tests prove one runner and truthful outcomes.)
+- GIVEN prose or planner output suggests SDB but the explicit admin flag is absent
+- WHEN the assistant evaluates the handoff
+- THEN no admin handoff is triggered
 
-#### Scenario: Consumed approval routing
-- GIVEN approval is atomically consumed
-- WHEN execution starts through API or graph
-- THEN `_run_sdb_tasks` is used and approval remains `consumed`
+#### Scenario: Existing execution safeguards
 
-### Requirement: SDB-10 — Project Write Boundary
-
-SDB MUST fail closed when a non-default project lacks capability, and MUST preserve that capability for mutation and artifact persistence. (Seams: `app/services/agent_chat.py:74-76,177-241`, `app/services/tukulpan.py:268-303`; integration tests cover authorized and missing capability.)
-
-#### Scenario: Authorized project mutation
-- GIVEN an active capability for the selected project
-- WHEN a project write executes and persists its result
-- THEN the service and SDB artifacts use that authorized project
-
-#### Scenario: Missing capability
-- GIVEN a non-default project without an active capability
-- WHEN EXECUTE is requested
-- THEN no mutation or artifact write commits
+- GIVEN a handoff turn dispatches a tool
+- WHEN the normal assistant and tool specifications govern execution
+- THEN their whitelist, approval, audit, and project-boundary guarantees remain in force
