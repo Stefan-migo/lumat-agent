@@ -96,7 +96,7 @@ describe("ClientFicha page", () => {
       history: { ...fichaResponse.history, appointments: [failedCalendarAppointment] },
     }} memories={[]} onRetryCalendar={onRetryCalendar} />);
     await user.click(screen.getByRole("tab", { name: "Visitas" }));
-    expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Próximas visitas" })).toBeInTheDocument();
     // The approved appointment label is "Reservada" (DS StatusBadge table).
     expect(screen.getAllByText("Reservada").length).toBeGreaterThan(0);
     expect(screen.getByRole("alert")).toContainElement(screen.getByRole("heading", { name: "No se pudo sincronizar el calendario" }));

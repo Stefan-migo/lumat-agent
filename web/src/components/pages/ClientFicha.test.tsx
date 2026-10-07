@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ApiError, apiFetch, addClientNote, changeClientState, deleteClientNote, postJson, resolveMemoryRelation, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, updateClientNote, listClientEquipment, fetchClients, previewClientMerge, mergeClient } from "../../api";
+import { ApiError, apiFetch, addClientNote, cancelAppointment, changeClientState, closeAppointment, deleteClientNote, postJson, resolveMemoryRelation, updateCaseAmount, updateCustomerProfile, updateCustomerConsent, archiveCustomer, unarchiveCustomer, createClientEquipment, updateClientEquipment, updateClientNote, listClientEquipment, fetchClients, previewClientMerge, mergeClient } from "../../api";
 import { ClientFicha } from "./ClientFicha";
 import type { ClientFichaResponse, Memory } from "../../types";
 
 vi.mock("../../api", async () => {
   const actual = await vi.importActual<typeof import("../../api")>("../../api");
-  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), changeClientState: vi.fn(), deleteClientNote: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCaseAmount: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), updateClientNote: vi.fn(), listClientEquipment: vi.fn(), fetchClients: vi.fn(), previewClientMerge: vi.fn(), mergeClient: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), addClientNote: vi.fn(), cancelAppointment: vi.fn(), changeClientState: vi.fn(), closeAppointment: vi.fn(), deleteClientNote: vi.fn(), postJson: vi.fn(), resolveMemoryRelation: vi.fn(), updateCaseAmount: vi.fn(), updateCustomerProfile: vi.fn(), updateCustomerConsent: vi.fn(), archiveCustomer: vi.fn(), unarchiveCustomer: vi.fn(), createClientEquipment: vi.fn(), updateClientEquipment: vi.fn(), updateClientNote: vi.fn(), listClientEquipment: vi.fn(), fetchClients: vi.fn(), previewClientMerge: vi.fn(), mergeClient: vi.fn() };
 });
 
 describe("ClientFicha equipment", () => {
@@ -118,6 +118,11 @@ async function clickCaseMenuItem(user: ReturnType<typeof userEvent.setup>, label
 // The archived rows render twice (desktop table + mobile cards); scope to the desktop copy.
 function archivedRowMenu(id: number) {
   return screen.getAllByRole("button", { name: `Acciones del caso #${id}` }).find((button) => button.closest(".table-card__desktop"))!;
+}
+
+// Visit rows also render twice (desktop table + mobile cards); scope to the desktop copy.
+function desktopOnly<T extends HTMLElement>(elements: T[]): T[] {
+  return elements.filter((element) => element.closest(".table-card__desktop"));
 }
 
 describe("ClientFicha page grammar", () => {
@@ -673,7 +678,7 @@ describe("ClientFicha slice 2 — product register", () => {
     expect(screen.getByRole("heading", { name: "Casos anteriores" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Visitas" }));
-    expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Próximas visitas" })).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Conversaciones" }));
     expect(screen.getByRole("heading", { name: /Mensajes de la conversación/ })).toBeInTheDocument();
   });
@@ -705,12 +710,57 @@ describe("ClientFicha slice 2 — product register", () => {
     render(<ClientFicha data={{ ...ficha, history: { ...ficha.history, appointments: [visit] } }} memories={memories} onRetryCalendar={vi.fn()} />);
 
     await user.click(screen.getByRole("tab", { name: "Visitas" }));
-    const link = screen.getByRole("link", { name: /Reparación/ });
+    const link = desktopOnly(screen.getAllByRole("link", { name: /Reparación/ }))[0];
     expect(link).toHaveAttribute("href", "/panel/app/agenda/42");
     const retry = screen.getByRole("button", { name: "Reintentar calendario" });
     expect(retry.closest("a")).toBeNull();
     await user.click(retry);
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/appointments/42/calendar/sync", { method: "POST" });
+  });
+
+  it("moves the reschedule action into the visit row menu", async () => {
+    const user = userEvent.setup();
+    const visit = { id: 42, service: "Reparación", customer_id: 7, case_id: 2, technician_id: 3, local_start: "2099-07-15T12:00:00Z", timezone: "UTC", starts_at: "2099-07-15T12:00:00Z", ends_at: "2099-07-15T13:00:00Z", duration_minutes: 60, status: "booked" };
+    render(<ClientFicha data={{ ...ficha, history: { ...ficha.history, appointments: [visit] } }} memories={memories} />);
+
+    await user.click(screen.getByRole("tab", { name: "Visitas" }));
+    expect(screen.queryByRole("button", { name: "Reprogramar" })).not.toBeInTheDocument();
+    await user.click(desktopOnly(screen.getAllByRole("button", { name: "Acciones de la visita #42" }))[0]);
+    expect(await screen.findByRole("menuitem", { name: "Reprogramar" })).toBeInTheDocument();
+  });
+
+  it("cancels an upcoming visit from the row menu with a reason", async () => {
+    const user = userEvent.setup();
+    vi.mocked(cancelAppointment).mockResolvedValue({ ok: true, appointment: {} });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    const visit = { id: 42, service: "Reparación", customer_id: 7, case_id: 2, technician_id: 3, local_start: "2099-07-15T12:00:00Z", timezone: "UTC", starts_at: "2099-07-15T12:00:00Z", ends_at: "2099-07-15T13:00:00Z", duration_minutes: 60, status: "booked" };
+    render(<ClientFicha customerId={7} data={{ ...ficha, history: { ...ficha.history, appointments: [visit] } }} memories={memories} />);
+
+    await user.click(screen.getByRole("tab", { name: "Visitas" }));
+    await user.click(desktopOnly(screen.getAllByRole("button", { name: "Acciones de la visita #42" }))[0]);
+    await user.click(await screen.findByRole("menuitem", { name: "Cancelar visita" }));
+    const dialog = screen.getByRole("dialog", { name: "Cancelar visita" });
+    await user.type(within(dialog).getByLabelText("Motivo de cancelación"), "Cliente avisó");
+    await user.click(within(dialog).getByRole("button", { name: "Confirmar cancelación" }));
+
+    expect(cancelAppointment).toHaveBeenCalledWith(42, "Cliente avisó");
+  });
+
+  it("closes an upcoming visit as a no-show from the row menu", async () => {
+    const user = userEvent.setup();
+    vi.mocked(closeAppointment).mockResolvedValue({ ok: true, appointment: {} });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    const visit = { id: 43, service: "Reparación", customer_id: 7, case_id: 2, technician_id: 3, local_start: "2099-07-15T12:00:00Z", timezone: "UTC", starts_at: "2099-07-15T12:00:00Z", ends_at: "2099-07-15T13:00:00Z", duration_minutes: 60, status: "booked" };
+    render(<ClientFicha customerId={7} data={{ ...ficha, history: { ...ficha.history, appointments: [visit] } }} memories={memories} />);
+
+    await user.click(screen.getByRole("tab", { name: "Visitas" }));
+    await user.click(desktopOnly(screen.getAllByRole("button", { name: "Acciones de la visita #43" }))[0]);
+    await user.click(await screen.findByRole("menuitem", { name: "Cerrar visita" }));
+    const dialog = screen.getByRole("dialog", { name: "Cerrar visita" });
+    await user.click(within(dialog).getByRole("radio", { name: /No completada/ }));
+    await user.click(within(dialog).getByRole("button", { name: "Confirmar cierre" }));
+
+    expect(closeAppointment).toHaveBeenCalledWith(43, "no_show");
   });
 
   // T15 — the layout decision: two regions with a summary rail.
