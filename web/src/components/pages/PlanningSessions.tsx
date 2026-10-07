@@ -1,4 +1,4 @@
-import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { ApiError, getPlanningSession, listPlanningSessions, reopenPlanningSession } from "../../api";
 import type { PlanningSessionDetailResponse, PlanningSessionsResponse } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -9,16 +9,13 @@ import { EmptyState } from "../shared/EmptyState";
 import { DataTable, tabularNum } from "../shared/DataTable";
 import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
-import { handoffStatusLabel, handoffStatusTone, memoryStatusLabel, memoryStatusTone, sessionStatusLabel, sessionStatusTone } from "../shared/toneMaps";
+import { memoryStatusLabel, memoryStatusTone, sessionStatusLabel, sessionStatusTone } from "../shared/toneMaps";
 
 const TIMESTAMP_FORMAT = new Intl.DateTimeFormat("es-CL", { dateStyle: "medium", timeStyle: "short" });
 
 function formatTimestamp(value: string | null): string | null {
   return value ? TIMESTAMP_FORMAT.format(new Date(value)) : null;
 }
-
-/** Shared two-column layout for the detail definition lists. */
-const FACTS_STYLE: CSSProperties = { display: "grid", gridTemplateColumns: "max-content minmax(0, 1fr)", gap: "var(--space-2) var(--space-4)", margin: 0, paddingBottom: "var(--space-4)", borderBottom: "1px solid var(--border)" };
 
 function ReadState({ state, detail }: { state: AsyncDataState; detail: boolean }) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title={detail ? "Cargando la sesión de planificación" : "Cargando las sesiones de planificación"} />;
@@ -54,10 +51,7 @@ export function PlanningSessions({ sessionSlug, onOpenSession, onOpenThread, dat
     return <PageFrame title={session?.topic ?? "Sesión de planificación"} meta={session ? `Hilo ${session.thread_id} · ${sessionStatusLabel(session.status)}${opened ? ` · Apertura: ${opened}` : ""}${closed ? ` · Cierre: ${closed}` : ""}` : "Detalle de la sesión"} actions={<><Button variant="secondary" onClick={() => window.history.back()}>Volver a las sesiones de planificación</Button>{session?.status === "closed" ? <Button disabled={reopening} onClick={() => void reopen()}>Reabrir sesión</Button> : null}</>} state={<><ReadState state={detail.state} detail />{reopenError ? <StateMessage tone="danger" role="alert" title="No pudimos reabrir la sesión de planificación" detail={reopenError} /> : null}</>}>
       {sectionTabs}
       {body ? <>
-         <section aria-labelledby="session-facts-heading"><h2 id="session-facts-heading">Datos de la sesión</h2><dl style={FACTS_STYLE}>{body.session.turn_index !== null && body.session.turn_index !== undefined ? <><dt>Turno</dt><dd>{body.session.turn_index}</dd></> : null}{body.session.next_decision ? <><dt>Próxima decisión</dt><dd>{body.session.next_decision}</dd></> : null}{body.session.last_class ? <><dt>Última clasificación</dt><dd>{body.session.last_class}</dd></> : null}</dl></section>
-         <section aria-labelledby="handoff-heading"><h2 id="handoff-heading">Derivación SDB</h2><dl style={FACTS_STYLE}><dt>Estado</dt><dd><Badge tone={handoffStatusTone(body.session.handoff.status)}>{handoffStatusLabel(body.session.handoff.status)}</Badge></dd>{body.session.handoff.sdb_phase ? <><dt>Fase SDB</dt><dd>{body.session.handoff.sdb_phase}</dd></> : null}{body.session.handoff.run_id ? <><dt>ID de ejecución</dt><dd>{body.session.handoff.run_id}</dd></> : null}</dl></section>
-         <section aria-labelledby="decisions-heading"><h2 id="decisions-heading">Decisiones</h2><DataTable rows={body.decisions} rowKey={(decision) => String(decision.id)} emptyMessage="No hay decisiones registradas" columns={[{ key: "title", header: "Título", render: (decision) => decision.titulo }, { key: "content", header: "Contenido", render: (decision) => decision.contenido }, { key: "status", header: "Estado", render: (decision) => <Badge tone={memoryStatusTone(decision.status)}>{memoryStatusLabel(decision.status)}</Badge> }]} /></section>
-        <Card title="Informe de cierre"><p>{body.report ? <><Badge tone={memoryStatusTone(body.report.status)}>{memoryStatusLabel(body.report.status)}</Badge> {body.report.contenido}</> : "No hay un informe de cierre disponible."}</p></Card>
+         <Card title="Informe de cierre"><p>{body.report ? <><Badge tone={memoryStatusTone(body.report.status)}>{memoryStatusLabel(body.report.status)}</Badge> {body.report.contenido}</> : "No hay un informe de cierre disponible."}</p></Card>
       </> : null}
     </PageFrame>;
   }

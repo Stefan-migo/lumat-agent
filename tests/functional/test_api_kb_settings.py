@@ -34,7 +34,7 @@ import pytest
 from sqlalchemy import select
 
 from app.db import SessionLocal  # noqa: E402
-from app.models import AuditLog, KbDocument, Settings  # noqa: E402
+from app.models import AuditLog, KbDocument, Project, Settings  # noqa: E402
 from app.services import kb as kb_service  # noqa: E402
 
 
@@ -346,6 +346,75 @@ def test_kb_upload_ingests_and_audits(client, make_user, fake_embedder):
         "version": 1,
         "visibility": "internal",
     }
+
+
+def _seed_project(owner_id: int, slug: str) -> int:
+    from app.services.kb import EMBED_DIMS
+
+    with SessionLocal() as session:
+        project = Project(
+            owner_id=owner_id,
+            slug=slug,
+            name=slug.title(),
+            purpose=f"Purpose for {slug}",
+            purpose_embedding=[0.0] * EMBED_DIMS,
+        )
+        session.add(project)
+        session.flush()
+        project_id = project.id
+        session.commit()
+        return project_id
+
+
+def test_kb_upload_without_project_id_is_global(client, make_user, fake_embedder):
+    make_user("adm", "adm-pass", role="admin")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/kb",
+        data={"title": "Global guide"},
+        files={"file": ("global.md", b"global content", "text/markdown")},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["doc"]["project_id"] is None
+
+
+def test_kb_upload_binds_to_owned_project(client, make_user, fake_embedder):
+    owner_id = make_user("adm", "adm-pass", role="admin")
+    project_id = _seed_project(owner_id, "owned")
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/kb",
+        data={"title": "Project guide", "project_id": str(project_id)},
+        files={"file": ("project.md", b"project content", "text/markdown")},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["doc"]["project_id"] == project_id
+
+
+@pytest.mark.parametrize("foreign", [False, True], ids=["unknown", "another-owner"])
+def test_kb_upload_rejects_unowned_project(client, make_user, fake_embedder, foreign):
+    make_user("adm", "adm-pass", role="admin")
+    if foreign:
+        other_owner_id = make_user("other", "other-pass", role="admin")
+        project_id = _seed_project(other_owner_id, "foreign")
+    else:
+        project_id = 999999
+    _login(client)
+
+    resp = client.post(
+        "/panel/api/kb",
+        data={"title": "Rejected guide", "project_id": str(project_id)},
+        files={"file": ("rejected.md", b"content", "text/markdown")},
+    )
+
+    assert resp.status_code == 400
+    assert "project" in resp.json()["detail"].lower()
+    with SessionLocal() as session:
+        assert session.scalar(select(KbDocument).where(KbDocument.title == "Rejected guide")) is None
 
 
 def test_kb_upload_explicit_customer_visibility(client, make_user, fake_embedder):
