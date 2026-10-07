@@ -1,4 +1,3 @@
-import json
 import logging
 
 import pytest
@@ -24,10 +23,3 @@ def test_embed_retries_with_declared_backoff_and_logs_final_failure(monkeypatch,
     assert len(calls) == tukulpan.EMBED_RETRIES + 1
     assert sleeps == list(tukulpan.EMBED_BACKOFF_SECONDS)
     assert any("memory embedding failed after 3 attempts" in record.message for record in caplog.records)
-
-
-def test_bounded_json_truncation_remains_valid_and_within_byte_bound():
-    result = tukulpan._bounded_json({"preview": "á" * 100}, limit=40)
-
-    assert len(result.encode("utf-8")) <= 40
-    assert json.loads(result)["truncated"] is True

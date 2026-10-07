@@ -24,7 +24,7 @@ from app.services import automation, cases, customers, kb, projects, relations, 
 logger = logging.getLogger(__name__)
 
 MAX_ITEMS = 20
-SDB_WRITE_ALLOWLIST = frozenset({
+APPROVED_WRITE_ALLOWLIST = frozenset({
     "automation.create_rule",
     "project.create",
     "project.rename",
@@ -700,7 +700,7 @@ def execute_tool(
     )
     if owner_scoped and owner_id is None:
         raise ToolValidationError("owner-scoped tool requires the authenticated owner")
-    if definition.write and not autonomous_write and name not in SDB_WRITE_ALLOWLIST:
+    if definition.write and not autonomous_write and name not in APPROVED_WRITE_ALLOWLIST:
         raise ToolValidationError("write-not-registered")
     if not cost_allowed:
         raise ToolValidationError("assistant cost limit blocks tool execution")
@@ -711,8 +711,6 @@ def execute_tool(
     payload = {"tool": name, "arguments": parsed.model_dump()}
     if task_binding is not None:
         payload["task_binding"] = task_binding
-    if isinstance(approval, dict) and isinstance(approval.get("sdb_payload"), dict):
-        payload["sdb"] = approval["sdb_payload"]
     project_approval = None
     if name.startswith("project.") and approval:
         project_payload = (
