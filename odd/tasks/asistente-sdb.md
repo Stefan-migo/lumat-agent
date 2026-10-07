@@ -221,6 +221,50 @@ Slice 6 = **removal only** (no new behaviour). Verified map:
 verified. This is a pre-existing gap (the old SDB branch that verified is already dead), not a
 regression introduced by Slice 6; Slice 8 wires the verifier into that path.
 
+### Slice 7 scope (2026-10-07, owner-confirmed)
+
+Slice 7 = cleanup only (no new behaviour): drop the `classification` planner contract, the
+dead registry/skills remnants, and the orphaned project cross-checks. Owner-confirmed:
+delete what no longer serves.
+
+**A — `classification` removal (atomic; `PlannerOutput` is `extra="forbid"`):**
+
+- `app/chat/assistant/state.py:33` remove `PlannerOutput.classification`.
+- `agent/prompts/assistant_plan.md:14-16,26-27` remove the `classification` slot and the
+  seven-phase instruction.
+- `agent/registry.yaml:96-98` remove `sdb_classification`.
+- `app/agent_registry.py:84,171-188` remove the `Assistant.sdb_classification` field, the
+  declaration validation, and the constructor arg.
+- `app/services/prompts.py:110,158` remove the `AssistantRuntimeConfig.sdb_classification` field
+  and its projection.
+- Tests: drop `classification` from the planner mock (`test_assistant_planner.py:121`) and the
+  `sdb_classification` fixtures/assertions in `test_agent_registry.py`.
+
+**B — registry / skills cleanup:**
+
+- `agent/registry.yaml:5` drop the `sdb` orchestrator skill; `agent/registry.yaml:68` drop the
+  unused `classify: prompts/assistant_classify.md` (not consumed at runtime — no
+  `prompts["classify"]` reader exists). Delete `agent/prompts/assistant_classify.md` and
+  `agent/skills/sdb.md`; update `agent/README.md`.
+- `app/chat/assistant/nodes.py:80` `extension_hook_metadata()` drop the `"sdb": "deferred"` key
+  (metadata-only, internal, no API consumer). Update `test_assistant_extensions.py`
+  (`SDB_TERMINOLOGY_CONSUMERS` becomes obsolete), `test_assistant_planner.py:606`,
+  `test_assistant_config.py:74`, `test_api_assistant_capabilities.py:110`,
+  `openspec/specs/agent-config/spec.md`.
+
+**C — projects cross-check (S5-07):**
+
+- `app/services/projects.py:208-215` `_has_active_run` never returns `True` (nothing writes
+  `assistant_state["sdb"]`/`["proyecto"]` since Slice 6). Delete it + the three
+  `"active SDB run"` raises in `rename`/`archive`/`merge` + the `test_projects_spec.py` block.
+- The project detail artifact browse is orphaned: `app/panel/api/routes/projects.py:42-50` lists
+  `topic_key.like("sdb:%")` and no writer of `sdb:` keys survives. Owner chose option 1: delete
+  the feature — backend query/response, `to_project_artifact_dict` (serializers), the
+  `ProjectsPage` artifact render + "artefactos SDB" copy, `ProjectDetailResponse.artifacts` /
+  `ProjectArtifact` types, and the backend + frontend tests.
+
+**Out of Slice 7 (Slice 8):** wiring the verifier into `approve_plan → execute`.
+
 ## Acceptance criteria (slice)
 
 1. No `sdb_*` phase node or edge survives; SDB runs through the normal loop.
