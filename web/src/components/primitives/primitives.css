@@ -610,6 +610,22 @@
 .client-ficha-page .detail-region { grid-template-columns: minmax(0, 1.7fr) minmax(16rem, 1fr); }
 .client-ficha-page .detail-region__rail,
 .client-ficha-page .detail-region__main { display: contents; }
+/* The cases tab keeps the active case and customer facts side by side, then spans archived history below. */
+.client-ficha-page .detail-region--cases { align-items: stretch; }
+.client-ficha-page .detail-region--cases > .client-ficha__case-card { grid-column: 1; grid-row: 1; }
+.client-ficha-page .detail-region--cases > .client-ficha__data-card { grid-column: 2; grid-row: 1; }
+.client-ficha-page .detail-region--cases > .client-ficha__archived-cases { grid-column: 1 / -1; grid-row: 2; margin-top: 0; }
+/* The active case lives in its own inset panel, separated from the card title/subtitle. */
+.client-ficha__case-panel { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); }
+/* Mobile: the archived cases become cards (`.table-cards--mobile` reveals this list at <=40rem). */
+.client-ficha__archived-card { grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: var(--space-3); }
+.client-ficha__archived-card-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); }
+.client-ficha__archived-card-head > strong { font-size: var(--text-lg); }
+.client-ficha__archived-card-badges { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.client-ficha__archived-card-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.client-ficha__archived-card-facts > div { display: grid; gap: var(--space-1); }
+.client-ficha__archived-card-facts small { color: var(--text-muted); }
+.client-ficha__archived-card-facts > div + div { padding-left: var(--space-2); border-left: 1px solid var(--border); }
 .client-ficha__summary-column { display: grid; align-content: start; gap: var(--space-4); min-width: 0; }
 .client-ficha__data-card { grid-column: 1; grid-row: 1; }
 .client-ficha__summary-column--left { grid-column: 1; grid-row: 2; }
@@ -704,6 +720,9 @@
 }
 @media (max-width: 64rem) {
   .client-ficha-page .detail-region { grid-template-columns: minmax(0, 1fr); }
+  .client-ficha-page .detail-region--cases > .client-ficha__case-card,
+  .client-ficha-page .detail-region--cases > .client-ficha__data-card,
+  .client-ficha-page .detail-region--cases > .client-ficha__archived-cases { grid-column: 1; grid-row: auto; }
   .client-ficha__summary-column--left, .client-ficha__summary-column--right { grid-column: 1; grid-row: auto; }
 }
 /* ---- ClientMemories (MEM-6) ---- */

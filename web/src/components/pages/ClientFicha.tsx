@@ -17,7 +17,6 @@ import { Textarea } from "../primitives/Textarea";
 import { Tabs } from "../primitives/Tabs";
 import "./ClientFichaDialogs.css";
 import { DataTable, type Column } from "../shared/DataTable";
-import { CaseActions } from "../shared/CaseActions";
 import { CollapsibleMessages } from "../shared/CollapsibleMessages";
 import { EmptyState } from "../shared/EmptyState";
 import { PageFrame } from "../shared/PageFrame";
@@ -60,6 +59,7 @@ export interface ClientFichaProps {
 
 type FichaState = AsyncDataState | "fatal-error";
 type Feedback = { tone: "success" | "danger"; title: string; detail?: string };
+type FichaCase = ClientFichaResponse["history"]["cases"][number];
 
 function stateMessage(state: FichaState) {
   if (state === "loading") return <StateMessage tone="info" role="status" spinner title="Cargando ficha" />;
@@ -91,12 +91,13 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 function surfaceClass(rowCount: number) {
   return rowCount > 0 ? "data-region" : undefined;
 }
+const priorityLabel = (priority: string | null) => priority ? priority.charAt(0).toUpperCase() + priority.slice(1) : "—";
 
 export function ClientFicha({ customerId, data: controlledData, memories: controlledMemories, onRetryCalendar, state: controlledState }: ClientFichaProps) {
   const [activeTab, setActiveTab] = useState("summary");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [memoriesOpen, setMemoriesOpen] = useState(false);
-  const [caseEditorOpen, setCaseEditorOpen] = useState(false);
+  const [caseEditTarget, setCaseEditTarget] = useState<FichaCase | null>(null);
   const [retryingCalendarId, setRetryingCalendarId] = useState<number | null>(null);
   const [messagesExpanded, setMessagesExpanded] = useState(false);
   const [refreshed, setRefreshed] = useState<{ ficha: ClientFichaResponse; memories: Memory[]; pendingRelations: MemoryRelation[] } | null>(null);
@@ -135,7 +136,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   const [mergeLoading, setMergeLoading] = useState(false);
   const [mergedCustomerId, setMergedCustomerId] = useState<number | null>(null);
   const fichaCustomerId = mergedCustomerId ?? customerId;
-  const [amountOpen, setAmountOpen] = useState(false);
+  const [amountTarget, setAmountTarget] = useState<FichaCase | null>(null);
   const [amountInput, setAmountInput] = useState("");
   const [amountMutation, setAmountMutation] = useState(false);
   const fetchFicha = useCallback(async () => {
@@ -242,7 +243,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
   };
   const saveCaseAmount = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (customerId === undefined || !activeCase || amountMutation) return;
+    if (customerId === undefined || !amountTarget || amountMutation) return;
     const amountText = amountInput.trim();
     const parsedAmount = amountText === "" ? null : Number(amountInput);
     if (parsedAmount !== null && (!Number.isFinite(parsedAmount) || parsedAmount < 0)) {
@@ -252,9 +253,9 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     setAmountMutation(true);
     setCaseFeedback(null);
     try {
-      await updateCaseAmount(activeCase.id, parsedAmount);
+      await updateCaseAmount(amountTarget.id, parsedAmount);
       await refresh();
-      setAmountOpen(false);
+      setAmountTarget(null);
     } catch (error) { setCaseFeedback({ tone: "danger", ...safeError(error, "caso") }); }
     finally { setAmountMutation(false); }
   };
@@ -263,15 +264,20 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     try { await postJson(`/panel/api/cases/${caseId}/update`, { status, responsible_id: responsibleId }); await refresh(); return true; }
     catch (error) { setCaseFeedback({ tone: "danger", ...safeError(error, "caso") }); return false; }
   };
-  const openCaseEditor = () => {
-    if (!activeCase) return;
-    setCaseEdit({ status: activeCase.status, responsibleId: activeCase.responsible_id === null ? "" : String(activeCase.responsible_id) });
+  const openCaseEditor = (target: FichaCase | null = activeCase) => {
+    if (!target) return;
+    setCaseEditTarget(target);
+    setCaseEdit({ status: target.status, responsibleId: target.responsible_id === null ? "" : String(target.responsible_id) });
     setCaseFeedback(null);
-    setCaseEditorOpen(true);
+  };
+  const openAmountEditor = (target: FichaCase) => {
+    setAmountInput(target.amount === null ? "" : String(target.amount));
+    setAmountTarget(target);
+    setCaseFeedback(null);
   };
   const saveCaseEdit = async () => {
-    if (!activeCase || !caseEdit.status) return;
-    if (await updateCase(activeCase.id, caseEdit.status, caseEdit.responsibleId ? Number(caseEdit.responsibleId) : null)) setCaseEditorOpen(false);
+    if (!caseEditTarget || !caseEdit.status) return;
+    if (await updateCase(caseEditTarget.id, caseEdit.status, caseEdit.responsibleId ? Number(caseEdit.responsibleId) : null)) setCaseEditTarget(null);
   };
   const acknowledgeCase = async (caseId: number) => {
     setCaseFeedback(null);
@@ -382,6 +388,14 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     { key: "amount", header: "Monto CLP", render: (row) => row.amount === null ? "Sin monto registrado" : CLP_FORMAT.format(row.amount) },
     { key: "summary", header: "Resumen", render: (row) => row.summary ?? "—" },
   ];
+  const archivedCaseColumns: Column<FichaCase>[] = [
+    { key: "id", header: "#", render: (row) => `#${row.id}` },
+    { key: "service", header: "Servicio", render: (row) => row.service },
+    { key: "priority", header: "Prioridad", render: (row) => row.priority ? <Badge tone="warning">{priorityLabel(row.priority)}</Badge> : "—" },
+    { key: "status", header: "Estado", render: (row) => <Badge tone={caseStatusTone(row.status)}>{caseStatusLabel(row.status)}</Badge> },
+    { key: "responsible", header: "Responsable", render: (row) => data.users.find((user) => user.id === row.responsible_id)?.username ?? "Sin asignar" },
+    { key: "amount", header: "Monto CLP", render: (row) => row.amount === null ? "Sin registrar" : CLP_FORMAT.format(row.amount) },
+  ];
   const messageColumns: Column<(typeof history.messages)[number]>[] = [
     { key: "conversation", header: "Conversación", render: (row) => <a className="table__link" href={pathForRoute({ view: "conversations", conversationId: row.conversation_id })}>#{row.conversation_id}</a> },
     { key: "id", header: "#", render: (row) => `#${row.id}` },
@@ -390,6 +404,110 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
     { key: "text", header: "Mensaje", render: (row) => `${row.text ?? "—"}${row.media_url ? " 📎" : ""}` },
     { key: "created", header: "Fecha", render: (row) => formatDate(row.created_at) },
   ];
+  const activeCaseBody = activeCase ? <>
+    <div className="client-ficha__case-eyebrow"><span className="client-ficha__status-dot"/> CASO ACTIVO <span>#{activeCase.id}</span><Menu trigger="icon" label="Acciones del caso" items={[{ value: "edit", label: "Editar caso", icon: BriefcaseBusiness }, { value: "amount", label: "Definir monto", icon: CircleDollarSign }]} onSelect={(value) => value === "amount" ? openAmountEditor(activeCase) : openCaseEditor(activeCase)} /></div>
+    <h2 className="client-ficha__case-title">{activeCase.service}</h2><div className="client-ficha__case-badges"><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge><Badge tone="warning">Prioridad {activeCase.priority}</Badge></div><p>{activeCase.summary ?? "—"}</p>
+    <div className="client-ficha__case-details"><div><small>Responsable</small><strong><Avatar name={data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"} /> {data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"}</strong></div><div><small>Monto del servicio</small><strong>{activeCase.amount === null ? "Sin registrar" : CLP_FORMAT.format(activeCase.amount)}</strong></div></div>
+    {activeCase.emergency ? <Badge tone={activeCase.ack_by === null ? "danger" : "warning"}>{activeCase.ack_by === null ? "Emergencia sin reconocer" : `Emergencia reconocida por ${activeCase.ack_by}`}</Badge> : null}<LocalFeedback feedback={caseEditTarget || amountTarget ? null : caseFeedback} />
+  </> : <EmptyState title="Sin caso activo" />;
+  const archivedCaseMenu = (row: FichaCase) => (
+    <Menu trigger="icon" label={`Acciones del caso #${row.id}`} items={[{ value: "edit", label: "Editar caso", icon: BriefcaseBusiness }, { value: "amount", label: "Definir monto", icon: CircleDollarSign }]} onSelect={(value) => value === "amount" ? openAmountEditor(row) : openCaseEditor(row)} />
+  );
+  const customerDataCard = (
+    <Card className="client-ficha__data-card">
+      <header className="client-ficha__card-heading"><h2>Datos del cliente</h2><div className="client-ficha__customer-controls">
+        {customer.archived_at ? <Badge tone="warning">Cliente archivado</Badge> : null}
+        <Menu
+          trigger="icon"
+          label={`Acciones para ${customer.name ?? customer.phone_e164 ?? "cliente"}`}
+          items={[
+            { value: "edit", label: "Editar", icon: Pencil, disabled: customerId === undefined || customerMutation !== null },
+            { value: "state", label: "Cambiar estado", icon: RefreshCw, disabled: customerId === undefined || customerMutation !== null },
+            { value: "consent", label: "Cambiar consentimiento", icon: ShieldCheck, disabled: customerId === undefined || customerMutation !== null },
+            { value: "merge", label: "Fusionar con otro cliente", icon: ArrowLeftRight, tone: "danger", disabled: customerId === undefined || customerMutation !== null },
+            { value: "archive", label: customer.archived_at ? "Restaurar" : "Archivar", icon: Archive, tone: "danger", disabled: customerId === undefined || customerMutation !== null },
+          ]}
+          onSelect={(value) => {
+            if (value === "edit") openProfile();
+            if (value === "state") { setSelectedState((customer.allowed_transitions ?? [])[0] ?? null); setStateFeedback(null); setStateDialogOpen(true); }
+            if (value === "consent") { setSelectedConsent(customer.consent_status); setConsentFeedback(null); setConsentDialogOpen(true); }
+            if (value === "merge") void openMerge();
+            if (value === "archive") customer.archived_at ? void saveArchive() : setArchiveOpen(true);
+          }}
+        />
+      </div></header>
+      <dl className="detail-region__facts client-ficha__contact-facts">
+        <div><dt>Teléfono</dt><dd>{customer.phone_e164 ?? "—"}<CopyButton value={customer.phone_e164 ?? ""} label="Copiar teléfono" /></dd></div>
+        <div><dt>Correo</dt><dd>{customer.email ?? "—"}<CopyButton value={customer.email ?? ""} label="Copiar correo" /></dd></div>
+        <div><dt>Dirección</dt><dd>{customer.address ?? "—"}{customer.comuna ? <><br/>{customer.comuna}</> : null}<CopyButton value={[customer.address, customer.comuna].filter(Boolean).join(", ")} label="Copiar dirección" /></dd></div>
+        <div className="client-ficha__customer-state"><dt>Estado del cliente</dt><dd><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></dd></div>
+        <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
+      </dl>
+      <div className="client-ficha__local-feedback">
+        <LocalFeedback feedback={consentDialogOpen ? null : consentFeedback} />
+        <LocalFeedback feedback={stateDialogOpen ? null : stateFeedback} />
+        {profileOpen ? null : <LocalFeedback feedback={profileFeedback} />}
+        {archiveOpen ? null : <LocalFeedback feedback={archiveFeedback} />}
+      </div>
+    </Card>
+  );
+  const customerDialogs = <>
+    <ChangeCustomerStateDialog open={stateDialogOpen} onClose={() => setStateDialogOpen(false)} customer={customer} subtitle={`Cliente desde el ${formatIdentityDate(customer.created_at)}`} selectedState={selectedState} onSelect={setSelectedState} onSave={() => void saveState()} busy={mutation !== null || customerId === undefined || selectedState === customer.state} feedback={<LocalFeedback feedback={stateFeedback} />} />
+    <Dialog open={consentDialogOpen} onClose={() => setConsentDialogOpen(false)} title="Cambiar consentimiento" icon={ShieldCheck} description="Registra la elección expresada por el cliente.">
+      <div className="client-ficha-dialog">
+        <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div><div className="client-ficha-dialog__current"><span>Consentimiento actual</span><Badge tone={customer.consent_status ? "success" : "neutral"}>{customer.consent_status ? "Sí" : "No"}</Badge></div></div>
+        <div className="client-ficha-dialog__options"><strong>Nuevo consentimiento</strong><div role="radiogroup" aria-label="Nuevo consentimiento">{[[true, "Sí", "El cliente acepta ser contactado por la tarde."], [false, "No", "El cliente prefiere no ser contactado."]].map(([value, label, detail]) => <Button key={String(value)} type="button" role="radio" aria-checked={selectedConsent === value} variant="secondary" className={selectedConsent === value ? "client-ficha-dialog__option is-selected" : "client-ficha-dialog__option"} disabled={customerMutation !== null} onClick={() => setSelectedConsent(value as boolean)}><span className="client-ficha-dialog__option-copy"><strong>{label}</strong><span>{detail}</span></span><span className="client-ficha-dialog__radio" aria-hidden="true" /></Button>)}</div></div>
+        <LocalFeedback feedback={consentFeedback} />
+        <footer><Button variant="secondary" onClick={() => setConsentDialogOpen(false)}>Cancelar</Button><Button disabled={customerMutation !== null || customerId === undefined || selectedConsent === null} onClick={() => void saveConsent()}>{customerMutation === "consent" ? "Guardando…" : "Guardar consentimiento"}</Button></footer>
+      </div>
+    </Dialog>
+    <Dialog open={profileOpen} onClose={() => setProfileOpen(false)} title="Editar datos del cliente" icon={UserRound} description="Actualiza su información de contacto.">
+      <form className="client-ficha-dialog client-ficha-dialog__profile-form" onSubmit={(event) => void saveProfile(event)}>
+        <div className="client-ficha-dialog__profile-row"><Input label="Nombre" icon={UserRound} value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /><Input label="Teléfono *" icon={Phone} value={customer.phone_e164 ?? "—"} readOnly /></div>
+        <Input label="Correo (opcional)" icon={Mail} type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
+        <Input label="Comuna (opcional)" icon={MapPin} value={profile.comuna} onChange={(event) => setProfile({ ...profile, comuna: event.target.value })} />
+        <Input label="Dirección (opcional)" icon={Home} value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} />
+        <LocalFeedback feedback={profileFeedback} />
+        <footer><Button type="button" variant="secondary" onClick={() => setProfileOpen(false)}>Cancelar</Button><Button type="submit" disabled={customerMutation !== null}>{customerMutation === "profile" ? "Guardando…" : "Guardar cambios"}</Button></footer>
+      </form>
+    </Dialog>
+    <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} title="Archivar cliente" icon={Archive} description="El cliente dejará de aparecer en la lista habitual.">
+      <div className="client-ficha-dialog">
+        <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div></div>
+        <section className="client-ficha-dialog__archive-info" aria-label="Información del cliente"><strong>Información del cliente</strong><div className="client-ficha-dialog__archive-stats"><div><FileText /><strong>{openCaseCount}</strong><span>{openCaseCount === 1 ? "caso abierto" : "casos abiertos"}</span></div><div><CalendarDays /><strong>{futureAppointmentCount}</strong><span>{futureAppointmentCount === 1 ? "visita futura" : "visitas futuras"}</span></div></div></section>
+        <p className="client-ficha-dialog__warning"><CircleAlert aria-hidden="true" />Estos trabajos seguirán registrados.</p>
+        <LocalFeedback feedback={archiveFeedback} />
+        <footer><Button variant="secondary" onClick={() => setArchiveOpen(false)}>Cancelar</Button><Button variant="danger" disabled={customerMutation !== null} onClick={() => void saveArchive()}>{customerMutation === "archive" ? "Guardando…" : "Archivar cliente"}</Button></footer>
+      </div>
+    </Dialog>
+    <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)} title="Fusionar clientes" icon={ArrowLeftRight} description="Revisa las fichas antes de confirmar.">
+      <div className="client-ficha-dialog client-ficha-dialog__merge">
+        <div className="client-ficha-dialog__merge-current"><strong>Cliente actual</strong><div><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><span><b>{customer.name ?? customer.phone_e164 ?? "Cliente"}</b><small>Cliente desde el {formatIdentityDate(customer.created_at)}</small></span><span className="client-ficha-dialog__merge-phone"><Phone />{customer.phone_e164 ?? "—"}</span></div></div>
+        <Select id="merge-other-client" label="Otro cliente" value={mergeOtherId} options={[{ value: "", label: "Buscar por nombre o teléfono…" }, ...mergeClients.map((client) => ({ value: String(client.id), label: `${client.name ?? "Sin nombre"} · ${client.phone_e164 ?? "Sin teléfono"}` }))]} onChange={(event) => void selectMergeClient(event.target.value)} />
+        <div className="client-ficha-dialog__merge-cards"><section>{mergePreview ? <strong>{mergePreview.survivor_id === fichaCustomerId ? "Se conserva" : "Se fusiona"}</strong> : <strong>Ficha actual</strong>}<div><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><span><b>{customer.name ?? customer.phone_e164 ?? "Cliente"}</b><small>{customer.phone_e164 ?? "—"}</small></span></div></section><section>{mergePreview ? <strong>{mergePreview.survivor_id === Number(mergeOtherId) ? "Se conserva" : "Se fusiona"}</strong> : <strong>Otra ficha</strong>}<div><Avatar name={mergeClients.find((client) => String(client.id) === mergeOtherId)?.name ?? "Sin seleccionar"} /><span><b>{mergeClients.find((client) => String(client.id) === mergeOtherId)?.name ?? "Sin seleccionar"}</b><small>{mergeClients.find((client) => String(client.id) === mergeOtherId)?.phone_e164 ?? "—"}</small></span></div></section></div>
+        <p className="client-ficha-dialog__warning"><CircleAlert aria-hidden="true" />Comprueba que ambas fichas correspondan a la misma persona.</p>
+        {mergePreview ? <p className="client-ficha-dialog__merge-preview">Vista previa: se moverán {Object.entries(mergePreview.moved).map(([table, count]) => `${MERGE_COUNT_LABELS[table as keyof ClientMergePreview["moved"]]}: ${count}`).join(" · ")}; {mergePreview.memory_conflicts} conflictos de memoria{mergePreview.scalar_conflicts.length ? `; se conservan los datos del cliente superviviente en ${mergePreview.scalar_conflicts.join(", ")}` : ""}.</p> : null}
+        <LocalFeedback feedback={mergeFeedback} />
+        <footer><Button variant="secondary" onClick={() => setMergeOpen(false)}>Cancelar</Button><Button variant="danger" disabled={!mergePreview || mergeLoading} onClick={() => void confirmMerge()}>{mergeLoading ? "Fusionando…" : "Confirmar fusión"}</Button></footer>
+      </div>
+    </Dialog>
+    <Dialog open={caseEditTarget !== null} onClose={() => setCaseEditTarget(null)} title="Editar caso" icon={BriefcaseBusiness} description="Actualiza el estado y el responsable.">
+      {caseEditTarget ? <div className="client-ficha-dialog client-ficha-dialog__case-edit">
+        <div className="client-ficha-dialog__case-context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>#{caseEditTarget.id} · {caseEditTarget.service}</span></div></div>
+        <Select label="Estado" value={caseEdit.status} onChange={(event) => setCaseEdit({ ...caseEdit, status: event.target.value })} options={[{value:"abierto",label:"Abierto"},{value:"en_evaluacion",label:"En evaluación"},{value:"escalado",label:"Escalado"},{value:"cerrado",label:"Cerrado"}]}/>
+        <Select label="Responsable" value={caseEdit.responsibleId} onChange={(event) => setCaseEdit({ ...caseEdit, responsibleId: event.target.value })} options={[{value:"",label:"Sin asignar"},...data.users.map((user) => ({value:String(user.id),label:user.username}))]}/>
+        <LocalFeedback feedback={caseFeedback}/><footer><Button variant="secondary" onClick={() => setCaseEditTarget(null)}>Cancelar</Button>{caseEditTarget.emergency && caseEditTarget.ack_by === null ? <Button variant="secondary" onClick={() => void acknowledgeCase(caseEditTarget.id)}>Reconocer</Button> : null}<Button onClick={() => void saveCaseEdit()}>Guardar cambios</Button></footer>
+      </div> : null}
+    </Dialog>
+    <Dialog open={amountTarget !== null} onClose={() => setAmountTarget(null)} title="Definir monto del caso" icon={CircleDollarSign} description="Registra el monto del servicio asociado al caso.">
+      <form className="client-ficha-dialog client-ficha-dialog__amount-form" onSubmit={(event) => void saveCaseAmount(event)}>
+        {amountTarget ? <div className="client-ficha-dialog__case-context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>#{amountTarget.id} · {amountTarget.service}</span></div><div className="client-ficha-dialog__current"><span>Monto actual:</span><strong>{amountTarget.amount === null ? "Sin registrar" : CLP_FORMAT.format(amountTarget.amount)}</strong></div></div> : null}
+        <div className="client-ficha-dialog__amount-field"><label htmlFor="case-amount">Monto del servicio</label><div className="client-ficha-dialog__amount"><span aria-hidden="true">$</span><input id="case-amount" type="number" min="0" step="1" value={amountInput} placeholder="0" onChange={(event) => setAmountInput(event.target.value)} /><span aria-hidden="true">CLP</span></div><p className="client-ficha-dialog__helper">Ingresa el monto en pesos chilenos.</p></div>
+        <LocalFeedback feedback={caseFeedback} />
+        <footer><Button type="button" variant="secondary" onClick={() => setAmountTarget(null)}>Cancelar</Button><Button type="submit" disabled={amountMutation}>{amountMutation ? "Guardando…" : "Guardar monto"}</Button></footer>
+      </form>
+    </Dialog>
+  </>;
 
   return (
     <PageFrame title="" className="client-ficha-page" state={stateMessage(state)}>
@@ -411,81 +529,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
       {activeTab === "summary" ? <>
       <div className="detail-region">
         <section className="detail-region__rail" aria-label="Resumen del cliente">
-          <Card className="client-ficha__data-card">
-            <header className="client-ficha__card-heading"><h2>Datos del cliente</h2><div className="client-ficha__customer-controls">
-              {customer.archived_at ? <Badge tone="warning">Cliente archivado</Badge> : null}
-              <Menu
-                trigger="icon"
-                label={`Acciones para ${customer.name ?? customer.phone_e164 ?? "cliente"}`}
-                items={[
-                  { value: "edit", label: "Editar", icon: Pencil, disabled: customerId === undefined || customerMutation !== null },
-                  { value: "state", label: "Cambiar estado", icon: RefreshCw, disabled: customerId === undefined || customerMutation !== null },
-                  { value: "consent", label: "Cambiar consentimiento", icon: ShieldCheck, disabled: customerId === undefined || customerMutation !== null },
-                  { value: "merge", label: "Fusionar con otro cliente", icon: ArrowLeftRight, tone: "danger", disabled: customerId === undefined || customerMutation !== null },
-                  { value: "archive", label: customer.archived_at ? "Restaurar" : "Archivar", icon: Archive, tone: "danger", disabled: customerId === undefined || customerMutation !== null },
-                ]}
-                onSelect={(value) => {
-                  if (value === "edit") openProfile();
-                  if (value === "state") { setSelectedState((customer.allowed_transitions ?? [])[0] ?? null); setStateFeedback(null); setStateDialogOpen(true); }
-                  if (value === "consent") { setSelectedConsent(customer.consent_status); setConsentFeedback(null); setConsentDialogOpen(true); }
-                  if (value === "merge") void openMerge();
-                  if (value === "archive") customer.archived_at ? void saveArchive() : setArchiveOpen(true);
-                }}
-              />
-            </div></header>
-            <dl className="detail-region__facts client-ficha__contact-facts">
-              <div><dt>Teléfono</dt><dd>{customer.phone_e164 ?? "—"}<CopyButton value={customer.phone_e164 ?? ""} label="Copiar teléfono" /></dd></div>
-              <div><dt>Correo</dt><dd>{customer.email ?? "—"}<CopyButton value={customer.email ?? ""} label="Copiar correo" /></dd></div>
-              <div><dt>Dirección</dt><dd>{customer.address ?? "—"}{customer.comuna ? <><br/>{customer.comuna}</> : null}<CopyButton value={[customer.address, customer.comuna].filter(Boolean).join(", ")} label="Copiar dirección" /></dd></div>
-              <div className="client-ficha__customer-state"><dt>Estado del cliente</dt><dd><Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge></dd></div>
-              <div><dt>Consentimiento</dt><dd>{customer.consent_status ? "Sí" : "No"}</dd></div>
-            </dl>
-            <div className="client-ficha__local-feedback">
-              <LocalFeedback feedback={consentDialogOpen ? null : consentFeedback} />
-              <LocalFeedback feedback={stateDialogOpen ? null : stateFeedback} />
-              {profileOpen ? null : <LocalFeedback feedback={profileFeedback} />}
-              {archiveOpen ? null : <LocalFeedback feedback={archiveFeedback} />}
-            </div>
-          </Card>
-          <ChangeCustomerStateDialog open={stateDialogOpen} onClose={() => setStateDialogOpen(false)} customer={customer} subtitle={`Cliente desde el ${formatIdentityDate(customer.created_at)}`} selectedState={selectedState} onSelect={setSelectedState} onSave={() => void saveState()} busy={mutation !== null || customerId === undefined || selectedState === customer.state} feedback={<LocalFeedback feedback={stateFeedback} />} />
-          <Dialog open={consentDialogOpen} onClose={() => setConsentDialogOpen(false)} title="Cambiar consentimiento" icon={ShieldCheck} description="Registra la elección expresada por el cliente.">
-            <div className="client-ficha-dialog">
-              <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div><div className="client-ficha-dialog__current"><span>Consentimiento actual</span><Badge tone={customer.consent_status ? "success" : "neutral"}>{customer.consent_status ? "Sí" : "No"}</Badge></div></div>
-              <div className="client-ficha-dialog__options"><strong>Nuevo consentimiento</strong><div role="radiogroup" aria-label="Nuevo consentimiento">{[[true, "Sí", "El cliente acepta ser contactado por la tarde."], [false, "No", "El cliente prefiere no ser contactado."]].map(([value, label, detail]) => <Button key={String(value)} type="button" role="radio" aria-checked={selectedConsent === value} variant="secondary" className={selectedConsent === value ? "client-ficha-dialog__option is-selected" : "client-ficha-dialog__option"} disabled={customerMutation !== null} onClick={() => setSelectedConsent(value as boolean)}><span className="client-ficha-dialog__option-copy"><strong>{label}</strong><span>{detail}</span></span><span className="client-ficha-dialog__radio" aria-hidden="true" /></Button>)}</div></div>
-              <LocalFeedback feedback={consentFeedback} />
-              <footer><Button variant="secondary" onClick={() => setConsentDialogOpen(false)}>Cancelar</Button><Button disabled={customerMutation !== null || customerId === undefined || selectedConsent === null} onClick={() => void saveConsent()}>{customerMutation === "consent" ? "Guardando…" : "Guardar consentimiento"}</Button></footer>
-            </div>
-          </Dialog>
-          <Dialog open={profileOpen} onClose={() => setProfileOpen(false)} title="Editar datos del cliente" icon={UserRound} description="Actualiza su información de contacto.">
-            <form className="client-ficha-dialog client-ficha-dialog__profile-form" onSubmit={(event) => void saveProfile(event)}>
-              <div className="client-ficha-dialog__profile-row"><Input label="Nombre" icon={UserRound} value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /><Input label="Teléfono *" icon={Phone} value={customer.phone_e164 ?? "—"} readOnly /></div>
-              <Input label="Correo (opcional)" icon={Mail} type="email" value={profile.email} onChange={(event) => setProfile({ ...profile, email: event.target.value })} />
-              <Input label="Comuna (opcional)" icon={MapPin} value={profile.comuna} onChange={(event) => setProfile({ ...profile, comuna: event.target.value })} />
-              <Input label="Dirección (opcional)" icon={Home} value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} />
-              <LocalFeedback feedback={profileFeedback} />
-              <footer><Button type="button" variant="secondary" onClick={() => setProfileOpen(false)}>Cancelar</Button><Button type="submit" disabled={customerMutation !== null}>{customerMutation === "profile" ? "Guardando…" : "Guardar cambios"}</Button></footer>
-            </form>
-          </Dialog>
-          <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} title="Archivar cliente" icon={Archive} description="El cliente dejará de aparecer en la lista habitual.">
-            <div className="client-ficha-dialog">
-              <div className="client-ficha-dialog__context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>Cliente desde el {formatIdentityDate(customer.created_at)}</span></div></div>
-              <section className="client-ficha-dialog__archive-info" aria-label="Información del cliente"><strong>Información del cliente</strong><div className="client-ficha-dialog__archive-stats"><div><FileText /><strong>{openCaseCount}</strong><span>{openCaseCount === 1 ? "caso abierto" : "casos abiertos"}</span></div><div><CalendarDays /><strong>{futureAppointmentCount}</strong><span>{futureAppointmentCount === 1 ? "visita futura" : "visitas futuras"}</span></div></div></section>
-              <p className="client-ficha-dialog__warning"><CircleAlert aria-hidden="true" />Estos trabajos seguirán registrados.</p>
-              <LocalFeedback feedback={archiveFeedback} />
-              <footer><Button variant="secondary" onClick={() => setArchiveOpen(false)}>Cancelar</Button><Button variant="danger" disabled={customerMutation !== null} onClick={() => void saveArchive()}>{customerMutation === "archive" ? "Guardando…" : "Archivar cliente"}</Button></footer>
-            </div>
-          </Dialog>
-          <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)} title="Fusionar clientes" icon={ArrowLeftRight} description="Revisa las fichas antes de confirmar.">
-            <div className="client-ficha-dialog client-ficha-dialog__merge">
-              <div className="client-ficha-dialog__merge-current"><strong>Cliente actual</strong><div><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><span><b>{customer.name ?? customer.phone_e164 ?? "Cliente"}</b><small>Cliente desde el {formatIdentityDate(customer.created_at)}</small></span><span className="client-ficha-dialog__merge-phone"><Phone />{customer.phone_e164 ?? "—"}</span></div></div>
-              <Select id="merge-other-client" label="Otro cliente" value={mergeOtherId} options={[{ value: "", label: "Buscar por nombre o teléfono…" }, ...mergeClients.map((client) => ({ value: String(client.id), label: `${client.name ?? "Sin nombre"} · ${client.phone_e164 ?? "Sin teléfono"}` }))]} onChange={(event) => void selectMergeClient(event.target.value)} />
-              <div className="client-ficha-dialog__merge-cards"><section>{mergePreview ? <strong>{mergePreview.survivor_id === fichaCustomerId ? "Se conserva" : "Se fusiona"}</strong> : <strong>Ficha actual</strong>}<div><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"} /><span><b>{customer.name ?? customer.phone_e164 ?? "Cliente"}</b><small>{customer.phone_e164 ?? "—"}</small></span></div></section><section>{mergePreview ? <strong>{mergePreview.survivor_id === Number(mergeOtherId) ? "Se conserva" : "Se fusiona"}</strong> : <strong>Otra ficha</strong>}<div><Avatar name={mergeClients.find((client) => String(client.id) === mergeOtherId)?.name ?? "Sin seleccionar"} /><span><b>{mergeClients.find((client) => String(client.id) === mergeOtherId)?.name ?? "Sin seleccionar"}</b><small>{mergeClients.find((client) => String(client.id) === mergeOtherId)?.phone_e164 ?? "—"}</small></span></div></section></div>
-              <p className="client-ficha-dialog__warning"><CircleAlert aria-hidden="true" />Comprueba que ambas fichas correspondan a la misma persona.</p>
-              {mergePreview ? <p className="client-ficha-dialog__merge-preview">Vista previa: se moverán {Object.entries(mergePreview.moved).map(([table, count]) => `${MERGE_COUNT_LABELS[table as keyof ClientMergePreview["moved"]]}: ${count}`).join(" · ")}; {mergePreview.memory_conflicts} conflictos de memoria{mergePreview.scalar_conflicts.length ? `; se conservan los datos del cliente superviviente en ${mergePreview.scalar_conflicts.join(", ")}` : ""}.</p> : null}
-              <LocalFeedback feedback={mergeFeedback} />
-              <footer><Button variant="secondary" onClick={() => setMergeOpen(false)}>Cancelar</Button><Button variant="danger" disabled={!mergePreview || mergeLoading} onClick={() => void confirmMerge()}>{mergeLoading ? "Fusionando…" : "Confirmar fusión"}</Button></footer>
-            </div>
-          </Dialog>
+          {customerDataCard}
         </section>
 
         <div className="detail-region__main">
@@ -525,32 +569,8 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
           </div>
           <div className="client-ficha__summary-column client-ficha__summary-column--right">
           <Card className="client-ficha__case-card">
-            {activeCase ? <>
-                <div className="client-ficha__case-eyebrow"><span className="client-ficha__status-dot"/> CASO ACTIVO <span>#{activeCase.id}</span><Menu trigger="icon" label="Acciones del caso" items={[{ value: "edit", label: "Editar caso", icon: BriefcaseBusiness }, { value: "amount", label: "Definir monto", icon: CircleDollarSign }]} onSelect={(value) => value === "amount" ? (setAmountInput(activeCase.amount === null ? "" : String(activeCase.amount)), setAmountOpen(true)) : openCaseEditor()} /></div>
-              <h2 className="client-ficha__case-title">{activeCase.service}</h2>
-              <div className="client-ficha__case-badges"><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge><Badge tone="warning">Prioridad {activeCase.priority}</Badge></div>
-              <p>{activeCase.summary ?? "—"}</p>
-                <div className="client-ficha__case-details"><div><small>Responsable</small><strong><Avatar name={data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"} /> {data.users.find((user) => user.id === activeCase.responsible_id)?.username ?? "Sin asignar"}</strong></div><div><small>Monto del servicio</small><strong>{activeCase.amount === null ? "Sin registrar" : CLP_FORMAT.format(activeCase.amount)}</strong></div></div>
-              {activeCase.emergency ? <Badge tone={activeCase.ack_by === null ? "danger" : "warning"}>{activeCase.ack_by === null ? "Emergencia sin reconocer" : `Emergencia reconocida por ${activeCase.ack_by}`}</Badge> : null}
-               <LocalFeedback feedback={caseEditorOpen || amountOpen ? null : caseFeedback} />
-            </> : <EmptyState title="Sin caso activo" />}
+            {activeCaseBody}
           </Card>
-          <Dialog open={caseEditorOpen && activeCase !== null} onClose={() => setCaseEditorOpen(false)} title="Editar caso" icon={BriefcaseBusiness} description="Actualiza el estado y el responsable.">
-             {activeCase ? <div className="client-ficha-dialog client-ficha-dialog__case-edit">
-              <div className="client-ficha-dialog__case-context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>#{activeCase.id} · {activeCase.service}</span></div></div>
-              <Select label="Estado" value={caseEdit.status} onChange={(event) => setCaseEdit({ ...caseEdit, status: event.target.value })} options={[{value:"abierto",label:"Abierto"},{value:"en_evaluacion",label:"En evaluación"},{value:"escalado",label:"Escalado"},{value:"cerrado",label:"Cerrado"}]}/>
-              <Select label="Responsable" value={caseEdit.responsibleId} onChange={(event) => setCaseEdit({ ...caseEdit, responsibleId: event.target.value })} options={[{value:"",label:"Sin asignar"},...data.users.map((user) => ({value:String(user.id),label:user.username}))]}/>
-              <LocalFeedback feedback={caseFeedback}/><footer><Button variant="secondary" onClick={() => setCaseEditorOpen(false)}>Cancelar</Button>{activeCase.emergency && activeCase.ack_by === null ? <Button variant="secondary" onClick={() => void acknowledgeCase(activeCase.id)}>Reconocer</Button> : null}<Button onClick={() => void saveCaseEdit()}>Guardar cambios</Button></footer>
-            </div> : null}
-          </Dialog>
-          <Dialog open={amountOpen} onClose={() => setAmountOpen(false)} title="Definir monto del caso" icon={CircleDollarSign} description="Registra el monto del servicio asociado al caso.">
-             <form className="client-ficha-dialog client-ficha-dialog__amount-form" onSubmit={(event) => void saveCaseAmount(event)}>
-              {activeCase ? <div className="client-ficha-dialog__case-context"><Avatar name={customer.name ?? customer.phone_e164 ?? "Cliente"}/><div><strong>{customer.name ?? customer.phone_e164 ?? "Cliente"}</strong><span>#{activeCase.id} · {activeCase.service}</span></div><div className="client-ficha-dialog__current"><span>Monto actual:</span><strong>{activeCase.amount === null ? "Sin registrar" : CLP_FORMAT.format(activeCase.amount)}</strong></div></div> : null}
-               <div className="client-ficha-dialog__amount-field"><label htmlFor="case-amount">Monto del servicio</label><div className="client-ficha-dialog__amount"><span aria-hidden="true">$</span><input id="case-amount" type="number" min="0" step="1" value={amountInput} placeholder="0" onChange={(event) => setAmountInput(event.target.value)} /><span aria-hidden="true">CLP</span></div><p className="client-ficha-dialog__helper">Ingresa el monto en pesos chilenos.</p></div>
-              <LocalFeedback feedback={caseFeedback} />
-              <footer><Button type="button" variant="secondary" onClick={() => setAmountOpen(false)}>Cancelar</Button><Button type="submit" disabled={amountMutation}>{amountMutation ? "Guardando…" : "Guardar monto"}</Button></footer>
-            </form>
-          </Dialog>
           <section aria-label="Equipos" className="client-ficha__equipment-slot">
              <Card className="client-ficha__equipment-card">
                <header className="client-ficha__card-heading"><h2>Equipos</h2><Button variant="secondary" disabled={customerId === undefined || equipmentMutation} onClick={() => openEquipment()}>＋ Agregar equipo</Button></header>
@@ -584,9 +604,23 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
         </div>
       </div>
       </> : null}
-       {activeTab === "cases" ? <div className="detail-region">
-         <section className="detail-region__main"><Card title="Casos del cliente" description="Caso activo e historial de atención.">{activeCase ? <div className="client-ficha__case-inline"><span className="client-ficha__status-dot"/> CASO ACTIVO <strong>{activeCase.service}</strong><Badge tone={caseStatusTone(activeCase.status)}>{caseStatusLabel(activeCase.status)}</Badge><Badge tone="warning">Prioridad {activeCase.priority}</Badge><p>{activeCase.summary}</p><Button variant="secondary" onClick={() => setCaseEditorOpen((open) => !open)}>Editar caso</Button>{caseEditorOpen ? <CaseActions target={activeCase} users={data.users} onUpdate={async (...args) => { await updateCase(...args); }} onAcknowledge={acknowledgeCase}/> : null}</div> : <EmptyState title="Sin caso activo"/>}</Card><section aria-label="Casos anteriores" className="client-ficha__history-block"><Card title="Casos anteriores"><div className={surfaceClass(archivedCases.length)}><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></div><p>Mostrando {archivedCases.length} {archivedCases.length === 1 ? "caso anterior" : "casos anteriores"}</p></Card></section></section>
-      </div> : null}
+        {activeTab === "cases" ? <div className="detail-region detail-region--cases">
+          <Card className="client-ficha__case-card client-ficha__case-card--primary" title="Casos del cliente" description="Caso activo e historial de atención."><div className="client-ficha__case-panel">{activeCaseBody}</div></Card>
+          {customerDataCard}
+          <section aria-label="Casos anteriores" className="client-ficha__history-block client-ficha__archived-cases"><Card title="Casos anteriores">
+            {archivedCases.length ? <>
+              <div className="data-region table-card__desktop"><DataTable columns={archivedCaseColumns} rows={archivedCases} actions={archivedCaseMenu} rowKey={(row) => String(row.id)} /></div>
+              <ul className="table-cards table-cards--mobile client-ficha__archived-cards" aria-label="Lista de casos anteriores">
+                {archivedCases.map((row) => <li className="table-card__item client-ficha__archived-card" key={row.id}>
+                  <div className="client-ficha__archived-card-head"><strong>#{row.id}</strong><span>{row.service}</span>{archivedCaseMenu(row)}</div>
+                  <div className="client-ficha__archived-card-badges">{row.priority ? <Badge tone="warning">{priorityLabel(row.priority)}</Badge> : null}<Badge tone={caseStatusTone(row.status)}>{caseStatusLabel(row.status)}</Badge></div>
+                  <div className="client-ficha__archived-card-facts"><div><small>Responsable</small><strong>{data.users.find((user) => user.id === row.responsible_id)?.username ?? "Sin asignar"}</strong></div><div><small>Monto CLP</small><strong>{row.amount === null ? "Sin registrar" : CLP_FORMAT.format(row.amount)}</strong></div></div>
+                </li>)}
+              </ul>
+            </> : <EmptyState title="No hay casos anteriores" />}
+            <p>Mostrando {archivedCases.length} {archivedCases.length === 1 ? "caso anterior" : "casos anteriores"}</p>
+          </Card></section>
+        </div> : null}
       {activeTab === "visits" ? <div className="detail-region__main">
         <section aria-label="Próximas visitas" className="client-ficha__history-block"><h2>Visitas</h2><Card title="Próximas visitas" description="Visitas pendientes de este cliente.">{upcomingAppointments.length ? <div className="data-region"><DataTable columns={[{key:"date",header:"Fecha y hora",render:(row: Appointment)=><><strong>{formatDate(row.starts_at)}</strong><br/><Clock3/> {new Intl.DateTimeFormat("es-CL",{hour:"2-digit",minute:"2-digit"}).format(new Date(row.starts_at))}</>},{key:"service",header:"Servicio",render:(row: Appointment)=><a href={pathForRoute({view:"agenda",appointmentId:row.id})}>{row.service}</a>},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>},{key:"actions",header:"Acciones",render:(row: Appointment)=><Button variant="secondary" onClick={()=>{window.location.href=pathForRoute({view:"agenda",appointmentId:row.id})}}>Reprogramar</Button>}] as Column<Appointment>[]} rows={upcomingAppointments} rowKey={(row)=>String(row.id)}/></div>:<EmptyState title="No hay próximas visitas"/>}</Card><Card title="Historial de visitas"><DataTable columns={[{key:"date",header:"Fecha y hora",render:(row: Appointment)=><>{formatDate(row.starts_at)}<br/><Clock3/> {formatDateTime(row.starts_at)}</>},{key:"service",header:"Servicio",render:(row: Appointment)=><a href={pathForRoute({view:"agenda",appointmentId:row.id})}>{row.service}</a>},{key:"status",header:"Estado",render:(row: Appointment)=><Badge tone={appointmentStatusTone(row.status)}>{appointmentStatusLabel(row.status)}</Badge>}] as Column<Appointment>[]} rows={appointments.filter(row=>!upcomingAppointments.includes(row))} rowKey={(row)=>String(row.id)} /></Card>{appointments.some((appointment)=>appointment.calendar_error) ? appointments.filter((appointment)=>appointment.calendar_error).map((appointment)=><div key={appointment.id}><StateMessage tone="danger" role="alert" title="No se pudo sincronizar el calendario" detail={`${appointment.calendar_error} Reintenta la sincronización.`}/><Button variant="secondary" disabled={retryingCalendarId===appointment.id} onClick={()=>void retryCalendar(appointment.id)}>Reintentar calendario</Button></div>):null}</section>
       </div> : null}
@@ -596,6 +630,7 @@ export function ClientFicha({ customerId, data: controlledData, memories: contro
       </div> : null}
         </>}
       </Tabs>
+      {customerDialogs}
       <Dialog open={historyOpen} onClose={() => setHistoryOpen(false)} title="Historial del cliente" icon={Clock3} description="Visitas, conversaciones y casos anteriores" size="wide">
         <div className="client-ficha__history-dialog">
           <Card title="Casos anteriores"><div className="client-ficha__history-table"><DataTable columns={caseColumns} rows={archivedCases} rowKey={(row) => String(row.id)} /></div></Card>

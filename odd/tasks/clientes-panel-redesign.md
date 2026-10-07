@@ -115,7 +115,7 @@ Owner verdict: CL-3's first pass is structurally right (title/subtitle/actions/t
   - [x] Próximas visitas: title + "Ver agenda →"; rows with date tile (28 SEP), service, clock + time, status badge.
   - [x] Equipos: title + **＋ Agregar equipo**; illustrated empty state + centered "Agregar equipo" button.
   - [x] Historial del cliente: compact row card (clock icon + title + subtitle + chevron).
-- [x] Rebuild the **Casos / Visitas / Conversaciones** tab bodies to the desktop references and mobile/tablet variants (`ed641d05`).
+- [ ] Rebuild the **Casos / Visitas / Conversaciones** tab bodies to the desktop references and mobile/tablet variants. The `ed641d05` structural pass exists but is not reference-faithful; the owner deferred the fidelity pass to the per-tab units CL-5/CL-6/CL-7.
 - [x] Owner decision (2026-10-06): the "Historial del cliente" card opens a **combined history panel/dialog** (casos anteriores + visitas + conversaciones), not a tab jump. Mensajes stays in the Conversaciones tab (`68dff135`).
 
 ### CL-3-r2 — Resumen tab layout + reference fidelity (owner visual review 2026-10-06 #2)
@@ -151,6 +151,18 @@ Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`descripti
 - [x] Cards **Memoria / Notas / Próximas visitas**: stack in an independent left-column flow with a consistent gap; remove explicit grid-row placement (`c68faabc`).
 - [x] Cards **Equipos / Historial del cliente**: plain-text header action, unboxed empty state, and compact aligned history row (`c68faabc`).
 - Mobile/tablet layout: summary columns collapse to one column at `max-width: 64rem`; confirmed in the authored responsive CSS. Browser screenshot verification was not available in this run.
+
+### CL-5 — Casos tab (owner visual review 2026-10-06 #4)
+Owner direction: reuse the existing Resumen cards; only `Casos anteriores` is a new design. Option A: the archived-row `⋮` edits / defines the amount of that row's case.
+Reference: `ClientFichaTabCases.png` (desktop) + `LUMAT client cases on mobile and tablet-3.png`.
+
+- [x] Tab layout: `Casos del cliente` as the wide primary card (left, reusing the active-case card with a header/description), `Datos del cliente` as the narrow secondary card (right) (`f7c0993a`).
+- [x] `Casos anteriores` full-width table redesign: `Caso | Servicio | Prioridad | Estado | Responsable | Monto CLP | Acciones` badges + "Mostrando N caso(s) anterior(es)" footer (`f7c0993a`).
+- [x] Generalize the case edit / amount dialogs to target any case; archived-row `⋮` → `Editar caso` / `Definir monto` on that row (`f7c0993a`).
+- [x] Hoist the shared ficha dialogs to the component root and extract the reused card markup (no Resumen visual change) (`f7c0993a`).
+- [x] Mobile: the archived cases switch from the table to cards at `max-width: 40rem` (`table-card__desktop` + `table-cards--mobile`, mirroring ClientesList); the active case sits in an inset panel (`client-ficha__case-panel`) and the case/data cards share a row height (`detail-region--cases { align-items: stretch }`) (`8e425d9a`, `54aa6321`). Tablet (40–64rem) still renders the table pending owner review.
+- [ ] RDD review (re-assess) after the tab pass.
+- Per-slice verification: `npx tsc -b --noEmit` green; `ClientFicha.test.tsx` 44/44, `ClientFicha.stories.test.tsx` + `closure.test.tsx` 14/14. Full suite/build deferred to the design checkpoint.
 
 ## Acceptance criteria
 
@@ -189,6 +201,7 @@ Reference pattern (clientes-020 already notes `Dialog` exposes `icon`/`descripti
 - CL-3-r3 query `ClientFicha dialogs estado consentimiento editar datos`: `ClientFicha()`, `ClientFicha.tsx`, `ClientFicha.test.tsx`, `ClientesList.tsx`, `Dialog()`, `Button.tsx`, `api.ts`, `updateCustomerConsent()`, `updateCustomerProfile()`, `changeClientState()`, and `Customer`. Path `ClientFicha.tsx` → `ClientesList.tsx` has no directed path. `ClientFicha.tsx` uses customer `allowed_transitions`; the ficha serializer (`to_customer_dict`) provides this same field as the list endpoint. Radio-role attributes were previously dropped by `Button`, preventing the CSS `radiogroup` selectors from styling either dialog's controls.
 - CL-3-r3 card-menu query `ClientFicha Datos del cliente Caso activo menu`: `ClientFicha()`, `Menu()`, `ClientFicha.tsx`, `Menu.tsx`, `ClientesList.tsx`, `ClientFicha.test.tsx`, `ClientesList.test.tsx`, and `clientes-panel-redesign Task`; path `ClientFicha()` → `Menu()` has no directed path. The graph already exposes optional Lucide icons per `MenuItem`; no primitive change was required. `GRAPH_REPORT.md`'s header still lags the current graph as expected.
 - CL-3-r3 spacing query `ClientFicha Resumen memoria notas visitas equipos historial spacing`: `ClientFicha()`, `ClientFicha.tsx`, `ClientFicha.test.tsx`, `ClientFicha.stories.tsx`, `ClientFicha.stories.test.tsx`, `primitives.css`, `spacing`, `ClientFicha` (ODD task/document), and `Clientes Pilot Dense Surface`. `GRAPH_REPORT.md` god/community hubs consulted: `ClientFicha.tsx`, `stories/pages/ClientFicha.stories.tsx`, and the `Clientes Pilot Dense Surface` hyperedge linking `ClientFicha`, `DataTable`, `.data-region`, and `primitives.css`. Path query `ClientFicha()` ↔ `ClientMemories()` found `ClientFicha.tsx --imports--> ClientMemories()`; path to `primitives.css` had no directed path.
+- CL-5 query `ClientFicha Casos anteriores archived cases tab client case card`: `ClientFicha()` (`web/src/components/pages/ClientFicha.tsx`, community `ClientFicha.tsx`), `Card()` (`primitives/Card.tsx`), `Tabs.tsx`, `DataTable` (`shared/DataTable.tsx`), `Menu` (`primitives/Menu.tsx`), `ClientFicha.test.tsx`, `stories/pages/ClientFicha.stories.tsx`, `ClientMemories.tsx`, `apiFetch()`/`postJson()` (`api.ts`). The `ClientFicha.tsx` community is the hub for this unit; `Card`, `Menu` and `DataTable` are reused as-is (no primitive change).
 
 ## Evidence
 
