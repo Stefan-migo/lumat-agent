@@ -599,6 +599,57 @@
   gap: var(--space-2);
   justify-items: start;
 }
+.client-ficha__identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+.client-ficha-page > .page-frame__titlebar { display: none; }
+.client-ficha-page .detail-region { grid-template-columns: minmax(0, 1.7fr) minmax(16rem, 1fr); }
+.client-ficha-page .detail-region__rail,
+.client-ficha-page .detail-region__main { display: contents; }
+.client-ficha__case-card { grid-column: 1; grid-row: 1; }
+.client-ficha__data-card { grid-column: 2; grid-row: 1; }
+.client-ficha__memory-card { grid-column: 1; grid-row: 2; }
+.client-ficha__equipment-slot { display: contents; }
+.client-ficha__equipment-card { grid-column: 2; grid-row: 2; }
+.client-ficha__notes-card { grid-column: 1; grid-row: 3; }
+.client-ficha__history-entry { grid-column: 2; grid-row: 3; }
+.client-ficha__upcoming-card { grid-column: 1; grid-row: 4; }
+.client-ficha__memory-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
+.client-ficha__history-entry {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  width: 100%; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface); color: var(--text); text-align: left; cursor: pointer;
+}
+.client-ficha__history-entry > span:nth-child(2) { display: grid; flex: 1; }
+.client-ficha__history-entry small { color: var(--text-muted); }
+.client-ficha__identity-person,
+.client-ficha__identity-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.client-ficha__identity h1,
+.client-ficha__identity p { margin: 0; }
+.client-ficha__identity h1 { font-size: var(--text-2xl); }
+.client-ficha__identity p { color: var(--text-muted); }
+.client-ficha__identity + .tabs .tabs__tab[aria-selected="true"] {
+  border-bottom-color: var(--corp-text);
+  font-weight: var(--weight-bold);
+}
+@media (max-width: 40rem) {
+  .client-ficha__identity { align-items: stretch; flex-direction: column; }
+  .client-ficha__identity-actions { display: grid; grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 44rem) {
+  .client-ficha-page .detail-region { grid-template-columns: minmax(0, 1fr); }
+  .client-ficha__case-card, .client-ficha__data-card, .client-ficha__memory-card,
+  .client-ficha__equipment-card, .client-ficha__notes-card, .client-ficha__history-entry,
+  .client-ficha__upcoming-card { grid-column: 1; grid-row: auto; }
+}
 /* ---- ClientMemories (MEM-6) ---- */
 .client-memories__memo {
   display: grid;
