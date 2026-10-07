@@ -162,7 +162,7 @@ Reference: `ClientFichaTabCases.png` (desktop) + `LUMAT client cases on mobile a
 - [x] Hoist the shared ficha dialogs to the component root and extract the reused card markup (no Resumen visual change) (`f7c0993a`).
 - [x] Mobile: the archived cases switch from the table to cards at `max-width: 40rem` (`table-card__desktop` + `table-cards--mobile`, mirroring ClientesList); the active case sits in an inset panel (`client-ficha__case-panel`) and the case/data cards share a row height (`detail-region--cases { align-items: stretch }`) (`8e425d9a`, `54aa6321`). Tablet (40–64rem) still renders the table pending owner review.
 - [ ] RDD review (re-assess) after the tab pass.
-- Per-slice verification: `npx tsc -b --noEmit` green; `ClientFicha.test.tsx` 45/45, `ClientFicha.stories.test.tsx` + `closure.test.tsx` 14/14. Full suite/build deferred to the design checkpoint.
+- Per-slice verification: `npx tsc -b --noEmit` green; `ClientFicha.test.tsx` 47/47, `ClientFicha.stories.test.tsx` + `closure.test.tsx` 14/14. Full suite/build deferred to the design checkpoint.
 
 ### CL-6 — Visitas tab (owner visual review 2026-10-06 #5)
 Owner direction: restyle to `ClientFichaTabVisits.png` (desktop) + `LUMAT client visits across mobile and tablet-4.png`.
@@ -170,6 +170,8 @@ Owner direction: restyle to `ClientFichaTabVisits.png` (desktop) + `LUMAT client
 - [x] `Fecha y hora` cell: bold day/month/year (`es-CL`) over a muted clock time in 24h (`client-ficha__visit-when`), in both cards (`97c2ea8d`).
 - [x] `Servicio`: the appointment link renders as plain text (`.table__resource-name`, underline on hover) instead of the browser-blue default (`97c2ea8d`).
 - [x] Próximas visitas: the `Reprogramar` button moved into the row `⋮` menu (`Acciones de la visita #<id>`) (`97c2ea8d`).
+- [x] Próximas visitas `⋮` also offers `Cancelar visita` (reason dialog) and `Cerrar visita` (reusing `AppointmentClosureDialog`) wired to `cancelAppointment` / `closeAppointment` (`fdc39df0`).
+- [x] Mobile: both visit tables switch to cards at `max-width: 40rem` (`table-card__desktop` + `table-cards--mobile`, `client-ficha__visit-card`) (`fdc39df0`).
 - [ ] Historial de visitas: the reference shows an `Acciones` column with a `⋮` and a "Mostrando N visita(s) del historial." footer; the owner's column list did not request them, so they are not implemented — confirm.
 - [ ] Mobile/tablet fidelity pass for both cards pending owner review.
 
