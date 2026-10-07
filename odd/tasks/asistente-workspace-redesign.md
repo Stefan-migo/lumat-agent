@@ -112,9 +112,9 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
 - [x] "Agentes del proyecto" section: honest empty state (no project-agent contract yet).
 
 ### AW-3 — Thread navigation + header
-- [ ] Per-thread tabs (open threads) + create/close affordances from the existing thread API.
-- [ ] Thread header: title + "Proyecto: <name>" subtitle + actions; reuse `Menu`, `Button`, `Icon`.
-- [ ] Controls without a backend (clock/split) rendered only if they map to real behavior; otherwise
+- [x] Per-thread recent-thread tabs + create/close affordances from the existing thread API.
+- [x] Thread header: title + "Proyecto: <name>" subtitle + actions; reuse `Menu`, `Button`, `Icon`.
+- [x] Controls without a backend (clock/split) rendered only if they map to real behavior; otherwise
       omitted.
 
 ### AW-4 — Chat center + composer
@@ -225,3 +225,25 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
     `AssistantWorkspace` → `PanelShell` and `AssistantWorkspace` → `AgentChat`, both with no directed
     path found (ambiguous target warning for PanelShell). Reference PNGs were read from the main
     worktree only; no files there were modified.
+- **AW-3 completion implemented (2026-10-07)** — recent threads are loaded from `listChatThreads`,
+  the active tab follows the URL, and selection uses `pathForRoute` plus History API navigation.
+  Existing create, rename, and delete contracts power the workspace controls. The header uses real
+  project data; `AgentChat` retains its behavior and action strip while its generic title copy is
+  suppressed to avoid competing with the workspace-owned thread title. Unsupported clock/split
+  controls remain omitted. Tab-close controls invoke deletion; rename/delete stay in the active thread
+  header menu to avoid repeating row actions.
+  - Files: `web/src/components/pages/AgentChat.tsx`, `web/src/components/pages/AssistantWorkspace.tsx`,
+    `web/src/components/pages/AssistantWorkspace.css`, `web/src/components/pages/AssistantWorkspace.test.tsx`,
+    `web/src/components/shared/PageFrame.tsx`, `web/src/components/shared/PageHeader.tsx`, and this task file.
+  - Verification: `npx vitest run src/components/pages/AssistantWorkspace.test.tsx` — 1 file / 6 tests passed;
+    `npx vitest run src/components/pages/AssistantWorkspace.test.tsx src/components/pages/AgentChat.test.tsx` —
+    2 files / 52 tests passed; `npx tsc -b --force --noEmit` — passed;
+    `npx vitest run --no-file-parallelism` — 97 files / 1040 tests passed; `npm run build` — passed with
+    the existing >500 kB chunk warning.
+  - Implementation commit: `305342c4` (`feat(assistant): add thread tabs and header`); this follow-up
+    commit completes tab actions with focused tests and task evidence.
+  - Graph Check: `listChatThreads()`, `createChatThread()`, `deleteChatThread()`, `renameChatThread()`,
+    `AgentChat()`, `AssistantWorkspace()`, `pathForRoute()`, `Tabs()`, `Menu`, `PageFrame()`, and
+    `PageHeader()`; undirected `AgentChat()`–`AssistantWorkspace()` path via `createChatThread()` and
+    `AgentChat()`–`PageFrame()` path via `AgentChat.tsx`. No uncontracted capability was added.
+  - Remaining: AW-4 through AW-7.

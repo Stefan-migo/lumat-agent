@@ -232,16 +232,6 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
                 <button type="button" aria-current={thread.id === activeThreadId ? "page" : undefined} onClick={() => navigateToThread(thread.id)}>
                   {thread.title || "Sin título"}
                 </button>
-                <Menu
-                  label={`Acciones de ${thread.title || "hilo"}`}
-                  trigger="icon"
-                  items={[{ value: "rename", label: "Renombrar" }, { value: "delete", label: "Eliminar", tone: "danger" }]}
-                  onSelect={(value) => {
-                    setThreadActionError(null);
-                    if (value === "rename") { setRenameTarget(thread); setRenameTitle(thread.title ?? ""); }
-                    else setDeleteTarget(thread);
-                  }}
-                />
                 <button type="button" className="assistant-workspace__thread-close" aria-label={`Cerrar ${thread.title || "hilo"}`} onClick={() => { setThreadActionError(null); setDeleteTarget(thread); }}>
                   <Icon icon={X} size="sm" />
                 </button>
