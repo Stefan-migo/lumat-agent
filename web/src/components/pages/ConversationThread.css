@@ -1,3 +1,6 @@
+/* The thread owns its own identity header, so the PageFrame title block (an empty h1) is dead space. */
+.conversation-thread-page > .page-frame__titlebar { display: none; }
+
 /* Page identity header: avatar + name + state badge + initiated line. */
 .conversation-thread__identity { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); }
 .conversation-thread__identity-person { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
@@ -67,8 +70,8 @@
 
 @media (max-width: 39.99rem) {
   .conversation-thread__identity { flex-direction: column; align-items: stretch; gap: var(--space-3); }
-  .conversation-thread__actions-row { flex-direction: column-reverse; align-items: stretch; }
-  .conversation-thread__actions-row .btn { width: 100%; }
+  .conversation-thread__actions-row { flex-direction: row-reverse; align-items: stretch; }
+  .conversation-thread__actions-row .btn { flex: 1 1 0; min-width: 0; white-space: normal; }
   .ai-agent-grammar__bubble-stack { max-width: 90%; }
   /* The chat is the primary surface: the inline inspector moves into the "Información del chat" sheet. */
   .conversation-workspace .ai-agent-grammar__inspector { display: none; }

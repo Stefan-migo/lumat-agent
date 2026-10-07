@@ -146,21 +146,23 @@ export function ConversationThread({ conversationId, data: controlledData, state
   const windowOpen = conversation?.reply_window_open === true;
   const mutate = async (action: () => Promise<unknown>) => { setBusy(true); setMutationError(null); try { await action(); setText(""); onMutate?.(); refresh(); } catch (error) { setMutationError(error instanceof ApiError ? `${error.status}: ${error.detail}` : "No se pudo completar la acción"); } finally { setBusy(false); } };
   const acknowledgesEmergency = Boolean(conversation?.case && conversation?.emergency && !conversation.acknowledged_at && conversation.case_id != null);
-  const conversationMenuItems = (includeTake: boolean): MenuItem[] => conversation ? [
-    ...(includeTake ? [{ value: "human", label: "Tomar conversación", icon: UserRoundPlus, disabled: busy || conversation.state === "human" }] : []),
+  const conversationMenuItems = (options: { includeTake?: boolean; includeInfo?: boolean } = {}): MenuItem[] => conversation ? [
+    ...(options.includeInfo ? [{ value: "info", label: "Información del chat", icon: Info }] : []),
+    ...(options.includeTake ? [{ value: "human", label: "Tomar conversación", icon: UserRoundPlus, disabled: busy || conversation.state === "human" }] : []),
     { value: "bot", label: "Devolver al agente", icon: Bot, disabled: busy || conversation.state !== "human" },
     { value: "closed", label: "Cerrar conversación", icon: CircleCheck, disabled: busy || conversation.state !== "human" },
     ...(acknowledgesEmergency ? [{ value: "acknowledge", label: "Reconocer emergencia", icon: ShieldAlert, disabled: busy }] : []),
   ] : [];
   const runMenuAction = (value: string) => {
+    if (value === "info") { setInfoOpen(true); return; }
     if (!conversation) return;
     if (value === "human") void mutate(() => changeConversationState(conversation.id, "human", conversation.version ?? 0));
     else if (value === "bot") void mutate(() => changeConversationState(conversation.id, "bot", conversation.version ?? 0));
     else if (value === "closed") void mutate(() => changeConversationState(conversation.id, "closed", conversation.version ?? 0));
     else void mutate(() => acknowledgeCase(conversation.case_id!));
   };
-  const desktopActions = conversation ? <><Button disabled={busy || conversation.state === "human"} onClick={() => void mutate(() => changeConversationState(conversation.id, "human", conversation.version ?? 0))}><UserRoundPlus aria-hidden="true" />Tomar conversación</Button><Menu trigger="icon" align="end" collisionPadding={8} label="Acciones de la conversación" disabled={busy} items={conversationMenuItems(false)} onSelect={runMenuAction} /></> : null;
-  const mobileActions = conversation ? <><Menu trigger="icon" align="end" collisionPadding={8} label="Más acciones de la conversación" disabled={busy} items={conversationMenuItems(true)} onSelect={runMenuAction} /><Button variant="secondary" onClick={() => setInfoOpen(true)}><Info aria-hidden="true" />Información del chat</Button></> : null;
+  const desktopActions = conversation ? <><Button disabled={busy || conversation.state === "human"} onClick={() => void mutate(() => changeConversationState(conversation.id, "human", conversation.version ?? 0))}><UserRoundPlus aria-hidden="true" />Tomar conversación</Button><Menu trigger="icon" align="end" collisionPadding={8} label="Acciones de la conversación" disabled={busy} items={conversationMenuItems()} onSelect={runMenuAction} /></> : null;
+  const mobileActions = conversation ? <Menu trigger="icon" align="end" collisionPadding={8} label="Más acciones de la conversación" disabled={busy} items={conversationMenuItems({ includeTake: true, includeInfo: true })} onSelect={runMenuAction} /> : null;
   const loadError = fetched.error;
   const loadTitle = loadError instanceof ApiError && loadError.status === 401 ? "Sesión requerida" : loadError instanceof ApiError && loadError.status === 403 ? "No tienes permiso para ver este panel" : "No pudimos cargar la conversación";
   const displayName = conversation ? (conversation.customer?.name ?? customerName?.(conversation.customer_id) ?? `Cliente #${conversation.customer_id}`) : undefined;
