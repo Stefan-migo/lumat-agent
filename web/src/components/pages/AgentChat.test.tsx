@@ -988,7 +988,7 @@ describe("AgentChat", () => {
       target: { files: [new File(["png"], "photo.png", { type: "image/png" })] },
     });
 
-    expect(await screen.findByText("photo.png")).toBeInTheDocument();
+    expect(await screen.findAllByText("photo.png")).toHaveLength(2);
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/panel/api/chat/threads/4/attachments",
       expect.objectContaining({ method: "POST" }),
