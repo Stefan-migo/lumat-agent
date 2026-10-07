@@ -92,7 +92,7 @@ def test_persona_files_have_no_slots(repo_root):
 # --- AC-6: skills are reference-only files, never rendered -------------------
 
 def test_skill_reference_files_exist(repo_root):
-    for rel in ("skills/sdb.md", "skills/emergency.md", "skills/handoff.md", "skills/capture.md"):
+    for rel in ("skills/emergency.md", "skills/handoff.md", "skills/capture.md"):
         assert _read(repo_root, rel).strip(), f"skill reference {rel} is empty"
 
 
@@ -108,7 +108,7 @@ def test_registry_declares_exactly_one_orchestrator(repo_root):
     assert isinstance(agent, dict), "registry must declare exactly one agent"
     assert agent["name"] == "orchestrator"
     assert agent["persona"] == "personas/orchestrator.md"
-    assert set(agent["skills"]) == {"sdb", "emergency", "handoff", "capture"}
+    assert set(agent["skills"]) == {"emergency", "handoff", "capture"}
     assert isinstance(agent["tools_whitelist"], list)
     for key in ("memoria_scope",):
         assert key in agent
