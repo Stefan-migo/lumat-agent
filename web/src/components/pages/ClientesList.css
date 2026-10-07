@@ -1,0 +1,19 @@
+.clientes-list__tabs { display: flex; gap: var(--space-6); border-bottom: 1px solid var(--border); margin-bottom: var(--space-4); }
+.clientes-list__tabs button { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-2); border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--corp-text); cursor: pointer; }
+.clientes-list__tabs button[aria-pressed="true"] { border-bottom-color: var(--corp-primary); font-weight: var(--weight-semibold); }
+.clientes-list__filter { display: flex; align-items: center; gap: var(--space-2); }
+.clientes-list__filter select { min-height: var(--space-8); padding: 0 var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); }
+.clientes-list__selection { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
+.clientes-list__selection label { display: inline-flex; align-items: center; gap: var(--space-2); }
+.clientes-list__consent { display: inline-flex; align-items: center; gap: var(--space-2); }
+.clientes-list__consent svg { width: var(--icon-md); height: var(--icon-md); }
+.clientes-list__sort { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.clientes-list__chevron { display: inline-flex; align-items: center; justify-content: center; width: var(--space-8); height: var(--space-8); border: 0; background: transparent; color: var(--corp-text); cursor: pointer; }
+.clientes-list__chevron svg { width: var(--icon-md); height: var(--icon-md); }
+.clientes-list__footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); color: var(--corp-fg-muted); }
+.clientes-list__footer > div { display: flex; align-items: center; gap: var(--space-2); }
+@media (max-width: 639px) {
+  .clientes-list__tabs { justify-content: space-between; gap: var(--space-1); }
+  .clientes-list__tabs button { gap: var(--space-1); font-size: var(--text-sm); }
+  .clientes-list__selection { font-size: var(--text-sm); }
+}

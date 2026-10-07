@@ -363,6 +363,44 @@ def test_archived_customer_hidden_by_default_and_included_on_request():
         }
 
 
+def test_search_customers_consent_and_sort_order():
+    with SessionLocal() as session:
+        rows = [
+            Customer(
+                phone_e164=f"+5697000000{i}",
+                name=f"Customer {i}",
+                consent_status=value,
+            )
+            for i, value in enumerate((True, False, True))
+        ]
+        session.add_all(rows)
+        session.flush()
+        # Same timestamps exercise the id tie-breaker in both directions.
+        timestamp = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        for row in rows:
+            row.created_at = timestamp
+        session.flush()
+        ids = [row.id for row in rows]
+
+        assert [row.id for row in customers.search_customers(session, consent=True)] == [
+            ids[2], ids[0]
+        ]
+        assert [row.id for row in customers.search_customers(session, consent=False)] == [ids[1]]
+        assert {row.id for row in customers.search_customers(session, consent=None)} == set(ids)
+        assert [row.id for row in customers.search_customers(session, sort="created_asc")] == ids
+        assert [row.id for row in customers.search_customers(
+            session, sort="created_desc"
+        )] == ids[::-1]
+        assert [row.id for row in customers.search_customers(session)] == ids[::-1]
+
+
+def test_search_customers_rejects_unknown_sort():
+    with SessionLocal() as session, pytest.raises(
+        ValueError, match="Unknown customer sort"
+    ):
+        customers.search_customers(session, sort="invalid")
+
+
 def test_archive_and_unarchive_are_audited_and_idempotent():
     from app.models import AuditLog
 

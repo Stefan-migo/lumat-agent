@@ -19,6 +19,7 @@ transition or an empty note. No redirects, no CORS (D1).
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -155,12 +156,15 @@ def _ficha_memory_or_404(
 def clients_list(
     q: str | None = None,
     include_archived: bool = False,
+    consent: bool | None = None,
+    sort: Literal["created_desc", "created_asc"] = "created_desc",
     session: Session = Depends(get_db),
     current: User = Depends(require_operator_json),
 ) -> dict:
     """Search/list customers (AP-3), wrapped and capped at 100."""
     found = customers.search_customers(
-        session, q, limit=100, include_archived=include_archived
+        session, q, limit=100, include_archived=include_archived,
+        consent=consent, sort=sort,
     )
     return {"clients": [to_customer_dict(c) for c in found], "query": q or ""}
 

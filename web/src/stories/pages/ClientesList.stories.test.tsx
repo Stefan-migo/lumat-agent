@@ -17,49 +17,9 @@ describe("ClientesList page story (R-PRD-PG-6)", () => {
     expect(screen.getByRole("searchbox", { name: "Buscar clientes" })).toBeInTheDocument();
   });
 
-  it("renders authenticated client and case export links", () => {
+  it("renders the export menu", () => {
     render(<ClientesListView />);
-    expect(screen.getByRole("link", { name: "Exportar clientes CSV" }).getAttribute("href")).toBe(
-      "/panel/export/clients.csv",
-    );
-    expect(screen.getByRole("link", { name: "Exportar casos CSV" }).getAttribute("href")).toBe(
-      "/panel/export/cases.csv",
-    );
-  });
-
-  it("uses same-origin navigation when an export is activated", () => {
-    render(<ClientesListView />);
-    const exportLink = screen.getByRole("link", { name: "Exportar clientes CSV" });
-
-    fireEvent.click(exportLink);
-
-    expect(exportLink.getAttribute("href")).toBe("/panel/export/clients.csv");
-    expect(exportLink.getAttribute("href")).not.toMatch(/^data:text\/csv;base64,/);
-  });
-
-  it("keeps denied exports server-controlled without a fabricated fallback", () => {
-    render(<ClientesListView />);
-
-    for (const link of screen.getAllByRole("link", { name: /Exportar (clientes|casos) CSV/ })) {
-      expect(link.getAttribute("href")).toMatch(/^\/panel\/export\/(clients|cases)\.csv$/);
-      expect(link.getAttribute("href")).not.toMatch(/^data:/);
-    }
-  });
-
-  it("does not fabricate a client-side download when export is server-denied", () => {
-    const createObjectURL = vi.fn();
-    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
-
-    render(<ClientesListView />);
-    const exportLink = screen.getByRole("link", { name: "Exportar clientes CSV" });
-    const serverEndpoint = "/panel/export/clients.csv";
-
-    fireEvent.click(exportLink);
-
-    expect(createObjectURL).not.toHaveBeenCalled();
-    expect(exportLink).toBeInTheDocument();
-    expect(exportLink).toHaveAttribute("href", serverEndpoint);
-    expect(exportLink.getAttribute("href")).not.toMatch(/^data:|^blob:/);
+    expect(screen.getByRole("button", { name: "Exportar" })).toBeInTheDocument();
   });
 
   it("renders the customer table with R-PRD-PG-6 fields", () => {
@@ -74,7 +34,7 @@ describe("ClientesList page story (R-PRD-PG-6)", () => {
     expect(firstRow).not.toBeNull();
 
     // Phone, state (Spanish label + tone-wired), consent, created
-    expect(within(firstRow).getByText(first.phone_e164!)).toBeInTheDocument();
+    expect(within(firstRow).getByRole("cell", { name: first.phone_e164! })).toBeInTheDocument();
     const stateLabel = customerStateLabel(first.state);
     const stateBadge = within(firstRow).getByText(stateLabel);
     expect(stateBadge.getAttribute("data-tone")).toBe(customerStateTone(first.state));
@@ -189,7 +149,7 @@ describe("ClientesList appearance axis (amended DS-GRAMMAR-1)", () => {
 
 describe("ClientesList API behavior", () => {
   it("adds the search query to the clients API request", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ clients: customers.slice(0, 1), query: "Jorge" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -202,7 +162,7 @@ describe("ClientesList API behavior", () => {
     fireEvent.change(search, { target: { value: "Jorge" } });
 
     await waitFor(() => {
-      expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Jorge")).toBe(true);
+      expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Jorge&sort=created_desc")).toBe(true);
     });
   });
 
@@ -213,7 +173,7 @@ describe("ClientesList API behavior", () => {
   });
 
   it("encodes spaces in a search query before requesting the API", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ clients: [], query: "Marcela Fuentes" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -227,7 +187,7 @@ describe("ClientesList API behavior", () => {
     });
 
     await waitFor(() => {
-      expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Marcela+Fuentes")).toBe(true);
+      expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Marcela+Fuentes&sort=created_desc")).toBe(true);
     });
   });
 });

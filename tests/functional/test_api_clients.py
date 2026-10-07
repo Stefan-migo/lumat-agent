@@ -369,6 +369,29 @@ def test_clients_search_no_matches_returns_empty_list(client, make_user):
     assert body["query"] == "zzz-nobody"
 
 
+def test_clients_list_consent_sort_and_validation(client, make_user):
+    first_id = _seed_customer(name="Older")
+    second_id = _seed_customer(name="Newer", phone="+56922223333")
+    with SessionLocal() as session:
+        session.get(Customer, first_id).consent_status = True
+        session.get(Customer, second_id).consent_status = False
+        session.commit()
+    make_user("oper", "oper-pass", role="operador")
+    _login(client)
+
+    consent_yes = client.get("/panel/api/clients", params={"consent": "true"})
+    consent_no = client.get("/panel/api/clients", params={"consent": "false"})
+    ascending = client.get("/panel/api/clients", params={"sort": "created_asc"})
+    default = client.get("/panel/api/clients")
+    invalid = client.get("/panel/api/clients", params={"sort": "oldest"})
+
+    assert [row["id"] for row in consent_yes.json()["clients"]] == [first_id]
+    assert [row["id"] for row in consent_no.json()["clients"]] == [second_id]
+    assert [row["id"] for row in ascending.json()["clients"]] == [first_id, second_id]
+    assert [row["id"] for row in default.json()["clients"]] == [second_id, first_id]
+    assert invalid.status_code == 422
+
+
 def test_clients_list_includes_archived_only_when_requested(client, make_user):
     active_id = _seed_customer(name="Active")
     archived_id = _seed_customer(name="Archived", phone="+56933334444")

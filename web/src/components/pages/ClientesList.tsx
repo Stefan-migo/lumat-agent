@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Archive, ArchiveRestore, ArrowRightLeft } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowRight, ArrowRightLeft, Check, CircleMinus, Download } from "lucide-react";
 import { ApiError, archiveCustomer, changeClientState, createCustomer, fetchClients as listClients, getClientFicha, unarchiveCustomer } from "../../api";
 import type { Customer, CustomerState } from "../../types";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
@@ -17,6 +17,7 @@ import { Dialog } from "../primitives/Dialog";
 import { Input } from "../primitives/Input";
 import { Select } from "../primitives/Select";
 import { Menu } from "../primitives/Menu";
+import "./ClientesList.css";
 
 export type ClientesListState = AsyncDataState | "stale" | "partial-error" | "fatal-error";
 
@@ -30,7 +31,8 @@ export interface ClientesListProps {
   query?: string;
 }
 
-const columns = (onOpenClient?: (id: number) => void): Column<Customer>[] => [
+const columns = (onOpenClient?: (id: number) => void, selected: Set<number> = new Set(), toggle: (id: number) => void = () => {}): Column<Customer>[] => [
+  { key: "select", header: "", render: (customer) => <input type="checkbox" aria-label={`Seleccionar ${customer.name ?? customer.phone_e164 ?? "cliente"}`} checked={selected.has(customer.id)} onChange={() => toggle(customer.id)} /> },
   {
     key: "name",
     header: "Cliente",
@@ -41,18 +43,18 @@ const columns = (onOpenClient?: (id: number) => void): Column<Customer>[] => [
           <a className="table__link" href={pathForRoute({ view: "clients", clientId: customer.id })} onClick={onOpenClient ? (event) => { event.preventDefault(); onOpenClient(customer.id); } : undefined}>
             {customer.name ?? "—"}
           </a>
-          {customer.phone_e164 ? <span className="table__resource-meta">{customer.phone_e164}</span> : null}
         </div>
       </div>
     ),
   },
+  { key: "phone", header: "Teléfono", render: (customer) => customer.phone_e164 ?? "—" },
   { key: "archived", header: "Registro", render: (customer) => customer.archived_at ? <Badge tone="warning">Archivado</Badge> : "—" },
   {
     key: "state",
     header: "Estado",
     render: (customer) => <Badge tone={customerStateTone(customer.state)}>{customerStateLabel(customer.state)}</Badge>,
   },
-  { key: "consent", header: "Consentimiento", render: (customer) => (customer.consent_status ? "Sí" : "No") },
+  { key: "consent", header: "Consentimiento", render: (customer) => <span className="clientes-list__consent"><span aria-hidden="true">{customer.consent_status ? <Check /> : <CircleMinus />}</span>{customer.consent_status ? "Sí" : "No"}</span> },
   { key: "created", header: "Creado", render: (customer) => customer.created_at?.slice(0, 10) ?? "—" },
 ];
 
@@ -83,6 +85,11 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   // text, so resetting our query state alone would leave the stale term on screen.
   const [searchResetKey, setSearchResetKey] = useState(0);
   const [includeArchived, setIncludeArchived] = useState(false);
+  const [consent, setConsent] = useState<"" | "true" | "false">("");
+  const [sort, setSort] = useState<"created_desc" | "created_asc">("created_desc");
+  const [tab, setTab] = useState<"all" | "scheduled" | "finished">("all");
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
   const [dialog, setDialog] = useState<"create" | "archive" | "state" | null>(null);
   const [phone, setPhone] = useState("");
   const [dialogError, setDialogError] = useState("");
@@ -95,12 +102,19 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   const [archiveCounts, setArchiveCounts] = useState<{ cases: number; appointments: number } | null>(null);
   const stateRequestSequence = useRef(0);
   const fetchClients = useCallback(
-    () => listClients({ includeArchived, query }).then((response) => response.clients),
-    [includeArchived, query],
+    () => listClients({ includeArchived, query, consent: consent === "" ? undefined : consent === "true", sort }).then((response) => response.clients),
+    [includeArchived, query, consent, sort],
   );
   const fetched = useAsyncData(fetchClients, controlledData === undefined, queryVersion);
   const data = controlledData === undefined ? fetched.data : controlledData;
   const state = controlledState ?? fetched.state;
+  const allRows = data ?? [];
+  const counts = { all: allRows.length, scheduled: allRows.filter((row) => row.state === "agendado").length, finished: allRows.filter((row) => row.state === "finalizado").length };
+  const filteredRows = tab === "scheduled" ? allRows.filter((row) => row.state === "agendado") : tab === "finished" ? allRows.filter((row) => row.state === "finalizado") : allRows;
+  const pageSize = 10;
+  const rows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const toggleSelected = (id: number) => setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const retry = onRetry ?? fetched.retry;
   const filtered = query.trim().length > 0;
   const clearSearch = () => {
@@ -203,21 +217,26 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
   return (
     <PageFrame
       title="Clientes"
-      meta={data ? `${data.length} ${data.length === 1 ? "cliente" : "clientes"}` : "Clientes del negocio"}
+      titleAdornment={<Badge>{allRows.length}</Badge>}
+      subtitle="Gestiona tus clientes y su historial de atención."
+      meta={!data ? "Clientes del negocio" : undefined}
       state={stateMessage(state, retry)}
     >
       <section aria-label="Listado de clientes">
+        <nav className="clientes-list__tabs" aria-label="Estado de clientes">{([ ["all", "Todos"], ["scheduled", "Agendados"], ["finished", "Finalizados"] ] as const).map(([key, label]) => <button key={key} type="button" aria-pressed={tab === key} onClick={() => { setTab(key); setPage(1); setSelected(new Set()); }}>{label} <Badge>{counts[key]}</Badge></button>)}</nav>
         <div className="toolbar">
           <SearchInput key={searchResetKey} aria-label="Buscar clientes" onSearch={(next) => { setSearchTerm(next); setQueryVersion((current) => current + 1); }} />
           <Button onClick={() => { setDialogError(""); setExistingCustomerId(null); setDialog("create"); }}>Nuevo cliente</Button>
           <label><input type="checkbox" aria-label="Mostrar archivados" checked={includeArchived} onChange={(event) => { setIncludeArchived(event.target.checked); refresh(); }} /> Mostrar archivados</label>
-          <Button variant="secondary" href="/panel/export/clients.csv">Exportar clientes CSV</Button>
-          <Button variant="secondary" href="/panel/export/cases.csv">Exportar casos CSV</Button>
+          <label className="clientes-list__filter">Consentimiento<select aria-label="Consentimiento" value={consent} onChange={(event) => { setConsent(event.target.value as typeof consent); setPage(1); setSelected(new Set()); refresh(); }}><option value="">Todos</option><option value="true">Sí</option><option value="false">No</option></select></label>
+          <Button variant="secondary" className="clientes-list__sort" onClick={() => { setSort((value) => value === "created_desc" ? "created_asc" : "created_desc"); refresh(); }}>Creado {sort === "created_desc" ? "↓" : "↑"}</Button>
+          <Menu label="Exportar" items={[{ value: "clients", label: "Exportar clientes CSV", icon: Download }, { value: "cases", label: "Exportar casos CSV", icon: Download }]} onSelect={(value) => { window.location.href = value === "clients" ? "/panel/export/clients.csv" : "/panel/export/cases.csv"; }} />
         </div>
         {dialog === null && dialogError ? <p role="alert">{dialogError}</p> : null}
         {state === "loading" ? null : data && data.length > 0 ? (
           <div className="data-region">
-            <DataTable columns={columns(onOpenClient)} rows={data} rowKey={(customer) => String(customer.id)} actions={(customer) => {
+             <div className="clientes-list__selection"><label><input type="checkbox" aria-label="Seleccionar todos" checked={rows.length > 0 && rows.every((row) => selected.has(row.id))} onChange={(event) => setSelected((current) => { const next = new Set(current); rows.forEach((row) => event.target.checked ? next.add(row.id) : next.delete(row.id)); return next; })} /> Seleccionar todos</label>{selected.size ? <span>{selected.size} seleccionados · Acciones masivas</span> : null}</div>
+             <DataTable columns={columns(onOpenClient, selected, toggleSelected)} rows={rows} rowKey={(customer) => String(customer.id)} actions={(customer) => {
               // The row's identity lives in the trigger's accessible name, not in every
               // action label: two pills repeating the customer name dominated the cell
               // (DESIGN_SYSTEM.md:475). `Archivar` is the only destructive action and
@@ -233,7 +252,7 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
                     { value: "archive", label: "Archivar", icon: Archive, tone: "danger" as const },
                   ];
               return (
-                <div className="table__actions">
+                 <div className="table__actions">
                   <Menu
                     trigger="icon"
                     label={rowLabel}
@@ -244,9 +263,11 @@ export function ClientesList({ data: controlledData, state: controlledState, onR
                       else void restore(customer);
                     }}
                   />
+                  <button className="clientes-list__chevron" type="button" aria-label={`Abrir ficha de ${customer.name ?? customer.phone_e164 ?? "cliente"}`} onClick={() => { if (onOpenClient) onOpenClient(customer.id); else window.location.assign(pathForRoute({ view: "clients", clientId: customer.id })); }}><ArrowRight /></button>
                 </div>
               );
             }} />
+            <footer className="clientes-list__footer"><span>Mostrando {rows.length} de {filteredRows.length} clientes</span><div><Button variant="secondary" disabled={page <= 1} aria-label="Página anterior" onClick={() => setPage((value) => value - 1)}>‹</Button><Badge>{page}</Badge><Button variant="secondary" disabled={page >= pageCount} aria-label="Página siguiente" onClick={() => setPage((value) => value + 1)}>›</Button></div></footer>
           </div>
         ) : filtered ? (
           <div>
