@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { ConversationThread } from "../../components/pages/ConversationThread";
 import { ConversationThreadBubbles, ConversationThreadView, ConversationThreadWithManyMessagesView, InteractiveConversationThreadView } from "./ConversationThread.stories";
 import { conversations, messages } from "./_shared/mockData/conversations";
@@ -37,12 +38,14 @@ describe("ConversationThread", () => {
     expect(screen.getAllByLabelText(/mensaje/i).length).toBeGreaterThan(0);
   });
 
-  it("renders the interactive story action set", () => {
+  it("renders the interactive story action set", async () => {
+    const user = userEvent.setup();
     render(<InteractiveConversationThreadView />);
     expect(screen.getByRole("button", { name: "Tomar conversación" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Devolver al agente" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Cerrar conversación" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reconocer emergencia" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Acciones de la conversación" }));
+    for (const label of ["Devolver al agente", "Cerrar conversación", "Reconocer emergencia"]) {
+      expect(await screen.findByRole("menuitem", { name: label })).toBeInTheDocument();
+    }
   });
 
   it("shows the message disclosure in the many-messages story", () => {
@@ -53,7 +56,7 @@ describe("ConversationThread", () => {
   it("renders the interactive story inspector content", () => {
     render(<InteractiveConversationThreadView />);
     expect(screen.getByRole("heading", { name: "Cliente" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Caso" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Caso vinculado" })).toBeInTheDocument();
     expect(screen.getByText("Datos capturados")).toBeInTheDocument();
     expect(screen.getByText("https://portal.aguas.cl/ordenes/2026/cliente-301/seguimiento-reparacion-urgente-987654321")).toBeInTheDocument();
   });
