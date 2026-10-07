@@ -444,7 +444,7 @@ def test_conservative_directive_is_added_to_planner_user_prompt(monkeypatch):
         "app.services.prompts.load_assistant_config",
         lambda: SimpleNamespace(
             prompts={"plan": "{{user_input}} {{available_tools}} {{context}}"},
-            tools_whitelist=[], persona="persona",
+            tools_whitelist=[], persona="persona", skills=(),
         ),
     )
     monkeypatch.setattr(

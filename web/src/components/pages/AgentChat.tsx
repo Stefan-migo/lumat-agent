@@ -32,7 +32,6 @@ import type {
   AssistantEvent,
   AssistantPlan,
   CortexArtifact,
-  CortexHandoff,
   InternalChatMessage,
   InternalChatResponse,
   InternalChatThread,
@@ -294,7 +293,6 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   const [attachments, setAttachments] = useState<AssistantAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [cortex, setCortex] = useState<PlanningSession | null>(null);
-  const [handoff, setHandoff] = useState<CortexHandoff | null>(null);
   const [report, setReport] = useState<CortexArtifact | null>(null);
   const [threads, setThreads] = useState<InternalChatThreadSummary[]>([]);
   const [navigatorError, setNavigatorError] = useState<string | null>(null);
@@ -537,7 +535,6 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
     try {
       const result = await closePlanningSession(cortex.slug);
       setCortex(result.session);
-      setHandoff(result.handoff);
       setReport(result.report);
     } catch (reason: unknown) {
       setError(reason instanceof ApiError ? reason.detail : "No pudimos cerrar la planificación");
@@ -1139,10 +1136,8 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
           </Button>
         </p>
       ) : null}
-      {handoff?.status === "pending" ? (
-        <p role="status">
-          El plan aprobado está listo para revisión. {report?.contenido}
-        </p>
+      {report ? (
+        <p role="status">Informe de planificación: {report.contenido}</p>
       ) : null}
     </PageFrame>
   );

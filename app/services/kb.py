@@ -23,7 +23,7 @@ from decimal import Decimal
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -189,6 +189,7 @@ def ingest_document(
     source_meta: dict | None = None,
     actor: str = "system",
     visibility: KbVisibility | str = KbVisibility.INTERNAL,
+    project_id: int | None = None,
 ) -> KbDocument:
     """Create a document (version 1) and ingest its chunks (KB-1)."""
     doc = KbDocument(
@@ -199,6 +200,7 @@ def ingest_document(
         active_version=1,
         active=True,
         visibility=KbVisibility(visibility),
+        project_id=project_id,
         provider=PROVIDER,
         model=EMBED_MODEL,
     )
@@ -338,6 +340,30 @@ def set_visibility(
     return doc
 
 
+def set_project(
+    session: Session,
+    doc_id: int,
+    project_id: int | None,
+    actor: str = "system",
+) -> KbDocument:
+    """Reclassify a document's project binding without creating a version."""
+    doc = session.get(KbDocument, doc_id)
+    if doc is None:
+        raise ValueError(f"kb document {doc_id} not found")
+    previous = doc.project_id
+    doc.project_id = project_id
+    record_audit(
+        session,
+        actor=actor,
+        action="kb.document_project",
+        entity="kb_document",
+        entity_id=str(doc.id),
+        before={"project_id": previous},
+        after={"project_id": project_id},
+    )
+    return doc
+
+
 # ---------------------------------------------------------------------------
 # Retrieval (KB-2)
 # ---------------------------------------------------------------------------
@@ -349,6 +375,8 @@ def retrieve(
     top_k: int = DEFAULT_TOP_K,
     min_sim: float = DEFAULT_MIN_SIM,
     audience: KbVisibility | str | None = KbVisibility.CUSTOMER,
+    project_id: int | None = None,
+    global_only: bool = False,
 ) -> list[dict]:
     """Semantic retrieval over the ACTIVE versions of enabled documents.
 
@@ -374,6 +402,12 @@ def retrieve(
     ]
     if audience is not None:
         filters.append(KbDocument.visibility == KbVisibility(audience))
+    if global_only:
+        filters.append(KbDocument.project_id.is_(None))
+    elif project_id is not None:
+        filters.append(
+            or_(KbDocument.project_id.is_(None), KbDocument.project_id == project_id)
+        )
     rows = session.execute(
         select(KbChunk, distance.label("distance"))
         .join(KbDocument, KbChunk.document_id == KbDocument.id)

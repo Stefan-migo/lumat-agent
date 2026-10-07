@@ -7,13 +7,12 @@ import logging
 import re
 from contextlib import nullcontext
 from datetime import datetime, timezone
-from hashlib import sha256
 from pydantic import ValidationError
 
 from app.chat.assistant.approval import validate_execution
 from app.chat.assistant.evidence import make_evidence
 from app.chat.assistant.markup import ToolCallMarkupSanitizer
-from app.chat.assistant.state import AssistantState, PlannerOutput, SDBTask, estimate_tokens, validate_cortex_session
+from app.chat.assistant.state import AssistantState, PlannerOutput, estimate_tokens, validate_cortex_session
 from app.chat.assistant.tools.registry import AUTONOMOUS_WRITE_ALLOWLIST, TOOL_REGISTRY, ToolExecutionError, ToolValidationError, execute_tool, get_tool
 from app.services.audit import record_audit
 from app.db import session_scope
@@ -28,8 +27,10 @@ from app.services.costs import (
     maybe_alert_owner,
     record_llm_cost,
 )
+from app.services.skills import SkillDefinition
 from app.chat.assistant.attachments import build_multimodal_content, prepare_attachment_context
 from app.models import InternalChatMessage
+from app.chat.assistant.verification import EFFECT_TOOLS, run_verification, verification_required
 
 
 logger = logging.getLogger(__name__)
@@ -87,71 +88,6 @@ def extension_hook_metadata() -> dict[str, str]:
     else:
         wired = True
     return {"sdb": "deferred", "panel_subagents": "implemented" if wired else "not_implemented"}
-
-
-_PLANNING_COMMAND = re.compile(r"^/planning(?: ([^\s].*?))?$")
-
-
-def parse_planning_command(content: str) -> dict[str, str | None] | None:
-    """Parse only the exact planning command forms; ordinary text is inert."""
-    if not isinstance(content, str):
-        return None
-    match = _PLANNING_COMMAND.fullmatch(content)
-    if not match or not match.group(1):
-        return None
-    topic = match.group(1)
-    if topic == "close":
-        return {"action": "close", "topic": None}
-    return {"action": "open", "topic": topic}
-
-
-def cortex_session_gate(state: AssistantState) -> AssistantState:
-    """Route only a valid active thread flag; missing state fails closed."""
-    if not validate_cortex_session(state):
-        return {"cortex_route": "normal", "cortex_rejection": "invalid-session"}
-    if state["cortex_session"]["status"] != "active":
-        return {"cortex_route": "normal", "cortex_rejection": "inactive-session"}
-    return {"cortex_route": "cortex", "cortex_rejection": None}
-
-
-def classify_cortex_turn(content: str) -> str:
-    """Classify the bounded Cortex loop without inferring lifecycle changes."""
-    text = content.strip()
-    if text == "/planning close":
-        return "close"
-    lowered = text.casefold()
-    if "?" in text or lowered.startswith(("what ", "why ", "how ")):
-        return "question"
-    if lowered.startswith(("research ", "investigate ", "look up ")):
-        return "research"
-    if lowered.startswith(("decide ", "we will ", "let's use ", "use ")):
-        return "decision"
-    return "continue"
-
-
-def cortex_session_turn(state: AssistantState) -> AssistantState:
-    """Advance an active Cortex session; questions/research need no decision."""
-    current = dict(state["cortex_session"])
-    turn_class = (state.get("planner") or {}).get("cortex_class") or classify_cortex_turn(state.get("content", ""))
-    index = current.get("turn_index", 0) + 1
-    current.update({"turn_index": index, "last_class": turn_class})
-    result: AssistantState = {
-        "cortex_session": current,
-        "response": "Cortex session closed." if turn_class == "close" else state.get("content", ""),
-        "status": "completed",
-    }
-    if turn_class == "close":
-        current.update({"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat()})
-    elif turn_class == "decision":
-        key = f"cortex-session/{current['slug']}:decision:{index}"
-        current["decision_keys"] = [*current.get("decision_keys", []), key]
-        session = state.get("session")
-        if session is not None and hasattr(session, "add"):
-            from app.services.tukulpan import record_decision
-            record_decision(session, thread_id=state["thread_id"], topic_key=key,
-                            title=current["topic"], content=state.get("content", ""))
-    result["cortex_session"] = current
-    return result
 
 
 def flush_panel_session(session, thread_id: int, *, source_message_ids: list[int], recap: str,
@@ -322,55 +258,7 @@ COST_BLOCKED_REPLY = (
     "Please review cost settings."
 )
 
-SDB_SPEC_LIMIT = 8_192
 SDB_RESULT_LIMIT = 4_096
-SDB_TEXT_LIMIT = 500
-
-
-def sdb_clarify(state: AssistantState) -> AssistantState:
-    """Accept one bounded scope for the native run."""
-    content = state.get("content", "").strip()[:SDB_TEXT_LIMIT]
-    scope = {"entities": ["service history"], "request": content, "proyecto": _project_slug(state)}
-    return {
-        "sdb_phase": "CLARIFY",
-        "sdb_scope": scope,
-        "status": "sdb_clarified",
-    }
-
-
-def sdb_spec(state: AssistantState) -> AssistantState:
-    """Freeze the clarified scope before any task planning."""
-    scope = state.get("sdb_scope") or {"entities": [], "request": ""}
-    spec = {"scope": scope, "scope_frozen": True}
-    encoded = str(spec).encode("utf-8")[:SDB_SPEC_LIMIT]
-    spec["sha256"] = sha256(encoded).hexdigest()
-    return {"sdb_phase": "SPEC", "sdb_spec": spec, "status": "sdb_specified"}
-
-
-def sdb_plan(state: AssistantState) -> AssistantState:
-    """Create bounded tasks, each with exactly one verifiable output."""
-    spec = state["sdb_spec"]
-    scope = spec["scope"]
-    task = SDBTask(
-        id="task-1",
-        scope=scope,
-        summary="Review the requested service history",
-        verifiable_output="A bounded service-history summary",
-        tool="conversations.search",
-        arguments={"query": scope["request"], "limit": 10},
-    )
-    return {"sdb_phase": "PLAN", "sdb_tasks": [task.model_dump()], "status": "sdb_planned"}
-
-
-def sdb_approve(state: AssistantState) -> AssistantState:
-    """Pause until a future approval flow supplies an explicit decision."""
-    return {"sdb_phase": "APPROVE", "approval": {"status": "pending"}, "status": "approval_pending"}
-
-
-def sdb_execute(state: AssistantState) -> AssistantState:
-    """Project canonical durable results without executing a second runner."""
-    result = state.get("sdb_result") or {"results": []}
-    return {"sdb_phase": "EXECUTE", "sdb_result": result, "status": "sdb_executed"}
 
 
 def sdb_verify(state: AssistantState) -> AssistantState:
@@ -418,14 +306,6 @@ def sdb_deliver(state: AssistantState) -> AssistantState:
                  "task_ids": verification.get("task_ids", []),
                    **({} if status == "completed" else {"reason": "durable commit not confirmed" if not committed else "verification did not pass on real work"})}]
     return {"sdb_phase": "DELIVER", "evidence": evidence, "status": status}
-
-
-def resolve_sdb_item(spec: dict, requested: str) -> dict:
-    """Resolve only entities in the frozen scope, with distinct absence errors."""
-    entities = spec.get("scope", {}).get("entities", [])
-    if requested not in entities:
-        return {"status": "error", "error": "scope-not-found"}
-    return {"status": "error", "error": "not-exist"}
 
 
 def _cost_snapshot(session: object, thread_id: int) -> dict[str, float | str]:
@@ -570,6 +450,7 @@ def delegation_span(state: AssistantState, scope) -> AssistantState:
                 trusted_thread_id=state.get("thread_id"),
                 owner_id=state.get("user_id"),
                 proyecto=_project_slug(state),
+                project_id=(state.get("effective") or {}).get("project_id"),
             )
         except (ToolExecutionError, ToolValidationError) as exc:
             result = {"tool": tool_name, "status": "error", "error": str(exc), "result": {"unavailable": True}}
@@ -618,8 +499,14 @@ def plan_llm(state: AssistantState) -> AssistantState:
 
     config = load_assistant_config()
     user_prompt = config.prompts["plan"]
-    available_tools = _planner_tool_catalog(config.tools_whitelist)
-    for key, value in {"user_input": state["content"], "available_tools": available_tools, "context": _planner_context_text(state)}.items():
+    available_tools = _planner_tool_catalog(list(_effective_tools(state)))
+    available_skills = json.dumps(
+        [{"name": skill.name, "description": skill.description} for skill in _effective_skill_index(state)],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    for key, value in {"user_input": state["content"], "available_tools": available_tools,
+                       "available_skills": available_skills, "context": _planner_context_text(state)}.items():
         user_prompt = user_prompt.replace("{{" + key + "}}", str(value))
     if state.get("cost_directive"):
         user_prompt += "\n\n" + state["cost_directive"]
@@ -629,7 +516,7 @@ def plan_llm(state: AssistantState) -> AssistantState:
     try:
         completion = _assistant_client().chat.completions.create(
             model=getattr(llm.get_settings(), "assistant_chat_model", llm.CHAT_MODEL),
-            messages=[{"role": "system", "content": config.persona}, {"role": "user", "content": user_prompt}],
+            messages=[{"role": "system", "content": _effective_persona(state, config)}, {"role": "user", "content": user_prompt}],
             temperature=0,
             response_format={"type": "json_object"},
         )
@@ -684,11 +571,104 @@ def plan_llm(state: AssistantState) -> AssistantState:
 def assemble_context_node(state: AssistantState) -> AssistantState:
     if state.get("session") is None:
         meta = state.get("context", {}).get("meta", {})
-        return {"context": state.get("context", {"items": [], "meta": {}}), "context_meta": meta, "projection_evidence": meta}
+        return {"context": state.get("context", {"items": [], "meta": {}}), "context_meta": meta, "projection_evidence": meta, "effective": None}
+    from app.models import InternalChatThread
+    from app.services.project_config import resolve_effective_config
     from app.services.agent_chat import assemble_context
 
+    thread = state["session"].get(InternalChatThread, state["thread_id"])
+    effective = None
+    if thread is not None:
+        config = resolve_effective_config(state["session"], thread, state.get("actor_role") or "")
+        effective = {
+            "project_id": config.project_id,
+            "instructions": config.instructions,
+            "tools_whitelist": list(config.tools_whitelist),
+            "skills_index": [
+                {"name": skill.name, "description": skill.description, "scope": skill.scope,
+                 "path": skill.path, "body": skill.body}
+                for skill in config.skills_index
+            ],
+        }
     context = assemble_context(state["session"], state["thread_id"], attachments=state.get("attachments", []))
-    return {"context": context, "context_meta": context["meta"], "projection_evidence": context["meta"]}
+    return {"context": context, "context_meta": context["meta"], "projection_evidence": context["meta"], "effective": effective}
+
+
+def _effective_tools(state) -> tuple[str, ...]:
+    effective = state.get("effective")
+    if effective:
+        tools = tuple(effective["tools_whitelist"])
+    else:
+        from app.services.prompts import load_assistant_config
+
+        tools = load_assistant_config().tools_whitelist
+
+    if not validate_cortex_session(state) or state["cortex_session"]["status"] != "active":
+        return tools
+    from app.chat.assistant.tools.registry import get_tool
+
+    allowed = []
+    for name in tools:
+        if name == "memory.write":
+            allowed.append(name)
+            continue
+        try:
+            definition = get_tool(name)
+        except ValueError:
+            continue
+        if not definition.write:
+            allowed.append(name)
+    return tuple(allowed)
+
+
+def _effective_skill_index(state) -> tuple[SkillDefinition, ...]:
+    from app.services.prompts import load_assistant_config
+    from app.services.skills import global_skill_index
+
+    effective = state.get("effective")
+    if effective:
+        return tuple(SkillDefinition(**skill) for skill in effective["skills_index"])
+    return global_skill_index(load_assistant_config())
+
+
+def _validated_skills(state) -> list[str]:
+    declared = (state.get("plan") or {}).get("skills") or []
+    allowed = {skill.name for skill in _effective_skill_index(state)}
+    valid = []
+    for name in declared:
+        if isinstance(name, str) and name in allowed and name not in valid:
+            valid.append(name)
+    return valid
+
+
+def _effective_persona(state, config) -> str:
+    effective = state.get("effective") or {}
+    instructions = (effective.get("instructions") or "").strip()
+    return f"{config.persona}\n\n{instructions}" if instructions else config.persona
+
+
+def _skill_context(state) -> str:
+    from app.services.skills import SkillError, load_skill_body
+
+    definitions = {skill.name: skill for skill in _effective_skill_index(state)}
+    bodies = []
+    for name in (state.get("guardrails", {}).get("skills") or []):
+        definition = definitions.get(name)
+        if definition is None:
+            continue
+        try:
+            body = load_skill_body(definition)
+        except SkillError as exc:
+            logger.warning("Skipping unavailable assistant skill %r: %s", name, exc)
+            continue
+        bodies.append(f"### Skill: {name}\n{body}")
+    return "\n\n".join(bodies)
+
+
+def _responder_system_prompt(state, config) -> str:
+    persona = _effective_persona(state, config)
+    skills = _skill_context(state)
+    return f"{persona}\n\n{skills}" if skills else persona
 
 
 def _is_autonomous_write(tool_name: str | None, thread_id: object) -> bool:
@@ -711,6 +691,7 @@ def guardrails(state: AssistantState) -> AssistantState:
         return {"approval": issue_approval(plan_data), "guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": True, "decision": "approval_pending"}, "status": "approval_pending"}
     if not state.get("planner", {}).get("valid", True):
         return {"guardrails": {"whitelisted": False, "arguments_valid": False, "cost_allowed": True, "approval_required": False, "decision": "fallback"}, "status": "responding"}
+    validated_skills = _validated_skills(state)
     if plan_data.get("kind") == "delegate":
         from app.chat.assistant.delegation import DelegationScopeError, resolve_delegation_scope
 
@@ -747,22 +728,21 @@ def guardrails(state: AssistantState) -> AssistantState:
                 "cost_allowed": True,
                 "approval_required": False,
                 "decision": "delegate",
+                "skills": validated_skills,
             },
         }
     tool_name = plan_data.get("tool")
     if plan_data.get("kind") != "tool" or not tool_name:
         decision = "respond" if _is_conversational_turn(state.get("content", "")) else "retrieve_kb"
-        return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": decision}, "status": "responding"}
-    from app.services.prompts import load_assistant_config
-    config = load_assistant_config()
-    whitelisted = tool_name in config.tools_whitelist
+        return {"guardrails": {"whitelisted": True, "arguments_valid": True, "cost_allowed": True, "approval_required": False, "decision": decision, "skills": validated_skills}, "status": "responding"}
+    whitelisted = tool_name in _effective_tools(state)
     arguments_valid = False
     if whitelisted:
         try:
             arguments_valid = bool(get_tool(tool_name).args_model.model_validate(plan_data.get("arguments", {})))
         except Exception:
             pass
-    decisions = {"whitelisted": whitelisted, "arguments_valid": arguments_valid, "cost_allowed": True, "approval_required": False, "decision": "execute"}
+    decisions = {"whitelisted": whitelisted, "arguments_valid": arguments_valid, "cost_allowed": True, "approval_required": False, "decision": "execute", "skills": validated_skills}
     if not whitelisted or not arguments_valid:
         diagnosis = _planner_failure(
             "unsafe_plan", "guardrails", ValueError("planner plan failed guardrails"), plan_data
@@ -857,9 +837,46 @@ def tool_loop_head(state: AssistantState) -> AssistantState:
 
 
 def _tool_accumulation(state: AssistantState, result: dict) -> dict:
+    # ponytail: preserve the exact dispatched arguments alongside the result for verification.
     return {
         "tool_results": [*(state.get("tool_results") or []), result],
         "tool_steps": state.get("tool_steps", 0) + 1,
+    }
+
+
+def verify_effects(state: AssistantState) -> AssistantState:
+    """Verify dispatched effects against the plan and evidence, never dispatching writes."""
+    steps = state.get("tool_results") or []
+    required, gate_reason = verification_required(
+        dispatched_tools=(item.get("tool") for item in steps),
+        explicit=bool(state.get("verify_requested")), handoff=bool(state.get("sdb_requested")),
+    )
+    if not required:
+        return {}
+
+    def tool_executor(name, arguments):
+        definition = get_tool(name)
+        whitelist = {tool for tool in _effective_tools(state) if get_tool(tool).read_only}
+        if not definition.read_only or name not in whitelist:
+            raise ToolValidationError("verification is read-only")
+        return execute_tool(
+            state.get("session"), name, arguments, whitelist=whitelist,
+            role=state.get("actor_role"), trusted_thread_id=state.get("thread_id"),
+            owner_id=state.get("user_id"), proyecto=_project_slug(state),
+            project_id=(state.get("effective") or {}).get("project_id"),
+        )
+
+    criterion = (state.get("plan") or {}).get("success_criterion") or (state.get("planner_output") or {}).get("success_criterion")
+    result = run_verification(
+        criterion=criterion, steps=steps, evidence=state.get("evidence") or [], tool_executor=tool_executor,
+    )
+    verification = {
+        "required": True, "gate_reason": gate_reason,
+        "status": result.status, "detail": result.reason,
+    }
+    return {
+        "verification": verification,
+        "evidence": [make_evidence(tool="verification", status=result.status, detail=result.reason)],
     }
 
 
@@ -881,6 +898,7 @@ def retrieve_kb(state: AssistantState) -> AssistantState:
     # `content` is a caller error, not a knowledge-base outage, and must not be
     # disguised as one.
     query = state["content"].strip()
+    project_id = (state.get("effective") or {}).get("project_id")
     with session_scope() if session is None else nullcontext(session) as session:
         try:
             chunks = kb.retrieve(
@@ -889,6 +907,7 @@ def retrieve_kb(state: AssistantState) -> AssistantState:
                 top_k=kb.DEFAULT_TOP_K,
                 min_sim=kb.DEFAULT_MIN_SIM,
                 audience=None,
+                **({"project_id": project_id} if project_id is not None else {"global_only": True}),
             )
         except Exception as error:
             detail = f"Knowledge-base retrieval failed: {error}"
@@ -948,20 +967,18 @@ def execute(state: AssistantState) -> AssistantState:
     tool_name = plan_data.get("tool")
     if tool_name and not tool_already_ran:
         try:
-            from app.services.prompts import load_assistant_config
-
-            config = load_assistant_config()
             result = execute_tool(
                 state.get("session"),
                 tool_name,
                 plan_data.get("arguments", {}),
                 approval=state.get("approval"),
-                whitelist=set(config.tools_whitelist),
+                whitelist=set(_effective_tools(state)),
                 cost_allowed=state.get("guardrails", {}).get("cost_allowed", True),
                 role=state.get("actor_role"),
                 trusted_thread_id=state.get("thread_id"),
                 owner_id=state.get("user_id"),
                 proyecto=_project_slug(state),
+                project_id=(state.get("effective") or {}).get("project_id"),
             )
         except (ToolExecutionError, ToolValidationError) as exc:
             detail = str(exc)
@@ -975,7 +992,7 @@ def execute(state: AssistantState) -> AssistantState:
                 )
             return {
                 "tool_result": failed_result,
-                **_tool_accumulation(state, failed_result),
+                **_tool_accumulation(state, {**failed_result, "arguments": plan_data.get("arguments", {})}),
                 "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],
                 "error": detail,
                 "response": f"Tool execution failed: {detail}",
@@ -994,14 +1011,14 @@ def execute(state: AssistantState) -> AssistantState:
                 bounded_result = {**result, "result": bounded_result}
                 return {
                     "tool_result": bounded_result,
-                    **_tool_accumulation(state, bounded_result),
+                    **_tool_accumulation(state, {**bounded_result, "arguments": plan_data.get("arguments", {})}),
                     "evidence": [make_evidence(tool=tool_name, status="degraded", detail=degraded_reason)],
                     "response": f"Tool {tool_name} unavailable.",
                     "status": "degraded",
                 }
             return {
                 "tool_result": result,
-                **_tool_accumulation(state, result),
+                **_tool_accumulation(state, {**result, "arguments": plan_data.get("arguments", {})}),
                 "evidence": [make_evidence(tool=tool_name, status="error", detail=detail)],
                 "error": detail,
                 "response": f"Tool execution failed: {detail}",
@@ -1010,7 +1027,7 @@ def execute(state: AssistantState) -> AssistantState:
         if result.get("status") == "approval_pending":
             return {
                 "tool_result": result,
-                **_tool_accumulation(state, result),
+                **_tool_accumulation(state, {**result, "arguments": plan_data.get("arguments", {})}),
                 "approval": result.get("approval"),
                 "guardrails": {**state.get("guardrails", {}), "approval_required": True,
                                 "decision": "approval_pending"},
@@ -1026,7 +1043,7 @@ def execute(state: AssistantState) -> AssistantState:
             )
         return {
             "tool_result": result,
-            **_tool_accumulation(state, result),
+            **_tool_accumulation(state, {**result, "arguments": plan_data.get("arguments", {})}),
             "evidence": [make_evidence(tool=tool_name, status="completed", detail="Tool execution completed")],
             "response": f"Tool {tool_name} completed.",
             "status": "completed",
@@ -1060,7 +1077,7 @@ def execute(state: AssistantState) -> AssistantState:
         )
         for key, value in {
             "user_input": state["content"],
-            "available_tools": ", ".join(config.tools_whitelist),
+            "available_tools": ", ".join(_effective_tools(state)),
             "tool_statement": tool_statement,
             "tool_evidence": _render_tool_evidence(state),
             "kb_evidence": _render_kb_evidence(state),
@@ -1074,7 +1091,7 @@ def execute(state: AssistantState) -> AssistantState:
         completion = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": config.persona},
+                {"role": "system", "content": _responder_system_prompt(state, config)},
                 {"role": "user", "content": build_multimodal_content(attachments, prompt) if attachments else prompt},
             ],
             temperature=0,
@@ -1101,6 +1118,14 @@ def execute(state: AssistantState) -> AssistantState:
         if not usage_seen:
             _record_usage(state, "response", None)
         response = "".join(chunks) or response
+    verification = state.get("verification") or {}
+    if verification.get("status") in {"failed", "unverifiable"}:
+        effect_ran = EFFECT_TOOLS.intersection(item.get("tool") for item in state.get("tool_results", []))
+        prefix = "The effect ran. " if effect_ran else ""
+        qualification = f"\n\n{prefix}verification: {verification['status']} — {verification.get('detail', '')}"
+        response += qualification
+        if on_token is not None:
+            on_token(qualification)
     session = state.get("session")
     if session is not None and not tool_already_ran:
         record_audit(

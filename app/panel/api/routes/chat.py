@@ -26,7 +26,7 @@ from app.panel.api.serializers import (
 )
 from app.services.audit import record_audit
 from sqlalchemy import func, select
-from app.services import tukulpan
+from app.services import projects, tukulpan
 
 router = APIRouter(tags=["panel-api-chat"])
 
@@ -64,7 +64,15 @@ def _planning_thread(session: Session, slug: str, user_id: int) -> InternalChatT
 
 def _planning_report(session: Session, thread: InternalChatThread) -> Memory | None:
     cortex = (thread.assistant_state or {}).get("cortex_session") or {}
-    return tukulpan.get_by_key(session, scope="panel", entity_id=f"thread:{thread.id}", topic_key=cortex.get("report_key", "")) if cortex.get("report_key") else None
+    if not cortex.get("report_key"):
+        return None
+    proyecto = thread.proyecto or "default"
+    authorization = None if proyecto == "default" else projects.agent_context(session, proyecto, owner_id=thread.user_id)
+    return tukulpan.get_by_key(
+        session, scope=tukulpan.AGENT_SCOPE, entity_id=tukulpan.agent_memory_entity(proyecto),
+        topic_key=cortex["report_key"], proyecto=proyecto,
+        owner_id=authorization.owner_id if authorization else None,
+    )
 
 
 @router.post("/chat/threads", status_code=201)
@@ -179,9 +187,7 @@ def open_planning_session(
         "cortex_session": {
             "slug": slug, "topic": topic, "status": "active",
             "opened_at": datetime.now(timezone.utc).isoformat(), "closed_at": None,
-            "turn_index": 0, "next_decision": None, "last_class": None,
-            "decision_keys": [], "report_key": None,
-            "handoff": {"status": "none", "sdb_phase": None},
+            "report_key": None,
         },
     }
     session.flush()
@@ -199,10 +205,7 @@ def planning_session_detail(slug: str, session: Session = Depends(get_db), curre
     thread = _planning_thread(session, slug, current.id)
     if thread is None:
         raise HTTPException(status_code=404, detail="planning session not found")
-    memories = tukulpan.list_for_entity(session, scope="panel", entity_id=f"thread:{thread.id}")
-    decisions = [row for row in memories if ":decision:" in row.topic_key]
     return {"session": to_cortex_session_dict(thread), "thread": thread_dict(thread),
-            "decisions": [to_cortex_report_dict(row) for row in decisions],
             "report": to_cortex_report_dict(_planning_report(session, thread))}
 
 
@@ -214,15 +217,10 @@ def close_planning_session(slug: str, session: Session = Depends(get_db), curren
     cortex = (thread.assistant_state or {}).get("cortex_session") or {}
     if cortex.get("status") != "active":
         raise HTTPException(status_code=409, detail="planning session is not active")
-    decisions = tukulpan.list_for_entity(session, scope="panel", entity_id=f"thread:{thread.id}")
-    report = json.dumps({"topic": cortex.get("topic", ""), "decisions": [row.contenido for row in decisions if ":decision:" in row.topic_key]}, ensure_ascii=False)
-    result = close_cortex_session(session, thread, report=report)
-    approval = (thread.assistant_state or {}).get("approval") or {}
-    session.add(InternalChatMessage(thread_id=thread.id, author=current.role.value, content=report,
-                                    status="approval_pending", assistant_metadata={"run_id": result["run_id"], "approval": approval}))
+    report = json.dumps({"topic": cortex.get("topic", "")}, ensure_ascii=False)
+    close_cortex_session(session, thread, report=report)
     session.flush()
-    return {"session": to_cortex_session_dict(thread), "report": to_cortex_report_dict(_planning_report(session, thread)),
-            "handoff": {"status": "pending", "sdb_phase": "SPEC", "run_id": result["run_id"], "approval": approval}}
+    return {"session": to_cortex_session_dict(thread), "report": to_cortex_report_dict(_planning_report(session, thread))}
 
 
 @router.post("/planning/sessions/{slug}/reopen")
@@ -235,7 +233,6 @@ def reopen_planning_session(slug: str, session: Session = Depends(get_db), curre
         raise HTTPException(status_code=409, detail="planning session is already active")
     thread.assistant_state = {**(thread.assistant_state or {}), "cortex_session": {
         **cortex, "status": "active", "closed_at": None,
-        "handoff": {"status": "none", "sdb_phase": None},
     }}
     session.flush()
     return {"session": to_cortex_session_dict(thread), "thread_id": thread.id}
