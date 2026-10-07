@@ -184,7 +184,8 @@ def test_sdb_state_preserves_unrelated_nested_assistant_state():
         thread = session.get(InternalChatThread, thread_id)
         thread.assistant_state = {
             "planner": {"model": "configured"},
-            "cortex_session": {"slug": "budget-review", "turn_index": 2},
+            "cortex_session": {"slug": "budget-review", "topic": "Budget review", "status": "active",
+                               "opened_at": "2026-09-13T12:00:00Z", "closed_at": None, "report_key": None},
         }
         agent_chat.persist_sdb_state(
             session, thread, run_id="run-merge", phase="SPEC",
@@ -195,29 +196,34 @@ def test_sdb_state_preserves_unrelated_nested_assistant_state():
     with SessionLocal() as session:
         state = session.get(InternalChatThread, thread_id).assistant_state
         assert state["planner"] == {"model": "configured"}
-        assert state["cortex_session"] == {"slug": "budget-review", "turn_index": 2}
+        assert state["cortex_session"]["slug"] == "budget-review"
+        assert state["cortex_session"]["status"] == "active"
         assert state["sdb"]["phase"] == "SPEC"
 
 
-def test_closed_cortex_report_is_archived_and_reloadable():
-    from app.chat.assistant.approval import validate_approval
-
+def test_closed_cortex_report_is_agent_scoped_and_reloadable():
     thread_id = _thread_id()
     with SessionLocal() as session:
         thread = session.get(InternalChatThread, thread_id)
         thread.assistant_state = {"cortex_session": {
             "slug": "budget-review", "topic": "Budget review", "status": "active",
+            "opened_at": "2026-09-13T12:00:00Z", "closed_at": None, "report_key": None,
         }}
+        thread.current_plan = {"untouched": True}
         result = agent_chat.close_cortex_session(session, thread, report="Approved budget findings")
         session.commit()
         assert result["report_key"] == "cortex-session/budget-review:report"
-        assert validate_approval(thread.current_plan, thread.assistant_state["approval"], thread.assistant_state["approval"]["token"])
+        assert "approval" not in thread.assistant_state
+        assert thread.current_plan == {"untouched": True}
 
     with SessionLocal() as session:
         thread = session.get(InternalChatThread, thread_id)
         report = session.scalar(select(Memory).where(Memory.topic_key == result["report_key"]))
         assert thread.assistant_state["cortex_session"]["status"] == "closed"
-        assert report.status == MemoryStatus.ARCHIVED
+        assert report.scope == "agent"
+        assert report.entity_id == "agent:default"
+        assert report.status == MemoryStatus.ACTIVE
+        assert session.scalar(select(func.count()).select_from(Memory).where(Memory.topic_key == result["report_key"])) == 1
 
 
 def test_sdb_state_writes_one_checkpoint_row_per_task_sequence():

@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from app.agent_registry import AssistantSkill
+
 logger = logging.getLogger(__name__)
 
 # Keys are relative paths under the repo-root `agent/` directory (D-A2).
@@ -103,11 +105,9 @@ class AssistantRuntimeConfig:
     persona: str
     prompts: dict[str, str]
     tools_whitelist: tuple[str, ...]
-    skills: tuple[str, ...]
+    skills: tuple[AssistantSkill, ...]
     memoria_scope: str | None
     sdb_classification: tuple[str, ...]
-    cortex_classes: tuple[str, ...]
-    planning_commands: tuple[str, ...]
 
 _SLOT_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
@@ -156,6 +156,4 @@ def load_assistant_config(registry_path: str | Path | None = None) -> AssistantR
         skills=assistant.skills,
         memoria_scope=assistant.memoria_scope,
         sdb_classification=assistant.sdb_classification,
-        cortex_classes=assistant.cortex_classes,
-        planning_commands=assistant.planning_commands,
     )

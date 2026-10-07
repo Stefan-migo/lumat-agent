@@ -66,6 +66,13 @@ class Agent:
 
 
 @dataclass(frozen=True)
+class AssistantSkill:
+    name: str
+    description: str
+    path: str
+
+
+@dataclass(frozen=True)
 class Assistant:
     name: str
     persona: str
@@ -73,10 +80,8 @@ class Assistant:
     tools_whitelist: tuple[str, ...]
     memoria_scope: str | None
     model: str
-    skills: tuple[str, ...]
+    skills: tuple[AssistantSkill, ...]
     sdb_classification: tuple[str, ...]
-    cortex_classes: tuple[str, ...]
-    planning_commands: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -101,6 +106,24 @@ def _coerce_optional_str_list(value, *, what: str) -> tuple[str, ...] | None:
     if value is None:
         return None
     return _coerce_str_list(value, what=what)
+
+
+def _coerce_assistant_skills(value) -> tuple[AssistantSkill, ...]:
+    if not isinstance(value, list):
+        raise RegistryError(f"assistant.skills must be a list, got {type(value).__name__}")
+    skills = []
+    for index, entry in enumerate(value):
+        where = f"assistant.skills[{index}]"
+        if not isinstance(entry, dict):
+            raise RegistryError(f"{where} must be a mapping, got {type(entry).__name__}")
+        fields = {}
+        for field in ("name", "description", "path"):
+            field_value = entry.get(field)
+            if not isinstance(field_value, str) or not field_value.strip():
+                raise RegistryError(f"{where}.{field} must be a non-empty string")
+            fields[field] = field_value
+        skills.append(AssistantSkill(**fields))
+    return tuple(skills)
 
 
 def _build_agent(root: dict, where: str) -> Agent:
@@ -153,20 +176,6 @@ def _build_assistant(root: dict, agent_dir: Path) -> Assistant:
     )
     if classification != ("normal", "sdb"):
         raise RegistryError("assistant.sdb_classification.allowed must be ['normal', 'sdb']")
-    cortex = root.get("cortex_session")
-    if not isinstance(cortex, dict):
-        raise RegistryError("assistant.cortex_session must be a mapping")
-    cortex_classes = _coerce_str_list(cortex.get("classes"), what="assistant.cortex_session.classes")
-    if cortex_classes != ("question", "research", "decision", "continue", "close"):
-        raise RegistryError(
-            "assistant.cortex_session.classes must be "
-            "['question', 'research', 'decision', 'continue', 'close']"
-        )
-    planning_commands = _coerce_str_list(cortex.get("commands"), what="assistant.cortex_session.commands")
-    if planning_commands != ("/planning <topic>", "/planning close"):
-        raise RegistryError(
-            "assistant.cortex_session.commands must be ['/planning <topic>', '/planning close']"
-        )
     return Assistant(
         name=root["name"],
         persona=persona,
@@ -174,10 +183,8 @@ def _build_assistant(root: dict, agent_dir: Path) -> Assistant:
         tools_whitelist=tools,
         memoria_scope=root.get("memoria_scope"),
         model=root["model"],
-        skills=_coerce_str_list(root.get("skills", []), what=f"{where}.skills"),
+        skills=_coerce_assistant_skills(root.get("skills", [])),
         sdb_classification=classification,
-        cortex_classes=cortex_classes,
-        planning_commands=planning_commands,
     )
 
 

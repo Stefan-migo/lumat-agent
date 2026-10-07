@@ -296,41 +296,14 @@ def test_assistant_whitelist_excludes_removed_aliases(repo_root):
     assert "appointments.list" not in whitelist
 
 
-def test_registry_declares_cortex_classes_and_literal_commands(repo_root):
-    assistant = _load(repo_root).assistant
-    assert assistant.cortex_classes == (
-        "question", "research", "decision", "continue", "close"
-    )
-    assert assistant.planning_commands == ("/planning <topic>", "/planning close")
-
-
-@pytest.mark.parametrize("mutation", ["missing", "bad_classes", "bad_commands"])
-def test_invalid_cortex_declaration_rejected(repo_root, tmp_path, mutation):
-    import shutil
+def test_registry_has_no_cortex_ceremony_declaration(repo_root):
     import yaml
 
+    assistant = _load(repo_root).assistant
     source = yaml.safe_load((repo_root / "agent" / "registry.yaml").read_text(encoding="utf-8"))
-    source["assistant"]["cortex_session"] = {
-        "classes": ["question", "research", "decision", "continue", "close"],
-        "commands": ["/planning <topic>", "/planning close"],
-    }
-    if mutation == "missing":
-        source["assistant"].pop("cortex_session", None)
-    elif mutation == "bad_classes":
-        source["assistant"]["cortex_session"]["classes"] = ["planning"]
-    else:
-        source["assistant"]["cortex_session"]["commands"] = ["planning close"]
-    agent_dir = tmp_path / "agent"
-    shutil.copytree(repo_root / "agent", agent_dir)
-    registry_path = agent_dir / "registry.yaml"
-    registry_path.write_text(yaml.safe_dump(source), encoding="utf-8")
-
-    from app.agent_registry import RegistryError
-
-    with pytest.raises(RegistryError, match="cortex_session"):
-        from app.agent_registry import load_registry
-
-        load_registry(registry_path)
+    assert "cortex_session" not in source["assistant"]
+    assert not hasattr(assistant, "cortex_classes")
+    assert not hasattr(assistant, "planning_commands")
 
 
 @pytest.mark.parametrize("field", ["persona", "prompt"])
