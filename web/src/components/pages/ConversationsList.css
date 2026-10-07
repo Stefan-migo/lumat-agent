@@ -1,13 +1,22 @@
 .conversations-list__card { display: grid; gap: var(--space-3); }
 
+/* Offline banner: neutral surface, wifi-off glyph, bold headline + muted note. */
+.conversations-list__offline { display: flex; align-items: center; gap: var(--space-3); margin: 0; padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--corp-text); font-size: var(--text-sm); }
+.conversations-list__offline > svg { flex: 0 0 auto; color: var(--corp-fg-muted); }
+.conversations-list__offline strong { font-weight: var(--weight-semibold); }
+.conversations-list__offline span { color: var(--corp-fg-muted); }
+
 /* Responsable filter: bordered control with leading icon, muted prefix, bold value, chevron. */
-.conversations-list__filter { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 40px; padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); white-space: nowrap; }
+.conversations-list__filter { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 40px; padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); color: var(--corp-text); font: inherit; white-space: nowrap; cursor: pointer; }
 .conversations-list__filter > svg { flex: 0 0 auto; color: var(--corp-fg-muted); }
 .conversations-list__filter-label { color: var(--corp-fg-muted); font-size: var(--text-sm); }
-.conversations-list__filter select { appearance: none; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: var(--weight-semibold); cursor: pointer; }
+.conversations-list__filter-value { font-weight: var(--weight-semibold); }
+.conversations-list__filter-menu { min-width: 12rem; }
+.conversations-list__filter-check { display: inline-flex; margin-left: auto; color: var(--corp-primary); }
 
 .conversations-list__summary { overflow: hidden; color: var(--corp-fg-muted); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
 .conversations-list__status { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+.conversations-list__case { color: var(--corp-fg-muted); font-size: var(--text-sm); }
 
 /* Client name reads as plain bold text, not a browser button. */
 .conversations-list__identity { padding: 0; border: 0; background: transparent; color: var(--corp-text); font: inherit; font-weight: var(--weight-semibold); text-align: left; cursor: pointer; }
@@ -20,16 +29,19 @@
 .conversations-list__actions .btn { white-space: nowrap; }
 .conversations-list__actions .menu__trigger--icon { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-subtle); }
 
-.conversations-list__mobile-card { grid-template-columns: minmax(0, 1fr); align-items: start; }
-.conversations-list__mobile-card .table__resource { align-items: start; }
-.conversations-list__mobile-card .table__resource-body { display: grid; gap: var(--space-1); min-width: 0; }
-.conversations-list__mobile-card .table__resource-name { justify-self: start; }
-.conversations-list__mobile-card .table__resource-meta { overflow-wrap: anywhere; }
+/* Mobile card: identity head, summary, badges + facts, actions. */
+.conversations-list__mobile-card { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); align-items: start; }
+.conversations-list__mobile-head { display: flex; align-items: flex-start; gap: var(--space-3); min-width: 0; }
+.conversations-list__mobile-identity { display: grid; flex: 1 1 auto; gap: var(--space-1); min-width: 0; }
+.conversations-list__mobile-identity .table__resource-name { justify-self: start; }
+.conversations-list__mobile-identity .table__resource-meta { overflow-wrap: anywhere; }
+.conversations-list__mobile-meta { display: grid; gap: var(--space-2); }
+.conversations-list__mobile-facts { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); }
 .conversations-list__mobile-card .table__actions { justify-content: flex-end; }
 .conversations-list__card .table-footer__count { display: inline; }
 .conversations-list__card .table-footer__pagination { display: flex; }
 
 @media (max-width: 39.99rem) {
-  .conversations-list__filter { width: 100%; }
-  .conversations-list__mobile-card .table__actions { justify-content: flex-start; }
+  .conversations-list__filter { width: 100%; justify-content: flex-start; }
+  .conversations-list__offline { flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
 }

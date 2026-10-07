@@ -105,6 +105,17 @@ describe('production conversations list', () => {
     expect(onRetry).toHaveBeenCalledTimes(2);
   });
 
+  it('filters by responsable through the styled dropdown', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(queue([])), { status: 200 }));
+    const user = userEvent.setup();
+    render(<ConversationsList currentUserId={7} />);
+    const trigger = screen.getByRole('button', { name: /filtrar por responsable/i });
+    expect(trigger).toHaveTextContent('Responsable:');
+    await user.click(trigger);
+    await user.click(await screen.findByRole('menuitemradio', { name: 'Asignadas a mí' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenLastCalledWith('/panel/api/conversations?responsible_id=7&limit=20&offset=0', expect.anything()));
+  });
+
   it('posts emergency acknowledgement to the case acknowledgement route', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const emergency = row(8, 'bot', null, { emergency: true, case_id: 44, acknowledged_at: null });
