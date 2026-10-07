@@ -82,6 +82,7 @@ def _kb_check(state: ConversationState) -> dict:
             min_sim=kb.DEFAULT_MIN_SIM,
             # This subgraph is part of the customer-facing chat surface.
             audience=KbVisibility.CUSTOMER,
+            global_only=True,
         )
         if chunks:
             record_activity(

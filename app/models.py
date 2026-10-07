@@ -199,6 +199,7 @@ class Project(Base):
         nullable=False,
     )
     purpose_embedding: Mapped[list[float]] = mapped_column(Vector(EMBED_DIMS), nullable=False)
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     created_at: Mapped[datetime] = _ts()
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -463,8 +464,12 @@ class ConversationEvent(Base):
 
 class KbDocument(Base):
     __tablename__ = "kb_documents"
+    __table_args__ = (Index("idx_kb_documents_project_id", "project_id"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    project_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("projects.id", ondelete="CASCADE")
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     format: Mapped[DocumentFormat] = mapped_column(
         pg_enum(DocumentFormat, "document_format"),
