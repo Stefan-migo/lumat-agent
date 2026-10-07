@@ -23,6 +23,7 @@ export interface ClientMemoriesProps {
   onResolveRelation?: (relationId: number, relation: MemoryRelationKind) => Promise<void> | void;
   compact?: boolean;
   onViewAll?: () => void;
+  conversationId?: number;
 }
 
 /** Ficha memories panel (MEM-6): list + edit + delete + mark(pin) over the
@@ -38,6 +39,7 @@ export function ClientMemories({
   onResolveRelation,
   compact = false,
   onViewAll,
+  conversationId,
 }: ClientMemoriesProps) {
   const [draft, setDraft] = useState("");
   const [resolvingId, setResolvingId] = useState<number | null>(null);
@@ -81,11 +83,9 @@ export function ClientMemories({
       {compact ? <div className="client-ficha__memory-meta"><Badge>{memories.length}</Badge><Button variant="secondary" onClick={onViewAll}>Ver todo →</Button></div> : null}
       {featuredMemo ? (
         <div className="client-memories__memo">
+          {compact ? <small>CONVERSACIÓN #{conversationId ?? "—"}</small> : null}
           <strong>{featuredMemo.contenido}</strong>
-          <div>
-            <Badge tone={memoryTypeTone(featuredMemo.tipo)}>{memoryTypeLabel(featuredMemo.tipo)}</Badge>
-            <Badge tone={memoryStatusTone(featuredMemo.status)}>{memoryStatusLabel(featuredMemo.status)}</Badge>
-          </div>
+          <div>{!compact ? <Badge tone={memoryTypeTone(featuredMemo.tipo)}>{memoryTypeLabel(featuredMemo.tipo)}</Badge> : null}<Badge tone={memoryStatusTone(featuredMemo.status)}>{memoryStatusLabel(featuredMemo.status)}</Badge></div>
           {renderActions(featuredMemo)}
         </div>
       ) : null}

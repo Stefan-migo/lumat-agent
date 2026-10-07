@@ -94,13 +94,29 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
       (`clientes-011`, blocker; `ebe2edd8`).
 - [x] Resumen/Casos/Visitas/Conversaciones tabs replacing the single `Historial` disclosure
       (`clientes-012`, blocker; `ebe2edd8`).
-- [x] Active-case card + "Editar caso" action (`clientes-013`; this CL-3 summary commit).
-- [x] "Memoria del cliente" card heading/count + "Ver todo →" (`clientes-014`; this CL-3 summary commit).
-- [x] Notes card + "+ Agregar nota" entry point (`clientes-015`; this CL-3 summary commit).
-- [x] "Próximas visitas" card + "Ver agenda →" (`clientes-016`; this CL-3 summary commit).
-- [x] "Datos del cliente" card + Editar action/contact facts (`clientes-017`; this CL-3 summary commit).
-- [x] Equipment card + empty state (`clientes-018`; this CL-3 summary commit).
-- [x] "Historial del cliente" summary card (`clientes-019`; this CL-3 summary commit).
+- [x] Active-case card + "Editar caso" action (`clientes-013`; `7e484635`).
+- [x] "Memoria del cliente" card heading/count + "Ver todo →" (`clientes-014`; `7e484635`).
+- [x] Notes card + "+ Agregar nota" entry point (`clientes-015`; `7e484635`).
+- [x] "Próximas visitas" card + "Ver agenda →" (`clientes-016`; `7e484635`).
+- [x] "Datos del cliente" card + Editar action/contact facts (`clientes-017`; `7e484635`).
+- [x] Equipment card + empty state (`clientes-018`; `7e484635`).
+- [x] "Historial del cliente" summary card (`clientes-019`; `7e484635`).
+
+### CL-3-r1 — ficha reference-fidelity (owner visual review 2026-10-06)
+Owner verdict: CL-3's first pass is structurally right (title/subtitle/actions/tabs and the Resumen grid), but not reference-faithful. **CONFIRMED scope expansion**: the Casos/Visitas/Conversaciones tab bodies ARE in scope for this unit.
+
+- [x] Avatar: match the reference identity size (large initials circle), not the current small default (`0754a728`).
+- [x] Identity subtitle copy: "Cliente desde el 11 sep 2026" (the reference includes "el") (`0754a728`).
+- [x] Restyle every Resumen card to `ClientFicha.png` (`0754a728`):
+  - [x] Caso activo: green status dot + `CASO ACTIVO` eyebrow + ⋮ menu; case title; Abierto/Prioridad alta badges; summary; divider; Responsable (avatar + name + chevron) and Monto del servicio ("Sin registrar" + "Definir monto" link); **Editar caso** button.
+  - [x] Datos del cliente: **Editar** button; Teléfono/Correo/Dirección rows with copy icons; divider; Estado del cliente badge + Consentimiento value.
+  - [x] Memoria del cliente: title + count badge + "Ver todo →"; memo row with accent bar, `CONVERSACIÓN #n` eyebrow, status badge.
+  - [x] Notas: title + **⊕ Agregar nota**; note row with author avatar, author/date, text, ⋮.
+  - [x] Próximas visitas: title + "Ver agenda →"; rows with date tile (28 SEP), service, clock + time, status badge.
+  - [x] Equipos: title + **＋ Agregar equipo**; illustrated empty state + centered "Agregar equipo" button.
+  - [x] Historial del cliente: compact row card (clock icon + title + subtitle + chevron).
+- [x] Rebuild the **Casos / Visitas / Conversaciones** tab bodies to the desktop references and mobile/tablet variants (`ed641d05`).
+- [x] Owner decision (2026-10-06): the "Historial del cliente" card opens a **combined history panel/dialog** (casos anteriores + visitas + conversaciones), not a tab jump. Mensajes stays in the Conversaciones tab (`68dff135`).
 
 ### CL-4 — Client ficha dialogs
 - [ ] Edit-data dialog: title/fields/order/editability (`clientes-024`).
@@ -141,7 +157,12 @@ Owner verdict: the first pass is still far from the reference. Concrete correcti
   `ClientFicha.test.tsx`, `stories/pages/ClientFicha.stories.tsx`, `Avatar()`, `Badge()`, `DataTable()`.
 - Path `ClientFicha.tsx` ↔ `Tabs.tsx` (undirected): `ClientFicha.tsx <--imports_from-- AppShell.tsx
   --imports_from--> PanelShell.tsx --imports_from--> Tabs.tsx`; directed query returned no path.
-- Graph refreshed to commit `072660fb` (this branch base).
+- CL-3-r1 query `ClientFicha summary cards client identity notes equipment visits cases conversations`:
+  `ClientFicha()`, `ClientFicha.tsx`, `ClientMemories.tsx`, `Tabs.tsx`, `ClientFicha.test.tsx`,
+  `ClientFicha.stories.test.tsx`, `Card()`, `Dialog()`, `DataTable()`.
+- CL-3-r1 path `ClientFicha.tsx` ↔ `ClientMemories.tsx`: direct extracted edge
+  `ClientFicha.tsx --imports_from--> ClientMemories.tsx` (one hop).
+- Graph `graph.json` current at commit `7e484635` (HEAD at CL-3-r1 start); `GRAPH_REPORT.md` header remains at `2cea04a7` because incremental refresh regenerates the report only at session close. No graph rebuild was needed.
 
 ## Evidence
 

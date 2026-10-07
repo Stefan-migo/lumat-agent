@@ -644,6 +644,44 @@
   .client-ficha__identity { align-items: stretch; flex-direction: column; }
   .client-ficha__identity-actions { display: grid; grid-template-columns: 1fr 1fr; }
 }
+.client-ficha__hero-avatar { width: 4.5rem; height: 4.5rem; font-size: var(--text-2xl); }
+.client-ficha__identity h1 { font-size: clamp(var(--text-2xl), 3vw, var(--text-4xl)); font-weight: var(--weight-bold); }
+.client-ficha__identity p { color: var(--corp-text); }
+.client-ficha__case-eyebrow { display:flex; align-items:center; gap:var(--space-2); font-weight:var(--weight-semibold); }
+.client-ficha__case-eyebrow > span:nth-child(2) { margin-left:auto; }
+.client-ficha__status-dot { width:.65rem; height:.65rem; border-radius:50%; background:var(--success); }
+.client-ficha__case-title { margin:var(--space-3) 0; font-size:var(--text-xl); }
+.client-ficha__case-badges { display:flex; gap:var(--space-2); }
+.client-ficha__case-details { display:grid; grid-template-columns:1fr 1fr; border-top:1px solid var(--border); padding-top:var(--space-3); }
+.client-ficha__case-details > div { display:grid; gap:var(--space-2); align-content:start; }
+.client-ficha__case-details small { color:var(--text-muted); }
+.client-ficha__case-details strong { display:flex; align-items:center; gap:var(--space-2); }
+.client-ficha__text-action { padding:0; border:0; background:none; color:var(--corp-text); text-align:left; text-decoration:underline; cursor:pointer; }
+.client-ficha__edit-case { float:right; }
+.client-ficha__case-inline { display:grid; gap:var(--space-2); }
+.client-ficha__case-edit { margin-top:var(--space-3); }
+ .client-ficha__contact-facts > div:not(.client-ficha__customer-state):not(:last-child) { grid-template-columns: minmax(5rem, .7fr) 1.3fr; align-items: start; padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }
+.client-ficha__contact-facts dd { display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); }
+.client-ficha__contact-facts dd .btn { min-width:2rem; padding:var(--space-1); }
+.client-ficha__customer-state { grid-template-columns: minmax(7rem, .7fr) 1.3fr !important; margin-top:var(--space-2); }
+.client-ficha__customer-state + div { grid-template-columns: minmax(7rem, .7fr) 1.3fr; }
+.client-ficha__date-tile { display:grid; justify-items:center; align-content:center; min-width:3rem; padding:var(--space-1); border-radius:var(--radius-sm); background:var(--success-tint); color:var(--corp-text); line-height:1.1; }
+.client-ficha__date-tile small { font-size:var(--text-xs); }
+.client-ficha__upcoming-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; align-items:center; gap:var(--space-3); width:100%; color:inherit; text-decoration:none; }
+.client-ficha__upcoming-row > span:nth-child(3) { display:flex; align-items:center; gap:var(--space-1); }
+.client-ficha__note-row { display:grid; grid-template-columns:auto minmax(6rem,.45fr) minmax(0,1fr) auto; align-items:center; gap:var(--space-3); padding:var(--space-3); border:1px solid var(--border); border-radius:var(--radius-md); }
+.client-ficha__note-row > div { display:grid; }
+.client-ficha__note-row small { color:var(--text-muted); }
+.client-ficha__note-row p { margin:0; }
+.client-ficha__equipment-empty { display:grid; justify-items:center; gap:var(--space-2); min-height:12rem; padding:var(--space-4); border:1px solid var(--border); border-radius:var(--radius-md); }
+.client-ficha__equipment-illustration { display:grid; place-items:center; width:3rem; height:4rem; border:2px solid var(--text-muted); border-radius:var(--radius-sm); color:var(--text-muted); font-size:var(--text-xl); }
+.client-memories__memo { border-left-color:var(--success); background:var(--surface); }
+@media (max-width: 40rem) {
+  .client-ficha__upcoming-row { grid-template-columns:auto minmax(0,1fr) auto; }
+  .client-ficha__upcoming-row .badge { grid-column:2 / -1; }
+  .client-ficha__note-row { grid-template-columns:auto minmax(0,1fr) auto; }
+  .client-ficha__note-row p { grid-column:2 / -1; }
+}
 @media (max-width: 44rem) {
   .client-ficha-page .detail-region { grid-template-columns: minmax(0, 1fr); }
   .client-ficha__case-card, .client-ficha__data-card, .client-ficha__memory-card,
