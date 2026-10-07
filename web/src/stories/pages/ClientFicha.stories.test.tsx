@@ -132,7 +132,8 @@ describe("ClientFicha state matrix stories", () => {
     const user = userEvent.setup();
     render(<UnansweredEmergency />);
     expect(screen.getByText("Emergencia sin reconocer")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Editar caso" }));
+    await user.click(screen.getByRole("button", { name: "Acciones del caso" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Editar caso" }));
     expect(screen.getByRole("button", { name: "Reconocer" })).toBeInTheDocument();
   });
 

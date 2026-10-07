@@ -109,6 +109,11 @@ async function clickCustomerMenuItem(user: ReturnType<typeof userEvent.setup>, l
   await user.click(await screen.findByRole("menuitem", { name: label }));
 }
 
+async function clickCaseMenuItem(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(screen.getByRole("button", { name: "Acciones del caso" }));
+  await user.click(await screen.findByRole("menuitem", { name: label }));
+}
+
 describe("ClientFicha page grammar", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.restoreAllMocks());
@@ -147,8 +152,9 @@ describe("ClientFicha page grammar", () => {
     expect(screen.getByText("CASO ACTIVO")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Reparación" })).toBeInTheDocument();
     expect(screen.getByText("Emergencia sin reconocer")).toBeInTheDocument();
-    expect(screen.getByText("operador⌄")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Editar caso" }));
+    expect(screen.getByText("operador", { selector: ".client-ficha__case-details strong" })).toBeInTheDocument();
+    expect(screen.queryByText("operador⌄")).not.toBeInTheDocument();
+    await clickCaseMenuItem(user, "Editar caso");
     expect(screen.getByLabelText("Estado")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Casos" }));
     const archive = screen.getByRole("region", { name: "Casos anteriores" });
@@ -168,7 +174,7 @@ describe("ClientFicha page grammar", () => {
     await user.click(screen.getByRole("tab", { name: "Casos" }));
     expect(within(screen.getByRole("region", { name: "Casos anteriores" })).getByText("Sin monto registrado")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Resumen" }));
-    await user.click(screen.getByRole("button", { name: "Definir monto" }));
+    await clickCaseMenuItem(user, "Definir monto");
     const dialog = screen.getByRole("dialog");
     await user.clear(within(dialog).getByLabelText("Monto del servicio"));
     await user.type(within(dialog).getByLabelText("Monto del servicio"), "200000");
@@ -182,7 +188,7 @@ describe("ClientFicha page grammar", () => {
     const user = userEvent.setup();
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
-    await user.click(screen.getByRole("button", { name: "Definir monto" }));
+    await clickCaseMenuItem(user, "Definir monto");
     const dialog = screen.getByRole("dialog");
     const input = within(dialog).getByLabelText("Monto del servicio");
     // fireEvent bypasses native constraint validation, mirroring the advisory's
@@ -201,7 +207,7 @@ describe("ClientFicha page grammar", () => {
     vi.mocked(postJson).mockResolvedValue({ ok: true });
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
-    await user.click(screen.getByRole("button", { name: "Editar caso" }));
+    await clickCaseMenuItem(user, "Editar caso");
     await user.selectOptions(screen.getByLabelText("Estado"), "cerrado");
     await user.selectOptions(screen.getByLabelText("Responsable"), "");
     await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
@@ -217,7 +223,7 @@ describe("ClientFicha page grammar", () => {
     const user = userEvent.setup();
     vi.mocked(postJson).mockRejectedValue(new ApiError(500, "private error"));
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
-    await user.click(screen.getByRole("button", { name: "Editar caso" }));
+    await clickCaseMenuItem(user, "Editar caso");
     await user.click(screen.getByRole("button", { name: "Guardar cambios" }));
     expect(await screen.findAllByRole("heading", { name: "No pudimos guardar el caso" })).toHaveLength(1);
   });
@@ -230,7 +236,7 @@ describe("ClientFicha page grammar", () => {
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
     await clickCustomerMenuItem(user, "Cambiar estado");
-    await user.click(screen.getByRole("button", { name: "Pendiente (seleccionado)" }));
+    await user.click(screen.getByRole("radio", { name: "Pendiente" }));
     await user.click(screen.getByRole("button", { name: "Guardar estado" }));
     await user.click(screen.getByRole("button", { name: "⊕ Agregar nota" }));
     const noteDialog = screen.getByRole("dialog", { name: "Agregar nota" });
@@ -242,6 +248,25 @@ describe("ClientFicha page grammar", () => {
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10");
     expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7/memories");
     expect(await screen.findByRole("heading", { name: "Nota agregada" })).toBeInTheDocument();
+  });
+
+  it("renders the ficha allowed transitions as selectable radio cards and hides save for terminal states", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await clickCustomerMenuItem(user, "Cambiar estado");
+    const group = screen.getByRole("radiogroup", { name: "Nuevo estado" });
+    expect(within(group).getAllByRole("radio")).toHaveLength(2);
+    expect(within(group).getByRole("radio", { name: "Pendiente" })).toHaveAttribute("aria-checked", "true");
+    await user.click(within(group).getByRole("radio", { name: "Agendado" }));
+    expect(within(group).getByRole("radio", { name: "Agendado" })).toHaveAttribute("aria-checked", "true");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancelar" }));
+
+    rerender(<ClientFicha customerId={7} data={{ ...ficha, customer: { ...ficha.customer, state: "cancelado", allowed_transitions: [] } }} memories={memories} />);
+    await clickCustomerMenuItem(user, "Cambiar estado");
+    const terminalDialog = screen.getByRole("dialog");
+    expect(within(terminalDialog).queryByRole("radio")).not.toBeInTheDocument();
+    expect(within(terminalDialog).queryByRole("button", { name: "Guardar estado" })).not.toBeInTheDocument();
   });
 
   it("shows a pending relation and resolves it through the panel API", async () => {
@@ -285,7 +310,7 @@ describe("ClientFicha page grammar", () => {
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
     await clickCustomerMenuItem(user, "Cambiar estado");
-    await user.click(screen.getByRole("button", { name: "Pendiente (seleccionado)" }));
+    await user.click(screen.getByRole("radio", { name: "Pendiente" }));
     const save = screen.getByRole("button", { name: "Guardar estado" });
     await user.click(save);
     expect(save).toBeDisabled();
@@ -324,13 +349,14 @@ describe("ClientFicha customer controls", () => {
     expect(within(rail).getAllByText("Contactado", { selector: ".badge" }).length).toBeGreaterThan(0);
 
     const actions = rail.querySelector(".client-ficha__customer-controls") as HTMLElement;
-    expect(within(actions).getByRole("button", { name: "Editar identidad" })).toHaveClass("btn--secondary");
+    expect(within(actions).queryByRole("button", { name: "Editar identidad" })).not.toBeInTheDocument();
     expect(actions.querySelectorAll(".menu__trigger--icon")).toHaveLength(1);
     expect(within(actions).getByRole("button", { name: "Acciones para Marcela Fuentes" })).toBeInTheDocument();
     expect(within(actions).getAllByRole("button").every((button) => !button.textContent?.includes("Marcela Fuentes"))).toBe(true);
 
     await user.click(within(actions).getByRole("button", { name: "Acciones para Marcela Fuentes" }));
     const menu = await screen.findByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Editar" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Cambiar consentimiento" })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Fusionar con otro cliente" })).toHaveClass("menu__item--danger");
     expect(within(menu).getByRole("menuitem", { name: "Archivar" })).toHaveClass("menu__item--danger");
@@ -342,7 +368,7 @@ describe("ClientFicha customer controls", () => {
     vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
-    await user.click(screen.getByRole("button", { name: "Editar identidad" }));
+    await clickCustomerMenuItem(user, "Editar");
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByLabelText("Teléfono *")).toHaveAttribute("readonly");
     await user.clear(within(dialog).getByLabelText("Nombre"));
@@ -356,7 +382,7 @@ describe("ClientFicha customer controls", () => {
   it("shows a local message rather than silently dropping a blank changed field", async () => {
     const user = userEvent.setup();
     render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
-    await user.click(screen.getByRole("button", { name: "Editar identidad" }));
+    await clickCustomerMenuItem(user, "Editar");
     const dialog = screen.getByRole("dialog");
     await user.clear(within(dialog).getByLabelText("Nombre"));
     await user.click(within(dialog).getByRole("button", { name: "Guardar cambios" }));
@@ -371,7 +397,10 @@ describe("ClientFicha customer controls", () => {
     await clickCustomerMenuItem(user, "Cambiar consentimiento");
     const dialog = screen.getByRole("dialog");
     expect(updateCustomerConsent).not.toHaveBeenCalled();
-    await user.click(within(dialog).getByRole("button", { name: /No: El cliente prefiere/ }));
+    const group = within(dialog).getByRole("radiogroup", { name: "Nuevo consentimiento" });
+    expect(within(group).getByRole("radio", { name: /Sí El cliente acepta/ })).toHaveAttribute("aria-checked", "true");
+    await user.click(within(group).getByRole("radio", { name: /No El cliente prefiere/ }));
+    expect(within(group).getByRole("radio", { name: /No El cliente prefiere/ })).toHaveAttribute("aria-checked", "true");
     await user.click(within(dialog).getByRole("button", { name: "Guardar consentimiento" }));
     expect(updateCustomerConsent).toHaveBeenCalledWith(7, false);
     expect(await within(dialog).findByRole("heading", { name: "No pudimos guardar el consentimiento" })).toBeInTheDocument();
@@ -537,7 +566,7 @@ describe("ClientFicha slice 2 — product register", () => {
     const { container } = render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
 
     await clickCustomerMenuItem(user, "Cambiar estado");
-    await user.click(screen.getByRole("button", { name: "Pendiente (seleccionado)" }));
+    await user.click(screen.getByRole("radio", { name: "Pendiente" }));
     await user.click(screen.getByRole("button", { name: "Guardar estado" }));
 
     expect(container.querySelector(".client-ficha__state-control")).toBeNull();
