@@ -173,7 +173,7 @@ describe("ClientFicha page grammar", () => {
 
     expect(screen.getAllByText(/125\.000/).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("tab", { name: "Casos" }));
-    expect(within(screen.getByRole("region", { name: "Casos anteriores" })).getByText("Sin monto registrado")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Casos anteriores" })).getByText("Sin registrar")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Resumen" }));
     await clickCaseMenuItem(user, "Definir monto");
     const dialog = screen.getByRole("dialog");
@@ -215,9 +215,44 @@ describe("ClientFicha page grammar", () => {
     expect(postJson).toHaveBeenCalledWith("/panel/api/cases/2/update", { status: "cerrado", responsible_id: null });
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/panel/api/clients/7?messages_limit=10"));
     await user.click(screen.getByRole("tab", { name: "Casos" }));
-    await user.click(screen.getByRole("button", { name: "Editar caso" }));
+    await clickCaseMenuItem(user, "Editar caso");
     await user.click(screen.getByRole("button", { name: "Reconocer" }));
     expect(postJson).toHaveBeenCalledWith("/panel/api/cases/2/ack");
+  });
+
+  it("edits an archived case from its row menu on the Casos tab", async () => {
+    const user = userEvent.setup();
+    vi.mocked(postJson).mockResolvedValue({ ok: true });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("tab", { name: "Casos" }));
+    await user.click(screen.getByRole("button", { name: "Acciones del caso #1" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Editar caso" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("#1 · Gasfitería")).toBeInTheDocument();
+    await user.selectOptions(within(dialog).getByLabelText("Estado"), "cerrado");
+    await user.click(within(dialog).getByRole("button", { name: "Guardar cambios" }));
+
+    expect(postJson).toHaveBeenCalledWith("/panel/api/cases/1/update", { status: "cerrado", responsible_id: null });
+  });
+
+  it("defines the amount of an archived case from its row menu on the Casos tab", async () => {
+    const user = userEvent.setup();
+    vi.mocked(updateCaseAmount).mockResolvedValue({ ok: true, case: { ...ficha.history.cases[1], amount: 90000, customer: ficha.customer } });
+    vi.mocked(apiFetch).mockImplementation(async (path) => path.endsWith("/memories") ? { memories } : path.endsWith("/pending") ? { relations: [] } : ficha);
+    render(<ClientFicha customerId={7} data={ficha} memories={memories} />);
+
+    await user.click(screen.getByRole("tab", { name: "Casos" }));
+    await user.click(screen.getByRole("button", { name: "Acciones del caso #1" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Definir monto" }));
+
+    const dialog = screen.getByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Monto del servicio"), "90000");
+    await user.click(within(dialog).getByRole("button", { name: "Guardar monto" }));
+
+    expect(updateCaseAmount).toHaveBeenCalledWith(1, 90000);
   });
 
   it("shows local feedback when a case update fails", async () => {
@@ -616,7 +651,7 @@ describe("ClientFicha slice 2 — product register", () => {
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Resumen", "Casos", "Visitas", "Conversaciones"]);
     await user.click(screen.getByRole("tab", { name: "Casos" }));
     expect(screen.getByRole("heading", { name: "Casos anteriores" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Datos del cliente" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Visitas" }));
     expect(screen.getByRole("heading", { name: "Visitas" })).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Conversaciones" }));
