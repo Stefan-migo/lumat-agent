@@ -121,7 +121,7 @@ The CV-1 tab-label change (`Humanas`→`Atención humana`, `Casos`→`Con caso`)
 - [x] `Cliente` card: avatar + name + phone + copy action.
 - [x] `Caso vinculado` card: title, status/priority badges, summary, `Ver caso →`, Emergencia/Reconocimiento rows.
 - [x] `Datos capturados` disclosure stays open by default with dt/dd rows (CSS contract kept: `.ai-agent-grammar__detail`).
-- [ ] Tablet/mobile workspace layout per `MobileTabletConversationThread.png` — NOT yet reviewed by the owner.
+- [x] Tablet/mobile workspace layout per `MobileTabletConversationThread.png` — resolved by the chat-first mobile pass (CV-5 + CV-5-r1) and owner-reviewed.
 - [x] Updated thread tests/stories.
 
 ### CV-4 — ConversationThread composer + states + a11y
@@ -164,6 +164,23 @@ The Vite dev server **missed a file edit**: it served a stale transform of `Dial
 - [x] `Ver ficha del cliente` and `Volver a conversaciones` are now **50/50 on one row** (measured 173px each at 390px wide) instead of stacked.
 - [x] `Información del chat` moved **into the mobile `…` menu**; the `…` trigger sits right-aligned with the card title/subtitle (measured x=314). Menu order: Información del chat · Tomar conversación · Devolver al agente · Cerrar conversación (+ Reconocer emergencia when applicable).
 - [x] Evidence: commit `00c2301e`; `tsc` clean; full suite **1034/1034**; `npm run build` green; Playwright measurements above.
+
+## Review (RDD) and close — 2026-10-07
+
+- **Candidate:** accumulated range `a0dbb472..HEAD`, 17 paths / 752 changed lines, risk **medium** (assess reason: executable change). `review_due: true` / `slice_budget_reached`.
+- **Consent:** granted by the owner (candidate-scoped; `gentle-ai.review-integration.consent/v3` relayed losslessly).
+- **Plan:** one lens, `review-reliability` (medium risk ⇒ single consolidated review).
+- **Outcome: APPROVED — authority burned** (`gentle-ai.review-acknowledged/v1`, `action: acknowledged`).
+- **Non-blocking warnings** (the reviewer marked them informational; they did not open a correction and are NOT a reason to re-run review on this candidate):
+  - `R3-001` — `web/src/components/pages/ConversationThread.tsx:166`: the menu dispatcher routes every unrecognized selection to `acknowledgeCase`, so an unexpected or future menu value would acknowledge the case instead of safely doing nothing. Defensive hardening.
+  - `R3-002` — `web/src/components/pages/ConversationThread.tsx:197`: **real gap** — `mobileActions` omits the emergency-acknowledge item, so a mobile operator cannot acknowledge an unacknowledged emergency from the thread. **Recommended follow-up (small fix).**
+- **Delivery:** not performed. Commit/push/PR/merge remain the owner's decision under ordinary repository policy.
+
+### Final status
+**Conversaciones section (frontend): closed and owner-approved.** Work units delivered: `8f844391` `ebd7cc20` `8572326b` `46046a06` `71a39676` `56c69b73` `68c21e99` `7e4dadd0` `0b64a05c` `fc84bb75` `64a1063d` `00c2301e`, plus the doc commits.
+- Passed: full frontend suite **1034/1034**, `tsc -b --force --noEmit`, `npm run build`, Playwright layout measurements (lists + mobile thread + bottom sheet).
+- Not performed: push, PR, merge (owner's decision) and the `R3-002` follow-up.
+- Backend follow-up still open (out of this section's scope): stop persisting `_pending` in `captured_data`.
 
 ## Authorized scope
 
