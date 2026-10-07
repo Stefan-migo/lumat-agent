@@ -190,6 +190,32 @@ def test_operator_cannot_read_assistant_stream(client):
     assert "evidence" not in response.text.lower()
 
 
+def test_sdb_requested_is_admin_only(client):
+    _user("assistant-sdb-operator", "operador")
+    _login(client, "assistant-sdb-operator")
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+
+    denied = client.post(
+        f"/panel/api/chat/threads/{thread_id}/messages",
+        json={"content": "verify this", "sdb_requested": True},
+    )
+
+    assert denied.status_code == 403
+
+
+def test_sdb_requested_is_accepted_for_admin(client):
+    _user("assistant-sdb-admin", "admin")
+    _login(client, "assistant-sdb-admin")
+    thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
+
+    accepted = client.post(
+        f"/panel/api/chat/threads/{thread_id}/messages",
+        json={"content": "verify this", "sdb_requested": True},
+    )
+
+    assert accepted.status_code == 201
+
+
 def test_cross_thread_read_is_not_exposed(client):
     _user("assistant-owner", "admin")
     _user("assistant-other", "admin")
