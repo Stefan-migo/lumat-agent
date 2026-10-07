@@ -127,9 +127,9 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
 - [x] Preserve stream/error/retry/approval behavior and tests.
 
 ### AW-5 — Right panel (Contexto / Actividad)
-- [ ] Persistent right panel with `Tabs`. Contexto: project + KB/capabilities + thread files (existing
-      data). Actividad: existing per-run tool/evidence activity restyled.
-- [ ] Project resources / project agents / "Fuentes del hilo" → honest empty states.
+- [x] Persistent right panel with `Tabs`. Contexto: active project + capabilities + thread files (existing
+       data). Actividad: existing per-run tool/evidence activity restyled.
+- [x] Project resources / project agents / "Fuentes del hilo" → honest empty states.
 
 ### AW-6 — Project context workspace
 - [ ] Route-backed project workspace with tabs Contexto / Hilos / Agentes, reusing `Tabs`, `Card`,
@@ -271,4 +271,25 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
     toggles, stop control, and mentions remain omitted.
   - Commits: `37d32673` (`feat(assistant): restyle chat composer`) and `5042bb1e`
     (`fix(assistant): refresh rail-created thread tabs`).
-  - Remaining: AW-5 through AW-7; review and visual validation remain outstanding.
+- Remaining: AW-5 through AW-7; review and visual validation remain outstanding.
+- **AW-5 implemented (2026-10-07)** — right panel now has Contexto / Actividad tabs. AgentChat passes
+  its existing run evidence, plan, lifecycle, processing, capabilities, and thread attachments down
+  into AssistantWorkspace; project name/purpose/status come from the real project list. Resources,
+  project agents, and per-thread sources remain honest unavailable/empty states (no backend contract).
+  The attachment display adds a third visible filename copy alongside the composer and status row;
+  the existing assertion was updated to preserve that exact expected count.
+  - Files: `web/src/components/pages/AssistantWorkspace.tsx`, `AssistantWorkspace.css`,
+    `AssistantWorkspace.test.tsx`, `AgentChat.tsx`, `AgentChat.test.tsx`, and this task file.
+  - Verification from `web/`: `npx tsc -b --force --noEmit` — passed, no output;
+    focused assistant tests — 2 files / 52 passed; `npx vitest run --no-file-parallelism` —
+    97 files / 1040 passed; `npm run build` — passed with the existing Vite >500 kB chunk warning.
+  - Graph Check: `graphify query "AssistantWorkspace right panel context activity AgentChat events capabilities"`
+    consulted `AssistantWorkspace()`, `AgentChat()`, `AgentChat.tsx`, `Tabs`, `Card`, `Badge`,
+    `listProjects()`, `getAssistantCapabilities()`, `src/types.ts`, and `AgentChat.test.tsx`;
+    `graphify path AgentChat AssistantWorkspace` returned no directed path (ambiguous source matches).
+    Source inspection confirms the direct JSX composition: AgentChat renders AssistantWorkspace and
+    passes the shared activity/attachments/capability state as props. Both reference PNGs were read
+    from the main worktree only. Graph incremental update reported warnings about out-of-scope source
+    attribution, but completed and produced updated graph data; no graph artifacts are part of this change.
+  - Code commit: `c65b38cf` (`feat(assistant): add context and activity panel`).
+  - Remaining: AW-6 and AW-7; owner visual review remains outstanding.
