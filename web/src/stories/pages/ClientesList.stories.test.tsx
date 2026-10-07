@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { clients as customers } from "./_shared/mockData/clients";
 import { customerStateLabel, customerStateTone } from "./_shared/toneMaps";
 import { ClientesListView, ClientesListEmpty, ClientesListFilteredEmpty } from "./ClientesList.stories";
 import { ClientesList } from "../../components/pages/ClientesList";
+import type { CustomerState } from "../../types";
 
 describe("ClientesList page story (R-PRD-PG-6)", () => {
   it("renders the page title", () => {
@@ -41,7 +43,7 @@ describe("ClientesList page story (R-PRD-PG-6)", () => {
 
     const consentCell = within(firstRow).getByText(first.consent_status ? "Sí" : "No");
     expect(consentCell).toBeInTheDocument();
-    expect(within(firstRow).getByText(new RegExp("^2026"))).toBeInTheDocument();
+    expect(within(firstRow).getByText(/\d{1,2} \w{3} 2026/)).toBeInTheDocument();
   });
 
   it("renders each customer's approved Spanish state label (triangulation)", () => {
@@ -113,15 +115,16 @@ describe("ClientesList appearance axis (amended DS-GRAMMAR-1)", () => {
     const { container } = render(<ClientesListView />);
 
     expect(screen.getByRole("region", { name: "Listado de clientes" })).toBeInTheDocument();
-    expect(container.querySelector(".toolbar")).not.toBeNull();
+    expect(container.querySelector(".clientes-list__toolbar")).not.toBeNull();
+    expect(container.querySelector(".clientes-list__card")).not.toBeNull();
     expect(container.querySelector(".data-region")).not.toBeNull();
   });
 
-  it("styles the drill-down link through the shared table link contract", () => {
+  it("styles the drill-down link without browser-default underlining", () => {
     render(<ClientesListView />);
 
     const link = screen.getByRole("link", { name: customers[0].name! });
-    expect(link).toHaveClass("table__link");
+    expect(link).toHaveClass("clientes-list__name");
     expect(link).not.toHaveAttribute("style");
   });
 
@@ -148,6 +151,19 @@ describe("ClientesList appearance axis (amended DS-GRAMMAR-1)", () => {
 });
 
 describe("ClientesList API behavior", () => {
+  it("offers only the allowed lifecycle transitions in the dialog", async () => {
+    const customer = { ...customers[0], allowed_transitions: ["contactado", "pendiente"] as CustomerState[] };
+    render(<ClientesList data={[customer]} state="ready" />);
+    const user = userEvent.setup();
+    const row = screen.getByRole("link", { name: customer.name! }).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: `Acciones para ${customer.name}` }));
+    await user.click(await screen.findByRole("menuitem", { name: "Cambiar estado" }));
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
+    expect(screen.getByRole("radio", { name: "Contactado" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Pendiente" })).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Nuevo" })).not.toBeInTheDocument();
+  });
+
   it("adds the search query to the clients API request", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ clients: customers.slice(0, 1), query: "Jorge" }), {
@@ -190,4 +206,5 @@ describe("ClientesList API behavior", () => {
       expect(fetchMock.mock.calls.some(([path]) => path === "/panel/api/clients?q=Marcela+Fuentes&sort=created_desc")).toBe(true);
     });
   });
+
 });

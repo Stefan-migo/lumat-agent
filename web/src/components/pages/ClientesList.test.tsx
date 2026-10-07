@@ -19,6 +19,7 @@ const customers: Customer[] = [
     comuna: "Ñuñoa",
     address: "Av. Italia 123",
     state: "contactado",
+    allowed_transitions: ["pendiente", "agendado", "en_evaluacion", "finalizado", "cancelado"],
     consent_status: true,
     consent_at: null,
     created_at: "2026-07-15T12:00:00Z",
@@ -66,10 +67,11 @@ describe("ClientesList", () => {
 
     expect(screen.getByRole("main")).toHaveTextContent("Clientes");
     expect(screen.getByRole("columnheader", { name: "Cliente" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Registro" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Teléfono" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Estado" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Consentimiento" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Creado" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Creado ↓" })).toBeInTheDocument();
 
     // The client name and phone remain distinct reference columns.
     const cell = screen.getByRole("link", { name: "Marcela Fuentes" }).closest(".table__resource");
@@ -80,7 +82,7 @@ describe("ClientesList", () => {
     expect(screen.getByRole("cell", { name: "+56912345678" })).toBeInTheDocument();
     expect(screen.getByText("Contactado")).toBeInTheDocument();
     expect(screen.getByText("En evaluación")).toBeInTheDocument();
-    expect(screen.getByText("2026-07-15")).toBeInTheDocument();
+    expect(screen.getByText("15 jul 2026")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
@@ -207,14 +209,14 @@ describe("ClientesList", () => {
     expect(screen.getByRole("button", { name: "Reintentar" })).toHaveClass("btn");
   });
 
-  // T6 — the filter and export controls belong to the region they control, not to the page header.
-  it("binds the search and the exports to a toolbar inside the list content", () => {
+  it("binds the search and filters to the list card and keeps exports in the page header", () => {
     const { container } = render(<ClientesList data={customers} state="ready" />);
 
-    const toolbar = container.querySelector(".toolbar");
+    const toolbar = container.querySelector(".clientes-list__toolbar");
     expect(toolbar).not.toBeNull();
     expect(toolbar).toContainElement(screen.getByLabelText("Buscar clientes"));
-    expect(toolbar).toContainElement(screen.getByRole("button", { name: "Exportar" }));
+    expect(toolbar).not.toContainElement(screen.getByRole("button", { name: "Exportar" }));
+    expect(screen.getByRole("button", { name: "Nuevo cliente" }).closest(".page-header__actions")).not.toBeNull();
   });
 
   it("exposes the search and export dropdown", () => {
@@ -237,11 +239,11 @@ describe("ClientesList", () => {
   });
 
   // T4 — the accessible link colour is a shared contract, not an inline call-site style.
-  it("styles the drill-down link through the shared table link contract", () => {
+  it("styles the drill-down link without browser-default underlining", () => {
     render(<ClientesList data={customers} state="ready" />);
 
     const link = screen.getByRole("link", { name: "Marcela Fuentes" });
-    expect(link).toHaveClass("table__link");
+    expect(link).toHaveClass("clientes-list__name");
     expect(link).not.toHaveAttribute("style");
   });
 
@@ -257,7 +259,6 @@ describe("ClientesList", () => {
   it("changes a client's state from the row and refreshes the list", async () => {
     const user = userEvent.setup();
     vi.mocked(fetchClients).mockResolvedValue({ clients: customers });
-    vi.mocked(getClientFicha).mockResolvedValue({ customer: customers[0], states: ["nuevo", "contactado", "en_evaluacion"], history: {} } as never);
     vi.mocked(changeClientState).mockResolvedValue({ customer: { ...customers[0], state: "en_evaluacion" } } as never);
 
     render(<ClientesList />);
@@ -265,34 +266,24 @@ describe("ClientesList", () => {
     expect(row).not.toBeNull();
     const menu = await openRowActions(user, row!, "Marcela Fuentes");
     await user.click(menu.getByRole("menuitem", { name: "Cambiar estado" }));
-    const stateSelect = await screen.findByLabelText("Estado del cliente");
-    await user.selectOptions(stateSelect, "en_evaluacion");
+    expect(screen.getAllByRole("radio").map((radio) => radio.getAttribute("aria-label") ?? radio.textContent)).toHaveLength(5);
+    expect(screen.queryByRole("radio", { name: "Nuevo" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /En evaluación/ }));
     await user.click(screen.getByRole("button", { name: "Guardar estado" }));
 
     expect(changeClientState).toHaveBeenCalledWith(1, "en_evaluacion");
     await waitFor(() => expect(fetchClients).toHaveBeenCalledTimes(2));
   });
 
-  it("does not let a stale ficha response replace the latest state options", async () => {
+  it("shows no state options or save action for a terminal customer", async () => {
     const user = userEvent.setup();
-    vi.mocked(fetchClients).mockResolvedValue({ clients: customers });
-    let resolveFirst!: (value: unknown) => void;
-    vi.mocked(getClientFicha)
-      .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }) as never)
-      .mockResolvedValueOnce({ customer: customers[1], states: ["nuevo", "pendiente"] } as never);
-    render(<ClientesList />);
-    const row1 = (await screen.findByText("Marcela Fuentes")).closest("tr")!;
-    const row2 = screen.getByText("Pedro Soto").closest("tr")!;
-
-    await user.click((await openRowActions(user, row1, "Marcela Fuentes")).getByRole("menuitem", { name: "Cambiar estado" }));
-    await user.click((await openRowActions(user, row2, "Pedro Soto")).getByRole("menuitem", { name: "Cambiar estado" }));
-    const select = await screen.findByLabelText("Estado del cliente");
-    await waitFor(() => expect(select.querySelectorAll("option")).toHaveLength(2));
-    resolveFirst({ customer: customers[0], states: ["contactado", "cancelado"] });
-
-    await waitFor(() => expect(select.querySelectorAll("option")).toHaveLength(2));
-    expect(within(select).getByRole("option", { name: "Pendiente" })).toBeInTheDocument();
-    expect(within(select).queryByRole("option", { name: "Cancelado" })).not.toBeInTheDocument();
+    const terminal = { ...customers[1], state: "cancelado" as const, allowed_transitions: [] };
+    render(<ClientesList data={[terminal]} state="ready" />);
+    const row = screen.getByText("Pedro Soto").closest("tr")!;
+    await user.click((await openRowActions(user, row, "Pedro Soto")).getByRole("menuitem", { name: "Cambiar estado" }));
+    expect(screen.getByRole("status")).toHaveTextContent("no tiene transiciones");
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar estado" })).not.toBeInTheDocument();
   });
 
   it("opens the create dialog and offers ficha navigation for a duplicate phone", async () => {
@@ -302,9 +293,17 @@ describe("ClientesList", () => {
     render(<ClientesList data={customers} state="ready" onOpenClient={onOpenClient} />);
     await user.click(screen.getByRole("button", { name: "Nuevo cliente" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Registra sus datos de contacto y ubicación.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Datos de contacto" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ubicación" })).toBeInTheDocument();
     expect(screen.getByLabelText("Teléfono")).toBeRequired();
-    await user.type(screen.getByLabelText("Teléfono"), "+56912345678");
+    await user.click(screen.getByLabelText("Teléfono")); await user.paste("+56912345678");
+    await user.click(screen.getByLabelText("Nombre (opcional)")); await user.paste("Carla Núñez");
+    await user.click(screen.getByLabelText("Correo (opcional)")); await user.paste("carla@example.com");
+    await user.click(screen.getByLabelText("Comuna (opcional)")); await user.paste("Providencia");
+    await user.click(screen.getByLabelText("Dirección (opcional)")); await user.paste("Av. Providencia 123");
     await user.click(screen.getByRole("button", { name: "Crear cliente" }));
+    expect(createCustomer).toHaveBeenCalledWith({ phone: "+56912345678", name: "Carla Núñez", email: "carla@example.com", comuna: "Providencia", address: "Av. Providencia 123" });
     await user.click(await screen.findByRole("button", { name: "Abrir la ficha existente" }));
     expect(onOpenClient).toHaveBeenCalledWith(9);
     expect(screen.queryByText("phone_exists")).not.toBeInTheDocument();
@@ -318,8 +317,8 @@ describe("ClientesList", () => {
     const activeRow = screen.getByText("Marcela Fuentes").closest("tr")!;
     await user.click((await openRowActions(user, activeRow, "Marcela Fuentes")).getByRole("menuitem", { name: "Archivar" }));
     expect(getClientFicha).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText(/1 caso abierto y 1 visita futura/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Confirmar archivo" }));
+    await waitFor(() => expect(screen.getAllByText("1", { selector: ".clientes-list__archive-stats strong" })).toHaveLength(2));
+    await user.click(screen.getByRole("button", { name: "Archivar cliente" }));
     expect(archiveCustomer).toHaveBeenCalledWith(1);
     unmount();
 
@@ -340,7 +339,7 @@ describe("ClientesList", () => {
 
   it("shows the archived filter and marks archived customers", () => {
     render(<ClientesList data={[{ ...customers[0], archived_at: "2026-01-01" }]} state="ready" />);
-    expect(screen.getByRole("checkbox", { name: "Mostrar archivados" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Mostrar archivados" })).toBeInTheDocument();
     expect(screen.getByText("Archivado")).toBeInTheDocument();
   });
 
@@ -349,7 +348,7 @@ describe("ClientesList", () => {
     vi.mocked(fetchClients).mockResolvedValue({ clients: customers });
     render(<ClientesList />);
     await screen.findByText("Marcela Fuentes");
-    await user.click(screen.getByRole("checkbox", { name: "Mostrar archivados" }));
+    await user.click(screen.getByRole("switch", { name: "Mostrar archivados" }));
     await waitFor(() => expect(fetchClients).toHaveBeenLastCalledWith({ includeArchived: true, query: "", consent: undefined, sort: "created_desc" }));
   });
 
@@ -380,12 +379,12 @@ describe("ClientesList", () => {
 describe("ClientesList — row actions", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("gives each row an action menu and ficha affordance", () => {
+  it("gives each row only its action menu", () => {
     render(<ClientesList data={customers} state="ready" />);
 
     const row = screen.getByText("Marcela Fuentes").closest("tr");
     expect(row).not.toBeNull();
-    expect(within(row!).getAllByRole("button")).toHaveLength(2);
+    expect(within(row!).getAllByRole("button")).toHaveLength(1);
     expect(
       within(row!).getByRole("button", { name: "Acciones para Marcela Fuentes" }),
     ).toBeInTheDocument();
@@ -421,7 +420,7 @@ describe("ClientesList — row actions", () => {
     const user = userEvent.setup();
     render(<ClientesList data={customers} state="ready" />);
     await user.click(screen.getByRole("checkbox", { name: "Seleccionar todos" }));
-    expect(screen.getByText("3 seleccionados · Acciones masivas")).toBeInTheDocument();
+    expect(screen.getByText("3 seleccionados")).toBeInTheDocument();
     expect(screen.getByText("Mostrando 3 de 3 clientes")).toBeInTheDocument();
   });
 

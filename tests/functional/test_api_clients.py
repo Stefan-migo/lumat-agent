@@ -407,6 +407,12 @@ def test_clients_list_includes_archived_only_when_requested(client, make_user):
     assert {row["id"] for row in default.json()["clients"]} == {active_id}
     archived = next(row for row in included.json()["clients"] if row["id"] == archived_id)
     assert datetime.fromisoformat(archived["archived_at"])
+    assert set(archived["allowed_transitions"]) == {
+        "contactado", "pendiente", "agendado", "en_evaluacion", "cancelado"
+    }
+    assert "allowed_transitions" in next(
+        row for row in default.json()["clients"] if row["id"] == active_id
+    )
 
 
 def test_archive_and_unarchive_routes_audit_actor_and_return_ficha(client, make_user):

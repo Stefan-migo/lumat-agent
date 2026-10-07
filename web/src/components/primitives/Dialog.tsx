@@ -12,10 +12,11 @@ export interface DialogProps {
   closeLabel?: string;
   icon?: LucideIcon;
   description?: string;
+  size?: "default" | "wide";
 }
 
 /** Corporate Dialog primitive (CST-PRIM-7): native modal ownership. */
-export function Dialog({ open, onClose, title, children, closeLabel = "Cerrar", icon, description }: DialogProps) {
+export function Dialog({ open, onClose, title, children, closeLabel = "Cerrar", icon, description, size = "default" }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const ignoreCloseRef = useRef(false);
   const titleId = useId();
@@ -40,7 +41,7 @@ export function Dialog({ open, onClose, title, children, closeLabel = "Cerrar", 
         open={!supportsModal && open ? true : undefined}
         aria-modal="true"
         aria-labelledby={titleId}
-        className="dialog"
+        className={size === "wide" ? "dialog dialog--wide" : "dialog"}
         onCancel={(event) => {
           event.preventDefault();
           ignoreCloseRef.current = true;

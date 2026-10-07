@@ -678,6 +678,7 @@
   box-shadow: var(--shadow-3);
   color: var(--corp-fg);
 }
+.dialog--wide { width: min(47rem, calc(100vw - var(--space-5))); }
 .dialog::backdrop {
   background: color-mix(in srgb, var(--corp-bg) 55%, transparent);
 }

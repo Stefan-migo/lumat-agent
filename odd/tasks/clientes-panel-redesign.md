@@ -44,7 +44,7 @@ the owner corrects the design visually per work unit.
 - [x] API tests: consent filter, sort, and unchanged default ordering.
 - Findings: `clientes-003`, `clientes-004`.
 
-### CL-2a — Clientes list surface
+### CL-2a — Clientes list surface (first pass)
 - [x] Reference title composition: count badge/accent bar + subtitle (`clientes-001`).
 - [x] Todos/Agendados/Finalizados tabs with per-state counts (`clientes-002`).
 - [x] Consent filter control wired to the CL-1 param (`clientes-003`).
@@ -54,14 +54,27 @@ the owner corrects the design visually per work unit.
 - [x] "Exportar" dropdown in place of the two CSV links (`clientes-007`).
 - [x] Dedicated Teléfono column (`clientes-008`).
 - [x] Consent check/minus icon treatment (`clientes-009`).
-- [x] Row chevron `>` ficha affordance alongside the ⋯ menu (`clientes-010`).
+- [x] ~~Row chevron `>` ficha affordance~~ — **REVERSED by the owner (2026-10-05): remove the row chevron.**
+
+### CL-2a-r1 — list reference-fidelity refinement (owner visual review 2026-10-05)
+Owner verdict: the first pass is still far from the reference. Concrete corrections:
+- [x] Move "Exportar" + "Nuevo cliente" to the page header (top-right); remove them from the table toolbar.
+- [x] Wrap the search toolbar + table + footer in one card.
+- [x] Toolbar composition: search input ("Buscar por nombre o teléfono...") + "Consentimiento" dropdown + "Mostrar archivados" toggle switch.
+- [x] Column order: Cliente | Registro | Teléfono | Estado | Consentimiento | Creado ↓ (actions last).
+- [x] Remove the row chevron `>` (owner reversal of `clientes-010`).
+- [x] Style the client-name link (no browser underline; plain name per the reference).
+- [x] Date format "20 sep 2026" (day month year).
+- [x] Match the estado/consent badges and the pagination active-page button to the reference.
+- [x] CL-2a-r2 polish: reuse shared Tabs/list patterns, make archived toggle readable, remove the dead bulk-action label, and reset pagination on search.
 
 ### CL-2b — Clientes list dialogs
-- [ ] Dialog headers: pass existing `Dialog` `icon`/`description` (`clientes-020`, list call sites).
-- [ ] New-client form: optional name/email/comuna/address + `Input` `icon`/`helper`
+- [x] Dialog headers: pass existing `Dialog` `icon`/`description` (`clientes-020`, list call sites).
+- [x] New-client form: icon header + description, "Datos de contacto" (Teléfono * + Nombre),
+      Correo, "Ubicación" (Comuna + Dirección), "* Campo obligatorio", Cancelar/Crear cliente
       (`clientes-021`, `clientes-022`).
-- [ ] Change-state dialog: client/current-state row, three radio cards, summary (`clientes-023`).
-- [ ] Archive confirmation label/danger tone on the list entry point (`clientes-032`, list side).
+- [x] Change-state dialog: client/current-state row, three radio cards, summary (`clientes-023`).
+- [x] Archive confirmation label/danger tone and client information block on the list entry point (`clientes-032`, list side).
 
 ### CL-3 — Client ficha shell
 - [ ] Identity header: avatar, name, "Cliente desde [date]", Agendar visita/Ver conversación
