@@ -841,6 +841,21 @@
   color: var(--corp-fg);
 }
 .dialog--wide { width: min(47rem, calc(100vw - var(--space-5))); }
+/* Mobile bottom sheet: rises from the bottom edge on small screens; centered dialog above 40rem. */
+@media (max-width: 40rem) {
+  .dialog--sheet {
+    inset: auto 0 0 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    max-height: min(85dvh, 40rem);
+    overflow-y: auto;
+    animation: dialog-sheet-rise var(--duration-base) var(--ease-out);
+  }
+}
+@keyframes dialog-sheet-rise { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .dialog--sheet { animation: none; } }
 .dialog::backdrop {
   background: color-mix(in srgb, var(--corp-bg) 55%, transparent);
 }

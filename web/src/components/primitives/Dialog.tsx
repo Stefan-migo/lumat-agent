@@ -13,10 +13,12 @@ export interface DialogProps {
   icon?: LucideIcon;
   description?: string;
   size?: "default" | "wide";
+  /** `sheet` rises from the bottom edge on small screens (centered dialog above 40rem). */
+  variant?: "default" | "sheet";
 }
 
 /** Corporate Dialog primitive (CST-PRIM-7): native modal ownership. */
-export function Dialog({ open, onClose, title, children, closeLabel = "Cerrar", icon, description, size = "default" }: DialogProps) {
+export function Dialog({ open, onClose, title, children, closeLabel = "Cerrar", icon, description, size = "default", variant = "default" }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const ignoreCloseRef = useRef(false);
   const titleId = useId();
@@ -41,7 +43,7 @@ export function Dialog({ open, onClose, title, children, closeLabel = "Cerrar", 
         open={!supportsModal && open ? true : undefined}
         aria-modal="true"
         aria-labelledby={titleId}
-        className={size === "wide" ? "dialog dialog--wide" : "dialog"}
+        className={["dialog", size === "wide" ? "dialog--wide" : "", variant === "sheet" ? "dialog--sheet" : ""].filter(Boolean).join(" ")}
         onCancel={(event) => {
           event.preventDefault();
           ignoreCloseRef.current = true;

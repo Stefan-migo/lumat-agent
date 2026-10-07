@@ -25,6 +25,10 @@
 .ai-agent-grammar__header-copy { display: grid; flex: 1 1 auto; gap: var(--space-1); min-width: 0; }
 .ai-agent-grammar__header-copy h2 { margin: 0; font-size: var(--text-md); font-weight: var(--weight-semibold); }
 
+/* Desktop shows "Tomar conversación" + "…"; mobile keeps everything behind "…" plus the info sheet. */
+.conversation-thread__actions-desktop, .conversation-thread__actions-mobile { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.conversation-thread__actions-mobile { display: none; }
+
 /* Composer: closed-window warning, locked row, closed note (reference ConversationThread.png). */
 .ai-agent-grammar__window-warning { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--warning-border); border-radius: var(--radius-md); background: var(--warning-bg); color: var(--warning); }
 .ai-agent-grammar__window-warning > svg { flex: 0 0 auto; }
@@ -38,7 +42,7 @@
 .ai-agent-grammar__composer-row .btn { flex: 0 0 auto; align-self: center; }
 .ai-agent-grammar__composer-lock { position: absolute; left: var(--space-3); top: 50%; z-index: 1; transform: translateY(-50%); color: var(--corp-fg-muted); pointer-events: none; }
 .ai-agent-grammar__composer--locked .field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.ai-agent-grammar__composer--locked .field__control { padding-left: calc(var(--space-3) + var(--icon-md)); resize: none; }
+.ai-agent-grammar__composer--locked .field__control { padding-left: calc(var(--space-3) + var(--icon-md) + var(--space-2)); resize: none; }
 .ai-agent-grammar__closed-note { margin: 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
 
 /* Context inspector (reference ConversationThread.png): identity, linked case, captured data. */
@@ -58,9 +62,16 @@
 .conversation-context__badges { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-1); }
 .conversation-context__case-summary { margin: var(--space-1) 0 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
 
+/* Inside the mobile sheet the inspector is the sheet body: no side border, full width. */
+.dialog--sheet .ai-agent-grammar__inspector { display: grid; border-left: 0; padding: 0; }
+
 @media (max-width: 39.99rem) {
   .conversation-thread__identity { flex-direction: column; align-items: stretch; gap: var(--space-3); }
   .conversation-thread__actions-row { flex-direction: column-reverse; align-items: stretch; }
   .conversation-thread__actions-row .btn { width: 100%; }
   .ai-agent-grammar__bubble-stack { max-width: 90%; }
+  /* The chat is the primary surface: the inline inspector moves into the "Información del chat" sheet. */
+  .conversation-workspace .ai-agent-grammar__inspector { display: none; }
+  .conversation-thread__actions-desktop { display: none; }
+  .conversation-thread__actions-mobile { display: flex; }
 }

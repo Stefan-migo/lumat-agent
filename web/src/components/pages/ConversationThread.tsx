@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { Bot, CircleCheck, Clock, Copy, Lock, SendHorizonal, ShieldAlert, UserRound, UserRoundPlus, WifiOff } from "lucide-react";
+import { Bot, CircleCheck, Clock, Copy, Info, Lock, SendHorizonal, ShieldAlert, UserRound, UserRoundPlus, WifiOff } from "lucide-react";
 import { ApiError, acknowledgeCase, changeConversationState, getConversation, listActiveConversations, listConversations, retryMessage, sendMessage } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { ConversationThread as ThreadData, Message } from "../../types";
 import { Avatar } from "../primitives/Avatar";
 import { Badge } from "../primitives/Badge";
 import { Button } from "../primitives/Button";
+import { Dialog } from "../primitives/Dialog";
 import { Icon } from "../primitives/Icon";
 import { Menu, type MenuItem } from "../primitives/Menu";
 import { StatusBadge } from "../primitives/StatusBadge";
@@ -78,6 +79,14 @@ function ConversationContext({ conversation }: { conversation: NonNullable<Threa
   const phone = customer?.phone_e164 ?? conversation.wa_phone ?? null;
   const caseStatus = conversation.case_status ?? caseData?.status ?? null;
   const casePriority = conversation.case_priority ?? caseData?.priority ?? null;
+  const captured = conversation.captured_data ?? {};
+  const capturedRows = capturedEntries(captured);
+  // The capture flow can leave location unanswered while the customer's ficha already knows it.
+  // Fall back to the profile so the operator never sees an empty section for known data.
+  const capturedKeys = new Set(Object.keys(captured).map((key) => key.toLowerCase()));
+  const profileRows: Array<[string, string]> = [];
+  if (customer?.comuna && !capturedKeys.has("comuna")) profileRows.push(["Comuna", customer.comuna]);
+  if (customer?.address && !capturedKeys.has("direccion") && !capturedKeys.has("address")) profileRows.push(["Dirección", customer.address]);
   return <aside className="ai-agent-grammar__inspector" aria-label="Inspector de conversación">
       {customer ? <section className="conversation-context__section" aria-labelledby="conversation-customer-heading">
         <h2 id="conversation-customer-heading">Cliente</h2>
@@ -90,13 +99,13 @@ function ConversationContext({ conversation }: { conversation: NonNullable<Threa
         </div>
       </section> : null}
       {caseData ? <section className="conversation-context__section" aria-labelledby="conversation-case-heading">
-        <div className="conversation-context__case-head"><h2 id="conversation-case-heading">Caso vinculado</h2>{conversation.case_id != null ? <a className="conversation-context__case-link" href={pathForRoute({ view: "cases" })}>Ver caso <span aria-hidden="true">→</span></a> : null}</div>
+        <div className="conversation-context__case-head"><h2 id="conversation-case-heading">Caso vinculado</h2>{conversation.case_id != null ? <a className="conversation-context__case-link" href={pathForRoute({ view: "clients", clientId: conversation.customer_id, clientTab: "cases" })}>Ver caso <span aria-hidden="true">→</span></a> : null}</div>
         <p className="conversation-context__case-title">{caseData.service}</p>
         <div className="conversation-context__badges">{caseStatus ? <Badge tone={caseStatusTone(caseStatus)}>{caseStatusLabel(caseStatus)}</Badge> : null}{casePriority ? <Badge tone={priorityTone(casePriority)}>{priorityLabel(casePriority)}</Badge> : null}</div>
         {caseData.summary ? <p className="conversation-context__case-summary">{caseData.summary}</p> : null}
         <dl><div className="ai-agent-grammar__detail"><dt>Emergencia</dt><dd>{conversation.emergency ? "Sí" : "No"}</dd></div><div className="ai-agent-grammar__detail"><dt>Reconocimiento</dt><dd>{conversation.acknowledged_at ? "Reconocida" : "Pendiente"}</dd></div></dl>
       </section> : null}
-      {conversation.captured_data && capturedEntries(conversation.captured_data).length > 0 ? <details open><summary>Datos capturados</summary><dl>{capturedEntries(conversation.captured_data).map(([key, value]) => <div className="ai-agent-grammar__detail" key={key}><dt>{capturedLabel(key)}</dt><dd>{displayCapturedValue(value)}</dd></div>)}</dl></details> : null}
+      {capturedRows.length > 0 || profileRows.length > 0 ? <details open><summary>Datos capturados</summary><dl>{capturedRows.map(([key, value]) => <div className="ai-agent-grammar__detail" key={key}><dt>{capturedLabel(key)}</dt><dd>{displayCapturedValue(value)}</dd></div>)}{profileRows.map(([label, value]) => <div className="ai-agent-grammar__detail" key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></details> : null}
   </aside>;
 }
 export function ConversationThread({ conversationId, data: controlledData, state: controlledState, customerName, refreshKey = 0, onMutate, onBack, interactive = false }: ConversationThreadProps) {
@@ -104,6 +113,7 @@ export function ConversationThread({ conversationId, data: controlledData, state
   const [messagesExpanded, setMessagesExpanded] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [connection, setConnection] = useState<ConnectionStatus>("disconnected");
   const [liveActivity, setLiveActivity] = useState<Array<{ event: string; cause?: string | null; actor?: string | null }>>([]);
   const fetchThread = useCallback(async () => { if (conversationId === undefined) throw new Error("conversation id is required"); return getConversation(conversationId, messagesExpanded ? undefined : MESSAGE_PREVIEW); }, [conversationId, messagesExpanded, refreshKey]);
@@ -136,12 +146,21 @@ export function ConversationThread({ conversationId, data: controlledData, state
   const windowOpen = conversation?.reply_window_open === true;
   const mutate = async (action: () => Promise<unknown>) => { setBusy(true); setMutationError(null); try { await action(); setText(""); onMutate?.(); refresh(); } catch (error) { setMutationError(error instanceof ApiError ? `${error.status}: ${error.detail}` : "No se pudo completar la acción"); } finally { setBusy(false); } };
   const acknowledgesEmergency = Boolean(conversation?.case && conversation?.emergency && !conversation.acknowledged_at && conversation.case_id != null);
-  const threadMenuItems: MenuItem[] = conversation ? [
+  const conversationMenuItems = (includeTake: boolean): MenuItem[] => conversation ? [
+    ...(includeTake ? [{ value: "human", label: "Tomar conversación", icon: UserRoundPlus, disabled: busy || conversation.state === "human" }] : []),
     { value: "bot", label: "Devolver al agente", icon: Bot, disabled: busy || conversation.state !== "human" },
     { value: "closed", label: "Cerrar conversación", icon: CircleCheck, disabled: busy || conversation.state !== "human" },
     ...(acknowledgesEmergency ? [{ value: "acknowledge", label: "Reconocer emergencia", icon: ShieldAlert, disabled: busy }] : []),
   ] : [];
-  const threadActions = conversation ? <><Button disabled={busy || conversation.state === "human"} onClick={() => void mutate(() => changeConversationState(conversation.id, "human", conversation.version ?? 0))}><UserRoundPlus aria-hidden="true" />Tomar conversación</Button><Menu trigger="icon" align="end" collisionPadding={8} label="Acciones de la conversación" disabled={busy} items={threadMenuItems} onSelect={(value) => { if (value === "bot") void mutate(() => changeConversationState(conversation.id, "bot", conversation.version ?? 0)); else if (value === "closed") void mutate(() => changeConversationState(conversation.id, "closed", conversation.version ?? 0)); else void mutate(() => acknowledgeCase(conversation.case_id!)); }} /></> : null;
+  const runMenuAction = (value: string) => {
+    if (!conversation) return;
+    if (value === "human") void mutate(() => changeConversationState(conversation.id, "human", conversation.version ?? 0));
+    else if (value === "bot") void mutate(() => changeConversationState(conversation.id, "bot", conversation.version ?? 0));
+    else if (value === "closed") void mutate(() => changeConversationState(conversation.id, "closed", conversation.version ?? 0));
+    else void mutate(() => acknowledgeCase(conversation.case_id!));
+  };
+  const desktopActions = conversation ? <><Button disabled={busy || conversation.state === "human"} onClick={() => void mutate(() => changeConversationState(conversation.id, "human", conversation.version ?? 0))}><UserRoundPlus aria-hidden="true" />Tomar conversación</Button><Menu trigger="icon" align="end" collisionPadding={8} label="Acciones de la conversación" disabled={busy} items={conversationMenuItems(false)} onSelect={runMenuAction} /></> : null;
+  const mobileActions = conversation ? <><Menu trigger="icon" align="end" collisionPadding={8} label="Más acciones de la conversación" disabled={busy} items={conversationMenuItems(true)} onSelect={runMenuAction} /><Button variant="secondary" onClick={() => setInfoOpen(true)}><Info aria-hidden="true" />Información del chat</Button></> : null;
   const loadError = fetched.error;
   const loadTitle = loadError instanceof ApiError && loadError.status === 401 ? "Sesión requerida" : loadError instanceof ApiError && loadError.status === 403 ? "No tienes permiso para ver este panel" : "No pudimos cargar la conversación";
   const displayName = conversation ? (conversation.customer?.name ?? customerName?.(conversation.customer_id) ?? `Cliente #${conversation.customer_id}`) : undefined;
@@ -162,7 +181,7 @@ export function ConversationThread({ conversationId, data: controlledData, state
         {connection !== "connected" ? <p className="conversations-offline" role="status"><Icon icon={WifiOff} aria-hidden="true" /><strong>{connection === "reconnecting" ? "Reconectando la conexión en tiempo real." : "Sin conexión en tiempo real."}</strong><span>El histórico guardado sigue disponible.</span></p> : null}
        {state === "loading" ? null : !data || messages.length === 0 ? <EmptyState title="No hay registros" description="Esta conversación no tiene mensajes para mostrar." /> : <div className="conversation-workspace">
          <main className="ai-agent-grammar__main" aria-label="Conversación">
-          {conversation ? <header className="ai-agent-grammar__header"><div className="ai-agent-grammar__header-copy"><h2>Historial de mensajes</h2><span className="ai-agent-grammar__freshness">Actualizada el {formatRecency(conversation.last_message_at)}</span></div><div className="ai-agent-grammar__header-actions">{interactive ? threadActions : null}</div>{!interactive ? <span className={`ai-agent-grammar__window${windowOpen ? "" : " ai-agent-grammar__window--closed"}`}>{windowOpen ? "Respuesta disponible" : "Fuera de la ventana de 24 horas"}</span> : null}</header> : null}
+          {conversation ? <header className="ai-agent-grammar__header"><div className="ai-agent-grammar__header-copy"><h2>Historial de mensajes</h2><span className="ai-agent-grammar__freshness">Actualizada el {formatRecency(conversation.last_message_at)}</span></div><div className="conversation-thread__actions-desktop">{interactive ? desktopActions : null}</div><div className="conversation-thread__actions-mobile">{interactive ? mobileActions : null}</div>{!interactive ? <span className={`ai-agent-grammar__window${windowOpen ? "" : " ai-agent-grammar__window--closed"}`}>{windowOpen ? "Respuesta disponible" : "Fuera de la ventana de 24 horas"}</span> : null}</header> : null}
          <section className="ai-agent-grammar__thread-area" aria-label="Mensajes de la conversación">
            <CollapsibleMessages total={data.messages_total ?? messages.length} expanded={messagesExpanded} onToggle={toggleMessages}><div className="ai-agent-grammar__bubbles">{messages.map((message) => <MessageBubble key={message.id} message={message} customerId={conversation?.customer_id ?? 0} customerName={(id) => conversation?.customer?.name ?? customerName?.(id) ?? `Cliente #${id}`} />)}</div></CollapsibleMessages>
           {liveActivity.length > 0 ? <div className="ai-agent-grammar__activity-list" aria-label="Actividad persistida">{liveActivity.map((activity, index) => <div className="ai-agent-grammar__activity" role="status" key={`${activity.event}-${index}`}><span aria-hidden="true">✦</span><span className="ai-agent-grammar__activity-chip">{activityText(activity)}</span></div>)}</div> : null}
@@ -182,6 +201,7 @@ export function ConversationThread({ conversationId, data: controlledData, state
            </div>}
            {mutationError && <p role="alert">La entrega falló: {mutationError}</p>}
          </div> : null}
-          </main>{conversation ? <ConversationContext conversation={conversation} /> : null}</div>}
+           </main>{conversation ? <ConversationContext conversation={conversation} /> : null}</div>}
+      {interactive && conversation && infoOpen ? <Dialog open onClose={() => setInfoOpen(false)} title="Información del chat" variant="sheet"><ConversationContext conversation={conversation} /></Dialog> : null}
     </PageFrame>;
 }
