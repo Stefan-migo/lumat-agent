@@ -75,16 +75,6 @@ class PlannerOutput(BaseModel):
         return self
 
 
-class SDBTrigger(BaseModel):
-    """Strict input contract for planner and authenticated admin signals."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    classification: Literal["normal", "sdb"] = "normal"
-    sdb_requested: bool | None = None
-    actor_role: str | None = None
-
-
 class CortexSession(BaseModel):
     """Validated thread-scoped Cortex state."""
 
@@ -187,11 +177,7 @@ class AssistantState(TypedDict, total=False):
     legacy_compat: bool
     cost_mode: Literal["normal", "conservative", "blocked"]
     cost_directive: str
-    sdb_trigger: Literal["classified", "admin"] | None
     sdb_phase: Literal["CLARIFY", "SPEC", "PLAN", "APPROVE", "EXECUTE", "VERIFY", "DELIVER"]
-    sdb_route: Literal["normal", "sdb"]
-    sdb_rejection: str | None
-    sdb_scope: dict
     project_authorization: object
     sdb_spec: dict
     sdb_tasks: list[SDBTask]
@@ -199,25 +185,3 @@ class AssistantState(TypedDict, total=False):
     verification: dict
     verify_requested: bool
     sdb_requested: bool
-
-
-def normalize_sdb_trigger(signal: object) -> dict[str, str | None]:
-    """Normalize the two trusted SDB entry signals, rejecting ambiguity."""
-    try:
-        trigger = SDBTrigger.model_validate(signal)
-    except (TypeError, ValidationError):
-        return {"route": "normal", "reason": "malformed-signal"}
-    classification = trigger.classification
-    requested = trigger.sdb_requested
-    role = trigger.actor_role
-    if classification not in {"normal", "sdb"}:
-        return {"route": "normal", "reason": "malformed-classification"}
-    if classification == "sdb" and requested is False:
-        return {"route": "normal", "reason": "conflicting-trigger"}
-    if requested is True and role != "admin":
-        return {"route": "normal", "reason": "unauthorized-request"}
-    if classification == "sdb":
-        return {"route": "sdb", "trigger": "classified", "phase": "CLARIFY"}
-    if requested is True:
-        return {"route": "sdb", "trigger": "admin", "phase": "CLARIFY"}
-    return {"route": "normal", "reason": None}
