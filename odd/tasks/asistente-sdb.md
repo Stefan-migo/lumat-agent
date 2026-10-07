@@ -220,7 +220,7 @@ first while the old subgraph still exists.
 | 2 | Deterministic gate + `success_criterion` (additive) | S5-03a | ~100 | ✅ merged #490 |
 | 3 | Isolated read-only verifier (additive) | S5-03b | ~230 | ✅ merged #490 |
 | 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~110 | ✅ merged #490 |
-| 5 | Remove the dead SDB phase subgraph + routing contract | S5-02 (removal, corrected) | ~330 | next |
+| 5 | Remove the dead SDB phase subgraph + routing contract | S5-02 (removal, corrected) | ~330 | ✅ committed + review approved |
 | 6 | Remove SDB service runner + `sdb_verify`/`sdb_deliver` + integration tests | S5-04 | ~480 | |
 | 7 | `classification` + prompt + registry/skills cleanup + cross-check | S5-05, S5-07 | ~300 | |
 
@@ -269,10 +269,20 @@ Push/PR creation remain the owner's decision per slice.
   to Slice 6. Details in "Slice 5 boundary correction" above. Graph Check done: `graphify query`
   over `build_assistant_graph`, `sdb_trigger_gate`, `sdb_{spec,plan,verify}`, `plan`, `tool_loop_head`,
   `execute`, `parse_planner_output`, `_context_text`; graph built from `10dbd301` (refresh at close).
+- **Slice 5 done (committed, reviewed)** — commits `edfd06c8` (removal: dead SDB phase subgraph +
+  routing contract; 5 files, +32/−373) and `d540ac9a` (odd doc). Full suite green (**1,791 passed**).
+  RDD review `review-df7d94ae9c298b1c` (lens `review-reliability`, medium, 6 files/467 lines)
+  **approved with 0 findings**; acknowledgement burned authority. NOT pushed — push/PR is the
+  owner's decision.
 
 ## Review (RDD)
 
-Not started.
+- **Slice 5** — `review.start` published (lineage `review-df7d94ae9c298b1c`, target
+  `sha256:56e9bab7…`), tier **medium**, 1 lens (`review-reliability`), 6 files / 467 lines,
+  correction budget 200. Consent: owner **granted**. Capture **approved with 0 findings**;
+  acknowledgement burned authority (`gentle-ai.review-acknowledged/v1`, action `acknowledged`,
+  `authority: burned`). Reviewed boundary = candidate tree (commit `d540ac9a`). Not pushed.
+- Slices 1–4: see progress log (`review-c781144a08c191f2`, `review-9d1562e7914d3b39`).
 
 ## Open questions
 
