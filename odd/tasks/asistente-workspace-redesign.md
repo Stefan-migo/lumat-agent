@@ -132,10 +132,10 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
 - [x] Project resources / project agents / "Fuentes del hilo" → honest empty states.
 
 ### AW-6 — Project context workspace
-- [ ] Route-backed project workspace with tabs Contexto / Hilos / Agentes, reusing `Tabs`, `Card`,
-      `Input`, `Textarea`, `Button`, `Menu`, `Badge`.
-- [ ] Hilos: real project threads. Instrucciones / Archivos y conocimiento / Agentes → honest empty
-      or disabled until backend contracts exist.
+- [x] Route-backed project workspace with tabs Contexto / Hilos / Agentes, reusing `Tabs`, `Card`,
+       `Input`, `Textarea`, `Button`, `Menu`, `Badge`.
+- [x] Hilos: explicitly unavailable because the API cannot associate listed threads with a project. Instrucciones / Archivos y conocimiento / Agentes → honest empty
+       or disabled until backend contracts exist.
 
 ### AW-7 — Owner visual-review passes
 - [ ] Iterative visual-review work units (`AW-N-r1`, `AW-N-r2`, …) recorded with commit + evidence,
@@ -293,3 +293,20 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
     attribution, but completed and produced updated graph data; no graph artifacts are part of this change.
   - Code commit: `c65b38cf` (`feat(assistant): add context and activity panel`).
   - Remaining: AW-6 and AW-7; owner visual review remains outstanding.
+- **AW-6 implemented (2026-10-07)** — the existing `/panel/app/projects/:slug` route now loads the
+  real project detail and presents Contexto / Hilos / Agentes tabs. Context displays the real project
+  name, purpose, and status; instruction and resource controls are explicitly disabled/empty; Hilos
+  and Agentes explain their unavailable backend contracts. The project-threads API limitation is
+  confirmed: `getProject` returns only `{ project }`, while `listChatThreads(limit)` returns summary
+  records without a `proyecto` field or filter, so no unrelated threads are listed.
+  - Files: `web/src/components/pages/ProjectsPage.tsx`, `ProjectsPage.css`, `ProjectsPage.test.tsx`,
+    and this task document.
+  - Graph Check: `ProjectsPage()`, `getProject()`, `listChatThreads()`, `Tabs()`, `ProjectDetailResponse`,
+    `panelRoutes`; `graphify query "ProjectsPage project detail workspace tabs threads getProject"`;
+    `graphify path ProjectsPage panelRoutes` found no directed path. Route parsing/building was verified
+    in `panelRoutes.ts`; no route or shell ownership changes were made.
+  - Verification from `web/`: `npx tsc -b --force --noEmit` — passed; focused project page tests —
+    1 file / 11 passed; `npx vitest run --no-file-parallelism` — 97 files / 1043 passed;
+    `npm run build` — passed (existing Vite >500 kB chunk-size advisory).
+  - Code commit: `2d1982be` (`feat(projects): add project context workspace`). Task evidence is recorded
+    in this follow-up documentation commit.
