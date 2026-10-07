@@ -111,18 +111,27 @@ Owner verdict: title/subtitle/badge and tabs OK; table needs design detail work.
 #### Regression found and fixed while validating CV-2
 The CV-1 tab-label change (`Humanas`→`Atención humana`, `Casos`→`Con caso`) and the dual-render table broke 8 `AppShell.test.tsx` specs. Fixed in `56c69b73`. **Lesson: run the FULL frontend suite after a shared-label or dual-render change — the targeted component tests do not catch cross-page specs.**
 
+### CV-2-r1 — owner visual review 2026-10-07 (thread)
+- [x] `Ver ficha del cliente` moved onto the same row as `Volver a conversaciones` (new `.conversation-thread__actions-row`, space-between).
+- [x] Card header actions collapsed to a visible `Tomar conversación` (with icon) plus a `...` menu holding `Devolver al agente` (`Bot`), `Cerrar conversación` (`CircleCheck`) and `Reconocer emergencia` (`ShieldAlert`), each with an icon.
+- [x] Activity chip de-jargoned: `classified`/`intent:<x>` → "Intención detectada: {intent}", `kb_retrieved`/`chunks:<n>` → "Se consultó la base de conocimiento (n resultados)", `escalation` → "Derivado a atención humana" (maps derived from `app/services/realtime.py`).
+- [x] Handoff separator restyled as a solid amber rule above/below the text.
+
 ### CV-3 — ConversationThread context inspector + responsive
-- [ ] `Cliente` card: avatar, name, phone + copy action.
-- [ ] `Caso vinculado` card: title, `Abierto`/`Prioridad alta` badges, summary, `Ver caso →`, Emergencia/Reconocimiento rows.
-- [ ] `Datos capturados` disclosure (reference shows it open by default).
-- [ ] Tablet/mobile workspace layout per `MobileTabletConversationThread.png` (shared-primitive CSS scope; regression check on clientes/usuarios).
-- [ ] Update thread tests/stories.
+- [x] `Cliente` card: avatar + name + phone + copy action.
+- [x] `Caso vinculado` card: title, status/priority badges, summary, `Ver caso →`, Emergencia/Reconocimiento rows.
+- [x] `Datos capturados` disclosure stays open by default with dt/dd rows (CSS contract kept: `.ai-agent-grammar__detail`).
+- [ ] Tablet/mobile workspace layout per `MobileTabletConversationThread.png` — NOT yet reviewed by the owner.
+- [x] Updated thread tests/stories.
 
 ### CV-4 — ConversationThread composer + states + a11y
-- [ ] 24h-window warning banner + disabled composer to the reference.
-- [ ] Closed-conversation presentation (`Conversación cerrada`, "Respuesta no disponible").
-- [ ] Human-attention handoff presentation and state actions.
-- [ ] Accessibility pass (labels, disabled semantics, focus) + final behavior coverage.
+- [x] 24h-window warning banner (clock icon + bold headline + muted note) replacing the old inline hint/reason text.
+- [x] Locked composer row: lock glyph, disabled `Respuesta` field with the "Respuesta no disponible" placeholder, disabled send button (`SendHorizonal`), `Conversación cerrada` note.
+- [x] Human-attention handoff presentation kept; state actions now live in the `...` menu.
+- [x] Accessibility kept: the field keeps its `Respuesta` accessible name and disabled semantics; the warning keeps `role=status` + `aria-label="Fuera de la ventana de 24 horas"`; the send button has `aria-label="Enviar respuesta"`.
+
+### CV-2/3/4 evidence (owner review 2026-10-07)
+- Commit `7e4dadd0`; `tsc -b --force --noEmit` clean; full suite **1034/1034**; `npm run build` green.
 
 ## Authorized scope
 
