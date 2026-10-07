@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConversationThread } from './ConversationThread';
 import type { Conversation, Message } from '../../types';
@@ -113,7 +113,7 @@ it('presents directional bubbles with identity and owner status', () => {
   expect(inbound.querySelector('.ai-agent-grammar__bubble')).toBeTruthy();
   expect(inbound.querySelector('.ai-agent-grammar__message-meta')).toHaveTextContent('María González');
   expect(inbound.querySelector('.ai-agent-grammar__message-time')).toHaveTextContent('09:00');
-  expect(screen.getByText('María González')).toBeInTheDocument();
+  expect(within(inbound).getByText('María González')).toBeInTheDocument();
   expect(screen.getByText('Lumat')).toBeInTheDocument();
 });
 
@@ -217,7 +217,7 @@ describe('conversation inspector layout CSS contract', () => {
 
     expect(screen.getByRole('complementary', { name: /inspector de conversación/i })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: 'Caso' })).toBeInTheDocument();
-  expect(screen.getByText('María González')).toBeInTheDocument();
+  expect(within(screen.getByRole('complementary', { name: /inspector de conversación/i })).getByText('María González')).toBeInTheDocument();
   expect(screen.getByText('Urgencia')).toBeInTheDocument();
   expect(screen.getByText('preferred_language')).toBeInTheDocument();
   expect(screen.getByText('es')).toBeInTheDocument();

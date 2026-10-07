@@ -30,7 +30,7 @@ describe("ConversationThread", () => {
 
   it("preserves the thread story exports", () => {
     render(<ConversationThreadView />);
-    expect(screen.getByRole("heading", { name: "Conversación" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Marcela Fuentes" })).toBeInTheDocument();
     expect(screen.getByText(new RegExp(`#${conversation.id}`))).toBeInTheDocument();
     render(<ConversationThreadBubbles />);
     expect(screen.queryAllByRole("table")).toHaveLength(0);

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import { UserRound, WifiOff } from "lucide-react";
 import { ApiError, acknowledgeCase, changeConversationState, getConversation, listActiveConversations, listConversations, retryMessage, sendMessage } from "../../api";
 import { useAsyncData, type AsyncDataState } from "../../hooks/useAsyncData";
 import type { ConversationThread as ThreadData, Message } from "../../types";
 import { Avatar } from "../primitives/Avatar";
 import { Button } from "../primitives/Button";
+import { Icon } from "../primitives/Icon";
 import { StatusBadge } from "../primitives/StatusBadge";
 import { Textarea } from "../primitives/Textarea";
 import { EmptyState } from "../shared/EmptyState";
@@ -11,7 +13,9 @@ import { PageFrame } from "../shared/PageFrame";
 import { StateMessage } from "../shared/StateMessage";
 import { CollapsibleMessages } from "../shared/CollapsibleMessages";
 import { conversationLabel } from "../shared/toneMaps";
+import { pathForRoute } from "../domain/panelRoutes";
 import { realtimeClient, type ConnectionStatus } from "../../realtime";
+import "./ConversationThread.css";
 
 export interface ConversationThreadProps { conversationId?: number; data?: ThreadData | null; state?: AsyncDataState | "stale"; customerName?: (id: number) => string; refreshKey?: number; onMutate?: () => void; onBack?: () => void; interactive?: boolean; }
 export function NoReplyNote() { return <StateMessage tone="info" role="status" title="Canal automático" detail="Este es un canal automático — no respondas a este mensaje (HH-5)." />; }
@@ -26,11 +30,13 @@ function MessageBubble({ message, customerId, customerName }: { message: Message
   const outbound = message.direction === "outbound";
   return <div className={`ai-agent-grammar__bubble-row${outbound ? " ai-agent-grammar__bubble-row--outbound" : ""}`} data-bubble aria-label={`Mensaje ${outbound ? "saliente" : "entrante"} de ${author}`}>
     {!outbound ? <Avatar name={author} /> : null}
-    <div className={`ai-agent-grammar__bubble${outbound ? " ai-agent-grammar__bubble--outbound" : ""}`}>
+    <div className="ai-agent-grammar__bubble-stack">
       <span className="ai-agent-grammar__message-meta">{author}</span>
-      <span>{message.text ?? "—"}{message.media_url ? " 📎" : null}</span>
+      <div className={`ai-agent-grammar__bubble${outbound ? " ai-agent-grammar__bubble--outbound" : ""}`}>
+        <span>{message.text ?? "—"}{message.media_url ? " 📎" : null}</span>
+        {message.delivery_status === "failed" ? <span className="ai-agent-grammar__message-error" role="alert">Entrega fallida{message.delivery_error ? `: ${message.delivery_error}` : ""}</span> : null}
+      </div>
       <span className="ai-agent-grammar__message-time">{message.created_at?.slice(11, 16) ?? "—"}</span>
-      {message.delivery_status === "failed" ? <span className="ai-agent-grammar__message-error" role="alert">Entrega fallida{message.delivery_error ? `: ${message.delivery_error}` : ""}</span> : null}
     </div>
     {outbound ? <Avatar name={author} /> : null}
   </div>;
@@ -40,6 +46,7 @@ function displayCapturedValue(value: unknown) {
   return typeof value === "object" && value !== null ? JSON.stringify(value) : String(value ?? "—");
 }
 const formatRecency = (value: string | null) => value ? new Intl.DateTimeFormat("es-CL", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
+const formatInitiatedDate = (value: string | null | undefined) => value ? new Intl.DateTimeFormat("es-CL", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value)).replace(".", "") : "—";
 const MESSAGE_PREVIEW = 10;
 
 function ConversationContext({ conversation }: { conversation: NonNullable<ThreadData["conversation"]> }) {
@@ -91,12 +98,22 @@ export function ConversationThread({ conversationId, data: controlledData, state
   const loadError = fetched.error;
   const loadTitle = loadError instanceof ApiError && loadError.status === 401 ? "Sesión requerida" : loadError instanceof ApiError && loadError.status === 403 ? "No tienes permiso para ver este panel" : "No pudimos cargar la conversación";
   const displayName = conversation ? (conversation.customer?.name ?? customerName?.(conversation.customer_id) ?? `Cliente #${conversation.customer_id}`) : undefined;
-  return <PageFrame className="conversations-page" title="Conversación" meta={conversation ? `#${conversation.id} · ${displayName} · ${conversation.created_at?.slice(0, 10) ?? "—"}` : "Detalle de la conversación"} state={state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando conversación" /> : state === "error" ? <><StateMessage tone="danger" role="alert" title={loadTitle} /><Button variant="secondary" onClick={refresh}>Reintentar</Button></> : state === "stale" ? <StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="Mostramos la información disponible." /> : null}>
+  return <PageFrame className="conversations-page conversation-thread-page" title="" state={state === "loading" ? <StateMessage tone="info" role="status" spinner title="Cargando conversación" /> : state === "error" ? <><StateMessage tone="danger" role="alert" title={loadTitle} /><Button variant="secondary" onClick={refresh}>Reintentar</Button></> : state === "stale" ? <StateMessage tone="warning" role="status" title="Datos posiblemente desactualizados" detail="Mostramos la información disponible." /> : null}>
+      {conversation ? <header className="conversation-thread__identity">
+        <div className="conversation-thread__identity-person">
+          <Avatar className="conversation-thread__hero-avatar" name={displayName ?? "Conversación"} />
+          <div>
+            <div className="conversation-thread__identity-title"><h1>{displayName}</h1><div role="status" aria-label={conversationLabel(conversation.state)}><StatusBadge status={conversation.state as "bot" | "human" | "closed"} /></div></div>
+            <p>Conversación #{conversation.id} · Iniciada el {formatInitiatedDate(conversation.created_at)}</p>
+          </div>
+        </div>
+        {interactive ? <div className="conversation-thread__identity-actions"><Button variant="secondary" onClick={() => { window.location.href = pathForRoute({ view: "clients", clientId: conversation.customer_id }); }}><UserRound aria-hidden="true" />Ver ficha del cliente</Button></div> : null}
+      </header> : null}
       {interactive && onBack ? <div className="conversation-back"><Button variant="secondary" onClick={onBack}>Volver a conversaciones</Button></div> : null}
-        {connection !== "connected" && <p className="realtime-status realtime-status--info" role="status"><span aria-hidden="true">ⓘ</span>Conexión en tiempo real: {connection === "reconnecting" ? "reconectando" : "desconectada"}. La historia persistida permanece disponible.</p>}
+        {connection !== "connected" ? <p className="conversations-offline" role="status"><Icon icon={WifiOff} aria-hidden="true" /><strong>{connection === "reconnecting" ? "Reconectando la conexión en tiempo real." : "Sin conexión en tiempo real."}</strong><span>El histórico guardado sigue disponible.</span></p> : null}
        {state === "loading" ? null : !data || messages.length === 0 ? <EmptyState title="No hay registros" description="Esta conversación no tiene mensajes para mostrar." /> : <div className="conversation-workspace">
          <main className="ai-agent-grammar__main" aria-label="Conversación">
-          {conversation ? <header className="ai-agent-grammar__header"><div role="status" aria-label={conversationLabel(conversation.state)}><StatusBadge status={conversation.state as "bot" | "human" | "closed"} /></div><div className="ai-agent-grammar__header-actions">{interactive ? stateControls : null}{conversation.case && conversation.emergency && !conversation.acknowledged_at && conversation.case_id != null ? <Button variant="secondary" className="emergency-action" disabled={busy} onClick={() => void mutate(() => acknowledgeCase(conversation.case_id!))}>Reconocer emergencia</Button> : null}</div><span className="ai-agent-grammar__freshness">Actualizado {formatRecency(conversation.last_message_at)}</span><span className={`ai-agent-grammar__window${windowOpen ? "" : " ai-agent-grammar__window--closed"}`}>{windowOpen ? "Respuesta disponible" : "Fuera de la ventana de 24 horas"}</span></header> : null}
+          {conversation ? <header className="ai-agent-grammar__header"><div className="ai-agent-grammar__header-copy"><h2>Historial de mensajes</h2><span className="ai-agent-grammar__freshness">Actualizada el {formatRecency(conversation.last_message_at)}</span></div><div className="ai-agent-grammar__header-actions">{interactive ? stateControls : null}{conversation.case && conversation.emergency && !conversation.acknowledged_at && conversation.case_id != null ? <Button variant="secondary" className="emergency-action" disabled={busy} onClick={() => void mutate(() => acknowledgeCase(conversation.case_id!))}>Reconocer emergencia</Button> : null}</div>{!interactive ? <span className={`ai-agent-grammar__window${windowOpen ? "" : " ai-agent-grammar__window--closed"}`}>{windowOpen ? "Respuesta disponible" : "Fuera de la ventana de 24 horas"}</span> : null}</header> : null}
          <section className="ai-agent-grammar__thread-area" aria-label="Mensajes de la conversación">
            <CollapsibleMessages total={data.messages_total ?? messages.length} expanded={messagesExpanded} onToggle={toggleMessages}><div className="ai-agent-grammar__bubbles">{messages.map((message) => <MessageBubble key={message.id} message={message} customerId={conversation?.customer_id ?? 0} customerName={customerName} />)}</div></CollapsibleMessages>
           {liveActivity.length > 0 ? <div className="ai-agent-grammar__activity-list" aria-label="Actividad persistida">{liveActivity.map((activity, index) => <div className="ai-agent-grammar__activity" role="status" key={`${activity.event}-${index}`}><span aria-hidden="true">✦</span><span className="ai-agent-grammar__activity-chip">{activity.event}{activity.cause ? `: ${activity.cause}` : ""}{activity.actor ? ` · ${activity.actor}` : ""}</span></div>)}</div> : null}

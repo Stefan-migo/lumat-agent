@@ -1,0 +1,26 @@
+/* Page identity header: avatar + name + state badge + initiated line + ficha action. */
+.conversation-thread__identity { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); }
+.conversation-thread__identity-person { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.conversation-thread__hero-avatar { flex: 0 0 auto; width: calc(var(--space-8) * 1.5); height: calc(var(--space-8) * 1.5); font-size: var(--text-lg); }
+.conversation-thread__identity-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.conversation-thread__identity-title h1 { margin: 0; font-size: var(--text-xl); }
+.conversation-thread__identity-person p { margin: var(--space-1) 0 0; color: var(--corp-fg-muted); font-size: var(--text-sm); }
+.conversation-thread__identity-actions { display: flex; gap: var(--space-2); margin-left: auto; }
+
+/* Messages card header: title + "Actualizada el …" copy on the left, actions on the right. */
+.ai-agent-grammar__header-copy { display: grid; flex: 1 1 auto; gap: var(--space-1); min-width: 0; }
+.ai-agent-grammar__header-copy h2 { margin: 0; font-size: var(--text-md); font-weight: var(--weight-semibold); }
+
+/* Message bubble stack: author above the bubble, timestamp below it. */
+.ai-agent-grammar__bubble-stack { display: grid; gap: var(--space-1); max-width: 75%; min-width: 0; }
+.ai-agent-grammar__bubble-stack .ai-agent-grammar__bubble { max-width: 100%; }
+.ai-agent-grammar__bubble-stack .ai-agent-grammar__message-meta { margin-bottom: 0; }
+.ai-agent-grammar__bubble-stack .ai-agent-grammar__message-time { margin-top: 0; }
+.ai-agent-grammar__bubble-row--outbound .ai-agent-grammar__bubble-stack { justify-items: end; }
+
+@media (max-width: 39.99rem) {
+  .conversation-thread__identity { flex-direction: column; align-items: stretch; gap: var(--space-3); }
+  .conversation-thread__identity-actions { margin-left: 0; }
+  .conversation-thread__identity-actions .btn { width: 100%; }
+  .ai-agent-grammar__bubble-stack { max-width: 90%; }
+}
