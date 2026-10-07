@@ -5,7 +5,6 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.chat.assistant.approval import arguments_digest, canonical_sdb_digest, canonical_sdb_payload
 from app.models import InternalChatThread
 
 
@@ -33,40 +32,6 @@ def recover_events(thread: InternalChatThread, run_id: str | None = None) -> lis
     )
 
 
-def revalidate_sdb_resume(
-    thread: InternalChatThread,
-    plan: dict,
-    approval: dict,
-    task: dict,
-    order: int,
-) -> bool:
-    """Fail closed unless a resumed task still belongs to the frozen plan."""
-    sdb = plan.get("sdb") if isinstance(plan, dict) else None
-    if not isinstance(sdb, dict) or not isinstance(approval, dict) or not isinstance(task, dict):
-        return False
-    if (thread.current_plan or {}).get("sdb") != sdb:
-        return False
-    if approval.get("status") != "consumed":
-        return False
-    expected_plan = canonical_sdb_payload(sdb)
-    bindings = approval.get("sdb_bindings")
-    if bindings != expected_plan["sdb_bindings"]:
-        return False
-    if approval.get("sdb_sha256") != canonical_sdb_digest(sdb):
-        return False
-    selected = next((binding for binding in bindings if binding.get("order") == order), None)
-    if selected is None:
-        return False
-    return (
-        selected.get("task_id") == task.get("id")
-        and selected.get("tool") == task.get("tool")
-        and selected.get("arguments") == task.get("arguments")
-        and selected.get("arguments_sha256") == arguments_digest(
-            task.get("tool"), task.get("arguments") or {}, order=order, task_id=task.get("id")
-        )
-    )
-
-
 def is_recoverable(thread: InternalChatThread) -> bool:
     return bool((thread.assistant_state or {}).get("recoverable"))
 
@@ -91,12 +56,3 @@ def claim_execution(
     session.refresh(thread)
     return True
 
-
-def resumable_sdb_tasks(tasks: list[dict], checkpoints: list[dict]) -> list[dict]:
-    """Return only tasks without a successful persisted checkpoint."""
-    completed = {
-        checkpoint.get("task_id")
-        for checkpoint in checkpoints
-        if checkpoint.get("status") == "completed" and checkpoint.get("task_id")
-    }
-    return [task for task in tasks if task.get("id") not in completed]
