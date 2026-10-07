@@ -204,3 +204,24 @@ slice (component tests written/updated + typecheck + build), not no checks. Runn
   These are advisories, not blockers; they do NOT reopen this review. Treat them as AW-3/AW-7 work.
 - **Branch synced with main** — merged `origin/main` (`1c8f8802`, PR #509
   `fix/conversaciones-thread-menu`) into the branch at `fb76a199` before AW-2.
+- **AW-3 slice A implemented (2026-10-07)** — workspace-owned icon rail adds real controls for
+  toggling Proyectos and Contexto, plus creating a project-bound thread through `createChatThread`
+  when a project is selected. The pane toggles remain user-controlled across resizes; narrow panes
+  open as overlays with a scrim, leaving the chat surface in place. `PanelShell`, `AppShell`, tokens,
+  backend, and `AgentChat` were not modified. Tabs and thread header remain pending for the next AW-3
+  slice. R3-001 and R3-002 are addressed by this implementation; owner visual review remains part of
+  AW-7.
+  - Code commit: `49404fb8` (`feat(assistant): add workspace rail and responsive drawers`); files:
+    `web/src/components/pages/AssistantWorkspace.tsx`,
+    `web/src/components/pages/AssistantWorkspace.css`,
+    `web/src/components/pages/AssistantWorkspace.test.tsx`, and this task document.
+  - Verification from `web/`: `npx tsc -b --force --noEmit` — passed, no output;
+    `npx vitest run src/components/pages/AssistantWorkspace.test.tsx` — 1 file, 4 tests passed;
+    `npx vitest run --no-file-parallelism` — 97 files, 1038 tests passed;
+    `npm run build` — passed (existing Vite >500 kB chunk-size advisory).
+  - Graph Check consulted nodes `AssistantWorkspace()`, `AssistantWorkspace.tsx`, `AgentChat.tsx`,
+    `PanelShell.tsx`/`NAVIGATION`, `Project`, `createChatThread()`, `api.ts`, `Button.tsx`/`Button()`,
+    `Icon.tsx`/`Icon()`, `panelRoutes.ts`, `DS-SHELL-8 Responsive Lumat Shell Surfaces`; queried
+    `AssistantWorkspace` → `PanelShell` and `AssistantWorkspace` → `AgentChat`, both with no directed
+    path found (ambiguous target warning for PanelShell). Reference PNGs were read from the main
+    worktree only; no files there were modified.
