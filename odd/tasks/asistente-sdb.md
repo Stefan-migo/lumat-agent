@@ -221,6 +221,50 @@ Slice 6 = **removal only** (no new behaviour). Verified map:
 verified. This is a pre-existing gap (the old SDB branch that verified is already dead), not a
 regression introduced by Slice 6; Slice 8 wires the verifier into that path.
 
+### Slice 7 scope (2026-10-07, owner-confirmed)
+
+Slice 7 = cleanup only (no new behaviour): drop the `classification` planner contract, the
+dead registry/skills remnants, and the orphaned project cross-checks. Owner-confirmed:
+delete what no longer serves.
+
+**A — `classification` removal (atomic; `PlannerOutput` is `extra="forbid"`):**
+
+- `app/chat/assistant/state.py:33` remove `PlannerOutput.classification`.
+- `agent/prompts/assistant_plan.md:14-16,26-27` remove the `classification` slot and the
+  seven-phase instruction.
+- `agent/registry.yaml:96-98` remove `sdb_classification`.
+- `app/agent_registry.py:84,171-188` remove the `Assistant.sdb_classification` field, the
+  declaration validation, and the constructor arg.
+- `app/services/prompts.py:110,158` remove the `AssistantRuntimeConfig.sdb_classification` field
+  and its projection.
+- Tests: drop `classification` from the planner mock (`test_assistant_planner.py:121`) and the
+  `sdb_classification` fixtures/assertions in `test_agent_registry.py`.
+
+**B — registry / skills cleanup:**
+
+- `agent/registry.yaml:5` drop the `sdb` orchestrator skill; `agent/registry.yaml:68` drop the
+  unused `classify: prompts/assistant_classify.md` (not consumed at runtime — no
+  `prompts["classify"]` reader exists). Delete `agent/prompts/assistant_classify.md` and
+  `agent/skills/sdb.md`; update `agent/README.md`.
+- `app/chat/assistant/nodes.py:80` `extension_hook_metadata()` drop the `"sdb": "deferred"` key
+  (metadata-only, internal, no API consumer). Update `test_assistant_extensions.py`
+  (`SDB_TERMINOLOGY_CONSUMERS` becomes obsolete), `test_assistant_planner.py:606`,
+  `test_assistant_config.py:74`, `test_api_assistant_capabilities.py:110`,
+  `openspec/specs/agent-config/spec.md`.
+
+**C — projects cross-check (S5-07):**
+
+- `app/services/projects.py:208-215` `_has_active_run` never returns `True` (nothing writes
+  `assistant_state["sdb"]`/`["proyecto"]` since Slice 6). Delete it + the three
+  `"active SDB run"` raises in `rename`/`archive`/`merge` + the `test_projects_spec.py` block.
+- The project detail artifact browse is orphaned: `app/panel/api/routes/projects.py:42-50` lists
+  `topic_key.like("sdb:%")` and no writer of `sdb:` keys survives. Owner chose option 1: delete
+  the feature — backend query/response, `to_project_artifact_dict` (serializers), the
+  `ProjectsPage` artifact render + "artefactos SDB" copy, `ProjectDetailResponse.artifacts` /
+  `ProjectArtifact` types, and the backend + frontend tests.
+
+**Out of Slice 7 (Slice 8):** wiring the verifier into `approve_plan → execute`.
+
 ## Acceptance criteria (slice)
 
 1. No `sdb_*` phase node or edge survives; SDB runs through the normal loop.
@@ -262,7 +306,7 @@ first while the old subgraph still exists.
 | 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~110 | ✅ merged #490 |
 | 5 | Remove the dead SDB phase subgraph + routing contract | S5-02 (removal, corrected) | ~330 | ✅ merged #491 |
 | 6 | Remove the dead SDB service runner + `sdb_verify`/`sdb_deliver` + SDB state + SDB tests | S5-04 (removal) | ~400 | ✅ committed + review approved |
-| 7 | `classification` + prompt + registry/skills cleanup + cross-check | S5-05, S5-07 | ~300 | |
+| 7 | `classification` + prompt + registry/skills cleanup + cross-check | S5-05, S5-07 | ~300 | ✅ committed + reviewed |
 | 8 | Wire the verifier into the approved service path (close D15 for `project.*`/`automation.*`) | S5-08 (new) | ~250 | |
 
 Each slice: work-unit commit(s) on `odd/asistente-sdb`, conventional message, tests with the code,
@@ -327,6 +371,17 @@ Push/PR creation remain the owner's decision per slice.
   `projects.py::_has_active_run` still reads the legacy `sdb` namespace, which is **Slice 7 scope**.
   RDD review `review-93510db7179fc56b` (lens `review-reliability`, medium, 19 files/1870 lines)
   **approved with 0 findings**; acknowledgement burned authority.
+- **Slice 7 started + done (2026-10-07)** — worktree `../lumat-agent-odd-asistente-sdb-classify` on
+  `odd/asistente-sdb-classify` from `main` = `fe81ba01` (owner approved). Graph Check on the
+  `classification`/registry cluster and the `projects`/artifacts cluster. Cleanup only:
+  `classification` + `assistant_plan.md` + `sdb_classification` (registry/`agent_registry.py`/
+  `prompts.py`); the unused `assistant_classify` prompt, the `sdb` orchestrator skill and
+  `agent/skills/sdb.md`; the `"sdb": "deferred"` extension hook; the spec AC-11 guardrails
+  classification declaration; the dead `_has_active_run` guard; and the orphaned SDB project-artifact
+  browse (backend query + `to_project_artifact_dict` + `ProjectsPage` render/copy + types/tests).
+  Owner-confirmed extra: `sdb_requested` is now admin-only (403 for a non-admin, SDB-16). Work-unit
+  commits `445b8f04`…`30371b1f`. Full backend suite green (**1,754 passed**); frontend `npm test`
+  1,032 passed (serialized) + `npm run build` green.
 
 ## Review (RDD)
 
@@ -338,6 +393,10 @@ Push/PR creation remain the owner's decision per slice.
 - **Slice 6** — `review.start` published (lineage `review-93510db7179fc56b`), tier **medium**, 1 lens
   (`review-reliability`), 19 files / 1870 lines, budget 200. Consent: owner **granted**. Capture
   **approved with 0 findings**; authority burned (`gentle-ai.review-acknowledged/v1`, `authority: burned`).
+- **Slice 7** — `review.start` published (lineage `review-af150dffa1c5c676`), tier **medium**, 1 lens
+  (`review-reliability`), 29 files / 292 lines, correction budget 146. Consent: owner **granted**.
+  Capture **approved with 0 findings**; acknowledgement burned authority
+  (`gentle-ai.review-acknowledged/v1`, action `acknowledged`, `authority: burned`).
 - Slices 1–4: see progress log (`review-c781144a08c191f2`, `review-9d1562e7914d3b39`).
 
 ## Open questions
@@ -345,6 +404,8 @@ Push/PR creation remain the owner's decision per slice.
 - Slice 8: wire the verifier into the approved service path (`approve_plan → execute`) so D15 covers
   `project.*`/`automation.create_rule`. Design TBD (reuse `verification.py`; read-only `tool_executor`
   bound to thread/owner/project).
-- Slice 7: locate the authoritative admin-only validation of `sdb_requested`; remove
+- ~~Slice 7: locate the authoritative admin-only validation of `sdb_requested`; remove
   `PlannerOutput.classification` + `assistant_plan.md` + `sdb_classification` +
-  `agent_registry.py`/`prompts.py` propagation.
+  `agent_registry.py`/`prompts.py` propagation.~~ **Resolved (Slice 7):** the `classification`
+  contract and its registry/propagation are removed; `sdb_requested` had no admin gate, so
+  `send_message` now returns 403 for a non-admin carrying the flag (SDB-16).

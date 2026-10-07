@@ -8,7 +8,6 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal
 from app.models import (
-    InternalChatThread,
     Memory,
     MemoryObservation,
     MemoryType,
@@ -301,24 +300,6 @@ def test_rename_validation_failure_leaves_registry_and_artifacts_unchanged(migra
         session.rollback()
         assert session.get(Project, project_id).name == "Field-Ops"
         assert session.query(ProjectAlias).count() == 0
-
-
-def test_rename_and_merge_reject_active_runs_before_changes(migrated_db):
-    with SessionLocal() as session:
-        user = User(username="lifecycle", password_hash="test")
-        session.add(user)
-        session.flush()
-        source = _project(session, "source")
-        target = _project(session, "target")
-        thread = InternalChatThread(user_id=user.id, active_run_id="run-1", assistant_state={"sdb": {"proyecto": "source"}})
-        session.add(thread)
-        session.flush()
-        with pytest.raises(ValueError, match="active SDB run"):
-            projects.rename(session, source, "Source Renamed", actor="agent")
-        with pytest.raises(ValueError, match="active SDB run"):
-            projects.merge(session, source, target, actor="agent")
-        assert session.get(Project, source.id).name == "Source"
-        assert session.get(Project, target.id).status.value == "active"
 
 
 def test_merge_is_atomic_on_byte_different_composite_key(migrated_db, fake_embedder):

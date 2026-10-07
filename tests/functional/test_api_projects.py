@@ -3,7 +3,7 @@
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import Memory, MemoryType, Project
+from app.models import Project
 
 
 def _login(client, make_user, *, role="operador", username="projects-operator", create=True):
@@ -17,17 +17,11 @@ def _seed_project(owner_id=None, slug="browse-contract"):
     with SessionLocal() as session:
         project = Project(slug=slug, name="Browse Contract", purpose=f"Read-only browse {owner_id} {slug}", purpose_embedding=[0.0] * 384, owner_id=owner_id)
         session.add(project)
-        session.flush()
-        session.add_all([
-            Memory(proyecto=project.slug, owner_id=owner_id, scope="panel", entity_id="thread:11", topic_key="sdb:run-1:spec", tipo=MemoryType.PATTERN, titulo="SDB specification", contenido='{"step":1}', embedding=[0.0] * 384),
-            Memory(proyecto=project.slug, owner_id=owner_id, scope="panel", entity_id="thread:11", topic_key=f"assistant-recap:11:1:{owner_id}", tipo=MemoryType.SUMMARY, titulo="WhatsApp recap", contenido="must not appear", embedding=[0.0] * 384),
-            Memory(proyecto=project.slug, owner_id=owner_id, scope="panel", entity_id="project:browse-contract", topic_key="sdb:project:decision", tipo=MemoryType.DECISION, titulo="Decision", contenido='{"ok":true}', embedding=[0.0] * 384),
-        ])
         session.commit()
         return project.slug
 
 
-def test_projects_list_and_detail_are_operator_only_and_sdb_only(client, make_user):
+def test_projects_list_and_detail_are_operator_only(client, make_user):
     user_id = make_user("projects-operator", "projects-pass")
     slug = _seed_project(user_id)
     assert client.get("/panel/api/projects").status_code == 401
@@ -41,9 +35,7 @@ def test_projects_list_and_detail_are_operator_only_and_sdb_only(client, make_us
     assert detail.status_code == 200
     body = detail.json()
     assert body["project"]["slug"] == slug
-    assert set(body["artifacts"]) == {"thread:11", "project:browse-contract"}
-    assert all(item["topic_key"].startswith("sdb:") for rows in body["artifacts"].values() for item in rows)
-    assert "must not appear" not in str(body)
+    assert set(body) == {"project"}
 
 
 def test_projects_detail_missing_and_mutation_routes(client, make_user):
@@ -83,7 +75,7 @@ def test_project_reads_are_scoped_and_admin_has_no_override(client, make_user):
     assert [p["slug"] for p in client.get("/panel/api/projects").json()["projects"]] == ["shared"]
     detail = client.get("/panel/api/projects/shared")
     assert detail.status_code == 200
-    assert all("must not appear" not in str(row) for rows in detail.json()["artifacts"].values() for row in rows)
+    assert detail.json()["project"]["slug"] == "shared"
     client.post("/panel/api/logout")
     _login(client, make_user, role="admin", username="owner-admin")
     assert client.get("/panel/api/projects").json()["projects"] == []

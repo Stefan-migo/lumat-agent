@@ -188,7 +188,7 @@ def test_compaction_fires_once_the_thread_window_fills(client, monkeypatch):
             ))
         session.commit()
 
-    planner = {"kind": "respond", "classification": "normal", "summary": "ok", "requires_approval": False}
+    planner = {"kind": "respond", "summary": "ok", "requires_approval": False}
     with respx.mock(base_url="https://openrouter.ai/api/v1") as router:
         router.post("/chat/completions").mock(side_effect=_planner_provider(planner))
         assert client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "hola"}).status_code == 201
@@ -212,7 +212,7 @@ def test_compaction_stays_idle_for_a_short_thread(client, monkeypatch):
     _admin(client, "compaction-short")
     thread_id = client.post("/panel/api/chat/threads", json={"proyecto": "default"}).json()["thread"]["id"]
 
-    planner = {"kind": "respond", "classification": "normal", "summary": "ok", "requires_approval": False}
+    planner = {"kind": "respond", "summary": "ok", "requires_approval": False}
     with respx.mock(base_url="https://openrouter.ai/api/v1") as router:
         router.post("/chat/completions").mock(side_effect=_planner_provider(planner))
         assert client.post(f"/panel/api/chat/threads/{thread_id}/messages", json={"content": "hola"}).status_code == 201

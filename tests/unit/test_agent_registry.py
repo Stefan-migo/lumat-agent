@@ -106,7 +106,7 @@ def test_missing_required_field_rejected(repo_root, tmp_path):
                 "agent": {
                     "name": "orchestrator",
                     "persona": "personas/orchestrator.md",
-                    "skills": ["sdb"],
+                    "skills": ["emergency"],
                     "tools_whitelist": [],
                     "memoria_scope": None,
                     "model": "deepseek-chat",
@@ -143,7 +143,7 @@ def test_unknown_tools_whitelist_rejected(repo_root, tmp_path):
                 "agent": {
                     "name": "orchestrator",
                     "persona": "personas/orchestrator.md",
-                    "skills": ["sdb"],
+                    "skills": ["emergency"],
                     "tools_whitelist": [],
                     "memoria_scope": None,
                     "model": "deepseek-chat",
@@ -180,7 +180,7 @@ def test_invalid_temperature_rejected(repo_root, tmp_path):
                 "agent": {
                     "name": "orchestrator",
                     "persona": "personas/orchestrator.md",
-                    "skills": ["sdb"],
+                    "skills": ["emergency"],
                     "tools_whitelist": [],
                     "memoria_scope": None,
                     "model": "deepseek-chat",
@@ -276,7 +276,6 @@ def test_valid_registry_resolves_assistant_runtime_configuration(repo_root):
     assert reg.assistant.prompts == {
         "plan": "prompts/assistant_plan.md",
         "respond": "prompts/assistant_respond.md",
-        "classify": "prompts/assistant_classify.md",
     }
     # Derive the surface from the code registry so adding or removing a tool
     # updates both sides together instead of hardcoding the size (WU#8 R3).
