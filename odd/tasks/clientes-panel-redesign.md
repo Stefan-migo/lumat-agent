@@ -162,7 +162,7 @@ Reference: `ClientFichaTabCases.png` (desktop) + `LUMAT client cases on mobile a
 - [x] Hoist the shared ficha dialogs to the component root and extract the reused card markup (no Resumen visual change) (`f7c0993a`).
 - [x] Mobile: the archived cases switch from the table to cards at `max-width: 40rem` (`table-card__desktop` + `table-cards--mobile`, mirroring ClientesList); the active case sits in an inset panel (`client-ficha__case-panel`) and the case/data cards share a row height (`detail-region--cases { align-items: stretch }`) (`8e425d9a`, `54aa6321`). Tablet (40–64rem) still renders the table pending owner review.
 - [ ] RDD review (re-assess) after the tab pass.
-- Per-slice verification: `npx tsc -b --noEmit` green; `ClientFicha.test.tsx` 48/48, `ClientFicha.stories.test.tsx` + `closure.test.tsx` 14/14. Full suite/build deferred to the design checkpoint.
+- Per-slice verification: `npx tsc -b --noEmit` green; `ClientFicha.test.tsx` 49/49, `ClientFicha.stories.test.tsx` + `closure.test.tsx` 14/14. Full suite/build deferred to the design checkpoint.
 
 ### CL-6 — Visitas tab (owner visual review 2026-10-06 #5)
 Owner direction: restyle to `ClientFichaTabVisits.png` (desktop) + `LUMAT client visits across mobile and tablet-4.png`.
@@ -185,7 +185,7 @@ Owner direction: approach both cards to `ClientFichaTabConversaciones.png` (desk
 - [x] Removed the inline "Ver todos" expansion: the card always shows the last 10 messages; the full thread is reached through `Abrir conversación` (`eee986c3`).
 - [x] Owner chose (2026-10-06): `Turno` = the 1-based order of the message within its own conversation (computed client-side over the loaded messages) (`62a28fd3`).
 - [x] Column priority: the `Resumen`/`Mensaje` cell grows while the meta cells shrink to content (`client-ficha__conversations-table` / `client-ficha__messages-table`) (`62a28fd3`).
-- [ ] Proposed: a conversation selector in the `Mensajes` card when the customer has more than one conversation. Pending owner confirmation. Note: the per-conversation `Turno` is currently relative to the loaded (last-10) messages; a selector backed by `getConversation(id, 10)` would make it exact.
+- [x] Conversation selector in the `Mensajes` card when the customer has more than one conversation: picks the thread (default = most recent) and loads its last 10 messages through `getConversation(id, 10)`; `Turno` is now the exact 1-based order within that thread (`0370569c`).
 
 ## Acceptance criteria
 
