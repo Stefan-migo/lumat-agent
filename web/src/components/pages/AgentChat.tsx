@@ -52,6 +52,7 @@ import { PageFrame } from "../shared/PageFrame";
 import { Markdown } from "../shared/Markdown";
 import { StateMessage } from "../shared/StateMessage";
 import { Icon } from "../primitives/Icon";
+import { AssistantWorkspace } from "./AssistantWorkspace";
 
 export const COMMAND_CENTER_BREAKPOINTS = {
   compactMax: 640,
@@ -735,6 +736,7 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
   );
 
   return (
+    <AssistantWorkspace>
     <PageFrame
       title="Asistente Lumat"
       meta="Chat interno con el agente virtual."
@@ -1140,5 +1142,6 @@ export function AgentChat({ role, threadId, sectionTabs, onThreadOpened }: Agent
         <p role="status">Informe de planificación: {report.contenido}</p>
       ) : null}
     </PageFrame>
+    </AssistantWorkspace>
   );
 }

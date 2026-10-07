@@ -1,0 +1,91 @@
+.assistant-workspace {
+  display: grid;
+  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr) minmax(17rem, 22.5rem);
+  min-width: 0;
+  min-height: calc(100vh - 10rem);
+  color: var(--corp-text);
+}
+
+.assistant-workspace__projects,
+.assistant-workspace__context {
+  min-width: 0;
+  padding: var(--space-4);
+  border-right: 1px solid var(--corp-border);
+  background: var(--brand-bg-elevated);
+}
+
+.assistant-workspace__context {
+  border-right: 0;
+  border-left: 1px solid var(--corp-border);
+}
+
+.assistant-workspace__pane-header,
+.assistant-workspace__controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.assistant-workspace__pane-header h2,
+.assistant-workspace__context > h2 {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.assistant-workspace__projects > .search-input {
+  margin-top: var(--space-3);
+}
+
+.assistant-workspace__projects-list {
+  margin-top: var(--space-4);
+}
+
+.assistant-workspace__thread {
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+.assistant-workspace__thread > .page-frame {
+  min-width: 0;
+}
+
+.assistant-workspace__controls {
+  justify-content: flex-end;
+  margin-bottom: var(--space-2);
+}
+
+.assistant-workspace__context .tabs {
+  margin-top: var(--space-3);
+}
+
+.assistant-workspace:not(.assistant-workspace--projects-visible):not(.assistant-workspace--context-visible) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.assistant-workspace:not(.assistant-workspace--projects-visible).assistant-workspace--context-visible {
+  grid-template-columns: minmax(0, 1fr) minmax(17rem, 22.5rem);
+}
+
+.assistant-workspace.assistant-workspace--projects-visible:not(.assistant-workspace--context-visible) {
+  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
+}
+
+@media (max-width: 64rem) {
+  .assistant-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .assistant-workspace__projects:not([hidden]),
+  .assistant-workspace__context:not([hidden]) { display: block; }
+
+  .assistant-workspace__thread {
+    padding: var(--space-3);
+  }
+}
+
+@media (max-width: 40rem) {
+  .assistant-workspace__thread {
+    padding: var(--space-2);
+  }
+}
