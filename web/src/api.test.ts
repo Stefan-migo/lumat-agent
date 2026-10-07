@@ -216,12 +216,12 @@ describe('planning session API contracts', () => {
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, thread_id: 8 }), { status: 201 }));
     await openPlanningSession('Budget review');
     expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/planning/sessions', expect.objectContaining({ method: 'POST', body: JSON.stringify({ topic: 'Budget review' }) }));
-    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, thread: {}, decisions: [], report: null }), { status: 200 }));
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, thread: {}, report: null }), { status: 200 }));
     await getPlanningSession('budget-review-8');
     expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/planning/sessions/budget-review-8', expect.anything());
   });
   it('supports close and reopen lifecycle calls', async () => {
-    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, report: {}, handoff: {} }), { status: 200 }));
+    vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, report: {} }), { status: 200 }));
     await closePlanningSession('budget-review-8');
     expect(globalThis.fetch).toHaveBeenLastCalledWith('/panel/api/planning/sessions/budget-review-8/close', expect.objectContaining({ method: 'POST' }));
     vi.mocked(globalThis.fetch).mockResolvedValue(new Response(JSON.stringify({ session: {}, thread_id: 8 }), { status: 200 }));
