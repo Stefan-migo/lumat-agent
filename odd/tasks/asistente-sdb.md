@@ -3,7 +3,7 @@
 **Branch**: `odd/asistente-sdb`
 **Worktree**: `../lumat-agent-odd-asistente-sdb`
 **Base**: `617cd2c2` (= `main` = `origin/main`, merge of PR #488, Slice 4)
-**Status**: Slices 1–2 done (spec reviewed+approved; deterministic verification gate + success criterion). Delivery strategy: chained PRs, stacked-to-main. No DB migration expected.
+**Status**: Slices 1–4 **merged to main** (PR #489 spec; PR #490 gate + isolated verifier + loop wiring). Slices 5–7 pending (collapse the phase subgraph, service-runner removal, registry cleanup). No DB migration expected.
 
 ## Objective
 
@@ -185,10 +185,10 @@ first while the old subgraph still exists.
 
 | Slice | Work unit | Tasks | Size | State |
 |---|---|---|---:|---|
-| 1 | New `sdb-native` spec (contract only) | S5-01 | ~197 | ✅ reviewed |
-| 2 | Deterministic gate + `success_criterion` (additive) | S5-03a | ~100 | ✅ committed |
-| 3 | Isolated read-only verifier (additive) | S5-03b | ~230 | ✅ committed |
-| 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~110 | ✅ committed |
+| 1 | New `sdb-native` spec (contract only) | S5-01 | ~197 | ✅ merged #489 |
+| 2 | Deterministic gate + `success_criterion` (additive) | S5-03a | ~100 | ✅ merged #490 |
+| 3 | Isolated read-only verifier (additive) | S5-03b | ~230 | ✅ merged #490 |
+| 4 | Wire verify into the loop + response qualification (additive) | S5-02 (routing) | ~110 | ✅ merged #490 |
 | 5 | Collapse phase graph + SDB state + spec-level tests | S5-02 (removal) | ~350 | next |
 | 6 | Replace SDB service runner + integration tests | S5-04 | ~450 | |
 | 7 | Registry/config cleanup + cross-check | S5-05, S5-07 | ~300 | |
@@ -227,6 +227,11 @@ Push/PR creation remain the owner's decision per slice.
   streamed via `on_token`; confirmed adds none. Tool results now carry dispatched arguments for the
   verifier. 109 added lines; 82 passed. In-turn effects are `memory.update`/`memory.delete` (the
   `project.*`/`automation.*` effects execute in the service → Slice 6).
+- **Slices 1–4 merged to `main`** — PR #489 (spec) and PR #490 (verification feature).
+  `main` = `9f2140a4`. Reviews: `review-c781144a08c191f2` (slice 1, 0 findings),
+  `review-9d1562e7914d3b39` (slices 2–4, approved; advisory R3-001 deferred). Full suite green.
+  A full-suite run caught a planner-dict baseline test (unchanged file, outside the reviewed diff);
+  fixed in `e6ef38fb`. Working branch for the removal slices: `odd/asistente-sdb-removal`.
 
 ## Review (RDD)
 
