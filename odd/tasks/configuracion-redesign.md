@@ -56,12 +56,12 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
 
 ### Unit A — shared primitives (roll-up)
 
-- [ ] **CF-1** — Help/support panel primitive (icon + heading + body), used by the reference
+- [x] **CF-1** — Help/support panel primitive (icon + heading + body), used by the reference
       right-hand panels "Cómo funciona", "Consideraciones", "Vista previa". Finding `configuracion-016`.
       New file under `web/src/components/primitives/`. Unit test.
-- [ ] **CF-2** — Weekday day-toggle / segmented control for Lun–Dom. Finding `configuracion-017`.
+- [x] **CF-2** — Weekday day-toggle / segmented control for Lun–Dom. Finding `configuracion-017`.
       New file under `web/src/components/primitives/`. Unit test (selection, disabled, a11y).
-- [ ] **CF-3** — Message preview primitive (assistant bubble + note). Finding `configuracion-018`.
+- [x] **CF-3** — Message preview primitive (assistant bubble + note). Finding `configuracion-018`.
       New file under `web/src/components/primitives/`. Unit test.
 - [ ] **CF-4** — Three-metric row composition on the shared `StatCard` surface. Finding
       `configuracion-019`. Extend `web/src/components/shared/StatCard.tsx` (+ test).
@@ -105,6 +105,18 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
 - [ ] **CF-14** — Verification and reference polish: full suite + build green; re-capture the section
       and self-review against the references at desktop/tablet/mobile; hand to the owner for the
       deferred visual pass.
+
+## Progress log
+
+- **PR1 — Unit A roll-up primitives (CF-1, CF-2, CF-3)** — done on branch `odd/configuracion-redesign`.
+  - Commits: `348593f2` help panel, `feac640b` day toggle, `8e23d46a` message preview.
+  - Files: `primitives/HelpPanel.tsx` (+ test), `primitives/DayToggle.tsx` (+ test),
+    `primitives/MessagePreview.tsx` (+ test), `primitives/primitives.css`.
+  - Verified: focused vitest 5/5 green; `npm run build` (tsc -b + vite build) green.
+  - Learned: `HelpPanel` originally used `var(--info-bg)`, which does not exist in
+    `tokens/tokens.css`; corrected to `var(--info-tint)`. The day-toggle selected state follows the
+    closed-section convention (`ClientFichaDialogs`): `--corp-text` border + `--success-tint`.
+  - Note: not pushed / no PR opened yet.
 
 ## Verification
 
