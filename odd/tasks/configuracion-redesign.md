@@ -87,7 +87,7 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
 - [x] **CF-10** — Mensajes tab: `Tono del asistente` horizontal row, and `Mensajes del asistente`
       with the 5-template strip, selected-text editor, info line, and "Vista previa". Findings
       `configuracion-004`, `configuracion-005`.
-- [ ] **CF-11** — Horarios y avisos tab: `Horarios de atención` (globe timezone `Select`, weekly
+- [x] **CF-11** — Horarios y avisos tab: `Horarios de atención` (globe timezone `Select`, weekly
       schedule list, "Nuevo horario" sub-card with day toggles + Inicio/Fin time inputs, delete,
       "Agregar otro horario", disabled save) plus the right column `Notificaciones push` and
       `Fuera de horario` cards. Findings `configuracion-006`, `configuracion-007`, `configuracion-014`.
@@ -165,6 +165,27 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
     scoped to the direct child (`.settings-tabs > .tabs > [role="tablist"]`).
   - Verified: focused vitest 7/7 + stories 30/30 green; FULL suite green (2 flaky `ClientFicha`
     timeouts that pass 49/49 in isolation); `npm run build` green.
+
+- **PR6 — Horarios y avisos tab (CF-11)** — done on branch `odd/configuracion-redesign`.
+  - Commit: the single CF-11 work-unit commit reported in the delivery summary; brings the Horarios
+    y avisos tab to the reference composition.
+  - Files: `web/src/components/pages/Settings.tsx`, `web/src/components/pages/Settings.css`,
+    `web/src/stories/pages/Settings.stories.test.tsx`, this task log.
+  - Graph nodes/edges consulted (graphify 0.9.40): `Settings()`, `PushSettings()`, `DayToggle()`,
+    `Select()`, `get_hours_timezone()`; `Settings.stories.tsx --imports--> PushSettings()`; settings
+    service business-hours schedule/timezone; `GRAPH_REPORT.md` settings hub and repeated-weekday
+    invariant. The direct Settings-to-PushSettings traversal had no directed edge; an undirected
+    query showed the import through the Settings story.
+  - `Intl.supportedValuesOf("timeZone")` supplies the native IANA options; the stored timezone is
+    included even if not listed by the browser. Existing `DayToggle` uses abbreviated weekday keys;
+    the schedule payload keeps its established ISO weekday numbers (Monday=1 through Sunday=7).
+  - Verified: focused Settings component tests 7/7 green. Full `npm test` completed with 1066/1067
+    passing; the unrelated `ClientFicha.test.tsx > ClientFicha equipment > adds equipment from the
+    dialog` timed out at 5s; rerunning `ClientFicha.test.tsx` alone passed 49/49. Settings story tests
+    passed 30/30. `npm run build` (`tsc -b` + Vite) green; Vite reported its existing >500 kB chunk
+    advisory.
+  - Not run: browser/runtime harness; this work unit changes only the existing frontend settings
+    surface and has no separately configured runtime harness.
 
 ## Verification
 

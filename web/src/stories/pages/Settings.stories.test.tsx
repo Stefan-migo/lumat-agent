@@ -137,22 +137,27 @@ describe("Settings page story (SS-1..SS-5 / S6 DS-UI-COPY/STATES/TABLES)", () =>
     }
   });
 
-  it("renders the configured hours timezone and schedule", async () => {
+  it("renders the configured timezone, weekly schedule, and new schedule editor", async () => {
     render(<SettingsView />);
     await selectSection("Horarios y avisos");
     const card = screen.getByRole("heading", { name: "Horarios de atención" }).closest(".card") as HTMLElement;
     expect(within(card).getByLabelText("Zona horaria")).toHaveValue(settings.hours.timezone);
-    expect(within(card).getByLabelText("Apertura 1")).toHaveValue(settings.hours.schedule[0].open);
-    expect(within(card).getByLabelText("Cierre 1")).toHaveValue(settings.hours.schedule[0].close);
-    expect(within(card).getByLabelText("Lunes, entrada 1")).toBeChecked();
+    expect(within(card).getByText("Lun, Mar, Mié, Jue, Vie")).toBeInTheDocument();
+    expect(within(card).getByText("09:00 – 18:00")).toBeInTheDocument();
+    expect(within(card).getByLabelText("Días del nuevo horario")).toBeInTheDocument();
+    expect(within(card).getByLabelText("Inicio")).toHaveValue("09:00");
+    expect(within(card).getByLabelText("Fin")).toHaveValue("18:00");
+    expect(within(card).getByRole("button", { name: "Agregar otro horario" })).toBeDisabled();
   });
 
   it("prevents duplicate weekdays when adding a schedule entry", async () => {
     render(<SettingsView />);
     await selectSection("Horarios y avisos");
     const card = screen.getByRole("heading", { name: "Horarios de atención" }).closest(".card") as HTMLElement;
-    fireEvent.click(within(card).getByRole("button", { name: "Agregar horario" }));
-    expect(within(card).getByLabelText("Lunes, entrada 2")).toBeDisabled();
+    fireEvent.click(within(card).getByRole("button", { name: "Lun" }));
+    expect(within(card).getByRole("button", { name: "Agregar otro horario" })).toBeDisabled();
+    fireEvent.click(within(card).getByRole("button", { name: "Sáb" }));
+    expect(within(card).getByRole("button", { name: "Agregar otro horario" })).toBeEnabled();
   });
 
   it("renders spend-limit inputs (conversation + daily) with plain-Spanish effect before them", async () => {
@@ -356,14 +361,13 @@ describe("Settings API page", () => {
     });
     render(<Settings />);
     await selectSection("Horarios y avisos");
-    const opening = await screen.findByLabelText("Apertura 1");
-    const card = opening.closest(".card") as HTMLElement;
-    fireEvent.change(within(card).getByLabelText("Zona horaria"), { target: { value: "America/Argentina/Buenos_Aires" } });
-    fireEvent.change(within(card).getByLabelText("Apertura 1"), { target: { value: "08:30" } });
+    const timezone = await screen.findByLabelText("Zona horaria");
+    const card = timezone.closest(".card") as HTMLElement;
+    fireEvent.change(within(card).getByLabelText("Zona horaria"), { target: { value: "America/New_York" } });
     fireEvent.click(within(card).getByRole("button", { name: "Guardar horarios" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/panel/api/settings/hours",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ timezone: "America/Argentina/Buenos_Aires", schedule: settings.hours.schedule.map((entry) => ({ ...entry, open: "08:30" })) }) }),
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ timezone: "America/New_York", schedule: settings.hours.schedule }) }),
     ));
     fetchMock.mockRestore();
   });
