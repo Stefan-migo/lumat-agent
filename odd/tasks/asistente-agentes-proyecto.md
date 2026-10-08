@@ -107,9 +107,9 @@ per-thread tool toggles + stop/cancel endpoint, and the workspace UI that expose
 ## Work units (stable IDs)
 
 ### A1 — Save ProjectConfig
-- [ ] Route `PATCH/PUT /panel/api/projects/{slug}/config` (owner-scoped, validated by `ProjectConfig`).
-- [ ] Wire the workspace UI to edit/save project instructions (+ tool policy / skills as exposed).
-- [ ] Tests first (RED) for validation + owner scoping + persistence; then implement.
+- [x] Route `PATCH/PUT /panel/api/projects/{slug}/config` (owner-scoped, validated by `ProjectConfig`).
+- [x] Wire the workspace UI to edit/save project instructions (+ tool policy / skills as exposed).
+- [x] Tests first (RED) for validation + owner scoping + persistence; then implement.
 
 ### A2 — Chats without project
 - [ ] `default` namespace as implicit "no project" for new chats; no visible "General" project.
@@ -160,3 +160,17 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   `main` = `23ff4cd1` (owner approved 2026-10-08).
 - Recorded design handoff from `cortex-session/2026-10-08-backend-agentes-proyecto` (Engram #5923) and
   `.rapsodia-code/sessions/ready-for-odd/2026-10-08-backend-agentes-proyecto/report.md`.
+- Slice 1 complete. Commits: backend `8485597e` (`feat(projects): persist project assistant config`);
+  frontend `03e397e5` (`feat(projects): edit project instructions in workspace`). Files: backend service,
+  serializer, project routes, and `tests/functional/test_api_projects.py`; frontend `api.ts`, `types.ts`,
+  `ProjectsPage.tsx`, and `ProjectsPage.test.tsx`. Graph nodes consulted: `Project`, `project_config.py`,
+  `routes/projects.py`, `api/serializers.py`, `types.ts`; path showed `project_config.py` and
+  `routes/projects.py` both import `models.py`. RED: `eval "$(bash infra/test-db.sh env)" && uv run pytest
+  tests/functional/test_api_projects.py -q` initially reported missing-route 404 failures; the owner test
+  also exposed the DB JSON default `{}` (rather than `None`) in its unchanged-config assertion, which was
+  corrected before GREEN. GREEN: `eval "$(bash infra/test-db.sh env)" && uv run pytest
+  tests/functional/test_api_projects.py` — 12 passed; full `eval "$(bash infra/test-db.sh env)" && uv run
+  pytest tests/` — 1761 passed, 2 warnings. Frontend: `npx tsc -b --force --noEmit` passed;
+  `npx vitest run src/components/pages/ProjectsPage.test.tsx` — 12 passed;
+  `npx vitest run --no-file-parallelism` — 97 files / 1049 tests passed; `npm run build` passed (large
+  chunk warning).
