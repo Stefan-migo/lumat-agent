@@ -116,8 +116,8 @@ per-thread tool toggles + stop/cancel endpoint, and the workspace UI that expose
 
 ### A3 — Project files (large)
 - [x] `project_files` table + migration (idempotent) + upload/download. Commits `89ee041f`, `06a85ce3`; migration-test expectation fix `11ef749e`.
-- [ ] Extractors: docx, xlsx, images; table-aware PDF (pdfplumber).
-- [ ] Ingest extracted content to `kb_documents(project_id)`.
+- [x] Extractors: docx, xlsx, images; table-aware PDF (pdfplumber). Commits `e1540d00`, `cc74ec97`. Images are stored but intentionally not text-extracted/embedded (D3).
+- [x] Ingest extracted content to `kb_documents(project_id)`. Commit `e14f757e`.
 - [ ] Tools `list_project_files` / `read_project_file`.
 - [ ] Downloadable artifact path.
 - [ ] UI "Archivos y conocimiento".
@@ -238,3 +238,19 @@ Do NOT edit `PanelShell`, `primitives.css`, `panelRoutes.ts` in the same window;
   extraction failure marks `ProjectFile.status="failed"` without losing the stored blob. Must update
   `tests/integration/test_migrations.py` (`043` version in `test_schema_migrations_records_version`;
   `test_enums_materialized` document_format labels gain docx/xlsx). TDD ON (RED -> GREEN).
+- A3.2 done (owner-approved deps `pdfplumber`, `python-docx`, `openpyxl`). Commits: `e1540d00`
+  (`feat(kb): add docx and xlsx document formats` — `DocumentFormat.DOCX/XLSX`, migration
+  `043_document_format_docx_xlsx.sql`, migration-test updates); `cc74ec97`
+  (`feat(projects): extract project file text...` — `app/services/document_extract.py`,
+  `tests/integration/test_document_extract.py`, deps); `e14f757e`
+  (`feat(projects): ingest project file text into the project knowledge base` —
+  `kb.ingest_document(content_text=...)`, `project_files.ingest_project_file` with a
+  `begin_nested()` savepoint + `status="failed"` on extraction error, route wiring, tests).
+  RED observed: `ModuleNotFoundError: No module named 'docx'` + `cannot import name 'ingest_project_file'`.
+  GREEN: targeted 76 passed; full `eval "$(bash infra/test-db.sh env)" && uv run pytest tests/` —
+  1789 passed. Graph nodes consulted: `ingest_document`, `extract_text`, `_store_chunks`, `embed_texts`,
+  `retrieve`, `DocumentFormat`, `KbDocument`, `KbChunk`, `KbVisibility`, `ProjectFile`,
+  `allowed_project_file`, `store_project_file`, `upload_project_file`; paths
+  `ingest_document -> KbDocument` and `upload_project_file -> store_project_file`.
+- A3 still open: tools `list_project_files`/`read_project_file`, downloadable artifact path,
+  UI "Archivos y conocimiento".
