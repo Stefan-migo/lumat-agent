@@ -1,14 +1,16 @@
 """capture node — progressive structured data capture (CM-2).
 
-One field per turn, in the LumatRequest §1.5 order: identification, location,
-equipment, failure, evidence, availability, consent. The answer to the
-pending field is validated and stored on the conversation (`captured_data`,
-persisted so the D2 per-message rebuild keeps it); a skip answer (no sé / no
-tengo / ...) marks the field `unknown` and continues without blocking (CM-2).
+One data field per turn, in the LumatRequest §1.5 order: identification
+(name, email), location (comuna, address), equipment, failure, evidence,
+availability. The answer to the pending field is validated and stored on the
+conversation (`captured_data`, persisted so the D2 per-message rebuild keeps
+it); a skip answer (no sé / no tengo / ...) marks the field `unknown` and
+continues without blocking (CM-2).
 
-Consent (CR-6): a positive consent answer writes the captured name/comuna/
-address + consent onto the customer record. Completion replies with a
-confirmation and sends the flow to the summary node (CM-5).
+CI-3: consent is NOT a data field. Once every field is captured the flow asks
+for consent as its own explicit step before booking; a positive answer writes
+the captured name/email/comuna/address + consent onto the customer record
+(CR-6) and sends the flow to booking.
 """
 
 from __future__ import annotations
@@ -26,17 +28,22 @@ from app.services.customers import (
 
 logger = logging.getLogger(__name__)
 
-# CM-2 field order (LumatRequest §1.5): (field, question to ask).
+# CM-2 field order (LumatRequest §1.5): (field, question to ask). Identification
+# is name + email, then location, then the equipment/failure/availability block.
 CAPTURE_FIELDS: list[tuple[str, str]] = [
     ("name", "¿Cuál es tu nombre?"),
+    ("email", "¿Cuál es tu correo electrónico?"),
     ("comuna", "¿En qué comuna te encuentras?"),
     ("address", "¿Cuál es tu dirección?"),
     ("equipment", "¿Qué equipo tienes? (marca, modelo y años aproximados)"),
     ("failure", "Describe el problema: qué falla, desde cuándo y con qué frecuencia."),
     ("evidence", "¿Puedes enviar una foto o video del equipo y su pantalla? (si no, di 'no tengo')"),
     ("availability", "¿Qué días y horarios te acomodan para la visita?"),
-    ("consent", "¿Autorizas que guardemos tus datos para gestionar tu solicitud? Responde sí o no."),
 ]
+
+# CI-3: consent is an explicit step of its own, before booking. It is never a
+# data field and never extracted from free text (PII).
+CONSENT_QUESTION = "¿Autorizas que guardemos tus datos para gestionar tu solicitud? Responde sí o no."
 
 COMPLETION_REPLY = (
     "Gracias, tu solicitud quedó registrada. Un técnico la revisará y te "
@@ -98,6 +105,7 @@ def _apply_consent_and_customer(session, state: ConversationState, captured: dic
         session,
         customer,
         name=clean.get("name"),
+        email=clean.get("email"),
         comuna=clean.get("comuna"),
         address=clean.get("address"),
     )
@@ -118,6 +126,19 @@ def capture(state: ConversationState) -> dict:
     """Handle one capture turn: store the pending answer, ask the next field."""
     captured = dict(state.captured)
     pending = captured.get("_pending")
+
+    if pending == "consent":
+        # CI-3: the explicit consent step runs AFTER every data field, before
+        # booking. A deviation on this step re-asks it instead of answering it.
+        if state.capture_paused:
+            return {"capture_paused": False, "replies": [CONSENT_QUESTION]}
+        answer = _current_text(state)
+        captured["consent"] = "unknown" if is_skip(answer) else answer
+        captured.pop("_pending", None)
+        with session_scope() as session:
+            _apply_consent_and_customer(session, state, captured)
+            _persist_captured(session, state, captured)
+        return {"captured": captured, "next_step": "booking"}
 
     if state.capture_paused and pending is not None:
         # CI-2: do not store deviation text as the pending value; re-ask and resume.
@@ -140,13 +161,15 @@ def capture(state: ConversationState) -> dict:
     captured.pop("_pending", None)
 
     with session_scope() as session:
-        if pending == "consent":
-            _apply_consent_and_customer(session, state, captured)
         _persist_captured(session, state, captured)
 
     next_field = _next_field_after(pending)
     if next_field is None:
-        return {"captured": captured, "next_step": "booking"}
+        # CI-3: data fields are complete; consent is its own explicit step.
+        captured["_pending"] = "consent"
+        with session_scope() as session:
+            _persist_captured(session, state, captured)
+        return {"captured": captured, "replies": [CONSENT_QUESTION]}
 
     captured["_pending"] = next_field[0]
     with session_scope() as session:

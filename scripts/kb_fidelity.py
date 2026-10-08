@@ -127,7 +127,11 @@ def _load_provider_environment() -> None:
 
 _load_provider_environment()
 
-from app.chat.nodes.capture import CAPTURE_FIELDS, COMPLETION_REPLY  # noqa: E402
+from app.chat.nodes.capture import (  # noqa: E402
+    CAPTURE_FIELDS,
+    COMPLETION_REPLY,
+    CONSENT_QUESTION,
+)
 from app.chat.nodes.handoff import HANDOFF_REPLY  # noqa: E402
 from app.chat.nodes.respond import CANNOT_ANSWER_REPLY, CLARIFICATION_REPLY  # noqa: E402
 from app.chat.state import greeting  # noqa: E402
@@ -146,7 +150,9 @@ OUTCOMES = (
 # The CM-2 capture questions. A turn that asks for a field is not an answer to the
 # question that was asked, and scoring it as one would invent false answers: four
 # `near_miss` queries in the first full run came back as "¿Cuál es tu nombre?".
-CAPTURE_PROMPTS = frozenset([question for _, question in CAPTURE_FIELDS] + [COMPLETION_REPLY])
+CAPTURE_PROMPTS = frozenset(
+    [question for _, question in CAPTURE_FIELDS] + [CONSENT_QUESTION, COMPLETION_REPLY]
+)
 
 # A number is a digit run optionally continued by `.`/`,` groups. Chilean Spanish
 # uses `.` for thousands (`45.000`) and `,` for decimals (`1,5`), so the grouping is

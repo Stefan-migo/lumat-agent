@@ -214,9 +214,14 @@ Follow RED → GREEN → REFACTOR; never fall back to standard mode. Test marker
 - [x] Preserve emergency / handoff / cost / closure gates and booking/manage.
 
 ### CI-3 — Extraction + grouped questions
+
+#### CI-3a — Mandatory email + separate consent — DONE
+- [x] Add mandatory `email` to the capture order and persist it on the ficha.
+- [x] Consent is now its own explicit step before booking (removed from `CAPTURE_FIELDS`).
+
+#### CI-3b — Multi-field extraction + grouped questions
 - [ ] Extract multiple fields from one free-text message.
 - [ ] Ask only missing fields, grouped 2–3, natural language, no numbered lists.
-- [ ] Add mandatory `email`; make consent a separate explicit step.
 
 ### CI-4 — Media as evidence (photo/audio for the technician)
 - [ ] Stop `handoff_gate` from routing media to a human during capture; store media as case evidence.
@@ -289,3 +294,17 @@ on the worktree graph (`graphify-out/`, built from `fe81ba01`): `greeting_with_m
   `tests/functional/test_triage_reply_duplication.py` (the file is under `tests/integration/`).
   CI-2 code commit: `229c732f`. This progress-log change is delivered by the accompanying
   `docs(odd): record CI-2 review state and CI-1 delivery in the task` commit.
+- **CI-3a implemented (2026-10-08).** `email` added to the capture order (name, email, comuna,
+  address, …) and persisted on the ficha; `consent` removed from `CAPTURE_FIELDS` and asked as its
+  own explicit step after the data fields and before booking (a deviation on the consent step
+  re-asks it). Files: `app/chat/nodes/capture.py`, `scripts/kb_fidelity.py`,
+  `tests/integration/test_chat_capture.py`, `tests/functional/test_conversation_flows.py`,
+  `tests/integration/test_handoff.py`, `tests/integration/test_out_of_hours_and_farewell.py`.
+  RED: 7 capture/flow tests failed before implementation (email missing, consent still a field).
+  GREEN: focused `uv run pytest tests/integration/test_chat_capture.py
+  tests/functional/test_conversation_flows.py tests/integration/test_chat_booking.py
+  tests/unit/test_kb_fidelity.py` **63 passed**; full suite `uv run pytest tests/` **EXIT 0** with
+  the two known-flaky seed tests deselected. CI-3a code commit: `1a94d6a5`.
+- **CI-3b (next):** multi-field extraction (reuse the single classifier LLM call — add a `fields`
+  object to `agent/personas/classify.md`) plus grouped 2–3 questions replacing the single `_pending`
+  model.
