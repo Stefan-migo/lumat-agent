@@ -1,11 +1,11 @@
 """capture node — progressive structured data capture (CM-2).
 
-One data field per turn, in the LumatRequest §1.5 order: identification
-(name, email), location (comuna, address), equipment, failure, evidence,
-availability. The answer to the pending field is validated and stored on the
-conversation (`captured_data`, persisted so the D2 per-message rebuild keeps
-it); a skip answer (no sé / no tengo / ...) marks the field `unknown` and
-continues without blocking (CM-2).
+Each turn the classifier extracts any capturable fields present in the free
+text (CI-3b); the node merges them and asks the next 2-3 MISSING fields in one
+natural-language message (no numbered list), in the LumatRequest §1.5 order:
+identification (name, email), location (comuna, address), equipment, failure,
+evidence, availability. A skip answer (no sé / no tengo / ...) marks the field
+`unknown` and continues without blocking (CM-2).
 
 CI-3: consent is NOT a data field. Once every field is captured the flow asks
 for consent as its own explicit step before booking; a positive answer writes
@@ -44,6 +44,13 @@ CAPTURE_FIELDS: list[tuple[str, str]] = [
 # CI-3: consent is an explicit step of its own, before booking. It is never a
 # data field and never extracted from free text (PII).
 CONSENT_QUESTION = "¿Autorizas que guardemos tus datos para gestionar tu solicitud? Responde sí o no."
+
+# CI-3b: ask up to this many questions per message. `evidence` is a media ask, so
+# it is not an extracted free-text field.
+MAX_ASKS = 3
+EXTRACTABLE_FIELDS = frozenset(field for field, _ in CAPTURE_FIELDS if field != "evidence")
+_FIELD_QUESTIONS = dict(CAPTURE_FIELDS)
+_FIELD_ORDER = [field for field, _ in CAPTURE_FIELDS]
 
 COMPLETION_REPLY = (
     "Gracias, tu solicitud quedó registrada. Un técnico la revisará y te "
@@ -115,16 +122,27 @@ def _apply_consent_and_customer(session, state: ConversationState, captured: dic
         record_consent(session, customer, consent=consent)
 
 
-def _next_field_after(pending: str) -> tuple[str, str] | None:
-    for i, (field, question) in enumerate(CAPTURE_FIELDS):
-        if field == pending and i + 1 < len(CAPTURE_FIELDS):
-            return CAPTURE_FIELDS[i + 1]
-    return None
+def _missing_fields(captured: dict) -> list[str]:
+    """Data fields not yet captured (a skipped field is stored, so not missing)."""
+    return [field for field in _FIELD_ORDER if field not in captured]
+
+
+def _ask_text(fields: list[str]) -> str:
+    """One message grouping 2-3 field questions, natural language, no list."""
+    return " ".join(_FIELD_QUESTIONS[field] for field in fields)
+
+
+def _merge_extracted(captured: dict, extracted: dict | None) -> None:
+    """Fill captured fields from this turn's extraction (never overwrite/consent)."""
+    for field, value in (extracted or {}).items():
+        if field in EXTRACTABLE_FIELDS and value and not captured.get(field):
+            captured[field] = value
 
 
 def capture(state: ConversationState) -> dict:
-    """Handle one capture turn: store the pending answer, ask the next field."""
+    """Merge this turn's extraction and ask the next missing fields (CI-3b)."""
     captured = dict(state.captured)
+    _merge_extracted(captured, state.extracted)
     pending = captured.get("_pending")
 
     if pending == "consent":
@@ -140,38 +158,43 @@ def capture(state: ConversationState) -> dict:
             _persist_captured(session, state, captured)
         return {"captured": captured, "next_step": "booking"}
 
-    if state.capture_paused and pending is not None:
-        # CI-2: do not store deviation text as the pending value; re-ask and resume.
-        question = dict(CAPTURE_FIELDS)[pending]
-        return {"capture_paused": False, "replies": [question]}
+    if state.capture_paused:
+        # CI-2/CI-3b: a deviation was answered; resume without storing its text.
+        captured.pop("_pending", None)
+        return _ask_next(captured, state, clear_paused=True)
 
     if pending is None:
-        # First capture turn: the current message is the menu choice/intent,
-        # not an answer. Ask the first field without storing anything.
-        captured["_pending"] = CAPTURE_FIELDS[0][0]
+        # First capture turn: the current message is the intent, not an answer.
         if state.intent in {"calefont", "caldera", "calefaccion"}:
             captured["equipment_type"] = state.intent
-        with session_scope() as session:
-            _persist_captured(session, state, captured)
-        return {"captured": captured, "replies": [CAPTURE_FIELDS[0][1]]}
+        return _ask_next(captured, state)
 
-    answer = _current_text(state)
-    value = "unknown" if is_skip(answer) else answer
-    captured[pending] = value
+    # An answer turn. Extraction already filled what it could. A single free-text
+    # answer that extracted nothing is attributed to the first asked field still
+    # missing — the batch we asked is always the leading missing fields in order.
+    if not any(field in captured for field in pending):
+        target = pending[0]
+        if target not in captured:
+            captured[target] = "unknown" if is_skip(_current_text(state)) else _current_text(state)
+
     captured.pop("_pending", None)
+    return _ask_next(captured, state)
 
-    with session_scope() as session:
-        _persist_captured(session, state, captured)
 
-    next_field = _next_field_after(pending)
-    if next_field is None:
-        # CI-3: data fields are complete; consent is its own explicit step.
+def _ask_next(captured: dict, state: ConversationState, *, clear_paused: bool = False) -> dict:
+    """Ask the next 2-3 missing fields, or the consent step when none remain."""
+    missing = _missing_fields(captured)
+    if not missing:
         captured["_pending"] = "consent"
         with session_scope() as session:
             _persist_captured(session, state, captured)
         return {"captured": captured, "replies": [CONSENT_QUESTION]}
 
-    captured["_pending"] = next_field[0]
+    batch = missing[:MAX_ASKS]
+    captured["_pending"] = batch
     with session_scope() as session:
         _persist_captured(session, state, captured)
-    return {"captured": captured, "replies": [next_field[1]]}
+    updates: dict = {"captured": captured, "replies": [_ask_text(batch)]}
+    if clear_paused:
+        updates["capture_paused"] = False
+    return updates

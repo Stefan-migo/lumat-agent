@@ -136,6 +136,9 @@ class ConversationState:
     intent: str | None = None
     case: dict = field(default_factory=dict)
     captured: dict = field(default_factory=dict)
+    # CI-3b: capturable fields extracted from this turn's free text by the
+    # classifier (never consent); merged into `captured` by the capture node.
+    extracted: dict = field(default_factory=dict)
     summary: str | None = None
     emergency: bool = False
     # set by the emergency_gate: "strong" | "weak" | None (EM-1/EM-5, T4.2)

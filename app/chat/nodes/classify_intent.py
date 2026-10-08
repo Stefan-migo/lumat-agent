@@ -25,6 +25,7 @@ import re
 from sqlalchemy import func, select
 
 from app.chat.state import ConversationState
+from app.chat.nodes.capture import EXTRACTABLE_FIELDS
 from app.db import session_scope
 from app.models import ConversationEvent
 from app.services import prompts
@@ -98,6 +99,18 @@ def _llm_classify(text: str, message_id: int) -> dict:
         "priority": parsed.get("priority"),
         "status": parsed.get("status"),
         "injection": bool(parsed.get("injection")),
+        # CI-3b: same call also extracts any capture fields present in the text.
+        "fields": parsed.get("fields") or {},
+    }
+
+
+def _extracted(result: dict) -> dict:
+    """Keep only clean string values for known capturable fields (never consent)."""
+    raw = result.get("fields") or {}
+    return {
+        field: value.strip()
+        for field, value in raw.items()
+        if field in EXTRACTABLE_FIELDS and isinstance(value, str) and value.strip()
     }
 
 
@@ -187,7 +200,7 @@ def classify_intent(state: ConversationState) -> dict:
     if result["intent"] == "unknown":
         if mid_capture:
             # CM-2 field answers are not comprehension failures (HH-3).
-            return {"intent": "unknown"}
+            return {"intent": "unknown", "extracted": _extracted(result)}
         with session_scope() as session:
             unknown_count = _record_unknown_intent(session, state, text)
             record_activity(
@@ -202,6 +215,7 @@ def classify_intent(state: ConversationState) -> dict:
             "unknown_count": unknown_count,
             "escalate": unknown_count >= 2,
             "escalate_reason": "unknown_intent_twice" if unknown_count >= 2 else None,
+            "extracted": _extracted(result),
         }
 
     with session_scope() as session:
@@ -221,6 +235,7 @@ def classify_intent(state: ConversationState) -> dict:
                 "intent": result["intent"],
                 "escalate": True,
                 "escalate_reason": "scope_always_escalate",
+                "extracted": _extracted(result),
                 **case_update,
             }
-    return {"intent": result["intent"], **case_update}
+    return {"intent": result["intent"], "extracted": _extracted(result), **case_update}

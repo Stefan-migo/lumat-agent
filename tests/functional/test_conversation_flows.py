@@ -113,7 +113,7 @@ def test_first_greeting_with_service_content_still_classifies_and_routes(
     assert replies[0] == MESSAGE_DEFAULTS["greeting"]
     assert "¿Cuál es tu nombre?" in replies[1]
     assert mock_openai_chat
-    assert conversation.captured_data["_pending"] == "name"
+    assert conversation.captured_data["_pending"] == ["name", "email", "comuna"]
 
 
 @pytest.mark.spec("CM-1")
@@ -134,7 +134,7 @@ def test_cm1_repeat_contact_resumes_not_restarts(
     assert "asistente virtual" in replies[0]  # greeting only on turn 1
     assert "¿Cuál es tu nombre?" in replies[1]  # capture resumed (CM-2 field 1)
     assert "asistente virtual" not in replies[1]  # NOT restarted from scratch
-    assert captured["_pending"] == "name"  # state persisted (D2 rebuild)
+    assert captured["_pending"] == ["name", "email", "comuna"]  # state persisted (D2 rebuild)
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +156,7 @@ def test_cm2_skip_marks_unknown_and_continues(client, mock_openai_chat, mock_met
 
     # the skipped field is stored as unknown, NOT blocking the flow (CM-2)
     assert captured.get("name") == "unknown"
-    assert captured["_pending"] == "email"  # flow advanced to the next field
+    assert captured["_pending"] == ["email", "comuna", "address"]  # advanced to next fields
     assert "correo" in (last_reply or "").lower()
 
 

@@ -135,7 +135,8 @@ def test_cm2_progressive_capture_asks_fields_in_order(mock_openai_chat):
     assert captured["email"] == "juan@mail.cl"
     assert captured["comuna"] == "Providencia"
     assert captured["address"] == "Av Siempre Viva 123"
-    assert captured["_pending"] == "equipment"
+    # CI-3b: the ask is grouped (leading missing fields), not one per turn.
+    assert captured["_pending"] == ["equipment", "failure", "evidence"]
 
 
 def test_cm2_mid_capture_deviation_is_answered_and_agenda_resumes(mock_openai_chat, fake_embedder):
@@ -143,14 +144,14 @@ def test_cm2_mid_capture_deviation_is_answered_and_agenda_resumes(mock_openai_ch
     conv_id = _start_conversation()
 
     _turn(conv_id, "quiero una visita", "wamid.dev0")
-    assert _conversation_captured(conv_id)["_pending"] == "name"
+    assert _conversation_captured(conv_id)["_pending"] == ["name", "email", "comuna"]
     replies = _turn(conv_id, "cuanto cuesta la revision anual", "wamid.dev1")
 
     assert any("Segun el manual de Lumat" in reply for reply in replies)
     assert any("¿Cuál es tu nombre?" in reply for reply in replies)
     captured = _conversation_captured(conv_id)
     assert captured.get("name") != "cuanto cuesta la revision anual"
-    assert captured["_pending"] == "name"
+    assert captured["_pending"] == ["name", "email", "comuna"]
     with SessionLocal() as session:
         unknown_count = session.scalar(
             select(ConversationEvent.id).where(
@@ -307,7 +308,7 @@ def test_cm2_skip_is_unknown_and_non_blocking(mock_openai_chat):
 
     captured = _conversation_captured(conv_id)
     assert captured["name"] == "unknown"
-    assert captured["_pending"] == "email"  # flow continued, not blocked
+    assert captured["_pending"] == ["email", "comuna", "address"]  # continued, not blocked
     assert any("correo" in r.lower() for r in replies)
 
 
@@ -335,6 +336,40 @@ def test_ci3_consent_is_a_separate_explicit_step(mock_openai_chat):
     captured = _conversation_captured(conv_id)
     assert captured["consent"] == "si"
     assert "_pending" not in captured
+
+
+def test_cm3_extracts_multiple_fields_from_one_message(mock_openai_chat, monkeypatch):
+    """CI-3b: one free-text message fills several fields; the ask skips them."""
+    from app.chat.nodes import classify_intent as ci
+
+    real = ci._llm_classify
+
+    def fake(text: str, message_id: int) -> dict:
+        result = real(text, message_id)
+        if "Los Leones" in text:
+            result["fields"] = {
+                "name": "Juan Pérez",
+                "email": "juan@mail.cl",
+                "address": "Los Leones 1234",
+            }
+        return result
+
+    monkeypatch.setattr(ci, "_llm_classify", fake)
+
+    conv_id = _start_conversation()
+    _turn(conv_id, "quiero una visita", "wamid.ext1")
+    replies = _turn(conv_id, "Juan Pérez, juan@mail.cl, Los Leones 1234", "wamid.ext2")
+
+    captured = _conversation_captured(conv_id)
+    assert captured["name"] == "Juan Pérez"
+    assert captured["email"] == "juan@mail.cl"
+    assert captured["address"] == "Los Leones 1234"
+
+    # the grouped ask skipped the fields the same message already supplied
+    asked = " ".join(replies)
+    assert "¿Cuál es tu nombre?" not in asked
+    assert "¿Cuál es tu correo" not in asked
+    assert "¿Cuál es tu dirección?" not in asked
 
 
 # ---------------------------------------------------------------------------
