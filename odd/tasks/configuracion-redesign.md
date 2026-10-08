@@ -116,9 +116,41 @@ Mapped to `odd/analysis/configuracion/findings.md`. Order is mandatory: shared p
     stacking. Card subtitles, scope-rule example placeholder, plain-language syntax disclosure,
     primary save buttons, and a styled mobile section selector were added.
   - Verification: focused Settings tests 40/40 passed; `npm run build` passed (`tsc -b` + `vite build`).
-    Full `npm test` ran 103 files / 1070 tests: 101 files passed, 2 failed with four timeout failures
-    in unrelated `ClientFicha` and `UserManagement` tests under local load. Re-run full suite before
-    closing CF-14; visual recapture/self-review is still pending.
+     Full `npm test` ran 103 files / 1070 tests: 101 files passed, 2 failed with four timeout failures
+     in unrelated `ClientFicha` and `UserManagement` tests under local load. Re-run full suite before
+     closing CF-14; visual recapture/self-review is still pending.
+
+- **CF-14 — Mensajes tab + mobile section selector reference polish (2026-10-08)** — implemented; full-suite gate remains open pending a low-load rerun.
+  - Feature commit: `c7b1a8ec` (`feat(settings): rebuild the Mensajes tab to the reference composition`).
+  - Files: `web/src/components/pages/Settings.tsx`, `web/src/components/pages/Settings.css`,
+    `web/src/components/pages/Settings.test.tsx`, `web/src/components/domain/AppShell.test.tsx`,
+    `web/src/components/primitives/Menu.tsx`, `web/src/components/primitives/MessagePreview.tsx`,
+    `web/src/components/primitives/MessagePreview.test.tsx`, `web/src/components/primitives/Tabs.tsx`,
+    `web/src/components/primitives/Tabs.test.tsx`, `web/src/components/primitives/primitives.css`,
+    `web/src/stories/pages/Settings.stories.test.tsx`.
+  - Graph nodes consulted: `Settings()`, `Tabs.tsx` / `Tabs()`, `Menu()`, `MessagePreview()`,
+    `Settings.test.tsx`, `Tabs.test.tsx`, `Settings.stories.tsx`, and the settings community hub.
+    The undirected path linked `Settings.stories.tsx -> Settings.tsx -> MessagePreview()`; the Tabs
+    test path linked `AssistantTabs.tsx -> Tabs.tsx <- Tabs.test.tsx`. No direct directed edge was
+    reported from `Settings()` to `Tabs()`.
+  - The mobile section selector now uses the Radix `Menu`, with field-like styling scoped to its
+    settings wrapper. Tone is a compact menu in the tone card header with the subtitle and a primary
+    save action. The message editor now has a three-column composition: a vertical icon/description
+    template tablist, selected editor, and in-card preview using the Lumat mark. Mobile stacks the
+    columns while retaining the nested tablist; the section-list hiding rule remains scoped to the
+    direct section-tabs child. `Tabs` gained backward-compatible vertical layout and optional icon /
+    description metadata; `MessagePreview` gained an optional avatar image source without changing
+    its default letter avatar. The AppShell assertion was updated for the new accessible tone menu.
+  - Verification from `web/`: focused Settings + story + primitive tests 50/50 passed;
+    `npm run build` (`tsc -b` + Vite) passed, with the existing >500 kB chunk advisory. Full
+    `npm test` completed with 1071/1073 tests passing across 103 files; only
+    `ClientFicha equipment > adds equipment from the dialog` and
+    `ClientFicha page grammar > posts state changes and notes, then refreshes ficha and memories`
+    timed out at 5s under full-suite load. `ClientFicha.test.tsx` passed 49/49 in isolation. The
+    related AppShell test passed 32/32 in isolation. No browser/runtime visual capture was run.
+  - Runtime harness: N/A — this frontend-only composition change uses existing app routes and has no
+    separate runtime harness. Rollback boundary: revert the feature commit to restore the former
+    tone selector, message-card layout, and section selector.
 
 - **PR1 — Unit A roll-up primitives (CF-1, CF-2, CF-3)** — done on branch `odd/configuracion-redesign`.
   - Commits: `348593f2` help panel, `feac640b` day toggle, `8e23d46a` message preview.
