@@ -88,7 +88,7 @@ describe("projects panel", () => {
     expect(onOpenChat).toHaveBeenCalledWith("ops");
   });
 
-  it("renders project context and honest disabled instruction and resource controls", async () => {
+  it("renders editable instructions while keeping project identity and resource controls disabled", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null } }), { status: 200 }));
     render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
 
@@ -97,8 +97,25 @@ describe("projects panel", () => {
     expect(screen.getByLabelText("Nombre del proyecto")).toHaveValue("Operations");
     expect(screen.getByLabelText("Nombre del proyecto")).toBeDisabled();
     expect(screen.getByLabelText("Propósito")).toHaveValue("Run ops");
-    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeDisabled();
+    expect(screen.getByLabelText("Instrucciones del proyecto")).toHaveValue("");
+    expect(screen.getByLabelText("Instrucciones del proyecto")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Guardar cambios" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Agregar recurso" })).toBeDisabled();
+  });
+
+  it("saves project instructions through the config endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null, config: { instructions: "Existing instructions", tool_policy: { opt_in_enabled: [] }, skills: [] } } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ project: { id: 1, slug: "ops", name: "Operations", purpose: "Run ops", status: "active", created_at: null, updated_at: null, config: { instructions: "Answer in Spanish.", tool_policy: { opt_in_enabled: [] }, skills: [] } } }), { status: 200 }));
+    render(<ProjectsPage projectSlug="ops" data={{ projects: [] }} />);
+
+    const textarea = await screen.findByLabelText("Instrucciones del proyecto");
+    expect(textarea).toHaveValue("Existing instructions");
+    fireEvent.change(textarea, { target: { value: "Answer in Spanish." } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
+
+    expect(await screen.findByLabelText("Instrucciones del proyecto")).toHaveValue("Answer in Spanish.");
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/panel/api/projects/ops/config", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ instructions: "Answer in Spanish." }) }));
   });
 
   it("explains that project-scoped threads are not supported and shows an honest agent empty state", async () => {

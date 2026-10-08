@@ -27,7 +27,11 @@ export interface SelfPasswordChange { current_password: string; new_password: st
 export interface AdminUser { id: number; username: string; role: Role; active: boolean; email: string | null; name: string | null; phone: string | null; position: string | null; locked_until: string | null; failed_logins: number; }
 export type AdminUserProfileUpdate = Pick<AdminUser, 'email' | 'name' | 'phone' | 'position'>;
 export interface AdminUsersResponse { users: AdminUser[]; }
-export interface Project { id: number; slug: string; name: string; purpose: string; status: 'active' | 'archived'; created_at: string | null; updated_at: string | null; }
+export interface ProjectToolPolicy { opt_in_enabled: string[]; }
+export interface ProjectSkill { name: string; description: string; body: string; }
+export interface ProjectConfig { instructions: string; tool_policy: ProjectToolPolicy; skills: ProjectSkill[]; }
+export type ProjectConfigUpdate = Partial<ProjectConfig>;
+export interface Project { id: number; slug: string; name: string; purpose: string; status: 'active' | 'archived'; created_at: string | null; updated_at: string | null; config?: ProjectConfig; }
 export interface ProjectsResponse { projects: Project[]; }
 export interface ProjectDetailResponse { project: Project; }
 export interface ProjectCandidate { slug: string; name: string; similarity: number; }
