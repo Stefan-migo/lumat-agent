@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderKanban, History, PanelRight, PanelLeft, Plus, X } from "lucide-react";
-import { deleteChatThread, listChatThreads, listProjects, renameChatThread } from "../../api";
+import { createProject, deleteChatThread, listChatThreads, listProjects, renameChatThread } from "../../api";
 import type { AssistantAttachment, AssistantCapabilities, AssistantEvidence, AssistantPlan, InternalChatThreadSummary, Project } from "../../types";
 import { useAsyncData } from "../../hooks/useAsyncData";
 import { Button } from "../primitives/Button";
@@ -13,6 +13,8 @@ import { Tabs } from "../primitives/Tabs";
 import { EmptyState } from "../shared/EmptyState";
 import { Dialog } from "../primitives/Dialog";
 import { StateMessage } from "../shared/StateMessage";
+import { Input } from "../primitives/Input";
+import { Textarea } from "../primitives/Textarea";
 import { projectStatusLabel, projectStatusTone } from "../shared/toneMaps";
 import { pathForRoute } from "../domain/panelRoutes";
 import "./AssistantWorkspace.css";
@@ -29,6 +31,13 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
   const [renameTitle, setRenameTitle] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<InternalChatThreadSummary | null>(null);
   const [threadActionError, setThreadActionError] = useState<string | null>(null);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [projectName, setProjectName] = useState("");
+  const [projectSlug, setProjectSlug] = useState("");
+  const [projectPurpose, setProjectPurpose] = useState("");
+  const [projectSlugEdited, setProjectSlugEdited] = useState(false);
+  const [projectCreateError, setProjectCreateError] = useState<string | null>(null);
+  const [projectSubmitting, setProjectSubmitting] = useState(false);
   const route = new URLSearchParams(window.location.search);
   const activeThreadId = Number(route.get("thread_id")) || undefined;
   const activeProjectSlug = route.get("proyecto") || selectedProject || undefined;
@@ -114,6 +123,39 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
+  const updateProjectName = (name: string) => {
+    setProjectName(name);
+    if (!projectSlugEdited) {
+      setProjectSlug(name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es-CL").trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
+    }
+  };
+
+  const resetProjectForm = () => {
+    setProjectName("");
+    setProjectSlug("");
+    setProjectPurpose("");
+    setProjectSlugEdited(false);
+    setProjectCreateError(null);
+  };
+
+  const submitProject = async () => {
+    if (!projectName.trim() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(projectSlug.trim()) || !projectPurpose.trim()) return;
+    setProjectSubmitting(true);
+    setProjectCreateError(null);
+    try {
+      const { project } = await createProject({ slug: projectSlug.trim(), name: projectName.trim(), purpose: projectPurpose.trim() });
+      setCreateProjectOpen(false);
+      resetProjectForm();
+      setSearch("");
+      setSelectedProject(project.slug);
+      await projectsData.retry();
+    } catch {
+      setProjectCreateError("No pudimos crear el proyecto. Revisa los datos e inténtalo nuevamente.");
+    } finally {
+      setProjectSubmitting(false);
+    }
+  };
+
   return (
     <div
       className={`assistant-workspace${projectsVisible ? " assistant-workspace--projects-visible" : ""}${contextVisible ? " assistant-workspace--context-visible" : ""}`}
@@ -128,6 +170,7 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
       >
         <header className="assistant-workspace__pane-header">
           <h2>Proyectos</h2>
+          <Button variant="tertiary" aria-label="Crear proyecto" title="Crear proyecto" onClick={() => { setProjectCreateError(null); setCreateProjectOpen(true); }}><Icon icon={Plus} /></Button>
         </header>
         <SearchInput aria-label="Buscar proyecto" placeholder="Buscar proyecto" onSearch={setSearch} />
         <div className="assistant-workspace__projects-list">
@@ -178,6 +221,17 @@ export function AssistantWorkspace({ children, onCreateThread, loadThreadTabs = 
             })
           )}
         </div>
+        <Dialog open={createProjectOpen} onClose={() => { setCreateProjectOpen(false); resetProjectForm(); }} title="Crear proyecto">
+          <div className="assistant-workspace__thread-dialog">
+            <Input label="Nombre" value={projectName} onChange={(event) => updateProjectName(event.target.value)} autoComplete="off" />
+            <Input label="Slug" value={projectSlug} onChange={(event) => { setProjectSlugEdited(true); setProjectSlug(event.target.value); }} autoComplete="off" />
+            <Textarea label="Propósito" value={projectPurpose} onChange={(event) => setProjectPurpose(event.target.value)} />
+            {projectCreateError ? <p role="alert">{projectCreateError}</p> : null}
+            <Button onClick={() => void submitProject()} disabled={projectSubmitting || !projectName.trim() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(projectSlug.trim()) || !projectPurpose.trim()}>
+              {projectSubmitting ? "Creando…" : "Crear proyecto"}
+            </Button>
+          </div>
+        </Dialog>
         <section className="assistant-workspace__agents" aria-label="Agentes del proyecto">
           <header><h3>Agentes del proyecto</h3><span aria-label="Cantidad no disponible">—</span><Button variant="tertiary" aria-label="Agregar agente" disabled><Icon icon={Plus} /></Button></header>
           <EmptyState title="No hay agentes disponibles" description="La gestión de agentes por proyecto todavía no está disponible." />

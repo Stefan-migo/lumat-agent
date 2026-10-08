@@ -80,6 +80,57 @@ describe("AssistantWorkspace", () => {
     expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
   });
 
+  it("creates a project through the API and refreshes the project list", async () => {
+    const project = { id: 3, slug: "nuevo-proyecto", name: "Nuevo Proyecto", purpose: "Organizar trabajo", status: "active", created_at: null, updated_at: null };
+    let projectRequests = 0;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/projects" && init?.method === "POST") {
+        expect(JSON.parse(String(init.body))).toEqual({ slug: "nuevo-proyecto", name: "Nuevo Proyecto", purpose: "Organizar trabajo" });
+        return new Response(JSON.stringify({ project }), { status: 201 });
+      }
+      if (url.includes("/panel/api/projects")) {
+        projectRequests += 1;
+        return new Response(JSON.stringify({ projects: projectRequests > 1 ? [project] : [] }), { status: 200 });
+      }
+      if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    render(<AgentChat role="admin" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Crear proyecto" }));
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Nuevo Proyecto" } });
+    expect(screen.getByLabelText("Slug")).toHaveValue("nuevo-proyecto");
+    fireEvent.change(screen.getByLabelText("Propósito"), { target: { value: "Organizar trabajo" } });
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Crear proyecto" })).getByRole("button", { name: "Crear proyecto" }));
+
+    expect((await screen.findAllByText("Nuevo Proyecto")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("dialog", { name: "Crear proyecto" })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("keeps the project dialog open and reports API failures honestly", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/panel/api/projects" && init?.method === "POST") return new Response(JSON.stringify({ detail: "failure" }), { status: 500 });
+      if (url.includes("/panel/api/projects")) return new Response(JSON.stringify({ projects: [] }), { status: 200 });
+      if (url.includes("/threads")) return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    render(<AgentChat role="admin" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Crear proyecto" }));
+    fireEvent.change(screen.getByLabelText("Nombre"), { target: { value: "Proyecto" } });
+    fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "proyecto" } });
+    fireEvent.change(screen.getByLabelText("Propósito"), { target: { value: "Propósito" } });
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Crear proyecto" })).getByRole("button", { name: "Crear proyecto" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos crear el proyecto");
+    expect(screen.getByRole("dialog", { name: "Crear proyecto" })).toBeInTheDocument();
+  });
+
   it("toggles both panes from the thread header at narrow widths", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);

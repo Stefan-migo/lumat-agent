@@ -94,6 +94,7 @@
   color: inherit;
   background: transparent;
   text-align: left;
+  font: inherit;
   cursor: pointer;
 }
 
@@ -209,6 +210,7 @@
   padding: 0;
   border: 0;
   color: inherit;
+  font: inherit;
   background: transparent;
   text-overflow: ellipsis;
   white-space: nowrap;
