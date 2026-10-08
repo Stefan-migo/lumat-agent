@@ -14,7 +14,7 @@ implementing any section. The v1 dashboard record predates this flow and has no 
 | `agenda` | implementing (48) | [agenda/visual.md](agenda/visual.md) | [agenda/findings.md](agenda/findings.md) |
 | `usuarios` | done | [visual.md](usuarios/visual.md) | [findings.md](usuarios/findings.md) |
 | `conocimiento` | done | [conocimiento/visual.md](conocimiento/visual.md) | [conocimiento/findings.md](conocimiento/findings.md) |
-| `configuracion` | pending | — | — |
+| `configuracion` | validated (22) | [configuracion/visual.md](configuracion/visual.md) | [configuracion/findings.md](configuracion/findings.md) |
 
 ## Legend
 
@@ -61,6 +61,12 @@ Findings that belong to one upstream unit. Implement these **before** per-sectio
 | agenda-035 | agenda | Detail client/technician avatars are too small | `web/src/components/primitives/Avatar.tsx` |
 | conversaciones-012 | conversaciones | Mobile filter controls stack vertically instead of the reference compact filter card | `web/src/components/primitives/primitives.css` |
 | conversaciones-023 | conversaciones | Tablet conversation workspace collapses to one column instead of the reference two-column layout | `web/src/components/primitives/primitives.css` |
+| configuracion-016 | configuracion | Reference help/support panels ("Cómo funciona", "Consideraciones", "Vista previa") have no primitive | `web/src/components/primitives/` (new help-panel primitive) |
+| configuracion-017 | configuracion | No segmented weekday/day-toggle control | `web/src/components/primitives/` (new day-toggle primitive) |
+| configuracion-018 | configuracion | No chat message preview primitive | `web/src/components/primitives/` (new message-preview primitive) |
+| configuracion-019 | configuracion | `StatCard` is single-value; the Costos reference needs a three-metric row | `web/src/components/shared/StatCard.tsx` |
+| configuracion-020 | configuracion | No accordion group with count chips | `web/src/components/primitives/` (new accordion primitive) |
+| configuracion-021 | configuracion | `Card` lacks header action / right-side slot | `web/src/components/primitives/Card.tsx` |
 
 ## Token/palette escalations
 
